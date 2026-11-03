@@ -287,15 +287,29 @@ test('435 owed obligations make bounded progress across explicit retry dispositi
   // Simulate timer firing before next retry attempt
   clearTimeout(lane.retryTimer.handle);
   lane.retryTimer = {state: 'idle', handle: null};
-  // Repeated backpressure advances exponential backoff to avoid unbacked-off storm
-  const repeatedBackpressureDelay = scheduleDeliveryRetry(
+  // Repeated backpressure WITH hint honors the hint without accumulating exponential backoff
+  const repeatedHintedBackpressureDelay = scheduleDeliveryRetry(
     delivery,
     {reason: 'backpressure', retryAfterMs: 12},
     OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE,
   );
-  assert.equal(repeatedBackpressureDelay, initialDelay);
+  assert.equal(repeatedHintedBackpressureDelay, 12, 'hint is honored even on repeated backpressure');
+  assert.equal(lane.retryDelayMs, initialDelay,
+    'hinted repeated backpressure resets and does not double retryDelayMs');
+
+  // Simulate timer firing before next retry attempt
+  clearTimeout(lane.retryTimer.handle);
+  lane.retryTimer = {state: 'idle', handle: null};
+
+  // Repeated backpressure WITHOUT hint advances exponential backoff to avoid unbacked-off storm
+  const unhintedBackpressureDelay = scheduleDeliveryRetry(
+    delivery,
+    {reason: 'backpressure'},
+    OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE,
+  );
+  assert.equal(unhintedBackpressureDelay, initialDelay);
   assert.equal(lane.retryDelayMs, initialDelay * 2,
-    'repeated backpressure doubles retryDelayMs to avoid unbacked-off storm');
+    'unhinted backpressure doubles retryDelayMs to avoid storm');
   scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
   // 4. Stale propagation lifetime -> refuse and disarm; never resume retired work
   assert.equal(

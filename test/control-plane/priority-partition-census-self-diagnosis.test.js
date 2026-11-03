@@ -738,3 +738,26 @@ test('the census publishes its holder identities and a holder-set change ' +
   );
   t.end();
 });
+
+test('priority census reports satisfied: false and spread gap when ready distinct nodes is less than partition replica_count during early formation', (t) => {
+  const partitionRow = {
+    partition_id: PARTITION_ID,
+    replica_count: 3,
+  };
+  const summary = buildDerivedPriorityPartitionSummary(
+    {
+      partitionRows: [partitionRow],
+      serviceRows: [createServiceRow('node-1', 1, {raftRole: 'leader'})],
+      locallyEligibleNodeIds: ['node-1'],
+    },
+    SUMMARY_HELPERS,
+  );
+  t.equal(summary.satisfied, false, 'formation with single ready node cannot satisfy 3-replica spread');
+  const blocked = partitionBlock(summary);
+  t.ok(blocked, 'partition must be listed in blockedPartitions');
+  t.equal(blocked?.readyDistinctNodeCount, 1);
+  t.equal(blocked?.requiredDistinctNodeCount, 3, 'partition-required distinct node count reflects expected replica count');
+  t.equal(blocked?.spreadGap, 2, 'spread gap is 3 - 1 = 2');
+  t.end();
+});
+

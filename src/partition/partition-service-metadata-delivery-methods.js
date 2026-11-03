@@ -119,6 +119,8 @@ class PartitionServiceMetadataDeliveryMethods {
     const previousObservation = this.localCanonicalLeaderObservation;
     if (
       this.isLeader === true ||
+      !previousObservation ||
+      previousObservation.demoted === true ||
       !this.systemTableCache ||
       typeof this.systemTableCache.get !== PARTITION_SERVICE_LITERAL.FUNCTION
     ) {

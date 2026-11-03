@@ -558,18 +558,6 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
   const blockedPartitions = [];
   for (let index = 0; index < priorityPartitionIds.length; index += 1) {
     const partitionId = priorityPartitionIds[index];
-    const stats = mapGet(readyReplicaStatsByPartitionId, partitionId) || {
-      observedReplicaRowCount: 0,
-      readyReplicaCount: 0,
-      nodeIds: buildStringSet([]),
-      readyReplicaCountByNodeId: objectCreate(null),
-      exclusionReasonCounts: objectCreate(null),
-    };
-    const readyDistinctNodeCount = setSize(stats.nodeIds);
-    const spreadGap = mathMax(0, requiredDistinctNodeCount - readyDistinctNodeCount);
-    if (requiredDistinctNodeCount <= 1 || spreadGap <= 0) {
-      continue;
-    }
     const partitionRow = mapGet(partitionRowByPartitionId, partitionId) || null;
     const expectedReplicaCountEntry = readOwnDataProperty(
       partitionRow,
@@ -578,6 +566,24 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
     const expectedReplicaCount = expectedReplicaCountEntry.found ?
       normalizeExpectedReplicaCount(expectedReplicaCountEntry.value) :
       null;
+    const partitionRequiredDistinctNodeCount = expectedReplicaCount !== null ?
+      mathMin(
+        PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT,
+        mathMax(requiredDistinctNodeCount, expectedReplicaCount),
+      ) :
+      requiredDistinctNodeCount;
+    const stats = mapGet(readyReplicaStatsByPartitionId, partitionId) || {
+      observedReplicaRowCount: 0,
+      readyReplicaCount: 0,
+      nodeIds: buildStringSet([]),
+      readyReplicaCountByNodeId: objectCreate(null),
+      exclusionReasonCounts: objectCreate(null),
+    };
+    const readyDistinctNodeCount = setSize(stats.nodeIds);
+    const spreadGap = mathMax(0, partitionRequiredDistinctNodeCount - readyDistinctNodeCount);
+    if (partitionRequiredDistinctNodeCount <= 1 || spreadGap <= 0) {
+      continue;
+    }
     const rowAbsentCount = expectedReplicaCount === null ? 0 : mathMax(
       0,
       expectedReplicaCount - stats.observedReplicaRowCount,
@@ -595,7 +601,7 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
     }
     appendOwnArrayValue(blockedPartitions, {
       partitionId,
-      requiredDistinctNodeCount,
+      requiredDistinctNodeCount: partitionRequiredDistinctNodeCount,
       readyDistinctNodeCount,
       exclusionReasonCounts,
       readyReplicaCount: stats.readyReplicaCount,
@@ -606,6 +612,12 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
       spreadGap,
     });
   }
+  let effectiveRequiredDistinctNodeCount = requiredDistinctNodeCount;
+  for (let index = 0; index < blockedPartitions.length; index += 1) {
+    if (blockedPartitions[index].requiredDistinctNodeCount > effectiveRequiredDistinctNodeCount) {
+      effectiveRequiredDistinctNodeCount = blockedPartitions[index].requiredDistinctNodeCount;
+    }
+  }
   const missingPartitionIds = [];
   for (let index = 0; index < blockedPartitions.length; index += 1) {
     appendOwnArrayValue(missingPartitionIds, blockedPartitions[index].partitionId);
@@ -613,14 +625,14 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
   return normalizePriorityPartitionSummary(
     {
       satisfied: blockedPartitions.length === 0,
-      requiredDistinctNodeCount,
+      requiredDistinctNodeCount: effectiveRequiredDistinctNodeCount,
       readyEligibleNodeCount: setSize(eligibleNodeIds),
       totalPriorityPartitionCount: priorityPartitionIds.length,
       missingPartitionIds,
       blockedPartitions,
     },
     {
-      requiredDistinctNodeCount,
+      requiredDistinctNodeCount: effectiveRequiredDistinctNodeCount,
       readyEligibleNodeCount: setSize(eligibleNodeIds),
     },
     helperFns,

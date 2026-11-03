@@ -440,11 +440,15 @@ function disarmDeliveryRetry(owner, lane, resetDelay = true) {
   if (resetDelay) lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
 }
 
-function computeRetryDelayMs(lane, error, disposition) {
+function resetYieldedRetryDelay(lane, disposition) {
   if (disposition === OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED) {
     lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
     lane.consecutiveBackpressure = 0;
   }
+}
+
+function computeRetryDelayMs(lane, error, disposition) {
+  resetYieldedRetryDelay(lane, disposition);
   const rawHint = error?.retryAfterMs;
   const hasHint = Number.isFinite(rawHint) && rawHint > 0;
   const isBackpressure = disposition === OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE;
@@ -453,27 +457,32 @@ function computeRetryDelayMs(lane, error, disposition) {
   let advanceBackoff = false;
   let delayMs;
 
-  if (isBackpressure) {
-    lane.consecutiveBackpressure = (lane.consecutiveBackpressure ?? 0) + 1;
-    if (lane.consecutiveBackpressure > 1) {
-      advanceBackoff = true;
-      delayMs = Math.min(
-        PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
-        Math.max(1, hasHint ? Math.max(Math.floor(rawHint), lane.retryDelayMs) : lane.retryDelayMs),
-      );
+  if (hasHint) {
+    delayMs = Math.min(
+      PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
+      Math.max(1, Math.floor(rawHint)),
+    );
+    lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+    if (isBackpressure) {
+      lane.consecutiveBackpressure = (lane.consecutiveBackpressure ?? 0) + 1;
     } else {
-      delayMs = Math.min(
-        PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
-        Math.max(1, hasHint ? Math.floor(rawHint) : lane.retryDelayMs),
-      );
+      lane.consecutiveBackpressure = 0;
     }
+    advanceBackoff = false;
+  } else if (isBackpressure) {
+    lane.consecutiveBackpressure = (lane.consecutiveBackpressure ?? 0) + 1;
+    delayMs = Math.min(
+      PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
+      Math.max(1, lane.retryDelayMs),
+    );
+    advanceBackoff = true;
   } else {
     lane.consecutiveBackpressure = 0;
     delayMs = Math.min(
       PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
-      Math.max(1, hasHint ? Math.floor(rawHint) : lane.retryDelayMs),
+      Math.max(1, lane.retryDelayMs),
     );
-    advanceBackoff = !hasHint && isTransient;
+    advanceBackoff = isTransient;
   }
 
   return {delayMs, advanceBackoff};

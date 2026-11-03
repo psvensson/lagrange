@@ -486,3 +486,33 @@ t.test(
     t.equal(mutations.length, 0, 'demoted owner submits no stale mutation');
   },
 );
+
+t.test(
+  'CL-036 demotion: follower without prior canonical leader observation does not clear active leader',
+  (t) => {
+    const cache = makePartitionRowCache();
+    cache.applySystemTableChange(
+      SYSTEM_TABLE_NAME.PARTITIONS,
+      'UPDATE',
+      {
+        partition_id: PARTITION_ID,
+        leader_node_id: REPLACEMENT_NODE_ID,
+        updated_at: 1000,
+      },
+      {causeId: 'active-leader-preexisting'},
+    );
+    const {context} = makeLocalLeaderContext(cache, {isLeader: false});
+    context.replicaId = `${PARTITION_ID}-r2`;
+    t.equal(context.localCanonicalLeaderObservation, undefined);
+
+    applyReplicaDemotion(context, 'follower');
+
+    t.equal(
+      cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID).leader_node_id,
+      REPLACEMENT_NODE_ID,
+      'follower demotion preserves the co-located active leader_node_id in cache',
+    );
+    t.end();
+  },
+);
+

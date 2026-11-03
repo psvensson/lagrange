@@ -579,15 +579,22 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     candidatePublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
       publishedActiveNodeIds :
       publishedBaselineNodeIds;
+  const combinedPublicationEligibleNodeIds = [
+    ...new Set([
+      ...publicationLocallyEligibleNodeIds,
+      ...publicationProjectedServingNodeIds,
+      ...publishedActiveNodeIds,
+    ]),
+  ];
   const normalizedPriorityPartitionSummary = normalizePriorityPartitionSummary(
     planningSnapshot.priorityPartitionSummary ||
       planningSnapshot.priorityRecoveryPlanningSnapshot?.priorityPartitionSummary,
     {
       requiredDistinctNodeCount: Math.min(
         PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT,
-        publicationLocallyEligibleNodeIds.length,
+        combinedPublicationEligibleNodeIds.length,
       ),
-      readyEligibleNodeCount: publicationLocallyEligibleNodeIds.length,
+      readyEligibleNodeCount: combinedPublicationEligibleNodeIds.length,
     },
     helperFns,
   );

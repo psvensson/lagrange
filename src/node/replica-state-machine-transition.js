@@ -605,49 +605,43 @@ async function updateReplicaStateInCdc(
   }
 }
 
+function isMatchingActiveSibling(
+  other,
+  currentReplicaId,
+  targetPartitionId,
+  targetNodeId,
+) {
+  if (!other) {
+    return false;
+  }
+  const otherReplicaId = other.replicaId || other.serviceId;
+  if (otherReplicaId === currentReplicaId ||
+      other.partitionId !== targetPartitionId ||
+      other.nodeId !== targetNodeId) {
+    return false;
+  }
+  const isLeader = other.isLeader === true || other.role === 'leader';
+  return RETAINS_CANONICAL_PARTITION_LEADER_SERVICE_STATES.has(other.state) || isLeader;
+}
+
 /**
  * @param {ReplicaStateMachine} stateMachine - Owning state machine instance.
  * @param {Object|null} replicaState - Replica state to inspect.
  * @return {boolean}
  */
 function hasOtherActivePartitionReplicaOnLeaderNode(stateMachine, replicaState) {
-  if (!replicaState ||
-      !stateMachine.systemTableCache ||
-      typeof stateMachine.systemTableCache.filter !== 'function') {
+  if (!replicaState || !stateMachine?.replicas) {
     return false;
   }
-
   const currentReplicaId = replicaState.replicaId || replicaState.serviceId;
-  const siblingServices = stateMachine.systemTableCache.filter(
-    TABLES.SERVICES,
-    (service) => {
-      if (!service) {
-        return false;
-      }
-      const serviceType = service.service_type || service.serviceType;
-      if (serviceType !== SERVICE_TYPE.PARTITION) {
-        return false;
-      }
-      const partitionId = service.partition_id || service.partitionId;
-      if (partitionId !== replicaState.partitionId) {
-        return false;
-      }
-      const nodeId = service.node_id || service.nodeId;
-      if (nodeId !== replicaState.nodeId) {
-        return false;
-      }
-      const replicaId =
-        service.replica_id || service.replicaId || service.service_id;
-      if (replicaId === currentReplicaId) {
-        return false;
-      }
-      const status = service.status;
-      return RETAINS_CANONICAL_PARTITION_LEADER_SERVICE_STATES.has(status);
-    },
-  );
-
-  return Array.isArray(siblingServices) &&
-    siblingServices.length > REPLICA_STATE_MACHINE_NUM.ZERO;
+  const targetPartitionId = replicaState.partitionId;
+  const targetNodeId = replicaState.nodeId;
+  for (const other of stateMachine.replicas.values()) {
+    if (isMatchingActiveSibling(other, currentReplicaId, targetPartitionId, targetNodeId)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

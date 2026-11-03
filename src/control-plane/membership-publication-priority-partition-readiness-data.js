@@ -153,13 +153,26 @@ function resolvePreferredNodeIds(
   projectedServingNodeIds,
   publishedActiveNodeIds,
 ) {
-  if (locallyEligibleNodeIds.value?.length > 0) {
-    return locallyEligibleNodeIds.value;
+  const merged = [];
+  const seen = new Set();
+  const sources = [
+    locallyEligibleNodeIds?.value,
+    projectedServingNodeIds?.value,
+    publishedActiveNodeIds?.value,
+  ];
+  for (let i = 0; i < sources.length; i += 1) {
+    const list = sources[i];
+    if (Array.isArray(list)) {
+      for (let j = 0; j < list.length; j += 1) {
+        const id = list[j];
+        if (typeof id === 'string' && id.length > 0 && !seen.has(id)) {
+          seen.add(id);
+          merged.push(id);
+        }
+      }
+    }
   }
-  if (projectedServingNodeIds.value?.length > 0) {
-    return projectedServingNodeIds.value;
-  }
-  return publishedActiveNodeIds.value || [];
+  return merged;
 }
 
 function buildPrioritySpreadEligibleNodeSnapshot(options = {}) {

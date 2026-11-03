@@ -769,3 +769,96 @@ test('ReplicaStateMachine does not consume timeout budget while persistence is i
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
   });
+
+test('ReplicaStateMachine preserves canonical partition leader when sibling active replica exists on same node',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+
+    ConfigurationManager.getInstance().initialize({});
+    LoggingService.getInstance().initialize({level: 'error'});
+
+    const recordedUpdates = [];
+    const stateMachine = new ReplicaStateMachine({
+      nodeId: 'node-colocated-1',
+      cdcIntegrationService: {
+        async insertSystemTableRow() {
+          return {success: true};
+        },
+        async updateSystemTableRow(tableName, whereClause, data, options) {
+          recordedUpdates.push({tableName, whereClause, data, options});
+          return {success: true};
+        },
+      },
+    });
+
+    await stateMachine.transition('svc-sibling-leader', ReplicaState.PENDING, {
+      partitionId: 'partition-colocated-1',
+      nodeId: 'node-colocated-1',
+      serviceId: 'svc-sibling-leader',
+      serviceAddress: 'node-colocated-1/partition/svc-sibling-leader',
+      reason: 'initial',
+    });
+    await stateMachine.transition('svc-sibling-leader', ReplicaState.CREATING, {
+      partitionId: 'partition-colocated-1',
+      nodeId: 'node-colocated-1',
+      serviceId: 'svc-sibling-leader',
+      serviceAddress: 'node-colocated-1/partition/svc-sibling-leader',
+      reason: 'creating',
+    });
+    await stateMachine.transition('svc-sibling-leader', ReplicaState.SYNCING, {
+      partitionId: 'partition-colocated-1',
+      nodeId: 'node-colocated-1',
+      serviceId: 'svc-sibling-leader',
+      serviceAddress: 'node-colocated-1/partition/svc-sibling-leader',
+      reason: 'syncing',
+    });
+    await stateMachine.transition('svc-sibling-leader', ReplicaState.ACTIVE, {
+      partitionId: 'partition-colocated-1',
+      nodeId: 'node-colocated-1',
+      serviceId: 'svc-sibling-leader',
+      serviceAddress: 'node-colocated-1/partition/svc-sibling-leader',
+      reason: 'became-active-leader',
+      role: 'leader',
+      isEffectHandlerCurrent: () => true,
+    });
+
+    await stateMachine.transition('svc-sibling-follower', ReplicaState.PENDING, {
+      partitionId: 'partition-colocated-1',
+      nodeId: 'node-colocated-1',
+      serviceId: 'svc-sibling-follower',
+      serviceAddress: 'node-colocated-1/partition/svc-sibling-follower',
+      reason: 'initial',
+    });
+    await stateMachine.transition('svc-sibling-follower', ReplicaState.CREATING, {
+      partitionId: 'partition-colocated-1',
+      nodeId: 'node-colocated-1',
+      serviceId: 'svc-sibling-follower',
+      serviceAddress: 'node-colocated-1/partition/svc-sibling-follower',
+      reason: 'creating',
+    });
+
+    recordedUpdates.length = 0;
+
+    const result = await stateMachine.transition('svc-sibling-follower', ReplicaState.REMOVING, {
+      partitionId: 'partition-colocated-1',
+      nodeId: 'node-colocated-1',
+      serviceId: 'svc-sibling-follower',
+      serviceAddress: 'node-colocated-1/partition/svc-sibling-follower',
+      reason: 'removing follower replica',
+    });
+
+    t.equal(result, true, 'removing transition succeeds');
+    const leaderNullUpdates = recordedUpdates.filter(
+      (entry) => entry.tableName === 'partitions' && entry.data?.leader_node_id === null,
+    );
+    t.equal(
+      leaderNullUpdates.length,
+      0,
+      'demoting/removing sibling follower preserves leader_node_id when active replica exists',
+    );
+
+    stateMachine.clear();
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
