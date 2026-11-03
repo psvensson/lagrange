@@ -4,18 +4,18 @@
   "receipts": [
     {
       "id": "gate-timeout-maximum",
-      "passed": false,
-      "reason": "ci.yml gate job timeout-minutes is 120; run 41431327759 (PR #184) was killed at 120 minutes."
+      "passed": true,
+      "reason": "Main's exact-sha change-gate run 41452698217 (workflow ci, event push, head 6d58fdba16157740e6c2f0bae5a2317fa24e0944, whose ci.yml carries timeout-minutes 360 at line 81) completed success 13:24:25Z-13:42:40Z: Ordinary proof WIDENED 201 tests, green; structural analysis lane completed. Run 41452698074 at the same sha is the unrelated lagrange-scenario-a-live-admission workflow and is not cited."
     },
     {
       "id": "lab-routing-design-decided",
-      "passed": false,
-      "reason": "No design for pull-request gates on lab runners has been decided by the lead."
+      "passed": true,
+      "reason": "Decided 2026-11-02: pull-request gates stay on the hosted runner by owner policy (home-lab.md) and the lead's acceptance of the attempt-2 recommendation; the lab-routing design is retained as evidence for a future owner decision at docs/evidence/ci-gate-proof-time-2026-11/lab-runner-routing-design-note.md."
     },
     {
       "id": "lab-pr-gate-routed",
       "passed": false,
-      "reason": "Pull-request gates run only on the hosted ubuntu-24.04 runner; no lab runner serves psvensson/lagrange."
+      "reason": "Superseded under R09, not implemented: pull-request gates stay on the hosted runner by owner policy (home-lab.md) and the lead's acceptance of the attempt-2 recommendation; the lab-routing design is retained as evidence for a future owner decision. Successor quest: ci-gate-proof-time-maximum."
     }
   ]
 }

@@ -1,0 +1,22 @@
+{
+  "schema": "solve-relocation-verification/1",
+  "bundles": [
+    {
+      "bundle": "postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.tar.gz",
+      "bundleSha256": "fac44cdb8760510c555aa710e7fcbfec1e99617d221f52b27712ec1ea28741b9",
+      "sourceCommit": "af8483c67aff68b0ad1049a2de5387e6b1128db7",
+      "shard": "relocation-inventory/postgres-compatibility-matrix-driver-version-pin--postgres-compatibility-matrix-driver-version-pin-evidence-af8483c67-2026-11-02.json",
+      "shardSha256": "2acf13d74884a1c415527f023e258dc9fade39f92024f7aa7f581f1361af75e3",
+      "verifiedAt": "2026-11-02T14:57:29.167Z",
+      "downloadedSha256": "fac44cdb8760510c555aa710e7fcbfec1e99617d221f52b27712ec1ea28741b9",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 7,
+      "results": "1111111",
+      "mismatches": [],
+      "verified": true
+    }
+  ]
+}

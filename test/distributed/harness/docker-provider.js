@@ -16,6 +16,7 @@ import {
   CONTAINER_LOG_TAIL_LINES,
 } from './constants.js';
 import {buildImageContext} from './docker-build-context.js';
+import {RETIREMENT, imageIdOf, retirePreviousImage} from './docker-image-retirement.js';
 import {resolveDockerMemoryWorkingSetBytes} from
   './container-memory-working-set.js';
 const localText = Object.freeze({
@@ -59,6 +60,7 @@ const TYPEOF_FUNCTION = 'function';
 const DOCKER_OP_CREATE_NETWORK = 'network.create';
 const DOCKER_OP_REMOVE_NETWORK = 'network.remove';
 const DOCKER_OP_BUILD_IMAGE = 'image.build';
+const DOCKER_OP_RETIRE_PREVIOUS_IMAGE = 'image.retire-previous';
 const DOCKER_OP_CREATE_CONTAINER = 'container.create';
 const DOCKER_OP_START_CONTAINER = 'container.start';
 const DOCKER_OP_STOP_CONTAINER = 'container.stop';
@@ -326,6 +328,11 @@ class DockerProvider {
       dockerfile,
       labels,
     });
+    // The build the tag names now: once the rebuild moves the tag it is
+    // retired, never left behind untagged (harness-image-build-leftovers).
+    const previous = await imageIdOf(this._docker, tag);
+    this._emitOperation(DOCKER_OP_RETIRE_PREVIOUS_IMAGE, {stage: RETIREMENT.RECORDED, tag,
+      previousId: previous.id, unreadable: previous.unreadable});
     let stream;
     try {
       stream = await this._docker.buildImage(
@@ -368,6 +375,15 @@ class DockerProvider {
       tag,
       dockerfile,
       labels,
+    });
+    const retirement = await retirePreviousImage(this._docker,
+      {tag, previousId: previous.id, unreadable: previous.unreadable});
+    this._emitOperation(DOCKER_OP_RETIRE_PREVIOUS_IMAGE, {
+      stage: retirement.outcome,
+      tag,
+      previousId: retirement.previousId,
+      currentId: retirement.currentId,
+      detail: retirement.detail,
     });
   }
 

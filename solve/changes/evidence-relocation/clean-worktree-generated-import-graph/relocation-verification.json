@@ -1,0 +1,22 @@
+{
+  "schema": "solve-relocation-verification/1",
+  "bundles": [
+    {
+      "bundle": "clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.tar.gz",
+      "bundleSha256": "5de274f4c35573dac9d8fae74b902c2dfdc3c66058b5b5e1e2fe6c113d58ef51",
+      "sourceCommit": "3cbf886b0f4eb91358e1d7deb1b2dfd19c571e61",
+      "shard": "relocation-inventory/clean-worktree-generated-import-graph--clean-worktree-generated-import-graph-evidence-3cbf886b0-2026-11-02.json",
+      "shardSha256": "90e33e0ed931de86057611ee0c859af7c394a07ed38cce9cb0f8650009948876",
+      "verifiedAt": "2026-11-02T14:46:12.144Z",
+      "downloadedSha256": "5de274f4c35573dac9d8fae74b902c2dfdc3c66058b5b5e1e2fe6c113d58ef51",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 15,
+      "results": "111111111111111",
+      "mismatches": [],
+      "verified": true
+    }
+  ]
+}

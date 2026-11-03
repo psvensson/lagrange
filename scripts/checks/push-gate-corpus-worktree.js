@@ -26,8 +26,9 @@
 //   node scripts/checks/push-gate-corpus-worktree.js --gate <sha>
 //       [--ref-lines <file>] [--run <command> [args...]]
 //     (proof-authority-integrity: materialize the pushed sha ONCE into an
-//     immutable throwaway checkout with the workspace injections declared,
-//     then run the WHOLE pre-push hook there - or the given command - with
+//     immutable throwaway checkout with the workspace injections declared
+//     and its generated proof material made for it (proof-checkout-
+//     preparation.js: the import graph a CI or lab checkout has), then run the WHOLE pre-push hook there - or the given command - with
 //     the pushed ref lines on stdin; refuse if the run left the checkout
 //     dirty. The pre-push hook calls this for itself when it is not already
 //     inside such a checkout, so every stage proves the pushed bytes and the
@@ -59,6 +60,7 @@ import {
 } from './change-selection-constants.js';
 import {execGit} from './git-invocation.js';
 import {gitProcessEnvironment} from './git-process-environment.js';
+import {prepareProofCheckout} from './proof-checkout-preparation.js';
 
 const TEXT_ENCODING = 'utf8';
 const REF_FLAG = '--ref';
@@ -331,6 +333,15 @@ function gateExactSha(root, {sha: requestedSha, refLinesFile, command}) {
       [GATE_PUSHED_SHA_ENV]: sha,
       [GATE_RED_MAIN_CHECKED_ENV]: ENABLED_ENV_VALUE,
     };
+    // The generated state a CI or lab-placed proof checkout has, made here
+    // for this commit before anything runs: a fresh checkout has none of it,
+    // and a commit whose generated metadata is stale is refused
+    // (clean-worktree-generated-import-graph).
+    const preparation = prepareProofCheckout(worktreePath, {env});
+    if (!preparation.ok) {
+      process.stderr.write(`${preparation.problem}\n`);
+      return EXIT_GATE_FAILURE;
+    }
     const input = refLinesFile ?
       fs.readFileSync(refLinesFile, TEXT_ENCODING) : EMPTY_INPUT;
     process.stdout.write(

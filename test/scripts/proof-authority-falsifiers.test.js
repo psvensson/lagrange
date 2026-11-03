@@ -40,6 +40,8 @@ const UTF8 = 'utf8';
 const SELECTOR = 'scripts/select-change-tests.js';
 const RUNNER = 'scripts/run-test-files.js';
 const MATERIALIZER = 'scripts/checks/push-gate-corpus-worktree.js';
+const GRAPH_PRODUCER = 'scripts/generate-global-owner-debt-inventory.js';
+const GRAPH_PRODUCER_FLAG = '--refresh-import-graph-only';
 const SOURCE_MODULE = 'src/partition/falsifier-source.js';
 const SPAWNED_SCRIPT = 'scripts/falsifier-script.js';
 const OBSERVED_FILE = 'test/partition/fixtures/falsifier-observed.json';
@@ -148,6 +150,7 @@ function buildFixtureRepo() {
   git(['add', '.']);
   git(['commit', '--quiet', '-m', 'base']);
   classifyFixtureTests();
+  sealImportGraph();
   git(['add', '.']);
   git(['commit', '--quiet', '-m', 'classified']);
   return git(['rev-parse', 'HEAD']);
@@ -185,8 +188,17 @@ function restore() {
   git(['clean', '-fdq', '-e', 'node_modules']);
 }
 
+// Every fixture commit carries its own import-graph seal, as the pre-commit
+// hook makes every real commit carry one: the gate refuses a commit whose
+// generated metadata is stale (clean-worktree-generated-import-graph).
+function sealImportGraph() {
+  const sealed = run([GRAPH_PRODUCER, GRAPH_PRODUCER_FLAG]);
+  assert.equal(sealed.status, 0, `the fixture's import graph: ${sealed.stderr}`);
+}
+
 function commitDefect(changes) {
   for (const [relative, contents] of Object.entries(changes)) write(relative, contents);
+  sealImportGraph();
   git(['add', '.']);
   git(['commit', '--quiet', '-m', 'planted defect']);
   return git(['rev-parse', 'HEAD']);

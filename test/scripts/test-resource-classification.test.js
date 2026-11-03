@@ -172,3 +172,28 @@ test('the toolchain lane runs serially and is not empty', () => {
   assert.ok(manifest.counts[RESOURCE_CLASS_EXTERNAL_TOOLCHAIN] > 0,
     'an empty toolchain class would mean the lane silently tests nothing');
 });
+
+// The 0.5 WASI service tests compile real Hono/service components
+// (componentize-js, jco) and start real component Cells, like their
+// external-toolchain siblings service-cell-worker-modes and
+// service-cell-bridge-roundtrip. Measured 2026-11-02: at jobs=4 pinned to two
+// cores, 3 of 4 failed (quest service-test-toolchain-classification).
+const WASI_SERVICE_TOOLCHAIN_TESTS = Object.freeze([
+  'test/service/h1-pinned-hono-component-proof.test.js',
+  'test/service/h2-hono-source-ir-deployment-cutover.test.js',
+  'test/service/h3-fetch-ingress-and-scoped-client.test.js',
+  'test/service/h4-http-invocation-recovery-and-cancellation.test.js',
+  'test/service/h5-compiled-public-hono-journey.test.js',
+  'test/service/q2-call-selector-typed-parameter-narrowing.test.js',
+  'test/service/q3-call-shard-paged-execution.test.js',
+  'test/service/q4-call-bounded-structured-partials.test.js',
+  'test/service/q5-service-cell-v2-default-multi-operation.test.js',
+]);
+
+test('the 0.5 WASI service tests run in the serial toolchain lane', () => {
+  const manifest = buildResourceManifest(root);
+  for (const file of WASI_SERVICE_TOOLCHAIN_TESTS) {
+    assert.equal(manifest.classes[file], RESOURCE_CLASS_EXTERNAL_TOOLCHAIN,
+      `${file} drives the WASM toolchain and starts real component Cells`);
+  }
+});

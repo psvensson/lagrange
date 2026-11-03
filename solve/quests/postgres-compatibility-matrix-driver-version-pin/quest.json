@@ -1,0 +1,33 @@
+{
+  "schema": "solve-quest/2",
+  "id": "postgres-compatibility-matrix-driver-version-pin",
+  "class": "fix",
+  "statement": "The PostgreSQL compatibility certification matrix (src/query/pg/postgres-compatibility-matrix.js, docs/postgres-compatibility-matrix.json, test/query/q10-postgres-compatibility-certification-matrix.test.js) certifies the product's SQL surface, not the generating host's client build. The exact client builds (driver versions) are environment metadata recorded beside the matrix, outside its digest, its cell receipt digests and the content comparison; the content the live run generates must still equal the committed matrix exactly (every cell's status, outcome, SQLSTATE and mutation flag, every negative control, the summary and the digest). The matrix declares the client majors it certifies and refuses, with a typed DRIVER_VERSION_UNSUPPORTED, a host whose client build is outside them. A host with psql 16.15 (hosted runner) and one with psql 14.24 (this controller) then certify the same committed matrix.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/postgres-compatibility-matrix-driver-version-pin/evidence/receipt.json",
+      "requiredReceipts": [
+        "measured-host-dependence-recorded",
+        "claim-independent-of-client-build",
+        "unsupported-client-build-refused",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "cause",
+      "statement": "Repair at the owner (postgres-compatibility-matrix.js and its catalog): the driver versions were in the certified content and both digests. Option (a) of the brief: environment beside the matrix, a declared supported range in it."
+    },
+    {
+      "id": "scope",
+      "statement": "Bounded repair; never widen the content comparison; no skip on a foreign host."
+    },
+    {
+      "id": "proof",
+      "statement": "Red first with a simulated psql 16.15 fixture and an out-of-range build; the existing positive case kept; independent verification before landing."
+    }
+  ],
+  "sealedAt": "6d58fdba16157740e6c2f0bae5a2317fa24e0944"
+}

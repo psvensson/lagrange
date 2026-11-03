@@ -263,7 +263,7 @@ export const FULL_CORPUS_TRIGGER_RULES = Object.freeze([
   // The execution report's schema owner is written by the runner and read by
   // the gate (proof-receipt-bound-to-validated-execution).
   {id: 'test-runner', pattern: /^scripts\/(run-test-files|run-classified-test-files|test-machine-factor|plan-test-lane|select-change-tests|check-subsystem|test-execution-report|checks\/wait-for-thermal-headroom)\.js$/u},
-  {id: 'selection-machinery', pattern: /^scripts\/checks\/(change-selection[a-z-]*|changed-paths|git-invocation|git-process-environment|change-proof-string-collections|helper-import-closure|push-gate-change-proof|impact-proof-cone-constants|test-timeout-declarations|test-(?:primary|resource|subsystem)-classification[a-z-]*)\.js$/u},
+  {id: 'selection-machinery', pattern: /^scripts\/checks\/(change-selection[a-z-]*|changed-paths|git-invocation|git-process-environment|change-proof-string-collections|helper-import-closure|push-gate-change-proof|proof-checkout-preparation|impact-proof-cone-constants|test-timeout-declarations|test-(?:primary|resource|subsystem)-classification[a-z-]*)\.js$/u},
   {id: 'classification-generator', pattern: /^scripts\/generate-test-(?:primary|resource|subsystem)-classes\.js$/u},
   // Placement hands the runner's files to lab machines, so the modules that
   // choose, send and run them execute the proof (test-placement). The load

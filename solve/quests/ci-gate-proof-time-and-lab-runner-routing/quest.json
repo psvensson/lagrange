@@ -28,5 +28,14 @@
       "statement": "Attempt 2 changes no workflow until the lead decides the design note."
     }
   ],
-  "sealedAt": "22becf575c9fc52b3e80894fafad388d291ad6b5"
+  "sealedAt": "22becf575c9fc52b3e80894fafad388d291ad6b5",
+  "supersession": {
+    "rule": "R09",
+    "recordedAt": "2026-11-02",
+    "supersededBy": "ci-gate-proof-time-maximum",
+    "supersededReceipts": [
+      "lab-pr-gate-routed"
+    ],
+    "statement": "pull-request gates stay on the hosted runner by owner policy (home-lab.md) and the lead's acceptance of the attempt-2 recommendation; the lab-routing design is retained as evidence for a future owner decision (docs/evidence/ci-gate-proof-time-2026-11/lab-runner-routing-design-note.md). The sealed doneWhen is immutable (solve land refuses a changed probe), so the claim that can be proved without a routing implementation is carried by the successor quest ci-gate-proof-time-maximum."
+  }
 }

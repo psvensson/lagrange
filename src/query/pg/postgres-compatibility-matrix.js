@@ -30,6 +30,7 @@ import {
   PG_COMPAT_ORM_CLAIM_POLICY,
   PG_COMPAT_QUEST_ID,
   PG_COMPAT_SQLSTATE,
+  PG_COMPAT_SUPPORTED_CLIENT_MAJORS,
   PostgresCompatibilityMatrixError,
   buildCompatibilityCellId,
 } from './postgres-compatibility-catalog.js';
@@ -98,6 +99,10 @@ const MSG_EXPECTED_SQLSTATE_MISMATCH =
   'Receipt sqlState does not match declared cell expectedSqlState';
 const MSG_MUTATION_NOT_PREVENTED =
   'Receipt required mutationPrevented=true for refused or aborted execution';
+const MSG_DRIVER_VERSION_UNSUPPORTED =
+  'Client build is outside the matrix\'s certified client majors';
+const MAJOR_VERSION_PATTERN = /^(\d+)\./u;
+const MAJOR_VERSION_GROUP = 1;
 const MSG_DRIVER_VERSION_MISMATCH =
   'Receipt driverVersion does not match matrix driverVersions table';
 const MSG_INVALID_DRIVER_VERSIONS =
@@ -152,7 +157,6 @@ function computeCellReceiptDigest(receiptFields) {
   return computeSha256Hex({
     cellId: receiptFields.cellId,
     clientId: receiptFields.clientId,
-    driverVersion: receiptFields.driverVersion,
     dimension: receiptFields.dimension,
     featureId: receiptFields.featureId,
     status: receiptFields.status,
@@ -378,8 +382,24 @@ function validateDriverVersions(driverVersions) {
       {clientId},
     );
     normalized[clientId] = driverVersions[clientId].trim();
+    assertSupportedClientBuild(clientId, normalized[clientId]);
   }
   return objectFreeze(normalized);
+}
+
+// A client build the matrix does not certify is refused, typed: the claim
+// covers the declared majors only (PG_COMPAT_SUPPORTED_CLIENT_MAJORS).
+function assertSupportedClientBuild(clientId, version) {
+  const match = MAJOR_VERSION_PATTERN.exec(version);
+  const major = match ? Number(match[MAJOR_VERSION_GROUP]) : null;
+  const supportedMajors = PG_COMPAT_SUPPORTED_CLIENT_MAJORS[clientId];
+  if (major === null || !supportedMajors.includes(major)) {
+    throw new PostgresCompatibilityMatrixError(
+      PG_COMPAT_MATRIX_ERROR_CODE.DRIVER_VERSION_UNSUPPORTED,
+      MSG_DRIVER_VERSION_UNSUPPORTED,
+      {clientId, version, supportedMajors: [...supportedMajors]},
+    );
+  }
 }
 
 function indexValidatedReceipts(receipts, normalizedDriverVersions) {
@@ -513,7 +533,7 @@ function computeCompatibilityMatrixDigest(matrixPayload) {
     editionScope: matrixPayload.editionScope,
     ormCompatibilityClaimed: matrixPayload.ormCompatibilityClaimed,
     ormClaimPolicy: matrixPayload.ormClaimPolicy,
-    driverVersions: matrixPayload.driverVersions,
+    supportedClientMajors: matrixPayload.supportedClientMajors,
     cells: matrixPayload.cells,
     negativeControls: matrixPayload.negativeControls,
   });
@@ -544,7 +564,6 @@ function buildVerifiedMatrixCells(receiptById) {
     cells.push(objectFreeze({
       cellId: declaredCell.cellId,
       clientId: declaredCell.clientId,
-      driverVersion: receipt.driverVersion,
       dimension: declaredCell.dimension,
       featureId: declaredCell.featureId,
       status: receipt.status,
@@ -598,7 +617,7 @@ function generatePostgresCompatibilityMatrix(options = {}) {
     ormCompatibilityClaimed: false,
     ormClaimPolicy: PG_COMPAT_ORM_CLAIM_POLICY,
     clients: PG_COMPAT_ALL_CLIENTS,
-    driverVersions: normalizedDriverVersions,
+    supportedClientMajors: PG_COMPAT_SUPPORTED_CLIENT_MAJORS,
     dimensions: PG_COMPAT_ALL_DIMENSIONS,
     summary,
     cells,
@@ -608,6 +627,9 @@ function generatePostgresCompatibilityMatrix(options = {}) {
   return objectFreeze({
     ...baseMatrix,
     matrixDigest,
+    // The generating host's client builds: provenance, not the claim, and
+    // outside the digest.
+    environment: objectFreeze({driverVersions: normalizedDriverVersions}),
   });
 }
 
@@ -664,7 +686,6 @@ function isCandidateCellReceiptMatch(candidateCell, receipt) {
     candidateCell.status === receipt.status &&
     candidateCell.observedOutcome === receipt.observedOutcome &&
     candidateCell.sqlState === receipt.sqlState &&
-    candidateCell.driverVersion === receipt.driverVersion &&
     candidateCell.mutationPrevented === receipt.mutationPrevented
   );
 }
@@ -706,7 +727,7 @@ function verifyCompatibilityMatrixRegression(options = {}) {
   );
   assertNoOrmOverclaim(candidateMatrix.ormCompatibilityClaimed);
   const normalizedDriverVersions = validateDriverVersions(
-    candidateMatrix.driverVersions,
+    candidateMatrix.environment?.driverVersions,
   );
   const receiptById = indexValidatedReceipts(
     receipts,

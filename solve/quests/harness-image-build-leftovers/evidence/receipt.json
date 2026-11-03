@@ -1,0 +1,55 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "harness-image-build-leftovers",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "previous-build-retired",
+      "passed": true,
+      "detail": "buildImage records the id the tag named before the build (imageIdOf) and, after a successful build, retirePreviousImage removes it when untagged and unused, without force; red before the fix (6 of 7 tests), green after",
+      "evidence": [
+        "harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz:red-before-fix.log.txt (inventory solve/changes/evidence-relocation/harness-image-build-leftovers/relocation-inventory.json)",
+        "harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz:touched-green.log.txt (inventory solve/changes/evidence-relocation/harness-image-build-leftovers/relocation-inventory.json)"
+      ],
+      "testFile": "test/distributed/harness/__tests__/docker-image-retirement.test.js"
+    },
+    {
+      "id": "only-the-replaced-untagged-unused-image",
+      "passed": true,
+      "detail": "kept-tagged (another tag names it), kept-in-use (a container, running or stopped, uses it), kept-remove-failed (the daemon refuses, e.g. dependent child images), kept-unverified (a step cannot be read), none (no previous image, the same image, already gone); another dangling image is never touched and there is no prune; a failed build retires nothing; mutations of the tagged, in-use, same-image and removal-error guards each turn their test red; attempt 2: a pre-build read that fails other than 404 (500, ECONNREFUSED) is kept-unverified with the read error, never a fresh host; a post-build inspect or container listing that throws, or answers something that is not a list, is kept-unverified; a container matching by ImageID alone or by Image alone is kept-in-use; the listing asks for {all: true}; null and [] RepoTags count as untagged and are removed; a remove that answers 404 is none (already gone). Mutations M5, M6, M7, M8, M9, M15 and the F1, F4 (both), F7 guards each turn a test red (mutation-witnesses-attempt2.log.txt)",
+      "evidence": [
+        "harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz:mutation-witnesses.log.txt (inventory solve/changes/evidence-relocation/harness-image-build-leftovers/relocation-inventory.json)",
+        "harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz:touched-green.log.txt (inventory solve/changes/evidence-relocation/harness-image-build-leftovers/relocation-inventory.json)",
+        "harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz:red-attempt2-before-fix.log.txt (inventory solve/changes/evidence-relocation/harness-image-build-leftovers/relocation-inventory.json)",
+        "harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz:mutation-witnesses-attempt2.log.txt (inventory solve/changes/evidence-relocation/harness-image-build-leftovers/relocation-inventory.json)",
+        "harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz:touched-green-2.log.txt (inventory solve/changes/evidence-relocation/harness-image-build-leftovers/relocation-inventory.json)"
+      ],
+      "testFile": "test/distributed/harness/__tests__/docker-image-retirement.test.js"
+    },
+    {
+      "id": "typed-outcome-events",
+      "passed": true,
+      "detail": "operation events image.retire-previous with stage recorded (previousId, before the build) and the outcome stage (previousId, currentId, detail) after it, through the provider's operation sink (the run's docker operation log); asserted in every test; attempt 2: the recorded event carries unreadable (the failed pre-build read), and test/distributed/run-runtime-helpers.js formatDockerOperationEvent prints image.retire-previous[<stage>] tag previous current detail on the verbose docker operation log (red before: the default branch dropped the fields, red-attempt2-run-log-line.log.txt)",
+      "evidence": [
+        "harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz:touched-green.log.txt (inventory solve/changes/evidence-relocation/harness-image-build-leftovers/relocation-inventory.json)",
+        "harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz:red-attempt2-run-log-line.log.txt (inventory solve/changes/evidence-relocation/harness-image-build-leftovers/relocation-inventory.json)",
+        "harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz:touched-green-2.log.txt (inventory solve/changes/evidence-relocation/harness-image-build-leftovers/relocation-inventory.json)"
+      ],
+      "testFile": "test/distributed/harness/__tests__/docker-image-retirement.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "evidence": [
+        "log.ndjson verification entries 2026-11-02 (subagent:a52d334c11adb1881): reject at 1c3c09dae, approve at e43883b91"
+      ]
+    }
+  ],
+  "evidenceBundle": {
+    "asset": "harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz",
+    "sourceCommit": "31631326f",
+    "inventory": "solve/changes/evidence-relocation/harness-image-build-leftovers/relocation-inventory.json",
+    "verification": "solve/changes/evidence-relocation/harness-image-build-leftovers/relocation-verification.json"
+  }
+}

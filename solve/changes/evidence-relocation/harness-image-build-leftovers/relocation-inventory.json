@@ -1,0 +1,14 @@
+{
+  "schema": "solve-relocation-inventory/1",
+  "bundles": [
+    {
+      "bundle": "harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz",
+      "bundleSha256": "023befce836096f119696887c659b1ae25f67e3011b17d3d3045f3e0bc99fc2b",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.tar.gz",
+      "sourceCommit": "31631326fea13d14faace40c4c2f31d651246958",
+      "root": "solve/quests/harness-image-build-leftovers/evidence/",
+      "files": 8,
+      "shard": "relocation-inventory/harness-image-build-leftovers--harness-image-build-leftovers-evidence-31631326f-2026-11-02.json"
+    }
+  ]
+}

@@ -1510,3 +1510,23 @@ describe('runScenarios: a scenario the config cannot carry is REFUSED (R1)',
       assert.equal(hasRefusals, false);
     });
   });
+
+// The run log names why the harness kept or removed the build its tag
+// replaced (harness-image-build-leftovers).
+describe('docker operation log: image.retire-previous', () => {
+  it('prints the stage, the previous and current image and the detail', () => {
+    const line = runModule.formatDockerOperationEvent({operation: 'image.retire-previous',
+      stage: 'kept-in-use', tag: 'distributed-db:test', previousId: 'sha256:old',
+      currentId: 'sha256:new', detail: 'c1'});
+    assert.equal(line, 'image.retire-previous[kept-in-use] tag=distributed-db:test ' +
+      'previous=sha256:old current=sha256:new detail=c1');
+  });
+
+  it('prints an unreadable pre-build read on the recorded line', () => {
+    const line = runModule.formatDockerOperationEvent({operation: 'image.retire-previous',
+      stage: 'recorded', tag: 'distributed-db:test', previousId: null,
+      unreadable: 'connect ECONNREFUSED'});
+    assert.equal(line, 'image.retire-previous[recorded] tag=distributed-db:test ' +
+      'previous=- current=- detail=connect ECONNREFUSED');
+  });
+});

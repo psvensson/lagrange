@@ -110,6 +110,7 @@ const BUILD_PROGRESS_STREAM_KEY = 'stream';
 const BUILD_PROGRESS_ERROR_KEY = 'error';
 const DOCKER_OP_UNKNOWN = 'docker.operation';
 const DOCKER_OP_IMAGE_BUILD = 'image.build';
+const DOCKER_OP_IMAGE_RETIRE_PREVIOUS = 'image.retire-previous';
 const DOCKER_OP_NETWORK_CREATE = 'network.create';
 const DOCKER_OP_NETWORK_REMOVE = 'network.remove';
 const DOCKER_OP_CONTAINER_CREATE = 'container.create';
@@ -313,6 +314,7 @@ const DISTRIBUTED_RUN_RUNTIME_BUNDLE = createDistributedRunRuntimeBundle({
   BUILD_PROGRESS_ERROR_KEY,
   DOCKER_OP_UNKNOWN,
   DOCKER_OP_IMAGE_BUILD,
+  DOCKER_OP_IMAGE_RETIRE_PREVIOUS,
   DOCKER_OP_NETWORK_CREATE,
   DOCKER_OP_NETWORK_REMOVE,
   DOCKER_OP_CONTAINER_CREATE,
@@ -431,6 +433,7 @@ const DISTRIBUTED_RUN_RUNTIME_BUNDLE = createDistributedRunRuntimeBundle({
 
 const {
   createDockerOperationSink,
+  formatDockerOperationEvent,
   extractBuildProgressLine,
   runScenarios,
   shouldPrintLiveLogEntry,
@@ -1450,6 +1453,7 @@ if (isDirectRun && !isTapRun) {
 }
 
 export {
+  formatDockerOperationEvent,
   parseArgs,
   runScenarios,
   normalizeScenarioPayload,

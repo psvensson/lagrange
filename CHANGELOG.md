@@ -11,6 +11,18 @@ releases without a compatibility guarantee.
 ## [Unreleased]
 
 ### Fixed
+- **PostgreSQL compatibility matrix certifies the SQL surface, not the host's client build (`postgres-compatibility-matrix.js`, `postgres-compatibility-catalog.js`, `docs/postgres-compatibility-matrix.json`):**
+  the generating host's driver versions are now environment recorded beside the matrix, outside its digest and its cell receipt digests, so a host with psql 16.15 and one with psql 14.24 certify the same committed matrix (schema `lagrange-postgres-compatibility-matrix/2`). The matrix declares the client majors it certifies (psql 14 and 16, node-pg 8, pg-pool 3) and refuses any other build with `DRIVER_VERSION_UNSUPPORTED`; the generated content must still equal the committed matrix exactly.
+- **0.5 WASI service tests run in the serial toolchain lane (`test/shards/resource-external-toolchain.txt`):**
+  `test/service/h1`-`h5` and `q2`-`q5` compile real Hono/service components and start real
+  component Cells, so they now have resource class `external-toolchain` (jobs=1), like
+  `service-cell-worker-modes` and `service-cell-bridge-roundtrip`. Measured at jobs=1 on the
+  20-core controller: 14.9-40.2 s real and 2.2-2.8x cores each. At jobs=4 pinned to two cores,
+  3 of 4 failed with `STARTUP_TIMEOUT_MS`. The hosted runner (run 41431327759) failed h1-h5 and
+  q2-q4, and q5 passed at 113 s. This corrects the classification under the existing rule. It
+  does not change any bound or assertion, and it does **not** close the underlying product
+  defect (every Cell start re-transpiles, and under load the start is killed and redone),
+  which quest `wasi-component-startup-budget` owns. Quest `service-test-toolchain-classification`.
 - **CI gate proof time (`.github/workflows/ci.yml`, `test/manifests/ci-resource-plan.json`):**
   the required `gate` job's `timeout-minutes` is raised from 120 to GitHub's 360-minute
   maximum for every event. Measured cause: PR #184's gate run 41431327759 (a 1892-file
@@ -43,6 +55,10 @@ releases without a compatibility guarantee.
   `npm run audit:comparative-recompute` recomputes every published artifact from the
   raw records.
 
+- **Local proof checkouts get the generated material CI has (`proof-checkout-preparation.js`, `push-gate-corpus-worktree.js`, `lab/probe.js`):**
+  every exact checkout the push-gate materializer proves a command in (the pre-push gate, the publisher's local and post-merge corpus, the local release proof) now generates the sealed import graph for that commit before the command starts, from the one list the lab placement shares; a producer that fails, or that rewrites tracked metadata (a commit whose committed seal is stale), refuses the checkout before the command, locally and on lab machines alike. The post-merge corpus for b3b366573 had run `push-gate-change-proof.test.js` red in an unprepared checkout.
+- **Harness image rebuilds no longer leave the previous build behind (`docker-image-retirement.js`, `docker-provider.js`):**
+  after a successful build of the harness test image the provider removes the image its tag named before, only when that image is now untagged and no container uses it, never forced and never anything else (no prune; tagged product and base images are kept), and records the previous id and the outcome as typed `image.retire-previous` events. Untagged leftovers of every lab scenario and cone run had filled a lab host's root partition.
 - **Proof receipts bound to a validated execution report (`proof-authority.js`, `test-execution-report.js`, `run-test-files.js`, `run-release-proof.js`, `publish-head.js`, `push-gate-change-proof.js`, `full-gate.yml`):**
   `recordProof` no longer takes a caller's word for a pass. Every durable receipt is minted only from the runner's execution report of the exact candidate (sha, tree, release proof identity, commands with exit statuses, planned versus executed files, per-file assertion counts and every retry attempt), and is refused with a typed problem for an absent, malformed (`execution-report-malformed`), partial or mismatched report, a failed command or run, a failed, unexecuted or zero-assertion file, a truncated run, an unresolvable reused proof or one its contract's seal does not let it cite (`execution-report-reused-proof-not-citable`), and a file green only on its retry (no contract admits qualified results). A file run in more than one run keeps its worst verdict whatever the run order. A test file never inherits the report its run writes, and a local corpus that lost its gate's cone report is no whole-corpus evidence. Receipts recorded before reports existed resolve unchanged. Lab-placed shard reporting and solve-land proof reuse mint no receipt yet.
 

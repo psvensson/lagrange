@@ -45,7 +45,7 @@ const MATRIX_TOKENS = Object.freeze([
 ]);
 
 const MATRIX_JSON_TOKENS = Object.freeze([
-  '"schema": "lagrange-postgres-compatibility-matrix/1"',
+  '"schema": "lagrange-postgres-compatibility-matrix/2"',
   '"ormCompatibilityClaimed": false',
   '"clients":',
   '"dimensions":',

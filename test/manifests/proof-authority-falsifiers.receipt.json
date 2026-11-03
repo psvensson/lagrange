@@ -3,10 +3,10 @@
   "quest": "proof-authority-integrity",
   "status": "pass",
   "testFileDigests": {
-    "test/scripts/proof-authority-falsifiers.test.js": "7c88b7ab4b1c88f56be5aae4fdd6f402fcac23a3aa3a3dac4bd62ac8e4315855",
-    "test/scripts/pre-push-hook-control-flow.test.js": "08fd51a0d6aebda2880dc392bb4117796a1a15c92a148f7a7cb12113213a0b27"
+    "test/scripts/proof-authority-falsifiers.test.js": "6143900c08287bf1ca9042620ca7ee390e328c71f1526f0941ff033ba811df9f",
+    "test/scripts/pre-push-hook-control-flow.test.js": "2523b4d90ddf7153b693ba45ca48815ff2d795abae5123ad9326f0b70bc63663"
   },
-  "generatedAt": "2026-09-14T15:24:02.934Z",
+  "generatedAt": "2026-11-02T13:57:06.824Z",
   "receipts": [
     {
       "id": "observed-file",

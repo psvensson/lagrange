@@ -19,7 +19,9 @@ import {
   runPlacedTestFiles, startRemoteShard,
 } from '../../scripts/lab/probe.js';
 import {runClassifiedTestFiles} from '../../scripts/run-classified-test-files.js';
-import {CONTROLLER, LANE, fakeInventory, lab} from './test-placement-fixtures.js';
+import {
+  CONTROLLER, IMPORT_GRAPH_PRODUCER, LANE, PRODUCER_STUB, fakeInventory, lab, sealPlacedCommit,
+} from './test-placement-fixtures.js';
 import {spawnGit} from '../../scripts/checks/git-invocation.js';
 
 const MINUTE = 60000;
@@ -892,20 +894,6 @@ function labLockFixture(scratch, env) {
     calls: () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : [])};
 }
 
-// The import-graph producer a fixture commit carries unless a witness asks
-// for the real one: it says where and how it ran, and writes the graph.
-const IMPORT_GRAPH_PRODUCER = 'scripts/generate-global-owner-debt-inventory.js';
-const PRODUCER_STUB = [
-  'import {execSync} from \'node:child_process\';',
-  'import fs from \'node:fs\';',
-  'const head = execSync(\'git rev-parse HEAD\', {encoding: \'utf8\'}).trim();',
-  'process.stderr.write(`producer ${process.argv.slice(2).join(\' \')} at ${head}\\n`);',
-  'if (process.env.PRODUCER_FAILS) process.exit(1);',
-  'fs.mkdirSync(\'test-output/analysis\', {recursive: true});',
-  'fs.writeFileSync(\'test-output/analysis/global-owner-debt-import-graph.json\', \'{}\');',
-  '',
-].join('\n');
-
 // A lab machine's checkout at this commit, and a controller one commit on,
 // in scratch repositories; `start` places files there in local-sh mode.
 function labFixture(t, {realProducer = false} = {}) {
@@ -945,6 +933,7 @@ function labFixture(t, {realProducer = false} = {}) {
   fs.writeFileSync(path.join(controller, SEALED_GRAPH_TEST), SEALED_GRAPH_TEST_SOURCE);
   fs.writeFileSync(path.join(controller, LINK_UNIVERSE_TEST), LINK_UNIVERSE_TEST_SOURCE);
   git(controller, 'add', '-f', GATE_TEST, RESULTS_FILE, SEALED_GRAPH_TEST, LINK_UNIVERSE_TEST);
+  if (realProducer) sealPlacedCommit(controller);
   git(controller, 'commit', '-qam', 'placement witness');
   const sha = git(controller, 'rev-parse', 'HEAD');
   const machine = {name: 'lab', sshTarget: null, repoPath: node, repoHead: basis,
@@ -1338,6 +1327,14 @@ test('a lab machine generates the placed commit\'s import graph before its files
     const failed = await start([FAST_TEST], {runId: 'graph-failed'}).done;
     assert.equal(failed.status, PLACEMENT_EXIT.SETUP, 'a graph it cannot make is a setup failure');
     assert.match(failed.errors, /placement: the import graph could not be generated/u);
+    delete env.PRODUCER_FAILS;
+    env.PRODUCER_REWRITES = 'README.md';
+    const stale = await start([FAST_TEST], {runId: 'graph-stale'}).done;
+    assert.equal(stale.status, PLACEMENT_EXIT.SETUP,
+      'a producer that rewrites tracked metadata is a setup failure, as in the gate');
+    assert.match(stale.errors,
+      /placement: the commit's generated metadata is stale; regenerate and commit README\.md/u);
+    assert.doesNotMatch(stale.log, /placement-pid=/u, 'no runner started');
   });
 
 test('the change proof\'s sealed-graph precondition holds in a lab machine\'s checkout',
