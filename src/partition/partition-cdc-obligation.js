@@ -68,25 +68,37 @@ import {applyCommittedPartitionCdcEventToCache} from
 const FAILED_LOCAL_COMMITTED_CDC_APPLY =
   'Failed local committed CDC apply';
 
-function applyCommittedEventsToPartitionState(service, events) {
-  if (!service?.systemTableCache) {
+function resolveServiceWritableCache(service) {
+  return service?.cdcIntegrationService?.cacheMutationTarget ||
+    service?.systemTableCache ||
+    null;
+}
+
+function applySingleCommittedEventToCache(service, writableCache, event, timestamp) {
+  if (!event?.cdcEvent) {
     return;
   }
-  const timestamp = service.timeSource?.now?.() ?? Date.now();
+  try {
+    applyCommittedPartitionCdcEventToCache(
+      writableCache,
+      event.cdcEvent,
+      timestamp,
+    );
+  } catch (err) {
+    service?.logger?.debug?.(FAILED_LOCAL_COMMITTED_CDC_APPLY, {
+      error: err?.message,
+    });
+  }
+}
+
+function applyCommittedEventsToPartitionState(service, events) {
+  const writableCache = resolveServiceWritableCache(service);
+  if (!writableCache) {
+    return;
+  }
+  const timestamp = service?.timeSource?.now?.() ?? Date.now();
   for (const event of events) {
-    if (event.cdcEvent) {
-      try {
-        applyCommittedPartitionCdcEventToCache(
-          service.systemTableCache,
-          event.cdcEvent,
-          timestamp,
-        );
-      } catch (err) {
-        service.logger?.debug?.(FAILED_LOCAL_COMMITTED_CDC_APPLY, {
-          error: err?.message,
-        });
-      }
-    }
+    applySingleCommittedEventToCache(service, writableCache, event, timestamp);
   }
 }
 

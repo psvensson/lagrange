@@ -53,6 +53,7 @@ const {
 const METADATA_LOOKUP_TIMEOUT_MS = 2500;
 const LOOKUP_TABLE_SQL = 'SELECT * FROM tables WHERE table_name = ?';
 const LOOKUP_PARTITIONS_SQL = 'SELECT * FROM partitions WHERE table_name = ?';
+const LOOKUP_SERVICES_SQL = 'SELECT * FROM services WHERE service_type = \'partition\'';
 
 async function fetchAuthoritativeTableRows(gateway, targetName) {
   let timer = null;
@@ -63,6 +64,7 @@ async function fetchAuthoritativeTableRows(gateway, targetName) {
     const fetch = Promise.all([
       gateway.readAuthoritativeRows(TABLES.TABLES, LOOKUP_TABLE_SQL, [targetName]),
       gateway.readAuthoritativeRows(TABLES.PARTITIONS, LOOKUP_PARTITIONS_SQL, [targetName]),
+      gateway.readAuthoritativeRows(TABLES.SERVICES, LOOKUP_SERVICES_SQL, []),
     ]);
     const outcome = await Promise.race([fetch, timeout]);
     if (timer !== null) clearTimeout(timer);
@@ -73,19 +75,24 @@ async function fetchAuthoritativeTableRows(gateway, targetName) {
   }
 }
 
+function applyTableResultToStore(store, gateway, tableName, result) {
+  if (Array.isArray(result?.rows) && result.rows.length > 0) {
+    gateway.applySystemTableRowsToCache?.(store, tableName, result.rows);
+    return true;
+  }
+  return false;
+}
+
 function applyAuthoritativeRowsToStore(store, gateway, outcome) {
   if (!Array.isArray(outcome)) return false;
-  const [tableResult, partitionResult] = outcome;
-  let applied = false;
-  if (Array.isArray(tableResult?.rows) && tableResult.rows.length > 0) {
-    gateway.applySystemTableRowsToCache?.(store, TABLES.TABLES, tableResult.rows);
-    applied = true;
-  }
-  if (Array.isArray(partitionResult?.rows) && partitionResult.rows.length > 0) {
-    gateway.applySystemTableRowsToCache?.(store, TABLES.PARTITIONS, partitionResult.rows);
-    applied = true;
-  }
-  return applied;
+  const [tableResult, partitionResult, serviceResult] = outcome;
+  const tableApplied =
+    applyTableResultToStore(store, gateway, TABLES.TABLES, tableResult);
+  const partitionApplied =
+    applyTableResultToStore(store, gateway, TABLES.PARTITIONS, partitionResult);
+  const serviceApplied =
+    applyTableResultToStore(store, gateway, TABLES.SERVICES, serviceResult);
+  return tableApplied || partitionApplied || serviceApplied;
 }
 
 class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverlay {
@@ -94,17 +101,21 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       this.getControlPlaneSystemTableGateway?.() ||
       this.controlPlaneSystemTableGateway ||
       null;
+    const store =
+      this.cdcIntegrationService?.cacheMutationTarget ||
+      this.systemCache ||
+      null;
     if (
       !gateway ||
       typeof gateway.readAuthoritativeRows !== 'function' ||
-      !this.systemCache ||
+      !store ||
       typeof tableName !== 'string' ||
       tableName.length === 0
     ) {
       return false;
     }
     const outcome = await fetchAuthoritativeTableRows(gateway, tableName);
-    return applyAuthoritativeRowsToStore(this.systemCache, gateway, outcome);
+    return applyAuthoritativeRowsToStore(store, gateway, outcome);
   }
   /**
    * Create one control-plane timeout budget.

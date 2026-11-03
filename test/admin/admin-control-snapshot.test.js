@@ -29,6 +29,7 @@ test('AdminControlSnapshot queries authoritative services and replica operations
 
   const cache = {
     getAll(table) {
+      if (table === TABLES.NODES) return [{node_id: 'n1', status: 'active'}, {node_id: 'n2', status: 'active'}];
       if (table === TABLES.SERVICES) return cachedServices;
       if (table === TABLES.REPLICA_OPERATIONS) return cachedOps;
       return [];
@@ -64,6 +65,7 @@ test('AdminControlSnapshot falls back to cached services and replica operations 
 
   const cache = {
     getAll(table) {
+      if (table === TABLES.NODES) return [{node_id: 'n1', status: 'active'}, {node_id: 'n2', status: 'active'}];
       if (table === TABLES.SERVICES) return cachedServices;
       if (table === TABLES.REPLICA_OPERATIONS) return cachedOps;
       return [];
@@ -99,7 +101,10 @@ test('AdminControlSnapshot late-resolves gateway from global registry when const
   };
 
   const cache = {
-    getAll: () => [],
+    getAll: (table) => {
+      if (table === TABLES.NODES) return [{node_id: 'n1', status: 'active'}, {node_id: 'n2', status: 'active'}];
+      return [];
+    },
   };
 
   const snapshot = new AdminControlSnapshot({

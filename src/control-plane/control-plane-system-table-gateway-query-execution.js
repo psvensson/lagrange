@@ -87,6 +87,10 @@ function buildExplicitReadRequestKey(tableName, explicitKey, options) {
   }:${explicitKey}:${stableSerialize(buildReadExecutionContract(options))}`;
 }
 
+const LOCAL_STR_APPLYSYSTEMTABLECHANGE = 'applySystemTableChange';
+const CONTROL_PLANE_GATEWAY_APPLY_CACHE_FAILED =
+  'control_plane_gateway_apply_cache_failed';
+
 function buildImplicitReadRequestKey(tableName, sql, params, options) {
   return stableSerialize({
     kind:
@@ -98,6 +102,37 @@ function buildImplicitReadRequestKey(tableName, sql, params, options) {
     ...buildReadExecutionContract(options),
     ...buildReadPressureContract(options),
   });
+}
+
+function isWritableSystemTableCache(cache) {
+  return Boolean(
+    cache &&
+    typeof cache === 'object' &&
+    LOCAL_STR_APPLYSYSTEMTABLECHANGE in cache &&
+    typeof cache.applySystemTableChange === 'function',
+  );
+}
+
+function resolveWritableCacheTarget(gateway, writableCache) {
+  if (isWritableSystemTableCache(writableCache)) {
+    return writableCache;
+  }
+  const cdcTarget = gateway.resolveCdcIntegrationService?.()?.cacheMutationTarget;
+  return isWritableSystemTableCache(cdcTarget) ? cdcTarget : null;
+}
+
+function applySingleRowToCache(logger, targetCache, tableName, row) {
+  if (!row || typeof row !== 'object') {
+    return;
+  }
+  try {
+    targetCache.applySystemTableChange(tableName, CDC_OPERATION.UPSERT, row);
+  } catch (e) {
+    logger?.debug?.(CONTROL_PLANE_GATEWAY_APPLY_CACHE_FAILED, {
+      tableName,
+      error: e?.message ?? String(e),
+    });
+  }
 }
 
 const controlPlaneSystemTableGatewayQueryExecutionMethods = {
@@ -473,29 +508,12 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
   },
 
   applySystemTableRowsToCache(writableCache, tableName, rows) {
-    if (
-      !writableCache ||
-      typeof writableCache.applySystemTableChange !== 'function' ||
-      !Array.isArray(rows)
-    ) {
+    const targetCache = resolveWritableCacheTarget(this, writableCache);
+    if (!targetCache || !Array.isArray(rows)) {
       return;
     }
-    for (let i = 0; i < rows.length; i += 1) {
-      const row = rows[i];
-      if (row && typeof row === 'object') {
-        try {
-          writableCache.applySystemTableChange(
-            tableName,
-            CDC_OPERATION.UPDATE,
-            row,
-          );
-        } catch (e) {
-          this.logger?.debug?.('control_plane_gateway_apply_cache_failed', {
-            tableName,
-            error: e?.message ?? String(e),
-          });
-        }
-      }
+    for (const row of rows) {
+      applySingleRowToCache(this.logger, targetCache, tableName, row);
     }
   },
 };
@@ -506,8 +524,7 @@ function applyCommittedPartitionCdcEventToCache(
   observedAtMs = Date.now(),
 ) {
   if (
-    !systemTableCache ||
-    typeof systemTableCache.applySystemTableChange !== 'function' ||
+    !isWritableSystemTableCache(systemTableCache) ||
     !cdcEvent?.tableName ||
     !cdcEvent?.operation ||
     !cdcEvent?.data

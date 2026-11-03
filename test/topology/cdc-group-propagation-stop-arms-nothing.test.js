@@ -260,11 +260,9 @@ const LANES = [
   {name: 'two targets, stop while the first is in flight',
     options: {targets: TARGETS}, async drive(lane) {
       propagate(lane);
-      await untilRouterCalls(lane, TARGETS.length);
+      await untilRouterCalls(lane, 1);
       lane.stop();
-      for (const call of lane.routerCalls) {
-        call.answer(REFUSED);
-      }
+      answerLastCall(lane);
     }},
 ];
 

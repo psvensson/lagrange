@@ -612,17 +612,7 @@ function registerSqlQueryEngineExecutionTestCases({
   const createMockProbeCache = () => createMockSystemCache(
     [],
     [],
-    [
-      {
-        service_id: 'ffr_probe_p1-r1',
-        service_type: SERVICE_TYPE.PARTITION,
-        partition_id: 'ffr_probe_p1',
-        node_id: 'test-node',
-        raft_role: 'leader',
-        address: 'test-node/partition/ffr_probe_p1',
-        status: SERVICE_STATUS.ACTIVE,
-      },
-    ],
+    [],
   );
 
   const createMockProbeMetadataGateway = (authoritativeQueries) => ({
@@ -647,6 +637,20 @@ function registerSqlQueryEngineExecutionTestCases({
           }],
         };
       }
+      if (tableName === TABLES.SERVICES) {
+        return {
+          success: true,
+          rows: [{
+            service_id: 'ffr_probe_p1-r1',
+            service_type: SERVICE_TYPE.PARTITION,
+            partition_id: 'ffr_probe_p1',
+            node_id: 'test-node',
+            raft_role: 'leader',
+            address: 'test-node/partition/ffr_probe_p1',
+            status: SERVICE_STATUS.ACTIVE,
+          }],
+        };
+      }
       return {success: false, rows: []};
     },
     applySystemTableRowsToCache(targetCache, tableName, rows) {
@@ -654,6 +658,8 @@ function registerSqlQueryEngineExecutionTestCases({
         targetCache.tables.push(...rows);
       } else if (tableName === TABLES.PARTITIONS) {
         targetCache.partitions.push(...rows);
+      } else if (tableName === TABLES.SERVICES) {
+        targetCache.services.push(...rows);
       }
     },
   });
@@ -674,7 +680,7 @@ function registerSqlQueryEngineExecutionTestCases({
     const result = await engine.executeQuery('SELECT * FROM ffr_probe');
 
     t.equal(result.success, true, 'SELECT should succeed after authoritative metadata refresh');
-    t.equal(authoritativeQueries.length, 2, 'should query tables and partitions from authority');
+    t.equal(authoritativeQueries.length, 3, 'should query tables, partitions, and services from authority');
     t.equal(result.rows.length, 1, 'should return rows from partition');
 
     mockPartitionData.clear();
@@ -703,7 +709,7 @@ function registerSqlQueryEngineExecutionTestCases({
     const result = await engine.executeQuery('INSERT INTO ffr_probe (id, val) VALUES ("k1", "ok")');
 
     t.equal(result.success, true, 'INSERT should succeed after authoritative metadata refresh');
-    t.equal(authoritativeQueries.length, 2, 'should query tables and partitions from authority');
+    t.equal(authoritativeQueries.length, 3, 'should query tables, partitions, and services from authority');
     t.equal(inserted, true, 'message router should deliver insert');
   });
 

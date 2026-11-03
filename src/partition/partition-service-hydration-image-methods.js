@@ -50,13 +50,6 @@ const PARTITION_SERVICE_HYDRATION_IMAGE_METHODS = Object.freeze({
     return Object.freeze({state: PARTITION_HYDRATION_IMAGE_STATE.READ, rows,
       appliedIndex, tenure: this.leadershipTenure, partitionId: this.partitionId});
   },
-
-  async acknowledgeHydratedCdcObligations(appliedIndex) {
-    if (!this.cdcDelivery || typeof this.cdcDelivery.acknowledgeHydratedObligationsThrough !== 'function') {
-      return;
-    }
-    await this.cdcDelivery.acknowledgeHydratedObligationsThrough(appliedIndex);
-  },
 });
 
 export {PARTITION_HYDRATION_IMAGE_STATE, PARTITION_SERVICE_HYDRATION_IMAGE_METHODS};

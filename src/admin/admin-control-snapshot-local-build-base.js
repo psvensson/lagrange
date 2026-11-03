@@ -106,6 +106,8 @@ const QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER =
   'membership_publication_owner';
 // ends-on: the authoritative system table query answers
 const AUTHORITATIVE_CONTROL_SNAPSHOT_TIMEOUT_MS = 1500;
+// ends-on: authoritative snapshot refresh rate limit cooldown elapsed
+const AUTHORITATIVE_SNAPSHOT_REFRESH_COOLDOWN_MS = 750;
 const SELECT_ALL_SERVICES_SQL = 'SELECT * FROM services';
 const SELECT_ALL_REPLICA_OPERATIONS_SQL = 'SELECT * FROM replica_operations';
 const CONTROL_SNAPSHOT_AUTHORITATIVE_FETCH_FAILED =
@@ -117,6 +119,51 @@ function resolveSnapshotTableSql(tableName) {
     tableName === TABLES.REPLICA_OPERATIONS ?
       SELECT_ALL_REPLICA_OPERATIONS_SQL :
       `SELECT * FROM ${tableName}`;
+}
+
+function shouldRefreshAuthoritativeSnapshotRows(
+  options,
+  gateway,
+  cachedNodeRows,
+  lastRefreshAtMs,
+  nowMs,
+) {
+  if (options.skipAuthoritativeSnapshotRowRefresh === true || !gateway) {
+    return false;
+  }
+  const allKnownNodesActive =
+    Array.isArray(cachedNodeRows) &&
+    cachedNodeRows.length >= 2 &&
+    cachedNodeRows.every((row) => String(row?.status || '').toLowerCase() === 'active');
+  return allKnownNodesActive &&
+    nowMs - lastRefreshAtMs >= AUTHORITATIVE_SNAPSHOT_REFRESH_COOLDOWN_MS;
+}
+
+async function refreshAuthoritativeSnapshotRows(gateway, resolver, cacheTarget) {
+  const [authoritativeServices, authoritativeOperations] =
+    await Promise.all([
+      resolver(gateway, TABLES.SERVICES),
+      resolver(gateway, TABLES.REPLICA_OPERATIONS),
+    ]);
+  let serviceRows = null;
+  let replicaOperationRows = null;
+  if (Array.isArray(authoritativeServices) && authoritativeServices.length > 0) {
+    serviceRows = authoritativeServices;
+    gateway.applySystemTableRowsToCache?.(
+      cacheTarget,
+      TABLES.SERVICES,
+      authoritativeServices,
+    );
+  }
+  if (Array.isArray(authoritativeOperations)) {
+    replicaOperationRows = authoritativeOperations;
+    gateway.applySystemTableRowsToCache?.(
+      cacheTarget,
+      TABLES.REPLICA_OPERATIONS,
+      authoritativeOperations,
+    );
+  }
+  return {serviceRows, replicaOperationRows};
 }
 function toControlSnapshotNonNegativeInteger(value) {
   const numericValue = Number(value);
@@ -498,6 +545,7 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
         null;
     this.nowFn =
       typeof deps.nowFn === 'function' ? deps.nowFn : () => Date.now();
+    this.lastAuthoritativeSnapshotRefreshAtMs = 0;
     // Diagnostics only, injected exactly as the sibling admin owners
     // (AdminServiceDiscovery, AdminDebugHandlers) receive theirs. Absent it
     // the control snapshot behaves as before and simply says nothing. The
@@ -572,39 +620,28 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
     );
     let serviceRows = systemTableCache.getAll(TABLES.SERVICES);
 
+    const cachedNodeRows = systemTableCache.getAll(TABLES.NODES);
+    const nowMs = this.nowFn();
     if (
-      options.skipAuthoritativeSnapshotRowRefresh !== true &&
-      gateway
+      shouldRefreshAuthoritativeSnapshotRows(
+        options,
+        gateway,
+        cachedNodeRows,
+        this.lastAuthoritativeSnapshotRefreshAtMs,
+        nowMs,
+      )
     ) {
-      const [authoritativeServices, authoritativeOperations] =
-        await Promise.all([
-          this.resolveAuthoritativeSnapshotRows(
-            gateway,
-            TABLES.SERVICES,
-          ),
-          this.resolveAuthoritativeSnapshotRows(
-            gateway,
-            TABLES.REPLICA_OPERATIONS,
-          ),
-        ]);
-      if (
-        Array.isArray(authoritativeServices) &&
-        authoritativeServices.length > 0
-      ) {
-        serviceRows = authoritativeServices;
-        gateway.applySystemTableRowsToCache?.(
-          cacheOwner.cacheMutationTarget || systemTableCache,
-          TABLES.SERVICES,
-          authoritativeServices,
-        );
+      this.lastAuthoritativeSnapshotRefreshAtMs = nowMs;
+      const refreshed = await refreshAuthoritativeSnapshotRows(
+        gateway,
+        (gw, tbl) => this.resolveAuthoritativeSnapshotRows(gw, tbl),
+        cacheOwner.cacheMutationTarget || systemTableCache,
+      );
+      if (refreshed.serviceRows) {
+        serviceRows = refreshed.serviceRows;
       }
-      if (Array.isArray(authoritativeOperations)) {
-        replicaOperationRows = authoritativeOperations;
-        gateway.applySystemTableRowsToCache?.(
-          cacheOwner.cacheMutationTarget || systemTableCache,
-          TABLES.REPLICA_OPERATIONS,
-          authoritativeOperations,
-        );
+      if (refreshed.replicaOperationRows) {
+        replicaOperationRows = refreshed.replicaOperationRows;
       }
     }
     const tableRows = systemTableCache.getAll(TABLES.TABLES);
