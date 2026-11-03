@@ -33,7 +33,7 @@ import {SYSTEM_TABLE_NAME} from
 import {ENTITY_TYPE, SERVICE_TYPE} from '../constants/index.js';
 import {validateBootstrapMembershipStamp} from
   '../raft/raft-committed-membership-stamp.js';
-import {admissionLeaderHint, admissionLeaderTarget, admissionStampReadOptions} from
+import {admissionLeaderHint, admissionLeaderTarget, admissionStampReads} from
   '../raft/raft-rs-committed-peer-address.js';
 import {readCommittedMembershipStamp} from
   '../rebalancer/committed-membership-bootstrap-read.js';
@@ -418,23 +418,27 @@ function admissionLeaderOf(service, request) {
 }
 
 // The committed-membership bootstrap read the target was created from,
-// performed again by the same owner (readCommittedMembershipStamp): the
-// stamp it now holds, or a typed unreadable answer kept for this cadence.
+// performed again by the same owner (readCommittedMembershipStamp), asked at
+// the held stamp's committed nodes in order, on this one cadence turn: the
+// stamp it now holds, or a typed unreadable answer kept for the next. No
+// cached row routes it.
 async function rereadCommittedStamp(service, request) {
-  try {
-    // Asked first at the node the held stamp places its leader on; no
-    // cached row routes it.
-    request.stamp = await readCommittedMembershipStamp({
-      messageRouter: service.transport, nodeId: service.nodeId},
-    service.partitionId, admissionStampReadOptions(request.stamp));
-    request.leaderHint = null;
-    request.rereadStamp = false;
-    return null;
-  } catch (error) {
-    return answer(REPLICA_ADMISSION_OUTCOME.NOT_LEADER, {leaderId: null,
-      reason: REPLICA_ADMISSION_REASON.STAMP_UNREADABLE,
-      readRefusal: error?.code ?? null});
+  let refusal = null;
+  for (const read of admissionStampReads(request.stamp)) {
+    try {
+      request.stamp = await readCommittedMembershipStamp({
+        messageRouter: service.transport, nodeId: service.nodeId},
+      service.partitionId, read);
+      request.leaderHint = null;
+      request.rereadStamp = false;
+      return null;
+    } catch (error) {
+      refusal = error;
+    }
   }
+  return answer(REPLICA_ADMISSION_OUTCOME.NOT_LEADER, {leaderId: null,
+    reason: REPLICA_ADMISSION_REASON.STAMP_UNREADABLE,
+    readRefusal: refusal?.code ?? null});
 }
 
 class PartitionServiceReplicaAdmissionMethods {
@@ -495,10 +499,12 @@ class PartitionServiceReplicaAdmissionMethods {
     if (request.state === REPLICA_ADMISSION_REQUEST_STATE.PENDING) {
       // A usable hint is followed; anything else (no hint, an unaddressed
       // or unreachable leader) reads the committed membership again on the
-      // next cadence. Nothing is seeded from a cache.
-      request.leaderHint = acceptedLeaderHint(request, admission);
-      request.rereadStamp = request.leaderHint === null &&
-        REREAD_STAMP_ANSWERS.has(admission.outcome);
+      // next cadence. A leader that deferred is asked again. Nothing is
+      // seeded from a cache.
+      if (REREAD_STAMP_ANSWERS.has(admission.outcome)) {
+        request.leaderHint = acceptedLeaderHint(request, admission);
+        request.rereadStamp = request.leaderHint === null;
+      }
     }
     this.logger.info(REPLICA_ADMISSION_LOG_MSG.ANSWERED, {
       partitionId: this.partitionId, replicaId: this.replicaId,

@@ -16,8 +16,10 @@
 //
 // On the rs-raft partition path the partition's peer is joined the way
 // production joins one: the partition leads its group, commits a prefix
-// through its own operation port, and admits the peer through its
-// services-cache reconcile (an ADD_PEER proposal the core commits). The real
+// through its own operation port, and admits the peer from its committed
+// replica operation on the peer's ADMIT_REPLICA request (an ADD_PEER
+// proposal the core commits; quest replica-admission-from-committed-operation
+// deleted the services-cache reconcile this fixture used). The real
 // write is the port's progress probe: the leader holds no acknowledged
 // progress for the peer (the recording transport never answers), so the probe
 // sends one append to the peer at the address resolved at send time
@@ -199,10 +201,28 @@ function authoritativePartitionCache() {
 }
 
 // Lead the group, commit a prefix write through the operation port, and
-// admit the peer the way production does: its ACTIVE services row lands in
-// the cache again (a durable re-landing, UPDATE) and the leader's
-// services-cache reconcile proposes it. Admission is complete when the port's
-// configuration names the peer.
+// admit the peer the way production does: a committed ADD operation names
+// the peer, its node and this partition at SYNCING (read by the leader
+// through its committed control-plane read), and the peer's ADMIT_REPLICA
+// request reaches the leader's handler. Admission is complete when the
+// port's configuration names the peer.
+const ADMIT_REPLICA = 'ADMIT_REPLICA';
+const PEER_OPERATION_ID = 'address-authority-add-peer';
+
+function committedAddOperation(peerRow) {
+  return {
+    operation_id: PEER_OPERATION_ID,
+    type: 'ADD',
+    entity_type: SERVICE_TYPE.PARTITION,
+    entity_id: PARTITION_ID,
+    partition_id: PARTITION_ID,
+    replica_id: peerRow.service_id,
+    target_node_id: peerRow.node_id,
+    status: 'syncing',
+    workflow_step: 'SYNCING',
+  };
+}
+
 async function leadAndAdmitPeer(partition, peerRow) {
   assertRaftOperationSucceeded(await partition.raft.campaign());
   assertRaftOperationSucceeded(await partition.raft.propose({
@@ -211,8 +231,16 @@ async function leadAndAdmitPeer(partition, peerRow) {
     params: [ONE],
     entryId: `address-authority-prefix-${partition.replicaId}`,
   }));
-  partition.systemTableCache.applySystemTableChange(
-    TABLES.SERVICES, CDC_OPERATIONS.UPDATE, {...peerRow, updated_at: ONE + 1});
+  const operation = committedAddOperation(peerRow);
+  partition.controlPlaneSystemTableGateway = {
+    async readAuthoritativeRows(tableName, _sql, params) {
+      return {success: true, rows: tableName === TABLES.REPLICA_OPERATIONS &&
+        params[0] === operation.operation_id ? [{...operation}] : []};
+    },
+  };
+  await partition.handleApplicationMessage({type: ADMIT_REPLICA,
+    partitionId: PARTITION_ID, replicaIdentity: peerRow.service_id,
+    operationId: operation.operation_id});
   const admitted = await waitForCondition(
     () => partition.raft.readStatus().peers
       .some((peer) => peer.address === peerRow.address),

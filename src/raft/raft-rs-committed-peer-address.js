@@ -121,30 +121,37 @@ function admissionLeaderHint(entityType, stamp, hintedLeaderId) {
   return stampMemberTarget(entityType, stamp, hintedLeaderId);
 }
 
-// The read's own routing when the held stamp places no leader.
+// The read's own routing when the held stamp places no member.
 const STAMP_READ_SELF_ROUTED = Object.freeze({});
-const admissionStampReads = (stamp) => [admissionStampReadOptions(stamp)];
 
 /**
- * How a replica reads the committed membership it was created from again:
- * asked first at the node its stamp places the stamp's leader on, or routed
- * by the read itself when the stamp places none.
+ * The committed-membership reads a replica makes, in order, to read the
+ * membership it was created from again: one per committed node, the stamp
+ * leader's first, then the stamp's other members in stamp order (voters,
+ * then learners), so a stamp leader that never returns does not strand the
+ * replica while the group has a live leader. A stamp that places no one
+ * leaves the read its own routing. Nothing here reads a row or a hint list.
  * @param {Object|null} stamp - The validated stamp the replica holds.
- * @return {Object} Frozen read options: {firstNodeId} or none.
+ * @return {Array<Object>} Frozen read options: {firstNodeId}, or none.
  */
-function admissionStampReadOptions(stamp) {
-  const leaderId = stamp?.kind === COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED ?
-    stamp.leaderId : undefined;
-  const nodeId = typeof leaderId === 'string' && leaderId.length > 0 ?
-    stamp.nodeIds[deriveRaftRsPeerId(leaderId)] : undefined;
-  return typeof nodeId === 'string' && nodeId.length > 0 ?
-    Object.freeze({firstNodeId: nodeId}) : STAMP_READ_SELF_ROUTED;
+function admissionStampReads(stamp) {
+  if (stamp?.kind !== COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED) {
+    return [STAMP_READ_SELF_ROUTED];
+  }
+  const leaderNodeId = typeof stamp.leaderId === 'string' &&
+    stamp.leaderId.length > 0 ?
+    stamp.nodeIds[deriveRaftRsPeerId(stamp.leaderId)] : undefined;
+  const nodeIds = [leaderNodeId,
+    ...[...stamp.voters, ...stamp.learners].map((peerId) => stamp.nodeIds[peerId])]
+    .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > 0);
+  const reads = [...new Set(nodeIds)].map((firstNodeId) =>
+    Object.freeze({firstNodeId}));
+  return reads.length > 0 ? reads : [STAMP_READ_SELF_ROUTED];
 }
 
 export {
   ADMISSION_LEADER_REFUSAL,
   admissionStampReads,
-  admissionStampReadOptions,
   admissionLeaderHint,
   admissionLeaderTarget,
   committedPeerAddress,

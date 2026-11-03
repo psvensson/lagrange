@@ -5,7 +5,7 @@
 // hint naming a member of that stamp, or the committed membership read again,
 // starting at the stamp leader's node and walking the stamp's other members.
 import assert from 'node:assert/strict';
-import {test} from '../../../src/test-helpers/tap.js';
+import {test} from 'node:test';
 import {admissionStampReads} from
   '../../../src/raft/raft-rs-committed-peer-address.js';
 import {deriveRaftRsPeerId} from '../../../src/raft/raft-rs-peer-identity.js';
@@ -301,7 +301,7 @@ SCENARIO, async () => {
 });
 
 test('the re-read order is the stamp leader then the other members in stamp ' +
-  'order; a stamp placing no one leaves the read its own routing', () => {
+  'order; a stamp placing no one leaves the read its own routing', async () => {
   const peer = (name) => deriveRaftRsPeerId(name);
   const stamp = {kind: 'committed', leaderId: 'r2',
     voters: [peer('r1'), peer('r2')], learners: [peer('r3')],

@@ -1910,14 +1910,18 @@
         "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/partition-service-learner-promotion-methods.js",
-        "src/partition/partition-service-entry-apply-base.js"
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/raft/raft-rs-committed-peer-address.js",
+        "src/rebalancer/committed-membership-bootstrap-read.js"
       ],
       "tests": [
         "test/partition/replica-admission-from-committed-operation.test.js",
         "test/partition/replica-admission-committed-operation-production.integration.test.js",
         "test/partition/partition-admission-redrive-wakes.test.js",
         "test/raft/raft-rs-backend/admission-redrive-chain.test.js",
-        "test/node/replica-handler.test.js"
+        "test/node/replica-handler.test.js",
+        "test/raft/raft-rs-backend/admission-stamp-reread-real-port.test.js",
+        "test/partition/partition-leader-address-from-raft-status.test.js"
       ]
     }
   },
