@@ -765,7 +765,6 @@ function buildCdcPersistenceOptions(replicaState, serviceId) {
     coalescingKey: `replica-state:${serviceId}`,
     deliveryPriority: backgroundWrite ? LOCAL_STR_BACKGROUND : LOCAL_STR_CRITICAL,
     workClass: backgroundWrite ? LOCAL_STR_BACKGROUND : LOCAL_STR_CRITICAL,
-    skipCacheWait: true,
   };
 }
 

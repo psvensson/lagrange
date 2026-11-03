@@ -123,6 +123,11 @@ class LifecycleCatalogGateway {
     return {success: true, affectedRows};
   }
 
+  // This fixture's projection applies synchronously with the write.
+  async awaitProjectionAt(position) {
+    return {outcome: 'reached', position};
+  }
+
   async upsertSystemTableRow(table, row) {
     this.tables.get(table).set(row[this.primaryKey(table)], clone(row));
     return {success: true, affectedRows: 1};

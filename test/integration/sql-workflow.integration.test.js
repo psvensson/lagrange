@@ -70,9 +70,19 @@ function createMockCDCService() {
     insertedRows,
     updatedRows,
     deletedRows,
+    async awaitProjectionAt(position) {
+      return {outcome: 'reached', position};
+    },
     async insertSystemTableRow(tableName, data) {
       insertedRows.push({tableName, data});
-      return buildMutationEnvelope('INSERT', tableName, {data});
+      return buildMutationEnvelope('INSERT', tableName, {
+        data,
+        position: {
+          tableName,
+          key: data?.table_id || data?.partition_id,
+          originHlc: '1793615397288-1-node',
+        },
+      });
     },
     async updateSystemTableRow(tableName, where, data) {
       updatedRows.push({tableName, where, data});

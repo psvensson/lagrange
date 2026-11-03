@@ -265,12 +265,15 @@ describe('PgWireProtocolHandler follows the engine transaction truth', () => {
       await query(handler, socket, 'INSERT INTO t (id) VALUES (1)');
       await query(handler, socket, 'COMMIT');
       await query(handler, socket, 'SELECT 1');
-      assert.deepEqual(adapter.executions.map((entry) => entry.options), [
-        {},
-        {expectedTransactionId: TRANSACTION_ID},
-        {expectedTransactionId: TRANSACTION_ID},
-        {},
+      assert.deepEqual(adapter.executions.map(
+        (entry) => entry.options.expectedTransactionId), [
+        undefined, TRANSACTION_ID, TRANSACTION_ID, undefined,
       ]);
+      // Every statement also carries the connection's disconnect signal
+      // (corrective 2b); it is one signal, live until the session ends.
+      assert.equal(new Set(adapter.executions.map(
+        (entry) => entry.options.abortSignal)).size, 1);
+      assert.equal(adapter.executions[0].options.abortSignal.aborted, false);
     });
 
   it('a COMMIT of a dropped transaction: 25P04 nothing committed, idle; ' +

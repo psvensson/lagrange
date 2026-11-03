@@ -559,6 +559,7 @@ class SQLQueryEngineStatementExecution extends
       namespace: options?.tenantId,
       timeoutBudget: options?.timeoutBudget,
       cancellationToken: options?.cancellationToken || null,
+      abortSignal: options?.abortSignal,
     });
   }
 

@@ -94,7 +94,6 @@ async function claimFailedCreateCleanup(
         coalescingKey: `services:${replicaId}:failed-create:${cleanupToken}`,
         deliveryPriority: FAILED_CREATE_CLAIM_WORK_CLASS,
         workClass: FAILED_CREATE_CLAIM_WORK_CLASS,
-        skipCacheWait: true,
       });
     } catch (error) {
       stateMachine.logger.warn(

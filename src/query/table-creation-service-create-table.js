@@ -251,7 +251,11 @@ async function submitCreateTableMetadata(metadataGateway, context, options) {
     },
   );
   // Both metadata rows answered at their commit (a failed commit throws):
-  // the metadata half of CREATE TABLE is done; nothing reads a projection.
+  // the metadata half of CREATE TABLE is done; no answer content reads a
+  // projection. The statement that asked keeps same-node read-your-writes
+  // at these positions (table-creation-service-durable-job.js).
+  options.onMetadataCommitted?.(metadataGateway,
+    [tableMutation?.position, partitionMutation?.position]);
   return {tableMutation, partitionMutation};
 }
 

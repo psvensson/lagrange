@@ -206,6 +206,11 @@ class SharedLifecycleCatalogGateway {
     return {affectedRows, success: true};
   }
 
+  // This fixture's projection applies synchronously with the write.
+  async awaitProjectionAt(position) {
+    return {outcome: 'reached', position};
+  }
+
   async upsertSystemTableRow(table, row) {
     const pk = this.primaryKey(table);
     this.tables.get(table).set(row[pk], clone(row));

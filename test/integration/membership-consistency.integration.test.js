@@ -264,23 +264,29 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       // ("fails closed for stale lease rows even when transport is
       // connected").
       const publications = recordPublishedMemberships(owners.cache);
-      const now = Date.now();
-      const shortLeaseNode = createNodeEntry('short-lease-node', {
-        // Live for the whole admission wait below.
-        ready_lease_expires_at: now + TEST_TIMEOUTS.TEST_TIMEOUT,
-        last_heartbeat: now -
-          NODE_LIVENESS_SEMANTIC_THRESHOLD_DEFAULT.derivationGraceMs - 1,
-      });
-      await owners.cdcIntegrationService.insertSystemTableRow(
-        SYSTEM_TABLE_NAME.NODES, shortLeaseNode);
+      const shortLeaseResult = await owners.cdcIntegrationService.insertSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES,
+        createNodeEntry('short-lease-node', {
+          // Live for the whole admission wait below.
+          ready_lease_expires_at: Date.now() + TEST_TIMEOUTS.TEST_TIMEOUT,
+          last_heartbeat: Date.now() -
+            NODE_LIVENESS_SEMANTIC_THRESHOLD_DEFAULT.derivationGraceMs - 1,
+        }),
+      );
+      if (shortLeaseResult?.position) {
+        await owners.cdcIntegrationService.awaitProjectionAt(shortLeaseResult.position);
+      }
       t.equal(await waitForCondition(() =>
         publications.hasPublished('short-lease-node')), true,
       'the publication owner publishes the row it witnessed READY on a live ' +
       'lease');
       publications.stop();
-      await owners.cdcIntegrationService.updateSystemTableRow(
+      const updateResult = await owners.cdcIntegrationService.updateSystemTableRow(
         SYSTEM_TABLE_NAME.NODES, {node_id: 'short-lease-node'},
         {ready_lease_expires_at: Date.now() - 1});
+      if (updateResult?.position) {
+        await owners.cdcIntegrationService.awaitProjectionAt(updateResult.position);
+      }
 
       // The real rebalancer over the seed's real owners
       const rebalancer = new UnifiedRebalancer({
@@ -513,8 +519,11 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       const nodeData = createNodeEntry(nodeId, {
         ready_lease_expires_at: Date.now() - 1,
       });
-      await owners.cdcIntegrationService.insertSystemTableRow(
+      const insertResult = await owners.cdcIntegrationService.insertSystemTableRow(
         SYSTEM_TABLE_NAME.NODES, nodeData);
+      if (insertResult?.position) {
+        await owners.cdcIntegrationService.awaitProjectionAt(insertResult.position);
+      }
       await replica.waitForPropagation();
       t.equal(followerCache.get(SYSTEM_TABLE_NAME.NODES, nodeId)?.connection_state,
         STATE.READY, 'follower should replicate the expired-lease row as ready');
@@ -524,6 +533,10 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       t.same(expiredIds, [nodeId], 'lease sweep should process the expired node');
 
       // Leader cache should have node marked as disconnected
+      await waitForCondition(() =>
+        owners.cache.get(SYSTEM_TABLE_NAME.NODES, nodeId)?.connection_state ===
+          STATE.DISCONNECTED,
+      );
       const leaderNode = owners.cache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
       t.equal(leaderNode.connection_state, STATE.DISCONNECTED,
         'leader should mark node as disconnected');
@@ -931,6 +944,9 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         },
       );
       t.ok(writeResult.success, 'write after bootstrap should succeed');
+      if (writeResult.position) {
+        await cdcService.awaitProjectionAt(writeResult.position);
+      }
 
       // Verify the write went through and is in cache
       const updatedNodes = systemTableCache.getAll(TABLES.NODES);
@@ -1029,6 +1045,9 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       );
 
       const [, joinResult] = await Promise.all([failurePromise, joinPromise]);
+      if (joinResult?.position) {
+        await cdcService.awaitProjectionAt(joinResult.position);
+      }
 
       // Verify both operations completed on the authoritative path
       // was: 'should have insert operation for joining node'

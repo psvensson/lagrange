@@ -70,13 +70,34 @@ function applyGatewayUpsert(rows, mutation) {
   return {success: true, affectedRows: 1, visibilityState: 'visible'};
 }
 
+// A committed metadata write answers its position (routed writes answer at
+// commit); this fixture's projection applies at once unless paused.
+function metadataPosition(mutation) {
+  return {tableName: mutation.tableName,
+    key: mutation.row?.table_id ?? mutation.row?.partition_id,
+    originHlc: '1793615397288-1-seam-node'};
+}
+
 function createGateway() {
   const rows = new Map();
   const writes = [];
   return {
     rows,
     writes,
+    paused: false,
+    projectionWaits: [],
+    awaitProjectionAt(position, options = {}) {
+      if (!this.paused) return Promise.resolve({outcome: 'reached', position});
+      return new Promise((resolve, reject) => {
+        this.projectionWaits.push({position, options, resolve, reject});
+      });
+    },
     async submitMutation(mutation) {
+      const answer = await this.applyMutation(mutation);
+      return mutation.tableName === 'schema_operations' ? answer :
+        {...answer, position: metadataPosition(mutation)};
+    },
+    async applyMutation(mutation) {
       writes.push(mutation);
       const {operation, tableName} = mutation;
       const normalizedOperation = String(operation).toUpperCase();
@@ -565,6 +586,73 @@ test('CREATE fails closed when durable intent persistence is unavailable',
       service.createTable(createAst()),
       {code: SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE},
     );
+  });
+
+// Corrective 2c: client-visible DDL keeps same-node read-your-writes. The
+// statement's answer waits at its own metadata positions; its content still
+// comes from the commit and provisioning.
+test('CREATE TABLE answers only once this node projects its own metadata',
+  async (t) => {
+    const gateway = createGateway();
+    gateway.paused = true;
+    const service = createService(gateway, []);
+    let answered = false;
+    const creating = service.createTable(createAst(), {namespace: 'tenant-a'})
+      .then((result) => {
+        answered = true;
+        return result;
+      });
+    for (let turn = 0; turn < 50 && gateway.projectionWaits.length < 2;
+      turn += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    t.same(gateway.projectionWaits.map((wait) => wait.position.tableName),
+      ['tables', 'partitions'], 'it waits at both metadata positions');
+    t.equal(gateway.projectionWaits[0].options.statement, 'CREATE TABLE');
+    t.equal(answered, false, 'no answer before the projection holds them');
+    for (const wait of gateway.projectionWaits) wait.resolve({});
+    const result = await creating;
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.READY,
+      'the answer is the commit and provisioning answer');
+  });
+
+test('a projection wait ended by disconnect answers CREATE TABLE typed ' +
+  'unavailable; the metadata stays committed', async (t) => {
+  const gateway = createGateway();
+  gateway.paused = true;
+  const service = createService(gateway, []);
+  const controller = new AbortController();
+  const creating = service.createTable(createAst(),
+    {namespace: 'tenant-a', abortSignal: controller.signal})
+    .then(() => null, (error) => error);
+  for (let turn = 0; turn < 50 && gateway.projectionWaits.length < 2;
+    turn += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  t.equal(gateway.projectionWaits[0].options.abortSignal, controller.signal,
+    'the session signal reaches the wait');
+  for (const wait of gateway.projectionWaits) {
+    wait.reject(Object.assign(new Error('ended'),
+      {code: 'client_disconnected'}));
+  }
+  const refusal = await creating;
+  t.equal(refusal?.code, SCHEMA_PROVISIONING_ERROR_CODE.PROJECTION_UNAVAILABLE);
+  t.equal(refusal?.projectionOutcome, 'client_disconnected');
+  t.equal([...gateway.rows.keys()].filter((key) =>
+    key.startsWith('tables:')).length, 1, 'the metadata stays committed');
+});
+
+test('a resumed job has no client and never waits for projection',
+  async (t) => {
+    const gateway = createGateway();
+    gateway.paused = true;
+    const service = createService(gateway, []);
+    await service.executeDurableSchemaProvisioningJob(createAst(), {
+      tableId: 'tbl-resumed', partitionId: 'tbl-resumed-p1',
+      jobId: 'schema-job-resumed', ownerFenceToken: 1,
+      assertOwnership: async () => {},
+    });
+    t.equal(gateway.projectionWaits.length, 0);
   });
 
 test('durable job cannot succeed through detached metadata wiring',
