@@ -42,6 +42,7 @@ const {
   ReplicaStatus,
   SAFETY_DEFERRED_RETRY_DELAY_MS,
   TIMEOUT_BUDGET_DEFAULT,
+  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
   buildHandoffDeferralTransportDiagnostics,
   classifySystemPartition,
@@ -155,13 +156,25 @@ function isOperationDeferredRetryActive(owner, operationId) {
     )
   );
 }
-function shouldDeferRetryableDispatchFailure(owner, operation, errorLike) {
-  if (!operation || !isRetryableControlPlaneError(errorLike)) {
+function isRetryableControlPlaneOperationTarget(operation) {
+  if (!operation) {
     return false;
+  }
+  if (
+    (operation.entityType || operation.entity_type) ===
+    UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE
+  ) {
+    return true;
   }
   return classifySystemPartition({
     partitionId: operation.partitionId,
   }).systemTable;
+}
+function shouldDeferRetryableDispatchFailure(owner, operation, errorLike) {
+  if (!operation || !isRetryableControlPlaneError(errorLike)) {
+    return false;
+  }
+  return isRetryableControlPlaneOperationTarget(operation);
 }
 function isDispatchRetryableWorkflowStep(owner, operation) {
   if (!operation) {
@@ -186,10 +199,7 @@ function isDispatchRetryableWorkflowStep(owner, operation) {
   return DISPATCH_PENDING_WORKFLOW_STEPS.has(workflowStep);
 }
 function isCreateRearmDispatchPhase(owner, operation) {
-  if (
-    !operation ||
-    !classifySystemPartition({partitionId: operation.partitionId}).systemTable
-  ) {
+  if (!isRetryableControlPlaneOperationTarget(operation)) {
     return false;
   }
   if (operation.workflowStep !== WORKFLOW_STEP.CREATING) {

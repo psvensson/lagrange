@@ -19,8 +19,6 @@ const MIN_ACTIVE_REPLICA_COUNT = 1;
 const SELECT_SERVICE_DEFINITION_BY_ID_SQL =
   'SELECT * FROM service_definitions WHERE service_id = ?';
 const FUNCTION_TYPE = 'function';
-const NO_SUCH_SERVICE_DEFINITIONS_TABLE_REGEX =
-  /no such table:\s*service_definitions/iu;
 
 const SERVICE_DEFINITION_RESOLUTION_OUTCOME = Object.freeze({
   ELIGIBLE: 'ELIGIBLE',
@@ -163,12 +161,6 @@ async function resolveServiceDefinitionOutcomeForCreate(handler, entityId) {
     entityId,
   );
   if (!authoritative.succeeded) {
-    if (
-      NO_SUCH_SERVICE_DEFINITIONS_TABLE_REGEX.test(authoritative.errorMessage)
-    ) {
-      const cached = readCachedServiceDefinition(handler, entityId);
-      return classifyDefinitionRowOutcome(handler, entityId, cached);
-    }
     return {
       outcome: SERVICE_DEFINITION_RESOLUTION_OUTCOME.UNAVAILABLE,
       definition: null,

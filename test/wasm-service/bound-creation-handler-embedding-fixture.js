@@ -161,7 +161,7 @@ async function embedding(t) {
   const cleanups = [];
   const metadata = await createOriginFixture({after: (fn) => cleanups.push(fn)},
     {canonicalFounders: true});
-  for (const table of ['services', 'service_endpoints']) {
+  for (const table of ['services', 'service_endpoints', 'service_definitions']) {
     metadata.db.exec(generateCreateTableSQL(SYSTEM_TABLE_SCHEMAS.find((schema) =>
       schema.tableName === table)));
   }
@@ -236,11 +236,17 @@ async function embedding(t) {
     const processOwner = acquireDataDirectoryProcessOwner(dataDirectoryManager.getDataDir());
     const owners = metadata.owner(nodeId);
     // The definition row as the serializer writes it (binding_* keys, null).
-    const cache = new EmbeddingCache(metadata.db, serializeServiceDefinition({
+    const definitionRow = serializeServiceDefinition({
       serviceId: metadata.serviceId, serviceName: metadata.serviceId,
       handlerFunctionId: definition.handlerFunctionId, runtimeKind: 'wasm_component',
       runtimeRef: intent.descriptor.runtimeRef, runtimeConfig: intent.descriptor.runtimeConfig},
-    timeSource.now()));
+    timeSource.now());
+    const definitionColumns = Object.keys(definitionRow);
+    metadata.db.prepare(
+      `INSERT OR REPLACE INTO service_definitions (${definitionColumns.join(', ')}) ` +
+      `VALUES (${definitionColumns.map(() => '?').join(', ')})`,
+    ).run(...definitionColumns.map((column) => definitionRow[column]));
+    const cache = new EmbeddingCache(metadata.db, definitionRow);
     const node = {nodeId, ...NODE_ADDRESSES[slot], messageRouter: e.transport,
       cdcIntegrationService: owners.cdc, runtimeServiceHandler: null,
       peekSystemTableCache: () => cache};

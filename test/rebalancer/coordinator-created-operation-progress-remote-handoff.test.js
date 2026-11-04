@@ -3,6 +3,8 @@ import {EXECUTOR_OUTCOME_FIELD, EXECUTOR_OUTCOME_TYPE} from
   '../../src/rebalancer/executor-outcome-constants.js';
 import {UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {OperationWorkflowOwner} from
+  '../../src/rebalancer/operation-workflow-owner.js';
 import {
   COORDINATOR_CREATED_REMOTE_HANDOFF_MODE,
   resolveExecutorOutcomeRemoteOwnerHandoffMode,
@@ -89,5 +91,99 @@ test('RUNTIME_SERVICE_CREATE_FAILED wakes remote operation owner via TARGET_EXEC
     ),
     scheduledCallbacks[1].handle,
     'stale timer callback must not delete the replaced active timer handle',
+  );
+});
+
+test('RUNTIME_SERVICE_CREATE_FAILED with deferRetry=true defers transition retry and allows CREATING re-dispatch for partitionless runtime_service operations', async (t) => {
+  const runtimeOperation = {
+    operationId: 'op-runtime-defer-1',
+    type: OperationType.ADD,
+    entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+    entityId: 'sys-postgres-wire',
+    partitionId: null,
+    replicaId: 'sys-postgres-wire-r1',
+    targetNodeId: 'node-1',
+    workflowStep: WORKFLOW_STEP.CREATING,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  const failedCalls = [];
+  const deferredCalls = [];
+  const owner = Object.create(OperationWorkflowOwner.prototype);
+  owner.repository = {
+    isReplaceRemoveDispatchPhase: () => false,
+    isOperationTerminal: () => false,
+    isOperationLocallyOwned: () => true,
+  };
+  owner.deferTransitionRetry = (operationId, errorLike, context) => {
+    deferredCalls.push({operationId, errorLike, context});
+    return true;
+  };
+  owner.failOperation = async (op, msg) => {
+    failedCalls.push({op, msg});
+  };
+  owner.clearExecutorOutcomeRetryIfNotAhead = () => true;
+  owner.emitter = {emit: () => {}};
+  owner.logger = {warn: () => {}, info: () => {}, debug: () => {}, error: () => {}};
+
+  t.equal(
+    owner.isCreateRearmDispatchPhase(runtimeOperation),
+    true,
+    'partitionless runtime_service operation at CREATING must be eligible for create re-arm dispatch',
+  );
+  t.equal(
+    owner.isDispatchRetryableWorkflowStep(runtimeOperation),
+    true,
+    'partitionless runtime_service operation at CREATING must be dispatch-retryable',
+  );
+
+  const retryableError = owner.buildExecutorFailureOutcomeErrorLike(
+    {
+      [EXECUTOR_OUTCOME_FIELD.OPERATION_ID]: runtimeOperation.operationId,
+      [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]:
+        EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_FAILED,
+      [EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP]: WORKFLOW_STEP.FAILED,
+      [EXECUTOR_OUTCOME_FIELD.ERROR_CODE]:
+        'service_definition_authority_unavailable',
+      [EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE]:
+        'Service definition authority unavailable',
+      [EXECUTOR_OUTCOME_FIELD.DEFER_RETRY]: true,
+    },
+    'RUNTIME_SERVICE_CREATE_FAILED',
+  );
+  const retryableState = owner.resolveExecutorFailureReconcileState(
+    owner.buildExecutorFailureReconcileEvidence(
+      runtimeOperation,
+      retryableError,
+    ),
+  );
+  t.equal(
+    retryableState,
+    'defer_retry',
+    'RUNTIME_SERVICE_CREATE_FAILED with deferRetry=true must resolve to defer_retry',
+  );
+
+  const terminalError = owner.buildExecutorFailureOutcomeErrorLike(
+    {
+      [EXECUTOR_OUTCOME_FIELD.OPERATION_ID]: runtimeOperation.operationId,
+      [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]:
+        EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_FAILED,
+      [EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP]: WORKFLOW_STEP.FAILED,
+      [EXECUTOR_OUTCOME_FIELD.ERROR_CODE]: 'service_definition_not_found',
+      [EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE]: 'Service definition not found',
+      [EXECUTOR_OUTCOME_FIELD.DEFER_RETRY]: false,
+    },
+    'RUNTIME_SERVICE_CREATE_FAILED',
+  );
+  const terminalState = owner.resolveExecutorFailureReconcileState(
+    owner.buildExecutorFailureReconcileEvidence(
+      runtimeOperation,
+      terminalError,
+    ),
+  );
+  t.equal(
+    terminalState,
+    'fail_operation',
+    'RUNTIME_SERVICE_CREATE_FAILED with deferRetry=false must resolve to fail_operation',
   );
 });

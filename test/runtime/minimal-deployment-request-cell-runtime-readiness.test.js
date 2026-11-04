@@ -965,6 +965,7 @@ describe('minimal deployment request Cell runtime readiness', () => {
         1,
         'stale prepare finishing artifactLoader late must not stop the live newer generation component',
       );
+      await fixture.lifecycle.stop(fixture.replica);
     },
   );
 });

@@ -223,7 +223,9 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       criticalSystemPartition:
         classifySystemPartition({
           partitionId: operation?.partitionId || null,
-        }).systemTable,
+        }).systemTable ||
+        (operation?.entityType || operation?.entity_type) ===
+          SHARED.UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
       dispatchRetryableWorkflowStep:
         this.isDispatchRetryableWorkflowStep(operation),
       retryableControlPlaneFailure:
