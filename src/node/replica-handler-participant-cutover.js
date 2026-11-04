@@ -239,20 +239,25 @@ async function releaseControlOwnerFirst(handler, service, request) {
   return null;
 }
 
-// A post-origin, empty coordinator cohort needs no second ENABLE or origin
-// replication. This is a *fresh*, paused current-member proof, not a reused
-// CUT_OVER answer. The normal full release remains authoritative for a dirty,
-// unavailable or schema-incomplete cohort.
+// A post-origin cohort whose members have all replicated the current origin
+// needs no second ENABLE or origin replication. This is a *fresh*, paused
+// current-member proof, not a reused CUT_OVER answer. The normal full release
+// remains authoritative for a dirty, unavailable or schema-incomplete cohort.
 function cleanCurrentControlCohort(service, release, attempt, census) {
-  if (service.tableName !== TABLES.SQL_TRANSACTIONS ||
-      service.partitionId !== INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS]) return false;
   const local = census.find((facts) =>
     facts?.generation?.replicaId === service.replicaId);
-  return local !== undefined &&
-    census.every((facts) =>
+  if (local === undefined) return false;
+  if (service.tableName === TABLES.SQL_TRANSACTIONS) {
+    if (service.partitionId !== INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS]) {
+      return false;
+    }
+    return census.every((facts) =>
       facts?.queryCensus?.state === TRANSACTION_RELEASE_CENSUS_STATE.CLEAR &&
       facts.queryCensus.enforcement?.state ===
         TRANSACTION_SCHEMA_ENFORCEMENT_STATE.ENFORCED) &&
+      releaseCensusDefect(release, census, local, {attempt}) === null;
+  }
+  return census.every((facts) => facts?.queryCensus === null) &&
     releaseCensusDefect(release, census, local, {attempt}) === null;
 }
 

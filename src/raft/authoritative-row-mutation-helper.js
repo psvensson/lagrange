@@ -169,7 +169,9 @@ class AuthoritativeRowMutationHelper {
     if (!cachedValue) {
       return false;
     }
-    const liveValue = this.readLiveValue ? this.readLiveValue() : null;
+    const liveValue = this.readLiveValue ?
+      this.readLiveValue(cachedValue) :
+      null;
     if (liveValue && liveValue !== cachedValue) {
       return false;
     }

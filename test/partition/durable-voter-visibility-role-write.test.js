@@ -157,9 +157,16 @@ function createDurableStoreFake({caches}) {
  * it (prototype call on a contract-faithful self), so the CAS guard shape,
  * dedup callbacks, and recovery paths under test are production code.
  */
-function createRoleHelperForReplica({replicaId, cache, store, warns}) {
+function createRoleHelperForReplica({
+  replicaId,
+  cache,
+  store,
+  warns,
+  initialRole = null,
+}) {
   const svc = {
     replicaId,
+    role: initialRole,
     partitionId: LEDGER_PARTITION_ID,
     systemTableCache: cache,
     cdcIntegrationService: store.cdcIntegrationService,
@@ -190,7 +197,9 @@ function createRoleHelperForReplica({replicaId, cache, store, warns}) {
   svc.refreshMetadataPublicationGuardRow =
     PartitionServiceCoreBase.prototype.refreshMetadataPublicationGuardRow
       .bind(svc);
-  return PartitionServiceCoreBase.prototype.createRoleMutationHelper.call(svc);
+  const helper = PartitionServiceCoreBase.prototype.createRoleMutationHelper.call(svc);
+  helper._owner = svc;
+  return helper;
 }
 
 /**
@@ -614,4 +623,70 @@ test('durable voter visibility - ReplicaStateMachine preserves voter raft_role a
     'live follower role overrides stale cached leader role in lifecycle payload',
   );
   await stateMachine.clear();
+});
+
+test('durable voter visibility - leader replica flushes collapsed follower voter role while fencing stale leader flush after stepdown', async (t) => {
+  const replicaId = `${LEDGER_PARTITION_ID}-r8`;
+  const cache = createCacheFake();
+  const store = createDurableStoreFake({caches: [cache]});
+  const warns = [];
+
+  store.seedDurableRow(
+    ledgerServiceRow({
+      replicaId,
+      nodeId: 'node-3',
+      raftRole: RAFT_ROLE.LEARNER,
+      updatedAt: 1000,
+    }),
+  );
+
+  // A learner promoted and elected to leader queues collapsed 'follower'
+  // voter role while owner.role === 'leader'.
+  const helper = createRoleHelperForReplica({
+    replicaId,
+    cache,
+    store,
+    warns,
+    initialRole: RAFT_ROLE.LEADER,
+  });
+  helper.queue(RAFT_ROLE.FOLLOWER);
+  await settleHelper(helper);
+
+  t.equal(
+    store.rows.get(replicaId).raft_role,
+    RAFT_ROLE.FOLLOWER,
+    'leader replica flushes its collapsed follower voter role to durable services row',
+  );
+
+  // If the replica steps down to follower, a stale 'leader' role flush or
+  // cached 'leader' value is fenced by the live role check.
+  helper._owner.role = RAFT_ROLE.FOLLOWER;
+  cache.applySystemTableChange(
+    SERVICES,
+    'upsert',
+    ledgerServiceRow({
+      replicaId,
+      nodeId: 'node-3',
+      raftRole: RAFT_ROLE.LEADER,
+      updatedAt: Date.now() + 1000,
+    }),
+  );
+  t.equal(
+    helper.syncFromCache(),
+    false,
+    'syncFromCache rejects stale cached leader role after stepdown to follower',
+  );
+  helper.queue(RAFT_ROLE.LEADER);
+  const staleResult = await helper.flush();
+  t.equal(
+    staleResult.applied,
+    false,
+    'stale leader role flush is skipped after stepdown to follower',
+  );
+  t.equal(
+    helper.pendingValue,
+    null,
+    'stale pending leader role update is cleared',
+  );
+  helper.shutdown();
 });

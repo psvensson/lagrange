@@ -11,6 +11,7 @@ import {resolveTimeSource} from '../time/time-source.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   isCatchupLearnerRaftRole,
+  isExplicitNonLeaderRaftRole,
   isVoterRaftRole,
 } from '../raft/replica-voter-readiness.js';
 
@@ -23,6 +24,7 @@ const {
   SERVICE_TYPE,
   SYSTEM_TABLE_NAME,
   TABLES,
+  normalizePublishedRaftRole,
 } = PARTITION_SERVICE_SHARED;
 
 // Loudness terminal for the leader-row publication (quest
@@ -37,12 +39,28 @@ const LEADER_PUBLICATION_RETRY_BUDGET_WAIT = Object.freeze({
   awaited: 'durable partitions.leader_node_id publication accepted',
 });
 
+function resolveComparableLiveRole(targetRole, liveRole) {
+  if (typeof liveRole !== 'string' || liveRole.length === 0) {
+    return null;
+  }
+  if (
+    isVoterRaftRole(targetRole) &&
+    !isExplicitNonLeaderRaftRole(targetRole)
+  ) {
+    return liveRole;
+  }
+  return normalizePublishedRaftRole(liveRole, {
+    collapseLeaderToFollower: true,
+  });
+}
+
 function isMismatchedLiveRole(role, liveRole) {
-  return typeof role === PARTITION_SERVICE_LITERAL.STRING &&
+  const comparableLiveRole = resolveComparableLiveRole(role, liveRole);
+  return typeof role === 'string' &&
     role.length > 0 &&
-    typeof liveRole === PARTITION_SERVICE_LITERAL.STRING &&
-    liveRole.length > 0 &&
-    role !== liveRole;
+    typeof comparableLiveRole === 'string' &&
+    comparableLiveRole.length > 0 &&
+    role !== comparableLiveRole;
 }
 
 function isStaleRoleFlushForLiveRole(role, liveRole) {
@@ -263,7 +281,8 @@ function createRoleMutationHelper(owner) {
           PARTITION_SERVICE_LITERAL.READY,
       };
     },
-    readLiveValue: () => owner.role || null,
+    readLiveValue: (expectedRole) =>
+      resolveComparableLiveRole(expectedRole, owner.role),
     readRowFromCache: (systemTableCache) =>
       systemTableCache?.get?.(TABLES.SERVICES, owner.replicaId) || null,
     readValueFromCache: (systemTableCache) => {

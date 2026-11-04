@@ -21,8 +21,10 @@ import {
   ROLE_PERSIST_ERROR_MSG,
 } from './message-group-service-runtime-support.js';
 import {resolveTimeSource} from '../time/time-source.js';
+import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {
   isCatchupLearnerRaftRole,
+  isExplicitNonLeaderRaftRole,
   isVoterRaftRole,
 } from '../raft/replica-voter-readiness.js';
 
@@ -32,12 +34,28 @@ import {
  * @param {Function} serviceClass - The MessageGroupService class.
  * @return {void}
  */
+function resolveComparableLiveRole(targetRole, liveRole) {
+  if (typeof liveRole !== 'string' || liveRole.length === 0) {
+    return null;
+  }
+  if (
+    isVoterRaftRole(targetRole) &&
+    !isExplicitNonLeaderRaftRole(targetRole)
+  ) {
+    return liveRole;
+  }
+  return normalizePublishedRaftRole(liveRole, {
+    collapseLeaderToFollower: true,
+  });
+}
+
 function isMismatchedLiveRole(role, liveRole) {
-  return typeof role === MESSAGE_GROUP_SERVICE_LITERAL.STRING &&
+  const comparableLiveRole = resolveComparableLiveRole(role, liveRole);
+  return typeof role === 'string' &&
     role.length > 0 &&
-    typeof liveRole === MESSAGE_GROUP_SERVICE_LITERAL.STRING &&
-    liveRole.length > 0 &&
-    role !== liveRole;
+    typeof comparableLiveRole === 'string' &&
+    comparableLiveRole.length > 0 &&
+    role !== comparableLiveRole;
 }
 
 function isStaleRoleFlushForLiveRole(role, liveRole) {
@@ -203,7 +221,8 @@ function assignMetadataPublication(serviceClass) {
               FLUSH_SKIP_READY,
           };
         },
-        readLiveValue: () => this.role || null,
+        readLiveValue: (expectedRole) =>
+          resolveComparableLiveRole(expectedRole, this.role),
         readRowFromCache: (systemTableCache) =>
           systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
         readValueFromCache: (systemTableCache) => {

@@ -520,13 +520,19 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             // Redirect target also failed - continue to next candidate
             const redirectFailureMessage =
               redirectResponse.error || ERRORS.QUERY_FAILED;
+            const redirectParticipantNodeId =
+              typeof response.leaderAddress ===
+                QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+              response.leaderAddress.includes('/') ?
+                response.leaderAddress.split('/')[0] || serviceInfo?.nodeId :
+                serviceInfo?.nodeId;
             const redirectUnknownDecision =
               unknownOutcome.observeAnswer(redirectResponse);
             if (redirectUnknownDecision !== UNKNOWN_OUTCOME_DECISION.NONE) {
               recordCandidateFailure(
                 redirectFailureMessage,
                 redirectResponse,
-                serviceInfo?.nodeId,
+                redirectParticipantNodeId,
                 response.leaderAddress,
               );
               if (
@@ -547,7 +553,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             recordCandidateFailure(
               redirectFailureMessage,
               redirectResponse,
-              serviceInfo?.nodeId,
+              redirectParticipantNodeId,
               response.leaderAddress,
             );
             if (
