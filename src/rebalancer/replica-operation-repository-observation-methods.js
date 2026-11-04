@@ -1,4 +1,6 @@
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {isUnclaimedPreRuntimeFailedCreateRow} from
+  './failed-create-cleanup-token.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -278,19 +280,30 @@ function assignReplicaOperationRepositoryObservationMethods(
    * @param {Object} [options={}]
    * @return {string|null}
    */
+    resolveObservedReplicaLifecycleStatus(observedRow, options = {}) {
+      if (
+        options?.ignoreUnclaimedPreRuntimeFailedCreate === true &&
+        isUnclaimedPreRuntimeFailedCreateRow(observedRow)
+      ) {
+        return null;
+      }
+      return this.normalizeObservedReplicaLifecycle(observedRow);
+    }
+
     getObservedReplicaStatusFromCache(
       replicaId,
       partitionId,
       targetNodeId,
       options = {},
     ) {
-      return this.normalizeObservedReplicaLifecycle(
+      return this.resolveObservedReplicaLifecycleStatus(
         this.getObservedReplicaRowFromCache(
           replicaId,
           partitionId,
           targetNodeId,
           options,
         ),
+        options,
       );
     }
     /**
@@ -439,7 +452,10 @@ function assignReplicaOperationRepositoryObservationMethods(
             REPLICA_OPERATION_REPOSITORY_LITERAL
               .CACHE_FALLBACK_AFTER_AUTHORITATIVE_FAILURE :
             REPLICA_OPERATION_REPOSITORY_LITERAL.CACHE,
-        lifecycleStatus: this.normalizeObservedReplicaLifecycle(observedRow),
+        lifecycleStatus: this.resolveObservedReplicaLifecycleStatus(
+          observedRow,
+          readOptions,
+        ),
       });
     }
     /**
@@ -534,7 +550,10 @@ function assignReplicaOperationRepositoryObservationMethods(
         return Object.freeze({
           state: REPLICA_OPERATION_REPOSITORY_LITERAL.OBSERVED,
           source: REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE,
-          lifecycleStatus: this.normalizeObservedReplicaLifecycle(observedRow),
+          lifecycleStatus: this.resolveObservedReplicaLifecycleStatus(
+            observedRow,
+            readOptions,
+          ),
           lifecyclePrecondition:
             buildObservedReplicaLifecyclePrecondition(observedRow),
         });

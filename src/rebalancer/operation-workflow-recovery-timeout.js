@@ -518,6 +518,10 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
         op.replicaId,
         op.partitionId,
         op.targetNodeId,
+        {
+          ignoreUnclaimedPreRuntimeFailedCreate:
+            this.isPreSyncCreateOperation(op),
+        },
       );
     } catch {
       return false;

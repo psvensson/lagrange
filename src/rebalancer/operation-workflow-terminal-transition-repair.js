@@ -58,7 +58,8 @@ function isTerminalFailedCreateCleanupRemove(operation) {
   return operation?.type === OperationType.REMOVE &&
     operation.workflowStep === WORKFLOW_STEP.REMOVED &&
     operation.status === ReplicaStatus.REMOVED &&
-    isFailedCreateCleanupToken(precondition?.cleanup_token) &&
+    (isFailedCreateCleanupToken(precondition?.cleanup_token) ||
+      precondition?.cleanup_token === null) &&
     typeof precondition?.create_attempt_token === 'string' &&
     precondition.create_attempt_token.length > 0;
 }

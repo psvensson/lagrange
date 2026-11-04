@@ -276,6 +276,28 @@ test('CREATE redispatch adopts the durable admission tuple instead of mutable ' 
     t.equal(delivered[0].request.createAdmissionAttemptToken,
       durable.createAdmissionAttemptToken,
       'admission-first recovery retains the exact durable attempt');
+
+    delivered.length = 0;
+    const rotated = {
+      ...durable,
+      createAdmissionState: 'ROTATING',
+      createAdmissionAttemptToken: 'attempt-from-sending-101:2',
+      createAdmissionPreviousAttemptToken: durable.createAdmissionAttemptToken,
+      createAdmissionAttemptSeq: 2,
+    };
+    owner.repository.getOperationByIdVisibilityObservation = async () => ({
+      operation: rotated,
+      deferredOutcome: null,
+    });
+    const rotatedResult = await owner.executeOperationInternal({...durable}, {});
+    t.equal(rotatedResult.success, true,
+      'redispatch when caller already holds attempt 1 refreshes from authority');
+    t.equal(delivered.length, 1);
+    t.equal(delivered[0].request.createAdmissionAttemptSeq, 2,
+      'redispatch adopts rotated attempt sequence instead of stale attempt 1');
+    t.equal(delivered[0].request.createAdmissionAttemptToken,
+      rotated.createAdmissionAttemptToken,
+      'redispatch carries rotated attempt token');
   } finally {
     await coordinator.shutdown();
   }

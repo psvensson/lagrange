@@ -72,6 +72,22 @@ const NO_INTENT_FAILURE_ADMISSION = Object.freeze({
   requiresRevalidation: false,
 });
 
+function matchesFailedCreatePreconditionTokens(
+  precondition,
+  cleanupToken,
+  createAttemptToken,
+) {
+  if (!precondition || precondition.status !== ReplicaStatus.FAILED) {
+    return false;
+  }
+  const validCleanupToken = precondition.cleanup_token === cleanupToken ||
+    precondition.cleanup_token === null;
+  return validCleanupToken &&
+    typeof createAttemptToken === 'string' &&
+    createAttemptToken.length > 0 &&
+    precondition.create_attempt_token === createAttemptToken;
+}
+
 function isClaimedFailedCreateObservation(
   observation,
   cleanupToken,
@@ -79,11 +95,11 @@ function isClaimedFailedCreateObservation(
 ) {
   return observation?.state === OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED &&
     observation.lifecycleStatus === ReplicaStatus.FAILED &&
-    observation.lifecyclePrecondition?.status === ReplicaStatus.FAILED &&
-    observation.lifecyclePrecondition?.cleanup_token === cleanupToken &&
-    typeof createAttemptToken === 'string' && createAttemptToken.length > 0 &&
-    observation.lifecyclePrecondition?.create_attempt_token ===
-      createAttemptToken;
+    matchesFailedCreatePreconditionTokens(
+      observation.lifecyclePrecondition,
+      cleanupToken,
+      createAttemptToken,
+    );
 }
 
 function isPartitionAdd(operation) {

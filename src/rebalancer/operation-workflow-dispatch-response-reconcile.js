@@ -206,6 +206,33 @@ function allowCreateDispatchAuthority(operation) {
  * @param {boolean} replaceRemoveDispatchPhase
  * @return {Promise<Object|null>}
  */
+function resolveObservedCreateDispatchAuthority(
+  owner,
+  operation,
+  observation,
+) {
+  const current = observation?.operation || null;
+  if (!current) {
+    if (!observation?.deferredOutcome &&
+        hasDurableCreateDispatchTuple(operation)) {
+      return allowCreateDispatchAuthority(operation);
+    }
+    throw buildCreateDispatchRefreshDeferred(operation, observation);
+  }
+  if (!sameCreateDispatchIdentity(operation, current)) {
+    return REFUSED_CREATE_DISPATCH_AUTHORITY;
+  }
+  const hasCurrentTuple = hasDurableCreateDispatchTuple(current);
+  if (owner.repository.isOperationTerminal(current) && !hasCurrentTuple) {
+    return REFUSED_CREATE_DISPATCH_AUTHORITY;
+  }
+  return allowCreateDispatchAuthority(
+    !hasCurrentTuple && hasDurableCreateDispatchTuple(operation) ?
+      operation :
+      current,
+  );
+}
+
 async function refreshCreateDispatchAuthority(
   owner,
   operation,
@@ -214,8 +241,7 @@ async function refreshCreateDispatchAuthority(
   if (!isCreateDispatchPhase(operation, replaceRemoveDispatchPhase)) {
     return allowCreateDispatchAuthority(operation);
   }
-  if (hasDurableCreateDispatchTuple(operation) ||
-      operation.workflowStep === WORKFLOW_STEP.PENDING ||
+  if (operation.workflowStep === WORKFLOW_STEP.PENDING ||
       operation.workflowStep === WORKFLOW_STEP.SENDING) {
     return allowCreateDispatchAuthority(operation);
   }
@@ -228,18 +254,7 @@ async function refreshCreateDispatchAuthority(
         allowOwnerPersistedTransitionDeferredVisibility: false,
       },
     );
-  const current = observation?.operation || null;
-  if (!current) {
-    throw buildCreateDispatchRefreshDeferred(operation, observation);
-  }
-  if (!sameCreateDispatchIdentity(operation, current)) {
-    return REFUSED_CREATE_DISPATCH_AUTHORITY;
-  }
-  if (owner.repository.isOperationTerminal(current) &&
-      !hasDurableCreateDispatchTuple(current)) {
-    return REFUSED_CREATE_DISPATCH_AUTHORITY;
-  }
-  return allowCreateDispatchAuthority(current);
+  return resolveObservedCreateDispatchAuthority(owner, operation, observation);
 }
 const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
   new Set([

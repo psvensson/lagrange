@@ -1046,4 +1046,113 @@ test('L3: the claimed FAILED target of a create that failed after admission ' +
     t.same(moves.filter((move) => move.replicaId === TARGET_ID), [],
       'an unclaimed pre-admission failed target is not removed by the planner');
   });
+
+  await t.test('unclaimed pre-runtime FAILED row stays non-terminal for in-flight ' +
+    'pre-sync ADD/REPLACE, while claimed or terminalized rows close cleanup',
+  async (t) => {
+    const unclaimedFailedRow = {
+      ...lifecycleRow(ReplicaStatus.FAILED, FAILED_STATE_ENTERED_AT, null),
+      previous_state: ReplicaStatus.CREATING,
+    };
+    const cache = createMockCache({
+      services: [unclaimedFailedRow],
+      replicaOperations: [],
+    });
+    let authoritativeRow = unclaimedFailedRow;
+    const coordinator = createTestCoordinator({
+      nodeId: 'node-1',
+      enableTimeouts: false,
+      systemTableCache: cache,
+      sqlQueryResults: {
+        get 'FROM services WHERE service_id = ?'() {
+          return {success: true, affectedRows: 1, rows: [authoritativeRow]};
+        },
+      },
+    });
+    const rebalancer = createTestRebalancer({
+      entityId: PARTITION_ID,
+      nodeId: 'node-1',
+      systemTableCache: cache,
+      rebalanceCoordinator: coordinator,
+    });
+    try {
+      const owner = coordinator.workflowOwner;
+      const replaceOp = await coordinator.createOperation({
+        type: OperationType.REPLACE,
+        partitionId: PARTITION_ID,
+        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+        entityId: PARTITION_ID,
+        sourceNodeId: 'node-1',
+        nodeId: TARGET_NODE,
+        replicaId: TARGET_ID,
+      });
+      await installCreateAdmissionAttempt(coordinator, replaceOp);
+      await owner.updateStep(replaceOp, WORKFLOW_STEP.CREATING);
+
+      // Positive witness: unclaimed pre-runtime FAILED does not trigger target
+      // progress during transition retry grace and does not fail pre-sync REPLACE.
+      t.equal(owner.hasObservedOperationRowTargetProgress(replaceOp), false,
+        'unclaimed pre-runtime FAILED is not observed target progress');
+      t.equal(
+        await owner.reconcileObservedTargetProgressDuringTransitionGrace(
+          replaceOp, Date.now()),
+        false,
+        'unclaimed pre-runtime FAILED does not break active transition retry grace',
+      );
+      const reconciledPreSync = await owner.getReconciledReplicaStatus(
+        replaceOp.replicaId,
+        replaceOp.partitionId,
+        replaceOp.targetNodeId,
+        {ignoreUnclaimedPreRuntimeFailedCreate: true},
+      );
+      t.equal(reconciledPreSync, null,
+        'pre-sync create status reconciliation ignores unclaimed pre-runtime FAILED');
+      await owner.reconcileOperationLifecycle(replaceOp);
+      const afterReconcile = await coordinator.getOperation(replaceOp.operationId);
+      t.not(afterReconcile.workflowStep, WORKFLOW_STEP.FAILED,
+        'in-flight pre-sync REPLACE is not failed by unclaimed pre-runtime FAILED row');
+
+      // Recovery path witness: if the create operation terminally fails while
+      // the target row is still unclaimed FAILED for its exact attempt token,
+      // admitCreateTerminalFailure records the precondition and MovePlanner removes it.
+      await owner.failOperation(replaceOp, 'Step timeout exhausted');
+      const terminalReplace = await coordinator.getOperation(replaceOp.operationId);
+      t.equal(terminalReplace.workflowStep, WORKFLOW_STEP.FAILED);
+      t.same(
+        terminalReplace.stepsHistory.at(-1)?.[
+          OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+        ],
+        lifecyclePrecondition(unclaimedFailedRow),
+        'terminal create failure captures exact unclaimed FAILED attempt precondition',
+      );
+      await rebalancer.refreshFailedCreateTargetCleanupDecisions();
+      t.same(
+        [...rebalancer.getTerminalFailedReplaceTargetReplicaIds()],
+        [replaceOp.replicaId],
+        'unclaimed FAILED row of a terminal operation is admitted for cleanup',
+      );
+
+      // Inverse counterexample: a claimed FAILED row immediately counts as
+      // target progress and terminal replica failure for a pre-sync create.
+      const claimedRow = {
+        ...unclaimedFailedRow,
+        cleanup_token: buildFailedCreateCleanupToken('op-claimed'),
+      };
+      authoritativeRow = claimedRow;
+      cache.upsert(SYSTEM_TABLE_NAME.SERVICES, TARGET_ID, claimedRow);
+      t.equal(
+        await owner.getReconciledReplicaStatus(
+          replaceOp.replicaId,
+          replaceOp.partitionId,
+          replaceOp.targetNodeId,
+          {ignoreUnclaimedPreRuntimeFailedCreate: true},
+        ),
+        ReplicaStatus.FAILED,
+        'claimed FAILED row is never ignored during status reconciliation',
+      );
+    } finally {
+      rebalancer.shutdown();
+      await coordinator.shutdown();
+    }
+  });
 });

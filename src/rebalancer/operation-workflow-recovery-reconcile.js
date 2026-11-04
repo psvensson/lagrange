@@ -587,6 +587,9 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
       return false;
     }
     if (durable.workflowStep !== WORKFLOW_STEP.STOPPING) {
+      if (this.transitionRetryTimerByOperationId?.has(operation?.operationId)) {
+        return false;
+      }
       if (await this.updateStep(durable, WORKFLOW_STEP.STOPPING,
         undefined, {stepMetadata, requireDurable: true}) &&
           replaceIntentEntryOf(durable)) {
