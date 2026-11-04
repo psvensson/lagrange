@@ -264,3 +264,71 @@ test('a stopped service answers the typed stopped unknown and applies or ' +
   assert.equal(f.source.batches.length, 0);
   assert.equal(f.calls.length, 0);
 });
+
+test('contended durable propagation admits a full 32-wave table slice before ' +
+  'marking the active context contended, then yields to the contending table', async (t) => {
+  let activeDeliverResolver = null;
+  const f = compose(t, LATENCY_PROPAGATION_MODE.SAFE, {
+    answer: async (payload) => {
+      if (activeDeliverResolver !== null) {
+        const wait = new Promise((resolve) => {
+          activeDeliverResolver = resolve;
+        });
+        await wait;
+      }
+      return committedTargetAnswer(payload);
+    },
+  });
+
+  // Wave 1 of SERVICES is held in flight while PARTITIONS collides with BUSY.
+  activeDeliverResolver = () => {};
+  const wave1Req = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: 'svc-1'}),
+  );
+  const wave1Promise = f.service.propagateCDCEvent(wave1Req);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  const contendingReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.PARTITIONS, eventKey: 'part-1'}),
+  );
+  const busyAnswer = await f.service.propagateCDCEvent(contendingReq);
+  assert.equal(busyAnswer.success, false);
+  assert.equal(busyAnswer.error, CDC_COMPLETION.BACKPRESSURE);
+
+  const releaseWave1 = activeDeliverResolver;
+  activeDeliverResolver = null;
+  releaseWave1();
+  const wave1Result = await wave1Promise;
+  assert.equal(wave1Result.success, true);
+  assert.equal(
+    wave1Req.deliveryContext.isContended(),
+    false,
+    'first wave of contended table slice is not preempted before completing its slice',
+  );
+
+  // Waves 2..31 complete unpreempted; wave 32 marks the context contended so the source yields.
+  for (let waveIndex = 2; waveIndex <= 31; waveIndex += 1) {
+    const req = createDurablePropagationRequest(
+      f.source,
+      createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: `svc-${waveIndex}`}),
+    );
+    const res = await f.service.propagateCDCEvent(req);
+    assert.equal(res.success, true);
+    assert.equal(req.deliveryContext.isContended(), false);
+  }
+
+  const wave32Req = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: 'svc-32'}),
+  );
+  const wave32Res = await f.service.propagateCDCEvent(wave32Req);
+  assert.equal(wave32Res.success, true);
+  assert.equal(
+    wave32Req.deliveryContext.isContended(),
+    true,
+    '32nd wave of a contended table slice marks deliveryContext contended so the source yields fairly',
+  );
+});

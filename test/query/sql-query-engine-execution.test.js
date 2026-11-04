@@ -23,6 +23,7 @@ import {
   TRANSACTION_MODE,
 } from '../../src/constants/index.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
 } from '../../src/control-plane/control-plane-readiness-service.js';
@@ -1316,3 +1317,45 @@ test('SQLQueryEngine - startup recovery invokes coordinator replay hook once',
     t.equal(replay.totalRecovered, 1);
     t.equal(replay.resumed, 1);
   });
+
+test('SQLQueryEngine - resolveSelectPreferLeader defaults sessionless user-table SELECTs ' +
+  'to leader while honoring explicit preferLeader:false and recovery-lane system reads',
+async (t) => {
+  const cache = createMockSystemCache([], []);
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
+
+  t.equal(
+    engine.resolveSelectPreferLeader(
+      'ffr_probe',
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      {},
+      null,
+    ),
+    true,
+    'sessionless user-table SELECT defaults to preferLeader: true for read-after-write visibility',
+  );
+  t.equal(
+    engine.resolveSelectPreferLeader(
+      'ffr_probe',
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      {preferLeader: false},
+      null,
+    ),
+    false,
+    'explicit preferLeader: false on user-table SELECT is preserved',
+  );
+  t.equal(
+    engine.resolveSelectPreferLeader(
+      TABLES.SERVICES,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      {},
+      null,
+    ),
+    false,
+    'recovery-lane system-table SELECT stays eligible to read from non-leader recovery replicas',
+  );
+});

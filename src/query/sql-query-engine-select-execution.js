@@ -217,7 +217,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       this.isSystemTable(tableName) &&
       routingReadinessDimension ===
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
-    return this.isSystemTable(tableName) && !recoveryLaneSystemTableSelect;
+    return !recoveryLaneSystemTableSelect;
   }
 
   validateSelectJoinPlans(ast, distributedPlan) {

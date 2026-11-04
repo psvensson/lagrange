@@ -271,12 +271,17 @@ function logFlushRefusal(owner, groups, fields) {
 async function flushCdcAcknowledgements(delivery, reason) {
   const lane = laneOf(delivery);
   const {owner} = delivery;
-  clearTimer(owner, lane.flushTimer);
-  lane.flushTimer = null;
-  if (lane.batch.events === 0) return flushOutcome(lane, FLUSH.EMPTY, {reason});
+  if (lane.batch.events === 0) {
+    clearTimer(owner, lane.flushTimer);
+    lane.flushTimer = null;
+    return flushOutcome(lane, FLUSH.EMPTY, {reason});
+  }
   if (lane.commands.size >= BOUND.ACK_MAX_OUTSTANDING_BATCHES) {
+    armFlushDeadline(delivery);
     return flushOutcome(lane, FLUSH.BACKPRESSURE, {reason});
   }
+  clearTimer(owner, lane.flushTimer);
+  lane.flushTimer = null;
   const {groups, members} = takeBatch(lane);
   const eventKeys = members.map((member) => member.eventKey);
   if (owner.isShutdown) {
@@ -400,7 +405,7 @@ async function retryAcknowledgements(delivery, lane) {
       await proposePendingAcknowledgement(delivery, lane, pending, REASON.DELIVERY_RETRY);
     }
   }
-  if (laneIsCurrent(delivery, lane) && lane.batch.events > 0) {
+  if (laneIsCurrent(delivery, lane) && lane.batch.events > 0 && lane.flushTimer === null) {
     await flushCdcAcknowledgements(delivery, REASON.DELIVERY_RETRY);
   }
 }

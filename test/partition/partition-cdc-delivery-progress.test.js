@@ -47,6 +47,10 @@ function delayedClock() {
     setInterval: (callback, delay, ...args) => scheduled.setInterval(callback, delay, ...args),
     clearInterval: (handle) => scheduled.clearInterval(handle),
     elapseWithoutCallbacks: (milliseconds) => observed.advance(milliseconds),
+    advance: (milliseconds) => {
+      observed.advance(milliseconds);
+      scheduled.advance(milliseconds);
+    },
   };
 }
 
@@ -455,4 +459,54 @@ test('handleDeliveryFailure logs at debug level on backpressure and warn on othe
   handleDeliveryFailure(mockDelivery, mockLane, obligation, 'error', false, causedBackpressureError);
   assert.equal(debugCalls.length, 2, 'logged at debug level for caused backpressure');
   assert.equal(warnCalls.length, 1, 'did not log at warn level for caused backpressure');
+});
+
+test('contended page yield preserves open ACK batch until flush deadline while ' +
+  'unproposed batches without a timer are retried on retryTimer', async (t) => {
+  const rows = Array.from({length: 12}, (_unused, index) => `ack-batch-${index}`);
+  const f = await fixture(t, {rows, subscribers: 1});
+  const delivery = f.leader.cdcDelivery;
+  const initialDelay = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+
+  f.behavior = (_index, event, context, groupId) => {
+    if (event.data.id === 'ack-batch-4') {
+      context.markContended();
+    }
+    return recipientAnswer(event, groupId, true);
+  };
+
+  const firstDrive = await f.drive();
+  const lane = delivery.obligationLane;
+  assert.equal(firstDrive.state, DRIVE.PAGE_YIELDED);
+  assert.equal(firstDrive.delivered, 5);
+  assert.equal(lane.batch.events, 5, '5 acknowledged events accumulate in the open batch');
+  assert.notEqual(lane.flushTimer, null, 'flush deadline timer is armed for the open batch');
+  assert.equal(
+    f.proposed.some((command) => command.type === PARTITION_CDC_COMMAND.DELIVERED),
+    false,
+    'no premature 5-event CDC_DELIVERED is proposed before bound or deadline',
+  );
+
+  // Advancing retryTimer (50ms) drives the remaining 7 rows into the same batch
+  // without flushing the first 5 events as a separate 5-event Raft commit.
+  f.clock.advance(initialDelay);
+  await settleTicks();
+  assert.equal(lane.batch.events, 12, 'remaining 7 events join the open batch on retryTimer');
+  assert.equal(
+    f.proposed.filter((command) => command.type === PARTITION_CDC_COMMAND.DELIVERED).length,
+    0,
+    'retryTimer does not flush an open batch whose flushTimer is still active',
+  );
+
+  // Advancing to ACK_FLUSH_DEADLINE_MS proposes all 12 events in one batch.
+  f.clock.advance(PARTITION_CDC_OBLIGATION_BOUND.ACK_FLUSH_DEADLINE_MS);
+  await settleTicks();
+  const ackCommands = f.proposed.filter(
+    (command) => command.type === PARTITION_CDC_COMMAND.DELIVERED,
+  );
+  assert.equal(ackCommands.length, 1, 'all 12 events flush together as a single CDC_DELIVERED');
+  assert.equal(
+    ackCommands[0].acknowledged.reduce((sum, group) => sum + group.events.length, 0),
+    12,
+  );
 });

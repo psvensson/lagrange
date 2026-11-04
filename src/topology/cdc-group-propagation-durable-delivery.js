@@ -31,6 +31,7 @@ const DURABLE_PROPAGATION_CAUSE = Object.freeze({
   RESPONSE: 'response',
   ERROR: 'error',
 });
+const CONTENDED_TABLE_SLICE_WAVES = 32;
 
 function decideDurablePropagationAdmission(occupied, sourceMismatch = false) {
   if (occupied) return DURABLE_PROPAGATION_ADMISSION.BUSY;
@@ -40,12 +41,36 @@ function decideDurablePropagationAdmission(occupied, sourceMismatch = false) {
 
 function durablePropagationRefusal(owner, admission) {
   if (admission === DURABLE_PROPAGATION_ADMISSION.BUSY) {
-    owner.activeDurablePropagation?.context?.markContended?.();
+    owner.durableSliceContended = true;
+    if ((owner.durableSliceWaves ?? 0) >= CONTENDED_TABLE_SLICE_WAVES) {
+      owner.activeDurablePropagation?.context?.markContended?.();
+    }
     return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
       retryAfterMs: owner.deliveryRetryDelayMs};
   }
   return {...unknownCdcAcceptance(),
     fallbackReason: CDC_GROUP_PROPAGATION_REASON.SOURCE_GROUP_MISMATCH};
+}
+
+function advanceDurablePropagationSlice(owner, tableName, context) {
+  if (owner.durableSliceTable === tableName) {
+    owner.durableSliceWaves = (owner.durableSliceWaves ?? 0) + 1;
+  } else {
+    owner.durableSliceTable = tableName ?? null;
+    owner.durableSliceWaves = 1;
+    owner.durableSliceContended = false;
+  }
+  if (owner.durableSliceContended &&
+      owner.durableSliceWaves >= CONTENDED_TABLE_SLICE_WAVES) {
+    context.markContended?.();
+  }
+}
+
+function finishDurablePropagationSliceWave(owner, context) {
+  if (context.isContended?.() === true) {
+    owner.durableSliceWaves = 0;
+    owner.durableSliceContended = false;
+  }
 }
 
 function bindWaveProgress(owner, source, events, context, plan) {
@@ -203,6 +228,7 @@ async function propagateDurableCdcEvent(owner, options) {
   const context = openCdcDeliveryChildScope(parent);
   const wave = {context, source: options.sourceMessageGroupService};
   owner.activeDurablePropagation = wave;
+  advanceDurablePropagationSlice(owner, options.tableName, context);
   context.cleanup.then(() => {
     if (owner.activeDurablePropagation === wave) owner.activeDurablePropagation = null;
   });
@@ -226,6 +252,7 @@ async function propagateDurableCdcEvent(owner, options) {
     }
     return result;
   } finally {
+    finishDurablePropagationSliceWave(owner, context);
     context.finish();
   }
 }

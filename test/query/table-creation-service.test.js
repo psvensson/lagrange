@@ -18,9 +18,6 @@ const TABLE_CREATION_TEST_COMPLETION_STATE = Object.freeze({
   ACTIVE: 'active',
   PENDING_CREATION: 'pending_creation',
 });
-const TABLE_CREATION_TEST_COMPLETION_REASON = Object.freeze({
-  REPLICA_CONVERGENCE_PENDING: 'replica_convergence_pending',
-});
 
 function createCreateTableAst() {
   return {
@@ -717,14 +714,14 @@ test('TableCreationService - CREATE TABLE IF NOT EXISTS restores missing ' +
   t.equal(result.partitionMetadataCreated, true);
   t.equal(
     result.completionState,
-    TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
+    TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
   );
   t.equal(
     result.completionReason,
-    TABLE_CREATION_TEST_COMPLETION_REASON.REPLICA_CONVERGENCE_PENDING,
+    null,
   );
-  t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
-  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
+  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.PROCEED);
   t.equal(submittedMutations.length, 1);
   t.equal(submittedMutations[0].tableName, 'partitions');
   t.equal(submittedMutations[0].row.partition_id, 'tbl-users-p1');
@@ -789,12 +786,11 @@ async (t) => {
   t.equal('visibilityPending' in result, false,
     'no visibility pending remnant');
   t.equal(result.completionState,
-    TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
-    'no replica evidence: pending on provisioning convergence');
-  t.equal(result.completionReason,
-    TABLE_CREATION_TEST_COMPLETION_REASON.REPLICA_CONVERGENCE_PENDING);
-  t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
-  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
+    TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
+    'quorum minimum proceeds as active under_replicated');
+  t.equal(result.completionReason, null);
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
+  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.PROCEED);
   t.equal(counts.readsAfterFirstWrite, 0,
     'the answer itself reads no projection after the metadata writes');
 });
@@ -878,14 +874,14 @@ test('TableCreationService - CREATE TABLE stays pending when only the minimum ro
 
     t.equal(
       result.completionState,
-      TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
+      TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
     );
     t.equal(
       result.completionReason,
-      TABLE_CREATION_TEST_COMPLETION_REASON.REPLICA_CONVERGENCE_PENDING,
+      null,
     );
-    t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
-    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
+    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.PROCEED);
     t.equal('visibilityState' in result, false);
     t.equal('visibilityPending' in result, false);
     t.same(
@@ -895,9 +891,12 @@ test('TableCreationService - CREATE TABLE stays pending when only the minimum ro
         resolvedReplicaCount: 3,
         minimumRoutableReplicaCount: 2,
         routableReplicaCount: 2,
+        committedReplicaCount: 2,
+        missingReplicaCount: 1,
+        epoch: null,
         fullReplicaCountConverged: false,
-        contractState: OWNER_CONTRACT_STATE.PENDING,
-        nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
+        contractState: OWNER_CONTRACT_STATE.UNDER_REPLICATED,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
         reasonCodes: [],
         retryAfterMs: 0,
       },
@@ -925,14 +924,14 @@ test('TableCreationService - CREATE TABLE without provisioning detail stays pend
 
     t.equal(
       result.completionState,
-      TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
+      TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
     );
     t.equal(
       result.completionReason,
-      TABLE_CREATION_TEST_COMPLETION_REASON.REPLICA_CONVERGENCE_PENDING,
+      null,
     );
-    t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
-    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
+    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.PROCEED);
     t.same(
       result.provisioningSummary,
       {
@@ -940,9 +939,12 @@ test('TableCreationService - CREATE TABLE without provisioning detail stays pend
         resolvedReplicaCount: 3,
         minimumRoutableReplicaCount: 2,
         routableReplicaCount: 2,
+        committedReplicaCount: 2,
+        missingReplicaCount: 1,
+        epoch: null,
         fullReplicaCountConverged: false,
-        contractState: OWNER_CONTRACT_STATE.PENDING,
-        nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
+        contractState: OWNER_CONTRACT_STATE.UNDER_REPLICATED,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
         reasonCodes: [],
         retryAfterMs: 0,
       },
