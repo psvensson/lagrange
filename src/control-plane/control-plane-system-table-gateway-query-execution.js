@@ -563,6 +563,23 @@ function applyAuthoritativeSystemTableRowsToCache(
   return true;
 }
 
+function evictSingleRowFromCache(logger, targetCache, tableName, row) {
+  if (!row || typeof row !== 'object') {
+    return;
+  }
+  try {
+    targetCache.applySystemTableChange(tableName, CDC_OPERATION.DELETE, row, {
+      mutationMode:
+        SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_ABSENCE_RECONCILIATION,
+    });
+  } catch (e) {
+    logger?.debug?.(CONTROL_PLANE_GATEWAY_APPLY_CACHE_FAILED, {
+      tableName,
+      error: e?.message ?? String(e),
+    });
+  }
+}
+
 function evictAuthoritativeAbsentSystemTableRowsFromCache(
   gateway,
   writableCache,
@@ -574,26 +591,7 @@ function evictAuthoritativeAbsentSystemTableRowsFromCache(
     return false;
   }
   for (const row of rows) {
-    if (!row || typeof row !== 'object') {
-      continue;
-    }
-    try {
-      targetCache.applySystemTableChange(
-        tableName,
-        CDC_OPERATION.DELETE,
-        row,
-        {
-          mutationMode:
-            SYSTEM_TABLE_CACHE_MUTATION_MODE
-              .AUTHORITATIVE_ABSENCE_RECONCILIATION,
-        },
-      );
-    } catch (e) {
-      gateway?.logger?.debug?.(CONTROL_PLANE_GATEWAY_APPLY_CACHE_FAILED, {
-        tableName,
-        error: e?.message ?? String(e),
-      });
-    }
+    evictSingleRowFromCache(gateway?.logger, targetCache, tableName, row);
   }
   return true;
 }
