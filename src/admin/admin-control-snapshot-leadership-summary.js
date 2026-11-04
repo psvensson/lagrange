@@ -491,17 +491,13 @@ class AdminControlSnapshot extends AdminControlSnapshotMembershipPublicationReco
     const serviceRows = Array.isArray(options.serviceRows) ?
       options.serviceRows :
       ADMIN_CACHE_DUMP.EMPTY;
-    const isStartup =
-      this.startupRecoveryCoordinator &&
-      typeof this.startupRecoveryCoordinator.evaluate === 'function' ?
-        this.startupRecoveryCoordinator.evaluate()?.ready !== true :
-        false;
     const livenessOptions = {
       partitionIds: scopedPartitionIds,
       serviceRows,
       nowMs: this.nowFn(),
       includeTimeline: true,
-      ignorePreRestart: isStartup || options.ignorePreRestart === true,
+      ignorePreRestart: options.ignorePreRestart === true,
+      localNodeId: this.nodeId || options.localNodeId || null,
     };
     const livenessSummary = summarizeReplicaOperationLiveness(
       replicaOperationRows,

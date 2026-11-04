@@ -8,7 +8,10 @@ import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {hasDurableCdcEvents, unknownCdcAcceptance} from '../cdc/cdc-delivery-outcome.js';
 import {isCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
-import {propagateDurableCdcEvent} from './cdc-group-propagation-durable-delivery.js';
+import {
+  propagateDurableCdcEvent,
+  releaseWaitingDurableSliceContender,
+} from './cdc-group-propagation-durable-delivery.js';
 import {
   LATENCY_PROPAGATION_MODE,
   LATENCY_TOPOLOGY_CONFIG_KEY,
@@ -63,6 +66,9 @@ class CDCGroupPropagationService extends EventEmitter {
     this.yieldedDurableSliceTable = null;
     this.yieldedDurableSliceUntilMs = 0;
     this.waitingDurableSliceTables = [];
+    this.waitingDurableSliceTableTimestamps = new Map();
+    this.waitingDurableSliceTableLifecycles = new Map();
+    this.creditedWaitingDurableSliceTables = new Set();
     this.durablePropagationLifetime = Object.freeze({});
     this.stats = {
       groupedCount: 0,
@@ -114,6 +120,9 @@ class CDCGroupPropagationService extends EventEmitter {
     this.yieldedDurableSliceTable = null;
     this.yieldedDurableSliceUntilMs = 0;
     this.waitingDurableSliceTables = [];
+    this.waitingDurableSliceTableTimestamps = new Map();
+    this.waitingDurableSliceTableLifecycles = new Map();
+    this.creditedWaitingDurableSliceTables = new Set();
     this.durablePropagationLifetime = Object.freeze({});
     if (options.nodeId) {
       this.nodeId = options.nodeId;
@@ -171,6 +180,9 @@ class CDCGroupPropagationService extends EventEmitter {
     this.yieldedDurableSliceTable = null;
     this.yieldedDurableSliceUntilMs = 0;
     this.waitingDurableSliceTables = [];
+    this.waitingDurableSliceTableTimestamps = new Map();
+    this.waitingDurableSliceTableLifecycles = new Map();
+    this.creditedWaitingDurableSliceTables = new Set();
     for (const releaseSleep of [...this.retrySleepReleases]) {
       releaseSleep();
     }
@@ -192,6 +204,16 @@ class CDCGroupPropagationService extends EventEmitter {
         reason: CDC_GROUP_PROPAGATION_DELIVERY_ERROR.PROPAGATION_STOPPED};
     }
     return propagateDurableCdcEvent(this, options);
+  }
+
+  /**
+   * Release a waiting table contender when its source retires, steps down,
+   * hydrates through its owed tail, or drains all owed obligations.
+   * @param {string} tableName
+   * @return {boolean}
+   */
+  releaseDurableSliceContender(tableName) {
+    return releaseWaitingDurableSliceContender(this, tableName);
   }
 
   /**

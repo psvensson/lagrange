@@ -263,6 +263,12 @@ function beginCdcDeliveryInvocation(delivery, isCurrent, onClosed = () => {}) {
       contended = true;
     },
     isContended: () => contended,
+    registerContentionOwner: (propagationOwner, tableName) => {
+      if (!propagationOwner || typeof tableName !== 'string' || tableName.length === 0) {
+        return null;
+      }
+      return () => !owner.isShutdown && isCurrent();
+    },
     signal: controller.signal,
     cleanup: cleanup.promise,
     remainingMs: () => {

@@ -76,6 +76,28 @@ function topologyProgressOf(lane, branch, owner, source, targets) {
   return branch.topology;
 }
 
+function registerLaneContentionOwner(delivery, lane, tableName, propagationOwner) {
+  if (!propagationOwner || typeof tableName !== 'string' || tableName.length === 0) {
+    return null;
+  }
+  if (!(lane.contendedPropagationOwners instanceof Map)) {
+    lane.contendedPropagationOwners = new Map();
+  }
+  let owners = lane.contendedPropagationOwners.get(tableName);
+  if (!(owners instanceof Set)) {
+    owners = new Set();
+    lane.contendedPropagationOwners.set(tableName, owners);
+  }
+  owners.add(propagationOwner);
+  return () =>
+    delivery.obligationLane === lane &&
+    delivery.owner.isLeader &&
+    !delivery.owner.isShutdown &&
+    delivery.owner.leadershipTenure === lane.tenure &&
+    lane.contendedPropagationOwners instanceof Map &&
+    lane.contendedPropagationOwners.has(tableName);
+}
+
 function cdcSubscriberInvocation(delivery, lane, cell, branch, context, event) {
   const operations = (scoped) => ({
     bindTopology: (owner, source, targets) => {
@@ -84,6 +106,8 @@ function cdcSubscriberInvocation(delivery, lane, cell, branch, context, event) {
       scoped.assertCurrent();
       return bindCdcPropagationProgress(scoped, progress, [event]);
     },
+    registerContentionOwner: (propagationOwner, tableName = event?.tableName) =>
+      registerLaneContentionOwner(delivery, lane, tableName, propagationOwner),
   });
   return scopeCdcDeliveryInvocation(context,
     () => cdcProgressCurrent(delivery, lane, cell), operations);
@@ -97,5 +121,26 @@ function cdcObligationCoverage(cell) {
   return cdcCoverageState(cell.branches.map((branch) => branch.coverage), cell.binding);
 }
 
+function releaseOwnersForTable(contendedTable, owners) {
+  if (!(owners instanceof Set)) return;
+  for (const propagationOwner of owners) {
+    propagationOwner?.releaseDurableSliceContender?.(contendedTable);
+  }
+}
+
+function releaseContendedPropagationOwners(lane, tableName = null) {
+  const map = lane?.contendedPropagationOwners;
+  if (!(map instanceof Map) || map.size === 0) return;
+  if (typeof tableName === 'string' && tableName.length > 0) {
+    releaseOwnersForTable(tableName, map.get(tableName));
+    map.delete(tableName);
+    return;
+  }
+  for (const [contendedTable, owners] of map.entries()) {
+    releaseOwnersForTable(contendedTable, owners);
+  }
+  map.clear();
+}
+
 export {cdcObligationCoverage, cdcProgressCurrent, cdcSubscriberInvocation, nextCdcSubscriber,
-  observeCdcSubscriber, prepareCdcObligationProgress};
+  observeCdcSubscriber, prepareCdcObligationProgress, releaseContendedPropagationOwners};

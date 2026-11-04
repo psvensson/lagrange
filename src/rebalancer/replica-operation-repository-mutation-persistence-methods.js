@@ -11,6 +11,7 @@ import {
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const ABSENT_VISIBILITY_VALUE = null;
+const SETTLED_MEMBERSHIP_OBLIGATION_STATE = 'settled';
 const SQLITE_CONSTRAINT_PRIMARY_KEY = 'SQLITE_CONSTRAINT_PRIMARYKEY';
 const REPLICA_OPERATION_VISIBILITY_WAIT = Object.freeze({
   wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
@@ -64,81 +65,50 @@ function nullableOperationValue(value) {
   return value ?? null;
 }
 
-function createAdmissionVisibilitySatisfied(
-  expectedOperation,
-  observedOperation,
-) {
-  if (
-    expectedOperation.createAdmissionState === null ||
-    expectedOperation.createAdmissionState === undefined
-  ) {
-    return true;
-  }
-  const admissionFields = [
-    'createAdmissionState',
-    'createAdmissionToken',
-    'createAdmissionReplicaCreatedAt',
-    'createAdmissionAttemptToken',
-    'createAdmissionPreviousAttemptToken',
-    'createAdmissionAttemptSeq',
-    'createAdmissionWorkflowUpdatedAt',
-    'createAdmissionOwnerIncarnation',
+function createAdmissionVisibilitySatisfied(expected, observed) {
+  if (expected.createAdmissionState == null) return true;
+  const fields = [
+    'createAdmissionState', 'createAdmissionToken',
+    'createAdmissionReplicaCreatedAt', 'createAdmissionAttemptToken',
+    'createAdmissionPreviousAttemptToken', 'createAdmissionAttemptSeq',
+    'createAdmissionWorkflowUpdatedAt', 'createAdmissionOwnerIncarnation',
   ];
-  if (
-    admissionFields.every(
-      (field) => observedOperation[field] === expectedOperation[field],
-    )
-  ) {
-    return true;
-  }
-  if (
-    expectedOperation.workflowStep &&
-    expectedOperation.workflowStep !== WORKFLOW_STEP.PENDING &&
-    typeof observedOperation.createAdmissionState === TYPEOF.STRING &&
-    observedOperation.createAdmissionToken ===
-      expectedOperation.createAdmissionToken &&
-    Number(observedOperation.createAdmissionAttemptSeq) >=
-      Number(expectedOperation.createAdmissionAttemptSeq)
-  ) {
-    return true;
-  }
-  return false;
+  if (fields.every((field) => observed[field] === expected[field])) return true;
+  return Boolean(
+    expected.workflowStep &&
+    expected.workflowStep !== WORKFLOW_STEP.PENDING &&
+    typeof observed.createAdmissionState === TYPEOF.STRING &&
+    observed.createAdmissionToken === expected.createAdmissionToken &&
+    Number(observed.createAdmissionAttemptSeq) >=
+      Number(expected.createAdmissionAttemptSeq),
+  );
 }
 
-function membershipVisibilitySatisfied(expectedOperation, observedOperation) {
-  const membershipFields = [
-    'sourceReplicaId',
-    ...REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS,
-  ];
-  const carriesMembership = membershipFields.some((field) =>
-    expectedOperation[field] !== null &&
-      expectedOperation[field] !== undefined);
-  if (!carriesMembership) {
+function membershipLaneKeyVisibilitySatisfied(expected, observed) {
+  const expectedKey = nullableOperationValue(expected.messageGroupMembershipLaneKey);
+  if (expectedKey === null) return true;
+  const observedKey = nullableOperationValue(observed.messageGroupMembershipLaneKey);
+  return observedKey === expectedKey ||
+    observedKey === null &&
+    observed.messageGroupMembershipObligationState ===
+      SETTLED_MEMBERSHIP_OBLIGATION_STATE;
+}
+
+function membershipVisibilitySatisfied(expected, observed) {
+  const fields = ['sourceReplicaId', ...REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS];
+  if (!fields.some((field) => expected[field] != null)) return true;
+  if (fields.every((field) =>
+    nullableOperationValue(observed[field]) === nullableOperationValue(expected[field]))) {
     return true;
   }
-  if (
-    membershipFields.every((field) =>
-      nullableOperationValue(observedOperation[field]) ===
-        nullableOperationValue(expectedOperation[field]))
-  ) {
-    return true;
+  if (!expected.workflowStep || expected.workflowStep === WORKFLOW_STEP.PENDING) {
+    return false;
   }
-  if (
-    expectedOperation.workflowStep &&
-    expectedOperation.workflowStep !== WORKFLOW_STEP.PENDING
-  ) {
-    const immutableMembershipIdentityFields = [
-      'sourceReplicaId',
-      'messageGroupMembershipLaneKey',
-      'messageGroupMembershipIdentity',
-    ];
-    return immutableMembershipIdentityFields.every((field) =>
-      expectedOperation[field] === null ||
-      expectedOperation[field] === undefined ||
-      nullableOperationValue(observedOperation[field]) ===
-        nullableOperationValue(expectedOperation[field]));
-  }
-  return false;
+  const identityFields = ['sourceReplicaId', 'messageGroupMembershipIdentity'];
+  return identityFields.every((field) =>
+    expected[field] == null ||
+    nullableOperationValue(observed[field]) === nullableOperationValue(expected[field])) &&
+    membershipLaneKeyVisibilitySatisfied(expected, observed);
 }
 
 function isReplicaOperationUniqueConstraintFailure(result) {

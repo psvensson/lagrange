@@ -15,6 +15,8 @@ import {afterEach, test} from 'node:test';
 import {CDC_OPERATION, COLUMN, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {CDC_COMPLETION, unknownCdcAcceptance} from '../../src/cdc/cdc-delivery-outcome.js';
+import {beginCdcDeliveryInvocation} from '../../src/cdc/cdc-delivery-invocation.js';
+import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {
   LATENCY_PROPAGATION_MODE,
   LATENCY_TOPOLOGY_MESSAGE_TYPE,
@@ -464,8 +466,8 @@ test('contended durable propagation rotates 3 contending tables in deterministic
   assert.equal(f.calls.length, 18, 'healthy waves deliver 1 proposal per target group per wave (proposals <= c*K*M)');
 });
 
-test('contended durable propagation evicts a retired/hydrated contender when the yield hold expires so active tables do not remain permanently contended', async (t) => {
-  let nowMs = 2000;
+test('contended durable propagation preserves FIFO position and scheduling credit across a delayed acknowledgement continuation while allowing ready work to proceed after reservation expiry', async (t) => {
+  let nowMs = 0;
   let activeDeliverResolver = null;
   const f = compose(t, LATENCY_PROPAGATION_MODE.SAFE, {
     options: {nowFn: () => nowMs},
@@ -480,7 +482,143 @@ test('contended durable propagation evicts a retired/hydrated contender when the
     },
   });
 
-  // Wave 1 of SERVICES is in flight while SERVICE_DEFINITIONS contends and is then retired by hydration.
+  // 0 ms: Table A (SERVICES) is in wave 1 while Table B (PARTITIONS) contends and arms its retry.
+  activeDeliverResolver = () => {};
+  const aWave1Req = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: 'a-1'}),
+  );
+  const aWave1Promise = f.service.propagateCDCEvent(aWave1Req);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  const bContendReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.PARTITIONS, eventKey: 'b-1'}),
+  );
+  const bBusyAt0 = await f.service.propagateCDCEvent(bContendReq);
+  assert.equal(bBusyAt0.success, false);
+  assert.equal(bBusyAt0.error, CDC_COMPLETION.BACKPRESSURE);
+
+  const releaseAWave1 = activeDeliverResolver;
+  activeDeliverResolver = null;
+  releaseAWave1();
+  assert.equal((await aWave1Promise).success, true);
+
+  for (let w = 2; w <= 4; w += 1) {
+    const req = createDurablePropagationRequest(
+      f.source,
+      createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: `a-${w}`}),
+    );
+    const res = await f.service.propagateCDCEvent(req);
+    assert.equal(res.success, true);
+    assert.equal(req.deliveryContext.isContended(), w === 4);
+  }
+  // A yielded at 0 ms -> reservation hold active until 300 ms for head contender B (PARTITIONS).
+
+  // 250 ms: B's retry timer fires, but B is delayed in retryAcknowledgements until 350 ms.
+  // 310 ms: Ready work C (NODES) arrives after the 300 ms exclusive reservation has expired.
+  nowMs = 310;
+  activeDeliverResolver = () => {};
+  const cWave1Req = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.NODES, eventKey: 'c-1'}),
+  );
+  const cWave1Promise = f.service.propagateCDCEvent(cWave1Req);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  // B's FIFO position at the head of waitingDurableSliceTables must still be preserved
+  // with scheduling credit even while C runs wave 1 and another table (REPLICA_OPERATIONS) contends at 320 ms.
+  nowMs = 320;
+  const dContendReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.REPLICA_OPERATIONS, eventKey: 'd-1'}),
+  );
+  const dBusyAt320 = await f.service.propagateCDCEvent(dContendReq);
+  assert.equal(dBusyAt320.error, CDC_COMPLETION.BACKPRESSURE);
+  assert.deepEqual(f.service.waitingDurableSliceTables, [
+    TABLES.PARTITIONS,
+    TABLES.REPLICA_OPERATIONS,
+  ]);
+  assert.equal(
+    f.service.creditedWaitingDurableSliceTables.has(TABLES.PARTITIONS),
+    true,
+    'B retains scheduling credit after its exclusive reservation expired during retryAcknowledgements',
+  );
+
+  // 350 ms: B's acknowledgement commits and B reaches arbitration while C wave 1 is in flight.
+  nowMs = 350;
+  const bArriveAt350Req = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.PARTITIONS, eventKey: 'b-1'}),
+  );
+  const bBusyAt350 = await f.service.propagateCDCEvent(bArriveAt350Req);
+  assert.equal(bBusyAt350.error, CDC_COMPLETION.BACKPRESSURE);
+  assert.equal(
+    f.service.waitingDurableSliceTables[0],
+    TABLES.PARTITIONS,
+    'B remains at the head of the FIFO queue ahead of later contenders',
+  );
+
+  // 360 ms: C wave 1 finishes; because credited contender B has arrived, C yields immediately after wave 1.
+  nowMs = 360;
+  const releaseCWave1 = activeDeliverResolver;
+  activeDeliverResolver = null;
+  releaseCWave1();
+  const cWave1Res = await cWave1Promise;
+  assert.equal(cWave1Res.success, true);
+  assert.equal(
+    cWave1Req.deliveryContext.isContended(),
+    true,
+    'credited contender B preempts C at the end of C wave 1 so B does not wait behind a full 4-wave slice',
+  );
+
+  // Neither C nor D can jump ahead of B after C yields.
+  const cWave2Premature = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.NODES, eventKey: 'c-2'}),
+  );
+  assert.equal(
+    (await f.service.propagateCDCEvent(cWave2Premature)).error,
+    CDC_COMPLETION.BACKPRESSURE,
+  );
+  const dPremature = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.REPLICA_OPERATIONS, eventKey: 'd-1'}),
+  );
+  assert.equal(
+    (await f.service.propagateCDCEvent(dPremature)).error,
+    CDC_COMPLETION.BACKPRESSURE,
+  );
+
+  // B is admitted next and completes its wave.
+  const bAdmittedReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.PARTITIONS, eventKey: 'b-1'}),
+  );
+  const bAdmittedRes = await f.service.propagateCDCEvent(bAdmittedReq);
+  assert.equal(bAdmittedRes.success, true);
+});
+
+test('contended durable propagation releases a contender only on actual source retirement or hydration evidence rather than silence alone', async (t) => {
+  let nowMs = 2000;
+  let activeDeliverResolver = null;
+  let contenderActive = true;
+  const f = compose(t, LATENCY_PROPAGATION_MODE.SAFE, {
+    options: {nowFn: () => nowMs},
+    answer: async (payload) => {
+      if (activeDeliverResolver !== null) {
+        const wait = new Promise((resolve) => {
+          activeDeliverResolver = resolve;
+        });
+        await wait;
+      }
+      return committedTargetAnswer(payload);
+    },
+  });
+
+  // Wave 1 of SERVICES is in flight while SERVICE_DEFINITIONS contends with a live source lifecycle.
   activeDeliverResolver = () => {};
   const svcWave1Req = createDurablePropagationRequest(
     f.source,
@@ -490,9 +628,17 @@ test('contended durable propagation evicts a retired/hydrated contender when the
   await Promise.resolve();
   await Promise.resolve();
 
+  const contenderDelivery = {
+    owner: {timeSource: new VirtualTimeSource({startMs: nowMs}), isShutdown: false},
+  };
+  const contenderContext = beginCdcDeliveryInvocation(
+    contenderDelivery,
+    () => contenderActive,
+  );
   const retiredContenderReq = createDurablePropagationRequest(
     f.source,
     createDurableCdcEvent({tableName: TABLES.SERVICE_DEFINITIONS, eventKey: 'def-1'}),
+    contenderContext,
   );
   const busyRes = await f.service.propagateCDCEvent(retiredContenderReq);
   assert.equal(busyRes.success, false);
@@ -513,8 +659,15 @@ test('contended durable propagation evicts a retired/hydrated contender when the
     assert.equal(req.deliveryContext.isContended(), w === 4);
   }
 
-  // Advance clock past the 300ms yield hold window without SERVICE_DEFINITIONS re-attempting.
+  // Advance clock past the 300ms reservation hold while SERVICE_DEFINITIONS is still a live contender:
+  // reservation expires so SERVICES can proceed, but SERVICE_DEFINITIONS is NOT evicted on silence alone.
   nowMs += 350;
+  assert.deepEqual(f.service.waitingDurableSliceTables, [TABLES.SERVICE_DEFINITIONS]);
+
+  // Now retire the contender via source lifecycle retirement (hydration / stepdown) and verify eviction.
+  contenderActive = false;
+  f.service.releaseDurableSliceContender(TABLES.SERVICE_DEFINITIONS);
+  assert.deepEqual(f.service.waitingDurableSliceTables, []);
 
   // SERVICES resumes and completes 5+ waves without being marked contended again.
   for (let w = 5; w <= 9; w += 1) {
@@ -527,7 +680,7 @@ test('contended durable propagation evicts a retired/hydrated contender when the
     assert.equal(
       req.deliveryContext.isContended(),
       false,
-      `wave ${w} must not be marked contended after retired contender is evicted`,
+      `wave ${w} must not be marked contended after retired contender is released`,
     );
   }
 });

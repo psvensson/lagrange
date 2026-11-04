@@ -125,3 +125,101 @@ test(
   },
 );
 
+test(
+  'AdminControlSnapshot inFlightCount preserves nonterminal operations across active target services and observer startup',
+  async (t) => {
+    const REMOTE_OWNER_NODE_ID = 'node-remote-owner';
+    const OBSERVER_NODE_ID = 'node-observer';
+    const OPERATION_UPDATED_AT_MS = 50_000;
+    const OBSERVATION_NOW_MS = 100_000;
+
+    let observerStartupReady = false;
+    let operationRow = {
+      operation_id: 'op-remote-add-1',
+      type: 'ADD',
+      entity_type: 'partition',
+      entity_id: 'tbl-users-p1',
+      partition_id: 'tbl-users-p1',
+      replica_id: 'tbl-users-p1-r2',
+      source_node_id: REMOTE_OWNER_NODE_ID,
+      target_node_id: OBSERVER_NODE_ID,
+      status: 'syncing',
+      workflow_step: 'SYNCING',
+      created_at: 1_000,
+      updated_at: OPERATION_UPDATED_AT_MS,
+      completed_at: null,
+    };
+    const activeTargetServiceRow = {
+      service_id: 'tbl-users-p1-r2',
+      replica_id: 'tbl-users-p1-r2',
+      partition_id: 'tbl-users-p1',
+      service_type: 'partition',
+      node_id: OBSERVER_NODE_ID,
+      status: 'active',
+      started_at: 90_000,
+    };
+
+    const snapshot = new AdminControlSnapshot({
+      nodeId: OBSERVER_NODE_ID,
+      nowFn: () => OBSERVATION_NOW_MS,
+      startupRecoveryCoordinator: {
+        evaluate: () => ({ready: observerStartupReady}),
+      },
+      systemTableCache: {
+        getAll(tableName) {
+          if (tableName === TABLES.SERVICES) return [activeTargetServiceRow];
+          if (tableName === TABLES.REPLICA_OPERATIONS) return [operationRow];
+          return [];
+        },
+      },
+    });
+
+    // (1) Live remote operation observed during a newer node's startup (with active target service)
+    const duringStartupSummary =
+      snapshot.buildControlSnapshotReplicaOperationSummary([operationRow]);
+    t.equal(
+      duringStartupSummary.inFlightCount,
+      1,
+      'a newer observing node still in startup must not erase a remote owner live nonterminal operation',
+    );
+
+    // Even when explicit ignorePreRestart is requested without remote owner start evidence,
+    // a remote owner operation must not fall back to the local observer restart time.
+    const explicitRestartDiagnosticSummary =
+      snapshot.buildControlSnapshotReplicaOperationSummary([operationRow], {
+        ignorePreRestart: true,
+      });
+    t.equal(
+      explicitRestartDiagnosticSummary.inFlightCount,
+      1,
+      'ignorePreRestart without remote owner start evidence must not use observer process start time for a remote owner',
+    );
+
+    // (2) The observer becomes ready without operation progress while target service already appears active
+    observerStartupReady = true;
+    const afterObserverReadySummary =
+      snapshot.buildControlSnapshotReplicaOperationSummary([operationRow]);
+    t.equal(
+      afterObserverReadySummary.inFlightCount,
+      1,
+      'an active target service must not complete a nonterminal SYNCING operation when the observer is ready',
+    );
+
+    // (3) Actual terminal settlement
+    operationRow = {
+      ...operationRow,
+      status: 'active',
+      workflow_step: 'ACTIVE',
+      updated_at: OBSERVATION_NOW_MS,
+      completed_at: OBSERVATION_NOW_MS,
+    };
+    const afterTerminalSettlementSummary =
+      snapshot.buildControlSnapshotReplicaOperationSummary([operationRow]);
+    t.equal(
+      afterTerminalSettlementSummary.inFlightCount,
+      0,
+      'outward inFlightCount drops to 0 once the operation row is durably terminal',
+    );
+  },
+);
+
