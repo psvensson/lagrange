@@ -10,8 +10,11 @@ import {currentExecution, releaseExecution, executionRefusal,
 import {RUNTIME_SERVICE_HANDLER_ERROR_MSG, RUNTIME_SERVICE_HANDLER_LOG_MSG} from
   './runtime-service-handler-constants.js';
 
-function genericCreateHandle(handler, entityId, replicaId) {
-  const definition = handler.resolveServiceDefinition(entityId);
+async function genericCreateHandle(handler, entityId, replicaId) {
+  const definition =
+    typeof handler.resolveServiceDefinitionForCreate === 'function' ?
+      await handler.resolveServiceDefinitionForCreate(entityId) :
+      handler.resolveServiceDefinition(entityId);
   if (!definition) {
     const definitionNotFound =
       RUNTIME_SERVICE_HANDLER_ERROR_MSG.DEFINITION_NOT_FOUND;
@@ -41,7 +44,8 @@ async function createGenericReplica(handler, params, entry) {
   if (!currentExecution(handler, entry) || entry.params !== params) return;
   const {operationId, entityId, replicaId} = params;
   try {
-    const replicaHandle = genericCreateHandle(handler, entityId, replicaId);
+    const replicaHandle = await genericCreateHandle(handler, entityId, replicaId);
+    if (!currentExecution(handler, entry)) return;
 
     await handler.serviceLifecycleManager.createReplica(
       replicaHandle, {nodeId: handler.nodeId},

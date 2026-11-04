@@ -1,5 +1,7 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
-import {CACHE_CDC_OPERATIONS} from '../cache/cache-constants.js';
+import {
+  applyAuthoritativeSystemTableRowsToCache,
+} from '../control-plane/control-plane-system-table-gateway.js';
 import {
   getSystemCachePrimaryKeyField,
   resolveSystemCacheRowKey,
@@ -459,17 +461,12 @@ function applyTableResultToStore(store, gateway, tableName, result) {
   if (changedRows.length === 0) {
     return false;
   }
-  if (typeof gateway?.applySystemTableRowsToCache === LOCAL_STR_FUNCTION) {
-    gateway.applySystemTableRowsToCache(store, tableName, changedRows);
-    return true;
-  }
-  if (typeof store?.applySystemTableChange === LOCAL_STR_FUNCTION) {
-    for (const row of changedRows) {
-      store.applySystemTableChange(tableName, CACHE_CDC_OPERATIONS.UPSERT, row);
-    }
-    return true;
-  }
-  return false;
+  return applyAuthoritativeSystemTableRowsToCache(
+    gateway,
+    store,
+    tableName,
+    changedRows,
+  );
 }
 
 function applyAuthoritativeRowsToStore(store, gateway, results) {

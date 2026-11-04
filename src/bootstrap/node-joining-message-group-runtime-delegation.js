@@ -289,8 +289,20 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     const nodeRow = systemTableCache?.get?.(TABLES.NODES, this.nodeId);
     return nodeRow ? this.nodeId : null;
   }
-  async activateMessageGroupServiceRows() {
-    return activateMessageGroupServiceRows({
+  async activateMessageGroupServiceRows(replicaIds = null) {
+    const messageGroupServices =
+      replicaIds == null ?
+        this.messageGroupServices :
+        new Map(
+          replicaIds
+            .map((replicaId) => [
+              replicaId,
+              this.messageGroupServices.get(replicaId),
+            ])
+            .filter(([, service]) => service != null),
+        );
+    const deferredReplicaIds = new Set();
+    const activatedCount = await activateMessageGroupServiceRows({
       nodeId: this.nodeId,
       systemTableWriter: this.createCdcIntegrationService(),
       replicaStateMachine: this.replicaStateMachine,
@@ -299,6 +311,7 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
       messageRouter: this.messageRouter,
       deferTransientFailures: true,
       onDeferredActivation: ({groupId, replicaId, error}) => {
+        deferredReplicaIds.add(replicaId);
         this.logger.warn(
           NODE_JOINING_SERVICE_LITERAL
             .DEFERRING_JOIN_MESSAGE_GROUP_SERVICE_ROW_ACTIVATION,
@@ -312,8 +325,18 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
       },
       messageGroupServiceHandler: this.messageGroupServiceHandler,
       endpointsPublished: this.hasPublishedLocalServiceEndpoints(),
-      messageGroupServices: this.messageGroupServices,
+      messageGroupServices,
     });
+    this.deferredMessageGroupServiceReplicaIds =
+      deferredReplicaIds.size > 0 ? deferredReplicaIds : null;
+    return activatedCount;
+  }
+  async retryDeferredMessageGroupServiceRowsIfNeeded() {
+    const pendingIds = this.deferredMessageGroupServiceReplicaIds;
+    if (!(pendingIds instanceof Set) || pendingIds.size === 0) {
+      return 0;
+    }
+    return this.activateMessageGroupServiceRows([...pendingIds]);
   }
   async activateJoinPartitionServiceRows(replicaIds = null) {
     const partitionServices =

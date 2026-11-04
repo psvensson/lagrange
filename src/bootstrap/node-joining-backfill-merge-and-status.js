@@ -480,6 +480,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
    * @return {Promise<void>}
    */
   async cleanupFailedJoin(failedPhase, cleanupContext) {
+    this.deferredMessageGroupServiceReplicaIds = null;
     return this.joinCleanupHandler.cleanupFailedJoin(
       failedPhase,
       cleanupContext,
@@ -543,6 +544,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
    * @private
    */
   async cleanup() {
+    this.deferredMessageGroupServiceReplicaIds = null;
     return this.joinCleanupHandler.cleanup();
   }
   /**

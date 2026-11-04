@@ -140,7 +140,8 @@ const TARGET_THRESHOLD = 12;
 // 2026-11-02 (quest serve-eligibility-committed-epoch-read attempt 1b): tightened 1731 -> 1728 on the checker's hint.
 // 2026-11-03 (quest serve-eligibility-committed-epoch-read attempt 2): tightened 1728 -> 1727 on the checker's hint.
 // 2026-11-03 (composed-05-comparison-readiness): tightened 1727 -> 1721 on the checker's hint.
-const BASELINE_COUNT = 1721;
+// 2026-11-04 (composed-05-comparison-readiness): tightened 1721 -> 1720 on the checker's hint.
+const BASELINE_COUNT = 1720;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

@@ -722,7 +722,15 @@ function drivePageFinished(
   delivery, lane, visited, reason, delivered, yieldedOnContention = false,
 ) {
   const scan = lane.scan;
-  if ((visited >= BOUND.DRIVE_PAGE_ROWS || yieldedOnContention) && !scanReachedTail(scan)) {
+  const moreWorkAfterContention =
+    yieldedOnContention &&
+    (hasOwedWorkBeyondScan(delivery.owner, scan) || lane.rerun);
+  if (
+    ((visited >= BOUND.DRIVE_PAGE_ROWS || yieldedOnContention) &&
+      !scanReachedTail(scan)) ||
+    moreWorkAfterContention
+  ) {
+    if (moreWorkAfterContention) lane.rerun = false;
     return yieldPageOutcome(delivery, lane, scan, reason, delivered, yieldedOnContention);
   }
   lane.scan = null;

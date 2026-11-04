@@ -27,6 +27,7 @@ import {
   assignControlPlaneSystemTableGatewayRequestCoalescing,
 } from './control-plane-system-table-gateway-request-coalescing.js';
 import {
+  applyAuthoritativeSystemTableRowsToCache,
   assignControlPlaneSystemTableGatewayQueryExecution,
 } from './control-plane-system-table-gateway-query-execution.js';
 import {
@@ -187,16 +188,28 @@ async function readAuthoritativeControlPlaneRows(
   params = [],
   options = {},
 ) {
-  if (gateway && typeof gateway.readAuthoritativeRows === 'function') {
-    return gateway.readAuthoritativeRows(tableName, sql, params, options);
+  const target = gateway?.controlPlaneSystemTableGateway || gateway;
+  if (target && typeof target.readAuthoritativeRows === 'function') {
+    return target.readAuthoritativeRows(tableName, sql, params, options);
   }
-  if (gateway && typeof gateway.executeRead === 'function') {
-    return gateway.executeRead(
+  if (target && typeof target.executeRead === 'function') {
+    return target.executeRead(
       buildAuthoritativeControlPlaneReadIntent(tableName, sql, params),
       options,
     );
   }
-  return gateway.readRows(tableName, sql, params, options);
+  if (
+    target &&
+    typeof target.executeAuthoritativeSystemTableRead === 'function'
+  ) {
+    return target.executeAuthoritativeSystemTableRead(
+      tableName,
+      sql,
+      params,
+      options,
+    );
+  }
+  return target.readRows(tableName, sql, params, options);
 }
 
 // The one availability rule for an authoritative control-plane row read
@@ -232,6 +245,7 @@ async function readProjectionControlPlaneRows(
 }
 export {
   ControlPlaneSystemTableGateway,
+  applyAuthoritativeSystemTableRowsToCache,
   isAuthoritativeControlPlaneRowReadSuccessful,
   readAuthoritativeControlPlaneRows,
   readProjectionControlPlaneRows,

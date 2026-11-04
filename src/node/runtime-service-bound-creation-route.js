@@ -243,11 +243,16 @@ async function createRouteDecision(handler, params, entry) {
   const hydration = await hydrateCreation(handler, params, entry);
   if (!currentExecution(handler, entry)) return;
   switch (hydration.kind) {
-  case HYDRATION.UNROUTED:
-    return isBoundClassDefinition(handler.resolveServiceDefinition(params.entityId)) ?
+  case HYDRATION.UNROUTED: {
+    const definition =
+      typeof handler.resolveServiceDefinitionForCreate === 'function' ?
+        await handler.resolveServiceDefinitionForCreate(params.entityId) :
+        handler.resolveServiceDefinition(params.entityId);
+    return isBoundClassDefinition(definition) ?
       {route: CREATE_ROUTE.BOUND,
         decision: {...unroutedDecision(hydration.answer), names: false}} :
       {route: CREATE_ROUTE.GENERIC};
+  }
   case HYDRATION.DECIDED:
     return {route: CREATE_ROUTE.BOUND, decision: hydration.decision};
   default:

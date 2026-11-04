@@ -294,36 +294,19 @@ const controlPlaneReadinessNodeMethods = {
   },
 
   getAllNodeReadinessSync(options = {}) {
-    const nodeRows =
+    const getAllRows = (tableName) =>
       typeof this.systemTableCache?.getAll === 'function' ?
-        this.systemTableCache.getAll(TABLES.NODES) || [] :
+        this.systemTableCache.getAll(tableName) || [] :
         [];
-    const serviceRows =
-      typeof this.systemTableCache?.getAll === 'function' ?
-        this.systemTableCache.getAll(TABLES.SERVICES) || [] :
-        [];
+    const nodeRows = getAllRows(TABLES.NODES);
+    const serviceRows = getAllRows(TABLES.SERVICES);
     const nodeEndpointRows =
       readCurrentEndpointRows(this.systemTableCache, TABLES.NODE_ENDPOINTS);
-    const nodeIds = new Set();
-    for (const nodeRow of nodeRows) {
-      const nodeId = nodeRow?.[COLUMN.NODE_ID] || null;
-      if (nodeId) {
-        nodeIds.add(nodeId);
-      }
-    }
-    for (const serviceRow of serviceRows) {
-      const nodeId = serviceRow?.[COLUMN.NODE_ID] || null;
-      if (nodeId) {
-        nodeIds.add(nodeId);
-      }
-    }
-    for (const endpointRow of nodeEndpointRows) {
-      const nodeId = endpointRow?.[COLUMN.NODE_ID] || null;
-      if (nodeId) {
-        nodeIds.add(nodeId);
-      }
-    }
-    for (const nodeId of this.lastReadinessSnapshotByNodeId.keys()) {
+    const nodeIds = new Set(
+      [...this.lastReadinessSnapshotByNodeId.keys()].filter(Boolean),
+    );
+    for (const row of [...nodeRows, ...serviceRows, ...nodeEndpointRows]) {
+      const nodeId = row?.[COLUMN.NODE_ID] || null;
       if (nodeId) {
         nodeIds.add(nodeId);
       }

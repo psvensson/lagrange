@@ -31,7 +31,20 @@ const DURABLE_PROPAGATION_CAUSE = Object.freeze({
   RESPONSE: 'response',
   ERROR: 'error',
 });
-const CONTENDED_TABLE_SLICE_WAVES = 32;
+const CONTENDED_TABLE_SLICE_WAVES = 4;
+const CONTENDED_SLICE_YIELD_HOLD_MS = 260;
+const BUSY_CONTENDED_RETRY_AFTER_MS = 20;
+const MIN_YIELD_HOLD_RETRY_AFTER_MS = 10;
+const DEFAULT_RETRY_DELAY_MS = 50;
+
+function isYieldedSliceTableDeferred(owner, tableName) {
+  return (
+    owner.yieldedDurableSliceTable !== null &&
+    (tableName ?? null) === owner.yieldedDurableSliceTable &&
+    Number.isFinite(owner.yieldedDurableSliceUntilMs) &&
+    owner.now() < owner.yieldedDurableSliceUntilMs
+  );
+}
 
 function decideDurablePropagationAdmission(occupied, sourceMismatch = false) {
   if (occupied) return DURABLE_PROPAGATION_ADMISSION.BUSY;
@@ -39,20 +52,40 @@ function decideDurablePropagationAdmission(occupied, sourceMismatch = false) {
     DURABLE_PROPAGATION_ADMISSION.ADMIT;
 }
 
-function durablePropagationRefusal(owner, admission) {
-  if (admission === DURABLE_PROPAGATION_ADMISSION.BUSY) {
-    owner.durableSliceContended = true;
-    if ((owner.durableSliceWaves ?? 0) >= CONTENDED_TABLE_SLICE_WAVES) {
-      owner.activeDurablePropagation?.context?.markContended?.();
+function computeBusyRetryAfterMs(owner, incomingTable) {
+  if (owner.activeDurablePropagation !== null) {
+    if (incomingTable !== owner.durableSliceTable) {
+      owner.durableSliceContended = true;
+      if ((owner.durableSliceWaves ?? 0) >= CONTENDED_TABLE_SLICE_WAVES) {
+        owner.activeDurablePropagation?.context?.markContended?.();
+      }
     }
-    return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
-      retryAfterMs: owner.deliveryRetryDelayMs};
+    return Math.min(owner.deliveryRetryDelayMs, BUSY_CONTENDED_RETRY_AFTER_MS);
+  }
+  return Math.max(
+    MIN_YIELD_HOLD_RETRY_AFTER_MS,
+    Math.min(
+      owner.deliveryRetryDelayMs,
+      (owner.yieldedDurableSliceUntilMs ?? 0) - owner.now(),
+    ),
+  );
+}
+
+function durablePropagationRefusal(owner, admission, options = null) {
+  if (admission === DURABLE_PROPAGATION_ADMISSION.BUSY) {
+    const incomingTable = options?.tableName ?? null;
+    return {
+      ...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
+      retryAfterMs: computeBusyRetryAfterMs(owner, incomingTable),
+    };
   }
   return {...unknownCdcAcceptance(),
     fallbackReason: CDC_GROUP_PROPAGATION_REASON.SOURCE_GROUP_MISMATCH};
 }
 
 function advanceDurablePropagationSlice(owner, tableName, context) {
+  owner.yieldedDurableSliceTable = null;
+  owner.yieldedDurableSliceUntilMs = 0;
   if (owner.durableSliceTable === tableName) {
     owner.durableSliceWaves = (owner.durableSliceWaves ?? 0) + 1;
   } else {
@@ -68,6 +101,13 @@ function advanceDurablePropagationSlice(owner, tableName, context) {
 
 function finishDurablePropagationSliceWave(owner, context) {
   if (context.isContended?.() === true) {
+    owner.yieldedDurableSliceTable = owner.durableSliceTable;
+    owner.yieldedDurableSliceUntilMs =
+      owner.now() +
+      Math.max(
+        (owner.deliveryRetryDelayMs ?? DEFAULT_RETRY_DELAY_MS) * 2,
+        CONTENDED_SLICE_YIELD_HOLD_MS,
+      );
     owner.durableSliceWaves = 0;
     owner.durableSliceContended = false;
   }
@@ -219,9 +259,12 @@ function publicationModeOf(plan) {
 async function propagateDurableCdcEvent(owner, options) {
   const parent = options.deliveryContext;
   assertCdcDeliveryInvocation(parent);
-  const admission = decideDurablePropagationAdmission(owner.activeDurablePropagation !== null);
+  const admission = decideDurablePropagationAdmission(
+    owner.activeDurablePropagation !== null ||
+      isYieldedSliceTableDeferred(owner, options.tableName),
+  );
   if (admission !== DURABLE_PROPAGATION_ADMISSION.ADMIT) {
-    return durablePropagationRefusal(owner, admission);
+    return durablePropagationRefusal(owner, admission, options);
   }
   // Admission precedes immutable capture, target capture, source effects and
   // every await. The slot is released by actual local cleanup, not response.

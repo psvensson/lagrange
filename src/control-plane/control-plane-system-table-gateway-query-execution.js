@@ -542,6 +542,26 @@ function applyCommittedPartitionCdcEventToCache(
   );
 }
 
+function applyAuthoritativeSystemTableRowsToCache(
+  gateway,
+  writableCache,
+  tableName,
+  rows,
+) {
+  if (typeof gateway?.applySystemTableRowsToCache === 'function') {
+    gateway.applySystemTableRowsToCache(writableCache, tableName, rows);
+    return isWritableSystemTableCache(writableCache);
+  }
+  const targetCache = resolveWritableCacheTarget(gateway || {}, writableCache);
+  if (!targetCache || !Array.isArray(rows)) {
+    return false;
+  }
+  for (const row of rows) {
+    applySingleRowToCache(gateway?.logger, targetCache, tableName, row);
+  }
+  return true;
+}
+
 function assignControlPlaneSystemTableGatewayQueryExecution(targetClass) {
   Object.assign(
     targetClass.prototype,
@@ -550,6 +570,7 @@ function assignControlPlaneSystemTableGatewayQueryExecution(targetClass) {
 }
 
 export {
+  applyAuthoritativeSystemTableRowsToCache,
   applyCommittedPartitionCdcEventToCache,
   assignControlPlaneSystemTableGatewayQueryExecution,
 };

@@ -265,8 +265,8 @@ test('a stopped service answers the typed stopped unknown and applies or ' +
   assert.equal(f.calls.length, 0);
 });
 
-test('contended durable propagation admits a full 32-wave table slice before ' +
-  'marking the active context contended, then yields to the contending table', async (t) => {
+test('contended durable propagation admits a 4-wave table slice before ' +
+  'marking the active context contended, then holds the yielding table until the contender runs', async (t) => {
   let activeDeliverResolver = null;
   const f = compose(t, LATENCY_PROPAGATION_MODE.SAFE, {
     answer: async (payload) => {
@@ -309,8 +309,8 @@ test('contended durable propagation admits a full 32-wave table slice before ' +
     'first wave of contended table slice is not preempted before completing its slice',
   );
 
-  // Waves 2..31 complete unpreempted; wave 32 marks the context contended so the source yields.
-  for (let waveIndex = 2; waveIndex <= 31; waveIndex += 1) {
+  // Waves 2..3 complete unpreempted; wave 4 marks the context contended so the source yields.
+  for (let waveIndex = 2; waveIndex <= 3; waveIndex += 1) {
     const req = createDurablePropagationRequest(
       f.source,
       createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: `svc-${waveIndex}`}),
@@ -320,15 +320,31 @@ test('contended durable propagation admits a full 32-wave table slice before ' +
     assert.equal(req.deliveryContext.isContended(), false);
   }
 
-  const wave32Req = createDurablePropagationRequest(
+  const wave4Req = createDurablePropagationRequest(
     f.source,
-    createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: 'svc-32'}),
+    createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: 'svc-4'}),
   );
-  const wave32Res = await f.service.propagateCDCEvent(wave32Req);
-  assert.equal(wave32Res.success, true);
+  const wave4Res = await f.service.propagateCDCEvent(wave4Req);
+  assert.equal(wave4Res.success, true);
   assert.equal(
-    wave32Req.deliveryContext.isContended(),
+    wave4Req.deliveryContext.isContended(),
     true,
-    '32nd wave of a contended table slice marks deliveryContext contended so the source yields fairly',
+    '4th wave of a contended table slice marks deliveryContext contended so the source yields fairly',
   );
+
+  // An immediate re-attempt by the yielding table (SERVICES) is held back so the contending table (PARTITIONS) runs next.
+  const prematureServicesReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: 'svc-5'}),
+  );
+  const heldAnswer = await f.service.propagateCDCEvent(prematureServicesReq);
+  assert.equal(heldAnswer.success, false);
+  assert.equal(heldAnswer.error, CDC_COMPLETION.BACKPRESSURE);
+
+  const contenderRunReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.PARTITIONS, eventKey: 'part-1'}),
+  );
+  const contenderRes = await f.service.propagateCDCEvent(contenderRunReq);
+  assert.equal(contenderRes.success, true);
 });

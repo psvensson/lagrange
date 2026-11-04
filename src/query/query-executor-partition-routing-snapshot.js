@@ -398,7 +398,12 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
     const shouldRepairServiceGap =
       this.shouldRepairCanonicalLeaderServiceGap(routingSnapshot);
     const repairNodeIds = new Set(deniedNodeIds);
-    if (shouldRepairServiceGap) {
+    if (
+      shouldRepairServiceGap &&
+      typeof routingSnapshot.canonicalLeaderNodeId ===
+        QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+      routingSnapshot.canonicalLeaderNodeId.length > 0
+    ) {
       repairNodeIds.add(routingSnapshot.canonicalLeaderNodeId);
     }
     // A serve denial waits on the committed answer and never runs the
@@ -548,15 +553,38 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
    * @private
    */
   shouldRepairCanonicalLeaderServiceGap(routingSnapshot) {
-    return Boolean(
-      routingSnapshot &&
+    if (!routingSnapshot) {
+      return false;
+    }
+    if (
+      routingSnapshot.reasonCode ===
+        QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS ||
+      routingSnapshot.reasonCode ===
+        QUERY_ROUTING_DIAGNOSTIC_REASON.NO_ACTIVE_ADDRESSED_SERVICES ||
+      Number(routingSnapshot.activeAddressedServiceCount) === 0
+    ) {
+      return true;
+    }
+    const hasCanonicalLeader =
       routingSnapshot.leaderKnown === true &&
       typeof routingSnapshot.canonicalLeaderNodeId ===
         QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-      routingSnapshot.canonicalLeaderNodeId.length > 0 &&
-      Number(routingSnapshot.canonicalLeaderServiceCount) === 0 &&
+      routingSnapshot.canonicalLeaderNodeId.length > 0;
+    if (!hasCanonicalLeader) {
+      return false;
+    }
+    const activeLeaderServiceCount = Array.isArray(
+      routingSnapshot.activeAddressedServices,
+    ) ?
+      routingSnapshot.activeAddressedServices.filter(
+        (service) =>
+          service?.node_id === routingSnapshot.canonicalLeaderNodeId,
+      ).length :
+      Number(routingSnapshot.canonicalLeaderServiceCount);
+    return (
+      activeLeaderServiceCount === 0 &&
       (Number(routingSnapshot.activeAddressedServiceCount) > 0 ||
-        Number(routingSnapshot.serviceRowCount) === 0),
+        Number(routingSnapshot.serviceRowCount) === 0)
     );
   },
 

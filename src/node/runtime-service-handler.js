@@ -14,6 +14,8 @@ import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/index.js';
+import {resolveServiceDefinitionForCreate} from
+  './runtime-service-definition-resolution.js';
 import {
   ReplicaOperationMessageType,
   ReplicaOperationField,
@@ -624,6 +626,10 @@ class RuntimeServiceHandler extends EventEmitter {
       return null;
     }
     return row;
+  }
+
+  async resolveServiceDefinitionForCreate(entityId) {
+    return resolveServiceDefinitionForCreate(this, entityId);
   }
 
   /**

@@ -34,6 +34,23 @@ import {
 import {MESSAGE_GROUP_SERVICE_LITERAL} from
   './message-group-service-runtime-support.js';
 
+function enableJoinConvergenceMetadataPublication(service, options) {
+  const shouldEnable =
+    options?.enableMetadataPublication === true &&
+    (service.publishRoleMetadata === false ||
+      service.publishLeaderNodeMetadata === false);
+  if (!shouldEnable) {
+    return false;
+  }
+  service.publishRoleMetadata = true;
+  service.publishLeaderNodeMetadata = true;
+  service.queueRoleUpdate(service.role);
+  if (service.isLeader) {
+    service.queueLeaderNodeUpdate(service.nodeId);
+  }
+  return true;
+}
+
 const SERVICE_SHUTDOWN = 'message_group_service_shutdown';
 
 function isThisGroupsServiceRow(service, row) {
@@ -387,7 +404,8 @@ function assignRaftLifecycle(serviceClass) {
      * leadership.
      * @return {void}
      */
-    completeJoinConvergence() {
+    completeJoinConvergence(options = {}) {
+      enableJoinConvergenceMetadataPublication(this, options);
       const wasJoiningExistingGroup = this.isJoiningExistingGroup === true;
       const shouldReleaseDeferredElection =
         this.deferElectionUntilJoinConvergence === true;

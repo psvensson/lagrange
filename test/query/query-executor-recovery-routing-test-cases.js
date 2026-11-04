@@ -490,6 +490,101 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     t.end();
   });
 
+  test('QueryExecutor - maybeAwaitDeniedPartitionRoutingRepair refreshes ' +
+    'authoritative routing overlay when cached service rows are all syncing',
+  async (t) => {
+    const partitionId = 'user-table-p1';
+    const leaderNodeId = 'node-a';
+    const overlayServices = [];
+    const refreshCalls = [];
+    const cachedServices = [
+      {
+        service_id: 'user-table-p1-r1',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: leaderNodeId,
+        raft_role: 'leader',
+        address: `${leaderNodeId}/partition/${partitionId}-r1`,
+        status: 'syncing',
+      },
+    ];
+    const systemCache = {
+      get(tableName, key) {
+        if (tableName === TABLES.PARTITIONS && key === partitionId) {
+          return {
+            partition_id: partitionId,
+            table_name: 'ffr_probe',
+            leader_node_id: leaderNodeId,
+          };
+        }
+        return null;
+      },
+      filter(tableName, predicate) {
+        if (tableName === TABLES.SERVICES) {
+          return cachedServices.filter(predicate);
+        }
+        if (tableName === TABLES.PARTITIONS) {
+          return [
+            {
+              partition_id: partitionId,
+              table_name: 'ffr_probe',
+              leader_node_id: leaderNodeId,
+            },
+          ].filter(predicate);
+        }
+        return [];
+      },
+    };
+
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      messageRouter: createMockMessageRouter(),
+      systemCache,
+      routingMetadataOverlay: {
+        getServicesForPartition: (targetPartitionId) =>
+          targetPartitionId === partitionId ? overlayServices : [],
+        shouldMaskCacheServicesForPartition: (targetPartitionId) =>
+          targetPartitionId === partitionId && overlayServices.length > 0,
+        refreshPartitionRouting: async (targetPartitionId, options = {}) => {
+          refreshCalls.push({
+            partitionId: targetPartitionId,
+            reasonCode: options?.routingSnapshot?.reasonCode || null,
+          });
+          overlayServices.splice(0, overlayServices.length, {
+            service_id: 'user-table-p1-r1',
+            service_type: SERVICE_TYPE.PARTITION,
+            partition_id: partitionId,
+            node_id: leaderNodeId,
+            raft_role: 'leader',
+            address: `${leaderNodeId}/partition/${partitionId}-r1`,
+            status: SERVICE_STATUS.ACTIVE,
+          });
+          return true;
+        },
+      },
+    });
+
+    const staleSnapshot = executor.getPartitionRoutingSnapshot(partitionId);
+    t.equal(
+      staleSnapshot.reasonCode,
+      QUERY_ROUTING_DIAGNOSTIC_REASON.NO_ACTIVE_ADDRESSED_SERVICES,
+    );
+    t.equal(staleSnapshot.serviceRowCount, 1);
+    t.equal(staleSnapshot.canonicalLeaderServiceCount, 1);
+    t.equal(staleSnapshot.activeAddressedServiceCount, 0);
+
+    const repaired =
+      await executor.maybeAwaitDeniedPartitionRoutingRepair(staleSnapshot);
+    t.equal(repaired, true);
+    t.equal(refreshCalls.length, 1);
+    t.equal(
+      executor.getPartitionServiceCandidates(partitionId, true).length,
+      1,
+      'candidates should recover once overlay replaces syncing cache rows with active authority rows',
+    );
+    t.end();
+  });
+
   test('QueryExecutor - recovery-owned system-table writes fail closed when ' +
     'only service-role leader witnesses exist',
   async (t) => {

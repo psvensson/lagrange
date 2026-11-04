@@ -1187,4 +1187,123 @@ describe('RuntimeServiceHandler shutdown', () => {
     assert.equal(handler.localReplicas.size, 0);
     assert.equal(handler.inProgressOperations.size, 0);
   });
+
+  it('refreshes stale ship-not-started (replica_count=0) service_definitions from authority on CREATE_REPLICA', async () => {
+    const staleRow = {
+      service_id: 'sys-postgres-wire',
+      service_type: 'runtime_service',
+      replica_count: 0,
+      runtime_kind: 'native_js',
+      runtime_ref: 'postgres-wire-runtime',
+      runtime_config: JSON.stringify({
+        host: '127.0.0.1',
+        authMode: 'trust',
+        tlsMode: 'disable',
+      }),
+    };
+    const scaledRow = {
+      ...staleRow,
+      replica_count: 1,
+      runtime_config: JSON.stringify({
+        host: '0.0.0.0',
+        authMode: 'password',
+        tlsMode: 'disable',
+      }),
+    };
+    const cache = createMockCache({
+      service_definitions: [staleRow],
+      replica_operations: [],
+    });
+    const appliedChanges = [];
+    const origGet = cache.get.bind(cache);
+    let updatedDef = null;
+    cache.get = (tableName, key) => {
+      if (tableName === 'service_definitions' && key === 'sys-postgres-wire' && updatedDef) {
+        return updatedDef;
+      }
+      return origGet(tableName, key);
+    };
+    cache.applySystemTableChange = (tableName, op, row) => {
+      appliedChanges.push({tableName, op, row});
+      if (tableName === 'service_definitions') {
+        updatedDef = row;
+      }
+    };
+    const cdc = {
+      ...createMockCdc(),
+      async executeAuthoritativeSystemTableRead(tableName, sql, params) {
+        assert.equal(tableName, 'service_definitions');
+        assert.match(sql, /FROM service_definitions WHERE service_id = \?/);
+        assert.deepEqual(params, ['sys-postgres-wire']);
+        return {success: true, rows: [scaledRow]};
+      },
+    };
+    const {handler, lifecycle} = createHandler({cache, cdc});
+
+    const response = await handler.handleMessage({
+      correlationId: 'corr-stale-def-1',
+      payload: {
+        [ReplicaOperationField.TYPE]:
+          ReplicaOperationMessageType.CREATE_REPLICA,
+        [ReplicaOperationField.OPERATION_ID]: 'op-stale-def-1',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
+      },
+    });
+    assert.equal(response.status, ReplicaOperationResponseStatus.INITIATED);
+
+    await flushImmediate();
+    await flushImmediate();
+    await flushImmediate();
+
+    const replica = handler.getLocalReplica('sys-postgres-wire-r1');
+    assert.equal(replica?.status, ReplicaStatus.ACTIVE);
+    assert.equal(lifecycle.calls[0]?.definition?.runtimeConfig, scaledRow.runtime_config);
+    assert.equal(appliedChanges.length, 1);
+  });
+
+  it('refuses CREATE_REPLICA when service_definitions remains replica_count=0 in authority', async () => {
+    const disabledRow = {
+      service_id: 'sys-postgres-wire',
+      service_type: 'runtime_service',
+      replica_count: 0,
+      runtime_kind: 'native_js',
+      runtime_ref: 'postgres-wire-runtime',
+      runtime_config: JSON.stringify({
+        host: '127.0.0.1',
+        authMode: 'trust',
+        tlsMode: 'disable',
+      }),
+    };
+    const cache = createMockCache({
+      service_definitions: [disabledRow],
+      replica_operations: [],
+    });
+    const cdc = {
+      ...createMockCdc(),
+      async executeAuthoritativeSystemTableRead() {
+        return {success: true, rows: [disabledRow]};
+      },
+    };
+    const {handler, lifecycle} = createHandler({cache, cdc});
+
+    await handler.handleMessage({
+      correlationId: 'corr-disabled-def-1',
+      payload: {
+        [ReplicaOperationField.TYPE]:
+          ReplicaOperationMessageType.CREATE_REPLICA,
+        [ReplicaOperationField.OPERATION_ID]: 'op-disabled-def-1',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
+      },
+    });
+
+    await flushImmediate();
+    await flushImmediate();
+    await flushImmediate();
+
+    const replica = handler.getLocalReplica('sys-postgres-wire-r1');
+    assert.equal(replica?.status, ReplicaStatus.FAILED);
+    assert.equal(lifecycle.calls.length, 0);
+  });
 });

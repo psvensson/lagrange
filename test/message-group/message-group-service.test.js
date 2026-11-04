@@ -375,6 +375,57 @@ test(
 );
 
 test(
+  'MessageGroupService - completeJoinConvergence enables role and leader metadata publication when requested',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
+        groupId: 'mg-self-hosted-meta',
+        replicaId: 'mg-self-hosted-meta-r0',
+        nodeId,
+        replicaIds: [
+          'mg-self-hosted-meta-r0',
+          'mg-self-hosted-meta-r1',
+          'mg-self-hosted-meta-r2',
+        ],
+        transport: router,
+        deferElection: false,
+        deferElectionUntilJoinConvergence: false,
+        publishRoleMetadata: false,
+        publishLeaderNodeMetadata: false,
+      }, port);
+
+      await service.initialize();
+      service.role = 'leader';
+      service.isLeader = true;
+      const queuedRoles = [];
+      const queuedLeaders = [];
+      service.queueRoleUpdate = (role) => queuedRoles.push(role);
+      service.queueLeaderNodeUpdate = (leaderNodeId) => queuedLeaders.push(leaderNodeId);
+
+      // Without enableMetadataPublication, standalone suppressed replicas stay suppressed.
+      service.completeJoinConvergence();
+      t.equal(service.publishRoleMetadata, false);
+      t.equal(service.publishLeaderNodeMetadata, false);
+      t.same(queuedRoles, []);
+      t.same(queuedLeaders, []);
+
+      // With enableMetadataPublication: true (join finalization), metadata publication is enabled and queued.
+      service.completeJoinConvergence({enableMetadataPublication: true});
+      t.equal(service.publishRoleMetadata, true);
+      t.equal(service.publishLeaderNodeMetadata, true);
+      t.same(queuedRoles, ['leader']);
+      t.same(queuedLeaders, [nodeId]);
+
+      await service.shutdown();
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
   'MessageGroupService - deferred self-hosted followers stay unscheduled until join convergence',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
