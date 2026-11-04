@@ -86,7 +86,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       Number.isInteger(context?.minimumRoutableReplicaCount) &&
       context.minimumRoutableReplicaCount > 0 &&
       context?.minimumRoutableReplicaCountWasDefaulted !== true;
-    const minimumRoutableReplicaCount =
+    let minimumRoutableReplicaCount =
       this.resolveMinimumProvisioningReplicaCount(
         context?.minimumRoutableReplicaCount,
         targetReplicaCount,
@@ -164,6 +164,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         partitionId,
         schemaJobId: context?.schemaJobId,
         requiredReplicaCount: convergenceRequiredReplicaCount,
+        minimumRoutableReplicaCountWasDefaulted:
+          context?.minimumRoutableReplicaCountWasDefaulted === true,
         timeoutBudget,
         failOnTimeout: false,
         maxWaitMs: this.tablePartitionTargetNodeConvergenceTimeoutMs,
@@ -214,6 +216,12 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         throw error;
       }
       targetReplicaCount = provisionTargetNodeIds.length;
+      if (!hasExplicitMinimumRoutableReplicaCount) {
+        minimumRoutableReplicaCount = Math.min(
+          minimumRoutableReplicaCount,
+          targetReplicaCount,
+        );
+      }
       enforceEveryProvisioningOperation = true;
       provisioningContractState = convergenceResult.contractState;
       provisioningNextAction = convergenceResult.nextAction;

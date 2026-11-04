@@ -189,7 +189,16 @@ class SQLQueryEngineProvisionTargetMethods {
       });
     }
 
-    const quorumCount = this.calculateQuorumReplicaCount(requiredReplicaCount);
+    const knownClusterNodeCount = Math.max(
+      cohort?.answers ? Object.keys(cohort.answers).length : 0,
+      Number(lastDiagnostics?.activeNodeRowCount) || 0,
+      Number(lastDiagnostics?.totalNodeRowCount) || 0,
+    );
+    const quorumCount =
+      knownClusterNodeCount === 1 &&
+      options.minimumRoutableReplicaCountWasDefaulted === true ?
+        1 :
+        this.calculateQuorumReplicaCount(requiredReplicaCount);
     const epoch = cohort?.epoch || lastDiagnostics?.epoch || null;
     const failOnTimeout = options.failOnTimeout !== false;
 
