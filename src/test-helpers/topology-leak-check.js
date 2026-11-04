@@ -11,6 +11,8 @@
 // embedded-node-protocol.js), so in-process and multi-process suites share
 // one definition. Test-only: nothing under src/ outside test-helpers imports it.
 
+import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
+
 // A key is a leak when a word of it STARTS one of these (see keyWords). This
 // is the one list every public-seam suite uses (the in-process and
 // multi-process Application Database suites, the Binding seam suites and the
@@ -22,14 +24,12 @@
 // key costs the seam claim.
 const TOPOLOGY_KEY_FRAGMENTS = Object.freeze([
   'address',
-  'candidate',
+  ...VOTER_RAFT_ROLES,
   'election',
   'endpoint',
   'epoch',
-  'follower',
   'holder',
   'host',
-  'leader',
   'lease',
   'member',
   'node',

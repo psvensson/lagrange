@@ -4,6 +4,7 @@ import {
   CONTROL_PLANE_READ_LEADER_MODE,
   readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 
 const READ_REPLICA_LIFECYCLE_SQL = `SELECT
   service_id,
@@ -269,6 +270,42 @@ function resolveReplicaCreateGroupId(stateMachine, replicaState, serviceId) {
     cachedRow.group_id.length > 0 ? cachedRow.group_id : null;
 }
 
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function isConflictingCachedReplicaIdentity(cachedRow, replicaState, serviceId) {
+  const cachedReplicaId = cachedRow?.replica_id;
+  if (!isNonEmptyString(cachedReplicaId)) {
+    return false;
+  }
+  const replicaIdentity =
+    replicaState?.replicaIdentity || replicaState?.replicaId || serviceId;
+  return isNonEmptyString(replicaIdentity) &&
+    cachedReplicaId !== replicaIdentity;
+}
+
+function resolvePreservedReplicaRaftRole(
+  stateMachine,
+  replicaState,
+  serviceId,
+  {voterOnly = false} = {},
+) {
+  const cachedRow = serviceId &&
+      typeof stateMachine?.systemTableCache?.get === 'function' ?
+    stateMachine.systemTableCache.get(TABLES.SERVICES, serviceId) :
+    null;
+  const cachedRole = cachedRow?.raft_role;
+  if (
+    !isNonEmptyString(cachedRole) ||
+    isConflictingCachedReplicaIdentity(cachedRow, replicaState, serviceId) ||
+    voterOnly && !isVoterRaftRole(cachedRole)
+  ) {
+    return null;
+  }
+  return cachedRole;
+}
+
 export {
   DURABLE_VERSION_COLUMN,
   buildReplicaLifecycleMutationPredicateFromRow,
@@ -280,6 +317,7 @@ export {
   observeAuthoritativeReplicaLifecycle,
   readAuthoritativePartitionLeader,
   readAuthoritativeReplicaLifecycle,
+  resolvePreservedReplicaRaftRole,
   resolveReplicaCreateGroupId,
   rowHoldsReplicaIncarnation,
   rowMatchesReplicaLifecycle,

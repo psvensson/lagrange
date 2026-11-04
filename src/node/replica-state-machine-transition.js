@@ -20,6 +20,7 @@ import {
   nextLifecycleStateEntry,
   observeAuthoritativeReplicaLifecycle,
   readAuthoritativeReplicaLifecycle,
+  resolvePreservedReplicaRaftRole,
   resolveReplicaCreateGroupId,
   rowMatchesReplicaLifecycle,
 } from './replica-state-machine-lifecycle-observation.js';
@@ -665,12 +666,12 @@ function armTimeoutClock(stateMachine, replicaId) {
 
 /**
  * Build CDC payload for updating an existing services row.
- * @param {ReplicaStateMachine} stateMachine - Owning state machine instance.
  * @param {Object} replicaState - Replica state snapshot.
  * @param {string|null} previousState - Previous state value.
+ * @param {ReplicaStateMachine|null} [stateMachine] - Owning state machine instance.
  * @return {Object} Partial services-row update payload.
  */
-function buildUpdateCdcData(replicaState, previousState) {
+function buildUpdateCdcData(replicaState, previousState, stateMachine = null) {
   const durableUpdatedAt = Number.isFinite(replicaState.durableUpdatedAt) ?
     replicaState.durableUpdatedAt : replicaState.stateEnteredAt;
   const cdcData = {
@@ -685,7 +686,12 @@ function buildUpdateCdcData(replicaState, previousState) {
   if (replicaState.errorMessage) {
     cdcData.error_message = replicaState.errorMessage;
   }
-
+  const serviceId = replicaState.serviceId || replicaState.replicaId;
+  const preservedVoterRole = resolvePreservedReplicaRaftRole(
+    stateMachine, replicaState, serviceId, {voterOnly: true});
+  if (preservedVoterRole) {
+    cdcData.raft_role = preservedVoterRole;
+  }
   return cdcData;
 }
 
@@ -713,22 +719,11 @@ function buildCreateCdcData(
   // spread recovery (exclusionReasonCounts = raft_role_missing on every
   // blocked partition; the mode=load ACTIVE-wait root). Preserve them from
   // the cached row when present.
-  const cachedRow =
-    typeof stateMachine.systemTableCache?.get === 'function' ?
-      stateMachine.systemTableCache.get(TABLES.SERVICES, serviceId) :
-      null;
-  const preservedColumns = {};
-  if (
-    typeof cachedRow?.raft_role === 'string' &&
-    cachedRow.raft_role.length > 0
-  ) {
-    preservedColumns.raft_role = cachedRow.raft_role;
-  }
+  const preservedRole = resolvePreservedReplicaRaftRole(
+    stateMachine, replicaState, serviceId, {voterOnly: false});
+  const preservedColumns = preservedRole ? {raft_role: preservedRole} : {};
   const groupId = resolveReplicaCreateGroupId(
-    stateMachine,
-    replicaState,
-    serviceId,
-  );
+    stateMachine, replicaState, serviceId);
   return {
     ...preservedColumns,
     ...stateMachine._buildUpdateCdcData(replicaState, null),

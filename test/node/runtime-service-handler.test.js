@@ -1306,4 +1306,112 @@ describe('RuntimeServiceHandler shutdown', () => {
     assert.equal(replica?.status, ReplicaStatus.FAILED);
     assert.equal(lifecycle.calls.length, 0);
   });
+
+  it('authoritative service_definitions overrides stale-positive cache and defers on temporary authority failure', async () => {
+    const staleActiveRow = {
+      service_id: 'sys-postgres-wire',
+      service_type: 'runtime_service',
+      replica_count: 1,
+      runtime_kind: 'native_js',
+      runtime_ref: 'postgres-wire-runtime',
+      runtime_config: JSON.stringify({
+        host: '127.0.0.1',
+        authMode: 'trust',
+        tlsMode: 'disable',
+      }),
+    };
+    const committedDisabledRow = {
+      ...staleActiveRow,
+      replica_count: 0,
+    };
+    const observedReadAuthorities = [];
+    const emittedOutcomes = [];
+    let authorityResponse = {
+      success: true,
+      rows: [committedDisabledRow],
+    };
+    const cache = createMockCache({
+      service_definitions: [staleActiveRow],
+      replica_operations: [],
+    });
+    const cdc = {
+      ...createMockCdc(),
+      async executeAuthoritativeSystemTableRead(_tableName, _sql, _params, options) {
+        observedReadAuthorities.push(options?.readAuthority);
+        return authorityResponse;
+      },
+    };
+    const {handler, lifecycle} = createHandler({
+      cache,
+      cdc,
+      executorOutcomeEmitter: {
+        emitOutcome(outcomeType, operationId, workflowStep, options) {
+          emittedOutcomes.push({
+            outcomeType,
+            operationId,
+            workflowStep,
+            options,
+          });
+        },
+      },
+    });
+
+    await handler.handleMessage({
+      correlationId: 'corr-stale-positive-1',
+      payload: {
+        [ReplicaOperationField.TYPE]:
+          ReplicaOperationMessageType.CREATE_REPLICA,
+        [ReplicaOperationField.OPERATION_ID]: 'op-stale-positive-1',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
+      },
+    });
+    await flushImmediate();
+    await flushImmediate();
+    await flushImmediate();
+
+    assert.equal(lifecycle.calls.length, 0,
+      'stale-positive cached replica_count=1 must not start replica when authority has replica_count=0');
+    assert.equal(Object.isFrozen(observedReadAuthorities[0]), true,
+      'must pass frozen buildControlPlaneReadAuthority token');
+    assert.equal(
+      emittedOutcomes.at(-1)?.options?.errorCode,
+      'service_definition_ineligible',
+    );
+    assert.equal(emittedOutcomes.at(-1)?.options?.deferRetry, false);
+
+    authorityResponse = {
+      success: false,
+      error: 'control_plane_leader_unreachable',
+    };
+    await handler.handleMessage({
+      correlationId: 'corr-authority-unavailable-1',
+      payload: {
+        [ReplicaOperationField.TYPE]:
+          ReplicaOperationMessageType.CREATE_REPLICA,
+        [ReplicaOperationField.OPERATION_ID]: 'op-authority-unavailable-1',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
+      },
+    });
+    await flushImmediate();
+    await flushImmediate();
+    await flushImmediate();
+
+    assert.equal(lifecycle.calls.length, 0);
+    assert.equal(
+      emittedOutcomes.at(-1)?.options?.errorCode,
+      'service_definition_authority_unavailable',
+      'temporary authority failure must not be misclassified as DEFINITION_NOT_FOUND',
+    );
+    assert.equal(
+      emittedOutcomes.at(-1)?.options?.deferRetry,
+      true,
+      'temporary authority failure must defer retry',
+    );
+    assert.equal(
+      handler.getLocalReplica('sys-postgres-wire-r1')?.deferRetry,
+      true,
+    );
+  });
 });

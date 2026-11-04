@@ -21,6 +21,10 @@ import {
   ROLE_PERSIST_ERROR_MSG,
 } from './message-group-service-runtime-support.js';
 import {resolveTimeSource} from '../time/time-source.js';
+import {
+  isCatchupLearnerRaftRole,
+  isVoterRaftRole,
+} from '../raft/replica-voter-readiness.js';
 
 /**
  * Attach metadata-publication readiness predicates and mutation-helper
@@ -160,13 +164,26 @@ function assignMetadataPublication(serviceClass) {
             this.getMetadataPublicationReadinessDimension(),
         }),
         buildExpectedCacheFields: (role) => ({raft_role: role}),
-        prepareFlush: () => ({
-          skip: !this.publishRoleMetadata,
-          clearPending: !this.publishRoleMetadata,
-          reason: !this.publishRoleMetadata ?
-            FLUSH_SKIP_DISABLED :
-            FLUSH_SKIP_READY,
-        }),
+        prepareFlush: ({pendingValue, flushingValue} = {}) => {
+          if (!this.publishRoleMetadata) {
+            return {
+              skip: true,
+              clearPending: true,
+              reason: FLUSH_SKIP_DISABLED,
+            };
+          }
+          const targetRole = flushingValue ?? pendingValue;
+          const staleLearnerFlush =
+            isCatchupLearnerRaftRole(targetRole) && isVoterRaftRole(this.role);
+          return {
+            skip: staleLearnerFlush,
+            clearPending:
+              staleLearnerFlush && isCatchupLearnerRaftRole(pendingValue),
+            reason: staleLearnerFlush ?
+              FLUSH_SKIP_NOT_OWNER :
+              FLUSH_SKIP_READY,
+          };
+        },
         readRowFromCache: (systemTableCache) =>
           systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
         readValueFromCache: (systemTableCache) => {

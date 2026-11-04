@@ -644,8 +644,17 @@ function validatePlannedSelectRootAndJoins(engine, ast, distributedPlan) {
     distributedPlan.tablePlans.get(rootAlias) ||
     distributedPlan.tablePlans.get(tableName) ||
     null;
-  if (!engine.getTableInfo(tableName) || !hasRoutableTablePlan(rootPlan)) {
+  const tableInfo = engine.getTableInfo(tableName);
+  if (!tableInfo) {
     return {errorResponse: buildTableNotFoundFailureResult(tableName)};
+  }
+  if (!hasRoutableTablePlan(rootPlan)) {
+    return {
+      errorResponse: buildUnavailableFailureResult(
+        tableName,
+        METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED,
+      ),
+    };
   }
   const joinErrorResponse = engine.validateSelectJoinPlans(
     ast,
@@ -755,7 +764,12 @@ async function resolveWriteExecutionPlanWithAuthorityRefresh(
   if (isWriteTableMetadataCold(tableInfo, tablePlan)) {
     return {
       settled: true,
-      response: buildTableNotFoundFailureResult(tableName),
+      response: tableInfo ?
+        buildUnavailableFailureResult(
+          tableName,
+          METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED,
+        ) :
+        buildTableNotFoundFailureResult(tableName),
     };
   }
   const dualWriteMigration = engine.getActiveDualWriteMigration(tableInfo);

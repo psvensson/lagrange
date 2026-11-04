@@ -9,6 +9,10 @@ import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  isCatchupLearnerRaftRole,
+  isVoterRaftRole,
+} from '../raft/replica-voter-readiness.js';
 
 const {
   AuthoritativeRowMutationHelper,
@@ -231,11 +235,19 @@ function createRoleMutationHelper(owner) {
     }),
     buildUpdateOptions: () => buildRoleMutationDeliveryOptions(owner),
     buildExpectedCacheFields: (role) => ({raft_role: role}),
-    prepareFlush: () => ({
-      skip: false,
-      clearPending: false,
-      reason: PARTITION_SERVICE_LITERAL.READY,
-    }),
+    prepareFlush: ({pendingValue, flushingValue} = {}) => {
+      const targetRole = flushingValue ?? pendingValue;
+      const staleLearnerFlush =
+        isCatchupLearnerRaftRole(targetRole) && isVoterRaftRole(owner.role);
+      return {
+        skip: staleLearnerFlush,
+        clearPending:
+          staleLearnerFlush && isCatchupLearnerRaftRole(pendingValue),
+        reason: staleLearnerFlush ?
+          PARTITION_SERVICE_LITERAL.NOT_OWNER :
+          PARTITION_SERVICE_LITERAL.READY,
+      };
+    },
     readRowFromCache: (systemTableCache) =>
       systemTableCache?.get?.(TABLES.SERVICES, owner.replicaId) || null,
     readValueFromCache: (systemTableCache) => {

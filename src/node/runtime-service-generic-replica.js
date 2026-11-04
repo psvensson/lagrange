@@ -7,19 +7,78 @@ import {ReplicaOperationMessageType, ReplicaOperationResponseStatus} from
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
 import {currentExecution, releaseExecution, executionRefusal,
   replyToGenericExecutionGate} from './runtime-service-creation-execution.js';
+import {
+  SERVICE_DEFINITION_RESOLUTION_OUTCOME,
+} from './runtime-service-definition-resolution.js';
 import {RUNTIME_SERVICE_HANDLER_ERROR_MSG, RUNTIME_SERVICE_HANDLER_LOG_MSG} from
   './runtime-service-handler-constants.js';
 
-async function genericCreateHandle(handler, entityId, replicaId) {
+const FUNCTION_TYPE = 'function';
+const BOOLEAN_TYPE = 'boolean';
+
+function buildDefinitionResolutionError(entityId, outcome) {
+  if (outcome === SERVICE_DEFINITION_RESOLUTION_OUTCOME.UNAVAILABLE) {
+    const formatAuthorityUnavailable =
+      RUNTIME_SERVICE_HANDLER_ERROR_MSG.DEFINITION_AUTHORITY_UNAVAILABLE;
+    const error = new Error(formatAuthorityUnavailable(entityId));
+    error.errorCode =
+      RUNTIME_SERVICE_HANDLER_ERROR_MSG.DEFINITION_AUTHORITY_UNAVAILABLE_CODE;
+    error.deferRetry = true;
+    return error;
+  }
+  const formatDefinitionNotFound =
+    RUNTIME_SERVICE_HANDLER_ERROR_MSG.DEFINITION_NOT_FOUND;
+  const error = new Error(formatDefinitionNotFound(entityId));
+  error.errorCode =
+    outcome === SERVICE_DEFINITION_RESOLUTION_OUTCOME.INELIGIBLE ?
+      RUNTIME_SERVICE_HANDLER_ERROR_MSG.DEFINITION_INELIGIBLE :
+      RUNTIME_SERVICE_HANDLER_ERROR_MSG.DEFINITION_NOT_FOUND_CODE;
+  error.deferRetry = false;
+  return error;
+}
+
+async function resolveDefinitionForGenericCreate(handler, entityId) {
+  if (typeof handler.resolveServiceDefinitionOutcomeForCreate === FUNCTION_TYPE) {
+    const resolution = await handler.resolveServiceDefinitionOutcomeForCreate(
+      entityId,
+    );
+    if (
+      resolution?.outcome !== SERVICE_DEFINITION_RESOLUTION_OUTCOME.ELIGIBLE ||
+      !resolution?.definition
+    ) {
+      throw buildDefinitionResolutionError(
+        entityId,
+        resolution?.outcome || SERVICE_DEFINITION_RESOLUTION_OUTCOME.ABSENT,
+      );
+    }
+    return resolution.definition;
+  }
   const definition =
-    typeof handler.resolveServiceDefinitionForCreate === 'function' ?
+    typeof handler.resolveServiceDefinitionForCreate === FUNCTION_TYPE ?
       await handler.resolveServiceDefinitionForCreate(entityId) :
       handler.resolveServiceDefinition(entityId);
   if (!definition) {
-    const definitionNotFound =
-      RUNTIME_SERVICE_HANDLER_ERROR_MSG.DEFINITION_NOT_FOUND;
-    throw new Error(definitionNotFound(entityId));
+    throw buildDefinitionResolutionError(
+      entityId,
+      SERVICE_DEFINITION_RESOLUTION_OUTCOME.ABSENT,
+    );
   }
+  return definition;
+}
+
+function buildGenericFailedOutcomeOptions(replicaId, error) {
+  return {
+    replicaId,
+    errorMessage: error.message,
+    ...(error?.errorCode ? {errorCode: error.errorCode} : {}),
+    ...(typeof error?.deferRetry === BOOLEAN_TYPE ?
+      {deferRetry: error.deferRetry} :
+      {}),
+  };
+}
+
+async function genericCreateHandle(handler, entityId, replicaId) {
+  const definition = await resolveDefinitionForGenericCreate(handler, entityId);
 
   return {
     serviceId: replicaId,
@@ -78,7 +137,10 @@ async function createGenericReplica(handler, params, entry) {
   } catch (error) {
     if (!currentExecution(handler, entry)) return;
     handler.localReplicas.set(replicaId, {
-      replicaId, entityId, status: ReplicaStatus.FAILED,
+      replicaId,
+      entityId,
+      status: ReplicaStatus.FAILED,
+      ...(error?.deferRetry === true ? {deferRetry: true} : {}),
     });
 
     // Emit failed outcome — coordinator will transition workflow.
@@ -86,7 +148,7 @@ async function createGenericReplica(handler, params, entry) {
       EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_FAILED,
       operationId,
       WORKFLOW_STEP.FAILED,
-      {replicaId, errorMessage: error.message},
+      buildGenericFailedOutcomeOptions(replicaId, error),
     );
 
     handler.logger.error(

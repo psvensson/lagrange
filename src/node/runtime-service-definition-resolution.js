@@ -1,10 +1,16 @@
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
+  areAuthoritativeSystemTableCacheRowsEqual,
+} from '../cache/system-table-cache-authoritative-reconciliation.js';
+import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_READ_LEADER_MODE,
   applyAuthoritativeSystemTableRowsToCache,
   readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {
+  buildControlPlaneReadAuthority,
+} from '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {SD_COL} from '../wasm-service/wasm-service-models.js';
 import {RUNTIME_SERVICE_HANDLER_LOG_MSG} from
   './runtime-service-handler-constants.js';
@@ -12,6 +18,22 @@ import {RUNTIME_SERVICE_HANDLER_LOG_MSG} from
 const MIN_ACTIVE_REPLICA_COUNT = 1;
 const SELECT_SERVICE_DEFINITION_BY_ID_SQL =
   'SELECT * FROM service_definitions WHERE service_id = ?';
+const FUNCTION_TYPE = 'function';
+const NO_SUCH_SERVICE_DEFINITIONS_TABLE_REGEX =
+  /no such table:\s*service_definitions/iu;
+
+const SERVICE_DEFINITION_RESOLUTION_OUTCOME = Object.freeze({
+  ELIGIBLE: 'ELIGIBLE',
+  INELIGIBLE: 'INELIGIBLE',
+  ABSENT: 'ABSENT',
+  UNAVAILABLE: 'UNAVAILABLE',
+});
+
+const AUTHORITATIVE_DEFINITION_READ_AUTHORITY = buildControlPlaneReadAuthority({
+  authoritativeReadMode:
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+  leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+});
 
 function isShipNotStartedServiceDefinition(row) {
   return Boolean(
@@ -22,7 +44,7 @@ function isShipNotStartedServiceDefinition(row) {
 }
 
 function readCachedServiceDefinition(handler, entityId) {
-  if (typeof handler?.systemTableCache?.get !== 'function') {
+  if (typeof handler?.systemTableCache?.get !== FUNCTION_TYPE) {
     return null;
   }
   return (
@@ -33,30 +55,57 @@ function readCachedServiceDefinition(handler, entityId) {
   );
 }
 
+function evictStaleCachedServiceDefinition(handler, entityId) {
+  const cache = handler?.systemTableCache;
+  if (typeof cache?.delete === FUNCTION_TYPE) {
+    cache.delete(SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS, entityId);
+    return;
+  }
+  if (typeof cache?.remove === FUNCTION_TYPE) {
+    cache.remove(SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS, entityId);
+  }
+}
+
 function resolveAuthoritativeDefinitionGateway(handler) {
   const cdc = handler?.cdcIntegrationService;
-  const gateway = cdc?.controlPlaneSystemTableGateway || cdc || null;
+  const gateway =
+    handler?.controlPlaneSystemTableGateway ||
+    cdc?.controlPlaneSystemTableGateway ||
+    cdc ||
+    null;
   const hasReader = Boolean(
     gateway &&
-    (typeof gateway.readAuthoritativeRows === 'function' ||
-      typeof gateway.executeRead === 'function' ||
-      typeof gateway.executeAuthoritativeSystemTableRead === 'function' ||
-      typeof gateway.readRows === 'function'),
+    (typeof gateway.readAuthoritativeRows === FUNCTION_TYPE ||
+      typeof gateway.executeRead === FUNCTION_TYPE ||
+      typeof gateway.executeAuthoritativeSystemTableRead === FUNCTION_TYPE ||
+      typeof gateway.readRows === FUNCTION_TYPE),
   );
   return hasReader ? gateway : null;
 }
 
-function extractFirstAuthoritativeDefinitionRow(readOutcome) {
+function classifyAuthoritativeReadOutcome(readOutcome) {
   if (Array.isArray(readOutcome)) {
-    return readOutcome[0] || null;
+    return {
+      succeeded: true,
+      row: readOutcome[0] || null,
+      errorMessage: '',
+    };
   }
   if (readOutcome?.success === true && Array.isArray(readOutcome.rows)) {
-    return readOutcome.rows[0] || null;
+    return {
+      succeeded: true,
+      row: readOutcome.rows[0] || null,
+      errorMessage: '',
+    };
   }
-  return null;
+  return {
+    succeeded: false,
+    row: null,
+    errorMessage: String(readOutcome?.error || ''),
+  };
 }
 
-async function fetchAuthoritativeServiceDefinitionRow(gateway, entityId) {
+async function fetchAuthoritativeServiceDefinitionOutcome(gateway, entityId) {
   try {
     const readOutcome = await readAuthoritativeControlPlaneRows(
       gateway,
@@ -64,43 +113,104 @@ async function fetchAuthoritativeServiceDefinitionRow(gateway, entityId) {
       SELECT_SERVICE_DEFINITION_BY_ID_SQL,
       [entityId],
       {
+        readAuthority: AUTHORITATIVE_DEFINITION_READ_AUTHORITY,
         authoritativeReadMode:
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
       },
     );
-    return extractFirstAuthoritativeDefinitionRow(readOutcome);
-  } catch (_error) {
-    return null;
+    return classifyAuthoritativeReadOutcome(readOutcome);
+  } catch (error) {
+    return {
+      succeeded: false,
+      row: null,
+      errorMessage: String(error?.message || error || ''),
+    };
   }
 }
 
-async function resolveServiceDefinitionForCreate(handler, entityId) {
-  const cached = readCachedServiceDefinition(handler, entityId);
-  if (cached && !isShipNotStartedServiceDefinition(cached)) {
-    return cached;
+function resolveRowDefinitionOutcomeKind(row) {
+  if (!row) {
+    return SERVICE_DEFINITION_RESOLUTION_OUTCOME.ABSENT;
   }
+  return isShipNotStartedServiceDefinition(row) ?
+    SERVICE_DEFINITION_RESOLUTION_OUTCOME.INELIGIBLE :
+    SERVICE_DEFINITION_RESOLUTION_OUTCOME.ELIGIBLE;
+}
+
+function classifyDefinitionRowOutcome(handler, entityId, row) {
+  const outcome = resolveRowDefinitionOutcomeKind(row);
+  if (outcome !== SERVICE_DEFINITION_RESOLUTION_OUTCOME.ELIGIBLE) {
+    handler?.logger?.warn?.(
+      RUNTIME_SERVICE_HANDLER_LOG_MSG.DEFINITION_NOT_FOUND,
+      {entityId, nodeId: handler?.nodeId},
+    );
+  }
+  return {
+    outcome,
+    definition: row || null,
+  };
+}
+
+async function resolveServiceDefinitionOutcomeForCreate(handler, entityId) {
   const gateway = resolveAuthoritativeDefinitionGateway(handler);
-  const authoritativeRow = gateway ?
-    await fetchAuthoritativeServiceDefinitionRow(gateway, entityId) :
-    null;
+  if (!gateway) {
+    const cached = readCachedServiceDefinition(handler, entityId);
+    return classifyDefinitionRowOutcome(handler, entityId, cached);
+  }
+  const authoritative = await fetchAuthoritativeServiceDefinitionOutcome(
+    gateway,
+    entityId,
+  );
+  if (!authoritative.succeeded) {
+    if (
+      NO_SUCH_SERVICE_DEFINITIONS_TABLE_REGEX.test(authoritative.errorMessage)
+    ) {
+      const cached = readCachedServiceDefinition(handler, entityId);
+      return classifyDefinitionRowOutcome(handler, entityId, cached);
+    }
+    return {
+      outcome: SERVICE_DEFINITION_RESOLUTION_OUTCOME.UNAVAILABLE,
+      definition: null,
+      errorMessage: authoritative.errorMessage,
+    };
+  }
+  if (!authoritative.row) {
+    evictStaleCachedServiceDefinition(handler, entityId);
+    return classifyDefinitionRowOutcome(handler, entityId, null);
+  }
+  const cached = readCachedServiceDefinition(handler, entityId);
   if (
-    authoritativeRow &&
-    !isShipNotStartedServiceDefinition(authoritativeRow)
+    !cached ||
+    !areAuthoritativeSystemTableCacheRowsEqual(
+      SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
+      cached,
+      authoritative.row,
+    )
   ) {
     applyAuthoritativeSystemTableRowsToCache(
       gateway,
       handler.systemTableCache,
       SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
-      [authoritativeRow],
+      [authoritative.row],
     );
-    return authoritativeRow;
   }
-  handler.logger.warn(
-    RUNTIME_SERVICE_HANDLER_LOG_MSG.DEFINITION_NOT_FOUND,
-    {entityId, nodeId: handler.nodeId},
-  );
-  return null;
+  return classifyDefinitionRowOutcome(handler, entityId, authoritative.row);
 }
 
-export {resolveServiceDefinitionForCreate};
+async function resolveServiceDefinitionForCreate(handler, entityId) {
+  const resolution = await resolveServiceDefinitionOutcomeForCreate(
+    handler,
+    entityId,
+  );
+  return resolution.outcome === SERVICE_DEFINITION_RESOLUTION_OUTCOME.ELIGIBLE ?
+    resolution.definition :
+    null;
+}
+
+export {
+  AUTHORITATIVE_DEFINITION_READ_AUTHORITY,
+  SERVICE_DEFINITION_RESOLUTION_OUTCOME,
+  resolveServiceDefinitionForCreate,
+  resolveServiceDefinitionOutcomeForCreate,
+};

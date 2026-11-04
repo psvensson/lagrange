@@ -4,6 +4,7 @@ import {PartitionServiceCoreBase} from
 import {createPartitionServiceMetadataDeliveryMethods} from
   '../../src/partition/partition-service-metadata-delivery-methods.js';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {evaluateOperationLedgerQuorumConcentration} from
   '../../src/rebalancer/operation-ledger-quorum-concentration.js';
@@ -436,4 +437,147 @@ test('durable voter visibility - quorum-spread hold releases once cure moves com
     'the quorum-spread hold releases once the cure moves complete and the ' +
       'promoted roles are durably visible',
   );
+});
+
+test('durable voter visibility - in-flight learner flush superseded during readAuthoritativeRoleRow is fenced and followed by voter flush', async (t) => {
+  const replicaId = `${LEDGER_PARTITION_ID}-r6`;
+  const cache = createCacheFake();
+  const store = createDurableStoreFake({caches: [cache]});
+  const warns = [];
+
+  store.seedDurableRow(
+    ledgerServiceRow({
+      replicaId,
+      nodeId: 'node-3',
+      raftRole: null,
+      updatedAt: 1000,
+    }),
+  );
+
+  let releaseFirstProbe;
+  const firstProbeGate = new Promise((resolve) => {
+    releaseFirstProbe = resolve;
+  });
+  let readCallCount = 0;
+  const originalRead =
+    store.cdcIntegrationService.executeAuthoritativeSystemTableRead;
+  store.cdcIntegrationService.executeAuthoritativeSystemTableRead = async (
+    tableName,
+    sql,
+    params,
+    options,
+  ) => {
+    readCallCount += 1;
+    if (readCallCount === 1) {
+      await firstProbeGate;
+    }
+    return originalRead(tableName, sql, params, options);
+  };
+
+  const writtenRoles = [];
+  const originalUpdate = store.cdcIntegrationService.updateSystemTableRow;
+  store.cdcIntegrationService.updateSystemTableRow = async (
+    tableName,
+    whereClause,
+    data,
+  ) => {
+    writtenRoles.push(data.raft_role);
+    return originalUpdate(tableName, whereClause, data);
+  };
+
+  const helper = createRoleHelperForReplica({replicaId, cache, store, warns});
+  // Start an in-flight learner flush that pauses inside readAuthoritativeRoleRow.
+  helper.queue(RAFT_ROLE.LEARNER);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  t.equal(helper.inFlight, true, 'initial learner flush is in flight');
+
+  // While the authoritative probe for learner is in flight, the replica
+  // promotes to follower and queues the voter role.
+  helper.queue(RAFT_ROLE.FOLLOWER);
+  releaseFirstProbe();
+
+  await settleHelper(helper);
+  helper.shutdown();
+
+  t.same(
+    writtenRoles,
+    [RAFT_ROLE.FOLLOWER],
+    'superseded learner flush is fenced before submitMutation and only follower is written',
+  );
+  t.equal(
+    store.rows.get(replicaId).raft_role,
+    RAFT_ROLE.FOLLOWER,
+    'durable row converges to follower without regressing to learner',
+  );
+});
+
+test('durable voter visibility - ReplicaStateMachine preserves voter raft_role across buildUpdateCdcData and buildCreateCdcData for the same replica identity', async (t) => {
+  const replicaId = `${LEDGER_PARTITION_ID}-r7`;
+  const cache = createCacheFake();
+  cache.applySystemTableChange(
+    SERVICES,
+    'upsert',
+    ledgerServiceRow({
+      replicaId,
+      nodeId: 'node-3',
+      raftRole: RAFT_ROLE.FOLLOWER,
+      updatedAt: 1000,
+    }),
+  );
+
+  const stateMachine = new ReplicaStateMachine({
+    nodeId: 'node-3',
+    systemTableCache: cache,
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true, affectedRows: 1}),
+    },
+  });
+
+  const replicaState = {
+    replicaId,
+    serviceId: replicaId,
+    replicaIdentity: replicaId,
+    partitionId: LEDGER_PARTITION_ID,
+    nodeId: 'node-3',
+    state: 'active',
+    stateEnteredAt: 2000,
+    triggerReason: 'voter_ready',
+    createdAt: 1000,
+  };
+
+  const updatePayload = stateMachine._buildUpdateCdcData(
+    replicaState,
+    'syncing',
+  );
+  t.equal(
+    updatePayload.raft_role,
+    RAFT_ROLE.FOLLOWER,
+    'buildUpdateCdcData preserves voter raft_role for the same replica identity',
+  );
+
+  const createPayload = stateMachine._buildCreateCdcData(
+    replicaState,
+    replicaId,
+    'partition',
+    'node-3/partition/r7',
+  );
+  t.equal(
+    createPayload.raft_role,
+    RAFT_ROLE.FOLLOWER,
+    'buildCreateCdcData preserves voter raft_role for the same replica identity',
+  );
+
+  const mismatchedIdentityPayload = stateMachine._buildUpdateCdcData(
+    {
+      ...replicaState,
+      replicaIdentity: `${replicaId}#gen-2`,
+    },
+    'syncing',
+  );
+  t.equal(
+    mismatchedIdentityPayload.raft_role,
+    undefined,
+    'buildUpdateCdcData does not copy raft_role across different replica identities',
+  );
+  await stateMachine.clear();
 });

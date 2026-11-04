@@ -590,7 +590,8 @@ class ServeEligibilityOwner {
   notePublicationSourceChange(row) {
     const pub = normalizeControlPlanePublicationRow(row);
     if (!isMembershipPublication(pub)) return;
-    const isPublished = pub.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
+    const isPublished = !pub.status ||
+      pub.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
     if (isPublished) this.recordObservedPublicationEpoch(pub.publicationEpoch);
     const heldEpoch = this.record?.epoch || null;
     if (

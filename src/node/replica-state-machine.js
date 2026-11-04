@@ -456,7 +456,7 @@ class ReplicaStateMachine extends EventEmitter {
   }
 
   _buildUpdateCdcData(replicaState, previousState) {
-    return buildUpdateCdcData(replicaState, previousState);
+    return buildUpdateCdcData(replicaState, previousState, this);
   }
 
   _buildCreateCdcData(replicaState, serviceId, serviceType, address) {

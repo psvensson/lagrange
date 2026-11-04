@@ -379,3 +379,54 @@ test(
     t.end();
   },
 );
+
+test(
+  'ServeEligibilityOwner does not ratchet minPublicationEpoch on OPEN, ACK_PENDING, or ABANDONED publications',
+  async (t) => {
+    const {owner} = createHarness({
+      publications: [buildPublicationRow(EPOCH_THREE)],
+    });
+    await owner.readServeEligibility();
+    t.equal(owner.minPublicationEpoch, EPOCH_THREE);
+    t.equal(owner.superseded, false);
+
+    for (const nonPublishedStatus of ['OPEN', 'ACK_PENDING', 'ABANDONED']) {
+      owner.noteSourceChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'UPDATE', {
+        publication_id: `cluster_membership-${EPOCH_FIVE}`,
+        publication_kind: 'cluster_membership',
+        publication_epoch: EPOCH_FIVE,
+        status: nonPublishedStatus,
+      });
+      t.equal(
+        owner.minPublicationEpoch,
+        EPOCH_THREE,
+        `${nonPublishedStatus} publication must not advance minPublicationEpoch`,
+      );
+      t.equal(
+        owner.superseded,
+        false,
+        `${nonPublishedStatus} publication for a different publication_id must not supersede committed epoch 3`,
+      );
+    }
+
+    owner.noteSourceChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'UPDATE', {
+      publication_id: `cluster_membership-${EPOCH_FIVE}`,
+      publication_kind: 'cluster_membership',
+      publication_epoch: EPOCH_FIVE,
+      status: 'PUBLISHED',
+    });
+    t.equal(
+      owner.minPublicationEpoch,
+      EPOCH_FIVE,
+      'PUBLISHED publication advances minPublicationEpoch to 5',
+    );
+    t.equal(
+      owner.superseded,
+      true,
+      'PUBLISHED publication at higher epoch marks committed record superseded',
+    );
+
+    owner.shutdown();
+    t.end();
+  },
+);

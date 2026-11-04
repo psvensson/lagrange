@@ -22,6 +22,7 @@ function initializeGuardedRuntimeServiceHandler(service, systemTableCache) {
     nodeId: service.nodeId,
     messageRouter: service.messageRouter,
     cdcIntegrationService: service.cdcIntegrationService,
+    controlPlaneSystemTableGateway: service.controlPlaneSystemTableGateway,
     systemTableCache,
     serviceLifecycleManager: service.serviceLifecycleManager,
     serviceRuntimeLifecycle: service.serviceRuntimeLifecycle,

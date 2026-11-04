@@ -21,6 +21,9 @@ import {
   selectRequestOptions,
 } from './sql-select-execution-helpers.js';
 import {
+  METADATA_AUTHORITY_ERROR_CODE,
+  METADATA_AUTHORITY_REFRESH_OUTCOME,
+  METADATA_AUTHORITY_UNAVAILABLE_REASON,
   refreshTableRoutingMetadataFromAuthority,
   resolveSelectExecutionPlanWithAuthorityRefresh,
 } from './sql-query-engine-metadata-authority-refresh.js';
@@ -230,6 +233,17 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         distributedPlan.tablePlans.get(joinTableName) ||
         null;
       if (!joinPlan || joinPlan.partitions.length === 0) {
+        if (this.getTableInfo?.(joinTableName)) {
+          return {
+            success: false,
+            tableName: joinTableName,
+            outcome: METADATA_AUTHORITY_REFRESH_OUTCOME.UNAVAILABLE,
+            reason: METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED,
+            error: `Authoritative routing metadata unavailable for table: ${joinTableName}`,
+            errorCode:
+              METADATA_AUTHORITY_ERROR_CODE.ROUTING_METADATA_UNAVAILABLE,
+          };
+        }
         return {
           success: false,
           error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${joinTableName}`,
