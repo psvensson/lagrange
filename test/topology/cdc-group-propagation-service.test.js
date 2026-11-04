@@ -513,8 +513,8 @@ test('contended durable propagation evicts a retired/hydrated contender when the
     assert.equal(req.deliveryContext.isContended(), w === 4);
   }
 
-  // Advance clock past the 25ms yield hold window without SERVICE_DEFINITIONS re-attempting.
-  nowMs += 30;
+  // Advance clock past the 300ms yield hold window without SERVICE_DEFINITIONS re-attempting.
+  nowMs += 350;
 
   // SERVICES resumes and completes 5+ waves without being marked contended again.
   for (let w = 5; w <= 9; w += 1) {

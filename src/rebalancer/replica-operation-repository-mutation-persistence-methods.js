@@ -1,6 +1,7 @@
 import {
   REPLICA_OPERATION_INSERT_DISPOSITION,
 } from './replica-operation-insert-disposition.js';
+import {TYPEOF, WORKFLOW_STEP} from '../constants/index.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
@@ -63,6 +64,47 @@ function nullableOperationValue(value) {
   return value ?? null;
 }
 
+function createAdmissionVisibilitySatisfied(
+  expectedOperation,
+  observedOperation,
+) {
+  if (
+    expectedOperation.createAdmissionState === null ||
+    expectedOperation.createAdmissionState === undefined
+  ) {
+    return true;
+  }
+  const admissionFields = [
+    'createAdmissionState',
+    'createAdmissionToken',
+    'createAdmissionReplicaCreatedAt',
+    'createAdmissionAttemptToken',
+    'createAdmissionPreviousAttemptToken',
+    'createAdmissionAttemptSeq',
+    'createAdmissionWorkflowUpdatedAt',
+    'createAdmissionOwnerIncarnation',
+  ];
+  if (
+    admissionFields.every(
+      (field) => observedOperation[field] === expectedOperation[field],
+    )
+  ) {
+    return true;
+  }
+  if (
+    expectedOperation.workflowStep &&
+    expectedOperation.workflowStep !== WORKFLOW_STEP.PENDING &&
+    typeof observedOperation.createAdmissionState === TYPEOF.STRING &&
+    observedOperation.createAdmissionToken ===
+      expectedOperation.createAdmissionToken &&
+    Number(observedOperation.createAdmissionAttemptSeq) >=
+      Number(expectedOperation.createAdmissionAttemptSeq)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function membershipVisibilitySatisfied(expectedOperation, observedOperation) {
   const membershipFields = [
     'sourceReplicaId',
@@ -71,9 +113,32 @@ function membershipVisibilitySatisfied(expectedOperation, observedOperation) {
   const carriesMembership = membershipFields.some((field) =>
     expectedOperation[field] !== null &&
       expectedOperation[field] !== undefined);
-  return !carriesMembership || membershipFields.every((field) =>
-    nullableOperationValue(observedOperation[field]) ===
-      nullableOperationValue(expectedOperation[field]));
+  if (!carriesMembership) {
+    return true;
+  }
+  if (
+    membershipFields.every((field) =>
+      nullableOperationValue(observedOperation[field]) ===
+        nullableOperationValue(expectedOperation[field]))
+  ) {
+    return true;
+  }
+  if (
+    expectedOperation.workflowStep &&
+    expectedOperation.workflowStep !== WORKFLOW_STEP.PENDING
+  ) {
+    const immutableMembershipIdentityFields = [
+      'sourceReplicaId',
+      'messageGroupMembershipLaneKey',
+      'messageGroupMembershipIdentity',
+    ];
+    return immutableMembershipIdentityFields.every((field) =>
+      expectedOperation[field] === null ||
+      expectedOperation[field] === undefined ||
+      nullableOperationValue(observedOperation[field]) ===
+        nullableOperationValue(expectedOperation[field]));
+  }
+  return false;
 }
 
 function isReplicaOperationUniqueConstraintFailure(result) {
@@ -612,20 +677,11 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       ) {
         return false;
       }
-      if (expectedOperation.createAdmissionState !== null &&
-          expectedOperation.createAdmissionState !== undefined) {
-        const admissionFields = [
-          'createAdmissionState',
-          'createAdmissionToken',
-          'createAdmissionReplicaCreatedAt',
-          'createAdmissionAttemptToken',
-          'createAdmissionPreviousAttemptToken',
-          'createAdmissionAttemptSeq',
-          'createAdmissionWorkflowUpdatedAt',
-          'createAdmissionOwnerIncarnation',
-        ];
-        if (admissionFields.some((field) =>
-          observedOperation[field] !== expectedOperation[field])) return false;
+      if (!createAdmissionVisibilitySatisfied(
+        expectedOperation,
+        observedOperation,
+      )) {
+        return false;
       }
       if (!membershipVisibilitySatisfied(expectedOperation,
         observedOperation)) {

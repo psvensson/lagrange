@@ -50,6 +50,9 @@ function adoptWinningTerminalOperationOutcome(operation, winningTerminal) {
   operation.workflowStep = winningTerminal.workflowStep;
   operation.completedAt = winningTerminal.completedAt;
   operation.errorMessage = winningTerminal.errorMessage;
+  if (Number.isFinite(winningTerminal.updatedAt)) {
+    operation.updatedAt = winningTerminal.updatedAt;
+  }
 }
 
 function hasWinningTerminalOperation(repository, terminalTransition,
