@@ -1,5 +1,9 @@
 
 const LOCAL_NUM_ONE_HUNDRED_TWENTY_EIGHT = 128;
+const MAX_DIAGNOSTIC_STRING_LENGTH = 512;
+const MAX_DIAGNOSTIC_ARRAY_LENGTH = 32;
+const MAX_DIAGNOSTIC_OBJECT_KEYS = 32;
+const MAX_DIAGNOSTIC_DEPTH = 4;
 const DEFAULT_AGGREGATION_KEY = 'default';
 const KEY_PART_SEPARATOR = '/';
 const BOUNDARY_FIELDS = Object.freeze(['decidingBoundary', 'boundary', 'type']);
@@ -32,14 +36,23 @@ const SUMMARY_FIELD = Object.freeze({
   LAST_MEANINGFUL_PROGRESS: 'lastMeaningfulProgress',
 });
 
-function freezeValue(value) {
+function freezeValue(value, depth = 0) {
+  if (typeof value === 'string') {
+    return value.length > MAX_DIAGNOSTIC_STRING_LENGTH ?
+      value.slice(0, MAX_DIAGNOSTIC_STRING_LENGTH) :
+      value;
+  }
   if (Array.isArray(value)) {
-    return Object.freeze(value.map((entry) => freezeValue(entry)));
+    if (depth >= MAX_DIAGNOSTIC_DEPTH) return Object.freeze([]);
+    return Object.freeze(
+      value.slice(0, MAX_DIAGNOSTIC_ARRAY_LENGTH).map((entry) => freezeValue(entry, depth + 1)),
+    );
   }
   if (value && typeof value === 'object') {
+    if (depth >= MAX_DIAGNOSTIC_DEPTH) return Object.freeze({});
     const frozen = {};
-    for (const [key, entry] of Object.entries(value)) {
-      frozen[key] = freezeValue(entry);
+    for (const [key, entry] of Object.entries(value).slice(0, MAX_DIAGNOSTIC_OBJECT_KEYS)) {
+      frozen[key] = freezeValue(entry, depth + 1);
     }
     return Object.freeze(frozen);
   }
@@ -129,6 +142,7 @@ function buildAggregatedSummary(entry, existing, normalized) {
       SUMMARY_FIELD.NEXT_TRIGGER,
     ),
     lastMeaningfulProgress: normalized.lastMeaningfulProgress,
+    firstSample: existing?.firstSample || normalized,
     latestSample: normalized,
   });
 }
@@ -165,6 +179,23 @@ function buildNormalizedDiagnosticEntry(
     lastMeaningfulProgress,
     ...entry,
   });
+}
+
+function trimEntriesPreservingDistinctKeys(entries, maxEntries) {
+  while (entries.length > maxEntries) {
+    const countsByKey = new Map();
+    for (const item of entries) {
+      countsByKey.set(item.aggregationKey, (countsByKey.get(item.aggregationKey) || 0) + 1);
+    }
+    const duplicateIndex = entries.findIndex(
+      (item) => (countsByKey.get(item.aggregationKey) || 0) > 1,
+    );
+    if (duplicateIndex >= 0) {
+      entries.splice(duplicateIndex, 1);
+    } else {
+      entries.shift();
+    }
+  }
 }
 
 function recordAggregatedSummary(map, maxEntries, key, summary) {
@@ -221,7 +252,7 @@ class ControlPlaneDiagnosticsLedger {
     this.nextSequence += 1;
     this.entries.push(normalized);
     if (this.entries.length > this.maxEntries) {
-      this.entries = this.entries.slice(this.entries.length - this.maxEntries);
+      trimEntriesPreservingDistinctKeys(this.entries, this.maxEntries);
     }
     recordAggregatedSummary(
       this.aggregatedByKey,

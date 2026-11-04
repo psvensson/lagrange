@@ -1060,4 +1060,97 @@ test('SQLQueryEngine - RF3 with sealed quorum minimum (2) never lowers minimumRo
   );
 });
 
+test('SQLQueryEngine & RuntimeServiceDefinitionResolution - authoritative SQL absence overrides stale cached presence and evicts populated SystemTableCache rows', async (t) => {
+  const {SystemTableCache} = await import('../../src/cache/system-table-cache.js');
+  const {METADATA_AUTHORITY_REFRESH_OUTCOME} = await import(
+    '../../src/query/sql-query-engine-metadata-authority-refresh.js'
+  );
+  const {
+    SERVICE_DEFINITION_RESOLUTION_OUTCOME,
+    resolveServiceDefinitionOutcomeForCreate,
+  } = await import('../../src/node/runtime-service-definition-resolution.js');
+
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
+    table_id: 'tbl-stale-dropped',
+    table_name: 'stale_dropped_orders',
+    schema_definition: JSON.stringify({
+      columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
+    }),
+    updated_at: 1000,
+  });
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+    partition_id: 'tbl-stale-dropped-p1',
+    table_id: 'tbl-stale-dropped',
+    table_name: 'stale_dropped_orders',
+    partition_version: 1,
+    replica_count: 1,
+    state: 'NORMAL',
+    updated_at: 1000,
+  });
+  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
+    service_id: 'svc-def-stale',
+    service_name: 'stale-wasm-service',
+    replica_count: 1,
+    updated_at: 1000,
+  });
+
+  t.equal(cache.getAll(TABLES.TABLES).length, 1, 'table row initially cached');
+  t.equal(cache.getAll(TABLES.PARTITIONS).length, 1, 'partition row initially cached');
+  t.ok(
+    cache.get(TABLES.SERVICE_DEFINITIONS, 'svc-def-stale'),
+    'service definition initially cached',
+  );
+
+  const gateway = {
+    async readAuthoritativeRows() {
+      return {success: true, rows: []};
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    nodeId: 'node-a',
+    systemCache: cache,
+    controlPlaneSystemTableGateway: gateway,
+    messageRouter: createMockMessageRouter(),
+  });
+
+  const refreshOutcome = await engine.refreshTableRoutingMetadataFromAuthority(
+    'stale_dropped_orders',
+  );
+  t.equal(
+    refreshOutcome.outcome,
+    METADATA_AUTHORITY_REFRESH_OUTCOME.ABSENT,
+    'authoritative empty table/partition SQL read must resolve to ABSENT despite stale cache',
+  );
+  t.equal(
+    cache.getAll(TABLES.TABLES).length,
+    0,
+    'stale table row must be evicted from SystemTableCache on authoritative absence',
+  );
+  t.equal(
+    cache.getAll(TABLES.PARTITIONS).length,
+    0,
+    'stale partition row must be evicted from SystemTableCache on authoritative absence',
+  );
+
+  const serviceResolution = await resolveServiceDefinitionOutcomeForCreate(
+    {
+      nodeId: 'node-a',
+      systemTableCache: cache,
+      controlPlaneSystemTableGateway: gateway,
+    },
+    'svc-def-stale',
+  );
+  t.equal(
+    serviceResolution.outcome,
+    SERVICE_DEFINITION_RESOLUTION_OUTCOME.ABSENT,
+    'authoritative empty service_definitions read must resolve to ABSENT',
+  );
+  t.equal(
+    cache.get(TABLES.SERVICE_DEFINITIONS, 'svc-def-stale'),
+    undefined,
+    'stale service_definitions row must be evicted from SystemTableCache on authoritative absence',
+  );
+});
 

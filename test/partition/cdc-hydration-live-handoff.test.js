@@ -119,3 +119,86 @@ test('W-D4b: acknowledgeHydratedObligationsThrough marks pre-hydration obligatio
     await shutdownAll(leader);
   }
 });
+
+test('W-D4c: acknowledgeHydratedObligationsThrough drains > 256 pre-hydration obligations ' +
+  'across bounded <= 256-event batches without creating a refused 257-event batch', async () => {
+  const timeSource = new VirtualTimeSource();
+  const {leader, proposed} = await startLeader({timeSource, tableName: CDC_TABLE});
+  try {
+    for (let index = 0; index < 600; index += 1) {
+      applyCommitted(leader, upsertOf(leader, 'bulk-seed', index));
+    }
+    const subscriber = acknowledgingCdcSubscriber();
+    await leader.subscribeToCDCWithHandshake(subscriber, {subscriberId: 'bulk-sub'});
+    const image = leader.readHydrationImage(IMAGE_SQL);
+    const position = Number(image.appliedIndex);
+    const ackResult = await leader.cdcDelivery.acknowledgeHydratedObligationsThrough(
+      image.appliedIndex,
+    );
+    const committedAbove = commitLaterTraffic(leader, 'post-bulk-hydration');
+    await settleTicks();
+    const applied = new Set();
+    await pump(timeSource, leader, proposed, applied);
+    const maxBatchEvents = Math.max(
+      0,
+      ...proposed.map((command) =>
+        (command.groups || []).reduce((sum, group) => sum + (group.events?.length || 0), 0)),
+    );
+    const diagnostics = leader.cdcDelivery.getCdcObligationDiagnostics();
+    assert.equal(ackResult.acknowledged > 0, true);
+    assert.equal(maxBatchEvents <= 256, true);
+    assert.equal(diagnostics.held, null);
+    assert.deepEqual(
+      measure(leader, subscriber, image.rows, position, committedAbove),
+      {
+        committedAbove: LATER_EVENTS,
+        missingAbove: 0,
+        divergentRows: 0,
+        deletedRowInView: false,
+        owed: 0,
+        outsideLane: 0,
+      },
+    );
+  } finally {
+    await shutdownAll(leader);
+  }
+});
+
+test('W-D4d: prepareCdcObligationProgress attaches logIndex and ' +
+  'acknowledgeHydratedObligationsThrough retires an in-flight pre-hydration invocation', async () => {
+  const timeSource = new VirtualTimeSource();
+  const {leader, proposed} = await startLeader({timeSource, tableName: CDC_TABLE});
+  try {
+    let unblockDelivery = null;
+    let observedCellLogIndex = null;
+    let observedInvocationDuringHydration = null;
+    const blockingSubscriber = {
+      handleCDCEvent: async () => {
+        const currentCell = leader.cdcDelivery.obligationLane.currentObligation;
+        observedCellLogIndex = currentCell?.logIndex ?? null;
+        observedInvocationDuringHydration = leader.cdcDelivery.activeCdcInvocation;
+        await new Promise((resolve) => {
+          unblockDelivery = resolve;
+        });
+        return {success: true, completion: 'DURABLE'};
+      },
+    };
+    await leader.subscribeToCDCWithHandshake(blockingSubscriber, {subscriberId: 'blocking-sub'});
+    applyCommitted(leader, upsertOf(leader, 'inflight-seed', 0));
+    await settleTicks();
+    assert.equal(Number.isSafeInteger(observedCellLogIndex) && observedCellLogIndex > 0, true);
+    assert.notEqual(observedInvocationDuringHydration, null);
+
+    const image = leader.readHydrationImage(IMAGE_SQL);
+    await leader.cdcDelivery.acknowledgeHydratedObligationsThrough(image.appliedIndex);
+
+    assert.equal(observedInvocationDuringHydration.context.signal.aborted, true);
+    assert.equal(leader.cdcDelivery.obligationLane.currentObligation, null);
+    unblockDelivery?.();
+    await settleTicks();
+    const applied = new Set();
+    await pump(timeSource, leader, proposed, applied);
+  } finally {
+    await shutdownAll(leader);
+  }
+});

@@ -6,6 +6,7 @@ import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_READ_LEADER_MODE,
   applyAuthoritativeSystemTableRowsToCache,
+  evictAuthoritativeAbsentSystemTableRowsFromCache,
   readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {
@@ -53,7 +54,7 @@ function readCachedServiceDefinition(handler, entityId) {
   );
 }
 
-function evictStaleCachedServiceDefinition(handler, entityId) {
+function evictStaleCachedServiceDefinition(handler, gateway, entityId) {
   const cache = handler?.systemTableCache;
   if (typeof cache?.delete === FUNCTION_TYPE) {
     cache.delete(SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS, entityId);
@@ -61,6 +62,16 @@ function evictStaleCachedServiceDefinition(handler, entityId) {
   }
   if (typeof cache?.remove === FUNCTION_TYPE) {
     cache.remove(SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS, entityId);
+    return;
+  }
+  const cached = readCachedServiceDefinition(handler, entityId);
+  if (cached) {
+    evictAuthoritativeAbsentSystemTableRowsFromCache(
+      gateway,
+      cache,
+      SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
+      [cached],
+    );
   }
 }
 
@@ -168,7 +179,7 @@ async function resolveServiceDefinitionOutcomeForCreate(handler, entityId) {
     };
   }
   if (!authoritative.row) {
-    evictStaleCachedServiceDefinition(handler, entityId);
+    evictStaleCachedServiceDefinition(handler, gateway, entityId);
     return classifyDefinitionRowOutcome(handler, entityId, null);
   }
   const cached = readCachedServiceDefinition(handler, entityId);

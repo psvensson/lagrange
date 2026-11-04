@@ -108,6 +108,16 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
       Object.freeze([]);
   }
 
+  getParticipationDecisionLedgerAggregatedSummaries(options = {}) {
+    return this.participationDecisionLedger ?
+      this.participationDecisionLedger.getAggregatedSummaries(options) :
+      Object.freeze([]);
+  }
+
+  getParticipationDecisionAggregatedSummaries(options = {}) {
+    return this.getParticipationDecisionLedgerAggregatedSummaries(options);
+  }
+
   /**
    * @param {Object} entry
    * @return {void}
@@ -132,6 +142,14 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
    */
   getAuthoritativeReadinessRepairLedgerEntries(options = {}) {
     return this.authoritativeNodeEvidenceReconciler.getLedgerEntries(options);
+  }
+
+  getAuthoritativeReadinessRepairLedgerAggregatedSummaries(options = {}) {
+    return this.authoritativeNodeEvidenceReconciler.getLedgerAggregatedSummaries(options);
+  }
+
+  getAuthoritativeReadinessRepairAggregatedSummaries(options = {}) {
+    return this.getAuthoritativeReadinessRepairLedgerAggregatedSummaries(options);
   }
 
   /**

@@ -2,6 +2,7 @@ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   applyAuthoritativeSystemTableRowsToCache,
+  evictAuthoritativeAbsentSystemTableRowsFromCache,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {
   getSystemCachePrimaryKeyField,
@@ -462,28 +463,52 @@ function filterChangedRows(store, tableName, rows) {
 
 function applyTableResultToStore(store, gateway, tableName, result) {
   const changedRows = filterChangedRows(store, tableName, result?.rows);
-  if (changedRows.length === 0) {
-    return false;
-  }
-  return applyAuthoritativeSystemTableRowsToCache(
-    gateway,
-    store,
-    tableName,
-    changedRows,
-  );
+  if (changedRows.length === 0) return false;
+  return applyAuthoritativeSystemTableRowsToCache(gateway, store, tableName, changedRows);
 }
 
-function applyAuthoritativeRowsToStore(store, gateway, results) {
-  if (!Array.isArray(results)) {
-    return false;
+function evictStoreRow(store, gateway, systemTable, row) {
+  if (!store || !row || typeof row !== LOCAL_STR_OBJECT) return;
+  const key = resolveSystemCacheRowKey(systemTable, row);
+  if (typeof store.delete === LOCAL_STR_FUNCTION && key) {
+    store.delete(systemTable, key);
+    return;
   }
+  if (typeof store.remove === LOCAL_STR_FUNCTION && key) {
+    store.remove(systemTable, key);
+    return;
+  }
+  evictAuthoritativeAbsentSystemTableRowsFromCache(gateway, store, systemTable, [row]);
+}
+
+function evictMatchingStoreRows(store, gateway, systemTable, predicate) {
+  const rows = typeof store?.getAll === LOCAL_STR_FUNCTION ? store.getAll(systemTable) || [] : [];
+  for (const row of rows) {
+    if (predicate(row)) evictStoreRow(store, gateway, systemTable, row);
+  }
+}
+
+function evictAbsentCatalogRows(store, gateway, tableName, results) {
+  if (!Array.isArray(results) || !store) return;
+  if (!hasAnyRowInResult(results[0])) {
+    evictMatchingStoreRows(store, gateway, TABLES.TABLES,
+      (row) => row?.table_name === tableName || row?.table_id === tableName);
+    evictMatchingStoreRows(
+      store, gateway, TABLES.PARTITIONS, (row) => row?.table_name === tableName);
+  } else if (!hasAnyRowInResult(results[1])) {
+    evictMatchingStoreRows(
+      store, gateway, TABLES.PARTITIONS, (row) => row?.table_name === tableName);
+  }
+}
+
+function applyAuthoritativeRowsToStore(store, gateway, results, tableName = null) {
+  if (!Array.isArray(results)) return false;
+  evictAbsentCatalogRows(store, gateway, tableName, results);
   const [tableResult, partitionResult, serviceResult] = results;
-  const tableApplied =
-    applyTableResultToStore(store, gateway, TABLES.TABLES, tableResult);
+  const tableApplied = applyTableResultToStore(store, gateway, TABLES.TABLES, tableResult);
   const partitionApplied =
     applyTableResultToStore(store, gateway, TABLES.PARTITIONS, partitionResult);
-  const serviceApplied =
-    applyTableResultToStore(store, gateway, TABLES.SERVICES, serviceResult);
+  const serviceApplied = applyTableResultToStore(store, gateway, TABLES.SERVICES, serviceResult);
   return tableApplied || partitionApplied || serviceApplied;
 }
 
@@ -492,74 +517,52 @@ function hasAnyRowInResult(result) {
 }
 
 function resolveMetadataPresence(engine, tableName, results = null) {
-  const hasTableMetadata =
-    Boolean(engine?.getTableInfo?.(tableName)) ||
-    hasAnyRowInResult(results?.[0]);
-  const hasPartitions =
-    (engine?.getTablePartitions?.(tableName)?.length || 0) > 0 ||
-    hasAnyRowInResult(results?.[1]);
+  if (Array.isArray(results)) {
+    return {
+      hasTableMetadata: hasAnyRowInResult(results[0]),
+      hasPartitions: hasAnyRowInResult(results[1]),
+    };
+  }
+  const hasTableMetadata = Boolean(engine?.getTableInfo?.(tableName));
+  const hasPartitions = (engine?.getTablePartitions?.(tableName)?.length || 0) > 0;
   return {hasTableMetadata, hasPartitions};
 }
 
 function classifyMetadataPresenceOutcome(tableName, presence, applied) {
-  if (!presence.hasTableMetadata) {
-    return buildAbsentRefreshResult(tableName);
-  }
+  if (!presence.hasTableMetadata) return buildAbsentRefreshResult(tableName);
   if (!presence.hasPartitions) {
     return buildUnavailableRefreshResult(
-      tableName,
-      METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED,
-    );
+      tableName, METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED);
   }
   return buildFoundRefreshResult(applied);
 }
 
 function resolveStoreAndGateway(engine) {
-  const gateway =
-    engine?.getControlPlaneSystemTableGateway?.() ||
-    engine?.controlPlaneSystemTableGateway ||
-    null;
-  const store =
-    engine?.cdcIntegrationService?.cacheMutationTarget ||
-    engine?.systemCache ||
-    null;
+  const gateway = engine?.getControlPlaneSystemTableGateway?.() ||
+    engine?.controlPlaneSystemTableGateway || null;
+  const store = engine?.cdcIntegrationService?.cacheMutationTarget ||
+    engine?.systemCache || null;
   return {gateway, store};
 }
 
 function settleUnreadableGatewayOutcome(engine, gateway, tableName) {
   const presence = resolveMetadataPresence(engine, tableName);
-  if (presence.hasTableMetadata && presence.hasPartitions) {
-    return buildFoundRefreshResult(false);
-  }
+  if (presence.hasTableMetadata && presence.hasPartitions) return buildFoundRefreshResult(false);
   if (isGatewayConfigured(gateway) || presence.hasTableMetadata) {
     return buildUnavailableRefreshResult(
-      tableName,
-      METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED,
-    );
+      tableName, METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED);
   }
   return buildAbsentRefreshResult(tableName);
 }
 
 function settleFetchedMetadataOutcome(engine, store, gateway, context) {
   const {tableName, fetchOutcome} = context;
-  if (
-    fetchOutcome.outcome === METADATA_AUTHORITY_REFRESH_OUTCOME.UNAVAILABLE
-  ) {
-    return buildUnavailableRefreshResult(
-      tableName,
-      fetchOutcome.reason,
-      fetchOutcome.errorMessage,
-    );
+  if (fetchOutcome.outcome === METADATA_AUTHORITY_REFRESH_OUTCOME.UNAVAILABLE) {
+    return buildUnavailableRefreshResult(tableName, fetchOutcome.reason, fetchOutcome.errorMessage);
   }
-  const applied =
-    fetchOutcome.outcome === METADATA_AUTHORITY_REFRESH_OUTCOME.FOUND ?
-      applyAuthoritativeRowsToStore(store, gateway, fetchOutcome.results) :
-      false;
-  const presence = resolveMetadataPresence(
-    engine,
-    tableName,
-    fetchOutcome.results,
-  );
+  const applied = fetchOutcome.outcome === METADATA_AUTHORITY_REFRESH_OUTCOME.FOUND ?
+    applyAuthoritativeRowsToStore(store, gateway, fetchOutcome.results, tableName) : false;
+  const presence = resolveMetadataPresence(engine, tableName, fetchOutcome.results);
   return classifyMetadataPresenceOutcome(tableName, presence, applied);
 }
 
@@ -725,65 +728,38 @@ function isWriteTableMetadataCold(tableInfo, tablePlan) {
 }
 
 async function resolveWriteExecutionPlanWithAuthorityRefresh(
-  engine,
-  ast,
-  params,
-  context = {},
+  engine, ast, params, context = {},
 ) {
   const {sessionId, queryOptions = {}, planStatement} = context;
   const tableName = ast.table;
   const planningStartTimeMs = Date.now();
   let distributedPlan = planStatement(
-    engine.distributedQueryPlanner,
-    ast,
-    params,
-    {sessionId},
-  );
+    engine.distributedQueryPlanner, ast, params, {sessionId});
   let tableInfo = engine.getTableInfo(tableName);
   let tablePlan = distributedPlan.tablePlans.get(tableName) || null;
   if (isWriteTableMetadataCold(tableInfo, tablePlan)) {
-    const refreshResult =
-      await engine.refreshTableRoutingMetadataFromAuthority(
-        tableName,
-        queryOptions,
-      );
-    if (
-      refreshResult.outcome !== METADATA_AUTHORITY_REFRESH_OUTCOME.FOUND
-    ) {
-      return {
-        settled: true,
-        response: refreshResult.failure,
-      };
+    const refreshResult = await engine.refreshTableRoutingMetadataFromAuthority(
+      tableName, queryOptions);
+    if (refreshResult.outcome !== METADATA_AUTHORITY_REFRESH_OUTCOME.FOUND) {
+      return {settled: true, response: refreshResult.failure};
     }
     distributedPlan = planStatement(
-      engine.distributedQueryPlanner,
-      ast,
-      params,
-      {sessionId},
-    );
+      engine.distributedQueryPlanner, ast, params, {sessionId});
     tableInfo = engine.getTableInfo(tableName);
     tablePlan = distributedPlan.tablePlans.get(tableName) || null;
   }
   const planningDurationMs = Date.now() - planningStartTimeMs;
   if (isWriteTableMetadataCold(tableInfo, tablePlan)) {
-    return {
-      settled: true,
-      response: tableInfo ?
-        buildUnavailableFailureResult(
-          tableName,
-          METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED,
-        ) :
-        buildTableNotFoundFailureResult(tableName),
-    };
+    const response = tableInfo ?
+      buildUnavailableFailureResult(
+        tableName, METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED) :
+      buildTableNotFoundFailureResult(tableName);
+    return {settled: true, response};
   }
   const dualWriteMigration = engine.getActiveDualWriteMigration(tableInfo);
   return {
-    settled: false,
-    distributedPlan,
-    tablePlan,
-    tableInfo,
-    dualWriteMigration,
-    planningDurationMs,
+    settled: false, distributedPlan, tablePlan, tableInfo,
+    dualWriteMigration, planningDurationMs,
   };
 }
 

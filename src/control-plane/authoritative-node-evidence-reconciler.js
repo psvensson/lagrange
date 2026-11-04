@@ -337,6 +337,12 @@ class AuthoritativeNodeEvidenceReconciler {
       EMPTY_LEDGER_ENTRIES;
   }
 
+  getLedgerAggregatedSummaries(options = {}) {
+    return this.repairLedger ?
+      this.repairLedger.getAggregatedSummaries(options) :
+      EMPTY_LEDGER_ENTRIES;
+  }
+
   buildRepairKey(nodeId, _options = {}) {
     return String(nodeId || EMPTY_STRING);
   }

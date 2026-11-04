@@ -29,6 +29,7 @@ import {
   getSchemaByTableName,
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_CACHE_MUTATION_MODE} from '../cache/cache-constants.js';
 import {runControlPlaneWrite} from './control-plane-write-identity.js';
 
 function buildSchemaFilteredSqlMutationEntries(tableName, data) {
@@ -562,6 +563,41 @@ function applyAuthoritativeSystemTableRowsToCache(
   return true;
 }
 
+function evictAuthoritativeAbsentSystemTableRowsFromCache(
+  gateway,
+  writableCache,
+  tableName,
+  rows,
+) {
+  const targetCache = resolveWritableCacheTarget(gateway || {}, writableCache);
+  if (!targetCache || !Array.isArray(rows)) {
+    return false;
+  }
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') {
+      continue;
+    }
+    try {
+      targetCache.applySystemTableChange(
+        tableName,
+        CDC_OPERATION.DELETE,
+        row,
+        {
+          mutationMode:
+            SYSTEM_TABLE_CACHE_MUTATION_MODE
+              .AUTHORITATIVE_ABSENCE_RECONCILIATION,
+        },
+      );
+    } catch (e) {
+      gateway?.logger?.debug?.(CONTROL_PLANE_GATEWAY_APPLY_CACHE_FAILED, {
+        tableName,
+        error: e?.message ?? String(e),
+      });
+    }
+  }
+  return true;
+}
+
 function assignControlPlaneSystemTableGatewayQueryExecution(targetClass) {
   Object.assign(
     targetClass.prototype,
@@ -573,4 +609,5 @@ export {
   applyAuthoritativeSystemTableRowsToCache,
   applyCommittedPartitionCdcEventToCache,
   assignControlPlaneSystemTableGatewayQueryExecution,
+  evictAuthoritativeAbsentSystemTableRowsFromCache,
 };

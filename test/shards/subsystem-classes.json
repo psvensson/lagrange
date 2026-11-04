@@ -28,7 +28,7 @@
   "censusSize": 2590,
   "digest": "fnv1a32-0076fca0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-94886950",
+  "observationDigest": "fnv1a32-2c51ddee",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2700,6 +2700,12 @@
     "test/admin/admin-control-snapshot-retry-decision.test.js": {
       "files": [
         "src/control-plane/timeout-budget.js"
+      ]
+    },
+    "test/admin/admin-control-snapshot.test.js": {
+      "files": [
+        "src/control-plane/control-plane-diagnostics-ledger.js",
+        "src/control-plane/control-plane-system-table-gateway.js"
       ]
     },
     "test/admin/admin-mutation-guard.pbt.test.js": {
@@ -13564,6 +13570,7 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
+        "src/query/sql-query-engine-metadata-authority-refresh.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
     },

@@ -68,16 +68,12 @@ function emptyBatch() {
 function createCdcObligationLane(tenure = null) {
   return {
     tenure, inFlight: false, rerun: false, scan: null, currentObligation: null,
-    // eventKey -> {logIndex, ordinal}: acknowledged here, flag not yet
-    // committed (in the batch or in a proposed CDC_DELIVERED). Never
-    // redelivered by this tenure; cleared when a tenure or the replica ends.
+    hydratedThroughLogIndex: 0,
     pending: new Map(), commands: new Map(), batch: emptyBatch(),
     contendedPropagationOwners: new Map(),
     flushTimer: null, retryTimer: IDLE_OBLIGATION_RETRY,
     retryDelayMs: PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS,
     consecutiveBackpressure: 0,
-    // The code the last flush was refused with before it was proposed; no
-    // deadline is armed again until a new acknowledgement arrives.
     held: null, lastDrive: null, lastFlush: null,
   };
 }
@@ -146,6 +142,7 @@ function settleAcknowledgedObligations(delivery, eventKeys, progress = null) {
     }
   }
   if (laneIsCurrent(delivery, lane)) {
+    drainPendingHydratedObligations(delivery, lane);
     trackOnOwner(delivery.owner, driveCdcObligations(delivery, REASON.AFTER_FLUSH));
   }
 }
@@ -228,29 +225,41 @@ function addToBatch(lane, obligation) {
     obligation.logIndex, obligation.ordinal, opensGroup);
 }
 
-// One acknowledged event enters the batch under its entry; a batch at either
-// bound is proposed at once, otherwise by the deadline.
+function batchExceedsBoundsForEvent(lane, addedBytes) {
+  return lane.batch.events >= BOUND.ACK_BATCH_MAX_EVENTS ||
+    (lane.batch.events > 0 && lane.batch.bytes + addedBytes > BOUND.ACK_BATCH_MAX_BYTES);
+}
+
+function flushFullBatchBeforeAdd(delivery, lane, addedBytes) {
+  if (!batchExceedsBoundsForEvent(lane, addedBytes)) return true;
+  const reason = lane.batch.events >= BOUND.ACK_BATCH_MAX_EVENTS ?
+    REASON.BATCH_EVENTS_BOUND : REASON.BATCH_BYTES_BOUND;
+  trackOnOwner(delivery.owner, flushCdcAcknowledgements(delivery, reason));
+  if (!batchExceedsBoundsForEvent(lane, addedBytes)) return true;
+  scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
+  return false;
+}
+
 function acknowledgeDelivered(delivery, obligation) {
   const lane = laneOf(delivery);
   const {owner} = delivery;
   if (lane.pending.has(obligation.eventKey) ||
       isCdcPositionReclaimed(obligation, readCdcObligationProgress(owner.db))) {
-    return;
+    return true;
   }
   const addedBytes = acknowledgedEventBytesOf(obligation.eventKey,
     obligation.logIndex, obligation.ordinal, !lane.batch.groups.has(obligation.logIndex));
-  if (lane.batch.events > 0 && lane.batch.bytes + addedBytes > BOUND.ACK_BATCH_MAX_BYTES) {
-    trackOnOwner(owner, flushCdcAcknowledgements(delivery, REASON.BATCH_BYTES_BOUND));
-  }
+  if (!flushFullBatchBeforeAdd(delivery, lane, addedBytes)) return false;
   lane.pending.set(obligation.eventKey,
     {logIndex: obligation.logIndex, ordinal: obligation.ordinal});
   addToBatch(lane, obligation);
   lane.batch.firstAcknowledgedAt ??= owner.timeSource.now();
   if (lane.batch.events >= BOUND.ACK_BATCH_MAX_EVENTS) {
     trackOnOwner(owner, flushCdcAcknowledgements(delivery, REASON.BATCH_EVENTS_BOUND));
-    return;
+    return true;
   }
   armFlushDeadline(delivery);
+  return true;
 }
 
 function flushOutcome(lane, state, fields) {
@@ -411,6 +420,9 @@ async function retryAcknowledgements(delivery, lane) {
     if (!pending.inFlight) {
       await proposePendingAcknowledgement(delivery, lane, pending, REASON.DELIVERY_RETRY);
     }
+  }
+  if (laneIsCurrent(delivery, lane)) {
+    drainPendingHydratedObligations(delivery, lane);
   }
   if (laneIsCurrent(delivery, lane) && lane.batch.events > 0 && lane.flushTimer === null) {
     await flushCdcAcknowledgements(delivery, REASON.DELIVERY_RETRY);
@@ -661,17 +673,29 @@ function recordObligationDeliveryResult(lane, obligation, result) {
 }
 
 function isObligationAlreadyAcknowledged(delivery, lane, obligation) {
-  if (lane.pending.has(obligation.eventKey)) return true;
+  if (lane.pending.has(obligation.eventKey) ||
+      obligation.logIndex <= (lane.hydratedThroughLogIndex || 0)) {
+    return true;
+  }
   if (!delivery.owner.db) return false;
   return isCdcPositionReclaimed(obligation, readCdcObligationProgress(delivery.owner.db));
 }
 
+function resolveDriveObligationStep(delivery, lane, obligation) {
+  if (obligation.logIndex <= (lane.hydratedThroughLogIndex || 0)) {
+    return lane.pending.has(obligation.eventKey) || acknowledgeDelivered(delivery, obligation) ?
+      OBLIGATION_DRIVE_STEP.PENDING : DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE;
+  }
+  if (acknowledgementBackpressured(delivery.owner, lane, obligation)) {
+    return DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE;
+  }
+  return lane.pending.has(obligation.eventKey) ?
+    OBLIGATION_DRIVE_STEP.PENDING : OBLIGATION_DRIVE_STEP.READY;
+}
+
 async function driveOneObligation(delivery, lane, obligation, subscribers,
   reason, delivered, context) {
-  const step = acknowledgementBackpressured(delivery.owner, lane, obligation) ?
-    DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE :
-    lane.pending.has(obligation.eventKey) ? OBLIGATION_DRIVE_STEP.PENDING :
-      OBLIGATION_DRIVE_STEP.READY;
+  const step = resolveDriveObligationStep(delivery, lane, obligation);
   if (step === DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE) {
     scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
     return {outcome: driveOutcome(lane, DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE, {reason, delivered})};
@@ -886,33 +910,43 @@ function cdcObligationDiagnosticsOf(delivery) {
 }
 
 function retireHydratedInvocationAndResetIdleScan(delivery, lane, throughLogIndex) {
-  if (delivery.activeCdcInvocation !== null &&
-      (lane.currentObligation === null ||
-       lane.currentObligation.logIndex <= throughLogIndex)) {
-    delivery.activeCdcInvocation.retire();
+  const currentLogIndex = lane.currentObligation?.logIndex;
+  if (lane.currentObligation === null ||
+      (Number.isSafeInteger(currentLogIndex) && currentLogIndex <= throughLogIndex)) {
+    lane.currentObligation = null;
+    delivery.activeCdcInvocation?.retire();
   }
-  if (!lane.inFlight) {
-    lane.scan = null;
-  }
+  if (!lane.inFlight) lane.scan = null;
 }
 
 function acknowledgeHydratedObligationList(delivery, lane, obligations) {
   let acknowledged = 0;
   for (const obligation of obligations) {
     if (lane.pending.has(obligation.eventKey)) continue;
-    acknowledgeDelivered(delivery, obligation);
+    if (!acknowledgeDelivered(delivery, obligation)) break;
     acknowledged += 1;
   }
   return acknowledged;
 }
 
-/**
- * Acknowledge every owed obligation at or below a hydration image's applied
- * log index after the image's rows have been applied to the hydrated target.
- * @param {Object} delivery - The CDC delivery owner.
- * @param {number|string} appliedIndex - The hydration image's applied log index.
- * @return {Object} {acknowledged: number}.
- */
+function drainPendingHydratedObligations(delivery, lane) {
+  const throughLogIndex = lane.hydratedThroughLogIndex || 0;
+  const {owner} = delivery;
+  if (throughLogIndex <= 0 || owner.isShutdown || !owner.db || !laneIsCurrent(delivery, lane)) {
+    return 0;
+  }
+  const obligations = readOwedCdcObligations(owner.db, {
+    through: {logIndex: throughLogIndex, ordinal: Number.MAX_SAFE_INTEGER},
+    limit: Number.MAX_SAFE_INTEGER,
+  });
+  if (obligations.length === 0) return 0;
+  const acknowledged = acknowledgeHydratedObligationList(delivery, lane, obligations);
+  if (lane.batch.events > 0) {
+    trackOnOwner(owner, flushCdcAcknowledgements(delivery, REASON.SUBSCRIPTION_HANDSHAKE));
+  }
+  return acknowledged;
+}
+
 function acknowledgeHydratedObligationsThrough(delivery, appliedIndex) {
   const throughLogIndex = Number(appliedIndex);
   if (!Number.isSafeInteger(throughLogIndex) || throughLogIndex <= 0) {
@@ -923,23 +957,13 @@ function acknowledgeHydratedObligationsThrough(delivery, appliedIndex) {
   if (owner.isShutdown || !owner.db || !laneIsCurrent(delivery, lane)) {
     return Object.freeze({acknowledged: 0});
   }
-  const obligations = readOwedCdcObligations(owner.db, {
-    through: {logIndex: throughLogIndex, ordinal: Number.MAX_SAFE_INTEGER},
-    limit: Number.MAX_SAFE_INTEGER,
-  });
+  lane.hydratedThroughLogIndex = Math.max(lane.hydratedThroughLogIndex || 0, throughLogIndex);
   const remainingAfterHydration = readOwedCdcObligations(owner.db, {
-    after: {logIndex: throughLogIndex, ordinal: Number.MAX_SAFE_INTEGER},
-    limit: 1,
+    after: {logIndex: throughLogIndex, ordinal: Number.MAX_SAFE_INTEGER}, limit: 1,
   });
-  if (remainingAfterHydration.length === 0) {
-    releaseContendedPropagationOwners(lane);
-  }
-  if (obligations.length === 0) return Object.freeze({acknowledged: 0});
+  if (remainingAfterHydration.length === 0) releaseContendedPropagationOwners(lane);
   retireHydratedInvocationAndResetIdleScan(delivery, lane, throughLogIndex);
-  const acknowledged = acknowledgeHydratedObligationList(delivery, lane, obligations);
-  if (lane.batch.events > 0) {
-    trackOnOwner(owner, flushCdcAcknowledgements(delivery, REASON.SUBSCRIPTION_HANDSHAKE));
-  }
+  const acknowledged = drainPendingHydratedObligations(delivery, lane);
   return Object.freeze({acknowledged});
 }
 

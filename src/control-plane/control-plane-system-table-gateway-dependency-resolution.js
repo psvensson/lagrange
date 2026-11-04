@@ -35,6 +35,16 @@ const controlPlaneSystemTableGatewayDependencyResolutionMethods = {
       Object.freeze([]);
   },
 
+  getControlPlaneOperationLedgerAggregatedSummaries(options = {}) {
+    return this.controlPlaneOperationLedger ?
+      this.controlPlaneOperationLedger.getAggregatedSummaries(options) :
+      Object.freeze([]);
+  },
+
+  getControlPlaneOperationAggregatedSummaries(options = {}) {
+    return this.getControlPlaneOperationLedgerAggregatedSummaries(options);
+  },
+
   get sqlQueryEngine() {
     const providedSqlQueryEngine = this.sqlQueryEngineProvider?.() || null;
     return providedSqlQueryEngine || this._sqlQueryEngine || null;

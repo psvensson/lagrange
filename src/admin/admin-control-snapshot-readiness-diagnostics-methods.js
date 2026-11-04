@@ -352,6 +352,24 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
         return ADMIN_CACHE_DUMP.EMPTY;
       }
     }
+    resolveParticipationDecisionAggregatedDiagnostics() {
+      const fn =
+        this.controlPlaneReadinessService
+          ?.getParticipationDecisionLedgerAggregatedSummaries ||
+        this.controlPlaneReadinessService
+          ?.getParticipationDecisionAggregatedSummaries;
+      if (typeof fn !== 'function') {
+        return ADMIN_CACHE_DUMP.EMPTY;
+      }
+      try {
+        const summaries = fn.call(this.controlPlaneReadinessService, {
+          limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT,
+        });
+        return Array.isArray(summaries) ? summaries : ADMIN_CACHE_DUMP.EMPTY;
+      } catch (_error) {
+        return ADMIN_CACHE_DUMP.EMPTY;
+      }
+    }
     /**
      * Resolve recent authoritative readiness repair attempts.
      * @return {Object[]}
@@ -371,6 +389,24 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
             {limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT},
           );
         return Array.isArray(entries) ? entries : ADMIN_CACHE_DUMP.EMPTY;
+      } catch (_error) {
+        return ADMIN_CACHE_DUMP.EMPTY;
+      }
+    }
+    resolveAuthoritativeReadinessRepairAggregatedDiagnostics() {
+      const fn =
+        this.controlPlaneReadinessService
+          ?.getAuthoritativeReadinessRepairLedgerAggregatedSummaries ||
+        this.controlPlaneReadinessService
+          ?.getAuthoritativeReadinessRepairAggregatedSummaries;
+      if (typeof fn !== 'function') {
+        return ADMIN_CACHE_DUMP.EMPTY;
+      }
+      try {
+        const summaries = fn.call(this.controlPlaneReadinessService, {
+          limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT,
+        });
+        return Array.isArray(summaries) ? summaries : ADMIN_CACHE_DUMP.EMPTY;
       } catch (_error) {
         return ADMIN_CACHE_DUMP.EMPTY;
       }
@@ -415,6 +451,24 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
             {limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT},
           );
         return Array.isArray(entries) ? entries : ADMIN_CACHE_DUMP.EMPTY;
+      } catch (_error) {
+        return ADMIN_CACHE_DUMP.EMPTY;
+      }
+    }
+    resolveControlPlaneOperationAggregatedDiagnostics() {
+      const fn =
+        this.controlPlaneSystemTableGateway
+          ?.getControlPlaneOperationLedgerAggregatedSummaries ||
+        this.controlPlaneSystemTableGateway
+          ?.getControlPlaneOperationAggregatedSummaries;
+      if (typeof fn !== 'function') {
+        return ADMIN_CACHE_DUMP.EMPTY;
+      }
+      try {
+        const summaries = fn.call(this.controlPlaneSystemTableGateway, {
+          limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT,
+        });
+        return Array.isArray(summaries) ? summaries : ADMIN_CACHE_DUMP.EMPTY;
       } catch (_error) {
         return ADMIN_CACHE_DUMP.EMPTY;
       }

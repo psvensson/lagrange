@@ -562,11 +562,20 @@ class AdminControlSnapshotControlPlaneDiagnostics
       this.resolvePriorityControlPlaneRecoveryByNodeId(readinessEntries);
     const participationDecisions =
       this.resolveParticipationDecisionDiagnostics();
+    const participationDecisionSummaries =
+      this.resolveParticipationDecisionAggregatedDiagnostics?.() ||
+      ADMIN_CACHE_DUMP.EMPTY;
     const authoritativeReadinessRepairs =
       this.resolveAuthoritativeReadinessRepairDiagnostics();
+    const authoritativeReadinessRepairSummaries =
+      this.resolveAuthoritativeReadinessRepairAggregatedDiagnostics?.() ||
+      ADMIN_CACHE_DUMP.EMPTY;
     const recoveryEpochsByNodeId = this.resolveRecoveryEpochDiagnostics();
     const controlPlaneOperations =
       this.resolveControlPlaneOperationDiagnostics();
+    const controlPlaneOperationSummaries =
+      this.resolveControlPlaneOperationAggregatedDiagnostics?.() ||
+      ADMIN_CACHE_DUMP.EMPTY;
     const startupRecovery =
       this.startupRecoveryCoordinator &&
       typeof this.startupRecoveryCoordinator.evaluate === 'function' ?
@@ -668,7 +677,9 @@ class AdminControlSnapshotControlPlaneDiagnostics
       priorityControlPlaneRecoveryByNodeId,
       readinessTransitionsByNodeId,
       participationDecisions,
+      participationDecisionSummaries,
       authoritativeReadinessRepairs,
+      authoritativeReadinessRepairSummaries,
       recoveryEpochsByNodeId,
       startupRecovery,
       placementEligibilityByNodeId,
@@ -676,6 +687,12 @@ class AdminControlSnapshotControlPlaneDiagnostics
         workflowDiagnostics.workflowAdmissionsByWorkflowId,
       timeoutClassifications: workflowDiagnostics.timeoutClassifications,
       controlPlaneOperations,
+      controlPlaneOperationSummaries,
+      aggregatedDiagnostics: {
+        participationDecisions: participationDecisionSummaries,
+        authoritativeReadinessRepairs: authoritativeReadinessRepairSummaries,
+        controlPlaneOperations: controlPlaneOperationSummaries,
+      },
       priorityRecoveryDecisionSnapshots,
       priorityRecoveryObservation,
       replicaOperations,

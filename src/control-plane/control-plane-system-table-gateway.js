@@ -29,6 +29,7 @@ import {
 import {
   applyAuthoritativeSystemTableRowsToCache,
   assignControlPlaneSystemTableGatewayQueryExecution,
+  evictAuthoritativeAbsentSystemTableRowsFromCache,
 } from './control-plane-system-table-gateway-query-execution.js';
 import {
   assignControlPlaneSystemTableGatewayReadDispatch,
@@ -246,6 +247,7 @@ async function readProjectionControlPlaneRows(
 export {
   ControlPlaneSystemTableGateway,
   applyAuthoritativeSystemTableRowsToCache,
+  evictAuthoritativeAbsentSystemTableRowsFromCache,
   isAuthoritativeControlPlaneRowReadSuccessful,
   readAuthoritativeControlPlaneRows,
   readProjectionControlPlaneRows,

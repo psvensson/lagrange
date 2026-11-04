@@ -47,13 +47,20 @@ function cdcProgressCurrent(delivery, lane, cell) {
       topologyBindingCurrent(branch, cell.binding));
 }
 
+function resolveObligationNumber(primary, fallback, defaultValue) {
+  if (Number.isSafeInteger(primary)) return primary;
+  return Number.isSafeInteger(fallback) ? fallback : defaultValue;
+}
+
 function prepareCdcObligationProgress(delivery, lane, event, subscribers) {
   const binding = cdcCommitWaitIdentity([event]);
   const previous = lane.currentObligation;
   if (previous?.binding === binding && cdcProgressCurrent(delivery, lane, previous)) {
     return previous;
   }
-  const cell = {binding, branches: subscribers.map((subscriber) =>
+  const logIndex = resolveObligationNumber(event?.logIndex, event?.sourceLogIndex, null);
+  const ordinal = resolveObligationNumber(event?.ordinal, event?.sourceOrdinal, 0);
+  const cell = {binding, logIndex, ordinal, branches: subscribers.map((subscriber) =>
     subscriberBinding(delivery, subscriber)), nextSubscriber: 0};
   lane.currentObligation = cell;
   return cell;

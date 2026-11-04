@@ -223,3 +223,133 @@ test(
   },
 );
 
+test(
+  'ControlPlaneDiagnosticsLedger & AdminControlSnapshot - bounds payload values, preserves root-cause firstSample under secondary churn, and exposes aggregated summaries outward',
+  async (t) => {
+    const {ControlPlaneDiagnosticsLedger} = await import(
+      '../../src/control-plane/control-plane-diagnostics-ledger.js'
+    );
+    const {ControlPlaneSystemTableGateway} = await import(
+      '../../src/control-plane/control-plane-system-table-gateway.js'
+    );
+
+    let nowMs = 1_000;
+    const ledger = new ControlPlaneDiagnosticsLedger({
+      maxEntries: 8,
+      now: () => nowMs,
+    });
+
+    const oversizedString = 'x'.repeat(2_000);
+    const oversizedArray = Array.from({length: 100}, (_, index) => index);
+    ledger.append({
+      decidingBoundary: 'readiness_gate',
+      originalCause: 'root_quorum_unavailable',
+      nodeId: 'node-a',
+      detail: oversizedString,
+      items: oversizedArray,
+    });
+
+    for (let index = 0; index < 20; index += 1) {
+      nowMs += 100;
+      ledger.append({
+        decidingBoundary: 'secondary_retry',
+        originalCause: 'transient_backpressure',
+        nodeId: 'node-b',
+        attempt: index + 1,
+      });
+    }
+
+    const entries = ledger.getEntries();
+    const summaries = ledger.getAggregatedSummaries();
+    t.equal(entries.length, 8, 'entries stay bounded by maxEntries');
+    const rootEntry = entries.find(
+      (entry) => entry.originalCause === 'root_quorum_unavailable',
+    );
+    t.ok(
+      rootEntry,
+      'root-cause entry of distinct key is preserved in entries when a noisy secondary key churns',
+    );
+    t.equal(
+      rootEntry.detail.length,
+      512,
+      'diagnostic string payload is bounded to 512 chars',
+    );
+    t.equal(
+      rootEntry.items.length,
+      32,
+      'diagnostic array payload is bounded to 32 elements',
+    );
+
+    const secondarySummary = summaries.find(
+      (item) => item.originalCause === 'transient_backpressure',
+    );
+    t.ok(secondarySummary, 'secondary aggregated summary exists');
+    t.equal(secondarySummary.count, 20, 'aggregated summary tracks total count');
+    t.equal(
+      secondarySummary.firstSample?.attempt,
+      1,
+      'aggregated summary preserves root-cause firstSample',
+    );
+    t.equal(
+      secondarySummary.latestSample?.attempt,
+      20,
+      'aggregated summary tracks latestSample',
+    );
+
+    const gateway = new ControlPlaneSystemTableGateway({
+      nodeId: 'node-a',
+      now: () => nowMs,
+    });
+    gateway.recordControlPlaneOperation({
+      type: 'mutation',
+      reasonCode: 'leader_not_ready',
+      partitionId: 'p-sys-1',
+    });
+
+    const readinessService = {
+      getParticipationDecisionLedgerEntries: () => ledger.getEntries(),
+      getParticipationDecisionLedgerAggregatedSummaries: () =>
+        ledger.getAggregatedSummaries(),
+      getAuthoritativeReadinessRepairLedgerEntries: () => ledger.getEntries(),
+      getAuthoritativeReadinessRepairLedgerAggregatedSummaries: () =>
+        ledger.getAggregatedSummaries(),
+      getRecoveryEpochHistoryByNodeId: () => ({}),
+    };
+
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-a',
+      nowFn: () => nowMs,
+      controlPlaneReadinessService: readinessService,
+      controlPlaneSystemTableGateway: gateway,
+      systemTableCache: {
+        getAll: () => [],
+      },
+    });
+
+    const diagnostics = await snapshot.buildControlPlaneDiagnosticsSnapshot({
+      capturedAt: nowMs,
+    });
+    t.equal(
+      diagnostics.participationDecisionSummaries.length,
+      2,
+      'AdminControlSnapshot exposes participationDecisionSummaries outward',
+    );
+    t.equal(
+      diagnostics.authoritativeReadinessRepairSummaries.length,
+      2,
+      'AdminControlSnapshot exposes authoritativeReadinessRepairSummaries outward',
+    );
+    t.equal(
+      diagnostics.controlPlaneOperationSummaries.length,
+      1,
+      'AdminControlSnapshot exposes controlPlaneOperationSummaries outward',
+    );
+    t.equal(
+      diagnostics.aggregatedDiagnostics.controlPlaneOperations[0]?.originalCause,
+      'leader_not_ready',
+      'aggregatedDiagnostics.controlPlaneOperations exposes root cause outward',
+    );
+  },
+);
+
+
