@@ -15,7 +15,7 @@
 import {COLUMN, SERVICE_STATUS, TABLES} from '../constants/index.js';
 import {CONTROL_PLANE_READINESS_REASON} from './control-plane-readiness-constants.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
-import {MEMBERSHIP_PUBLICATION_KIND} from './membership-publication-row-contract.js';
+import {MEMBERSHIP_PUBLICATION_KIND, MEMBERSHIP_PUBLICATION_STATUS} from './membership-publication-row-contract.js';
 import {
   resolveLatestPublishedPublicationRow,
   resolvePublishedActiveNodeIds,
@@ -588,15 +588,14 @@ class ServeEligibilityOwner {
   }
 
   notePublicationSourceChange(row) {
-    const publication = normalizeControlPlanePublicationRow(row);
-    if (!isMembershipPublication(publication)) {
-      return;
-    }
-    this.recordObservedPublicationEpoch(publication.publicationEpoch);
+    const pub = normalizeControlPlanePublicationRow(row);
+    if (!isMembershipPublication(pub)) return;
+    const isPublished = pub.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
+    if (isPublished) this.recordObservedPublicationEpoch(pub.publicationEpoch);
+    const heldEpoch = this.record?.epoch || null;
     if (
-      !this.record ||
-      publication.publicationEpoch > this.record.epoch.publicationEpoch ||
-      publication.publicationId === this.record.epoch.publicationId
+      (heldEpoch && pub.publicationId === heldEpoch.publicationId) ||
+      (isPublished && (!heldEpoch || pub.publicationEpoch > heldEpoch.publicationEpoch))
     ) {
       this.markSuperseded();
     }

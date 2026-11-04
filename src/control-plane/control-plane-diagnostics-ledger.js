@@ -1,5 +1,36 @@
 
 const LOCAL_NUM_ONE_HUNDRED_TWENTY_EIGHT = 128;
+const DEFAULT_AGGREGATION_KEY = 'default';
+const KEY_PART_SEPARATOR = '/';
+const BOUNDARY_FIELDS = Object.freeze(['decidingBoundary', 'boundary', 'type']);
+const CAUSE_FIELDS = Object.freeze([
+  'originalCause',
+  'cause',
+  'reasonCode',
+  'reason',
+]);
+const IDENTITY_FIELDS = Object.freeze([
+  'identity',
+  'operationId',
+  'partitionId',
+  'replicaId',
+  'nodeId',
+]);
+const REVISION_FIELDS = Object.freeze(['acceptedRevision', 'revision']);
+const OBLIGATION_FIELDS = Object.freeze(['remainingObligation', 'obligation']);
+const OWNER_FIELDS = Object.freeze(['responsibleOwner', 'owner']);
+const TRIGGER_FIELDS = Object.freeze(['nextTrigger', 'trigger']);
+const PROGRESS_FIELDS = Object.freeze(['lastMeaningfulProgress']);
+const SUMMARY_FIELD = Object.freeze({
+  ORIGINAL_CAUSE: 'originalCause',
+  DECIDING_BOUNDARY: 'decidingBoundary',
+  IDENTITY: 'identity',
+  ACCEPTED_REVISION: 'acceptedRevision',
+  REMAINING_OBLIGATION: 'remainingObligation',
+  RESPONSIBLE_OWNER: 'responsibleOwner',
+  NEXT_TRIGGER: 'nextTrigger',
+  LAST_MEANINGFUL_PROGRESS: 'lastMeaningfulProgress',
+});
 
 function freezeValue(value) {
   if (Array.isArray(value)) {
@@ -13,6 +44,144 @@ function freezeValue(value) {
     return Object.freeze(frozen);
   }
   return value;
+}
+
+function pickFirstDefinedField(entry, fields, fallback = null) {
+  for (const field of fields) {
+    if (entry?.[field] !== undefined && entry?.[field] !== null) {
+      return entry[field];
+    }
+  }
+  return fallback;
+}
+
+function resolveAggregationKey(entry = {}) {
+  const explicitKey = entry.aggregationKey;
+  if (typeof explicitKey === 'string' && explicitKey.length > 0) {
+    return explicitKey;
+  }
+  const parts = [
+    pickFirstDefinedField(entry, BOUNDARY_FIELDS),
+    pickFirstDefinedField(entry, CAUSE_FIELDS),
+    pickFirstDefinedField(entry, IDENTITY_FIELDS),
+  ].filter((part) => typeof part === 'string' && part.length > 0);
+  return parts.length > 0 ?
+    parts.join(KEY_PART_SEPARATOR) :
+    DEFAULT_AGGREGATION_KEY;
+}
+
+function pickCausalField(entry, existing, fields, existingField) {
+  const existingValue =
+    existing && existing[existingField] !== undefined ?
+      existing[existingField] :
+      null;
+  return pickFirstDefinedField(entry, fields, existingValue);
+}
+
+function buildAggregatedSummary(entry, existing, normalized) {
+  return freezeValue({
+    aggregationKey: normalized.aggregationKey,
+    count: normalized.count,
+    firstOccurrenceAtMs: normalized.firstOccurrenceAtMs,
+    firstOccurrenceAt: normalized.firstOccurrenceAt,
+    latestOccurrenceAtMs: normalized.recordedAtMs,
+    latestOccurrenceAt: normalized.recordedAt,
+    originalCause: pickCausalField(
+      entry,
+      existing,
+      CAUSE_FIELDS,
+      SUMMARY_FIELD.ORIGINAL_CAUSE,
+    ),
+    decidingBoundary: pickCausalField(
+      entry,
+      existing,
+      BOUNDARY_FIELDS,
+      SUMMARY_FIELD.DECIDING_BOUNDARY,
+    ),
+    identity: pickCausalField(
+      entry,
+      existing,
+      IDENTITY_FIELDS,
+      SUMMARY_FIELD.IDENTITY,
+    ),
+    acceptedRevision: pickCausalField(
+      entry,
+      existing,
+      REVISION_FIELDS,
+      SUMMARY_FIELD.ACCEPTED_REVISION,
+    ),
+    remainingObligation: pickCausalField(
+      entry,
+      existing,
+      OBLIGATION_FIELDS,
+      SUMMARY_FIELD.REMAINING_OBLIGATION,
+    ),
+    responsibleOwner: pickCausalField(
+      entry,
+      existing,
+      OWNER_FIELDS,
+      SUMMARY_FIELD.RESPONSIBLE_OWNER,
+    ),
+    nextTrigger: pickCausalField(
+      entry,
+      existing,
+      TRIGGER_FIELDS,
+      SUMMARY_FIELD.NEXT_TRIGGER,
+    ),
+    lastMeaningfulProgress: normalized.lastMeaningfulProgress,
+    latestSample: normalized,
+  });
+}
+
+function buildNormalizedDiagnosticEntry(
+  sequence,
+  recordedAtMs,
+  key,
+  existing,
+  entry,
+) {
+  const recordedAt = new Date(recordedAtMs).toISOString();
+  const count = existing ? existing.count + 1 : 1;
+  const firstOccurrenceAtMs = existing ?
+    existing.firstOccurrenceAtMs :
+    recordedAtMs;
+  const firstOccurrenceAt = existing ?
+    existing.firstOccurrenceAt :
+    recordedAt;
+  const lastMeaningfulProgress = pickCausalField(
+    entry,
+    existing,
+    PROGRESS_FIELDS,
+    SUMMARY_FIELD.LAST_MEANINGFUL_PROGRESS,
+  );
+  return freezeValue({
+    sequence,
+    recordedAtMs,
+    recordedAt,
+    aggregationKey: key,
+    count,
+    firstOccurrenceAtMs,
+    firstOccurrenceAt,
+    lastMeaningfulProgress,
+    ...entry,
+  });
+}
+
+function recordAggregatedSummary(map, maxEntries, key, summary) {
+  map.delete(key);
+  map.set(key, summary);
+  while (map.size > maxEntries) {
+    const oldestKey = map.keys().next().value;
+    map.delete(oldestKey);
+  }
+}
+
+function sliceRecentItems(items, limit) {
+  const validLimit =
+    Number.isInteger(limit) && limit > 0 ? limit : null;
+  return validLimit === null ?
+    items :
+    items.slice(Math.max(0, items.length - validLimit));
 }
 
 class ControlPlaneDiagnosticsLedger {
@@ -31,6 +200,7 @@ class ControlPlaneDiagnosticsLedger {
       () => Date.now();
     this.nextSequence = 1;
     this.entries = [];
+    this.aggregatedByKey = new Map();
   }
 
   /**
@@ -39,17 +209,26 @@ class ControlPlaneDiagnosticsLedger {
    */
   append(entry = {}) {
     const recordedAtMs = this.now();
-    const normalized = freezeValue({
-      sequence: this.nextSequence,
+    const key = resolveAggregationKey(entry);
+    const existing = this.aggregatedByKey.get(key) || null;
+    const normalized = buildNormalizedDiagnosticEntry(
+      this.nextSequence,
       recordedAtMs,
-      recordedAt: new Date(recordedAtMs).toISOString(),
-      ...entry,
-    });
+      key,
+      existing,
+      entry,
+    );
     this.nextSequence += 1;
     this.entries.push(normalized);
     if (this.entries.length > this.maxEntries) {
       this.entries = this.entries.slice(this.entries.length - this.maxEntries);
     }
+    recordAggregatedSummary(
+      this.aggregatedByKey,
+      this.maxEntries,
+      key,
+      buildAggregatedSummary(entry, existing, normalized),
+    );
     return normalized;
   }
 
@@ -59,13 +238,18 @@ class ControlPlaneDiagnosticsLedger {
    * @return {Object[]}
    */
   getEntries(options = {}) {
-    const limit = Number.isInteger(options.limit) && options.limit > 0 ?
-      options.limit :
-      null;
-    const entries = limit === null ?
-      this.entries :
-      this.entries.slice(Math.max(0, this.entries.length - limit));
+    const entries = sliceRecentItems(this.entries, options.limit);
     return Object.freeze(entries.map((entry) => entry));
+  }
+
+  /**
+   * @param {Object} [options={}]
+   * @param {number} [options.limit]
+   * @return {Object[]}
+   */
+  getAggregatedSummaries(options = {}) {
+    const all = [...this.aggregatedByKey.values()];
+    return Object.freeze(sliceRecentItems(all, options.limit));
   }
 
   /**
