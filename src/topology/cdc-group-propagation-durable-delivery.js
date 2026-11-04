@@ -32,10 +32,32 @@ const DURABLE_PROPAGATION_CAUSE = Object.freeze({
   ERROR: 'error',
 });
 const CONTENDED_TABLE_SLICE_WAVES = 4;
-const CONTENDED_SLICE_YIELD_HOLD_MS = 260;
-const BUSY_CONTENDED_RETRY_AFTER_MS = 20;
-const MIN_YIELD_HOLD_RETRY_AFTER_MS = 10;
-const DEFAULT_RETRY_DELAY_MS = 50;
+const CONTENDED_SLICE_YIELD_HOLD_MS = 25;
+const STALE_WAITING_SLICE_TABLE_MS = 100;
+const BUSY_CONTENDED_RETRY_AFTER_MS = 10;
+const MIN_YIELD_HOLD_RETRY_AFTER_MS = 5;
+
+function pruneStaleWaitingDurableSliceTables(owner) {
+  if (!Array.isArray(owner.waitingDurableSliceTables) ||
+      owner.waitingDurableSliceTables.length === 0) {
+    return;
+  }
+  const timestamps = owner.waitingDurableSliceTableTimestamps;
+  if (!(timestamps instanceof Map)) {
+    return;
+  }
+  const now = owner.now();
+  owner.waitingDurableSliceTables = owner.waitingDurableSliceTables.filter(
+    (table) => {
+      const enqueuedAt = timestamps.get(table);
+      if (Number.isFinite(enqueuedAt) && now - enqueuedAt >= STALE_WAITING_SLICE_TABLE_MS) {
+        timestamps.delete(table);
+        return false;
+      }
+      return true;
+    },
+  );
+}
 
 function enqueueWaitingDurableSliceTable(owner, tableName) {
   if (
@@ -45,9 +67,14 @@ function enqueueWaitingDurableSliceTable(owner, tableName) {
   ) {
     return;
   }
+  pruneStaleWaitingDurableSliceTables(owner);
   if (!Array.isArray(owner.waitingDurableSliceTables)) {
     owner.waitingDurableSliceTables = [];
   }
+  if (!(owner.waitingDurableSliceTableTimestamps instanceof Map)) {
+    owner.waitingDurableSliceTableTimestamps = new Map();
+  }
+  owner.waitingDurableSliceTableTimestamps.set(tableName, owner.now());
   if (!owner.waitingDurableSliceTables.includes(tableName)) {
     owner.waitingDurableSliceTables.push(tableName);
   }
@@ -61,11 +88,35 @@ function dequeueWaitingDurableSliceTable(owner, tableName) {
   if (index !== -1) {
     owner.waitingDurableSliceTables.splice(index, 1);
   }
+  if (owner.waitingDurableSliceTableTimestamps instanceof Map) {
+    owner.waitingDurableSliceTableTimestamps.delete(tableName);
+  }
+}
+
+function expireYieldedSliceHoldIfElapsed(owner) {
+  if (
+    Number.isFinite(owner.yieldedDurableSliceUntilMs) &&
+    owner.yieldedDurableSliceUntilMs > 0 &&
+    owner.now() >= owner.yieldedDurableSliceUntilMs
+  ) {
+    owner.yieldedDurableSliceUntilMs = 0;
+    owner.yieldedDurableSliceTable = null;
+    if (Array.isArray(owner.waitingDurableSliceTables) &&
+        owner.waitingDurableSliceTables.length > 0) {
+      const evicted = owner.waitingDurableSliceTables.shift();
+      if (owner.waitingDurableSliceTableTimestamps instanceof Map) {
+        owner.waitingDurableSliceTableTimestamps.delete(evicted);
+      }
+    }
+  }
+  pruneStaleWaitingDurableSliceTables(owner);
 }
 
 function isYieldedSliceTableDeferred(owner, tableName) {
+  expireYieldedSliceHoldIfElapsed(owner);
   const holdActive =
     Number.isFinite(owner.yieldedDurableSliceUntilMs) &&
+    owner.yieldedDurableSliceUntilMs > 0 &&
     owner.now() < owner.yieldedDurableSliceUntilMs;
   if (!holdActive) {
     return false;
@@ -126,6 +177,7 @@ function durablePropagationRefusal(owner, admission, options = null) {
 }
 
 function advanceDurablePropagationSlice(owner, tableName, context) {
+  expireYieldedSliceHoldIfElapsed(owner);
   dequeueWaitingDurableSliceTable(owner, tableName);
   owner.yieldedDurableSliceTable = null;
   owner.yieldedDurableSliceUntilMs = 0;
@@ -149,11 +201,7 @@ function finishDurablePropagationSliceWave(owner, context) {
     owner.yieldedDurableSliceTable = owner.durableSliceTable;
     owner.durableSliceTable = null;
     owner.yieldedDurableSliceUntilMs =
-      owner.now() +
-      Math.max(
-        (owner.deliveryRetryDelayMs ?? DEFAULT_RETRY_DELAY_MS) * 2,
-        CONTENDED_SLICE_YIELD_HOLD_MS,
-      );
+      owner.now() + CONTENDED_SLICE_YIELD_HOLD_MS;
     owner.durableSliceWaves = 0;
     owner.durableSliceContended = false;
   }

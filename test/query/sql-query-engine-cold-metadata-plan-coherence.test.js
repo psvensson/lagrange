@@ -8,6 +8,9 @@ import {
   METADATA_AUTHORITY_REFRESH_OUTCOME,
   METADATA_AUTHORITY_UNAVAILABLE_REASON,
 } from '../../src/query/sql-query-engine-metadata-authority-refresh.js';
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {CACHE_CDC_OPERATIONS} from '../../src/cache/cache-constants.js';
 import {TABLES} from '../../src/constants/index.js';
@@ -123,6 +126,7 @@ test('Witness 1: transactional cold-metadata SELECT refreshes complete ' +
   });
 
   const cache = createMockSystemCache([], []);
+  const observedReadModes = [];
   const txPersistence = attachCatalogReadsToPersistenceGateway(
     createTransactionPersistenceGateway(),
     {
@@ -144,6 +148,11 @@ test('Witness 1: transactional cold-metadata SELECT refreshes complete ' +
         leader_node_id: TEST_NODE_ID,
       }],
       services: [buildServiceRow(ACCOUNTS_PARTITION)],
+    },
+    {
+      onRead: ({options}) => {
+        observedReadModes.push(options?.authoritativeReadMode || null);
+      },
     },
   );
 
@@ -179,6 +188,18 @@ test('Witness 1: transactional cold-metadata SELECT refreshes complete ' +
   );
 
   t.equal(selectResult.success, true, 'cold transactional SELECT should succeed');
+  t.same(
+    observedReadModes,
+    [
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+        .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+        .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+        .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
+    ],
+    'catalog authority refresh must use owner-local with owner-RPC fallback/confirmation',
+  );
   t.same(
     selectResult.partitions,
     [ACCOUNTS_PARTITION],

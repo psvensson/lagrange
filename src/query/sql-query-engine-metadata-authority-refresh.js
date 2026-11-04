@@ -1,5 +1,6 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   applyAuthoritativeSystemTableRowsToCache,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {
@@ -379,6 +380,9 @@ async function fetchAuthoritativeTableRows(
   }
   const {budgetMs, cancellationToken} = preflight;
   const readOptions = {
+    authoritativeReadMode:
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+        .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
     timeoutMs: budgetMs,
     ...(cancellationToken ? {cancellationToken} : {}),
   };

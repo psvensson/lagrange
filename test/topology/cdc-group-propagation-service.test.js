@@ -463,3 +463,71 @@ test('contended durable propagation rotates 3 contending tables in deterministic
   assert.equal(f.source.batches.length, 9, 'healthy waves apply 1 source batch per wave');
   assert.equal(f.calls.length, 18, 'healthy waves deliver 1 proposal per target group per wave (proposals <= c*K*M)');
 });
+
+test('contended durable propagation evicts a retired/hydrated contender when the yield hold expires so active tables do not remain permanently contended', async (t) => {
+  let nowMs = 2000;
+  let activeDeliverResolver = null;
+  const f = compose(t, LATENCY_PROPAGATION_MODE.SAFE, {
+    options: {nowFn: () => nowMs},
+    answer: async (payload) => {
+      if (activeDeliverResolver !== null) {
+        const wait = new Promise((resolve) => {
+          activeDeliverResolver = resolve;
+        });
+        await wait;
+      }
+      return committedTargetAnswer(payload);
+    },
+  });
+
+  // Wave 1 of SERVICES is in flight while SERVICE_DEFINITIONS contends and is then retired by hydration.
+  activeDeliverResolver = () => {};
+  const svcWave1Req = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: 'svc-1'}),
+  );
+  const svcWave1Promise = f.service.propagateCDCEvent(svcWave1Req);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  const retiredContenderReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.SERVICE_DEFINITIONS, eventKey: 'def-1'}),
+  );
+  const busyRes = await f.service.propagateCDCEvent(retiredContenderReq);
+  assert.equal(busyRes.success, false);
+  assert.equal(busyRes.error, CDC_COMPLETION.BACKPRESSURE);
+
+  const releaseWave1 = activeDeliverResolver;
+  activeDeliverResolver = null;
+  releaseWave1();
+  assert.equal((await svcWave1Promise).success, true);
+
+  for (let w = 2; w <= 4; w += 1) {
+    const req = createDurablePropagationRequest(
+      f.source,
+      createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: `svc-${w}`}),
+    );
+    const res = await f.service.propagateCDCEvent(req);
+    assert.equal(res.success, true);
+    assert.equal(req.deliveryContext.isContended(), w === 4);
+  }
+
+  // Advance clock past the 25ms yield hold window without SERVICE_DEFINITIONS re-attempting.
+  nowMs += 30;
+
+  // SERVICES resumes and completes 5+ waves without being marked contended again.
+  for (let w = 5; w <= 9; w += 1) {
+    const req = createDurablePropagationRequest(
+      f.source,
+      createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: `svc-${w}`}),
+    );
+    const res = await f.service.propagateCDCEvent(req);
+    assert.equal(res.success, true);
+    assert.equal(
+      req.deliveryContext.isContended(),
+      false,
+      `wave ${w} must not be marked contended after retired contender is evicted`,
+    );
+  }
+});

@@ -655,6 +655,30 @@ function handleDeliveryFailure(delivery, lane, obligation, reason, delivered, er
     {reason, delivered, eventKey: obligation.eventKey, retryDelayMs});
 }
 
+function advanceScanCursor(lane, obligation) {
+  if (lane.scan !== null) {
+    lane.scan.cursor = obligationCursor(obligation);
+  }
+}
+
+function recordObligationDeliveryResult(lane, obligation, result) {
+  if (result === CDC_COVERAGE_STATE.PROVISIONAL) {
+    if (lane.scan !== null) lane.scan.provisional = true;
+    advanceScanCursor(lane, obligation);
+    return {delivered: 0};
+  }
+  lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+  lane.consecutiveBackpressure = 0;
+  advanceScanCursor(lane, obligation);
+  return {delivered: 1};
+}
+
+function isObligationAlreadyAcknowledged(delivery, lane, obligation) {
+  if (lane.pending.has(obligation.eventKey)) return true;
+  if (!delivery.owner.db) return false;
+  return isCdcPositionReclaimed(obligation, readCdcObligationProgress(delivery.owner.db));
+}
+
 async function driveOneObligation(delivery, lane, obligation, subscribers,
   reason, delivered, context) {
   const step = acknowledgementBackpressured(delivery.owner, lane, obligation) ?
@@ -666,19 +690,17 @@ async function driveOneObligation(delivery, lane, obligation, subscribers,
     return {outcome: driveOutcome(lane, DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE, {reason, delivered})};
   }
   if (step === OBLIGATION_DRIVE_STEP.PENDING) {
-    lane.scan.cursor = obligationCursor(obligation);
+    advanceScanCursor(lane, obligation);
     return {delivered: 0};
   }
   try {
     const result = await deliverObligation(delivery, lane, obligation, subscribers, context);
-    if (result === CDC_COVERAGE_STATE.PROVISIONAL) lane.scan.provisional = true;
-    else {
-      lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-      lane.consecutiveBackpressure = 0;
-    }
-    lane.scan.cursor = obligationCursor(obligation);
-    return {delivered: result === CDC_COVERAGE_STATE.PROVISIONAL ? 0 : 1};
+    return recordObligationDeliveryResult(lane, obligation, result);
   } catch (error) {
+    if (isObligationAlreadyAcknowledged(delivery, lane, obligation)) {
+      advanceScanCursor(lane, obligation);
+      return {delivered: 0};
+    }
     return {outcome: handleDeliveryFailure(
       delivery, lane, obligation, reason, delivered, error)};
   }
@@ -876,6 +898,27 @@ function cdcObligationDiagnosticsOf(delivery) {
   });
 }
 
+function retireHydratedInvocationAndResetIdleScan(delivery, lane, throughLogIndex) {
+  if (delivery.activeCdcInvocation !== null &&
+      (lane.currentObligation === null ||
+       lane.currentObligation.logIndex <= throughLogIndex)) {
+    delivery.activeCdcInvocation.retire();
+  }
+  if (!lane.inFlight) {
+    lane.scan = null;
+  }
+}
+
+function acknowledgeHydratedObligationList(delivery, lane, obligations) {
+  let acknowledged = 0;
+  for (const obligation of obligations) {
+    if (lane.pending.has(obligation.eventKey)) continue;
+    acknowledgeDelivered(delivery, obligation);
+    acknowledged += 1;
+  }
+  return acknowledged;
+}
+
 /**
  * Acknowledge every owed obligation at or below a hydration image's applied
  * log index after the image's rows have been applied to the hydrated target.
@@ -898,18 +941,8 @@ function acknowledgeHydratedObligationsThrough(delivery, appliedIndex) {
     limit: Number.MAX_SAFE_INTEGER,
   });
   if (obligations.length === 0) return Object.freeze({acknowledged: 0});
-  if (delivery.activeCdcInvocation !== null &&
-      (lane.currentObligation === null ||
-       lane.currentObligation.logIndex <= throughLogIndex)) {
-    delivery.activeCdcInvocation.retire();
-  }
-  lane.scan = null;
-  let acknowledged = 0;
-  for (const obligation of obligations) {
-    if (lane.pending.has(obligation.eventKey)) continue;
-    acknowledgeDelivered(delivery, obligation);
-    acknowledged += 1;
-  }
+  retireHydratedInvocationAndResetIdleScan(delivery, lane, throughLogIndex);
+  const acknowledged = acknowledgeHydratedObligationList(delivery, lane, obligations);
   if (lane.batch.events > 0) {
     trackOnOwner(owner, flushCdcAcknowledgements(delivery, REASON.SUBSCRIPTION_HANDSHAKE));
   }
