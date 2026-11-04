@@ -988,3 +988,76 @@ test('SQLQueryEngine - attempt 2: cohort below quorum fails with PROVISIONING_UN
   t.ok(threw?.epoch, 'error must carry epoch');
 });
 
+test('SQLQueryEngine - RF3 with sealed quorum minimum (2) never lowers minimumRoutableReplicaCount below quorum on a 3-node cluster with 1 eligible node', async (t) => {
+  const localNodeId = 'node-a';
+  const partitionId = 'tbl-users-sealed-quorum-p1';
+  const nodes = [
+    {node_id: localNodeId, status: 'active'},
+    {node_id: 'node-b', status: 'active'},
+    {node_id: 'node-c', status: 'active'},
+  ];
+  const cache = {
+    onCacheChange() {},
+    offCacheChange() {},
+    has: () => true,
+    get: () => null,
+    filter: (type, predicate) => (type === TABLES.NODES ? nodes.filter(predicate) : []),
+    getAll: (type) => (type === TABLES.NODES ? nodes : []),
+  };
+  const readiness = createCommittedServeEligibilityOwner({
+    answers: {
+      'node-a': serveEligibilityAnswer(true),
+      'node-b': serveEligibilityAnswer(false, {reasons: ['ready_lease_expired']}),
+      'node-c': serveEligibilityAnswer(false, {reasons: ['ready_lease_expired']}),
+    },
+  });
+  readiness.getProvisioningNodeTrustViewSync = () => [
+    {nodeId: 'node-a', repairEligible: true, serveEligible: true},
+    {nodeId: 'node-b', repairEligible: true, serveEligible: false},
+    {nodeId: 'node-c', repairEligible: true, serveEligible: false},
+  ];
+  const createdTargetNodeIds = [];
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    controlPlaneReadinessService: readiness,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator: {
+      createOperation: async (move) => {
+        createdTargetNodeIds.push(move.nodeId);
+        return {operationId: `op-${move.nodeId}`, ...move};
+      },
+      executeOperation: async () => ({success: true}),
+    },
+  });
+
+  for (const minimumRoutableReplicaCountWasDefaulted of [true, false]) {
+    let threw = null;
+    try {
+      await engine.provisionInitialTablePartition({
+        partitionId,
+        replicaCount: 3,
+        minimumRoutableReplicaCount: 2,
+        minimumRoutableReplicaCountWasDefaulted,
+      });
+    } catch (err) {
+      threw = err;
+    }
+    t.ok(
+      threw,
+      `1 eligible node in 3-node cluster must fail (defaulted=${minimumRoutableReplicaCountWasDefaulted})`,
+    );
+    t.equal(
+      threw?.code,
+      QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
+      'must reject with PROVISIONING_UNAVAILABLE rather than lowering minimumRoutableReplicaCount to 1',
+    );
+  }
+  t.same(
+    createdTargetNodeIds,
+    [],
+    'no operations are created when sealed quorum minimum cannot be satisfied',
+  );
+});
+
+

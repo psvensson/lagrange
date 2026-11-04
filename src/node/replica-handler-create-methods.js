@@ -14,6 +14,10 @@ import {
 } from './replica-create-admission-owner.js';
 import {assignReplicaHandlerCreateAdmissionMethods} from
   './replica-handler-create-admission-methods.js';
+import {
+  isSupersededAdmissionError,
+  retireSupersededCreateAdmissionRuntime,
+} from './replica-create-admission-retained-recovery.js';
 import {REPLICA_CLEANUP_ERROR_CODE} from
   './replica-cleanup-tombstone-owner.js';
 import * as priorExistence from './replica-prior-existence.js';
@@ -120,22 +124,16 @@ async function settleCreateAdmissionProgress(
     if (!progressed) armCreateAdmissionRecoveryRearm(handler);
     return true;
   } catch (error) {
-    if (
-      error?.bootIncarnationSuperseded === true ||
-      error?.code === CREATE_ADMISSION_ERROR_CODE.STALE
-    ) {
-      if (partitionService) {
-        await handler.fenceFailedReplicaCreateRuntime(
-          replicaId,
-          partitionId,
-          partitionService,
-          error,
-        );
-      }
-      if (replicaId) {
-        handler.localServices.delete(replicaId);
-        handler.localReplicas.delete(replicaId);
-      }
+    if (isSupersededAdmissionError(error)) {
+      await retireSupersededCreateAdmissionRuntime(handler, {
+        replicaId,
+        partitionId,
+        operationId: evidence.operationId,
+        admissionToken: evidence.admissionToken,
+        attemptToken: evidence.attemptToken,
+        partitionService,
+        error,
+      });
       return false;
     }
     armCreateAdmissionRecoveryRearm(handler);
@@ -429,12 +427,28 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         }
         this.throwIfShuttingDown();
         // Store service reference in localServices
+        const admissionOperationId =
+          createAdmissionEvidence?.operationId || operationId || null;
+        const admissionToken =
+          createAdmissionEvidence?.admissionToken || null;
+        const admissionAttemptToken =
+          createAdmissionEvidence?.attemptToken ||
+          request.createAttemptToken ||
+          null;
+        if (partitionService && typeof partitionService === REPLICA_HANDLER_TYPEOF.OBJECT) {
+          partitionService.createAdmissionOperationId = admissionOperationId;
+          partitionService.createAdmissionToken = admissionToken;
+          partitionService.createAttemptToken = admissionAttemptToken;
+        }
         this.localServices.set(replicaId, partitionService);
         this.setLocalReplica(replicaId, {
           replicaId,
           partitionId,
           tableName,
           service: partitionService,
+          createAdmissionOperationId: admissionOperationId,
+          createAdmissionToken: admissionToken,
+          createAttemptToken: admissionAttemptToken,
         });
         // Emit syncing outcome - coordinator will transition workflow.
         this.emitExecutorOutcome(
@@ -530,7 +544,12 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             {replicaId, partitionId, partitionService},
           );
           if (settled === false) {
-            this.clearReplicaCreationProgress(progress);
+            this.failReplicaCreationProgress(progress, null);
+            if (operationId) {
+              this.inProgressOperations.delete(operationId);
+              this.getReplicaCreateAdmissionOwner()
+                .releasePhysicalWorker(request.createPhysicalWorkerClaim);
+            }
             return;
           }
         } else {

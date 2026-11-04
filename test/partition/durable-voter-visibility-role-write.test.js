@@ -579,5 +579,39 @@ test('durable voter visibility - ReplicaStateMachine preserves voter raft_role a
     undefined,
     'buildUpdateCdcData does not copy raft_role across different replica identities',
   );
+
+  // Stale cached leader role after stepdown to follower must never be
+  // republished by lifecycle writes or by an in-flight stale role flush.
+  cache.applySystemTableChange(
+    SERVICES,
+    'upsert',
+    ledgerServiceRow({
+      replicaId,
+      nodeId: 'node-3',
+      raftRole: RAFT_ROLE.LEADER,
+      updatedAt: 3000,
+    }),
+  );
+  const unconfirmedCachedLeaderUpdate = stateMachine._buildUpdateCdcData(
+    replicaState,
+    'syncing',
+  );
+  t.equal(
+    unconfirmedCachedLeaderUpdate.raft_role,
+    undefined,
+    'unconfirmed cached leader role is not copied into lifecycle UPDATE payload',
+  );
+  const liveFollowerPayload = stateMachine._buildUpdateCdcData(
+    {
+      ...replicaState,
+      raftRole: RAFT_ROLE.FOLLOWER,
+    },
+    'syncing',
+  );
+  t.equal(
+    liveFollowerPayload.raft_role,
+    RAFT_ROLE.FOLLOWER,
+    'live follower role overrides stale cached leader role in lifecycle payload',
+  );
   await stateMachine.clear();
 });

@@ -194,11 +194,21 @@ class SQLQueryEngineProvisionTargetMethods {
       Number(lastDiagnostics?.activeNodeRowCount) || 0,
       Number(lastDiagnostics?.totalNodeRowCount) || 0,
     );
-    const quorumCount =
+    const singleNodeClusterDefaultedMinimum =
       knownClusterNodeCount === 1 &&
-      options.minimumRoutableReplicaCountWasDefaulted === true ?
-        1 :
-        this.calculateQuorumReplicaCount(requiredReplicaCount);
+      options.minimumRoutableReplicaCountWasDefaulted === true &&
+      options.hasExplicitMinimumRoutableReplicaCount !== true;
+    const quorumReplicaCount =
+      this.calculateQuorumReplicaCount(requiredReplicaCount);
+    const explicitMinimumReplicaCount =
+      options.hasExplicitMinimumRoutableReplicaCount === true &&
+      Number.isInteger(options.minimumRoutableReplicaCount) &&
+      options.minimumRoutableReplicaCount > 0 ?
+        Math.min(requiredReplicaCount, options.minimumRoutableReplicaCount) :
+        quorumReplicaCount;
+    const quorumCount = singleNodeClusterDefaultedMinimum ?
+      1 :
+      Math.max(quorumReplicaCount, explicitMinimumReplicaCount);
     const epoch = cohort?.epoch || lastDiagnostics?.epoch || null;
     const failOnTimeout = options.failOnTimeout !== false;
 
@@ -243,6 +253,7 @@ class SQLQueryEngineProvisionTargetMethods {
         admissionProbe: lastAdmissionProbe,
         timedOut: true,
         requiredReplicaCount,
+        singleNodeClusterDefaultedMinimum,
         waitedMs: 0,
         epoch,
         reasons: uniqueReasons,
@@ -260,6 +271,7 @@ class SQLQueryEngineProvisionTargetMethods {
       admissionProbe: lastAdmissionProbe,
       timedOut: false,
       requiredReplicaCount,
+      singleNodeClusterDefaultedMinimum,
       waitedMs: 0,
       epoch,
       contractOutcome: buildOwnerContractOutcome({
@@ -300,6 +312,8 @@ class SQLQueryEngineProvisionTargetMethods {
           options.admissionProbe :
           null,
       timedOut,
+      singleNodeClusterDefaultedMinimum:
+        options.singleNodeClusterDefaultedMinimum === true,
       requiredReplicaCount:
         Number.isInteger(options.requiredReplicaCount) &&
         options.requiredReplicaCount > 0 ?

@@ -777,4 +777,132 @@ describe('ReplicaCreateAdmissionOwner', () => {
     );
     assert.equal(await oldBoot.takeoverRetained({...f.row}), null);
   });
+
+  it('isolates concurrent markProgress observations without shared lastAdvanceRow cross-talk', async () => {
+    const rowsByOpId = new Map([
+      ['op-stale', {
+        operation_id: 'op-stale',
+        type: OperationType.ADD,
+        entity_type: 'partition',
+        entity_id: 'partition-1',
+        partition_id: 'partition-1',
+        replica_id: 'replica-1',
+        target_node_id: 'node-1',
+        workflow_step: 'SENDING',
+        updated_at: 11,
+        completed_at: 99,
+        create_admission_state: CREATE_ADMISSION_STATE.CLOSED,
+        create_admission_token: 'admission-stale',
+        create_admission_replica_created_at: 20,
+        create_admission_attempt_token: 'attempt-stale',
+        create_admission_previous_attempt_token: null,
+        create_admission_attempt_seq: 1,
+        create_admission_workflow_updated_at: 11,
+        create_admission_owner_incarnation: 101,
+      }],
+      ['op-active', {
+        operation_id: 'op-active',
+        type: OperationType.ADD,
+        entity_type: 'partition',
+        entity_id: 'partition-2',
+        partition_id: 'partition-2',
+        replica_id: 'replica-2',
+        target_node_id: 'node-1',
+        workflow_step: 'SENDING',
+        updated_at: 11,
+        completed_at: null,
+        create_admission_state: CREATE_ADMISSION_STATE.MATERIALIZED,
+        create_admission_token: 'admission-active',
+        create_admission_replica_created_at: 20,
+        create_admission_attempt_token: 'attempt-active',
+        create_admission_previous_attempt_token: null,
+        create_admission_attempt_seq: 1,
+        create_admission_workflow_updated_at: 11,
+        create_admission_owner_incarnation: 101,
+      }],
+    ]);
+    let releaseStaleRead;
+    const staleReadGate = new Promise((resolve) => {
+      releaseStaleRead = resolve;
+    });
+    const gateway = {
+      async readAuthoritativeRows(_table, sql, params) {
+        if (sql.includes('FROM nodes')) {
+          return {
+            success: true,
+            rows: [{node_id: params[0], boot_incarnation: 101}],
+          };
+        }
+        if (sql.includes('WHERE operation_id = ?')) {
+          const opId = params[0];
+          if (opId === 'op-stale') {
+            await staleReadGate;
+          }
+          const row = rowsByOpId.get(opId);
+          return {success: true, rows: row ? [{...row}] : []};
+        }
+        return {success: true, rows: []};
+      },
+      async updateSystemTableRow(_table, where, data) {
+        const row = rowsByOpId.get(where.operation_id);
+        if (!row || !matches(row, where)) return NO_OP;
+        Object.assign(row, data);
+        return APPLIED;
+      },
+    };
+    const owner = new ReplicaCreateAdmissionOwner({
+      gateway,
+      nodeId: 'node-1',
+      ownerIncarnation: 101,
+      now: () => 20,
+    });
+    const staleEvidence = {
+      operationId: 'op-stale',
+      operationType: OperationType.ADD,
+      entityType: 'partition',
+      entityId: 'partition-1',
+      partitionId: 'partition-1',
+      replicaId: 'replica-1',
+      targetNodeId: 'node-1',
+      admissionState: CREATE_ADMISSION_STATE.MATERIALIZED,
+      admissionToken: 'admission-stale',
+      replicaCreatedAt: 20,
+      attemptToken: 'attempt-stale',
+      previousAttemptToken: null,
+      attemptSeq: 1,
+      workflowUpdatedAt: 11,
+      ownerIncarnation: 101,
+    };
+    const activeEvidence = {
+      operationId: 'op-active',
+      operationType: OperationType.ADD,
+      entityType: 'partition',
+      entityId: 'partition-2',
+      partitionId: 'partition-2',
+      replicaId: 'replica-2',
+      targetNodeId: 'node-1',
+      admissionState: CREATE_ADMISSION_STATE.MATERIALIZED,
+      admissionToken: 'admission-active',
+      replicaCreatedAt: 20,
+      attemptToken: 'attempt-active',
+      previousAttemptToken: null,
+      attemptSeq: 1,
+      workflowUpdatedAt: 11,
+      ownerIncarnation: 101,
+    };
+    const stalePromise = owner.markProgress(
+      staleEvidence,
+      CREATE_ADMISSION_STATE.ACTIVE,
+    );
+    const activeResult = await owner.markProgress(
+      activeEvidence,
+      CREATE_ADMISSION_STATE.ACTIVE,
+    );
+    assert.equal(activeResult.admissionState, CREATE_ADMISSION_STATE.ACTIVE);
+    releaseStaleRead();
+    await assert.rejects(
+      stalePromise,
+      {code: CREATE_ADMISSION_ERROR_CODE.STALE},
+    );
+  });
 });

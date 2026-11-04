@@ -31,8 +31,9 @@ import {REPLICA_CLEANUP_ERROR_CODE} from
 import {observeAuthoritativeReplicaLifecycle} from
   './replica-state-machine-lifecycle-observation.js';
 import {durableRowVersion} from './replica-state-machine-recovery.js';
-import {recoverRetainedCreateAdmissionRow} from
-  './replica-create-admission-retained-recovery.js';
+import {
+  recoverRetainedCreateAdmissionRows,
+} from './replica-create-admission-retained-recovery.js';
 import {
   REPLICA_HANDLER_CREATE_DECISION,
   REPLICA_HANDLER_ERROR_MSG,
@@ -704,30 +705,20 @@ function assignReplicaHandlerCreateAdmissionMethods(ReplicaHandler) {
       this.throwIfShuttingDown();
       const owner = this.getReplicaCreateAdmissionOwner();
       const rows = await owner.snapshotTargetAdmissions(SERVICE_TYPE.PARTITION);
-      const deferredOperationIds = [];
-      for (const row of rows) {
-        this.throwIfShuttingDown();
-        if (row.create_admission_state === CREATE_ADMISSION_STATE.CLOSED) {
-          continue;
-        }
-        try {
-          await recoverRetainedCreateAdmissionRow(this, owner, row, {
-            buildRequest: buildRetainedCreateRequest,
-            reconcileLifecycle: reconcileCreateAdmissionLifecycle,
-          });
-        } catch (error) {
-          this.throwIfShuttingDown();
-          if (error?.deferRetry === true ||
-              error?.code === CREATE_ADMISSION_ERROR_CODE.DEFERRED) {
-            deferredOperationIds.push(row.operation_id);
-            continue;
-          }
-          this.logger.warn(
-            REPLICA_HANDLER_LOG_MSG.CREATE_ADMISSION_RECOVERY_FAILED,
-            {operationId: row.operation_id, error: error.message},
-          );
-        }
-      }
+      const deferredOperationIds = await recoverRetainedCreateAdmissionRows(
+        this,
+        owner,
+        rows,
+        {
+          buildRequest: buildRetainedCreateRequest,
+          reconcileLifecycle: reconcileCreateAdmissionLifecycle,
+          onFailure: (row, error) =>
+            this.logger.warn(
+              REPLICA_HANDLER_LOG_MSG.CREATE_ADMISSION_RECOVERY_FAILED,
+              {operationId: row.operation_id, error: error.message},
+            ),
+        },
+      );
       if (deferredOperationIds.length > 0) {
         const error = createAdmissionLifecycleError(
           `CREATE admission recovery deferred for ${deferredOperationIds.join(',')}`,

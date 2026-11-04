@@ -968,4 +968,59 @@ describe('minimal deployment request Cell runtime readiness', () => {
       await fixture.lifecycle.stop(fixture.replica);
     },
   );
+
+  test('does not clear a newer generation request cell when an older failing prepare awaits stop',
+    async () => {
+      let loaderCallCount = 0;
+      let releaseFirstStop;
+      const firstStopGate = new Promise((resolve) => {
+        releaseFirstStop = resolve;
+      });
+      const validArtifact = {
+        artifactDigest: ARTIFACT_DIGEST,
+        bytes: COMPONENT_BYTES,
+        manifest: manifest(),
+        manifestDigest: manifestDigest(manifest()),
+        packageId: PACKAGE_ID,
+        payloadDigest: PAYLOAD_DIGEST,
+      };
+      const fixture = createFixture({
+        artifactLoader: async () => {
+          loaderCallCount += 1;
+          if (loaderCallCount === 1) {
+            throw new Error('transient loader failure');
+          }
+          return validArtifact;
+        },
+      });
+      const originalStop =
+        fixture.cellRuntime.stop.bind(fixture.cellRuntime);
+      let stopCalls = 0;
+      fixture.cellRuntime.stop = async (serviceId) => {
+        stopCalls += 1;
+        if (stopCalls === 1) {
+          await firstStopGate;
+        }
+        return originalStop(serviceId);
+      };
+
+      const failingPrepare = fixture.driver.prepare(
+        fixture.replica.definition,
+        {},
+      );
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      await fixture.lifecycle.prepare(fixture.replica.definition, {});
+      releaseFirstStop();
+      const failedResult = await failingPrepare;
+      assert.equal(failedResult.status, 'failed');
+
+      const startResult = await fixture.lifecycle.start(fixture.replica);
+      assert.equal(
+        startResult.status,
+        'running',
+        'newer generation request cell remains prepared and startable after older failing prepare finishes stop',
+      );
+      await fixture.lifecycle.stop(fixture.replica);
+    },
+  );
 });

@@ -37,6 +37,21 @@ const LEADER_PUBLICATION_RETRY_BUDGET_WAIT = Object.freeze({
   awaited: 'durable partitions.leader_node_id publication accepted',
 });
 
+function isMismatchedLiveRole(role, liveRole) {
+  return typeof role === PARTITION_SERVICE_LITERAL.STRING &&
+    role.length > 0 &&
+    typeof liveRole === PARTITION_SERVICE_LITERAL.STRING &&
+    liveRole.length > 0 &&
+    role !== liveRole;
+}
+
+function isStaleRoleFlushForLiveRole(role, liveRole) {
+  return Boolean(
+    (isCatchupLearnerRaftRole(role) && isVoterRaftRole(liveRole)) ||
+    isMismatchedLiveRole(role, liveRole),
+  );
+}
+
 function hasAuthoritativeReadOwner(gateway) {
   if (
     typeof gateway.resolveCdcIntegrationService !==
@@ -237,17 +252,18 @@ function createRoleMutationHelper(owner) {
     buildExpectedCacheFields: (role) => ({raft_role: role}),
     prepareFlush: ({pendingValue, flushingValue} = {}) => {
       const targetRole = flushingValue ?? pendingValue;
-      const staleLearnerFlush =
-        isCatchupLearnerRaftRole(targetRole) && isVoterRaftRole(owner.role);
+      const liveRole = owner.role || null;
+      const staleRoleFlush = isStaleRoleFlushForLiveRole(targetRole, liveRole);
       return {
-        skip: staleLearnerFlush,
+        skip: staleRoleFlush,
         clearPending:
-          staleLearnerFlush && isCatchupLearnerRaftRole(pendingValue),
-        reason: staleLearnerFlush ?
+          staleRoleFlush && isStaleRoleFlushForLiveRole(pendingValue, liveRole),
+        reason: staleRoleFlush ?
           PARTITION_SERVICE_LITERAL.NOT_OWNER :
           PARTITION_SERVICE_LITERAL.READY,
       };
     },
+    readLiveValue: () => owner.role || null,
     readRowFromCache: (systemTableCache) =>
       systemTableCache?.get?.(TABLES.SERVICES, owner.replicaId) || null,
     readValueFromCache: (systemTableCache) => {

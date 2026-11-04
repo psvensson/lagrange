@@ -148,22 +148,15 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
 
     if (
       explicitTargetNodeIds.length === 0 &&
-      // Quorum-minimum creates also converge admission before planning; run-24
-      // otherwise fail-fasted into a transient whole-cluster ledger hold.
-      (enforceEveryProvisioningOperation ||
-        this.supportsProvisioningAdmissionPrecheck()) &&
       (provisionTargetNodeIds.length < targetReplicaCount ||
         this.supportsProvisioningAdmissionPrecheck())
     ) {
-      // A quorum-minimum create proceeds when the minimum admits; requiring the
-      // full target would wait for replicas the rebalancer can fill afterwards.
-      const convergenceRequiredReplicaCount = enforceEveryProvisioningOperation ?
-        targetReplicaCount :
-        Math.max(1, minimumRoutableReplicaCount);
       let convergenceResult = await this.waitForProvisionTargetNodeIds({
         partitionId,
         schemaJobId: context?.schemaJobId,
-        requiredReplicaCount: convergenceRequiredReplicaCount,
+        requiredReplicaCount: targetReplicaCount,
+        minimumRoutableReplicaCount,
+        hasExplicitMinimumRoutableReplicaCount,
         minimumRoutableReplicaCountWasDefaulted:
           context?.minimumRoutableReplicaCountWasDefaulted === true,
         timeoutBudget,
@@ -180,7 +173,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         await this.waitOutWholeClusterTransientProvisioningHold({
           partitionId,
           schemaJobId: context?.schemaJobId,
-          requiredReplicaCount: convergenceRequiredReplicaCount,
+          requiredReplicaCount: targetReplicaCount,
+          minimumRoutableReplicaCount,
           timeoutBudget,
           explicitTargetNodeIds,
           hasExplicitMinimumRoutableReplicaCount,
@@ -216,11 +210,35 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         throw error;
       }
       targetReplicaCount = provisionTargetNodeIds.length;
-      if (!hasExplicitMinimumRoutableReplicaCount) {
+      if (
+        !hasExplicitMinimumRoutableReplicaCount &&
+        convergenceResult.singleNodeClusterDefaultedMinimum === true
+      ) {
         minimumRoutableReplicaCount = Math.min(
           minimumRoutableReplicaCount,
           targetReplicaCount,
         );
+      } else if (!hasExplicitMinimumRoutableReplicaCount) {
+        minimumRoutableReplicaCount = Math.max(
+          this.calculateQuorumReplicaCount(requestedReplicaCount),
+          Math.min(minimumRoutableReplicaCount, targetReplicaCount),
+        );
+      }
+      if (targetReplicaCount < minimumRoutableReplicaCount) {
+        const error = new Error(
+          `Provisioning unavailable: quorum not reachable for partition ${partitionId}`,
+        );
+        error.code = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
+        error.errorCode = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
+        error.epoch = provisioningEpoch;
+        error.reasons = convergenceResult.reasons || [];
+        error.retryAfterMs = convergenceResult.retryAfterMs || 0;
+        error.detail = {
+          epoch: error.epoch,
+          reasons: error.reasons,
+          retryAfterMs: error.retryAfterMs,
+        };
+        throw error;
       }
       enforceEveryProvisioningOperation = true;
       provisioningContractState = convergenceResult.contractState;

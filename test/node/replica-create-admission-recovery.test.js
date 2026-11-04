@@ -738,4 +738,63 @@ describe('ReplicaHandler retained CREATE admission recovery', () => {
     );
     await fixture.handler.shutdown();
   });
+
+  it('retires a superseded retained admission runtime while preserving a newer successor runtime', async () => {
+    const row = operationRow();
+    const fixture = await createHandlerFixture({
+      row,
+      targetRow: targetLifecycle(row),
+    });
+    const staleService = {
+      createAdmissionOperationId: row.operation_id,
+      createAdmissionToken: row.create_admission_token,
+      createAttemptToken: row.create_admission_attempt_token,
+      shutdownCalls: 0,
+      async shutdown() {
+        this.shutdownCalls += 1;
+      },
+    };
+    fixture.handler.localServices.set(row.replica_id, staleService);
+    fixture.handler.setLocalReplica(row.replica_id, {
+      replicaId: row.replica_id,
+      partitionId: row.partition_id,
+      service: staleService,
+      createAdmissionOperationId: row.operation_id,
+      createAdmissionToken: row.create_admission_token,
+      createAttemptToken: row.create_admission_attempt_token,
+    });
+    row.create_admission_state = CREATE_ADMISSION_STATE.CLOSED;
+    await fixture.handler.recoverRetainedReplicaCreateAdmissions();
+    assert.equal(staleService.shutdownCalls, 1,
+      'retained recovery retires the superseded admission runtime');
+    assert.equal(fixture.handler.localServices.get(row.replica_id), undefined);
+    assert.equal(fixture.handler.localReplicas.get(row.replica_id), undefined);
+
+    const successorService = {
+      createAdmissionOperationId: 'op-successor',
+      createAdmissionToken: 'admission-successor',
+      createAttemptToken: 'attempt-successor',
+      shutdownCalls: 0,
+      async shutdown() {
+        this.shutdownCalls += 1;
+      },
+    };
+    fixture.handler.localServices.set(row.replica_id, successorService);
+    fixture.handler.setLocalReplica(row.replica_id, {
+      replicaId: row.replica_id,
+      partitionId: row.partition_id,
+      service: successorService,
+      createAdmissionOperationId: 'op-successor',
+      createAdmissionToken: 'admission-successor',
+      createAttemptToken: 'attempt-successor',
+    });
+    await fixture.handler.recoverRetainedReplicaCreateAdmissions();
+    assert.equal(successorService.shutdownCalls, 0,
+      'retained recovery must not tear down a newer successor runtime');
+    assert.equal(
+      fixture.handler.localServices.get(row.replica_id),
+      successorService,
+    );
+    await fixture.handler.shutdown();
+  });
 });

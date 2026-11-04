@@ -4,7 +4,9 @@ import {
   CONTROL_PLANE_READ_LEADER_MODE,
   readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {ReplicaStatus} from '../rebalancer/replica-status.js';
 
 const READ_REPLICA_LIFECYCLE_SQL = `SELECT
   service_id,
@@ -285,25 +287,65 @@ function isConflictingCachedReplicaIdentity(cachedRow, replicaState, serviceId) 
     cachedReplicaId !== replicaIdentity;
 }
 
+function resolveLiveReplicaRaftRole(stateMachine, replicaState, serviceId) {
+  const directRole = replicaState?.raftRole ?? replicaState?.role ?? null;
+  if (isNonEmptyString(directRole)) {
+    return directRole;
+  }
+  if (typeof stateMachine?.resolveLiveReplicaRole === 'function') {
+    const resolved = stateMachine.resolveLiveReplicaRole(serviceId, replicaState);
+    if (isNonEmptyString(resolved)) {
+      return resolved;
+    }
+  }
+  return null;
+}
+
+function isNonActiveReplicaLifecycleState(replicaState) {
+  return isNonEmptyString(replicaState?.state) &&
+    replicaState.state !== ReplicaStatus.ACTIVE;
+}
+
+function filterPreservedRaftRole(role, voterOnly) {
+  if (!isNonEmptyString(role)) {
+    return null;
+  }
+  return voterOnly && !isVoterRaftRole(role) ? null : role;
+}
+
+function readCachedReplicaServiceRow(stateMachine, serviceId) {
+  if (!serviceId || typeof stateMachine?.systemTableCache?.get !== 'function') {
+    return null;
+  }
+  return stateMachine.systemTableCache.get(TABLES.SERVICES, serviceId);
+}
+
 function resolvePreservedReplicaRaftRole(
   stateMachine,
   replicaState,
   serviceId,
   {voterOnly = false} = {},
 ) {
-  const cachedRow = serviceId &&
-      typeof stateMachine?.systemTableCache?.get === 'function' ?
-    stateMachine.systemTableCache.get(TABLES.SERVICES, serviceId) :
-    null;
+  if (isNonActiveReplicaLifecycleState(replicaState)) {
+    return null;
+  }
+  const liveRole = resolveLiveReplicaRaftRole(
+    stateMachine,
+    replicaState,
+    serviceId,
+  );
+  if (isNonEmptyString(liveRole)) {
+    return filterPreservedRaftRole(liveRole, voterOnly);
+  }
+  const cachedRow = readCachedReplicaServiceRow(stateMachine, serviceId);
   const cachedRole = cachedRow?.raft_role;
   if (
-    !isNonEmptyString(cachedRole) ||
-    isConflictingCachedReplicaIdentity(cachedRow, replicaState, serviceId) ||
-    voterOnly && !isVoterRaftRole(cachedRole)
+    cachedRole === RAFT_ROLE.LEADER ||
+    isConflictingCachedReplicaIdentity(cachedRow, replicaState, serviceId)
   ) {
     return null;
   }
-  return cachedRole;
+  return filterPreservedRaftRole(cachedRole, voterOnly);
 }
 
 export {

@@ -633,12 +633,14 @@ class ReplicaCreateAdmissionOwner {
     );
   }
 
-  async advance(evidence, expectedStates, nextState, data = {}, extraWhere = {}) {
+  async #advanceWithObservation(
+    evidence, expectedStates, nextState, data = {}, extraWhere = {},
+  ) {
     const expected = Array.isArray(expectedStates) ? expectedStates :
       [expectedStates];
     if (!isValidAdvanceRequest(
       evidence, this.ownerIncarnation, expected, nextState,
-    )) return null;
+    )) return {progressed: null, row: null};
     await this.requireCurrentBootIncarnation();
     for (const expectedState of expected) {
       let result = null;
@@ -669,11 +671,19 @@ class ReplicaCreateAdmissionOwner {
     }
     const row = await this.readOperation(evidence.operationId);
     await this.requireCurrentBootIncarnation();
-    this.lastAdvanceRow = row;
     if (!rowMatchesAdvanceResult(
       row, evidence, nextState, this.ownerIncarnation, data,
-    )) return null;
-    return admissionEvidenceFromRow(row, requestFromAdmissionRow(row));
+    )) return {progressed: null, row};
+    return {
+      progressed: admissionEvidenceFromRow(row, requestFromAdmissionRow(row)),
+      row,
+    };
+  }
+
+  async advance(evidence, expectedStates, nextState, data = {}, extraWhere = {}) {
+    return (await this.#advanceWithObservation(
+      evidence, expectedStates, nextState, data, extraWhere,
+    )).progressed;
   }
 
   async markMaterialized(evidence, admissionBasis = NO_ADMISSION_BASIS) {
@@ -689,7 +699,7 @@ class ReplicaCreateAdmissionOwner {
   async markProgress(evidence, nextState) {
     if (nextState !== CREATE_ADMISSION_STATE.ACTIVE &&
         nextState !== CREATE_ADMISSION_STATE.FAILED) return null;
-    const progressed = await this.advance(
+    const {progressed, row} = await this.#advanceWithObservation(
       evidence,
       [
         CREATE_ADMISSION_STATE.ADMITTED,
@@ -699,7 +709,7 @@ class ReplicaCreateAdmissionOwner {
       nextState,
     );
     if (!progressed) {
-      throwIfReplicaCreateProgressSuperseded(this, this.lastAdvanceRow, evidence);
+      throwIfReplicaCreateProgressSuperseded(this, row, evidence);
     }
     return progressed;
   }

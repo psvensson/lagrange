@@ -32,6 +32,21 @@ import {
  * @param {Function} serviceClass - The MessageGroupService class.
  * @return {void}
  */
+function isMismatchedLiveRole(role, liveRole) {
+  return typeof role === MESSAGE_GROUP_SERVICE_LITERAL.STRING &&
+    role.length > 0 &&
+    typeof liveRole === MESSAGE_GROUP_SERVICE_LITERAL.STRING &&
+    liveRole.length > 0 &&
+    role !== liveRole;
+}
+
+function isStaleRoleFlushForLiveRole(role, liveRole) {
+  return Boolean(
+    (isCatchupLearnerRaftRole(role) && isVoterRaftRole(liveRole)) ||
+    isMismatchedLiveRole(role, liveRole),
+  );
+}
+
 // The clock a metadata mutation stamps and retries on: the owning replica's
 // when it has one, the host's otherwise.
 function hostedMutationTimers(owner) {
@@ -173,17 +188,22 @@ function assignMetadataPublication(serviceClass) {
             };
           }
           const targetRole = flushingValue ?? pendingValue;
-          const staleLearnerFlush =
-            isCatchupLearnerRaftRole(targetRole) && isVoterRaftRole(this.role);
+          const liveRole = this.role || null;
+          const staleRoleFlush = isStaleRoleFlushForLiveRole(
+            targetRole,
+            liveRole,
+          );
           return {
-            skip: staleLearnerFlush,
+            skip: staleRoleFlush,
             clearPending:
-              staleLearnerFlush && isCatchupLearnerRaftRole(pendingValue),
-            reason: staleLearnerFlush ?
+              staleRoleFlush &&
+              isStaleRoleFlushForLiveRole(pendingValue, liveRole),
+            reason: staleRoleFlush ?
               FLUSH_SKIP_NOT_OWNER :
               FLUSH_SKIP_READY,
           };
         },
+        readLiveValue: () => this.role || null,
         readRowFromCache: (systemTableCache) =>
           systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
         readValueFromCache: (systemTableCache) => {

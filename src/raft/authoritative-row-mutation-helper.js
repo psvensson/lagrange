@@ -26,6 +26,7 @@ class AuthoritativeRowMutationHelper {
       buildUpdateData,
       buildUpdateOptions,
       readValueFromCache,
+      readLiveValue,
       readRowFromCache,
       buildExpectedCacheFields,
       isWriteReady,
@@ -63,37 +64,28 @@ class AuthoritativeRowMutationHelper {
     this.buildUpdateData = buildUpdateData;
     this.buildUpdateOptions = withDefault(buildUpdateOptions, () => ({}));
     this.readValueFromCache = readValueFromCache;
+    this.readLiveValue = optionalFunction(readLiveValue);
     this.readRowFromCache = withDefault(readRowFromCache, null);
-    this.buildExpectedCacheFields = withDefault(
-      buildExpectedCacheFields,
-      null,
-    );
+    this.buildExpectedCacheFields = withDefault(buildExpectedCacheFields, null);
     this.isWriteReady = withDefault(isWriteReady, () => true);
     this.prepareFlush = withDefault(prepareFlush, () => ({skip: false}));
     this.retryDelayMs = withDefault(retryDelayMs, TIME_MS.SECOND);
-    this.retryBackoffMultiplier =
-      normalizeRetryBackoffMultiplier(withDefault(
-        retryBackoffMultiplier,
-        AUTHORITATIVE_ROW_MUTATION_RETRY.BACKOFF_MULTIPLIER,
-      ));
+    this.retryBackoffMultiplier = normalizeRetryBackoffMultiplier(withDefault(
+      retryBackoffMultiplier, AUTHORITATIVE_ROW_MUTATION_RETRY.BACKOFF_MULTIPLIER,
+    ));
     this.maxRetryDelayMs = normalizeMaxRetryDelayMs(withDefault(
-      maxRetryDelayMs,
-      AUTHORITATIVE_ROW_MUTATION_RETRY.MAX_DELAY_MS,
+      maxRetryDelayMs, AUTHORITATIVE_ROW_MUTATION_RETRY.MAX_DELAY_MS,
     ));
     this.cdcIntegrationService = withDefault(cdcIntegrationService, null);
     this.controlPlaneSystemTableGateway = withDefault(
-      controlPlaneSystemTableGateway,
-      null,
+      controlPlaneSystemTableGateway, null,
     );
     this.nodeId = withDefault(nodeId, null);
     this.messageRouter = withDefault(messageRouter, null);
     this.systemTableCache = withDefault(systemTableCache, null);
     this.refreshObservedRow = optionalFunction(refreshObservedRow);
     this.readAuthoritativeRow = optionalFunction(readAuthoritativeRow);
-    this.onObservedStateChanged = withDefault(
-      onObservedStateChanged,
-      () => {},
-    );
+    this.onObservedStateChanged = withDefault(onObservedStateChanged, () => {});
     this.onAsyncError = withDefault(onAsyncError, () => {});
     // Loudness/budget hooks (quest
     // partition-leader-row-publication-integrity). All optional; absent
@@ -175,6 +167,10 @@ class AuthoritativeRowMutationHelper {
   syncFromCache() {
     const cachedValue = this.readValueFromCache(this.systemTableCache);
     if (!cachedValue) {
+      return false;
+    }
+    const liveValue = this.readLiveValue ? this.readLiveValue() : null;
+    if (liveValue && liveValue !== cachedValue) {
       return false;
     }
 

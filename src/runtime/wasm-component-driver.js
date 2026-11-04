@@ -339,7 +339,9 @@ class WasmComponentDriver extends RuntimeDriver {
           (existing.bindingDigest !== cell.bindingDigest ||
            existing.payloadDigest !== cell.payloadDigest)) {
         await this._componentRuntime.stop(serviceId);
-        this._running.delete(serviceId);
+        if (this._serviceGenerations.get(serviceId) === generation) {
+          this._running.delete(serviceId);
+        }
       }
       if (this._serviceGenerations.get(serviceId) !== generation) {
         throw new Error(WASM_COMPONENT_ERROR.NOT_PREPARED);
@@ -354,7 +356,9 @@ class WasmComponentDriver extends RuntimeDriver {
       if (this._serviceGenerations.get(serviceId) === generation) {
         this._componentRuntime.releaseComponent(serviceId);
         await this._componentRuntime.stop(serviceId);
-        this.#clearRequestCellState(serviceId);
+        if (this._serviceGenerations.get(serviceId) === generation) {
+          this.#clearRequestCellState(serviceId);
+        }
       }
       return buildDriverStatusResult(
         PREPARE_STATUS.FAILED,
