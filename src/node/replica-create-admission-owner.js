@@ -444,55 +444,37 @@ class ReplicaCreateAdmissionOwner {
 
   async snapshotTargetAdmissions(entityType) {
     if (!this.gateway) {
-      throw admissionError(
-        CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-        this.nodeId,
-        `CREATE admission recovery authority unavailable for ${this.nodeId}`,
-      );
+      throw admissionError(CREATE_ADMISSION_ERROR_CODE.DEFERRED, this.nodeId,
+        `CREATE admission recovery authority unavailable for ${this.nodeId}`);
     }
     if (typeof entityType !== 'string' || entityType.length === 0) {
-      throw admissionError(
-        CREATE_ADMISSION_ERROR_CODE.INVALID,
-        this.nodeId,
-        `CREATE admission recovery needs its entity type on ${this.nodeId}`,
-      );
+      throw admissionError(CREATE_ADMISSION_ERROR_CODE.INVALID, this.nodeId,
+        `CREATE admission recovery needs its entity type on ${this.nodeId}`);
     }
     const observation = await readAuthoritativeControlPlaneRows(
-      this.gateway,
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      READ_TARGET_ADMISSIONS_SQL,
-      [this.nodeId, entityType],
-      CRITICAL_OPTIONS,
-    );
+      this.gateway, SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      READ_TARGET_ADMISSIONS_SQL, [this.nodeId, entityType], CRITICAL_OPTIONS);
     if (observation?.success !== true || !Array.isArray(observation.rows)) {
-      throw admissionError(
-        CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-        this.nodeId,
-        `CREATE admission recovery snapshot deferred for ${this.nodeId}`,
-      );
+      throw admissionError(CREATE_ADMISSION_ERROR_CODE.DEFERRED, this.nodeId,
+        `CREATE admission recovery snapshot deferred for ${this.nodeId}`);
     }
     return observation.rows;
   }
 
   async requireCurrentBootIncarnation() {
     const observation = await readAuthoritativeControlPlaneRows(
-      this.gateway,
-      SYSTEM_TABLE_NAME.NODES,
-      READ_CURRENT_BOOT_SQL,
-      [this.nodeId],
-      CRITICAL_OPTIONS,
-    );
+      this.gateway, SYSTEM_TABLE_NAME.NODES, READ_CURRENT_BOOT_SQL,
+      [this.nodeId], CRITICAL_OPTIONS).catch(() => null);
     const row = observation?.success === true &&
       Array.isArray(observation.rows) && observation.rows.length === 1 ?
       observation.rows[0] : null;
-    if (row?.node_id !== this.nodeId ||
-        nullableSafeInteger(row.boot_incarnation) !== this.ownerIncarnation) {
-      const error = admissionError(
-        CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-        this.nodeId,
-        `Current boot authority unavailable for ${this.nodeId}`,
-      );
+    const bootIncarnation = nullableSafeInteger(row?.boot_incarnation);
+    if (row?.node_id !== this.nodeId || bootIncarnation !== this.ownerIncarnation) {
+      const error = admissionError(CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+        this.nodeId, `Current boot authority unavailable for ${this.nodeId}`);
       error.bootAuthorityUnavailable = true;
+      error.bootIncarnationSuperseded = row?.node_id === this.nodeId &&
+        bootIncarnation !== null && bootIncarnation !== this.ownerIncarnation;
       throw error;
     }
     return row;

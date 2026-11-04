@@ -141,10 +141,15 @@ function gatewayFixture(cache, row, options = {}) {
   const lifecycle = createLifecycleControlPlaneGatewayForCache(cache);
   const operationRows = [row, ...(options.additionalRows || [])];
   let bootIncarnation = options.bootIncarnation ?? 102;
+  let bootReadFailures = 0;
   let snapshotFailures = options.snapshotFailures ?? 0;
   const gateway = {
     async readAuthoritativeRows(tableName, sql, params) {
       if (tableName === SYSTEM_TABLE_NAME.NODES) {
+        if (bootReadFailures > 0) {
+          bootReadFailures -= 1;
+          return {success: false, error: 'nodes authority deferred'};
+        }
         return {success: true, rows: [{
           node_id: row.target_node_id,
           boot_incarnation: bootIncarnation,
@@ -194,6 +199,9 @@ function gatewayFixture(cache, row, options = {}) {
     setBootIncarnation(value) {
       bootIncarnation = value;
     },
+    failNextBootReads(count = 1) {
+      bootReadFailures = count;
+    },
   };
 }
 
@@ -229,6 +237,7 @@ async function createHandlerFixture({row, targetRow, additionalTargetRows = [],
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'create-recovery-'));
   tempDirs.push(dataDir);
   let physicalStarts = 0;
+  let physicalShutdowns = 0;
   let releaseFactory;
   const factoryGate = new Promise((resolve) => {
     releaseFactory = resolve;
@@ -248,7 +257,9 @@ async function createHandlerFixture({row, targetRow, additionalTargetRows = [],
         replicaId: factoryOptions.replicaId,
         initialized: true,
         role: 'follower',
-        async shutdown() {},
+        async shutdown() {
+          physicalShutdowns += 1;
+        },
         async syncFromLeader() {},
         // A CREATE target asks its leader to admit it after its SYNCING commit
         // (replica-admission-from-committed-operation); this double admits.
@@ -264,6 +275,7 @@ async function createHandlerFixture({row, targetRow, additionalTargetRows = [],
     handler,
     releaseFactory,
     physicalStarts: () => physicalStarts,
+    physicalShutdowns: () => physicalShutdowns,
   };
 }
 
@@ -618,4 +630,75 @@ describe('ReplicaHandler retained CREATE admission recovery', () => {
       await completed;
       await fixture.handler.shutdown();
     });
+
+  it('preserves the live ACTIVE runtime and arms recovery when post-ACTIVE ' +
+    'markProgress hits a transient boot-authority read failure', async () => {
+    const row = operationRow();
+    const fixture = await createHandlerFixture({
+      row,
+      targetRow: targetLifecycle(row),
+    });
+    const completed = waitForCreateCompletion(fixture.handler);
+    fixture.handler.initialize();
+    await fixture.handler.awaitReplicaCreateAdmissionRecoveryBarrier();
+    await waitForPhysicalStart(fixture);
+    const originalPersist =
+      fixture.handler.persistReplicaStatusWithRetry.bind(fixture.handler);
+    fixture.handler.persistReplicaStatusWithRetry = async (
+      replicaId,
+      newStatus,
+      additionalData,
+    ) => {
+      const result = await originalPersist(replicaId, newStatus, additionalData);
+      if (newStatus === ReplicaStatus.ACTIVE) {
+        fixture.authority.failNextBootReads(1);
+      }
+      return result;
+    };
+    fixture.releaseFactory();
+    await completed;
+    assert.equal(fixture.physicalShutdowns(), 0,
+      'transient post-ACTIVE markProgress failure must not tear down the live service');
+    assert.ok(fixture.handler.localServices.get(row.replica_id),
+      'the activated partition service remains hosted in localServices');
+    assert.equal(
+      fixture.cache.get(SYSTEM_TABLE_NAME.SERVICES, row.replica_id)?.status,
+      ReplicaStatus.ACTIVE,
+    );
+    assert.equal(row.create_admission_state, CREATE_ADMISSION_STATE.MATERIALIZED);
+    assert.ok(fixture.handler.replicaCreateAdmissionRecoveryRearmOwner.current(),
+      'recovery is re-armed to settle create_admission_state = ACTIVE');
+    fixture.handler.startReplicaCreateAdmissionRecovery();
+    await fixture.handler.replicaCreateAdmissionRecoveryTask;
+    assert.equal(row.create_admission_state, CREATE_ADMISSION_STATE.ACTIVE);
+    assert.equal(fixture.physicalStarts(), 1);
+    await fixture.handler.shutdown();
+  });
+
+  it('fences a superseded boot incarnation without arming recovery on the ' +
+    'stale boot when boot authority changes before physical creation', async () => {
+    const row = operationRow();
+    const fixture = await createHandlerFixture({
+      row,
+      targetRow: targetLifecycle(row),
+    });
+    const owner = fixture.handler.getReplicaCreateAdmissionOwner();
+    fixture.authority.failNextBootReads(1);
+    await assert.rejects(
+      owner.requireCurrentBootIncarnation(),
+      {
+        bootAuthorityUnavailable: true,
+        bootIncarnationSuperseded: false,
+      },
+    );
+    fixture.authority.setBootIncarnation(103);
+    await assert.rejects(
+      owner.requireCurrentBootIncarnation(),
+      {
+        bootAuthorityUnavailable: true,
+        bootIncarnationSuperseded: true,
+      },
+    );
+    await fixture.handler.shutdown();
+  });
 });

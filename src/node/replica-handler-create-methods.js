@@ -94,6 +94,19 @@ function armCreateAdmissionRecoveryRearm(handler) {
   );
 }
 
+function lostBootPhysicalWorkerError(message) {
+  return Object.assign(
+    new Error(message),
+    {
+      code: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+      errorCode: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+      deferRetry: true,
+      bootAuthorityUnavailable: true,
+      bootIncarnationSuperseded: true,
+    },
+  );
+}
+
 async function settleCreateAdmissionProgress(handler, evidence, nextState) {
   if (!evidence) return;
   try {
@@ -101,8 +114,9 @@ async function settleCreateAdmissionProgress(handler, evidence, nextState) {
       .markProgress(evidence, nextState);
     if (!progressed) armCreateAdmissionRecoveryRearm(handler);
   } catch (error) {
-    if (error?.bootAuthorityUnavailable === true) throw error;
-    armCreateAdmissionRecoveryRearm(handler);
+    if (error?.bootIncarnationSuperseded !== true) {
+      armCreateAdmissionRecoveryRearm(handler);
+    }
   }
 }
 
@@ -200,16 +214,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               const evidence = request?.createAdmissionEvidence;
               if (evidence && !await this.getReplicaCreateAdmissionOwner()
                 .revalidatePhysicalWorker(request.createPhysicalWorkerClaim)) {
-                throw Object.assign(
-                  new Error(
-                    `Current boot lost before queued CREATE ${operationId}`,
-                  ),
-                  {
-                    code: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-                    errorCode: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-                    deferRetry: true,
-                    bootAuthorityUnavailable: true,
-                  },
+                throw lostBootPhysicalWorkerError(
+                  `Current boot lost before queued CREATE ${operationId}`,
                 );
               }
               createStarted = true;
@@ -222,6 +228,10 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
                 this.inProgressOperations.delete(operationId);
                 this.localServices.delete(replicaId);
                 this.localReplicas.delete(replicaId);
+                if (error?.bootAuthorityUnavailable === true &&
+                    error?.bootIncarnationSuperseded !== true) {
+                  armCreateAdmissionRecoveryRearm(this);
+                }
               }
               this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED, {
                 operationId,
@@ -366,14 +376,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         if (createAdmissionEvidence &&
             !await this.getReplicaCreateAdmissionOwner()
               .revalidatePhysicalWorker(request.createPhysicalWorkerClaim)) {
-          throw Object.assign(
-            new Error(`Current boot lost before physical CREATE ${operationId}`),
-            {
-              code: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-              errorCode: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-              deferRetry: true,
-              bootAuthorityUnavailable: true,
-            },
+          throw lostBootPhysicalWorkerError(
+            `Current boot lost before physical CREATE ${operationId}`,
           );
         }
         partitionService = await this.createPartitionService({
@@ -582,6 +586,9 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           }
           this.localServices.delete(replicaId);
           this.localReplicas.delete(replicaId);
+          if (error?.bootIncarnationSuperseded !== true) {
+            armCreateAdmissionRecoveryRearm(this);
+          }
           throw error;
         }
         await this.fenceFailedReplicaCreateRuntime(
