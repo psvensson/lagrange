@@ -401,7 +401,15 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
       this.clearDeferredMessageGroupServiceRowActivationRetry();
       return 0;
     }
-    return this.activateMessageGroupServiceRows([...pendingIds]);
+    const activatedCount = await this.activateMessageGroupServiceRows([...pendingIds]);
+    if (
+      activatedCount > 0 &&
+      (!(this.deferredMessageGroupServiceReplicaIds instanceof Set) ||
+        this.deferredMessageGroupServiceReplicaIds.size === 0)
+    ) {
+      this.runBackgroundCdcCatchupAfterSubscription?.();
+    }
+    return activatedCount;
   }
   async activateJoinPartitionServiceRows(replicaIds = null) {
     const partitionServices =

@@ -147,6 +147,7 @@ function advanceDurablePropagationSlice(owner, tableName, context) {
 function finishDurablePropagationSliceWave(owner, context) {
   if (context.isContended?.() === true) {
     owner.yieldedDurableSliceTable = owner.durableSliceTable;
+    owner.durableSliceTable = null;
     owner.yieldedDurableSliceUntilMs =
       owner.now() +
       Math.max(

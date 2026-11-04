@@ -489,12 +489,7 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
     ) {
       throw new Error(ADMIN_ERROR_MESSAGE.CONTROL_SNAPSHOT_UNAVAILABLE);
     }
-    const replicaOperationRows = systemTableCache.getAll(
-      TABLES.REPLICA_OPERATIONS,
-    );
-    const serviceRows = systemTableCache.getAll(TABLES.SERVICES);
     const tableRows = systemTableCache.getAll(TABLES.TABLES);
-    const partitionRows = systemTableCache.getAll(TABLES.PARTITIONS);
     const capturedAt = this.nowFn();
     const preferAuthoritativePublicationRead =
       options.preferAuthoritativePublicationRead === true ||
@@ -520,6 +515,11 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
     if (!this.isCurrentCacheOwner(cacheOwner)) {
       return null;
     }
+    let replicaOperationRows = systemTableCache.getAll(
+      TABLES.REPLICA_OPERATIONS,
+    );
+    let serviceRows = systemTableCache.getAll(TABLES.SERVICES);
+    let partitionRows = systemTableCache.getAll(TABLES.PARTITIONS);
     const nodeRows = systemTableCache.getAll(TABLES.NODES);
     const nodeEndpointRows = systemTableCache.getAll(
       TABLES.NODE_ENDPOINTS,
@@ -662,6 +662,11 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
         if (!this.isCurrentCacheOwner(cacheOwner)) {
           return null;
         }
+        replicaOperationRows = systemTableCache.getAll(
+          TABLES.REPLICA_OPERATIONS,
+        );
+        serviceRows = systemTableCache.getAll(TABLES.SERVICES);
+        partitionRows = systemTableCache.getAll(TABLES.PARTITIONS);
         if (
           membershipPublicationHandoffOutcome &&
           typeof membershipPublicationHandoffOutcome === 'object'

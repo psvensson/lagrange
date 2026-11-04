@@ -83,3 +83,39 @@ for (const earlierCount of [1, 3]) {
     }
   });
 }
+
+test('W-D4b: acknowledgeHydratedObligationsThrough marks pre-hydration obligations delivered ' +
+  'and reclaims them at P while preserving live delivery above P', async () => {
+  const timeSource = new VirtualTimeSource();
+  const {leader, proposed} = await startLeader({timeSource, tableName: CDC_TABLE});
+  try {
+    for (let index = 0; index < PENDING_EVENTS; index += 1) {
+      applyCommitted(leader, upsertOf(leader, 'seed', index));
+    }
+    const subscriber = acknowledgingCdcSubscriber();
+    await leader.subscribeToCDCWithHandshake(subscriber, {subscriberId: 'seed-sub'});
+    const image = leader.readHydrationImage(IMAGE_SQL);
+    const position = Number(image.appliedIndex);
+    const ackResult = await leader.cdcDelivery.acknowledgeHydratedObligationsThrough(
+      image.appliedIndex,
+    );
+    const committedAbove = commitLaterTraffic(leader, 'post-hydration');
+    await settleTicks();
+    const applied = new Set();
+    await pump(timeSource, leader, proposed, applied);
+    assert.deepEqual({
+      acknowledged: ackResult.acknowledged >= 1,
+      ...measure(leader, subscriber, image.rows, position, committedAbove),
+    }, {
+      acknowledged: true,
+      committedAbove: LATER_EVENTS,
+      missingAbove: 0,
+      divergentRows: 0,
+      deletedRowInView: false,
+      owed: 0,
+      outsideLane: 0,
+    });
+  } finally {
+    await shutdownAll(leader);
+  }
+});

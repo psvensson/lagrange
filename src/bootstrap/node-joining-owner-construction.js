@@ -333,6 +333,11 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
           }
           void this.createMessageGroupPhase
             .flushDeferredCreateSelfHostedMetadata()
+            .then((result) => {
+              if (result) {
+                this.runBackgroundCdcCatchupAfterSubscription();
+              }
+            })
             .catch((error) => {
               this.logger.warn(
                 NODE_JOINING_SERVICE_LITERAL.DEFERRED_CREATE_SELF_HOSTED_MESSAGE_GROUP_METADATA_PUBLICATION_FAILED,

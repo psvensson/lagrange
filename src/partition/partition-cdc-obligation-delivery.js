@@ -230,6 +230,10 @@ function addToBatch(lane, obligation) {
 function acknowledgeDelivered(delivery, obligation) {
   const lane = laneOf(delivery);
   const {owner} = delivery;
+  if (lane.pending.has(obligation.eventKey) ||
+      isCdcPositionReclaimed(obligation, readCdcObligationProgress(owner.db))) {
+    return;
+  }
   const addedBytes = acknowledgedEventBytesOf(obligation.eventKey,
     obligation.logIndex, obligation.ordinal, !lane.batch.groups.has(obligation.logIndex));
   if (lane.batch.events > 0 && lane.batch.bytes + addedBytes > BOUND.ACK_BATCH_MAX_BYTES) {
@@ -766,7 +770,8 @@ async function driveOnce(delivery, lane, reason) {
         precondition.subscribers, reason, delivered, context);
       if (result.outcome) return result.outcome;
       delivered += result.delivered;
-      stepContended = context.isContended?.() === true && delivered > 0;
+      stepContended = context.isContended?.() === true &&
+        (delivered > 0 || lane.scan?.provisional === true);
     } finally {
       context.finish();
     }
@@ -871,7 +876,48 @@ function cdcObligationDiagnosticsOf(delivery) {
   });
 }
 
-export {OBLIGATION_RETRY_DISPOSITION, cdcObligationDiagnosticsOf, createCdcObligationLane,
+/**
+ * Acknowledge every owed obligation at or below a hydration image's applied
+ * log index after the image's rows have been applied to the hydrated target.
+ * @param {Object} delivery - The CDC delivery owner.
+ * @param {number|string} appliedIndex - The hydration image's applied log index.
+ * @return {Object} {acknowledged: number}.
+ */
+function acknowledgeHydratedObligationsThrough(delivery, appliedIndex) {
+  const throughLogIndex = Number(appliedIndex);
+  if (!Number.isSafeInteger(throughLogIndex) || throughLogIndex <= 0) {
+    return Object.freeze({acknowledged: 0});
+  }
+  const lane = laneOf(delivery);
+  const {owner} = delivery;
+  if (owner.isShutdown || !owner.db || !laneIsCurrent(delivery, lane)) {
+    return Object.freeze({acknowledged: 0});
+  }
+  const obligations = readOwedCdcObligations(owner.db, {
+    through: {logIndex: throughLogIndex, ordinal: Number.MAX_SAFE_INTEGER},
+    limit: Number.MAX_SAFE_INTEGER,
+  });
+  if (obligations.length === 0) return Object.freeze({acknowledged: 0});
+  if (delivery.activeCdcInvocation !== null &&
+      (lane.currentObligation === null ||
+       lane.currentObligation.logIndex <= throughLogIndex)) {
+    delivery.activeCdcInvocation.retire();
+  }
+  lane.scan = null;
+  let acknowledged = 0;
+  for (const obligation of obligations) {
+    if (lane.pending.has(obligation.eventKey)) continue;
+    acknowledgeDelivered(delivery, obligation);
+    acknowledged += 1;
+  }
+  if (lane.batch.events > 0) {
+    trackOnOwner(owner, flushCdcAcknowledgements(delivery, REASON.SUBSCRIPTION_HANDSHAKE));
+  }
+  return Object.freeze({acknowledged});
+}
+
+export {OBLIGATION_RETRY_DISPOSITION, acknowledgeHydratedObligationsThrough,
+  cdcObligationDiagnosticsOf, createCdcObligationLane,
   driveCdcObligations, flushCdcAcknowledgements, handleDeliveryFailure,
   registerCdcAcknowledgementProposer,
   resetCdcObligationLane, scheduleDeliveryRetry, settleAcknowledgedObligations};

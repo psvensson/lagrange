@@ -435,9 +435,18 @@ class SeedCacheHydrationPhase {
     }
 
     for (const row of image.rows) {
+      const rowTimestamp =
+        typeof row?.updated_at_hlc === 'string' && row.updated_at_hlc.length > 0 ?
+          row.updated_at_hlc :
+          undefined;
       await leaderMessageGroup.applyCDCEvent(
         tableName, CDC_OPERATION.INSERT, row,
-        CDC_APPLY_OPTIONS);
+        rowTimestamp ? {...CDC_APPLY_OPTIONS, timestamp: rowTimestamp} : CDC_APPLY_OPTIONS);
+    }
+    if (typeof options.registerSubscribers === LOCAL_STR_FUNCTION) {
+      await leaderPartition.cdcDelivery?.acknowledgeHydratedObligationsThrough?.(
+        image.appliedIndex,
+      );
     }
 
     d.getLogger().debug(BOOTSTRAP_LOG_MSG.TABLE_HYDRATED, {
