@@ -49,6 +49,7 @@ const {
   isBootstrapTopologyDispatchDeferred,
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
+const DISPATCH_RETRY_BOUNDARY = 'dispatch_retry';
 const SAFETY_DEFERRED_RETRY_BOUNDARY = 'safety_retry';
 const DEFERRED_RETRY_REARM_WAIT = Object.freeze({
   wait: 'REBALANCE_OPERATION_BUDGET_MS',
@@ -430,11 +431,11 @@ function deferDispatchRetry(owner, operation, errorLike) {
       ...buildHandoffDeferralTransportDiagnostics(owner, operation, errorLike),
     },
   );
-  const timerHandle = owner.setTimeoutFn(() => {
+  let timerHandle = null;
+  timerHandle = owner.setTimeoutFn(() => {
+    if (owner.dispatchRetryTimerByOperationId.get(operationId) !== timerHandle) return;
     owner.dispatchRetryTimerByOperationId.delete(operationId);
-    if (owner.isShuttingDown) {
-      return;
-    }
+    if (owner.isShuttingDown) return;
     if (!owner.isInitialized) {
       rearmDispatchRetryWhileUninitialized(owner, operation, errorLike);
       return;
@@ -459,7 +460,7 @@ function deferDispatchRetry(owner, operation, errorLike) {
           OPERATION_OWNER_ACTION.DISPATCH,
           currentOperation,
           {
-            boundary: 'dispatch_retry',
+            boundary: DISPATCH_RETRY_BOUNDARY,
             cause:
               OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_OPERATION_DISPATCH,
             workflowStep: currentOperation.workflowStep || null,
@@ -651,7 +652,14 @@ function scheduleDeferredSafetyRetry(owner, operation, deferReason, errorMessage
       ...buildHandoffDeferralTransportDiagnostics(owner, operation, null),
     },
   );
-  const timerHandle = owner.setTimeoutFn(() => {
+  let timerHandle = null;
+  timerHandle = owner.setTimeoutFn(() => {
+    if (
+      owner.safetyDeferredRetryTimerByOperationId.get(operationId) !==
+      timerHandle
+    ) {
+      return;
+    }
     owner.safetyDeferredRetryTimerByOperationId.delete(operationId);
     if (owner.isShuttingDown) {
       return;

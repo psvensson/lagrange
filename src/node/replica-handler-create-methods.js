@@ -107,16 +107,39 @@ function lostBootPhysicalWorkerError(message) {
   );
 }
 
-async function settleCreateAdmissionProgress(handler, evidence, nextState) {
-  if (!evidence) return;
+async function settleCreateAdmissionProgress(
+  handler,
+  evidence,
+  nextState,
+  {replicaId = null, partitionId = null, partitionService = null} = {},
+) {
+  if (!evidence) return true;
   try {
     const progressed = await handler.getReplicaCreateAdmissionOwner()
       .markProgress(evidence, nextState);
     if (!progressed) armCreateAdmissionRecoveryRearm(handler);
+    return true;
   } catch (error) {
-    if (error?.bootIncarnationSuperseded !== true) {
-      armCreateAdmissionRecoveryRearm(handler);
+    if (
+      error?.bootIncarnationSuperseded === true ||
+      error?.code === CREATE_ADMISSION_ERROR_CODE.STALE
+    ) {
+      if (partitionService) {
+        await handler.fenceFailedReplicaCreateRuntime(
+          replicaId,
+          partitionId,
+          partitionService,
+          error,
+        );
+      }
+      if (replicaId) {
+        handler.localServices.delete(replicaId);
+        handler.localReplicas.delete(replicaId);
+      }
+      return false;
     }
+    armCreateAdmissionRecoveryRearm(handler);
+    return true;
   }
 }
 
@@ -500,11 +523,16 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               createAttemptToken,
             },
           );
-          await settleCreateAdmissionProgress(
+          const settled = await settleCreateAdmissionProgress(
             this,
             createAdmissionEvidence,
             CREATE_ADMISSION_STATE.ACTIVE,
+            {replicaId, partitionId, partitionService},
           );
+          if (settled === false) {
+            this.clearReplicaCreationProgress(progress);
+            return;
+          }
         } else {
           this.setLocalReplica(replicaId, {
             replicaId,

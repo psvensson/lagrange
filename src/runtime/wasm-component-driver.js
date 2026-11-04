@@ -330,6 +330,9 @@ class WasmComponentDriver extends RuntimeDriver {
     try {
       const runtime = projectRequestCellRuntime(definition);
       const artifact = await this._artifactLoader(runtime);
+      if (this._serviceGenerations.get(serviceId) !== generation) {
+        throw new Error(WASM_COMPONENT_ERROR.NOT_PREPARED);
+      }
       const cell = bindRequestCellArtifact(runtime, artifact);
       const existing = this._requestCells.get(serviceId);
       if (existing &&

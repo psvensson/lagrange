@@ -35,7 +35,9 @@ const EXECUTOR_OUTCOME_REMOTE_OWNER_WAKE_TYPES = Object.freeze(
 const TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_TYPES = Object.freeze(
   new Set([
     EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
     EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
+    EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_FAILED,
   ]),
 );
 
@@ -279,7 +281,8 @@ function resolveExecutorOutcomeRemoteOwnerHandoffMode(
   const outcomeWorkflowStep = outcome?.[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP];
   if (
     TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_TYPES.has(outcomeType) &&
-    outcomeWorkflowStep === WORKFLOW_STEP.ACTIVE &&
+    (outcomeWorkflowStep === WORKFLOW_STEP.ACTIVE ||
+      outcomeWorkflowStep === WORKFLOW_STEP.FAILED) &&
     isTargetCreateOutcomeHandoffEligible(operation)
   ) {
     return COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME;
@@ -513,7 +516,13 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
   ) {
     return false;
   }
-  const replaceExisting = options.replaceExisting === true;
+  const desiredDeadlineMs = Date.now() + delayMs;
+  const existingDeadlineMs =
+    owner.createdOperationHandoffRetryDeadlineMsByOperationId?.get(operationId);
+  const replaceExisting =
+    options.replaceExisting === true ||
+    Number.isFinite(existingDeadlineMs) &&
+      desiredDeadlineMs < existingDeadlineMs;
   if (owner.hasActiveCreatedOperationHandoffRetry(operationId)) {
     if (!replaceExisting) {
       return true;
@@ -523,7 +532,14 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
   const operationSnapshot = owner.cloneOperationSnapshot(operation) || {
     operationId,
   };
-  const timerHandle = owner.setTimeoutFn(() => {
+  let timerHandle = null;
+  timerHandle = owner.setTimeoutFn(() => {
+    if (
+      owner.createdOperationHandoffRetryTimerByOperationId.get(operationId) !==
+      timerHandle
+    ) {
+      return;
+    }
     owner.createdOperationHandoffRetryTimerByOperationId.delete(operationId);
     owner.createdOperationHandoffRetryDeadlineMsByOperationId.delete(
       operationId,

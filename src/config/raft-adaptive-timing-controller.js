@@ -203,6 +203,7 @@ class RaftAdaptiveTimingController {
     this.lastSignals = null;
     this.intervalHandle = null;
     this.watchUnsubscribers = [];
+    this.watchedKeyRevision = new Map();
     // Set by shutdown(); an initialize still in flight then starts nothing.
     this.stopped = false;
     this.evaluationInFlight = false;
@@ -224,14 +225,20 @@ class RaftAdaptiveTimingController {
       return;
     }
 
-    await this.loadConfig();
+    this.suspendLoopControl = true;
+    this.registerWatchers();
+    try {
+      await this.loadConfig();
+    } finally {
+      this.suspendLoopControl = false;
+    }
     // A shutdown that arrived while the config loaded cancels the rest: no
     // watcher, profile or loop is started after it
     // (dynamic-config-startup-owned-initialization).
     if (this.stopped) {
+      this.unregisterWatchers();
       return;
     }
-    this.registerWatchers();
     this.currentProfile = await this.detectCurrentProfile();
     if (this.stopped) {
       this.unregisterWatchers();
@@ -350,10 +357,15 @@ class RaftAdaptiveTimingController {
    * @private
    */
   registerWatchers() {
+    this.unregisterWatchers();
     for (const [key, field] of Object.entries(ADAPTIVE_TIMING_SETTINGS_KEY_FIELD)) {
       this.watchUnsubscribers.push(this.dynamicConfigService.watch(
         key,
         (value) => {
+          this.watchedKeyRevision.set(
+            key,
+            (this.watchedKeyRevision.get(key) || 0) + 1,
+          );
           this.applySettingUpdate(field, value);
         },
       ));
@@ -363,6 +375,10 @@ class RaftAdaptiveTimingController {
       this.watchUnsubscribers.push(this.dynamicConfigService.watch(
         key,
         (value) => {
+          this.watchedKeyRevision.set(
+            key,
+            (this.watchedKeyRevision.get(key) || 0) + 1,
+          );
           this.applyProfileUpdate(mapping.profile, mapping.field, value);
         },
       ));
@@ -413,18 +429,24 @@ class RaftAdaptiveTimingController {
   async loadConfig() {
     this.suspendLoopControl = true;
     for (const [key, field] of Object.entries(ADAPTIVE_TIMING_SETTINGS_KEY_FIELD)) {
+      const revBefore = this.watchedKeyRevision.get(key) || 0;
       try {
         const value = await this.dynamicConfigService.get(key);
-        this.applySettingUpdate(field, value);
+        if ((this.watchedKeyRevision.get(key) || 0) === revBefore) {
+          this.applySettingUpdate(field, value);
+        }
       } catch (_error) {
         // Fall back to defaults on read failures.
       }
     }
 
     for (const [key, mapping] of Object.entries(ADAPTIVE_TIMING_PROFILE_KEY_FIELD)) {
+      const revBefore = this.watchedKeyRevision.get(key) || 0;
       try {
         const value = await this.dynamicConfigService.get(key);
-        this.applyProfileUpdate(mapping.profile, mapping.field, value);
+        if ((this.watchedKeyRevision.get(key) || 0) === revBefore) {
+          this.applyProfileUpdate(mapping.profile, mapping.field, value);
+        }
       } catch (_error) {
         // Fall back to defaults on read failures.
       }

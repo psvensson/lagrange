@@ -1109,3 +1109,27 @@ test('DynamicConfigService clearCache', async (t) => {
   t.equal(stats.cachedKeys, 0,
     'cache should be empty after clear');
 });
+
+test('DynamicConfigService handleCDCEvent applies UPSERT events and notifies watchers', async (t) => {
+  const mockEngine = createMockSqlEngine();
+  const service = new DynamicConfigService({
+    sqlQueryEngine: mockEngine,
+    nodeId: 'test-node',
+  });
+  await service.initialize();
+  const observed = [];
+  service.watch('logging.level', (newValue, oldValue, key) => {
+    observed.push({newValue, oldValue, key});
+  });
+  await service.handleCDCEvent({
+    operation: 'UPSERT',
+    data: {
+      config_key: 'logging.level',
+      config_value: 'debug',
+      value_type: ConfigValueType.STRING,
+    },
+  });
+  t.equal(await service.get('logging.level'), 'debug');
+  t.equal(observed.length, 1);
+  t.equal(observed[0].newValue, 'debug');
+});

@@ -24,7 +24,8 @@ import {NO_ADMISSION_BASIS, claimReplicaCreateDurablePhysicalWorker,
   requireReplicaCreateRotationWorkerClaim,
   revalidateReplicaCreatePhysicalWorker, rowMatchesAdmissionBasis,
   runReplicaCreateExclusive, advanceReplicaCreatePhysicalWorker,
-  snapshotReplicaCreateInstallAuthority} from
+  snapshotReplicaCreateInstallAuthority,
+  throwIfReplicaCreateProgressSuperseded} from
   './replica-create-process-owner.js';
 import {closeReplicaCreateAdmissionForLifecycle} from
   './replica-create-lifecycle-close.js';
@@ -668,6 +669,7 @@ class ReplicaCreateAdmissionOwner {
     }
     const row = await this.readOperation(evidence.operationId);
     await this.requireCurrentBootIncarnation();
+    this.lastAdvanceRow = row;
     if (!rowMatchesAdvanceResult(
       row, evidence, nextState, this.ownerIncarnation, data,
     )) return null;
@@ -687,7 +689,7 @@ class ReplicaCreateAdmissionOwner {
   async markProgress(evidence, nextState) {
     if (nextState !== CREATE_ADMISSION_STATE.ACTIVE &&
         nextState !== CREATE_ADMISSION_STATE.FAILED) return null;
-    return this.advance(
+    const progressed = await this.advance(
       evidence,
       [
         CREATE_ADMISSION_STATE.ADMITTED,
@@ -696,6 +698,10 @@ class ReplicaCreateAdmissionOwner {
       ],
       nextState,
     );
+    if (!progressed) {
+      throwIfReplicaCreateProgressSuperseded(this, this.lastAdvanceRow, evidence);
+    }
+    return progressed;
   }
 
   async beginFailedAttemptRotation(evidence, physicalClaim = null) {

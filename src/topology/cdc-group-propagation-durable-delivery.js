@@ -37,12 +37,50 @@ const BUSY_CONTENDED_RETRY_AFTER_MS = 20;
 const MIN_YIELD_HOLD_RETRY_AFTER_MS = 10;
 const DEFAULT_RETRY_DELAY_MS = 50;
 
+function enqueueWaitingDurableSliceTable(owner, tableName) {
+  if (
+    typeof tableName !== 'string' ||
+    tableName.length === 0 ||
+    tableName === owner.durableSliceTable
+  ) {
+    return;
+  }
+  if (!Array.isArray(owner.waitingDurableSliceTables)) {
+    owner.waitingDurableSliceTables = [];
+  }
+  if (!owner.waitingDurableSliceTables.includes(tableName)) {
+    owner.waitingDurableSliceTables.push(tableName);
+  }
+}
+
+function dequeueWaitingDurableSliceTable(owner, tableName) {
+  if (!Array.isArray(owner.waitingDurableSliceTables) || !tableName) {
+    return;
+  }
+  const index = owner.waitingDurableSliceTables.indexOf(tableName);
+  if (index !== -1) {
+    owner.waitingDurableSliceTables.splice(index, 1);
+  }
+}
+
 function isYieldedSliceTableDeferred(owner, tableName) {
+  const holdActive =
+    Number.isFinite(owner.yieldedDurableSliceUntilMs) &&
+    owner.now() < owner.yieldedDurableSliceUntilMs;
+  if (!holdActive) {
+    return false;
+  }
+  const nextWaitingTable =
+    Array.isArray(owner.waitingDurableSliceTables) &&
+    owner.waitingDurableSliceTables.length > 0 ?
+      owner.waitingDurableSliceTables[0] :
+      null;
+  if (nextWaitingTable !== null) {
+    return (tableName ?? null) !== nextWaitingTable;
+  }
   return (
     owner.yieldedDurableSliceTable !== null &&
-    (tableName ?? null) === owner.yieldedDurableSliceTable &&
-    Number.isFinite(owner.yieldedDurableSliceUntilMs) &&
-    owner.now() < owner.yieldedDurableSliceUntilMs
+    (tableName ?? null) === owner.yieldedDurableSliceTable
   );
 }
 
@@ -55,12 +93,16 @@ function decideDurablePropagationAdmission(occupied, sourceMismatch = false) {
 function computeBusyRetryAfterMs(owner, incomingTable) {
   if (owner.activeDurablePropagation !== null) {
     if (incomingTable !== owner.durableSliceTable) {
+      enqueueWaitingDurableSliceTable(owner, incomingTable);
       owner.durableSliceContended = true;
       if ((owner.durableSliceWaves ?? 0) >= CONTENDED_TABLE_SLICE_WAVES) {
         owner.activeDurablePropagation?.context?.markContended?.();
       }
     }
     return Math.min(owner.deliveryRetryDelayMs, BUSY_CONTENDED_RETRY_AFTER_MS);
+  }
+  if (incomingTable !== owner.yieldedDurableSliceTable) {
+    enqueueWaitingDurableSliceTable(owner, incomingTable);
   }
   return Math.max(
     MIN_YIELD_HOLD_RETRY_AFTER_MS,
@@ -84,6 +126,7 @@ function durablePropagationRefusal(owner, admission, options = null) {
 }
 
 function advanceDurablePropagationSlice(owner, tableName, context) {
+  dequeueWaitingDurableSliceTable(owner, tableName);
   owner.yieldedDurableSliceTable = null;
   owner.yieldedDurableSliceUntilMs = 0;
   if (owner.durableSliceTable === tableName) {
@@ -91,7 +134,9 @@ function advanceDurablePropagationSlice(owner, tableName, context) {
   } else {
     owner.durableSliceTable = tableName ?? null;
     owner.durableSliceWaves = 1;
-    owner.durableSliceContended = false;
+    owner.durableSliceContended =
+      Array.isArray(owner.waitingDurableSliceTables) &&
+      owner.waitingDurableSliceTables.length > 0;
   }
   if (owner.durableSliceContended &&
       owner.durableSliceWaves >= CONTENDED_TABLE_SLICE_WAVES) {

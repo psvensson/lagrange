@@ -701,4 +701,41 @@ describe('ReplicaHandler retained CREATE admission recovery', () => {
     );
     await fixture.handler.shutdown();
   });
+
+  it('fences the runtime and removes localServices/localReplicas when ' +
+    'post-ACTIVE markProgress observes a superseded admission or boot', async () => {
+    const row = operationRow();
+    const fixture = await createHandlerFixture({
+      row,
+      targetRow: targetLifecycle(row),
+    });
+    fixture.handler.initialize();
+    await fixture.handler.awaitReplicaCreateAdmissionRecoveryBarrier();
+    await waitForPhysicalStart(fixture);
+    const originalPersist =
+      fixture.handler.persistReplicaStatusWithRetry.bind(fixture.handler);
+    fixture.handler.persistReplicaStatusWithRetry = async (
+      replicaId,
+      newStatus,
+      additionalData,
+    ) => {
+      const result = await originalPersist(replicaId, newStatus, additionalData);
+      if (newStatus === ReplicaStatus.ACTIVE) {
+        row.create_admission_state = CREATE_ADMISSION_STATE.CLOSED;
+      }
+      return result;
+    };
+    fixture.releaseFactory();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(fixture.physicalShutdowns(), 1,
+      'confirmed post-ACTIVE supersession must fence and shut down the runtime');
+    assert.equal(fixture.handler.localServices.get(row.replica_id), undefined);
+    assert.equal(fixture.handler.localReplicas.get(row.replica_id), undefined);
+    assert.equal(
+      fixture.handler.replicaCreateAdmissionRecoveryRearmOwner.current(),
+      null,
+      'superseded attempt must not re-arm recovery',
+    );
+    await fixture.handler.shutdown();
+  });
 });

@@ -327,13 +327,78 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
       endpointsPublished: this.hasPublishedLocalServiceEndpoints(),
       messageGroupServices,
     });
+    const nextDeferredReplicaIds =
+      replicaIds != null &&
+      this.deferredMessageGroupServiceReplicaIds instanceof Set ?
+        new Set(this.deferredMessageGroupServiceReplicaIds) :
+        new Set();
+    if (replicaIds != null) {
+      for (const replicaId of replicaIds) {
+        if (
+          messageGroupServices.has(replicaId) &&
+          !deferredReplicaIds.has(replicaId)
+        ) {
+          nextDeferredReplicaIds.delete(replicaId);
+        } else {
+          nextDeferredReplicaIds.add(replicaId);
+        }
+      }
+    }
+    for (const replicaId of deferredReplicaIds) {
+      nextDeferredReplicaIds.add(replicaId);
+    }
     this.deferredMessageGroupServiceReplicaIds =
-      deferredReplicaIds.size > 0 ? deferredReplicaIds : null;
+      nextDeferredReplicaIds.size > 0 ? nextDeferredReplicaIds : null;
+    if (this.deferredMessageGroupServiceReplicaIds) {
+      this.scheduleDeferredMessageGroupServiceRowActivationRetry();
+    } else {
+      this.clearDeferredMessageGroupServiceRowActivationRetry();
+    }
     return activatedCount;
+  }
+  clearDeferredMessageGroupServiceRowActivationRetry() {
+    if (this.deferredMessageGroupServiceActivationRetryTimer) {
+      clearTimeout(this.deferredMessageGroupServiceActivationRetryTimer);
+      this.deferredMessageGroupServiceActivationRetryTimer = null;
+    }
+  }
+  scheduleDeferredMessageGroupServiceRowActivationRetry() {
+    if (
+      this.deferredMessageGroupServiceActivationRetryTimer ||
+      this.aborted ||
+      this.shuttingDown ||
+      !(this.deferredMessageGroupServiceReplicaIds instanceof Set) ||
+      this.deferredMessageGroupServiceReplicaIds.size === 0
+    ) {
+      return;
+    }
+    const retryDelayMs =
+      Number.isFinite(this.deferredMessageGroupActivationRetryDelayMs) &&
+      this.deferredMessageGroupActivationRetryDelayMs > 0 ?
+        Math.floor(this.deferredMessageGroupActivationRetryDelayMs) :
+        250;
+    const setTimeoutFn = typeof this.setTimeoutFn === 'function' ?
+      this.setTimeoutFn :
+      setTimeout;
+    const timer = setTimeoutFn(() => {
+      this.deferredMessageGroupServiceActivationRetryTimer = null;
+      if (
+        this.aborted ||
+        this.shuttingDown ||
+        !(this.deferredMessageGroupServiceReplicaIds instanceof Set) ||
+        this.deferredMessageGroupServiceReplicaIds.size === 0
+      ) {
+        return;
+      }
+      void this.retryDeferredMessageGroupServiceRowsIfNeeded().catch(() => {});
+    }, retryDelayMs);
+    timer.unref?.();
+    this.deferredMessageGroupServiceActivationRetryTimer = timer;
   }
   async retryDeferredMessageGroupServiceRowsIfNeeded() {
     const pendingIds = this.deferredMessageGroupServiceReplicaIds;
     if (!(pendingIds instanceof Set) || pendingIds.size === 0) {
+      this.clearDeferredMessageGroupServiceRowActivationRetry();
       return 0;
     }
     return this.activateMessageGroupServiceRows([...pendingIds]);

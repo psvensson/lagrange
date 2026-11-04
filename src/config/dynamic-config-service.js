@@ -54,7 +54,6 @@ const CONFIG_MUTATION_CONFIRMATION = Object.freeze({
 
 const ConfigValueType = CONFIG_VALUE_TYPE;
 
-
 /**
  * DynamicConfigService manages configuration through the config system table.
  * Provides watchers for configuration changes and supports hot reload.
@@ -464,29 +463,23 @@ class DynamicConfigService extends EventEmitter {
     const {operation, data} = event;
     const key = data[CONFIG_TABLE_COLUMN.KEY];
     this.cdcApplySeqByKey.set(key, this.cdcApplySequence(key) + 1);
-
-    if (operation === CDC_OPERATION.INSERT || operation === CDC_OPERATION.UPDATE) {
-      const valueType = this.resolveValueType(
-        key,
-        data[CONFIG_TABLE_COLUMN.VALUE_TYPE],
-      );
-      const newValue = this.deserializeValue(
-        data[CONFIG_TABLE_COLUMN.VALUE],
-        valueType,
-      );
+    const op = String(operation || '').toUpperCase();
+    if (
+      op === CDC_OPERATION.INSERT ||
+      op === CDC_OPERATION.UPDATE ||
+      op === CDC_OPERATION.UPSERT
+    ) {
+      const valueType = this.resolveValueType(key, data[CONFIG_TABLE_COLUMN.VALUE_TYPE]);
+      const newValue = this.deserializeValue(data[CONFIG_TABLE_COLUMN.VALUE], valueType);
       const oldValue = this.configCache.get(key);
-
-      // Update local cache
       this.configCache.set(key, newValue);
-
-      // Notify watchers if value changed
       if (oldValue !== newValue) {
         const oldValueSerialized = oldValue === undefined ?
           undefined :
           this.serializeValue(oldValue, valueType);
         await this.notifyWatchers(key, newValue, oldValueSerialized);
       }
-    } else if (operation === CDC_OPERATION.DELETE) {
+    } else if (op === CDC_OPERATION.DELETE) {
       this.configCache.delete(key);
       this.emit(CONFIG_EVENT.DELETE, {key});
     }

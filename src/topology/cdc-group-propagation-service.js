@@ -62,6 +62,7 @@ class CDCGroupPropagationService extends EventEmitter {
     this.durableSliceContended = false;
     this.yieldedDurableSliceTable = null;
     this.yieldedDurableSliceUntilMs = 0;
+    this.waitingDurableSliceTables = [];
     this.durablePropagationLifetime = Object.freeze({});
     this.stats = {
       groupedCount: 0,
@@ -112,6 +113,7 @@ class CDCGroupPropagationService extends EventEmitter {
     this.durableSliceContended = false;
     this.yieldedDurableSliceTable = null;
     this.yieldedDurableSliceUntilMs = 0;
+    this.waitingDurableSliceTables = [];
     this.durablePropagationLifetime = Object.freeze({});
     if (options.nodeId) {
       this.nodeId = options.nodeId;
@@ -168,6 +170,7 @@ class CDCGroupPropagationService extends EventEmitter {
     this.durableSliceContended = false;
     this.yieldedDurableSliceTable = null;
     this.yieldedDurableSliceUntilMs = 0;
+    this.waitingDurableSliceTables = [];
     for (const releaseSleep of [...this.retrySleepReleases]) {
       releaseSleep();
     }

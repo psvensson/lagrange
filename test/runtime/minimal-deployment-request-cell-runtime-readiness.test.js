@@ -924,4 +924,47 @@ describe('minimal deployment request Cell runtime readiness', () => {
       await assertNotReady(unavailable);
     },
   );
+
+  test('fences a stale concurrent #prepareRequestCell before it can stop a newer generation component',
+    async () => {
+      let loaderCallCount = 0;
+      let resolveStaleLoader;
+      const staleLoaderPromise = new Promise((resolve) => {
+        resolveStaleLoader = resolve;
+      });
+      const validArtifact = {
+        artifactDigest: ARTIFACT_DIGEST,
+        bytes: COMPONENT_BYTES,
+        manifest: manifest(),
+        manifestDigest: manifestDigest(manifest()),
+        packageId: PACKAGE_ID,
+        payloadDigest: PAYLOAD_DIGEST,
+      };
+      const fixture = createFixture({
+        artifactLoader: async () => {
+          loaderCallCount += 1;
+          if (loaderCallCount === 1) {
+            return staleLoaderPromise;
+          }
+          return validArtifact;
+        },
+      });
+      const stalePrepare = fixture.driver.prepare(
+        fixture.replica.definition,
+        {},
+      );
+      await fixture.lifecycle.prepare(fixture.replica.definition, {});
+      await fixture.lifecycle.start(fixture.replica);
+      assert.equal(fixture.cellRuntime.instanceCount, 1);
+
+      resolveStaleLoader(validArtifact);
+      const staleResult = await stalePrepare;
+      assert.equal(staleResult.status, 'failed');
+      assert.equal(
+        fixture.cellRuntime.instanceCount,
+        1,
+        'stale prepare finishing artifactLoader late must not stop the live newer generation component',
+      );
+    },
+  );
 });

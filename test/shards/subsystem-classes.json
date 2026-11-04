@@ -28,7 +28,7 @@
   "censusSize": 2590,
   "digest": "fnv1a32-0076fca0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-78b4528b",
+  "observationDigest": "fnv1a32-03e20061",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4432,6 +4432,7 @@
     },
     "test/control-plane/control-plane-readiness-service-cluster-health-and-recovery-diagnostics.test.js": {
       "files": [
+        "src/control-plane/control-plane-diagnostics-ledger.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js"
       ]
@@ -15626,6 +15627,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/priority-recovery-completion.js",
         "src/control-plane/timeout-budget.js",
+        "src/rebalancer/executor-outcome-constants.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },

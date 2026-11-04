@@ -348,3 +348,118 @@ test('contended durable propagation admits a 4-wave table slice before ' +
   const contenderRes = await f.service.propagateCDCEvent(contenderRunReq);
   assert.equal(contenderRes.success, true);
 });
+
+test('contended durable propagation rotates 3 contending tables in deterministic FIFO slice order without 2-table ping-pong starvation and bounds healthy delivery cost', async (t) => {
+  let activeDeliverResolver = null;
+  const f = compose(t, LATENCY_PROPAGATION_MODE.SAFE, {
+    groups: ['g-1', 'g-2', 'g-3'],
+    answer: async (payload) => {
+      if (activeDeliverResolver !== null) {
+        const wait = new Promise((resolve) => {
+          activeDeliverResolver = resolve;
+        });
+        await wait;
+      }
+      return committedTargetAnswer(payload);
+    },
+  });
+
+  // Hold wave 1 of SERVICES while PARTITIONS and NODES contend in order.
+  activeDeliverResolver = () => {};
+  const svcWave1Req = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: 'svc-1'}),
+  );
+  const svcWave1Promise = f.service.propagateCDCEvent(svcWave1Req);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  const partContendReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.PARTITIONS, eventKey: 'part-1'}),
+  );
+  const partBusy = await f.service.propagateCDCEvent(partContendReq);
+  assert.equal(partBusy.success, false);
+  assert.equal(partBusy.error, CDC_COMPLETION.BACKPRESSURE);
+
+  const nodesContendReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.NODES, eventKey: 'node-1'}),
+  );
+  const nodesBusy = await f.service.propagateCDCEvent(nodesContendReq);
+  assert.equal(nodesBusy.success, false);
+  assert.equal(nodesBusy.error, CDC_COMPLETION.BACKPRESSURE);
+
+  const releaseWave1 = activeDeliverResolver;
+  activeDeliverResolver = null;
+  releaseWave1();
+  assert.equal((await svcWave1Promise).success, true);
+
+  for (let w = 2; w <= 4; w += 1) {
+    const req = createDurablePropagationRequest(
+      f.source,
+      createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: `svc-${w}`}),
+    );
+    const res = await f.service.propagateCDCEvent(req);
+    assert.equal(res.success, true);
+    assert.equal(req.deliveryContext.isContended(), w === 4);
+  }
+
+  // SERVICES yielded after 4 waves; FIFO queue is [PARTITIONS, NODES].
+  // Neither SERVICES nor NODES can jump ahead of PARTITIONS during the yield hold window.
+  const svcJumpReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: 'svc-5'}),
+  );
+  assert.equal((await f.service.propagateCDCEvent(svcJumpReq)).error, CDC_COMPLETION.BACKPRESSURE);
+
+  const nodesJumpReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.NODES, eventKey: 'node-1'}),
+  );
+  assert.equal(
+    (await f.service.propagateCDCEvent(nodesJumpReq)).error,
+    CDC_COMPLETION.BACKPRESSURE,
+  );
+
+  // PARTITIONS is head of FIFO queue and runs its 4-wave slice.
+  // Because NODES (and re-queued SERVICES) remain in waitingDurableSliceTables,
+  // PARTITIONS is marked contended at wave 4 and yields to NODES instead of ping-ponging back to SERVICES.
+  for (let w = 1; w <= 4; w += 1) {
+    const req = createDurablePropagationRequest(
+      f.source,
+      createDurableCdcEvent({tableName: TABLES.PARTITIONS, eventKey: `part-${w}`}),
+    );
+    const res = await f.service.propagateCDCEvent(req);
+    assert.equal(res.success, true);
+    assert.equal(
+      req.deliveryContext.isContended(),
+      w === 4,
+      `PARTITIONS wave ${w} should ${w === 4 ? '' : 'not '}be marked contended when NODES is queued`,
+    );
+  }
+
+  // SERVICES still cannot jump ahead of NODES (which is now head of FIFO queue).
+  const svcPingPongReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: 'svc-5'}),
+  );
+  assert.equal(
+    (await f.service.propagateCDCEvent(svcPingPongReq)).error,
+    CDC_COMPLETION.BACKPRESSURE,
+    '2-table ping-pong must be prevented while NODES is at the head of the FIFO contender queue',
+  );
+
+  // NODES runs its slice next.
+  const nodesAdmittedReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.NODES, eventKey: 'node-1'}),
+  );
+  const nodesAdmittedRes = await f.service.propagateCDCEvent(nodesAdmittedReq);
+  assert.equal(nodesAdmittedRes.success, true);
+
+  // Verify healthy-schedule delivery cost bound: 9 completed waves across 2 target groups (g-2, g-3)
+  // applied 9 source batches (1 per wave) and 18 target group deliveries (1 per target group per wave).
+  assert.equal(f.source.batches.length, 9, 'healthy waves apply 1 source batch per wave');
+  assert.equal(f.calls.length, 18, 'healthy waves deliver 1 proposal per target group per wave (proposals <= c*K*M)');
+});

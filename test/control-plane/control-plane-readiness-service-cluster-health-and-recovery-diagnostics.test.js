@@ -1210,3 +1210,105 @@ test('ControlPlaneReadinessService sync readiness splits publication diagnostics
   );
   t.end();
 });
+
+test('ControlPlaneDiagnosticsLedger preserves first-cause root event and causal fields under repeated secondary churn', async (t) => {
+  const {ControlPlaneDiagnosticsLedger} = await import(
+    '../../src/control-plane/control-plane-diagnostics-ledger.js'
+  );
+  let nowMs = 1000;
+  const ledger = new ControlPlaneDiagnosticsLedger({
+    maxEntries: 4,
+    now: () => nowMs,
+  });
+
+  // Record root cause at t=1000
+  ledger.append({
+    decidingBoundary: 'serve_eligibility',
+    originalCause: 'PUBLICATION_EPOCH_PENDING',
+    identity: 'node-1',
+    acceptedRevision: 7,
+    remainingObligation: 'ack_publication_epoch_7',
+    responsibleOwner: 'MembershipPublicationCoordinator',
+    nextTrigger: 'publication_ack_retry_timer',
+    lastMeaningfulProgress: 'epoch_7_staged',
+  });
+
+  // Repeated secondary churn on the same causal key updates latestOccurrenceAtMs and count
+  // without losing firstOccurrenceAtMs or root causal fields, and without consuming distinct key slots.
+  for (let i = 1; i <= 10; i += 1) {
+    nowMs = 1000 + i * 100;
+    ledger.append({
+      decidingBoundary: 'serve_eligibility',
+      originalCause: 'PUBLICATION_EPOCH_PENDING',
+      identity: 'node-1',
+      lastMeaningfulProgress: `epoch_7_poll_${i}`,
+    });
+  }
+
+  const summaries = ledger.getAggregatedSummaries();
+  t.equal(summaries.length, 1, 'repeated churn on the same causal key aggregates into one summary');
+  t.equal(summaries[0].count, 11, 'occurrence count tracks all 11 events');
+  t.equal(summaries[0].firstOccurrenceAtMs, 1000, 'firstOccurrenceAtMs is preserved');
+  t.equal(summaries[0].latestOccurrenceAtMs, 2000, 'latestOccurrenceAtMs reflects latest event');
+  t.equal(summaries[0].originalCause, 'PUBLICATION_EPOCH_PENDING');
+  t.equal(summaries[0].decidingBoundary, 'serve_eligibility');
+  t.equal(summaries[0].identity, 'node-1');
+  t.equal(summaries[0].acceptedRevision, 7);
+  t.equal(summaries[0].remainingObligation, 'ack_publication_epoch_7');
+  t.equal(summaries[0].responsibleOwner, 'MembershipPublicationCoordinator');
+  t.equal(summaries[0].nextTrigger, 'publication_ack_retry_timer');
+  t.equal(summaries[0].lastMeaningfulProgress, 'epoch_7_poll_10');
+  t.end();
+});
+
+test('ControlPlaneReadinessService getAllNodeReadiness and getAllNodeReadinessSync include published and explicit required nodes when cache rows are missing', async (t) => {
+  const cache = createCache({
+    nodes: [createActiveNode('node-1')],
+    services: [createMessageGroupService('node-1')],
+  });
+  const pubRow = committedMembershipPublicationRow(['node-1', 'node-2'], 1500);
+  const origGetAll = cache.getAll.bind(cache);
+  cache.getAll = (tableName) => {
+    if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+      return [pubRow];
+    }
+    return origGetAll(tableName);
+  };
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'node-1',
+    systemTableCache: cache,
+    storageAccountingService: createAccountingService({
+      'node-1': {nodeId: 'node-1', budgetBytes: 1000, pressureState: 'normal'},
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => 1500,
+  });
+
+  const asyncAll = await readinessService.getAllNodeReadiness({
+    requiredNodeIds: ['node-3'],
+  });
+  const syncAll = readinessService.getAllNodeReadinessSync({
+    requiredNodeIds: ['node-3'],
+  });
+
+  t.same(
+    asyncAll.map((entry) => entry.nodeId),
+    ['node-1', 'node-2', 'node-3'],
+    'async getAllNodeReadiness must evaluate published (node-2) and explicit required (node-3) nodes even when their cache rows are missing',
+  );
+  t.same(
+    syncAll.map((entry) => entry.nodeId),
+    ['node-1', 'node-2', 'node-3'],
+    'sync getAllNodeReadinessSync must evaluate published (node-2) and explicit required (node-3) nodes even when their cache rows are missing',
+  );
+  const node2Async = asyncAll.find((entry) => entry.nodeId === 'node-2');
+  const node3Async = asyncAll.find((entry) => entry.nodeId === 'node-3');
+  t.equal(node2Async?.dimensions?.clusterMemberHealthy, false);
+  t.equal(node3Async?.dimensions?.clusterMemberHealthy, false);
+  t.end();
+});

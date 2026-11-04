@@ -1118,3 +1118,132 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
         originalSubscribeToCDCWithHandshake;
     }
   });
+
+test('NodeJoiningService - partial message-group service row activation retains remaining deferred replicas and retries via timer until empty',
+  async (t) => {
+    initializeTestEnvironment();
+    const cache = new SystemTableCache();
+    const originalGetNodeService = NodeService.getInstance;
+    try {
+      NodeService.getInstance = () => ({
+        getSystemTableCache() {
+          return cache;
+        },
+        getTimeSource() {
+          return nodeTimeSource;
+        },
+      });
+      const nodeId = 'joining-node-partial-mg-deferred';
+      const service = new NodeJoiningService({
+        bootIncarnation: 1,
+        nodeId,
+        nodeAddress: 'ws://localhost:9090',
+        seedNodeAddress: 'http://localhost:8080',
+      });
+      service.deferredMessageGroupActivationRetryDelayMs = 15;
+      service.hasPublishedLocalServiceEndpoints = () => true;
+      service.messageGroupServiceHandler = {};
+      const transportHandler1 = () => null;
+      const transportHandler2 = () => null;
+      service.messageRouter = createIdentityTransport();
+      service.messageRouter.register(
+        `${nodeId}/message-group/mg-r1`,
+        transportHandler1,
+      );
+      service.messageRouter.register(
+        `${nodeId}/message-group/mg-r2`,
+        transportHandler2,
+      );
+      const writer = createLifecycleCdcService({
+        services: [
+          createLifecycleServiceRow({
+            serviceId: 'mg-r1',
+            replicaId: 'mg-r1',
+            replicaIdentity: 'mg-r1',
+            serviceType: SERVICE_TYPE.MESSAGE_GROUP,
+            groupId: 'mg-1',
+            nodeId,
+            status: SERVICE_STATUS.STOPPED,
+            createdAt: 100,
+            updatedAt: 101,
+          }),
+          createLifecycleServiceRow({
+            serviceId: 'mg-r2',
+            replicaId: 'mg-r2',
+            replicaIdentity: 'mg-r2',
+            serviceType: SERVICE_TYPE.MESSAGE_GROUP,
+            groupId: 'mg-2',
+            nodeId,
+            status: SERVICE_STATUS.STOPPED,
+            createdAt: 100,
+            updatedAt: 101,
+          }),
+        ],
+      });
+      let failReplica2 = true;
+      const origUpdate = writer.updateSystemTableRow.bind(writer);
+      writer.updateSystemTableRow = async (table, where, data, opts) => {
+        if (where?.service_id === 'mg-r2' && failReplica2) {
+          const err = new Error('Timed out waiting for Raft commit');
+          err.retryable = true;
+          throw err;
+        }
+        return origUpdate(table, where, data, opts);
+      };
+      service.createCdcIntegrationService = () => writer;
+      service.replicaStateMachine = new ReplicaStateMachine({
+        nodeId,
+        controlPlaneSystemTableGateway: {},
+      });
+      service.messageGroupServices.set('mg-r1', {
+        groupId: 'mg-1',
+        unifiedAddress: `${nodeId}/message-group/mg-r1`,
+        transportHandler: transportHandler1,
+      });
+      service.messageGroupServices.set('mg-r2', {
+        groupId: 'mg-2',
+        unifiedAddress: `${nodeId}/message-group/mg-r2`,
+        transportHandler: transportHandler2,
+      });
+      service.createMessageGroupPhase.registrationEvidenceByReplicaId.set(
+        'mg-r1',
+        writer.store.durableRow(TABLES.SERVICES, 'mg-r1'),
+      );
+      service.createMessageGroupPhase.registrationEvidenceByReplicaId.set(
+        'mg-r2',
+        writer.store.durableRow(TABLES.SERVICES, 'mg-r2'),
+      );
+
+      await service.activateMessageGroupServiceRows();
+      t.ok(
+        service.deferredMessageGroupServiceReplicaIds?.has('mg-r2'),
+        'mg-r2 should remain deferred after initial partial activation',
+      );
+      // Partial subset call for mg-r1 must NOT erase mg-r2 from deferred set
+      await service.activateMessageGroupServiceRows(['mg-r1']);
+      t.ok(
+        service.deferredMessageGroupServiceReplicaIds?.has('mg-r2'),
+        'subset activation of mg-r1 must retain unactivated mg-r2 in deferred set',
+      );
+      t.ok(
+        service.deferredMessageGroupServiceActivationRetryTimer != null,
+        'bounded retry timer should remain armed while deferred set is non-empty',
+      );
+
+      failReplica2 = false;
+      await new Promise((resolve) => setTimeout(resolve, 45));
+      t.equal(
+        service.deferredMessageGroupServiceReplicaIds,
+        null,
+        'timer-driven retry should clear deferredMessageGroupServiceReplicaIds once mg-r2 activates',
+      );
+      t.equal(
+        writer.store.durableRow(TABLES.SERVICES, 'mg-r2')?.status,
+        SERVICE_STATUS.ACTIVE,
+        'timer-driven retry should mark mg-r2 ACTIVE in durable services table',
+      );
+      service.clearDeferredMessageGroupServiceRowActivationRetry();
+    } finally {
+      NodeService.getInstance = originalGetNodeService;
+    }
+  });
