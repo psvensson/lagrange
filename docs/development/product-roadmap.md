@@ -107,6 +107,7 @@ stabilization Q17 or the full distributed service milestone.
 | Capability truth | Community | Current operational and compatibility guidance matches the measured correction scope and names unfinished behavior explicitly |
 | Honest comparison and checks | Community | Correct unsupported performance claims and stale assertions without presenting repair checks as completed physical comparative qualification |
 | Major-feature journey rule | Community | Existing specifications and Quest evidence show useful public outcomes; the bounded historical inventory does not turn every old capability into a new release gate |
+| Operation integrity and reliable formation | Community | Preserve distinct read/decision/effect outcomes across ownership boundaries, causally read-only observation, revision-fresh role publication, exact continuation/cleanup custody, CDC contender fairness and bounded delivery cost, and three consecutive fresh three-node formation and user-table routability runs |
 | Selected bounded repairs | Community | Independently verified corrections may ship without claiming that their wider feature or service acceptance passed |
 
 Missing feature journeys retain their existing owner and assigned version.
