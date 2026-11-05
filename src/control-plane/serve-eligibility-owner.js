@@ -61,7 +61,6 @@ const SELECT_ALL_PREFIX = 'SELECT * FROM ';
 const STALE_SIGNATURE = 'stale';
 const REASON_SEPARATOR = ',';
 const SIGNATURE_SEPARATOR = '|';
-const READ_FAILURE_RETRY_MS = 100;
 const NO_REASONS = Object.freeze([]);
 const OUTCOME = Object.freeze({
   PENDING: 'pending',
@@ -330,6 +329,8 @@ class ServeEligibilityOwner {
     this.superseded = false;
     this.triggerGeneration = 0;
     this.inFlight = null;
+    this.refreshRequested = false;
+    this.refreshScheduled = false;
     this.leaseRefreshHandle = null;
     this.listeners = new Set();
     this.decisionSignature = null;
@@ -348,21 +349,16 @@ class ServeEligibilityOwner {
     if (this.inFlight) {
       return this.inFlight;
     }
+    this.refreshRequested = false;
     const startedGeneration = this.triggerGeneration;
     this.inFlight = this.readCommittedRecord()
       .then((result) => this.adoptReadResult(result, startedGeneration))
       .finally(() => {
         this.inFlight = null;
-        // A trigger that arrived during a successful read is served by one
-        // more read. A failed read is not retried here: the next trigger
-        // (a cache change, the lease timer or a routing denial) asks again,
-        // and the answer stays the typed unavailability meanwhile.
-        if (
-          this.superseded &&
-          this.outcome !== OUTCOME.READ_FAILED &&
-          this.triggerGeneration !== startedGeneration &&
-          !this.stopped
-        ) {
+        // A source event can postdate either a successful or failed read.
+        // Retain that event once, independently of whether it revoked the
+        // answer. The read result itself never creates another request.
+        if (this.refreshRequested && !this.stopped) {
           this.scheduleRefresh();
         }
       });
@@ -454,9 +450,7 @@ class ServeEligibilityOwner {
       // A trigger observed while the read was in flight may postdate it.
       this.superseded = this.triggerGeneration !== startedGeneration;
     }
-    this.armLeaseRefresh(
-      regressedRead && this.triggerGeneration === startedGeneration,
-    );
+    this.armLeaseRefresh();
     // Derived memos re-key only when the committed answer changes (a new
     // epoch, outcome or per-node decision); a refresh that only advanced
     // leases changes no answer.
@@ -511,13 +505,13 @@ class ServeEligibilityOwner {
     this.leaseRefreshHandle = handle;
   }
 
-  armLeaseRefresh(retryRegressedRead = false) {
+  armLeaseRefresh() {
     if (this.leaseRefreshHandle !== null) {
       this.clearTimeoutFn(this.leaseRefreshHandle);
       this.leaseRefreshHandle = null;
     }
     const nowMs = this.now();
-    let earliestMs = retryRegressedRead ? nowMs + READ_FAILURE_RETRY_MS : null;
+    let earliestMs = null;
     if (this.record) {
       // The earliest committed lease that currently grants: past it the answer
       // is stale, so a committed refresh is due exactly then.
@@ -542,11 +536,17 @@ class ServeEligibilityOwner {
     this.armLeaseRefreshAt(earliestMs, nowMs);
   }
 
-  // A refresh never starts inside the triggering turn (a cache apply or a
-  // reader); it starts on the next microtask and joins one in flight.
+  // Source events retain one refresh across an in-flight read. Their wake
+  // is separate from revocation: extending a lease need not revoke a grant.
+  // A burst before a read starts coalesces into one deferred request.
   scheduleRefresh() {
+    if (this.stopped) return;
+    this.refreshRequested = true;
+    if (this.inFlight || this.refreshScheduled) return;
+    this.refreshScheduled = true;
     queueMicrotask(() => {
-      if (!this.stopped) {
+      this.refreshScheduled = false;
+      if (!this.stopped && this.refreshRequested) {
         this.readServeEligibility().catch(() => {});
       }
     });
@@ -565,9 +565,7 @@ class ServeEligibilityOwner {
         }
       });
     }
-    if (!this.inFlight && !this.stopped) {
-      this.scheduleRefresh();
-    }
+    this.scheduleRefresh();
   }
 
   notePublicationSourceChange(row) {
@@ -602,9 +600,7 @@ class ServeEligibilityOwner {
     // A lease extension leaves the committed answer valid until its own
     // expiry; it only triggers a background refresh (coalesced to one in
     // flight) so the record's leases advance before they elapse.
-    if (!this.inFlight && !this.stopped) {
-      this.scheduleRefresh();
-    }
+    this.scheduleRefresh();
   }
 
   /**
@@ -659,9 +655,7 @@ class ServeEligibilityOwner {
       // re-keys derived memos; a reader only schedules the refresh.
       this.triggerGeneration += 1;
       this.superseded = true;
-      if (!this.inFlight) {
-        this.scheduleRefresh();
-      }
+      this.scheduleRefresh();
       return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.STALE, epoch,
         this.readTimeoutMs);
     }
@@ -755,6 +749,8 @@ class ServeEligibilityOwner {
 
   shutdown() {
     this.stopped = true;
+    this.refreshRequested = false;
+    this.refreshScheduled = false;
     if (this.leaseRefreshHandle !== null) {
       this.clearTimeoutFn(this.leaseRefreshHandle);
       this.leaseRefreshHandle = null;

@@ -118,10 +118,19 @@ Audit reconciliation preserves the formation seal: E8 did not satisfy its
 H1-before-source ordering, and later green cannot retroactively do so. The
 bounded schema custody repair is recorded under the already-sealed
 `serve-eligibility-committed-epoch-read` F10 contract. Original formation
-receipts remain false. The current receipt audit also found an inherited
-`ServeEligibilityOwner` read-failure timer whose applicability to that seal's
-no-new-timer constraint is unresolved. No blanket six-receipt approval is
-claimed while that finding remains open.
+receipts remain false. The receipt audit found an inherited 100 ms
+`ServeEligibilityOwner` regression timer contrary to the unchanged no-new-timer
+constraint. The bounded F10 repair removes that polling arm and retains one
+real source event across an in-flight committed read, including a failed read.
+Revocation generation remains separate from non-revoking lease refresh.
+Before the repair, composed public CREATE/cohort/readiness/cache witnesses
+failed eight assertions; owner witnesses failed six. Four focused files now
+pass 480 assertions. Deliberately dropping the retained wake or restoring the
+poll each fails its intended witness. Production source hash is
+`02c907fd954943d524ddef6bf7191582e7f0868713d1b88aa44255e4b146b33e`.
+Independent exact-source review approves this bounded mechanism at the hashes
+recorded in the F10 Quest log. The required broader lab proof is pending; this
+mechanism result does not attribute the physical formation failure.
 
 The startup ownership dependency has current independent source review and
 seven passing suites (743 assertions). Its shutdown witness now measures live
@@ -138,21 +147,37 @@ neither. Current runtime-open and resumed-SYNCING markers conservatively retain
 cleanup custody; no new orphan path was demonstrated. This is a retained
 conditional obligation, not a silently waived requirement.
 
-E9 has not been submitted on the takeover candidate. The latest inherited
-physical report failed projection/authority agreement and observation integrity
-on `0dfef1de4d3efff7fcceda495a3639b1d28df6c0`. A read-only preflight found
-`adam-laptop` below the existing 10 GiB free-space requirement; use
-`adams-gamla,lenovo-laptop,tv-dator`, preserving three separate physical hosts,
-existing locks, the unchanged scenario/configuration, and all sealed budgets.
+The registered physical baseline on clean
+`d717874ca0d0271802f584ad654d006b24450d21` failed on
+`adams-gamla,lenovo-laptop,tv-dator` at 2026-11-05 11:40:32 UTC. It never opened
+the serve lane; priority spread, quiet, routability, projection agreement and
+observation integrity also failed. The 22-file full-log/report/playback archive
+was reopened, hash-checked, uploaded and downloaded through the evidence owner:
+`sha256:00956b36b2f84c73baa51c1961bf0f3d502e6c720d0089f4a8a780630d6ddd7c`.
+It is a diagnostic baseline, not an acceptance streak. A read-only preflight
+found `adam-laptop` below the existing 10 GiB free-space requirement; the run
+used three other physical hosts under existing locks and unchanged budgets.
 This scenario lacks `SCENARIO_CERTIFICATION_REQUIREMENT`: use its ordinary
 physical harness route with exact committed source/image evidence, and do not
 claim the distinct `--certify` certificate. The receipt remains failing.
 
-Next action: freeze the reviewed witness/evidence updates and run the unchanged
-registered physical scenario through the lab owner. Treat the first run as
-current baseline evidence while the timer constraint and H1 trace remain open;
-do not count it as a completed acceptance streak. The receipt remains red until
-exact-candidate evidence closes all required claims.
+The independently traced ADD `91ab63d0-edcc-40e1-a6c6-952d5b70aa4b` /
+`sql_transactions-p1-r5` enters durable PENDING at 11:34:58.013 UTC, spends its
+30-second state bound, and persists FAILED at 11:35:39.212 before CREATE first
+reports starting at 11:35:44.645. Replay then rejects FAILED-to-PENDING.
+Admission materialization and the worker claim follow PENDING persistence;
+the retained trace cannot identify which authority await held startup. This
+sequence predates the takeover. Direct replay's MATERIALIZED admission versus
+FAILED lifecycle interaction needs a controlled same-operation witness before
+repair. The subsequent cleanup refusal is retained separately. There were no
+learner-address refusals, so the specific H1 settling observation remains
+unavailable; aggregate CDC acceptance holds do not prove it.
+
+Next actions: freeze and independently verify the bounded F10 refresh repair,
+run its required Q6 and interaction tests on the lab, and reproduce the
+physical lifecycle/admission interaction with the real handler and state
+machine before assigning a repair. Keep every formation receipt red until its
+exact-candidate evidence closes the sealed claim.
 
 ## Approved user-visible contract
 

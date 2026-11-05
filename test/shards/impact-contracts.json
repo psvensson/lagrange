@@ -281,7 +281,9 @@
         "src/rebalancer/storage-capacity-accounting-service.js",
         "src/rebalancer/storage-capacity-semantic-projection-owner.js",
         "src/rebalancer/unified-rebalancer-available-nodes.js",
-        "src/workflow/owner-key-reconcile-queue.js"
+        "src/workflow/owner-key-reconcile-queue.js",
+        "src/control-plane/serve-eligibility-owner.js",
+        "src/control-plane/control-plane-readiness-serve-eligibility-methods.js"
       ],
       "tests": [
         "test/control-plane/single-readiness-owner.receipt.test.js",
@@ -298,7 +300,9 @@
         "test/rebalancer/startup-authority-available-node-contract.test.js",
         "test/rebalancer/storage-capacity-accounting-service.test.js",
         "test/rebalancer/storage-capacity-semantic-projection-owner.test.js",
-        "test/workflow/owner-key-reconcile-queue.test.js"
+        "test/workflow/owner-key-reconcile-queue.test.js",
+        "test/control-plane/serve-eligibility-owner.test.js",
+        "test/query/schema-provisioning-job-owner.test.js"
       ]
     },
     "active-gate-convergence": {
@@ -1976,13 +1980,15 @@
       ]
     },
     "schema-provisioning-quorum-refusal": {
-      "description": "A committed-cohort quorum refusal remains nonterminal in the canonical durable schema owner and reaches SQL clients as the current typed DEFERRED/RETRY observation; the existing fenced retry completes the same intent when quorum becomes available.",
+      "description": "A committed-cohort quorum refusal remains nonterminal in the canonical durable schema owner and reaches SQL clients as the current typed DEFERRED/RETRY observation; the existing fenced retry completes the same intent when quorum becomes available. Committed refreshes retain source events across in-flight reads; no polling timer grants a cohort or substitutes for the schema retry.",
       "owners": [
         "src/query/sql-query-engine-initial-partition-provisioning.js",
         "src/query/sql-query-engine-provision-target-methods.js",
         "src/query/schema-provisioning-job-owner.js",
         "src/query/table-creation-service-durable-job.js",
-        "src/runtime/pgwire-protocol-handler.js"
+        "src/runtime/pgwire-protocol-handler.js",
+        "src/control-plane/serve-eligibility-owner.js",
+        "src/control-plane/control-plane-readiness-serve-eligibility-methods.js"
       ],
       "tests": [
         "test/query/sql-query-engine-provision-partition-waits.test.js",
@@ -2004,7 +2010,9 @@
       "tests": [
         "test/control-plane/serve-eligibility-committed-epoch-read.test.js",
         "test/query/query-executor-serve-eligibility-routing.test.js",
-        "test/control-plane/readiness-routing-heartbeat-window.test.js"
+        "test/control-plane/readiness-routing-heartbeat-window.test.js",
+        "test/control-plane/serve-eligibility-owner.test.js",
+        "test/query/schema-provisioning-job-owner.test.js"
       ]
     }
   },
@@ -4161,7 +4169,9 @@
       "endpoints": [
         {
           "id": "config-read-and-cdc-ordering",
-          "owners": ["src/config/dynamic-config-service.js"]
+          "owners": [
+            "src/config/dynamic-config-service.js"
+          ]
         },
         {
           "id": "startup-and-controller-custody",
@@ -4188,7 +4198,9 @@
           "id": "committed-quorum-admission",
           "owners": [
             "src/query/sql-query-engine-initial-partition-provisioning.js",
-            "src/query/sql-query-engine-provision-target-methods.js"
+            "src/query/sql-query-engine-provision-target-methods.js",
+            "src/control-plane/serve-eligibility-owner.js",
+            "src/control-plane/control-plane-readiness-serve-eligibility-methods.js"
           ]
         },
         {

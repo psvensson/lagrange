@@ -19,6 +19,12 @@ import {PgWireProtocolHandler} from
   '../../src/runtime/pgwire-protocol-handler.js';
 import {PG_BACKEND_MSG, PG_ERROR_CODE, PG_TRANSACTION_STATE} from
   '../../src/runtime/pgwire-protocol-constants.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {ControlPlaneReadinessService} from
+  '../../src/control-plane/control-plane-readiness-service.js';
+import {TABLES} from '../../src/constants/index.js';
+import {SCHEMA_PROVISIONING_DEFAULT} from
+  '../../src/query/schema-provisioning-job-constants.js';
 
 function createAst(extraColumn = null) {
   return {
@@ -172,8 +178,8 @@ function createService(gateway, provisionCalls, overrides = {}) {
 
 // Real SQL dispatch, table service, durable schema owner and wire mapping.
 // Only durable storage, provisioning availability and timer delivery are seams.
-function createSchemaWireClient(t, service, gateway) {
-  const engine = new SQLQueryEngine({
+function createSchemaWireClient(t, service, gateway, existingEngine = null) {
+  const engine = existingEngine || new SQLQueryEngine({
     systemCache: {find: () => null, getAll: () => []},
     controlPlaneSystemTableGateway: gateway,
     autoStartDistributedTransactionRecovery: false,
@@ -206,6 +212,179 @@ function createSchemaWireClient(t, service, gateway) {
       'CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY)', []);
     return {outcome, messages};
   };
+}
+
+function createServeRefreshClock() {
+  const clock = {now: 1000, timers: []};
+  clock.setTimeout = (callback, delayMs) => {
+    const timer = {at: clock.now + delayMs, callback,
+      cleared: false, unref() {}};
+    clock.timers.push(timer);
+    return timer;
+  };
+  clock.clearTimeout = (timer) => {
+    timer.cleared = true;
+  };
+  clock.advance = async (elapsedMs) => {
+    clock.now += elapsedMs;
+    for (const timer of clock.timers.filter((entry) =>
+      !entry.cleared && entry.at <= clock.now)) {
+      timer.cleared = true;
+      timer.callback();
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  };
+  return clock;
+}
+
+function serveRefreshPublication(epoch) {
+  const members = JSON.stringify(['serve-a', 'serve-b', 'serve-c']);
+  return {publication_id: `cluster_membership-${epoch}`,
+    publication_kind: 'cluster_membership', publication_epoch: epoch,
+    publisher_node_id: 'serve-a', status: 'PUBLISHED',
+    published_active_node_ids: members, required_ack_node_ids: members,
+    acknowledged_node_ids: members,
+    priority_partition_summary: JSON.stringify({
+      satisfied: true, blockedPartitions: []}),
+  };
+}
+
+function createServeRefreshFixture(t, gateway) {
+  const clock = createServeRefreshClock();
+  const cache = new SystemTableCache();
+  const state = {reads: 0, activeReads: 0, maxActiveReads: 0, hold: null,
+    nodes: ['serve-a', 'serve-b', 'serve-c'].map((nodeId) => ({
+      node_id: nodeId, status: 'active', boot_incarnation: 1,
+      ready_lease_expires_at: 16000,
+    })), publications: [serveRefreshPublication(3)], fail: false};
+  const view = {
+    canRead: () => true,
+    async readReadinessOwnerRows(tableName) {
+      state.reads += 1;
+      state.activeReads += 1;
+      state.maxActiveReads = Math.max(state.maxActiveReads, state.activeReads);
+      const rows = tableName === TABLES.NODES ? state.nodes : state.publications;
+      const answer = {success: !state.fail, rows: structuredClone(rows)};
+      try {
+        if (state.hold) await state.hold;
+        return answer;
+      } finally {
+        state.activeReads -= 1;
+      }
+    },
+  };
+  const readiness = new ControlPlaneReadinessService({
+    nodeId: 'serve-a', systemTableCache: cache,
+    authoritativeControlPlaneView: view,
+    now: () => clock.now,
+    setTimeoutFn: clock.setTimeout, clearTimeoutFn: clock.clearTimeout,
+  });
+  const engine = new SQLQueryEngine({
+    nodeId: 'serve-a', systemCache: cache,
+    controlPlaneReadinessService: readiness,
+    controlPlaneSystemTableGateway: gateway,
+    autoStartDistributedTransactionRecovery: false, migrationAutoWire: false,
+  });
+  t.teardown(() => readiness.shutdown());
+  return {clock, cache, state, readiness, engine};
+}
+
+// Real public SQL -> schema custody -> provisioning cohort -> readiness owner
+// -> SystemTableCache source events. Storage and native replica dispatch are
+// the explicit seams; no test supplies a serve decision or a retry outcome.
+for (const heldReadFails of [false, true]) {
+  test('CREATE retains one job across regressed serve reads and an in-flight ' +
+    `source wake (held read fails: ${heldReadFails})`, async (t) => {
+    const gateway = createGateway();
+    const {clock, cache, state, readiness, engine} =
+      createServeRefreshFixture(t, gateway);
+    const nativeDispatches = [];
+    const service = createService(gateway, [], {
+      systemCache: cache, now: () => clock.now,
+      schemaProvisioningRetrySetTimeoutFn: clock.setTimeout,
+      schemaProvisioningRetryClearTimeoutFn: clock.clearTimeout,
+      async partitionProvisioner(context) {
+        const cohort = await engine.waitForProvisionTargetNodeIds({
+          ...context, requiredReplicaCount: context.replicaCount,
+          maxWaitMs: SCHEMA_PROVISIONING_DEFAULT.RETRY_AFTER_MS});
+        nativeDispatches.push({partitionId: context.partitionId,
+          nodeIds: cohort.nodeIds, epoch: cohort.epoch});
+        return {resolvedReplicaCount: cohort.nodeIds.length,
+          routableReplicaCount: cohort.nodeIds.length,
+          fullReplicaCountConverged: true,
+          contractState: OWNER_CONTRACT_STATE.READY,
+          nextAction: 'proceed', epoch: cohort.epoch};
+      },
+    });
+    const query = createSchemaWireClient(t, service, gateway, engine);
+    await readiness.readServeEligibility();
+    t.equal(readiness.answerServeCohort().epoch.publicationEpoch, 3);
+    state.publications = [serveRefreshPublication(4)];
+    cache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS,
+      'INSERT', serveRefreshPublication(5));
+    await new Promise((resolve) => setImmediate(resolve));
+    const first = await query();
+    assertQuorumRefusal(t, first, first.outcome.detail);
+    const jobKey = `schema_operations:${first.outcome.jobId}`;
+    t.equal(gateway.rows.get(jobKey)?.status, 'PENDING');
+    t.equal(nativeDispatches.length, 0, 'regressed committed epoch cannot dispatch');
+    t.equal(readiness.answerServeCohort().reason, 'unavailable_stale');
+
+    const beforeIdle = state.reads;
+    await clock.advance(100);
+    t.equal(state.reads, beforeIdle,
+      'a regressed read creates no 100ms polling obligation');
+    t.equal(nativeDispatches.length, 0);
+    t.equal(gateway.rows.get(jobKey)?.attempt_count, 1,
+      'the existing schema retry has not elapsed');
+
+    let release;
+    state.hold = new Promise((resolve) => {
+      release = resolve;
+    });
+    state.fail = heldReadFails;
+    const heldRead = readiness.readServeEligibility();
+    const beforeWake = state.reads;
+    state.nodes = state.nodes.map((row) => ({...row,
+      ready_lease_expires_at: 21000}));
+    state.publications = [serveRefreshPublication(5)];
+    state.fail = false;
+    // A real accepted cache apply arrives while the prior committed read is
+    // held. Lease extension does not revoke, but must retain its wake.
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', state.nodes[0]);
+    await new Promise((resolve) => setImmediate(resolve));
+    state.hold = null;
+    release();
+    await heldRead;
+    await new Promise((resolve) => setImmediate(resolve));
+    t.equal(state.reads, beforeWake + 2,
+      'exactly one successor read consumes the source event before any timer');
+    t.equal(state.maxActiveReads, 2,
+      'only the two tables of one committed refresh overlap');
+    t.equal(readiness.answerServeCohort().state, 'ready');
+    t.equal(readiness.answerServeCohort().epoch?.publicationEpoch, 5);
+    t.equal(nativeDispatches.length, 0, 'refresh cannot act as a schema worker');
+
+    await clock.advance(SCHEMA_PROVISIONING_DEFAULT.RETRY_AFTER_MS - 100);
+    for (let turn = 0; turn < 100; turn += 1) {
+      if (gateway.rows.get(jobKey)?.status === 'SUCCEEDED') break;
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    t.equal(gateway.rows.get(jobKey)?.status, 'SUCCEEDED',
+      'the existing schema retry completes the retained intent');
+    t.equal(nativeDispatches.length, 1);
+    t.same(nativeDispatches[0]?.nodeIds, ['serve-a', 'serve-b', 'serve-c']);
+    t.equal(nativeDispatches[0]?.epoch?.publicationEpoch, 5);
+    t.equal(service.schemaProvisioningJobOwner.retryTimersByWorkflowId.size, 0);
+    t.equal(gateway.writes.filter((write) => write.tableName === 'tables' &&
+      String(write.operation).toUpperCase() === 'INSERT').length, 1);
+    const replay = await query();
+    t.equal(replay.outcome.jobId, first.outcome.jobId);
+    t.equal(replay.outcome.contractState, OWNER_CONTRACT_STATE.READY);
+    t.ok(replay.messages.some((message) =>
+      message[0] === PG_BACKEND_MSG.COMMAND_COMPLETE));
+    t.equal(nativeDispatches.length, 1, 'terminal replay does not dispatch again');
+  });
 }
 
 function assertQuorumRefusal(t, answer, refusal) {
