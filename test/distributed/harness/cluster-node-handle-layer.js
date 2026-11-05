@@ -383,6 +383,7 @@ class NodeHandle {
 
       const timeout = setTimeout(() => {
         pendingQueries.delete(queryId);
+        this._resetAdminSocket(lane);
         rejectWithOutcome(
           new Error(timeoutMessage),
           ADMIN_QUERY_TRACE_OUTCOME_TIMEOUT,

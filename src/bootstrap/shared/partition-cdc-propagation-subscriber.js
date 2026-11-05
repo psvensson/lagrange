@@ -180,16 +180,26 @@ function requirePropagationService(selection, cdcEvent, requiredTables, deferred
   return service;
 }
 
+function resolveUnknownAnswerDeferredFields(answer) {
+  const retryAfterMs = Number.isFinite(answer?.retryAfterMs) && answer.retryAfterMs > 0 ?
+    Math.floor(answer.retryAfterMs) : undefined;
+  const reason = answer?.reason ?
+    answer.reason :
+    (answer?.error === CDC_COMPLETION.BACKPRESSURE ?
+      CDC_COMPLETION.BACKPRESSURE : undefined);
+  return {
+    ...(retryAfterMs !== undefined ? {retryAfterMs} : {}),
+    ...(reason !== undefined ? {reason} : {}),
+  };
+}
+
 function propagationIsProvisional(answer, cdcEvent, groupId) {
   if (!hasDurableCdcEvents([cdcEvent]) ||
       isCommittedCdcOutcome(answer, [cdcEvent], groupId)) return false;
   if (isProvisionalCdcOutcome(answer, [cdcEvent], groupId)) return true;
-  const retryAfterMs = Number.isFinite(answer?.retryAfterMs) && answer.retryAfterMs > 0 ?
-    Math.floor(answer.retryAfterMs) : undefined;
   throw Object.assign(new Error(CDC_COMPLETION.UNKNOWN), {
     code: CDC_COMPLETION.UNKNOWN, cause: answer, deferRetry: true,
-    ...(retryAfterMs !== undefined ? {retryAfterMs} : {}),
-    ...(typeof answer?.reason === 'string' ? {reason: answer.reason} : {}),
+    ...resolveUnknownAnswerDeferredFields(answer),
   });
 }
 

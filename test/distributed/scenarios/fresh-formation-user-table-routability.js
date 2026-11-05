@@ -178,13 +178,16 @@ async function readSnapshot(node, timeoutMs) {
 }
 
 async function observeFormation(nodes, seedNode, timeoutMs, now) {
-  const snapshotEntries = await Promise.all(nodes.map(async (node) =>
-    [node.id, await readSnapshot(node, timeoutMs)]));
-  const [partitions, services, replicaOperations] = await Promise.all([
-    readRows(seedNode, SQL.PARTITIONS, timeoutMs),
-    readRows(seedNode, SQL.SERVICES, timeoutMs),
-    readRows(seedNode, SQL.REPLICA_OPERATIONS, timeoutMs),
-  ]);
+  const [snapshotEntries, [partitions, services, replicaOperations]] =
+    await Promise.all([
+      Promise.all(nodes.map(async (node) =>
+        [node.id, await readSnapshot(node, timeoutMs)])),
+      Promise.all([
+        readRows(seedNode, SQL.PARTITIONS, timeoutMs),
+        readRows(seedNode, SQL.SERVICES, timeoutMs),
+        readRows(seedNode, SQL.REPLICA_OPERATIONS, timeoutMs),
+      ]),
+    ]);
   return {
     authority: {partitions, replicaOperations, services},
     capturedAtMs: now(),

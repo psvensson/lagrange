@@ -439,7 +439,9 @@ function driveOutcome(lane, state, fields) {
 function errorBackpressureReason(error) {
   const cause = error.cause;
   if (error.reason !== undefined && error.reason !== null) return error.reason;
-  return cause ? (cause.reason ?? cause.error) : undefined;
+  return cause ?
+    (cause.reason ?? cause.error ?? cause.cause?.reason ?? cause.cause?.error) :
+    undefined;
 }
 
 function isBackpressureError(error) {
@@ -597,11 +599,30 @@ function drivePrecondition(delivery, lane, reason) {
     {outcome: driveOutcome(lane, state, {reason, delivered: 0})};
 }
 
+function initialScanCursor(lane) {
+  const throughLogIndex = lane.hydratedThroughLogIndex || 0;
+  return throughLogIndex > 0 ?
+    {logIndex: throughLogIndex, ordinal: Number.MAX_SAFE_INTEGER} : null;
+}
+
 function drivePage(owner, lane) {
-  lane.scan ??= {cursor: null, through: readOwedCdcTail(owner.db), provisional: false};
+  lane.scan ??= {
+    cursor: initialScanCursor(lane),
+    through: readOwedCdcTail(owner.db),
+    provisional: false,
+  };
   lane.scan.through ??= readOwedCdcTail(owner.db);
   return lane.scan.through === null ? [] : readOwedCdcObligations(owner.db,
     {after: lane.scan.cursor ?? undefined, through: lane.scan.through, limit: 1});
+}
+
+function readPostHydrationOwedHead(owner, throughLogIndex) {
+  return throughLogIndex > 0 ?
+    readOwedCdcObligations(owner.db, {
+      after: {logIndex: throughLogIndex, ordinal: Number.MAX_SAFE_INTEGER},
+      limit: 1,
+    })[0] ?? null :
+    readOwedCdcHead(owner.db);
 }
 
 // Delivering past the lowest owed row keeps every delivered row above it in
@@ -610,17 +631,40 @@ function drivePage(owner, lane) {
 // RETAINED_DELIVERED_MAX; the lowest owed row itself is always deliverable,
 // and a scan stopped here restarts from it (lane.scan cleared).
 function retainedDeliveredBackpressured(owner, lane, obligation) {
-  const head = readOwedCdcHead(owner.db);
+  const throughLogIndex = lane.hydratedThroughLogIndex || 0;
+  const head = readPostHydrationOwedHead(owner, throughLogIndex);
   if (head === null || (head.logIndex === obligation.logIndex &&
       head.ordinal === obligation.ordinal)) {
     return false;
   }
-  return lane.pending.size + countRetainedDeliveredCdcObligations(owner.db,
+  let postHydrationPending = 0;
+  for (const position of lane.pending.values()) {
+    if (position.logIndex > throughLogIndex) postHydrationPending += 1;
+  }
+  return postHydrationPending + countRetainedDeliveredCdcObligations(owner.db,
     BOUND.RETAINED_DELIVERED_MAX) >= BOUND.RETAINED_DELIVERED_MAX;
 }
 
+function hasMaxPostHydrationCommands(lane) {
+  const throughLogIndex = lane.hydratedThroughLogIndex || 0;
+  if (throughLogIndex <= 0) {
+    return lane.commands.size >= BOUND.ACK_MAX_OUTSTANDING_BATCHES;
+  }
+  if (lane.batch.events >= BOUND.ACK_BATCH_MAX_EVENTS &&
+      lane.commands.size >= BOUND.ACK_MAX_OUTSTANDING_BATCHES) {
+    return true;
+  }
+  let postHydrationCommands = 0;
+  for (const pending of lane.commands.values()) {
+    if (pending.members.some((member) => member.logIndex > throughLogIndex)) {
+      postHydrationCommands += 1;
+    }
+  }
+  return postHydrationCommands >= BOUND.ACK_MAX_OUTSTANDING_BATCHES;
+}
+
 function acknowledgementBackpressured(owner, lane, obligation) {
-  if (lane.held !== null || lane.commands.size >= BOUND.ACK_MAX_OUTSTANDING_BATCHES) return true;
+  if (lane.held !== null || hasMaxPostHydrationCommands(lane)) return true;
   if (!retainedDeliveredBackpressured(owner, lane, obligation)) return false;
   lane.scan = null;
   return true;
@@ -683,8 +727,11 @@ function isObligationAlreadyAcknowledged(delivery, lane, obligation) {
 
 function resolveDriveObligationStep(delivery, lane, obligation) {
   if (obligation.logIndex <= (lane.hydratedThroughLogIndex || 0)) {
-    return lane.pending.has(obligation.eventKey) || acknowledgeDelivered(delivery, obligation) ?
-      OBLIGATION_DRIVE_STEP.PENDING : DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE;
+    if (!lane.pending.has(obligation.eventKey) &&
+        lane.commands.size < BOUND.ACK_MAX_OUTSTANDING_BATCHES) {
+      acknowledgeDelivered(delivery, obligation);
+    }
+    return OBLIGATION_DRIVE_STEP.PENDING;
   }
   if (acknowledgementBackpressured(delivery.owner, lane, obligation)) {
     return DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE;
@@ -702,7 +749,7 @@ async function driveOneObligation(delivery, lane, obligation, subscribers,
   }
   if (step === OBLIGATION_DRIVE_STEP.PENDING) {
     advanceScanCursor(lane, obligation);
-    return {delivered: 0};
+    return {delivered: 0, skipped: true};
   }
   try {
     const result = await deliverObligation(delivery, lane, obligation, subscribers, context);
@@ -710,7 +757,7 @@ async function driveOneObligation(delivery, lane, obligation, subscribers,
   } catch (error) {
     if (isObligationAlreadyAcknowledged(delivery, lane, obligation)) {
       advanceScanCursor(lane, obligation);
-      return {delivered: 0};
+      return {delivered: 0, skipped: true};
     }
     return {outcome: handleDeliveryFailure(
       delivery, lane, obligation, reason, delivered, error)};
@@ -798,10 +845,10 @@ async function driveOnce(delivery, lane, reason) {
     try {
       const [obligation] = drivePage(owner, lane);
       if (!obligation) break;
-      visited += 1;
       const result = await driveOneObligation(delivery, lane, obligation,
         precondition.subscribers, reason, delivered, context);
       if (result.outcome) return result.outcome;
+      if (!result.skipped) visited += 1;
       delivered += result.delivered;
       stepContended = context.isContended?.() === true &&
         (delivered > 0 || lane.scan?.provisional === true);
@@ -916,13 +963,26 @@ function retireHydratedInvocationAndResetIdleScan(delivery, lane, throughLogInde
     lane.currentObligation = null;
     delivery.activeCdcInvocation?.retire();
   }
-  if (!lane.inFlight) lane.scan = null;
+  if (!lane.inFlight) {
+    lane.scan = null;
+  } else if (lane.scan !== null &&
+      (lane.scan.cursor === null || lane.scan.cursor.logIndex <= throughLogIndex)) {
+    lane.scan.cursor = {logIndex: throughLogIndex, ordinal: Number.MAX_SAFE_INTEGER};
+  }
 }
 
 function acknowledgeHydratedObligationList(delivery, lane, obligations) {
   let acknowledged = 0;
+  const maxStagedEventsWhenInFlight = Math.max(
+    1,
+    BOUND.ACK_BATCH_MAX_EVENTS - BOUND.DRIVE_PAGE_ROWS,
+  );
   for (const obligation of obligations) {
     if (lane.pending.has(obligation.eventKey)) continue;
+    if (lane.commands.size >= BOUND.ACK_MAX_OUTSTANDING_BATCHES &&
+        lane.batch.events >= maxStagedEventsWhenInFlight) {
+      break;
+    }
     if (!acknowledgeDelivered(delivery, obligation)) break;
     acknowledged += 1;
   }

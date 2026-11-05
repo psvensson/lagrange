@@ -412,6 +412,22 @@ test(
         expected: false,
       },
       {
+        name: 'ACTIVE target with learner raft_role',
+        serviceRows: [buildTargetServiceRow({
+          status: 'active',
+          raft_role: 'learner',
+        })],
+        expected: true,
+      },
+      {
+        name: 'ACTIVE target with missing raft_role',
+        serviceRows: [buildTargetServiceRow({
+          status: 'active',
+          raft_role: null,
+        })],
+        expected: true,
+      },
+      {
         name: 'removed target',
         serviceRows: [buildTargetServiceRow({status: 'removed'})],
         expected: false,
