@@ -43,6 +43,22 @@ const TRANSIENT_ERROR_FRAGMENT = Object.freeze({
   TIMEOUT_MESSAGE: 'timeout',
   TIMED_OUT_MESSAGE: 'timed out',
 });
+const TRANSIENT_PROVISIONING_CODES = new Set([
+  QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
+  QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE,
+  SCHEMA_PROVISIONING_ERROR_CODE.STALE_OWNER,
+]);
+const TRANSIENT_CODE_FRAGMENTS = Object.freeze([
+  TRANSIENT_ERROR_FRAGMENT.TIMEOUT_CODE,
+  TRANSIENT_ERROR_FRAGMENT.CANCEL_CODE,
+]);
+const TRANSIENT_MESSAGE_FRAGMENTS = Object.freeze([
+  TRANSIENT_ERROR_FRAGMENT.TIMEOUT_MESSAGE,
+  TRANSIENT_ERROR_FRAGMENT.TIMED_OUT_MESSAGE,
+  TRANSIENT_ERROR_FRAGMENT.CANCEL_MESSAGE,
+  TRANSIENT_ERROR_FRAGMENT.STALE_FENCE_MESSAGE,
+  TRANSIENT_ERROR_FRAGMENT.NOT_CONFIRMED_MESSAGE,
+]);
 
 function isTerminalProvisioningSuccess(result) {
   const state = result?.contractState;
@@ -122,16 +138,9 @@ function buildInitialRow(intent, workflow) {
 export function isTransientProvisioningError(error) {
   const code = String(error?.code || error?.errorCode || '').toUpperCase();
   const message = String(error?.message || '').toLowerCase();
-  return code.includes(TRANSIENT_ERROR_FRAGMENT.TIMEOUT_CODE) ||
-    code.includes(TRANSIENT_ERROR_FRAGMENT.CANCEL_CODE) ||
-    code === QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE ||
-    code === QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE ||
-    message.includes(TRANSIENT_ERROR_FRAGMENT.TIMEOUT_MESSAGE) ||
-    message.includes(TRANSIENT_ERROR_FRAGMENT.TIMED_OUT_MESSAGE) ||
-    message.includes(TRANSIENT_ERROR_FRAGMENT.CANCEL_MESSAGE) ||
-    message.includes(TRANSIENT_ERROR_FRAGMENT.STALE_FENCE_MESSAGE) ||
-    message.includes(TRANSIENT_ERROR_FRAGMENT.NOT_CONFIRMED_MESSAGE) ||
-    code === SCHEMA_PROVISIONING_ERROR_CODE.STALE_OWNER;
+  return TRANSIENT_PROVISIONING_CODES.has(code) ||
+    TRANSIENT_CODE_FRAGMENTS.some((fragment) => code.includes(fragment)) ||
+    TRANSIENT_MESSAGE_FRAGMENTS.some((fragment) => message.includes(fragment));
 }
 
 function buildProvisioningRefusal(workflow, error) {
