@@ -70,6 +70,40 @@ node within preregistered bounds.
   `solve/quests/fresh-create-release-authority-from-committed-operation/quest.json`,
   and `solve/quests/replica-admission-from-committed-operation/quest.json`.
 
+## Current integration summary
+
+Updated 2026-11-05 by `codex:formation-takeover`. Governing rule-set revision
+`5`, rules/router source `2fca51dc9a2f0344e23f0535dfa50fe0e000b674`.
+The stopped Gemini source and its remote preservation branch both resolve to
+`fffd9addfd600cf58bc0c40b1c7df43d5ba4a899`. Work continues on
+`work/formation-takeover-20261105` in an isolated worktree; the original
+worktrees remain unchanged. The accepted baseline above is not advanced.
+
+Independent review `subagent:/root/formation_independent_review` rejected the
+inherited verification package: the no-poll case injected completed cache
+rows, the cited public embedded test used one runtime, two edited production
+files exceeded 800 lines, and the hydration witness lacked interaction
+registration. These are proof/steering defects, not a newly demonstrated
+formation regression. The seven focused baseline suites passed 758 assertions.
+The extracted diagnostics and CDC state helpers passed the three affected
+suites (522 assertions). Source review, the new genuine three-process
+no-admin-poll witness, and its separate native owner-wake negative control
+remain pending; their evidence ceilings are distinct.
+
+E9 has not been submitted on the takeover candidate. The latest inherited
+physical report failed projection/authority agreement and observation integrity
+on `0dfef1de4d3efff7fcceda495a3639b1d28df6c0`. A read-only preflight found
+`adam-laptop` below the existing 10 GiB free-space requirement; use
+`adams-gamla,lenovo-laptop,tv-dator`, preserving three separate physical hosts,
+existing locks, the unchanged scenario/configuration, and all sealed budgets.
+This scenario lacks `SCENARIO_CERTIFICATION_REQUIREMENT`: use its ordinary
+physical harness route with exact committed source/image evidence, and do not
+claim the distinct `--certify` certificate. The receipt remains failing.
+
+Next action: the integration owner completes proof repairs and independent
+review, freezes the candidate, then observes the actual lab execution to
+completion. No queue or background continuation is claimed.
+
 ## Approved user-visible contract
 
 1. **Fresh three-node formation:** each node's serve lane opens from committed
@@ -98,8 +132,8 @@ node within preregistered bounds.
 | `E5` Deferred join, config & runtime handoffs | Deferred join message-group activation retains owned retry trigger; subscribe-before-hydrate config initialization; `WasmComponentDriver.#prepareRequestCell` generation fence before and after `stop(serviceId)` | `src/bootstrap/node-joining-message-group-runtime-delegation.js`, `src/config/raft-adaptive-timing-controller.js`, `src/config/dynamic-config-service.js`, `src/runtime/wasm-component-driver.js` | Retained `deferredMessageGroupServiceReplicaIds` re-drives on bounded timer until empty or shutdown; `WasmComponentDriver.#prepareRequestCell` aborts after `await stop(serviceId)` if service generation changed | `test/bootstrap/node-joining-service-message-group-activation.test.js`, `test/config/raft-adaptive-timing-controller.test.js`, `test/config/dynamic-config-service.test.js`, `test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js` | Complete (`65cc65b62`) |
 | `E6` CDC fairness, exact coverage & hydration handoff | 3+ contender FIFO slice fairness with live credit retention across delayed ACK continuations and lifecycle-only contender retirement; bounded `<= 256` hydration ACK batches with actual-prefix pressure preserved; absolute retry timer deadlines (`dueAtMs`); pre-hydration invocation retirement via progress-cell `logIndex` and verified `command.acknowledged` batches | `src/topology/cdc-group-propagation-durable-delivery.js`, `src/topology/cdc-group-propagation-service.js`, `src/partition/partition-cdc-obligation-progress.js`, `src/partition/partition-cdc-obligation-delivery.js` | Reservation hold expiry (`300ms`) allows ready work without dropping a live contender's FIFO queue position or credit; actual owed-prefix pressure (`readOwedCdcHead`) bounds retained delivered rows; retry timer preemption compares absolute `dueAtMs`; `command.acknowledged` batches verified `<= 256` | `test/topology/cdc-group-propagation-service.test.js`, `test/partition/cdc-hydration-live-handoff.test.js`, `test/partition/partition-cdc-obligation-reclamation.test.js` | In progress (retaining `f8a16904f`, `c10f1f854`; completing interaction package for prefix pressure, live credit, `dueAtMs`, and `command.acknowledged`) |
 | `E7` First-cause diagnostics & required-domain evaluation | Bounded key-based diagnostic aggregation retaining `firstSample`, `latestSample`, original cause, boundary, owner, trigger, and explicit truncation/eviction loss accounting outward on `AdminControlSnapshot`; complete keyed readiness disposition over published required node domain | `src/control-plane/control-plane-diagnostics-ledger.js`, `src/control-plane/authoritative-node-evidence-reconciler.js`, `src/control-plane/control-plane-readiness-diagnostics-eligibility.js`, `src/control-plane/control-plane-system-table-gateway-dependency-resolution.js`, `src/admin/admin-control-snapshot-readiness-diagnostics-methods.js`, `src/admin/admin-control-snapshot-control-plane-diagnostics.js`, `src/control-plane/control-plane-readiness-service-node-methods.js` | Every required node in published membership receives an explicit readiness entry; `ControlPlaneDiagnosticsLedger` bounds payload values, preserves distinct-key root causes under secondary churn, and exposes explicit loss accounting (`evictedKeyCount`, `droppedSampleCount`, `truncatedValueCount`) outward on `AdminControlSnapshot` | `test/control-plane/control-plane-readiness-service-cluster-health-and-recovery-diagnostics.test.js`, `test/admin/admin-control-snapshot.test.js` | In progress (retaining `c10f1f854`; exposing diagnostic loss accounting) |
-| `E8` Composed verification on faithful substrates | Deterministic repros with negative controls and process-isolated embedded-cluster verification covering E1–E7 on one canonical candidate SHA | `test/closure/registry.json`, `test/integration/helpers/embedded-cluster-harness.js`, focused unit/integration suites | Independent verifier (`subagent:bfecb08b-7326-49a4-a70d-9cf10cf4617f`) verifies composed candidate with negative controls | Focused + embedded-cluster tests (`test/integration/public-application-database-multinode.integration.test.js`) + independent verification `approve` | In progress |
-| `E9` Unchanged physical acceptance & closure | Three consecutive green fresh-state runs of `fresh-formation-user-table-routability` on `local-three-node.json` (`adam-laptop,lenovo-laptop,tv-dator`) and admitted proof receipt | `scripts/lab.js`, `solve/quests/fresh-formation-user-table-routability/evidence/receipt.json` | Full node logs, harness reports, and admitted receipt bound to exact candidate SHA | `node scripts/lab.js run --scenario fresh-formation-user-table-routability` (x3 consecutive) + `node scripts/solve.js probe --id fresh-formation-user-table-routability` | In progress |
+| `E8` Composed verification on faithful substrates | Deterministic repros with negative controls and process-isolated embedded-cluster verification covering E1–E7 on one canonical candidate SHA | `test/closure/registry.json`, `test/integration/helpers/embedded-cluster-harness.js`, focused unit/integration suites | Independent verifier (`subagent:bfecb08b-7326-49a4-a70d-9cf10cf4617f`) verifies composed candidate with negative controls | Focused + genuine three-process `test/integration/fresh-formation-without-admin-polling.integration.test.js`, separate owner-wake negative in `test/convergence/dt6-publication-quorum-failback-network.test.js`, and current independent verification `approve`; the historical public seam suite retains its one-runtime ceiling | In progress |
+| `E9` Unchanged physical acceptance & closure | Three consecutive green fresh-state runs of `fresh-formation-user-table-routability` on `local-three-node.json` (`adams-gamla,lenovo-laptop,tv-dator`; host substitution recorded below) and admitted proof receipt | `scripts/lab.js`, `solve/quests/fresh-formation-user-table-routability/evidence/receipt.json` | Full node logs, harness reports, and admitted receipt bound to exact candidate SHA | `node scripts/lab.js harness run fresh-formation-user-table-routability --base test/distributed/config/local-three-node.json --nodes adams-gamla,lenovo-laptop,tv-dator` (x3 consecutive) + `node scripts/solve.js probe --id fresh-formation-user-table-routability` | In progress |
 
 ## Decision log
 
@@ -122,3 +156,9 @@ node within preregistered bounds.
   `dueAtMs` retry deadlines + `command.acknowledged` batch verification (`E6`),
   and bounded cost / progress-without-admin-polling / diagnostic loss accounting
   / receipt applicability (`E3`/`E4`/`E7`/`E8`/`E9`).
+- 2026-11-05 takeover: preserved the sealed Quest and previous failures;
+  corrected the E8 evidence ceiling and registered the hydration interaction
+  witness. Diagnostics aggregation and CDC lane bookkeeping are extracted
+  within their existing owners to satisfy the scoped size rule. The physical
+  host substitution above resolves a disk preflight refusal without deleting
+  another run's data, lowering the requirement, or changing the scenario.

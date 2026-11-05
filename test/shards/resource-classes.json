@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2564,
+    "ordinary": 2565,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2590,
-  "digest": "fnv1a32-e18c3fb1",
+  "censusSize": 2591,
+  "digest": "fnv1a32-5b6d6639",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1088,6 +1088,7 @@
     "test/integration/debug-join-flow.test.js": "ordinary",
     "test/integration/developer-journey-j1-j2-j3.integration.test.js": "ordinary",
     "test/integration/failure-scenarios.integration.test.js": "ordinary",
+    "test/integration/fresh-formation-without-admin-polling.integration.test.js": "ordinary",
     "test/integration/http-to-call-composition.integration.test.js": "ordinary",
     "test/integration/insert-or-ignore-raft-replay.integration.test.js": "ordinary",
     "test/integration/lagrange-server-npm-package.integration.test.js": "ordinary",

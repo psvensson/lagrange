@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 118,
+    "admin-diagnostics": 119,
     "architecture-governance": 21,
     "bootstrap-membership": 337,
     "cdc-metadata": 70,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2590,
-  "digest": "fnv1a32-0076fca0",
+  "censusSize": 2591,
+  "digest": "fnv1a32-7bb2d482",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-67aaad20",
+  "observationDigest": "fnv1a32-ff4b0132",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1108,6 +1108,7 @@
     "test/integration/debug-join-flow.test.js": "admin-diagnostics",
     "test/integration/developer-journey-j1-j2-j3.integration.test.js": "services-runtime",
     "test/integration/failure-scenarios.integration.test.js": "distributed-harness",
+    "test/integration/fresh-formation-without-admin-polling.integration.test.js": "admin-diagnostics",
     "test/integration/http-to-call-composition.integration.test.js": "services-runtime",
     "test/integration/insert-or-ignore-raft-replay.integration.test.js": "storage-raft",
     "test/integration/lagrange-server-npm-package.integration.test.js": "release-packaging",
@@ -9054,6 +9055,23 @@
       ],
       "env": [
         "TAP"
+      ]
+    },
+    "test/integration/fresh-formation-without-admin-polling.integration.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/control-plane/membership-publication-row-contract.js",
+        "src/control-plane/system-row-normalizers.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/distributed/config/local.json",
+        "test/integration/helpers/embedded-node-worker.js",
+        "test/integration/helpers/forbid-admin-snapshot-preload.js"
+      ],
+      "env": [
+        "NODE_OPTIONS"
       ]
     },
     "test/integration/http-to-call-composition.integration.test.js": {

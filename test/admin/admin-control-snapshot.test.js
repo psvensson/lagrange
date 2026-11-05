@@ -550,7 +550,7 @@ test(
 );
 
 test(
-  'Control-plane convergence and operation completion progress to inFlightCount === 0 with zero admin polling and READ_ONLY_SYSTEM_TABLE_CACHE_MUTATION negative control',
+  'Control snapshot reads completed cache rows without mutating the read-only cache',
   async (t) => {
     const {SystemTableCache} = await import(
       '../../src/cache/system-table-cache.js'
@@ -685,7 +685,8 @@ test(
       return originalGetControlSnapshot(...args);
     };
 
-    // Drive control-plane publication convergence and replica operation completion via CDC without admin polling
+    // Seed completed projections for presentation and read-only cache checks.
+    // Fixture writes do not exercise the production convergence owners.
     writableCache.applySystemTableChange(
       TABLES.CONTROL_PLANE_PUBLICATIONS,
       'UPDATE',

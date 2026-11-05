@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "6c334cf369d984d6f63befd3490625995df39122b59ac8920781afb2862afc49"
+        "sha256": "972024bcde5ef11c698580f51bd987d645e6f0f8bea8870ed7a3b9a62bbbc085"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3421632,
-        "sha256": "8843aaef75e674174c3013bba856beeb7b4df3a56a36a0d4274c0eb24e558977"
+        "bytes": 3423958,
+        "sha256": "9d247a6fc3c87192c6f5ee3b852c80860ab9a482c4c2cd19edf1b4b58a765f49"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "1bd7fc59f4aab06f54554d7372025dfa5ae0dea7125ca1066d9127c0f7e99a16"
+        "sha256": "6217556c4d63753dab91c0b4d4f600ed02d4f5e2cadf7fa7336b40791ffb281c"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,12 +42,12 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "ed7008a4c8b14e831ce58ef593b2d261e2b77d250c2aca7b699e6ed1c1e196ec"
+        "sha256": "a10e049d5fdc5997c8262f3241bd339b110ac62e79e5fa15c019aa03be48a70d"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
         "bytes": 8425,
-        "sha256": "40f9615d5810cc109e735aae524206fde09ace836be725aaf4374e4e37af1466"
+        "sha256": "8fb043bb43f104baa2fc17a30fcddcb31d83f258f7548a84b63e6f49a862a29d"
       },
       {
         "path": "eslint.config.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "5466375a2e00a8b13ee542947c1eabce40a5021b976d755918d76b9e06b72fba"
+    "inputDigest": "54f23f8cbfe9ffb64c977b896f972fb4dd385eff6bc3e96e5a86dce35aaeae38"
   },
   "reconciliation": {
     "complexity": {
@@ -73,7 +73,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "6c334cf369d984d6f63befd3490625995df39122b59ac8920781afb2862afc49"
+        "sha256": "972024bcde5ef11c698580f51bd987d645e6f0f8bea8870ed7a3b9a62bbbc085"
       },
       "declaredCount": 1727,
       "observedCount": 1727,
@@ -94,18 +94,18 @@
       "authority": {
         "path": "scripts/check-file-size-thresholds.js",
         "bytes": 8425,
-        "sha256": "40f9615d5810cc109e735aae524206fde09ace836be725aaf4374e4e37af1466"
+        "sha256": "8fb043bb43f104baa2fc17a30fcddcb31d83f258f7548a84b63e6f49a862a29d"
       },
       "thresholds": {
         "source": 800,
         "test": 1500
       },
       "baselines": {
-        "source": 26,
+        "source": 24,
         "test": 21
       },
-      "observedCount": 49,
-      "assignedCount": 49
+      "observedCount": 45,
+      "assignedCount": 45
     },
     "duplication": [
       {
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "1bd7fc59f4aab06f54554d7372025dfa5ae0dea7125ca1066d9127c0f7e99a16"
+          "sha256": "6217556c4d63753dab91c0b4d4f600ed02d4f5e2cadf7fa7336b40791ffb281c"
         },
         "cloneGroups": 40,
         "duplicatedLines": 1267,
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "ed7008a4c8b14e831ce58ef593b2d261e2b77d250c2aca7b699e6ed1c1e196ec"
+          "sha256": "a10e049d5fdc5997c8262f3241bd339b110ac62e79e5fa15c019aa03be48a70d"
         },
         "cloneGroups": 641,
         "duplicatedLines": 24107,
@@ -173,35 +173,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3421632,
-        "sha256": "8843aaef75e674174c3013bba856beeb7b4df3a56a36a0d4274c0eb24e558977"
+        "bytes": 3423958,
+        "sha256": "9d247a6fc3c87192c6f5ee3b852c80860ab9a482c4c2cd19edf1b4b58a765f49"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "0232f2e0eee20c2a35e7630a4fdc6b0efc7680544311add2d49afd714bdd0b1c",
-      "moduleCount": 6054,
-      "edgeCount": 33465,
+      "sourceDigest": "9445b7e8626d08301cf224f5eba039421db64d7468672e02ca95e0fdc2b9b173",
+      "moduleCount": 6058,
+      "edgeCount": 33486,
       "unresolvedCount": 46
     }
   },
   "assignment": {
-    "sourceSignalCount": 2425,
-    "assignedSignalCount": 2425,
-    "uniqueAssignmentCount": 2425,
-    "digest": "8dfa83fd1e59cdb2a4ce3618f89a5cd5fb63c26f2bdcfd982b06f26faf3a074b"
+    "sourceSignalCount": 2421,
+    "assignedSignalCount": 2421,
+    "uniqueAssignmentCount": 2421,
+    "digest": "3f57339014c2caa0fcfd9a799086f9cc43bf94dae03a9718bee3116db04aa8a0"
   },
   "signalCounts": {
     "cognitive": 145,
     "complexity": 1727,
     "duplication": 465,
-    "fileSize": 49,
+    "fileSize": 45,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1249,
+    "filesWithDebt": 1248,
     "rankedBoundaryCount": 110,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 90,
@@ -273,17 +273,17 @@
         "src/control-plane"
       ],
       "fileCount": 89,
-      "signalCount": 241,
+      "signalCount": 240,
       "complexity": 198,
       "cognitive": 36,
-      "oversizedFiles": 3,
+      "oversizedFiles": 2,
       "duplicatedLines": 136,
       "cloneTouches": 4,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 718,
+      "importIn": 719,
       "importOut": 432,
-      "score": 1129.6,
+      "score": 1117.6,
       "topPaths": [
         "src/control-plane/control-plane-kernel-ingress.js",
         "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
@@ -365,7 +365,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 285,
+      "importIn": 286,
       "importOut": 308,
       "score": 636.8,
       "topPaths": [
@@ -469,23 +469,23 @@
         "src/admin"
       ],
       "fileCount": 14,
-      "signalCount": 51,
+      "signalCount": 50,
       "complexity": 36,
       "cognitive": 7,
-      "oversizedFiles": 3,
+      "oversizedFiles": 2,
       "duplicatedLines": 414,
       "cloneTouches": 14,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 42,
-      "importOut": 89,
-      "score": 277.4,
+      "importIn": 43,
+      "importOut": 91,
+      "score": 265.4,
       "topPaths": [
         "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
         "src/admin/admin-control-snapshot-local-build-base.js",
         "src/admin/admin-control-snapshot-node-view-projection.js",
         "src/admin/admin-control-snapshot-coverage-gap-evaluation.js",
-        "src/admin/admin-control-snapshot-readiness-diagnostics-methods.js"
+        "src/admin/admin-control-snapshot.js"
       ]
     },
     {
@@ -720,24 +720,24 @@
       "ownerAreas": [
         "src/partition"
       ],
-      "fileCount": 20,
-      "signalCount": 32,
+      "fileCount": 19,
+      "signalCount": 31,
       "complexity": 26,
       "cognitive": 3,
-      "oversizedFiles": 1,
+      "oversizedFiles": 0,
       "duplicatedLines": 50,
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 115,
-      "importOut": 166,
-      "score": 145,
+      "importIn": 110,
+      "importOut": 156,
+      "score": 133,
       "topPaths": [
         "src/partition/partition-sql-parser.js",
         "src/partition/managed-split-workflow-provisioning-methods.js",
         "src/partition/partition-cdc-generator.js",
-        "src/partition/partition-cdc-obligation-delivery.js",
-        "src/partition/partition-participant-release-contract.js"
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-split-merge-manager-evaluation-methods.js"
       ]
     },
     {
@@ -945,8 +945,8 @@
         "src/node"
       ],
       "fileCount": 11,
-      "signalCount": 23,
-      "complexity": 22,
+      "signalCount": 22,
+      "complexity": 21,
       "cognitive": 1,
       "oversizedFiles": 0,
       "duplicatedLines": 0,
@@ -955,41 +955,13 @@
       "lintExclusions": 0,
       "importIn": 237,
       "importOut": 112,
-      "score": 96,
+      "score": 92,
       "topPaths": [
         "src/node/runtime-service-bound-creation-route.js",
         "src/node/runtime-service-handler.js",
         "src/node/failure-detector.js",
-        "src/node/replica-state-machine-lifecycle-observation.js",
-        "src/node/replica-state-machine-recovery.js"
-      ]
-    },
-    {
-      "key": "semantic:replica_handler_owner/replica_handler_workflow",
-      "owner": "replica_handler_owner",
-      "boundary": "replica_handler_workflow",
-      "classification": "declared-owner-rule",
-      "ownerAreas": [
-        "src/node"
-      ],
-      "fileCount": 11,
-      "signalCount": 19,
-      "complexity": 16,
-      "cognitive": 2,
-      "oversizedFiles": 1,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 23,
-      "importOut": 124,
-      "score": 92,
-      "topPaths": [
-        "src/node/replica-handler-create-status-methods.js",
-        "src/node/replica-handler-runtime-methods.js",
-        "src/node/replica-handler-create-methods.js",
-        "src/node/replica-handler-runtime-metadata-methods.js",
-        "src/node/replica-handler-class.js"
+        "src/node/replica-state-machine-recovery.js",
+        "src/node/node-reintegration-reconciliation.js"
       ]
     },
     {
@@ -1018,6 +990,34 @@
         "src/rebalancer/unified-rebalancer-lifecycle-base.js",
         "src/rebalancer/unified-rebalancer-replica-state.js",
         "src/rebalancer/unified-rebalancer-available-nodes.js"
+      ]
+    },
+    {
+      "key": "semantic:replica_handler_owner/replica_handler_workflow",
+      "owner": "replica_handler_owner",
+      "boundary": "replica_handler_workflow",
+      "classification": "declared-owner-rule",
+      "ownerAreas": [
+        "src/node"
+      ],
+      "fileCount": 11,
+      "signalCount": 18,
+      "complexity": 16,
+      "cognitive": 2,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 23,
+      "importOut": 124,
+      "score": 80,
+      "topPaths": [
+        "src/node/replica-handler-runtime-methods.js",
+        "src/node/replica-handler-create-methods.js",
+        "src/node/replica-handler-runtime-metadata-methods.js",
+        "src/node/replica-handler-create-status-methods.js",
+        "src/node/replica-handler-class.js"
       ]
     },
     {
@@ -1518,6 +1518,34 @@
       ]
     },
     {
+      "key": "area:test/convergence",
+      "owner": null,
+      "boundary": "test/convergence",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/convergence"
+      ],
+      "fileCount": 8,
+      "signalCount": 10,
+      "complexity": 8,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 46,
+      "cloneTouches": 2,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 2,
+      "importOut": 64,
+      "score": 36.6,
+      "topPaths": [
+        "test/convergence/dt-priority-recovery-followup-stabilization-phi.test.js",
+        "test/convergence/dt6-publication-quorum-failback-network.test.js",
+        "test/convergence/baseline-discovered-regressions.test.js",
+        "test/convergence/deterministic-convergence-harness.test.js",
+        "test/convergence/dt-ledger-completion-continuity-discriminator.test.js"
+      ]
+    },
+    {
       "key": "area:test/cli",
       "owner": null,
       "boundary": "test/cli",
@@ -1543,34 +1571,6 @@
         "test/cli/core/live-query-pause-resume.property.test.js",
         "test/cli/views/logs-sorting-correctness.property.test.js",
         "test/cli/core/cache-query-methods-completeness.property.test.js"
-      ]
-    },
-    {
-      "key": "area:test/convergence",
-      "owner": null,
-      "boundary": "test/convergence",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/convergence"
-      ],
-      "fileCount": 8,
-      "signalCount": 9,
-      "complexity": 7,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 46,
-      "cloneTouches": 2,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 2,
-      "importOut": 63,
-      "score": 32.6,
-      "topPaths": [
-        "test/convergence/dt-priority-recovery-followup-stabilization-phi.test.js",
-        "test/convergence/baseline-discovered-regressions.test.js",
-        "test/convergence/deterministic-convergence-harness.test.js",
-        "test/convergence/dt-ledger-completion-continuity-discriminator.test.js",
-        "test/convergence/dt6-learner-promotion-fixture.js"
       ]
     },
     {

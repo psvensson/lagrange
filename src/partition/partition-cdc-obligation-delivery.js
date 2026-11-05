@@ -1,3 +1,9 @@
+import {driveOutcome, flushOutcome, createCdcObligationLane, laneOf, laneIsCurrent, clearTimer, resetCdcObligationLane,
+  takeBatch, groupsOfMembers, keysOf, restoreBatch, addToBatch, batchExceedsBoundsForEvent,
+  isBackpressureError, resolveDeliveryRetryDisposition, disarmDeliveryRetry,
+  computeRetryDelayMs, OBLIGATION_RETRY_STATE, IDLE_OBLIGATION_RETRY,
+  OBLIGATION_RETRY_DISPOSITION} from
+  './partition-cdc-obligation-lane.js';
 // The obligation lane of the CDC delivery owner (TX1 design revision 10,
 // section 8.3 point 5; owner ruling 2026-10-11): on the leader it drives owed
 // obligations of the durable ledger (partition-cdc-obligation-ledger.js) to
@@ -25,8 +31,8 @@ import {PARTITION_CDC_OBLIGATION_BOUND as BOUND, PARTITION_CDC_OBLIGATION_DRIVE_
   PARTITION_CDC_OBLIGATION_FLUSH_STATE as FLUSH, PARTITION_CDC_OBLIGATION_LOG_MSG as LOG_MSG,
   PARTITION_CDC_OBLIGATION_ORIGIN as ORIGIN, PARTITION_CDC_OBLIGATION_REASON as REASON} from
   './partition-cdc-obligation-constants.js';
-import {acknowledgedEventBytesOf, buildCdcAcknowledgementCommand, cdcObligationEventKeyDigest,
-  countRetainedDeliveredCdcObligations, emptyAcknowledgedBytes, isCdcPositionReclaimed,
+import {acknowledgedEventBytesOf, buildCdcAcknowledgementCommand,
+  countRetainedDeliveredCdcObligations, isCdcPositionReclaimed,
   readCdcObligationProgress, readOwedCdcHead, readOwedCdcObligations, readOwedCdcTail} from
   './partition-cdc-obligation-ledger.js';
 
@@ -34,16 +40,7 @@ import {acknowledgedEventBytesOf, buildCdcAcknowledgementCommand, cdcObligationE
 // Promise<write answer>, the write commit owner's.
 let acknowledgementProposer = null;
 
-const OBLIGATION_RETRY_STATE = Object.freeze({IDLE: 'idle', ARMED: 'armed'});
-const IDLE_OBLIGATION_RETRY = Object.freeze({state: OBLIGATION_RETRY_STATE.IDLE, handle: null});
 const OBLIGATION_DRIVE_STEP = Object.freeze({READY: 'ready', PENDING: 'pending_acknowledgement'});
-const OBLIGATION_RETRY_DISPOSITION = Object.freeze({
-  PAGE_YIELDED: 'page_yielded', TRANSIENT_FAILURE: 'transient_failure',
-  BACKPRESSURE: 'backpressure', NO_PENDING_WORK: 'no_pending_work',
-  STALE_LIFETIME: 'stale_lifetime',
-});
-const HINTED_BACKPRESSURE_MAX_DELAY_MS = 250;
-
 /**
  * Register the proposer a flush hands its CDC_DELIVERED command to.
  * @param {Function|null} propose - (service, command) -> Promise<answer>.
@@ -56,68 +53,11 @@ function registerCdcAcknowledgementProposer(propose) {
   return previous;
 }
 
-function emptyBatch() {
-  return {groups: new Map(), events: 0, bytes: emptyAcknowledgedBytes(),
-    firstAcknowledgedAt: null};
-}
-
-/**
- * The lane's state, held by one CDC delivery owner instance.
- * @return {Object} A fresh lane.
- */
-function createCdcObligationLane(tenure = null) {
-  return {
-    tenure, inFlight: false, rerun: false, scan: null, currentObligation: null,
-    hydratedThroughLogIndex: 0,
-    pending: new Map(), commands: new Map(), batch: emptyBatch(),
-    contendedPropagationOwners: new Map(),
-    flushTimer: null, retryTimer: IDLE_OBLIGATION_RETRY,
-    retryDelayMs: PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS,
-    consecutiveBackpressure: 0,
-    held: null, lastDrive: null, lastFlush: null,
-  };
-}
-
-function currentTenureOf(owner) {
-  return owner.isLeader && !owner.isShutdown ? owner.leadershipTenure ?? null : null;
-}
-
-function laneOf(delivery) {
-  const tenure = currentTenureOf(delivery.owner);
-  if (delivery.obligationLane.tenure !== tenure) resetCdcObligationLane(delivery);
-  return delivery.obligationLane;
-}
-
-function laneIsCurrent(delivery, lane) {
-  return lane.tenure !== null && delivery.obligationLane === lane &&
-    currentTenureOf(delivery.owner) === lane.tenure;
-}
-
-function clearTimer(owner, handle) {
-  if (handle !== null) owner.timeSource.clearTimeout(handle);
-}
-
 function trackOnOwner(owner, promise) {
   if (typeof owner.trackPendingCDCEvent === PARTITION_SERVICE_TYPE.FUNCTION) {
     owner.trackPendingCDCEvent(promise);
   }
   return promise;
-}
-
-/**
- * Forget every acknowledgement in flight: a tenure or the replica ended, or
- * the ledger decided. The ledger stays the authority for what is owed.
- * @param {Object} delivery - The CDC delivery owner.
- */
-function resetCdcObligationLane(delivery) {
-  const lane = delivery.obligationLane;
-  const tenure = currentTenureOf(delivery.owner);
-  if (lane.tenure === tenure && !delivery.owner.isShutdown) return;
-  clearTimer(delivery.owner, lane.flushTimer);
-  clearTimer(delivery.owner, lane.retryTimer.handle);
-  releaseContendedPropagationOwners(lane);
-  delivery.activeCdcInvocation?.retire();
-  delivery.obligationLane = createCdcObligationLane(tenure);
 }
 
 /**
@@ -165,36 +105,6 @@ function stampOf(owner) {
     proposedBy: owner.replicaId, proposedAt: owner.timeSource.now()};
 }
 
-// The batch as the pinned form wants it: groups by ascending log index, each
-// group's keys by ascending ordinal. The batch is left empty.
-function takeBatch(lane) {
-  const members = [...lane.batch.groups.entries()]
-    .sort(([left], [right]) => left - right)
-    .flatMap(([logIndex, grouped]) => grouped
-      .sort((left, right) => left.ordinal - right.ordinal)
-      .map((member) => ({...member, logIndex})));
-  lane.batch = emptyBatch();
-  return {groups: groupsOfMembers(members), members};
-}
-
-function groupsOfMembers(members) {
-  const groups = [];
-  for (const member of members) {
-    let group = groups.at(-1);
-    if (group?.logIndex !== member.logIndex) {
-      group = {logIndex: member.logIndex, events: []};
-      groups.push(group);
-    }
-    group.events.push({ordinal: member.ordinal,
-      eventKeyDigest: cdcObligationEventKeyDigest(member.eventKey)});
-  }
-  return groups;
-}
-
-function keysOf(groups) {
-  return groups.flatMap((group) => group.events);
-}
-
 function armFlushDeadline(delivery) {
   const lane = laneOf(delivery);
   const {owner} = delivery;
@@ -204,30 +114,6 @@ function armFlushDeadline(delivery) {
     if (!laneIsCurrent(delivery, lane)) return;
     trackOnOwner(owner, flushCdcAcknowledgements(delivery, REASON.FLUSH_DEADLINE));
   }, BOUND.ACK_FLUSH_DEADLINE_MS);
-}
-
-// Put a taken batch back (a flush refused before it was proposed): the keys
-// stay pending and are proposed again with the next acknowledgements.
-function restoreBatch(lane, members) {
-  for (const member of members) addToBatch(lane, member);
-}
-
-function addToBatch(lane, obligation) {
-  let members = lane.batch.groups.get(obligation.logIndex);
-  const opensGroup = members === undefined;
-  if (opensGroup) {
-    members = [];
-    lane.batch.groups.set(obligation.logIndex, members);
-  }
-  members.push({eventKey: obligation.eventKey, ordinal: obligation.ordinal});
-  lane.batch.events += 1;
-  lane.batch.bytes += acknowledgedEventBytesOf(obligation.eventKey,
-    obligation.logIndex, obligation.ordinal, opensGroup);
-}
-
-function batchExceedsBoundsForEvent(lane, addedBytes) {
-  return lane.batch.events >= BOUND.ACK_BATCH_MAX_EVENTS ||
-    (lane.batch.events > 0 && lane.batch.bytes + addedBytes > BOUND.ACK_BATCH_MAX_BYTES);
 }
 
 function flushFullBatchBeforeAdd(delivery, lane, addedBytes) {
@@ -260,11 +146,6 @@ function acknowledgeDelivered(delivery, obligation) {
   }
   armFlushDeadline(delivery);
   return true;
-}
-
-function flushOutcome(lane, state, fields) {
-  lane.lastFlush = Object.freeze({state, ...fields});
-  return lane.lastFlush;
 }
 
 function logFlushRefusal(owner, groups, fields) {
@@ -430,83 +311,6 @@ async function retryAcknowledgements(delivery, lane) {
 }
 
 // --- the drive ---
-
-function driveOutcome(lane, state, fields) {
-  lane.lastDrive = Object.freeze({state, ...fields});
-  return lane.lastDrive;
-}
-
-function errorBackpressureReason(error) {
-  const cause = error.cause;
-  if (error.reason !== undefined && error.reason !== null) return error.reason;
-  return cause ?
-    (cause.reason ?? cause.error ?? cause.cause?.reason ?? cause.cause?.error) :
-    undefined;
-}
-
-function isBackpressureError(error) {
-  if (!error) return false;
-  const hasHint = Number.isFinite(error.retryAfterMs) && error.retryAfterMs > 0;
-  return hasHint || Boolean(error.ownerNotReady) ||
-    errorBackpressureReason(error) === CDC_COMPLETION.BACKPRESSURE;
-}
-
-function resolveDeliveryRetryDisposition(delivery, lane, error = null, explicit = null) {
-  const stale = !laneIsCurrent(delivery, lane) || delivery.owner.isShutdown ||
-    Boolean(error?.stalePropagationLifetime);
-  if (stale) return OBLIGATION_RETRY_DISPOSITION.STALE_LIFETIME;
-  if (explicit !== null) return explicit;
-  return isBackpressureError(error) ?
-    OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE : OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE;
-}
-
-function disarmDeliveryRetry(owner, lane, resetDelay = true) {
-  clearTimer(owner, lane.retryTimer.handle);
-  lane.retryTimer = IDLE_OBLIGATION_RETRY;
-  lane.consecutiveBackpressure = 0;
-  if (resetDelay) lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-}
-
-function resetYieldedRetryDelay(lane, disposition) {
-  if (disposition === OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED) {
-    lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-    lane.consecutiveBackpressure = 0;
-  }
-}
-
-function computeRetryDelayMs(lane, error, disposition) {
-  resetYieldedRetryDelay(lane, disposition);
-  const rawHint = error?.retryAfterMs;
-  const hasHint = Number.isFinite(rawHint) && rawHint > 0;
-  const isBackpressure = disposition === OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE;
-  const isTransient = disposition === OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE;
-  const initDelay = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-  const maxDelay = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS;
-  let advanceBackoff = false;
-  let delayMs;
-  if (isBackpressure && hasHint) {
-    lane.consecutiveBackpressure = (lane.consecutiveBackpressure ?? 0) + 1;
-    const isInitial = lane.consecutiveBackpressure <= 1;
-    delayMs = Math.min(HINTED_BACKPRESSURE_MAX_DELAY_MS,
-      Math.max(1, isInitial ? Math.floor(rawHint) : lane.retryDelayMs));
-    lane.retryDelayMs = isInitial ? Math.max(delayMs, initDelay) :
-      Math.min(HINTED_BACKPRESSURE_MAX_DELAY_MS, lane.retryDelayMs);
-    advanceBackoff = true;
-  } else if (hasHint) {
-    lane.consecutiveBackpressure = 0;
-    delayMs = Math.min(maxDelay, Math.max(1, Math.floor(rawHint)));
-    lane.retryDelayMs = initDelay;
-  } else if (isBackpressure) {
-    lane.consecutiveBackpressure = (lane.consecutiveBackpressure ?? 0) + 1;
-    delayMs = Math.min(HINTED_BACKPRESSURE_MAX_DELAY_MS, Math.max(1, lane.retryDelayMs));
-    advanceBackoff = true;
-  } else {
-    lane.consecutiveBackpressure = 0;
-    delayMs = Math.min(maxDelay, Math.max(1, lane.retryDelayMs));
-    advanceBackoff = isTransient;
-  }
-  return {delayMs, advanceBackoff};
-}
 
 function scheduleDeliveryRetry(delivery, error = null, explicitDisposition = null) {
   const lane = laneOf(delivery);

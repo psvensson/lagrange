@@ -327,7 +327,8 @@
         "test/convergence/dt6-publication-ack-recovery-gate-network.test.js",
         "test/convergence/dt6-publication-quorum-failback-network.test.js",
         "test/convergence/dt6-publication-failback-pct-search.test.js",
-        "test/convergence/membership-publication-owner-driver-host.test.js"
+        "test/convergence/membership-publication-owner-driver-host.test.js",
+        "test/integration/fresh-formation-without-admin-polling.integration.test.js"
       ]
     },
     "admin-cache-owner-lifecycle": {
@@ -407,7 +408,7 @@
       ]
     },
     "CL-041": {
-      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
+      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft \u00a75.2 Election Safety).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -418,7 +419,7 @@
       ]
     },
     "CL-040": {
-      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
+      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft \u00a75.3 Log Matching).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -429,7 +430,7 @@
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft \u00a75.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -1421,7 +1422,8 @@
         "src/utils/canonical-json-data.js",
         "src/topology/cdc-group-propagation-retry-wait-report.js",
         "src/transport/transport-query-semantic-outcome.js",
-        "src/partition/partition-cdc-owed-admission.js"
+        "src/partition/partition-cdc-owed-admission.js",
+        "src/partition/partition-cdc-obligation-lane.js"
       ],
       "tests": [
         "test/cdc/cdc-delivery-outcome.test.js",
@@ -1467,7 +1469,8 @@
         "test/partition/partition-cdc-prepared-capacity.test.js",
         "test/partition/partition-cdc-drain-admission.test.js",
         "test/partition/partition-cdc-owed-admission-native.test.js",
-        "test/message-group/message-group-peer-address-committed-configuration.test.js"
+        "test/message-group/message-group-peer-address-committed-configuration.test.js",
+        "test/partition/cdc-hydration-live-handoff.test.js"
       ]
     },
     "router-delivery-envelope": {
@@ -2300,7 +2303,8 @@
         "test/admin/admin-control-snapshot.test.js",
         "test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js",
         "test/admin/admin-control-snapshot-retry-decision.test.js",
-        "test/active-gate/active-gate-authoritative-repair-convergence.test.js"
+        "test/active-gate/active-gate-authoritative-repair-convergence.test.js",
+        "test/integration/fresh-formation-without-admin-polling.integration.test.js"
       ]
     },
     "admin-notification-repair-cache-owner-handoff": {
@@ -3461,7 +3465,8 @@
             "src/topology/cdc-group-propagation-routing.js",
             "src/utils/canonical-json-data.js",
             "src/topology/cdc-group-propagation-retry-wait-report.js",
-            "src/partition/partition-cdc-owed-admission.js"
+            "src/partition/partition-cdc-owed-admission.js",
+            "src/partition/partition-cdc-obligation-lane.js"
           ]
         },
         {
@@ -3537,7 +3542,8 @@
         "test/partition/partition-cdc-prepared-capacity.test.js",
         "test/partition/partition-cdc-drain-admission.test.js",
         "test/partition/partition-cdc-owed-admission-native.test.js",
-        "test/message-group/message-group-peer-address-committed-configuration.test.js"
+        "test/message-group/message-group-peer-address-committed-configuration.test.js",
+        "test/partition/cdc-hydration-live-handoff.test.js"
       ]
     },
     "router-envelope-query": {
