@@ -384,4 +384,399 @@ test(
   },
 );
 
+test(
+  'ControlPlaneDiagnosticsLedger & AdminControlSnapshot - exposes deterministic lossAccounting under churn/truncation and all-zero negative control',
+  async (t) => {
+    const {ControlPlaneDiagnosticsLedger} = await import(
+      '../../src/control-plane/control-plane-diagnostics-ledger.js'
+    );
+    let nowMs = 5_000;
+    const ledger = new ControlPlaneDiagnosticsLedger({
+      maxEntries: 6,
+      maxAggregatedKeys: 4,
+      now: () => nowMs,
+    });
+
+    const readinessService = {
+      participationDecisionLedger: ledger,
+      getParticipationDecisionLedgerEntries: () => ledger.getEntries(),
+      getParticipationDecisionLedgerAggregatedSummaries: () =>
+        ledger.getAggregatedSummaries(),
+      getAuthoritativeReadinessRepairLedgerEntries: () => [],
+      getAuthoritativeReadinessRepairLedgerAggregatedSummaries: () => [],
+      getRecoveryEpochHistoryByNodeId: () => ({}),
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-a',
+      nowFn: () => nowMs,
+      controlPlaneReadinessService: readinessService,
+      systemTableCache: {getAll: () => []},
+    });
+
+    // Negative control: bounded entries (count <= 2, no key eviction, no ring-buffer overwrite, no truncation)
+    ledger.record({
+      decidingBoundary: 'readiness_gate',
+      originalCause: 'healthy_probe',
+      nodeId: 'node-a',
+      detail: 'short-string',
+      items: [1, 2, 3],
+      meta: {ok: true},
+    });
+    nowMs += 50;
+    ledger.record({
+      decidingBoundary: 'readiness_gate',
+      originalCause: 'healthy_probe',
+      nodeId: 'node-a',
+      detail: 'second-sample',
+    });
+
+    const zeroExpected = {
+      evictedKeys: 0,
+      overwrittenEntries: 0,
+      droppedSamples: 0,
+      truncatedStrings: 0,
+      truncatedArrays: 0,
+      truncatedObjects: 0,
+      totalLossEvents: 0,
+    };
+    t.ok(
+      Object.isFrozen(ledger.getLossAccounting()),
+      'getLossAccounting returns a frozen snapshot',
+    );
+    t.same(
+      ledger.getLossAccounting(),
+      zeroExpected,
+      'negative control: ledger.getLossAccounting returns all zeros when within bounds',
+    );
+    t.same(
+      ledger.getLatestSummary().lossAccounting,
+      zeroExpected,
+      'negative control: getLatestSummary includes all-zero lossAccounting',
+    );
+    const cleanSnapshot = await snapshot.getControlSnapshot({capturedAt: nowMs});
+    t.same(
+      cleanSnapshot.controlPlaneDiagnostics.lossAccounting,
+      zeroExpected,
+      'negative control: AdminControlSnapshot exposes all-zero lossAccounting',
+    );
+
+    // Reset before positive churn & truncation test
+    ledger.reset();
+
+    const oversizedObjectKeys = {};
+    for (let index = 0; index < 40; index += 1) {
+      oversizedObjectKeys[`key_${index}`] = index;
+    }
+    const overDepthObject = {
+      level2: {
+        level3: {
+          level4Dropped: {hiddenKey: 'dropped-at-max-depth'},
+        },
+      },
+    };
+
+    // 5 samples on key-1 -> count reaches 5 -> 3 intermediate samples dropped (count 3, 4, 5)
+    // Sample 1 also triggers 1 truncatedString, 1 truncatedArray, and 2 truncatedObjects (40-key object + depth-4 object)
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      nowMs += 100;
+      ledger.record({
+        aggregationKey: 'key-1',
+        decidingBoundary: 'churn_gate',
+        originalCause: 'repeated_stall',
+        attempt,
+        ...(attempt === 1 ?
+          {
+            oversizedText: 's'.repeat(1_024),
+            oversizedList: Array.from({length: 50}, (_, idx) => idx),
+            oversizedMap: oversizedObjectKeys,
+            nestedDepth: overDepthObject,
+          } :
+          {}),
+      });
+    }
+
+    // Add 4 more distinct keys (key-2, key-3, key-4, key-5) -> total 5 distinct keys > maxAggregatedKeys (4) -> 1 evictedKey
+    // Total entries appended = 5 + 4 = 9 > maxEntries (6) -> 3 overwrittenEntries
+    for (let keyIndex = 2; keyIndex <= 5; keyIndex += 1) {
+      nowMs += 100;
+      ledger.record({
+        aggregationKey: `key-${keyIndex}`,
+        decidingBoundary: 'distinct_gate',
+        originalCause: `cause_${keyIndex}`,
+      });
+    }
+
+    const expectedLossAccounting = {
+      evictedKeys: 1,
+      overwrittenEntries: 3,
+      droppedSamples: 3,
+      truncatedStrings: 1,
+      truncatedArrays: 1,
+      truncatedObjects: 2,
+      totalLossEvents: 11,
+    };
+
+    t.same(
+      ledger.getLossAccounting(),
+      expectedLossAccounting,
+      'ledger.getLossAccounting deterministically counts all loss and truncation categories',
+    );
+    t.same(
+      ledger.getLatestSummary().lossAccounting,
+      expectedLossAccounting,
+      'getLatestSummary exposes exact lossAccounting snapshot',
+    );
+    t.same(
+      snapshot.resolveControlPlaneReadinessDiagnostics().lossAccounting,
+      expectedLossAccounting,
+      'resolveControlPlaneReadinessDiagnostics exposes lossAccounting alongside aggregatedSummaries',
+    );
+
+    const churnSnapshot = await snapshot.getControlSnapshot({capturedAt: nowMs});
+    t.same(
+      churnSnapshot.controlPlaneDiagnostics.lossAccounting,
+      expectedLossAccounting,
+      'AdminControlSnapshot controlPlaneDiagnostics.lossAccounting exposes exact counts outward',
+    );
+
+    // Verify reset() clears all counters back to 0
+    ledger.reset();
+    t.same(
+      ledger.getLossAccounting(),
+      zeroExpected,
+      'reset() resets all loss accounting counters to 0',
+    );
+  },
+);
+
+test(
+  'Control-plane convergence and operation completion progress to inFlightCount === 0 with zero admin polling and READ_ONLY_SYSTEM_TABLE_CACHE_MUTATION negative control',
+  async (t) => {
+    const {SystemTableCache} = await import(
+      '../../src/cache/system-table-cache.js'
+    );
+    const {createReadOnlyCache} = await import(
+      '../../src/cache/read-only-system-table-cache.js'
+    );
+
+    const nowMs = 200_000;
+    const writableCache = new SystemTableCache();
+    const readOnlyCache = createReadOnlyCache(writableCache);
+
+    // Negative control: READ_ONLY_SYSTEM_TABLE_CACHE_MUTATION — direct mutation on readOnlyCache is rejected
+    t.throws(
+      () =>
+        readOnlyCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+          id: 'node-1',
+          node_id: 'node-1',
+          status: 'active',
+        }),
+      /Cache write violation/i,
+      'READ_ONLY_SYSTEM_TABLE_CACHE_MUTATION negative control blocks direct mutation on readOnlyCache',
+    );
+
+    // Seed initial non-converged state: OPEN membership publication + in-flight SYNCING replica operation
+    for (const nodeId of ['node-1', 'node-2']) {
+      writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+        id: nodeId,
+        node_id: nodeId,
+        address: `${nodeId}:8080`,
+        node_address: `${nodeId}:8080`,
+        status: 'active',
+        connection_state: 'ready',
+        last_heartbeat: nowMs,
+        ready_lease_expires_at: nowMs + 30_000,
+      });
+    }
+    writableCache.applySystemTableChange(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      'INSERT',
+      {
+        publication_id: 'pub-epoch-4',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 4,
+        status: 'OPEN',
+        published_active_node_ids: ['node-1', 'node-2'],
+        required_ack_node_ids: ['node-1', 'node-2'],
+        acknowledged_node_ids: ['node-1'],
+        updated_at: nowMs - 1_000,
+      },
+    );
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+      id: 'orders-p1',
+      partition_id: 'orders-p1',
+      table_name: 'orders',
+      leader_node_id: 'node-1',
+      status: 'active',
+      partition_version: 1,
+    });
+    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      id: 'orders-p1-r1',
+      service_id: 'orders-p1-r1',
+      replica_id: 'orders-p1-r1',
+      partition_id: 'orders-p1',
+      service_type: 'partition',
+      node_id: 'node-1',
+      raft_role: 'leader',
+      status: 'active',
+    });
+    writableCache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+      id: 'op-add-r2',
+      operation_id: 'op-add-r2',
+      type: 'ADD',
+      entity_type: 'partition',
+      entity_id: 'orders-p1',
+      partition_id: 'orders-p1',
+      replica_id: 'orders-p1-r2',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      status: 'syncing',
+      workflow_step: 'SYNCING',
+      created_at: nowMs - 2_000,
+      updated_at: nowMs - 500,
+      completed_at: null,
+    });
+
+    const getLatestPublication = () =>
+      readOnlyCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS)[0] || null;
+    const readinessService = {
+      membershipPublicationService: {
+        getLatestClusterPublicationSync: () => getLatestPublication(),
+        getLatestPublishedClusterPublicationSync: () => {
+          const pub = getLatestPublication();
+          return pub?.status === 'PUBLISHED' ? pub : null;
+        },
+        async getLatestPublishedClusterPublication() {
+          const pub = getLatestPublication();
+          return pub?.status === 'PUBLISHED' ? pub : null;
+        },
+      },
+      getAllNodeReadinessSync() {
+        const pub = getLatestPublication();
+        return ['node-1', 'node-2'].map((nodeId) => ({
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+          },
+          membershipPublication: {
+            publicationEpoch: pub?.publication_epoch ?? 4,
+            status: pub?.status ?? 'OPEN',
+            publishedActiveNodeIds: pub?.published_active_node_ids ?? [],
+            requiredAckNodeIds: pub?.required_ack_node_ids ?? [],
+            acknowledgedNodeIds: pub?.acknowledged_node_ids ?? [],
+          },
+        }));
+      },
+    };
+
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+      nowFn: () => nowMs,
+      systemTableCache: readOnlyCache,
+      controlPlaneReadinessService: readinessService,
+      startupRecoveryCoordinator: {evaluate: () => ({ready: true})},
+    });
+
+    let adminSnapshotPollCalls = 0;
+    const originalGetControlSnapshot = snapshot.getControlSnapshot.bind(snapshot);
+    snapshot.getControlSnapshot = async (...args) => {
+      adminSnapshotPollCalls += 1;
+      return originalGetControlSnapshot(...args);
+    };
+
+    // Drive control-plane publication convergence and replica operation completion via CDC without admin polling
+    writableCache.applySystemTableChange(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      'UPDATE',
+      {
+        publication_id: 'pub-epoch-4',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 4,
+        status: 'PUBLISHED',
+        published_active_node_ids: ['node-1', 'node-2'],
+        required_ack_node_ids: ['node-1', 'node-2'],
+        acknowledged_node_ids: ['node-1', 'node-2'],
+        published_at: nowMs,
+        updated_at: nowMs,
+      },
+    );
+    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      id: 'orders-p1-r2',
+      service_id: 'orders-p1-r2',
+      replica_id: 'orders-p1-r2',
+      partition_id: 'orders-p1',
+      service_type: 'partition',
+      node_id: 'node-2',
+      raft_role: 'follower',
+      status: 'active',
+    });
+    writableCache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'UPDATE', {
+      id: 'op-add-r2',
+      operation_id: 'op-add-r2',
+      type: 'ADD',
+      entity_type: 'partition',
+      entity_id: 'orders-p1',
+      partition_id: 'orders-p1',
+      replica_id: 'orders-p1-r2',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      status: 'active',
+      workflow_step: 'ACTIVE',
+      created_at: nowMs - 2_000,
+      updated_at: nowMs,
+      completed_at: nowMs,
+    });
+
+    t.equal(
+      adminSnapshotPollCalls,
+      0,
+      'control-plane convergence and operation settlement completed with zero admin polling',
+    );
+
+    const trackedTables = [
+      TABLES.NODES,
+      TABLES.PARTITIONS,
+      TABLES.SERVICES,
+      TABLES.REPLICA_OPERATIONS,
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+    ];
+    const versionsBeforeSnapshot = Object.fromEntries(
+      trackedTables.map((table) => [
+        table,
+        writableCache.getTableMutationVersion(table),
+      ]),
+    );
+
+    // Inspect once after convergence and operation completion
+    const finalSnapshot = await snapshot.getControlSnapshot({capturedAt: nowMs});
+    t.equal(
+      adminSnapshotPollCalls,
+      1,
+      'getControlSnapshot called exactly once after convergence completed',
+    );
+    t.equal(
+      finalSnapshot.replicaOperations.inFlightCount,
+      0,
+      'replica operation progressed to inFlightCount === 0 without admin polling',
+    );
+    t.same(
+      finalSnapshot.publishedNodes,
+      ['node-1', 'node-2'],
+      'membership publication converged to published active cohort without admin polling',
+    );
+
+    const versionsAfterSnapshot = Object.fromEntries(
+      trackedTables.map((table) => [
+        table,
+        writableCache.getTableMutationVersion(table),
+      ]),
+    );
+    t.same(
+      versionsAfterSnapshot,
+      versionsBeforeSnapshot,
+      'calling getControlSnapshot performs zero mutations on the underlying SystemTableCache',
+    );
+  },
+);
 

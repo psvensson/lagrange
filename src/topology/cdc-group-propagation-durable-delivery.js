@@ -33,17 +33,12 @@ const DURABLE_PROPAGATION_CAUSE = Object.freeze({
 });
 const CONTENDED_TABLE_SLICE_WAVES = 4;
 const CONTENDED_SLICE_YIELD_HOLD_MS = 300;
-const STALE_WAITING_SLICE_TABLE_MS = 2500;
 const BUSY_CONTENDED_RETRY_AFTER_MS = 10;
 const MIN_YIELD_HOLD_RETRY_AFTER_MS = 5;
 
-function isWaitingSliceTableExpired(owner, table, now) {
+function isWaitingSliceTableExpired(owner, table) {
   const isLive = owner.waitingDurableSliceTableLifecycles?.get?.(table);
-  if (typeof isLive === 'function' && isLive() === false) {
-    return true;
-  }
-  const enqueuedAt = owner.waitingDurableSliceTableTimestamps?.get?.(table);
-  return Number.isFinite(enqueuedAt) && now - enqueuedAt >= STALE_WAITING_SLICE_TABLE_MS;
+  return typeof isLive === 'function' && isLive() === false;
 }
 
 function clearWaitingSliceTableMetadata(owner, table) {
@@ -57,10 +52,9 @@ function pruneStaleWaitingDurableSliceTables(owner) {
       owner.waitingDurableSliceTables.length === 0) {
     return;
   }
-  const now = owner.now();
   owner.waitingDurableSliceTables = owner.waitingDurableSliceTables.filter(
     (table) => {
-      if (isWaitingSliceTableExpired(owner, table, now)) {
+      if (isWaitingSliceTableExpired(owner, table)) {
         clearWaitingSliceTableMetadata(owner, table);
         return false;
       }
@@ -239,6 +233,9 @@ function durablePropagationRefusal(owner, admission, options = null) {
 
 function advanceDurablePropagationSlice(owner, tableName, context) {
   expireYieldedSliceHoldIfElapsed(owner);
+  const wasCredited = Boolean(
+    owner.creditedWaitingDurableSliceTables?.has?.(tableName),
+  );
   dequeueWaitingDurableSliceTable(owner, tableName);
   owner.yieldedDurableSliceTable = null;
   owner.yieldedDurableSliceUntilMs = 0;
@@ -251,8 +248,15 @@ function advanceDurablePropagationSlice(owner, tableName, context) {
       Array.isArray(owner.waitingDurableSliceTables) &&
       owner.waitingDurableSliceTables.length > 0;
   }
-  if (owner.durableSliceContended &&
-      owner.durableSliceWaves >= CONTENDED_TABLE_SLICE_WAVES) {
+  const hasOtherCreditedContender =
+    !wasCredited &&
+    owner.creditedWaitingDurableSliceTables instanceof Set &&
+    owner.creditedWaitingDurableSliceTables.size > 0;
+  if (
+    hasOtherCreditedContender ||
+    (owner.durableSliceContended &&
+      owner.durableSliceWaves >= CONTENDED_TABLE_SLICE_WAVES)
+  ) {
     context.markContended?.();
   }
 }

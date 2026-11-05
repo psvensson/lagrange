@@ -730,7 +730,10 @@ describe('ReplicaHandler retained CREATE admission recovery', () => {
     assert.equal(fixture.physicalShutdowns(), 1,
       'confirmed post-ACTIVE supersession must fence and shut down the runtime');
     assert.equal(fixture.handler.localServices.get(row.replica_id), undefined);
-    assert.equal(fixture.handler.localReplicas.get(row.replica_id), undefined);
+    assert.equal(
+      fixture.handler.localReplicas.get(row.replica_id)?.service ?? null,
+      null,
+    );
     assert.equal(
       fixture.handler.replicaCreateAdmissionRecoveryRearmOwner.current(),
       null,
@@ -739,7 +742,7 @@ describe('ReplicaHandler retained CREATE admission recovery', () => {
     await fixture.handler.shutdown();
   });
 
-  it('retires a superseded retained admission runtime while preserving a newer successor runtime', async () => {
+  it('retires a superseded retained admission runtime via single cleanup owner while preserving untagged and newer successor runtimes', async () => {
     const row = operationRow();
     const fixture = await createHandlerFixture({
       row,
@@ -768,8 +771,34 @@ describe('ReplicaHandler retained CREATE admission recovery', () => {
     assert.equal(staleService.shutdownCalls, 1,
       'retained recovery retires the superseded admission runtime');
     assert.equal(fixture.handler.localServices.get(row.replica_id), undefined);
-    assert.equal(fixture.handler.localReplicas.get(row.replica_id), undefined);
+    assert.equal(
+      fixture.handler.localReplicas.get(row.replica_id)?.service ?? null,
+      null,
+      'fenceFailedReplicaCreateRuntime clears the service reference on localReplicas',
+    );
 
+    // Negative control 1: an untagged runtime must NOT be matched or retired by fallback.
+    const untaggedService = {
+      shutdownCalls: 0,
+      async shutdown() {
+        this.shutdownCalls += 1;
+      },
+    };
+    fixture.handler.localServices.set(row.replica_id, untaggedService);
+    fixture.handler.setLocalReplica(row.replica_id, {
+      replicaId: row.replica_id,
+      partitionId: row.partition_id,
+      service: untaggedService,
+    });
+    await fixture.handler.recoverRetainedReplicaCreateAdmissions();
+    assert.equal(untaggedService.shutdownCalls, 0,
+      'retained recovery must not match or retire an untagged runtime');
+    assert.equal(
+      fixture.handler.localServices.get(row.replica_id),
+      untaggedService,
+    );
+
+    // Negative control 2: a newer successor runtime with different tags must be preserved.
     const successorService = {
       createAdmissionOperationId: 'op-successor',
       createAdmissionToken: 'admission-successor',

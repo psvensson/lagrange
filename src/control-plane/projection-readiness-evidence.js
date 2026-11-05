@@ -767,8 +767,7 @@ function buildProjectionReadinessEvidence(source = {}) {
     durablePrioritySpreadPending:
       resolveProjectionReadinessDurablePrioritySpreadPending(priorityRecovery),
     priorityRecoveryReasonCodes: normalizeProjectionReadinessReasonCodes(
-      priorityRecovery?.reasonCodes,
-    ),
+      priorityRecovery?.reasonCodes),
     priorityRecovery,
     projectionRevision,
     sourceInvalid,
@@ -779,11 +778,9 @@ function buildProjectionReadinessEvidence(source = {}) {
         PROJECTION_READINESS_EMPTY.LIST :
         objectFreeze([PROJECTION_READINESS_REASON.OWNER_EVIDENCE_MISSING]),
     pendingAckCount: normalizeProjectionReadinessNonNegativeInteger(
-      publicationOwnerStream?.pendingAckCount,
-    ),
+      publicationOwnerStream?.pendingAckCount),
     missingPublishedCount: normalizeProjectionReadinessNonNegativeInteger(
-      publicationOwnerStream?.missingPublishedCount,
-    ),
+      publicationOwnerStream?.missingPublishedCount),
     raw: (() => {
       const normalized = normalizeProjectionReadinessOwnDataGraph(source);
       return normalized === PROJECTION_READINESS_INVALID.OWN_DATA_GRAPH ?

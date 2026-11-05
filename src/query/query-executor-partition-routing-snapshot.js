@@ -453,7 +453,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       this.defaultRoutingReadinessDimension;
     const postOverlaySnapshot = this.getPartitionRoutingSnapshot(
       routingSnapshot.partitionId,
-      {routingReadinessDimension},
+      routingReadinessDimension,
     );
     const postOverlayDeniedNodeIds =
       this.collectAllFilteredRoutingRepairNodeIds(postOverlaySnapshot);
@@ -461,7 +461,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       return;
     }
     if (
-      routingSnapshot.routingReadinessDimension ===
+      routingReadinessDimension ===
       CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE
     ) {
       await this.awaitServeEligibilityRefreshForDenial(

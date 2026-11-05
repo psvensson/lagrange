@@ -19,6 +19,15 @@
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {
+  PARTITION_CDC_OBLIGATION_BOUND,
+  PARTITION_CDC_OBLIGATION_DRIVE_STATE,
+} from '../../src/partition/partition-cdc-obligation-constants.js';
+import {
+  OBLIGATION_RETRY_DISPOSITION,
+  scheduleDeliveryRetry,
+} from '../../src/partition/partition-cdc-obligation-delivery.js';
+import {acknowledgedGroupsOf} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {PARTITION_HYDRATION_IMAGE_STATE} from
   '../../src/partition/partition-service-hydration-image-methods.js';
 import {
@@ -137,16 +146,33 @@ test('W-D4c: acknowledgeHydratedObligationsThrough drains > 256 pre-hydration ob
     );
     const committedAbove = commitLaterTraffic(leader, 'post-bulk-hydration');
     await settleTicks();
+    const beforePumpDiagnostics = leader.cdcDelivery.getCdcObligationDiagnostics();
+    assert.equal(
+      beforePumpDiagnostics.lastDrive?.state,
+      PARTITION_CDC_OBLIGATION_DRIVE_STATE.ACKNOWLEDGEMENT_BACKPRESSURE,
+      'actual-prefix pressure blocks post-hydration delivery while > 256 pre-hydration obligations saturate outstanding acknowledgement batches',
+    );
+    assert.equal(
+      subscriber.events.length,
+      0,
+      'post-hydration events are held back until prefix acknowledgement batches drain',
+    );
     const applied = new Set();
     await pump(timeSource, leader, proposed, applied);
-    const maxBatchEvents = Math.max(
-      0,
-      ...proposed.map((command) =>
-        (command.groups || []).reduce((sum, group) => sum + (group.events?.length || 0), 0)),
-    );
+    const batchEventCounts = proposed
+      .map((command) => acknowledgedGroupsOf(command))
+      .filter((groups) => Array.isArray(groups))
+      .map((groups) =>
+        groups.reduce((sum, group) => sum + (group.events?.length || 0), 0));
+    const maxBatchEvents = Math.max(0, ...batchEventCounts);
     const diagnostics = leader.cdcDelivery.getCdcObligationDiagnostics();
-    assert.equal(ackResult.acknowledged > 0, true);
-    assert.equal(maxBatchEvents <= 256, true);
+    assert.equal(ackResult.acknowledged, 600);
+    assert.equal(batchEventCounts.length >= 2, true);
+    assert.equal(
+      maxBatchEvents,
+      PARTITION_CDC_OBLIGATION_BOUND.ACK_BATCH_MAX_EVENTS,
+      'command.acknowledged batches fill up to ACK_BATCH_MAX_EVENTS (256) without exceeding the bound',
+    );
     assert.equal(diagnostics.held, null);
     assert.deepEqual(
       measure(leader, subscriber, image.rows, position, committedAbove),
@@ -198,6 +224,77 @@ test('W-D4d: prepareCdcObligationProgress attaches logIndex and ' +
     await settleTicks();
     const applied = new Set();
     await pump(timeSource, leader, proposed, applied);
+  } finally {
+    await shutdownAll(leader);
+  }
+});
+
+test('W-D4e: scheduleDeliveryRetry preserves an earlier absolute dueAtMs against a later ' +
+  'smaller relative delayMs, and retainedDeliveredBackpressured enforces actual-prefix pressure', async () => {
+  const timeSource = new VirtualTimeSource({startMs: 1000});
+  const {leader} = await startLeader({timeSource, tableName: CDC_TABLE});
+  try {
+    const delivery = leader.cdcDelivery;
+    delivery.getCdcObligationDiagnostics();
+    const lane = delivery.obligationLane;
+
+    // 1. Arm retry timer at t = 1000 with PAGE_YIELDED (delayMs = 50 -> dueAtMs = 1050).
+    const firstDelay = scheduleDeliveryRetry(
+      delivery,
+      null,
+      OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED,
+    );
+    assert.equal(firstDelay, 50);
+    assert.equal(lane.retryTimer.dueAtMs, 1050);
+    const firstHandle = lane.retryTimer.handle;
+
+    // Advance clock to t = 1040 and schedule a smaller relative delayMs = 25 -> dueAtMs = 1065 > 1050.
+    // The earlier deadline (1050) must NOT be pushed back to 1065.
+    timeSource.advance(40);
+    const secondDelay = scheduleDeliveryRetry(
+      delivery,
+      {retryAfterMs: 25, reason: 'BACKPRESSURE'},
+      OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE,
+    );
+    assert.equal(secondDelay, 25);
+    assert.equal(
+      lane.retryTimer.dueAtMs,
+      1050,
+      'later dueAtMs (1065) must not push back earlier armed dueAtMs (1050) even when relative delayMs (25 < 50) is smaller',
+    );
+    assert.equal(lane.retryTimer.handle, firstHandle);
+
+    // An genuinely earlier dueAtMs (t = 1040 + 5 = 1045 < 1050) replaces the timer.
+    lane.consecutiveBackpressure = 0;
+    const earlierDelay = scheduleDeliveryRetry(
+      delivery,
+      {retryAfterMs: 5, reason: 'BACKPRESSURE'},
+      OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE,
+    );
+    assert.equal(earlierDelay, 5);
+    assert.equal(lane.retryTimer.dueAtMs, 1045);
+
+    // 2. Verify actual-prefix retainedDeliveredBackpressured: when a pre-hydration
+    // obligation remains owed at the head of the ledger and lane.pending holds
+    // RETAINED_DELIVERED_MAX entries, post-hydration delivery is backpressured.
+    applyCommitted(leader, upsertOf(leader, 'prefix-head', 0));
+    const image = leader.readHydrationImage(IMAGE_SQL);
+    lane.hydratedThroughLogIndex = Number(image.appliedIndex);
+    lane.pending.clear();
+    lane.commands.clear();
+    for (let i = 0; i < PARTITION_CDC_OBLIGATION_BOUND.RETAINED_DELIVERED_MAX; i += 1) {
+      lane.pending.set(`synthetic-pending-${i}`, {logIndex: 1, ordinal: i});
+    }
+    const subscriber = acknowledgingCdcSubscriber();
+    await leader.subscribeToCDCWithHandshake(subscriber, {subscriberId: 'pressure-sub'});
+    applyCommitted(leader, upsertOf(leader, 'post-hydration-blocked', 1));
+    await settleTicks();
+    assert.equal(
+      leader.cdcDelivery.getCdcObligationDiagnostics().lastDrive?.state,
+      PARTITION_CDC_OBLIGATION_DRIVE_STATE.ACKNOWLEDGEMENT_BACKPRESSURE,
+      'retainedDeliveredBackpressured stops post-hydration delivery when actual owed head + pending reaches RETAINED_DELIVERED_MAX',
+    );
+    assert.equal(subscriber.events.length, 0);
   } finally {
     await shutdownAll(leader);
   }

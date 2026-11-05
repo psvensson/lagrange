@@ -22,6 +22,10 @@ import {CREATE_ADMISSION_STATE} from './replica-create-admission-owner.js';
 import {persistFailedCreateLifecycle} from
   './replica-handler-failed-create-publication.js';
 import {durableRowVersion} from './replica-state-machine-recovery.js';
+import {
+  isConflictingCachedReplicaIdentity,
+  resolvePreservedReplicaRaftRole,
+} from './replica-state-machine-lifecycle-observation.js';
 import {REPLICA_CLEANUP_ERROR_CODE} from
   './replica-cleanup-constants.js';
 import {
@@ -577,12 +581,24 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         seededRow.create_attempt_token =
           trackedState.createAttemptToken ?? null;
       }
-      const existingRow =
-        typeof this.systemTableCache.get === REPLICA_HANDLER_TYPEOF.FUNCTION ?
-          this.systemTableCache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId) :
-          null;
-      if (existingRow?.raft_role) {
-        seededRow.raft_role = existingRow.raft_role;
+      const preservedRole = resolvePreservedReplicaRaftRole(
+        {systemTableCache: this.systemTableCache},
+        {
+          ...(trackedState || {}),
+          replicaId,
+          replicaIdentity: seededRow.replica_id || replicaId,
+          partitionId,
+          nodeId: this.nodeId,
+          state: status,
+          createdAt: trackedState?.createdAt,
+          cleanupToken: seededRow.cleanup_token ?? null,
+          createAttemptToken: seededRow.create_attempt_token ?? null,
+        },
+        replicaId,
+        {voterOnly: false},
+      );
+      if (preservedRole) {
+        seededRow.raft_role = preservedRole;
       }
       this.systemTableCache.applySystemTableChange(
         SYSTEM_TABLE_NAME.SERVICES,
@@ -648,10 +664,14 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       // Do not synthesize an incomplete row: only seed the field onto an
       // existing SERVICES row (the create-path seed already established it).
       const existingRow = this.systemTableCache.get(
-        SYSTEM_TABLE_NAME.SERVICES,
-        replicaId,
-      );
+        SYSTEM_TABLE_NAME.SERVICES, replicaId);
       if (!existingRow) {
+        return false;
+      }
+      const {trackedState} = observeTrackedReplicaState(this, replicaId);
+      if (trackedState &&
+        isConflictingCachedReplicaIdentity(existingRow, trackedState, replicaId)
+      ) {
         return false;
       }
       const trackedRole = this.getTrackedReplicaRole(replicaId);
@@ -664,16 +684,11 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       this.systemTableCache.applySystemTableChange(
         SYSTEM_TABLE_NAME.SERVICES,
         LOCAL_STR_UPSERT,
-        {
-          service_id: replicaId,
-          raft_role: normalizedRole,
-        },
+        {service_id: replicaId, raft_role: normalizedRole},
         {causeId: `local-voter-ready:${replicaId}`},
       );
       this.replicaStateMachine?.markServiceRowLocalOnly?.(
-        replicaId,
-        deferredDurableWriteActivation(this, replicaId),
-      );
+        replicaId, deferredDurableWriteActivation(this, replicaId));
       return true;
     }
 
@@ -693,15 +708,12 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         partitionId,
         status: ReplicaStatus.CREATING,
       });
-      this.seedLocalPriorityServiceRow(
-        replicaId,
-        partitionId,
-        ReplicaStatus.CREATING,
-      );
       const transitionContext = {
         partitionId,
         nodeId: this.nodeId,
         errorMessage: error?.message || null,
+        createAdmissionEvidence: options.createAdmissionEvidence,
+        createAttemptToken: options.createAttemptToken,
         serviceId: replicaId,
         serviceType: REPLICA_HANDLER_SERVICE.TYPE,
         serviceAddress: this.buildTrackedServiceAddress(replicaId),
@@ -741,6 +753,11 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
           });
         }
       }
+      this.seedLocalPriorityServiceRow(
+        replicaId,
+        partitionId,
+        ReplicaStatus.CREATING,
+      );
       this.logger.warn(REPLICA_HANDLER_LOG_MSG.CREATE_STATUS_WRITE_DEFERRED, {
         operationId,
         partitionId,

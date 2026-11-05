@@ -210,15 +210,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         throw error;
       }
       targetReplicaCount = provisionTargetNodeIds.length;
-      if (
-        !hasExplicitMinimumRoutableReplicaCount &&
-        convergenceResult.singleNodeClusterDefaultedMinimum === true
-      ) {
-        minimumRoutableReplicaCount = Math.min(
-          minimumRoutableReplicaCount,
-          targetReplicaCount,
-        );
-      } else if (!hasExplicitMinimumRoutableReplicaCount) {
+      if (!hasExplicitMinimumRoutableReplicaCount) {
         minimumRoutableReplicaCount = Math.max(
           this.calculateQuorumReplicaCount(requestedReplicaCount),
           Math.min(minimumRoutableReplicaCount, targetReplicaCount),

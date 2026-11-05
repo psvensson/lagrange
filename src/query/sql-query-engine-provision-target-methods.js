@@ -11,7 +11,6 @@ const LOCAL_STR_TIMEOUT = 'timeout';
 const LOCAL_STR_ELIGIBLE = 'eligible';
 const LOCAL_STR_READY_LEASE_EXPIRED = 'ready_lease_expired';
 const LOCAL_STR_PROVISIONING_UNAVAILABLE = 'provisioning_unavailable';
-const LOCAL_NUM_THREE = 3;
 const TARGET_NODE_WAIT_LOG_LEVEL = Object.freeze({
   FAIL: 'error',
   CONTINUE: 'warn',
@@ -81,36 +80,6 @@ class SQLQueryEngineProvisionTargetMethods {
       1,
       Math.min(requestedMinimumReplicaCount, targetReplicaCount),
     );
-  }
-
-  /**
-   * Preserve one quorum-sized floor for implicit RF3+ provisioning fallback.
-   * Smaller cohorts still degrade to one replica so single-node bootstrap and
-   * legacy RF2 owner paths remain backward-compatible.
-   * @param {number} requestedReplicaCount
-   * @param {number|undefined|null} visibleActiveNodeCount
-   * @return {number}
-   * @private
-   */
-  resolveImplicitProvisioningFallbackReplicaCount(
-    requestedReplicaCount,
-    visibleActiveNodeCount,
-  ) {
-    const normalizedReplicaCount =
-      Number.isInteger(requestedReplicaCount) && requestedReplicaCount > 0 ?
-        requestedReplicaCount :
-        1;
-    const normalizedVisibleActiveNodeCount =
-      Number.isInteger(visibleActiveNodeCount) && visibleActiveNodeCount > 0 ?
-        visibleActiveNodeCount :
-        0;
-    if (
-      normalizedReplicaCount < LOCAL_NUM_THREE ||
-      normalizedVisibleActiveNodeCount <= 1
-    ) {
-      return 1;
-    }
-    return this.calculateQuorumReplicaCount(normalizedReplicaCount);
   }
 
   /**
@@ -189,15 +158,6 @@ class SQLQueryEngineProvisionTargetMethods {
       });
     }
 
-    const knownClusterNodeCount = Math.max(
-      cohort?.answers ? Object.keys(cohort.answers).length : 0,
-      Number(lastDiagnostics?.activeNodeRowCount) || 0,
-      Number(lastDiagnostics?.totalNodeRowCount) || 0,
-    );
-    const singleNodeClusterDefaultedMinimum =
-      knownClusterNodeCount === 1 &&
-      options.minimumRoutableReplicaCountWasDefaulted === true &&
-      options.hasExplicitMinimumRoutableReplicaCount !== true;
     const quorumReplicaCount =
       this.calculateQuorumReplicaCount(requiredReplicaCount);
     const explicitMinimumReplicaCount =
@@ -206,9 +166,7 @@ class SQLQueryEngineProvisionTargetMethods {
       options.minimumRoutableReplicaCount > 0 ?
         Math.min(requiredReplicaCount, options.minimumRoutableReplicaCount) :
         quorumReplicaCount;
-    const quorumCount = singleNodeClusterDefaultedMinimum ?
-      1 :
-      Math.max(quorumReplicaCount, explicitMinimumReplicaCount);
+    const quorumCount = Math.max(quorumReplicaCount, explicitMinimumReplicaCount);
     const epoch = cohort?.epoch || lastDiagnostics?.epoch || null;
     const failOnTimeout = options.failOnTimeout !== false;
 
@@ -253,7 +211,6 @@ class SQLQueryEngineProvisionTargetMethods {
         admissionProbe: lastAdmissionProbe,
         timedOut: true,
         requiredReplicaCount,
-        singleNodeClusterDefaultedMinimum,
         waitedMs: 0,
         epoch,
         reasons: uniqueReasons,
@@ -271,7 +228,6 @@ class SQLQueryEngineProvisionTargetMethods {
       admissionProbe: lastAdmissionProbe,
       timedOut: false,
       requiredReplicaCount,
-      singleNodeClusterDefaultedMinimum,
       waitedMs: 0,
       epoch,
       contractOutcome: buildOwnerContractOutcome({
@@ -312,8 +268,6 @@ class SQLQueryEngineProvisionTargetMethods {
           options.admissionProbe :
           null,
       timedOut,
-      singleNodeClusterDefaultedMinimum:
-        options.singleNodeClusterDefaultedMinimum === true,
       requiredReplicaCount:
         Number.isInteger(options.requiredReplicaCount) &&
         options.requiredReplicaCount > 0 ?

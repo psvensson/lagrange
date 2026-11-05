@@ -684,3 +684,113 @@ test('contended durable propagation releases a contender only on actual source r
     );
   }
 });
+
+test('contended durable propagation retains live contender credit past 2500ms delayed ACK continuations and preempts borrowing contenders after 1 wave', async (t) => {
+  let nowMs = 1000;
+  let activeDeliverResolver = null;
+  const contenderActive = true;
+  const f = compose(t, LATENCY_PROPAGATION_MODE.SAFE, {
+    options: {nowFn: () => nowMs},
+    answer: async (payload) => {
+      if (activeDeliverResolver !== null) {
+        const wait = new Promise((resolve) => {
+          activeDeliverResolver = resolve;
+        });
+        await wait;
+      }
+      return committedTargetAnswer(payload);
+    },
+  });
+
+  // 1000 ms: SERVICES runs wave 1 while PARTITIONS contends with a live lifecycle callback.
+  activeDeliverResolver = () => {};
+  const svcWave1Req = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: 'svc-1'}),
+  );
+  const svcWave1Promise = f.service.propagateCDCEvent(svcWave1Req);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  const contenderDelivery = {
+    owner: {timeSource: new VirtualTimeSource({startMs: nowMs}), isShutdown: false},
+  };
+  const contenderContext = beginCdcDeliveryInvocation(
+    contenderDelivery,
+    () => contenderActive,
+  );
+  const partContendReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.PARTITIONS, eventKey: 'part-1'}),
+    contenderContext,
+  );
+  const busyRes = await f.service.propagateCDCEvent(partContendReq);
+  assert.equal(busyRes.error, CDC_COMPLETION.BACKPRESSURE);
+
+  const releaseWave1 = activeDeliverResolver;
+  activeDeliverResolver = null;
+  releaseWave1();
+  assert.equal((await svcWave1Promise).success, true);
+
+  for (let w = 2; w <= 4; w += 1) {
+    const req = createDurablePropagationRequest(
+      f.source,
+      createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: `svc-${w}`}),
+    );
+    const res = await f.service.propagateCDCEvent(req);
+    assert.equal(res.success, true);
+    assert.equal(req.deliveryContext.isContended(), w === 4);
+  }
+  // SERVICES yielded at 1000 ms -> reservation hold until 1300 ms for PARTITIONS.
+
+  // Advance clock to 4500 ms (3500 ms elapsed > 2500 ms while PARTITIONS is delayed in
+  // retryAcknowledgements draining multi-batch pre-hydration obligations).
+  // NODES steps in to borrow a wave after reservation expiry, without PARTITIONS colliding during wave 1.
+  nowMs = 4500;
+  const nodesWave1Req = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.NODES, eventKey: 'node-1'}),
+  );
+  const nodesWave1Res = await f.service.propagateCDCEvent(nodesWave1Req);
+  assert.equal(nodesWave1Res.success, true);
+  assert.equal(
+    f.service.waitingDurableSliceTables[0],
+    TABLES.PARTITIONS,
+    'live contender PARTITIONS is not evicted after 3500ms (> 2500ms)',
+  );
+  assert.equal(
+    f.service.creditedWaitingDurableSliceTables.has(TABLES.PARTITIONS),
+    true,
+    'live contender PARTITIONS retains its scheduling credit past 2500ms',
+  );
+  assert.equal(
+    nodesWave1Req.deliveryContext.isContended(),
+    true,
+    'borrowing contender NODES is marked contended on wave 1 because PARTITIONS holds scheduling credit',
+  );
+
+  // Because NODES yielded at the end of wave 1, the 300ms reservation hold is re-armed for PARTITIONS.
+  nowMs = 4550;
+  const nodesWave2Premature = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.NODES, eventKey: 'node-2'}),
+  );
+  assert.equal(
+    (await f.service.propagateCDCEvent(nodesWave2Premature)).error,
+    CDC_COMPLETION.BACKPRESSURE,
+    'borrowing contender NODES cannot run wave 2 while reservation is re-armed for credited PARTITIONS',
+  );
+
+  // PARTITIONS finishes its delayed ACK continuation and is admitted immediately.
+  const partAdmittedReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.PARTITIONS, eventKey: 'part-1'}),
+  );
+  const partAdmittedRes = await f.service.propagateCDCEvent(partAdmittedReq);
+  assert.equal(partAdmittedRes.success, true);
+  assert.equal(
+    f.service.creditedWaitingDurableSliceTables.has(TABLES.PARTITIONS),
+    false,
+    'PARTITIONS consumes its scheduling credit upon admission',
+  );
+});

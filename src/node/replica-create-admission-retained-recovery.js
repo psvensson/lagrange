@@ -61,14 +61,7 @@ function runtimeMatchesSupersededAdmission(
     matchesTaggedField(attemptToken, identity.attemptToken) ??
     matchesTaggedField(admissionToken, identity.admissionToken) ??
     matchesTaggedField(operationId, identity.operationId);
-  if (matched !== null) {
-    return matched;
-  }
-  return !(
-    identity.attemptToken ||
-    identity.admissionToken ||
-    identity.operationId
-  );
+  return matched === true;
 }
 
 function resolveFencedServiceCandidate(
@@ -102,21 +95,6 @@ async function fenceSupersededRuntimeIfPresent(
     serviceToFence,
     error,
   );
-}
-
-function deleteSupersededRuntimeRegistrations(
-  handler,
-  replicaId,
-  serviceMatches,
-  replicaMatches,
-) {
-  if (!replicaId) return;
-  if (serviceMatches) {
-    handler?.localServices?.delete?.(replicaId);
-  }
-  if (replicaMatches) {
-    handler?.localReplicas?.delete?.(replicaId);
-  }
 }
 
 function readRegisteredService(handler, replicaId) {
@@ -154,12 +132,6 @@ async function retireSupersededCreateAdmissionRuntime(handler, options = {}) {
     partitionId,
     serviceToFence,
     error,
-  );
-  deleteSupersededRuntimeRegistrations(
-    handler,
-    replicaId,
-    serviceMatches,
-    replicaMatches,
   );
 }
 

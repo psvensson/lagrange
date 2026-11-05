@@ -1058,6 +1058,203 @@ test('SQLQueryEngine - RF3 with sealed quorum minimum (2) never lowers minimumRo
     [],
     'no operations are created when sealed quorum minimum cannot be satisfied',
   );
+
+  // Observed-singleton RF3 negative control: even if the local node cache and cohort
+  // transiently observe only 1 node (node-a), RF3 must NOT downgrade quorum from 2 to 1.
+  const singletonNodes = [{node_id: localNodeId, status: 'active'}];
+  const singletonCache = {
+    onCacheChange() {},
+    offCacheChange() {},
+    has: () => true,
+    get: () => null,
+    filter: (type, predicate) => (type === TABLES.NODES ? singletonNodes.filter(predicate) : []),
+    getAll: (type) => (type === TABLES.NODES ? singletonNodes : []),
+  };
+  const singletonReadiness = createCommittedServeEligibilityOwner({
+    answers: {
+      'node-a': serveEligibilityAnswer(true),
+    },
+  });
+  singletonReadiness.getProvisioningNodeTrustViewSync = () => [
+    {nodeId: 'node-a', repairEligible: true, serveEligible: true},
+  ];
+  const singletonEngine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: singletonCache,
+    controlPlaneReadinessService: singletonReadiness,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator: {
+      createOperation: async (move) => {
+        createdTargetNodeIds.push(move.nodeId);
+        return {operationId: `op-${move.nodeId}`, ...move};
+      },
+      executeOperation: async () => ({success: true}),
+    },
+  });
+  let singletonRf3Threw = null;
+  try {
+    await singletonEngine.provisionInitialTablePartition({
+      partitionId: `${partitionId}-singleton`,
+      replicaCount: 3,
+      minimumRoutableReplicaCount: 2,
+      minimumRoutableReplicaCountWasDefaulted: true,
+    });
+  } catch (err) {
+    singletonRf3Threw = err;
+  }
+  t.ok(
+    singletonRf3Threw,
+    'RF3 with only 1 observed node in cache/cohort must still reject below quorum (2)',
+  );
+  t.equal(
+    singletonRf3Threw?.code,
+    QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
+    'RF3 observed-singleton must fail with PROVISIONING_UNAVAILABLE',
+  );
+});
+
+test('QueryExecutor - awaitPostOverlayRoutingRepair passes positional routingReadinessDimension and drives serve-eligibility refresh chain', async (t) => {
+  const {CONTROL_PLANE_READINESS_DIMENSION} = await import(
+    '../../src/control-plane/control-plane-readiness-constants.js'
+  );
+  const {
+    SERVE_ELIGIBILITY_DECISION,
+    SERVE_ELIGIBILITY_STATE,
+  } = await import(
+    '../../src/control-plane/serve-eligibility-owner.js'
+  );
+  const localNodeId = 'node-a';
+  const remoteNodeId = 'node-b';
+  const partitionId = 'tbl-overlay-chain-p1';
+
+  const cachedServices = [];
+  let serveEligibilityRefreshed = false;
+  let readServeEligibilityCount = 0;
+  let getNodeReadinessCount = 0;
+
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: {
+      onCacheChange() {},
+      offCacheChange() {},
+      has: () => false,
+      get: (table, id) =>
+        table === TABLES.PARTITIONS && id === partitionId ?
+          {partition_id: partitionId, table_id: 'tbl-overlay-chain', table_name: 'user_orders'} :
+          null,
+      filter: (table, predicate) =>
+        table === TABLES.SERVICES ? cachedServices.filter(predicate) : [],
+      getAll: (table) => (table === TABLES.SERVICES ? [...cachedServices] : []),
+    },
+    messageRouter: createMockMessageRouter(),
+    controlPlaneReadinessService: {
+      // Projection readiness says eligible so if getPartitionRoutingSnapshot
+      // receives a non-SERVE_ELIGIBLE dimension (such as a wrapped object),
+      // it would falsely treat node-b as routable and skip serve refresh.
+      getControlPlaneParticipationSync(nodeId) {
+        return {
+          eligible: nodeId === remoteNodeId,
+          failedDimensions: [],
+          reasonCodes: [],
+        };
+      },
+      answerServeEligibility(nodeId) {
+        if (nodeId !== remoteNodeId) {
+          return null;
+        }
+        return serveEligibilityRefreshed ?
+          {
+            state: SERVE_ELIGIBILITY_STATE.READY,
+            decision: SERVE_ELIGIBILITY_DECISION.ELIGIBLE,
+            epoch: 2,
+            reasons: [],
+          } :
+          {
+            state: SERVE_ELIGIBILITY_STATE.READY,
+            decision: SERVE_ELIGIBILITY_DECISION.NOT_ELIGIBLE,
+            epoch: 1,
+            reasons: ['epoch_behind'],
+          };
+      },
+      async readServeEligibility() {
+        readServeEligibilityCount += 1;
+        serveEligibilityRefreshed = true;
+        return {epoch: 2};
+      },
+      async getNodeReadiness() {
+        getNodeReadinessCount += 1;
+        return null;
+      },
+    },
+  });
+  const executor = engine.queryExecutor;
+
+  // Before overlay refresh, no service rows exist in cache.
+  const initialSnapshot = executor.getPartitionRoutingSnapshot(
+    partitionId,
+    CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+  );
+  t.equal(initialSnapshot.serviceRowCount, 0, 'pre-overlay snapshot has no service rows');
+
+  // Negative control: passing wrapped {routingReadinessDimension} object to
+  // getPartitionRoutingSnapshot after service row arrives bypasses
+  // evaluateServeEligibilityRoutability and falsely reports 0 denied nodes.
+  cachedServices.push({
+    service_id: `${partitionId}-r1`,
+    replica_id: `${partitionId}-r1`,
+    partition_id: partitionId,
+    service_type: 'partition',
+    status: 'active',
+    node_id: remoteNodeId,
+    address: '127.0.0.1:9102',
+  });
+  const buggyObjectDimensionSnapshot = executor.getPartitionRoutingSnapshot(
+    partitionId,
+    {routingReadinessDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE},
+  );
+  t.same(
+    executor.collectAllFilteredRoutingRepairNodeIds(buggyObjectDimensionSnapshot),
+    [],
+    'negative control: object dimension argument bypasses SERVE_ELIGIBLE evaluation and misses denied node',
+  );
+  cachedServices.length = 0;
+
+  // Positive end-to-end chain: overlay refresh populates the active service row,
+  // awaitPostOverlayRoutingRepair calls getPartitionRoutingSnapshot with positional
+  // SERVE_ELIGIBLE dimension, discovers node-b is serve-denied, and awaits readServeEligibility().
+  executor.refreshRoutingMetadataOverlay = async () => {
+    cachedServices.push({
+      service_id: `${partitionId}-r1`,
+      replica_id: `${partitionId}-r1`,
+      partition_id: partitionId,
+      service_type: 'partition',
+      status: 'active',
+      node_id: remoteNodeId,
+      address: '127.0.0.1:9102',
+    });
+    return true;
+  };
+
+  const repaired = await executor.maybeAwaitDeniedPartitionRoutingRepair(
+    initialSnapshot,
+    {allowReadinessAuthoritativeRefresh: true},
+  );
+  t.equal(repaired, true, 'overlay + post-overlay repair chain reports repaired');
+  t.equal(
+    readServeEligibilityCount,
+    1,
+    'post-overlay SERVE_ELIGIBLE denial drives awaitServeEligibilityRefreshForDenial -> readServeEligibility()',
+  );
+  t.equal(getNodeReadinessCount, 0, 'projection repair not called for SERVE_ELIGIBLE');
+  const postRepairSnapshot = executor.getPartitionRoutingSnapshot(
+    partitionId,
+    CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+  );
+  t.equal(
+    postRepairSnapshot.routableServiceCount,
+    1,
+    'service is routable for SERVE_ELIGIBLE after post-overlay serve-eligibility refresh',
+  );
 });
 
 test('SQLQueryEngine & RuntimeServiceDefinitionResolution - authoritative SQL absence overrides stale cached presence and evicts populated SystemTableCache rows', async (t) => {

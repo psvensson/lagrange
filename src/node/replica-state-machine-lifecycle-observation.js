@@ -276,15 +276,62 @@ function isNonEmptyString(value) {
   return typeof value === 'string' && value.length > 0;
 }
 
+function hasConflictingNonEmptyField(cachedValue, expectedValue) {
+  return isNonEmptyString(cachedValue) &&
+    isNonEmptyString(expectedValue) &&
+    cachedValue !== expectedValue;
+}
+
+function isConflictingCachedIncarnationTokens(cachedRow, replicaState) {
+  if (
+    hasConflictingNonEmptyField(
+      cachedRow?.create_attempt_token,
+      replicaState?.createAttemptToken,
+    )
+  ) {
+    return true;
+  }
+  if (
+    isNonEmptyString(cachedRow?.cleanup_token) &&
+    cachedRow.cleanup_token !== (replicaState?.cleanupToken ?? null)
+  ) {
+    return true;
+  }
+  return Number.isFinite(cachedRow?.created_at) &&
+    Number.isFinite(replicaState?.createdAt) &&
+    cachedRow.created_at !== replicaState.createdAt;
+}
+
+const ROLE_PRESERVING_LIFECYCLE_STATES = new Set([
+  ReplicaStatus.PENDING,
+  ReplicaStatus.CREATING,
+  ReplicaStatus.SYNCING,
+  ReplicaStatus.ACTIVE,
+]);
+
 function isConflictingCachedReplicaIdentity(cachedRow, replicaState, serviceId) {
-  const cachedReplicaId = cachedRow?.replica_id;
-  if (!isNonEmptyString(cachedReplicaId)) {
+  if (!cachedRow || typeof cachedRow !== 'object') {
     return false;
+  }
+  if (
+    isNonEmptyString(cachedRow.status) &&
+    !ROLE_PRESERVING_LIFECYCLE_STATES.has(cachedRow.status.toLowerCase())
+  ) {
+    return true;
   }
   const replicaIdentity =
     replicaState?.replicaIdentity || replicaState?.replicaId || serviceId;
-  return isNonEmptyString(replicaIdentity) &&
-    cachedReplicaId !== replicaIdentity;
+  if (
+    hasConflictingNonEmptyField(cachedRow.replica_id, replicaIdentity) ||
+    hasConflictingNonEmptyField(cachedRow.node_id, replicaState?.nodeId) ||
+    hasConflictingNonEmptyField(
+      cachedRow.partition_id,
+      replicaState?.partitionId,
+    )
+  ) {
+    return true;
+  }
+  return isConflictingCachedIncarnationTokens(cachedRow, replicaState);
 }
 
 function resolveLiveReplicaRaftRole(stateMachine, replicaState, serviceId) {
@@ -300,13 +347,6 @@ function resolveLiveReplicaRaftRole(stateMachine, replicaState, serviceId) {
   }
   return null;
 }
-
-const ROLE_PRESERVING_LIFECYCLE_STATES = new Set([
-  ReplicaStatus.PENDING,
-  ReplicaStatus.CREATING,
-  ReplicaStatus.SYNCING,
-  ReplicaStatus.ACTIVE,
-]);
 
 function isNonActiveReplicaLifecycleState(replicaState) {
   return isNonEmptyString(replicaState?.state) &&
@@ -360,6 +400,7 @@ export {
   buildReplicaLifecycleMutationPredicateFromRow,
   buildReplicaLifecycleMutationPredicateFromState,
   durableRowVersion,
+  isConflictingCachedReplicaIdentity,
   isReplicaLifecycleMutationPredicate,
   nextLifecycleStateEntry,
   installAuthoritativeReplicaLifecycleSnapshot,
