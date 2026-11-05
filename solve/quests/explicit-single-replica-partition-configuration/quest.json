@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "explicit-single-replica-partition-configuration",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "An explicitly configured single-replica partition is accepted by startup configuration validation and reaches public embedded table provisioning as RF1, while omitted configuration retains RF3 and an RF3 request on one eligible node remains unavailable. The existing one-runtime public database witness explicitly requests RF1 through its public configuration input.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/explicit-single-replica-partition-configuration/evidence/receipt.json",
+      "requiredReceipts": [
+        "configuration-boundary",
+        "public-embedded-rf1",
+        "requested-quorum-preserved",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "explicit-only",
+      "statement": "Preserve the production default of three, the existing rejection of RF2, message-group configuration, requested provisioning minima, and physical formation configuration. Never derive RF1 from observed availability or bypass public validation."
+    },
+    {
+      "id": "bounded-prerequisite",
+      "statement": "This repairs the configuration inconsistency exposed by E8 on 0bafa0f3e5fba82ab6b580d3f2bc185f70dddf01. It does not claim H1 formation causality or alter the fresh-formation quest's acceptance."
+    },
+    {
+      "id": "validation",
+      "statement": "Prove omitted RF3, explicit RF1 and RF3, rejection of zero/negative/fractional/RF2 values, public embedded RF1 writes, and retained RF3 singleton refusal plus two-node quorum success. Runtime work uses the existing lab runner and all bounds remain unchanged."
+    }
+  ],
+  "sealedAt": "0bafa0f3e5fba82ab6b580d3f2bc185f70dddf01"
+}

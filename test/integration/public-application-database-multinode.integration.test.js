@@ -18,6 +18,8 @@
  * PK read (64 ms), cross-node update visibility (33 ms), F1, F2, EXPLAIN
  * refusal and every leak check passed; that run is recorded, not asserted.
  *
+ * The one-runtime fixture explicitly configures partition RF1 through the
+ * public startup input. Default RF3 retains its requested quorum.
  * What this proves at the committed shape, and what it does not:
  * - The application names rows ONLY by its own PRIMARY KEY value (composite
  *   string ids such as `img:<sha>:blob`); statements go through the canonical
@@ -112,7 +114,9 @@ test('public application database routes by primary key through embedded process
   timeout: MULTINODE_TEST_TIMEOUT_MS,
 }, async (t) => {
   const cluster = createEmbeddedCluster(t);
-  const formation = await cluster.formCluster(MULTINODE_CLUSTER_SIZE);
+  const formation = await cluster.formCluster(MULTINODE_CLUSTER_SIZE, {
+    configuration: {partition: {defaultReplicaCount: 1}},
+  });
   t.comment(`formation (${MULTINODE_CLUSTER_SIZE} processes): ` +
     JSON.stringify(formation));
   const seed = cluster.nodes[0];
@@ -234,9 +238,11 @@ test('public application database routes by primary key through embedded process
     t.same(rowIds(fulfilledRows(exact)), [RANGE_IDS[2]], 'exact PK lookup');
 
     const tablePartitions = (await cluster.seedQueryRows(
-      'SELECT partition_id FROM partitions WHERE table_name = ?', [TABLE]));
+      'SELECT partition_id, replica_count FROM partitions WHERE table_name = ?', [TABLE]));
     t.equal(tablePartitions.length, 1,
       'harness view: the unsplit table is one partition (single-partition range proof)');
+    t.equal(tablePartitions[0].replica_count, 1,
+      'the public startup configuration reaches the persisted RF1 target');
   });
 
   await t.test('the application process refuses session work before start', async (t) => {

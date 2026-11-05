@@ -19,6 +19,7 @@ quests:
   - fresh-create-release-authority-from-committed-operation
   - replica-admission-from-committed-operation
   - dynamic-config-startup-owned-initialization
+  - explicit-single-replica-partition-configuration
 authorizes:
   - src
   - test
@@ -107,6 +108,21 @@ node within preregistered bounds.
   consecutive fresh-state physical runs remain open. The formal receipt stays
   failing until its existing obligations have evidence. Continuation owner:
   the current local integration session; no physical run has yet been submitted.
+- E8 on frozen `0bafa0f3e5fba82ab6b580d3f2bc185f70dddf01` passed 28/29
+  files on tv-dator (2,130 reported assertions). The one-runtime embedded
+  public-seam fixture requested default RF3 and correctly received
+  `PROVISIONING_UNAVAILABLE`. The bounded prerequisite
+  `explicit-single-replica-partition-configuration` makes RF1 an explicit
+  public startup choice for that fixture while retaining default RF3 and
+  its requested quorum. The new configuration regression is red on the
+  previous schema. E8 must run again on the resulting frozen candidate.
+  The earlier E3/E6 content approval is retained, not promoted to E8 approval.
+- E9's archived registered red baseline has been recovered and its two
+  bundle hashes verified. The first-divergence receipt still needs the
+  same-learner authoritative SERVICES/cache observation identified in the
+  historical H1 investigation; the current reviewer is checking retained
+  owner diagnostics. Three future green runs alone cannot supply that causal
+  observation. This does not change any physical acceptance predicate.
 
 ## Approved user-visible contract
 

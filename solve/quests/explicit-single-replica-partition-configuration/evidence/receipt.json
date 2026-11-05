@@ -1,0 +1,12 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "configuration-boundary", "passed": false},
+    {"id": "public-embedded-rf1", "passed": false},
+    {"id": "requested-quorum-preserved", "passed": false},
+    {"id": "independent-verification", "passed": false}
+  ],
+  "evidence": [],
+  "applicability": "Bounded E8 prerequisite; not physical formation or release acceptance. Startup schema currently rejects explicit RF1, and the one-runtime E8 fixture requests unavailable default RF3 at 0bafa0f3e5fba82ab6b580d3f2bc185f70dddf01."
+}
