@@ -1957,6 +1957,24 @@
         "test/node/fresh-create-authority-unavailability-native.integration.test.js"
       ]
     },
+    "dynamic-config-startup-ownership": {
+      "description": "The config service fences late reads against CDC, startup wiring retains late application and its single controller, and the controller subscribes before hydration while shutdown detaches every watcher and prevents later loop startup; existing wait-bound certification remains strict.",
+      "owners": [
+        "src/config/dynamic-config-service.js",
+        "src/config/dynamic-config-startup-wiring.js",
+        "src/config/raft-adaptive-timing-controller.js",
+        "src/entrypoint-runtime-shutdown-lifecycle.js"
+      ],
+      "tests": [
+        "test/config/dynamic-config-startup-owned-initialization.test.js",
+        "test/config/dynamic-config-startup-wait-bound-spent.test.js",
+        "test/config/dynamic-config-startup-wiring.test.js",
+        "test/config/dynamic-config-cdc-update-shape.test.js",
+        "test/config/dynamic-config-service.test.js",
+        "test/config/raft-adaptive-timing-controller.test.js",
+        "test/distributed/harness/__tests__/scenario-certification.test.js"
+      ]
+    },
     "schema-provisioning-quorum-refusal": {
       "description": "A committed-cohort quorum refusal remains nonterminal in the canonical durable schema owner and reaches SQL clients as the current typed DEFERRED/RETRY observation; the existing fenced retry completes the same intent when quorum becomes available.",
       "owners": [
@@ -4136,6 +4154,31 @@
         "test/partition/partition-admission-redrive-wakes.test.js",
         "test/raft/raft-rs-backend/admission-redrive-chain.test.js",
         "test/node/replica-handler.test.js"
+      ]
+    },
+    "dynamic-config-startup-ownership": {
+      "description": "CDC ordering, retained startup application and adaptive-controller shutdown must agree on the same current values and one owned lifecycle across delayed hydration.",
+      "endpoints": [
+        {
+          "id": "config-read-and-cdc-ordering",
+          "owners": ["src/config/dynamic-config-service.js"]
+        },
+        {
+          "id": "startup-and-controller-custody",
+          "owners": [
+            "src/config/dynamic-config-startup-wiring.js",
+            "src/config/raft-adaptive-timing-controller.js",
+            "src/entrypoint-runtime-shutdown-lifecycle.js"
+          ]
+        }
+      ],
+      "contract": "dynamic-config-startup-ownership",
+      "witnessTests": [
+        "test/config/dynamic-config-startup-owned-initialization.test.js",
+        "test/config/dynamic-config-startup-wait-bound-spent.test.js",
+        "test/config/dynamic-config-startup-wiring.test.js",
+        "test/config/dynamic-config-cdc-update-shape.test.js",
+        "test/config/raft-adaptive-timing-controller.test.js"
       ]
     },
     "schema-provisioning-quorum-refusal": {

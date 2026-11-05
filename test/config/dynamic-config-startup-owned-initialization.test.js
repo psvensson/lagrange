@@ -549,19 +549,30 @@ test('F5 c1: initialize after shutdown reads nothing', async (t) => {
   t.equal(watched.length, 0, 'no watcher');
 });
 
-test('F5 c2: a shutdown during loadConfig registers no watcher, though profile ' +
-  'detection never answers', async (t) => {
+test('F5 c2: shutdown during loadConfig detaches its early watchers and ' +
+  'starts no later profile or loop', async (t) => {
   const release = [];
-  const {controller, watched} = controllerOver(() =>
-    new Promise((resolve) => release.push(resolve)));
-  void controller.initialize();
+  let profileReads = 0;
+  const {controller, watched, started, liveWatchers} = controllerOver((key) => {
+    if (key === CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS) profileReads += 1;
+    return new Promise((resolve) => release.push(resolve));
+  });
+  t.teardown(() => controller.shutdown());
+  const initialize = controller.initialize();
   await tick(5);
+  t.ok(watched.length > 0, 'subscribed before hydration can miss an update');
+  t.equal(liveWatchers(), watched.length, 'early registrations are live');
   controller.shutdown();
+  t.equal(liveWatchers(), 0, 'shutdown removes every early watcher');
   for (let round = 0; round < 40 && release.length > 0; round += 1) {
     release.shift()(undefined);
     await tick(1);
   }
-  t.equal(watched.length, 0, 'loadConfig finished into a stopped controller');
+  await initialize;
+  t.equal(liveWatchers(), 0, 'late load completion cannot register again');
+  t.equal(controller.initialized, false, 'the stopped controller stays stopped');
+  t.equal(profileReads, 0, 'shutdown prevents entry into profile detection');
+  t.equal(started.length, 0, 'no later loop');
 });
 
 test('F5 c3: a shutdown during profile detection leaves it uninitialized', async (t) => {

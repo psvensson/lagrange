@@ -103,9 +103,40 @@ as `DEFERRED/RETRY`, with identical epoch/reasons/retry delay through SQLSTATE
 `57P03`. It changes no quorum, wait budget or timer policy and does not migrate
 previously terminal rows. The production-seam red and green logs, distinct-owner
 lease/recovery control, and retained six-file live evidence are recorded in the
-Quest log. Broader checks also exposed two unchanged April-era quorum fixtures;
+Quest logs. Broader checks also exposed two unchanged April-era quorum fixtures;
 they now enforce RF2's quorum and exercise RF3's real caller minimum with actual
-GENESIS replica/node identities. The next frozen candidate still needs E8/E9.
+GENESIS replica/node identities. The repaired source is frozen at
+`9f9e039269bf04a6f19def12c5940cd8244df5df`: five schema/quorum suites pass 413
+assertions; strict classifier complexity passes. E8 then passed 20 assertions
+on locked `tv-dator` in 136,132 ms. Its logs contain 67 temporary quorum
+refusals before recovery and all three no-admin guards remain empty. Six copied
+evidence files match their remote hashes. The verified 33-file archive is
+`sha256:ea38366b8e7fdfb90123d5cfcb6589a75cd8443b628e6f5e41d9eda3f0a64019`,
+linked by the canonical evidence-store finding in the formation Quest.
+
+Audit reconciliation preserves the formation seal: E8 did not satisfy its
+H1-before-source ordering, and later green cannot retroactively do so. The
+bounded schema custody repair is recorded under the already-sealed
+`serve-eligibility-committed-epoch-read` F10 contract. Original formation
+receipts remain false. The current receipt audit also found an inherited
+`ServeEligibilityOwner` read-failure timer whose applicability to that seal's
+no-new-timer constraint is unresolved. No blanket six-receipt approval is
+claimed while that finding remains open.
+
+The startup ownership dependency has current independent source review and
+seven passing suites (743 assertions). Its shutdown witness now measures live
+watcher removal after subscribe-before-hydrate, zero profile-detection reads,
+and no later loop; the startup interaction is registered. The final witness
+rerun passes 147 assertions. This remains bounded mechanism proof, with its
+historical replay limitations and spent-bound certification policy intact;
+Solver landing is pending.
+
+Fresh-release sequencing remains explicit: the sealed first-admission-send
+boundary and C1-C3 follow-up is conditional on both owning changes reaching
+main. Verified remote main `644017d7155882f98ab01bf7bc0900ff3eaf090d` contains
+neither. Current runtime-open and resumed-SYNCING markers conservatively retain
+cleanup custody; no new orphan path was demonstrated. This is a retained
+conditional obligation, not a silently waived requirement.
 
 E9 has not been submitted on the takeover candidate. The latest inherited
 physical report failed projection/authority agreement and observation integrity
@@ -117,10 +148,11 @@ This scenario lacks `SCENARIO_CERTIFICATION_REQUIREMENT`: use its ordinary
 physical harness route with exact committed source/image evidence, and do not
 claim the distinct `--certify` certificate. The receipt remains failing.
 
-Next action: independently review the bounded schema-owner correction and
-updated witnesses, freeze the candidate, and rerun E8 through the locked lab
-owner before E9. The receipt remains red until exact-candidate evidence closes
-all required claims.
+Next action: freeze the reviewed witness/evidence updates and run the unchanged
+registered physical scenario through the lab owner. Treat the first run as
+current baseline evidence while the timer constraint and H1 trace remain open;
+do not count it as a completed acceptance streak. The receipt remains red until
+exact-candidate evidence closes all required claims.
 
 ## Approved user-visible contract
 
