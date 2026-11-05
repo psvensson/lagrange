@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 119,
     "architecture-governance": 21,
-    "bootstrap-membership": 337,
+    "bootstrap-membership": 338,
     "cdc-metadata": 70,
     "cli-tooling": 99,
     "control-plane": 233,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2591,
-  "digest": "fnv1a32-7bb2d482",
+  "censusSize": 2592,
+  "digest": "fnv1a32-110b6579",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-fd50abfd",
+  "observationDigest": "fnv1a32-62d40485",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1287,6 +1287,7 @@
     "test/node/replica-cleanup-token-authority.test.js": "bootstrap-membership",
     "test/node/replica-create-admission-owner.test.js": "bootstrap-membership",
     "test/node/replica-create-admission-recovery.test.js": "bootstrap-membership",
+    "test/node/replica-create-timeout-replay-custody.test.js": "bootstrap-membership",
     "test/node/replica-executor-activation-handler-boundary.test.js": "bootstrap-membership",
     "test/node/replica-failed-create-cleanup-generation.test.js": "bootstrap-membership",
     "test/node/replica-handler-cache-state.test.js": "bootstrap-membership",
@@ -10709,6 +10710,18 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-status.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/node/replica-create-timeout-replay-custody.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schema-sql.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/executor-outcome-emitter.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-status.js",
+        "test/test-helpers/replica-create-admission-recovery-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },

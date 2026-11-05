@@ -206,12 +206,15 @@
         "src/partition/partition-service-row-owner.js",
         "src/bootstrap/phases/seed-partitions-phase.js",
         "src/bootstrap/rejoin-hints-durable-evidence.js",
-        "src/cdc/cdc-integration-service-mutations.js"
+        "src/cdc/cdc-integration-service-mutations.js",
+        "src/node/replica-handler-create-admission-methods.js",
+        "src/node/replica-create-admission-owner.js"
       ],
       "tests": [
         "test/node/replica-lifecycle-durable-generation.test.js",
         "test/node/replica-handler.test.js",
-        "test/partition/partition-service-cleanup-token-schema.test.js"
+        "test/partition/partition-service-cleanup-token-schema.test.js",
+        "test/node/replica-create-timeout-replay-custody.test.js"
       ]
     },
     "failed-create-target-authoritative-cleanup": {
@@ -1932,18 +1935,26 @@
       ]
     },
     "replica-create-failure-claim-and-retry-type": {
-      "description": "A failed replica CREATE whose admission input may exist (runtime opened, or its own admissible durable row resumed) is published as a terminal create failure carrying the failed-create cleanup claim and no deferRetry; only a create whose admission input is absent may stay unclaimed and re-dispatchable. The owner-path guard and the fresh-create witnesses exercise that rule.",
+      "description": "A failed replica CREATE whose admission input may exist (runtime opened, or its own admissible durable row resumed) is published as a terminal create failure carrying the failed-create cleanup claim and no deferRetry; only a create whose admission input is absent may stay unclaimed and re-dispatchable. The owner-path guard and the fresh-create witnesses exercise that rule. A real PENDING timeout during materialization confirmation reconciles exact lifecycle FAILED into admission FAILED before legal attempt rotation; direct identical replay uses the same authority as retained recovery. Terminal, claimed-cleanup, CLOSED, boot and identity fences remain effective.",
       "owners": [
         "src/node/replica-create-admission-input.js",
         "src/node/replica-handler-create-methods.js",
         "src/node/replica-handler-create-status-methods.js",
-        "src/node/replica-handler-create-admission-methods.js"
+        "src/node/replica-handler-create-admission-methods.js",
+        "src/node/replica-create-admission-owner.js",
+        "src/node/replica-create-admission-retained-recovery.js",
+        "src/node/replica-state-machine",
+        "src/node/replica-handler-failed-create-publication.js"
       ],
       "tests": [
         "test/node/replica-handler-owner-path-bypass.test.js",
         "test/node/fresh-create-resumed-syncing-claim.test.js",
         "test/node/replica-handler.test.js",
-        "test/node/fresh-create-authority-unavailability-native.integration.test.js"
+        "test/node/fresh-create-authority-unavailability-native.integration.test.js",
+        "test/node/replica-create-timeout-replay-custody.test.js",
+        "test/node/replica-create-admission-recovery.test.js",
+        "test/node/replica-create-admission-owner.test.js",
+        "test/rebalancer/terminal-failed-add-target-cleanup.test.js"
       ]
     },
     "fresh-create-release-authority": {
@@ -2203,7 +2214,9 @@
             "src/node/replica-handler-create-methods.js",
             "src/bootstrap/phases/seed-partitions-phase.js",
             "src/bootstrap/rejoin-hints-durable-evidence.js",
-            "src/cdc/cdc-integration-service-mutations.js"
+            "src/cdc/cdc-integration-service-mutations.js",
+            "src/node/replica-handler-create-admission-methods.js",
+            "src/node/replica-create-admission-owner.js"
           ]
         }
       ],
@@ -2211,7 +2224,8 @@
       "witnessTests": [
         "test/node/replica-lifecycle-durable-generation.test.js",
         "test/node/replica-handler.test.js",
-        "test/partition/partition-service-cleanup-token-schema.test.js"
+        "test/partition/partition-service-cleanup-token-schema.test.js",
+        "test/node/replica-create-timeout-replay-custody.test.js"
       ]
     },
     "failed-create-target-authoritative-cleanup": {
@@ -4245,6 +4259,34 @@
         "test/control-plane/serve-eligibility-committed-epoch-read.test.js",
         "test/query/query-executor-serve-eligibility-routing.test.js",
         "test/control-plane/readiness-routing-heartbeat-window.test.js"
+      ]
+    },
+    "replica-create-failure-claim-and-retry-type": {
+      "description": "Partition CREATE reconciles the exact expired lifecycle and admitted operation before existing failed-attempt rotation. Retry custody and terminal cleanup remain paired with current durable identity and worker ownership.",
+      "endpoints": [
+        {
+          "id": "lifecycle-and-admission",
+          "owners": [
+            "src/node/replica-state-machine",
+            "src/node/replica-create-admission-owner.js",
+            "src/node/replica-create-admission-retained-recovery.js"
+          ]
+        },
+        {
+          "id": "create-replay",
+          "owners": [
+            "src/node/replica-handler-create-admission-methods.js",
+            "src/node/replica-handler-create-status-methods.js",
+            "src/node/replica-handler-create-methods.js",
+            "src/node/replica-handler-failed-create-publication.js"
+          ]
+        }
+      ],
+      "contract": "replica-create-failure-claim-and-retry-type",
+      "witnessTests": [
+        "test/node/replica-create-timeout-replay-custody.test.js",
+        "test/node/replica-create-admission-recovery.test.js",
+        "test/rebalancer/terminal-failed-add-target-cleanup.test.js"
       ]
     }
   }

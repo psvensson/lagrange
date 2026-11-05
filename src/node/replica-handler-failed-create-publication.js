@@ -5,6 +5,42 @@ import {
   isRetryableControlPlaneError,
 } from '../control-plane/control-plane-error-classification.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {isUnclaimedPreRuntimeFailedCreateRow} from
+  '../rebalancer/failed-create-cleanup-token.js';
+import {CREATE_ADMISSION_ERROR_CODE} from './replica-create-admission-owner.js';
+import {isReplicaCreateProgressRowSuperseded} from './replica-create-process-owner.js';
+
+function initialStatusDeferral(evidence, cause) {
+  return Object.assign(new Error(
+    `CREATE initial status recovery deferred ${evidence.operationId}`, {cause}), {
+    code: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+    errorCode: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+    deferRetry: true,
+  });
+}
+
+// A timeout can win after the initial-status replay probes. Only its exact,
+// still-live pre-runtime attempt retains retry custody; this grants no effect
+// authority and leaves settlement and worker release with the failure owner.
+async function expiredCreateInitialStatusError(handler, options, error, observeCreateReplay) {
+  const evidence = options.createAdmissionEvidence;
+  if (!evidence || error?.code || error?.deferRetry) return error;
+  const owner = handler.getReplicaCreateAdmissionOwner();
+  if (!await owner.revalidatePhysicalWorker(options.createPhysicalWorkerClaim, evidence)) {
+    return error;
+  }
+  const operation = await owner.readOperation(evidence.operationId);
+  if (!operation || operation.completed_at != null ||
+      isReplicaCreateProgressRowSuperseded(owner, operation, evidence)) return error;
+  const observation = await observeCreateReplay(handler, options.replicaId,
+    options.partitionId, ReplicaStatus.FAILED, evidence).catch((readError) => {
+    throw initialStatusDeferral(evidence, readError);
+  });
+  // Unavailable authority cannot turn uncertainty into terminal cleanup.
+  // A positively observed cleanup/identity refusal keeps its original meaning.
+  if (observation.available && !isUnclaimedPreRuntimeFailedCreateRow(observation.row)) return error;
+  return initialStatusDeferral(evidence, error);
+}
 
 function trackedReplicaState(handler, replicaId) {
   return handler.replicaStateMachine?.getState?.(replicaId) ?? null;
@@ -95,4 +131,4 @@ async function persistFailedCreateLifecycle(
   )};
 }
 
-export {persistFailedCreateLifecycle};
+export {expiredCreateInitialStatusError, persistFailedCreateLifecycle};

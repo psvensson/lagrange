@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2241,
+    "unit": 2242,
     "integration": 124,
     "bootstrap": 219,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2591,
-  "digest": "fnv1a32-9650c0e8",
+  "censusSize": 2592,
+  "digest": "fnv1a32-c2031856",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1268,6 +1268,7 @@
     "test/node/replica-cleanup-token-authority.test.js": "unit",
     "test/node/replica-create-admission-owner.test.js": "unit",
     "test/node/replica-create-admission-recovery.test.js": "unit",
+    "test/node/replica-create-timeout-replay-custody.test.js": "unit",
     "test/node/replica-executor-activation-handler-boundary.test.js": "unit",
     "test/node/replica-failed-create-cleanup-generation.test.js": "unit",
     "test/node/replica-handler-cache-state.test.js": "unit",

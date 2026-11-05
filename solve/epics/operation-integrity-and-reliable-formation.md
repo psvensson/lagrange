@@ -19,6 +19,7 @@ quests:
   - fresh-create-release-authority-from-committed-operation
   - replica-admission-from-committed-operation
   - dynamic-config-startup-owned-initialization
+  - replica-create-timeout-replay-custody
 authorizes:
   - src
   - test
@@ -129,8 +130,41 @@ pass 480 assertions. Deliberately dropping the retained wake or restoring the
 poll each fails its intended witness. Production source hash is
 `02c907fd954943d524ddef6bf7191582e7f0868713d1b88aa44255e4b146b33e`.
 Independent exact-source review approves this bounded mechanism at the hashes
-recorded in the F10 Quest log. The required broader lab proof is pending; this
-mechanism result does not attribute the physical formation failure.
+recorded in the F10 Quest log. Frozen commit
+`340e34e484c04bb2badacfc97b5aa34aedf5c74a` ran the canonical 150-file Q6 set
+on four locked lab hosts: 138 passed, 12 failed, 6,274 runner assertions. The
+genuine three-process no-admin-poll witness passed on that source. All twelve
+failing files also failed with the same first-failure signature on frozen
+predecessor `d717874ca0d0271802f584ad654d006b24450d21`, on their same machines.
+Complete logs and ledgers are uploaded through the evidence owner at
+`sha256:14c19ad9c8ebf02aceb2fccd370365d5ecd2110c073bd5286461beaf12c39d92`
+(candidate) and
+`sha256:41b1bb2e5dfcd1adb0f1b3c89c273b299dac7721288ccdd6760bf63c2c5cf1cb`
+(comparison). These inherited failures remain open; no broader green or physical
+formation acceptance is claimed.
+
+The new sealed bounded Quest `replica-create-timeout-replay-custody` addresses
+the participant's timeout/replay mismatch exposed by the physical baseline.
+Its real handler, admission and lifecycle owners reproduce the unchanged
+PENDING timeout while an authority read waits. Retained recovery before replay
+succeeds, whereas direct replay loses custody. The current working candidate
+reconciles exact FAILED lifecycle evidence into admission FAILED and preserves
+typed deferral at the initial-status boundary, including the actual
+`sql_transactions-p1` priority path and unavailable classification authority.
+It reuses existing attempt rotation, failure settlement and worker release.
+No timer, retry budget, cleanup policy or shared-worker semantics change.
+Forty-two composed cases and fifteen retained-recovery cases pass locally;
+five controlled negative treatments fail their intended behavioral assertions,
+including both returned and rejected classifier-read unavailability.
+Thirty fence controls cover terminal operations, cleanup claims, CLOSED
+admissions, boot changes and changed identities across three wait points on
+ordinary and priority partitions. Independent exact-source re-review approves
+the bounded repair and its component proof; the frozen eleven-file locked-lab
+interaction proof remains pending. This repair does not
+identify the physical authority delay, settle formation H1 or prove physical
+cleanup completion. The historical epic YAML parser defect was separately
+reviewed and repaired without changing acceptance fields; its checkpoint is
+pending the same metadata-consistent code freeze.
 
 The startup ownership dependency has current independent source review and
 seven passing suites (743 assertions). Its shutdown witness now measures live

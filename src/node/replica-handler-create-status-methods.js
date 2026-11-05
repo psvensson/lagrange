@@ -19,7 +19,7 @@ import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {buildFailedCreateCleanupToken} from
   '../rebalancer/failed-create-cleanup-token.js';
 import {CREATE_ADMISSION_STATE} from './replica-create-admission-owner.js';
-import {persistFailedCreateLifecycle} from
+import {expiredCreateInitialStatusError, persistFailedCreateLifecycle} from
   './replica-handler-failed-create-publication.js';
 import {durableRowVersion} from './replica-state-machine-recovery.js';
 import {
@@ -138,12 +138,7 @@ async function rotateFailedCreateEvidence(handler, evidence, physicalClaim) {
 
 function buildRotatingReplayContext(handler, replicaId, partitionId,
   service, rotatingEvidence) {
-  const context = buildFailedCreateReplayContext(
-    handler,
-    replicaId,
-    partitionId,
-    service,
-  );
+  const context = buildFailedCreateReplayContext(partitionId, service);
   if (!rotatingEvidence) return context;
   return {
     ...context,
@@ -152,22 +147,23 @@ function buildRotatingReplayContext(handler, replicaId, partitionId,
   };
 }
 
-// The exact authoritative row of this create on this node in `status`,
-// installed as the tracked state; null when the row is anything else.
-async function resolveCreateReplay(
-  handler,
-  replicaId,
-  partitionId,
-  status,
-  createAdmissionEvidence = null,
-) {
+async function observeCreateReplay(handler, replicaId, partitionId, status,
+  createAdmissionEvidence = null) {
   const observation = await handler.replicaStateMachine
     .observeAuthoritativeReplicaLifecycle(replicaId);
-  if (observation?.available !== true ||
-      !isExactCreateRow(handler, observation.row,
-        {replicaId, partitionId, status, createAdmissionEvidence})) {
-    return null;
-  }
+  if (observation?.available !== true) return {available: false, row: null};
+  const row = isExactCreateRow(handler, observation.row,
+    {replicaId, partitionId, status, createAdmissionEvidence}) ? observation.row : null;
+  return {available: true, row};
+}
+
+// The exact authoritative row of this create on this node in `status`,
+// installed as the tracked state; null when no matching row is observed.
+async function resolveCreateReplay(handler, replicaId, partitionId, status,
+  createAdmissionEvidence = null) {
+  const observation = await observeCreateReplay(
+    handler, replicaId, partitionId, status, createAdmissionEvidence);
+  if (!observation.row) return null;
   registerAuthoritativeCreateSnapshot(handler, replicaId, observation.row);
   const trackedState = observeTrackedReplicaState(
     handler,
@@ -176,20 +172,13 @@ async function resolveCreateReplay(
   return trackedState?.state === status ? {service: observation.row} : null;
 }
 
-function buildFailedCreateReplayContext(
-  handler,
-  replicaId,
-  partitionId,
-  service,
-) {
+function buildFailedCreateReplayContext(partitionId, service) {
   return {
     partitionId,
     nodeId: service.node_id,
     serviceId: service.service_id,
-    serviceType:
-      service.service_type,
-    serviceAddress:
-      service.address,
+    serviceType: service.service_type,
+    serviceAddress: service.address,
   };
 }
 
@@ -305,7 +294,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         }
         this.throwIfShuttingDown();
         if (this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
-          return this.persistPriorityReplicaCreateCreatingStatus(options);
+          return await this.persistPriorityReplicaCreateCreatingStatus(options);
         }
         await this.persistReplicaStatusWithRetry(replicaId, ReplicaStatus.CREATING, {
           partitionId,
@@ -314,6 +303,9 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         });
         return true;
       } catch (error) {
+        const currentError = await expiredCreateInitialStatusError(
+          this, options, error, observeCreateReplay);
+        if (currentError !== error) throw currentError;
         if (shouldRethrowCreateStatusError(error)) throw error;
         this.deferRetryableReplicaCreateStatusWrite({
           operationId,

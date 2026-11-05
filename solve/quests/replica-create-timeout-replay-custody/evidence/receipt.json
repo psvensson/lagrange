@@ -1,0 +1,27 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "replica-create-timeout-replay-custody",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "historical-cause-reproduced-with-real-owners",
+      "passed": false,
+      "detail": "Real handler, admission and lifecycle owners reproduce the unchanged timeout and direct-replay mismatch. Component red/green and source history are retained in evidence sha256:9b901f43de5f4ce04b402997a1fdcea6e1062b018922382cf3c9ba5f55dac188. Frozen locked-lab confirmation is pending; the physical authority delay and H1 remain unassigned."
+    },
+    {
+      "id": "same-operation-replay-completes-after-finite-failure",
+      "passed": false,
+      "detail": "Reviewed component witnesses complete useful first same-identity replay after finite returned or rejected authority unavailability, for ordinary and priority partitions. The native factory is an explicit double. Frozen eleven-file locked-lab verification remains pending."
+    },
+    {
+      "id": "terminal-identity-and-cleanup-fences-preserved",
+      "passed": false,
+      "detail": "Thirty component fence controls and five killed source mutations pass review; final restored canonical run passes 57 cases. Frozen interaction verification remains pending; physical cleanup completion is excluded."
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "detail": "Independent subagent:/root/formation_independent_review approved exact source and component evidence after the last attempt, recorded 2026-11-05T15:08:39.873Z. Approval permits the reviewed candidate freeze; it excludes lab and physical acceptance."
+    }
+  ]
+}

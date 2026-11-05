@@ -32,6 +32,7 @@ import {observeAuthoritativeReplicaLifecycle} from
   './replica-state-machine-lifecycle-observation.js';
 import {durableRowVersion} from './replica-state-machine-recovery.js';
 import {
+  reconcileCreateAdmissionProgress,
   recoverRetainedCreateAdmissionRows,
 } from './replica-create-admission-retained-recovery.js';
 import {
@@ -285,17 +286,14 @@ async function reconcileCreateAdmissionLifecycle(handler, evidence) {
       CREATE_ADMISSION_ERROR_CODE.STALE,
     );
   }
-  let currentEvidence = evidence;
-  if (evidence.admissionState === CREATE_ADMISSION_STATE.ADMITTED) {
-    currentEvidence = await handler.getReplicaCreateAdmissionOwner()
-      .markMaterialized(evidence);
-    if (!currentEvidence) {
-      throw createAdmissionLifecycleError(
-        `CREATE admission materialization deferred ${evidence.operationId}`,
-        CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-        true,
-      );
-    }
+  const currentEvidence = await reconcileCreateAdmissionProgress(
+    handler.getReplicaCreateAdmissionOwner(), evidence, observation.row.status);
+  if (!currentEvidence) {
+    throw createAdmissionLifecycleError(
+      `CREATE admission lifecycle progress deferred ${evidence.operationId}`,
+      CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+      true,
+    );
   }
   installCreateAdmissionLifecycleSnapshot(
     handler,
