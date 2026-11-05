@@ -620,11 +620,56 @@ test('shared incarnation rule governs both durable role persistence and local pr
     'seedLocalReplicaVoterRaftRole refuses to seed voter role onto conflicting cached incarnation',
   );
 
-  // Negative control 2: terminal FAILED seed must never preserve cached raft_role
+  // Negative control 2: local ACTIVE seed for attempt-2 must not combine new attempt/created_at
+  // metadata with the cached follower role from attempt-1 via SystemTableCache merge
+  handler.seedLocalPriorityServiceRow(REPLICA_ID, PARTITION_ID, ReplicaStatus.ACTIVE, {
+    markLocalOnly: false,
+  });
+  const activeAttempt2Row = handler.systemTableCache.get('services', REPLICA_ID);
+  t.equal(
+    activeAttempt2Row?.create_attempt_token,
+    'attempt-2',
+    'local ACTIVE seed writes new incarnation attempt token',
+  );
+  t.equal(
+    activeAttempt2Row?.created_at,
+    2000,
+    'local ACTIVE seed writes new incarnation created_at',
+  );
+  t.equal(
+    activeAttempt2Row?.raft_role,
+    null,
+    'local ACTIVE seed clears cached raft_role from older incarnation instead of merging it',
+  );
+
+  // Negative control 3: when compatible owner evidence is unavailable (untracked replica),
+  // local ACTIVE seed must omit/clear cached raft_role
+  handler.systemTableCache.applySystemTableChange('services', 'UPSERT', {
+    service_id: REPLICA_ID,
+    raft_role: 'follower',
+    updated_at: 2500,
+  });
+  stateMachine.replicas.delete(REPLICA_ID);
+  handler.seedLocalPriorityServiceRow(REPLICA_ID, PARTITION_ID, ReplicaStatus.ACTIVE, {
+    markLocalOnly: false,
+  });
+  t.equal(
+    handler.systemTableCache.get('services', REPLICA_ID)?.raft_role,
+    null,
+    'local ACTIVE seed clears cached raft_role when owner lifecycle evidence is unavailable',
+  );
+
+  // Negative control 4: terminal FAILED seed must never preserve cached raft_role
+  handler.systemTableCache.applySystemTableChange('services', 'UPSERT', {
+    service_id: REPLICA_ID,
+    raft_role: 'follower',
+    updated_at: 3000,
+  });
   handler.seedLocalPriorityServiceRow(REPLICA_ID, PARTITION_ID, ReplicaStatus.FAILED, {
     markLocalOnly: false,
   });
   const failedRow = handler.systemTableCache.get('services', REPLICA_ID);
   t.equal(failedRow?.status, ReplicaStatus.FAILED, 'row transitioned to failed');
+  t.equal(failedRow?.raft_role, null, 'terminal FAILED seed clears cached raft_role');
   stateMachine.shutdown?.();
 });

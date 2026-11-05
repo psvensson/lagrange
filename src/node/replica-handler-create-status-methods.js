@@ -545,22 +545,16 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         return false;
       }
       const nowMs = Date.now();
-      const trackedState = observeTrackedReplicaState(
-        this,
-        replicaId,
-      ).trackedState;
+      const {trackedState} = observeTrackedReplicaState(this, replicaId);
       const trackedMatchesStatus = trackedState?.state === status;
       const createdAt = Number.isFinite(trackedState?.createdAt) ?
-        trackedState.createdAt :
-        nowMs;
+        trackedState.createdAt : nowMs;
       const stateEnteredAt = trackedMatchesStatus &&
         Number.isFinite(trackedState?.stateEnteredAt) ?
-        trackedState.stateEnteredAt :
-        nowMs;
+        trackedState.stateEnteredAt : nowMs;
       const updatedAt = trackedMatchesStatus &&
         Number.isFinite(trackedState?.durableVersion) ?
-        trackedState.durableVersion :
-        stateEnteredAt;
+        trackedState.durableVersion : stateEnteredAt;
       const seededRow = {
         service_id: replicaId,
         service_type: REPLICA_HANDLER_SERVICE.TYPE,
@@ -581,24 +575,32 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         seededRow.create_attempt_token =
           trackedState.createAttemptToken ?? null;
       }
-      const preservedRole = resolvePreservedReplicaRaftRole(
-        {systemTableCache: this.systemTableCache},
-        {
-          ...(trackedState || {}),
+      const existingRow = typeof this.systemTableCache.get ===
+          REPLICA_HANDLER_TYPEOF.FUNCTION ?
+        this.systemTableCache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId) :
+        null;
+      const preservedRole = trackedState ?
+        resolvePreservedReplicaRaftRole(
+          {systemTableCache: this.systemTableCache},
+          {
+            ...trackedState,
+            replicaId,
+            replicaIdentity: seededRow.replica_id || replicaId,
+            partitionId,
+            nodeId: this.nodeId,
+            state: status,
+            createdAt,
+            cleanupToken: seededRow.cleanup_token ?? null,
+            createAttemptToken: seededRow.create_attempt_token ?? null,
+          },
           replicaId,
-          replicaIdentity: seededRow.replica_id || replicaId,
-          partitionId,
-          nodeId: this.nodeId,
-          state: status,
-          createdAt: trackedState?.createdAt,
-          cleanupToken: seededRow.cleanup_token ?? null,
-          createAttemptToken: seededRow.create_attempt_token ?? null,
-        },
-        replicaId,
-        {voterOnly: false},
-      );
+          {voterOnly: false},
+        ) :
+        null;
       if (preservedRole) {
         seededRow.raft_role = preservedRole;
+      } else if (existingRow?.raft_role !== undefined) {
+        seededRow.raft_role = null;
       }
       this.systemTableCache.applySystemTableChange(
         SYSTEM_TABLE_NAME.SERVICES,

@@ -282,18 +282,22 @@ function hasConflictingNonEmptyField(cachedValue, expectedValue) {
     cachedValue !== expectedValue;
 }
 
+function hasMismatchedOptionalToken(cachedValue, expectedValue) {
+  const cachedToken = isNonEmptyString(cachedValue) ? cachedValue : null;
+  const expectedToken = isNonEmptyString(expectedValue) ? expectedValue : null;
+  return cachedToken !== expectedToken;
+}
+
 function isConflictingCachedIncarnationTokens(cachedRow, replicaState) {
   if (
-    hasConflictingNonEmptyField(
+    hasMismatchedOptionalToken(
       cachedRow?.create_attempt_token,
       replicaState?.createAttemptToken,
+    ) ||
+    hasMismatchedOptionalToken(
+      cachedRow?.cleanup_token,
+      replicaState?.cleanupToken,
     )
-  ) {
-    return true;
-  }
-  if (
-    isNonEmptyString(cachedRow?.cleanup_token) &&
-    cachedRow.cleanup_token !== (replicaState?.cleanupToken ?? null)
   ) {
     return true;
   }
@@ -310,8 +314,13 @@ const ROLE_PRESERVING_LIFECYCLE_STATES = new Set([
 ]);
 
 function isConflictingCachedReplicaIdentity(cachedRow, replicaState, serviceId) {
-  if (!cachedRow || typeof cachedRow !== 'object') {
-    return false;
+  if (
+    !cachedRow ||
+    typeof cachedRow !== 'object' ||
+    !replicaState ||
+    typeof replicaState !== 'object'
+  ) {
+    return true;
   }
   if (
     isNonEmptyString(cachedRow.status) &&
@@ -349,8 +358,10 @@ function resolveLiveReplicaRaftRole(stateMachine, replicaState, serviceId) {
 }
 
 function isNonActiveReplicaLifecycleState(replicaState) {
-  return isNonEmptyString(replicaState?.state) &&
-    !ROLE_PRESERVING_LIFECYCLE_STATES.has(replicaState.state.toLowerCase());
+  return !replicaState ||
+    typeof replicaState !== 'object' ||
+    (isNonEmptyString(replicaState.state) &&
+      !ROLE_PRESERVING_LIFECYCLE_STATES.has(replicaState.state.toLowerCase()));
 }
 
 function filterPreservedRaftRole(role, voterOnly) {
