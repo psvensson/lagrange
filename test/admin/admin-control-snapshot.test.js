@@ -122,6 +122,38 @@ test(
       CDC_PROPAGATION_DELIVERY_PRIORITY.BACKGROUND,
       'non-critical system tables must remain BACKGROUND deliveryPriority',
     );
+
+    const partialPartitionServiceUpdate = resolveCdcPropagationDeliveryProfile([
+      {
+        tableName: TABLES.SERVICES,
+        operation: 'UPDATE',
+        data: {service_id: 'services-p1-r1', status: 'active'},
+      },
+    ]);
+    t.equal(
+      partialPartitionServiceUpdate.state,
+      CDC_PROPAGATION_DELIVERY_STATE.CRITICAL_VISIBILITY,
+      'partial partition SERVICES UPDATE without service_type must use CRITICAL_VISIBILITY',
+    );
+    t.equal(
+      partialPartitionServiceUpdate.deliveryPriority,
+      CDC_PROPAGATION_DELIVERY_PRIORITY.CRITICAL,
+      'partial partition SERVICES UPDATE without service_type must use CRITICAL deliveryPriority',
+    );
+
+    const partialMessageGroupServiceUpdate =
+      resolveCdcPropagationDeliveryProfile([
+        {
+          tableName: TABLES.SERVICES,
+          operation: 'UPDATE',
+          data: {service_id: 'mg-orders-1', status: 'active'},
+        },
+      ]);
+    t.equal(
+      partialMessageGroupServiceUpdate.state,
+      CDC_PROPAGATION_DELIVERY_STATE.STANDARD_VISIBILITY,
+      'partial message-group SERVICES UPDATE must remain STANDARD_VISIBILITY',
+    );
   },
 );
 

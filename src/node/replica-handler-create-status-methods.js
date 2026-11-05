@@ -527,10 +527,12 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
      * @param {string} replicaId
      * @param {string} partitionId
      * @param {string} status - ReplicaStatus value reflecting local truth.
+     * @param {Object} [options]
+     * @param {boolean} [options.markLocalOnly=true]
      * @return {boolean} Whether the row was applied.
      * @private
      */
-    seedLocalPriorityServiceRow(replicaId, partitionId, status) {
+    seedLocalPriorityServiceRow(replicaId, partitionId, status, options = {}) {
       if (
         !this.systemTableCache ||
         typeof this.systemTableCache.applySystemTableChange !==
@@ -575,6 +577,13 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         seededRow.create_attempt_token =
           trackedState.createAttemptToken ?? null;
       }
+      const existingRow =
+        typeof this.systemTableCache.get === REPLICA_HANDLER_TYPEOF.FUNCTION ?
+          this.systemTableCache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId) :
+          null;
+      if (existingRow?.raft_role) {
+        seededRow.raft_role = existingRow.raft_role;
+      }
       this.systemTableCache.applySystemTableChange(
         SYSTEM_TABLE_NAME.SERVICES,
         LOCAL_STR_UPSERT,
@@ -583,9 +592,9 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       );
       // Lifecycle persistence must UPSERT for this row until a durable
       // write confirms remote existence (the local row no longer proxies
-      // it). Terminal FAILED rows are already durably persisted before this
-      // seed runs and must not arm local-only full-row insert reconciliation.
-      if (status !== ReplicaStatus.FAILED) {
+      // it). Terminal FAILED rows and post-durable ACTIVE seeds must not arm
+      // local-only full-row insert reconciliation.
+      if (status !== ReplicaStatus.FAILED && options?.markLocalOnly !== false) {
         this.replicaStateMachine?.markServiceRowLocalOnly?.(
           replicaId,
           deferredDurableWriteActivation(this, replicaId),

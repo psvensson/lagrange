@@ -498,7 +498,7 @@ function computeRetryDelayMs(lane, error, disposition) {
     lane.retryDelayMs = initDelay;
   } else if (isBackpressure) {
     lane.consecutiveBackpressure = (lane.consecutiveBackpressure ?? 0) + 1;
-    delayMs = Math.min(maxDelay, Math.max(1, lane.retryDelayMs));
+    delayMs = Math.min(HINTED_BACKPRESSURE_MAX_DELAY_MS, Math.max(1, lane.retryDelayMs));
     advanceBackoff = true;
   } else {
     lane.consecutiveBackpressure = 0;
@@ -521,7 +521,11 @@ function scheduleDeliveryRetry(delivery, error = null, explicitDisposition = nul
     return 0;
   }
   const {delayMs, advanceBackoff} = computeRetryDelayMs(lane, error, disposition);
-  if (lane.retryTimer.state === OBLIGATION_RETRY_STATE.ARMED || owner.isShutdown) return delayMs;
+  if (owner.isShutdown) return delayMs;
+  if (lane.retryTimer.state === OBLIGATION_RETRY_STATE.ARMED) {
+    if (delayMs >= (lane.retryTimer.delayMs ?? Infinity)) return delayMs;
+    clearTimer(owner, lane.retryTimer.handle);
+  }
   if (advanceBackoff) {
     lane.retryDelayMs = Math.min(PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
       lane.retryDelayMs * 2);
@@ -534,7 +538,7 @@ function scheduleDeliveryRetry(delivery, error = null, explicitDisposition = nul
       if (laneIsCurrent(delivery, lane)) await driveCdcObligations(delivery, REASON.DELIVERY_RETRY);
     })());
   }, delayMs);
-  lane.retryTimer = {state: OBLIGATION_RETRY_STATE.ARMED, handle};
+  lane.retryTimer = {state: OBLIGATION_RETRY_STATE.ARMED, handle, delayMs};
   return delayMs;
 }
 
@@ -968,6 +972,7 @@ function retireHydratedInvocationAndResetIdleScan(delivery, lane, throughLogInde
   } else if (lane.scan !== null &&
       (lane.scan.cursor === null || lane.scan.cursor.logIndex <= throughLogIndex)) {
     lane.scan.cursor = {logIndex: throughLogIndex, ordinal: Number.MAX_SAFE_INTEGER};
+    lane.scan.through = null;
   }
 }
 

@@ -301,9 +301,16 @@ function resolveLiveReplicaRaftRole(stateMachine, replicaState, serviceId) {
   return null;
 }
 
+const ROLE_PRESERVING_LIFECYCLE_STATES = new Set([
+  ReplicaStatus.PENDING,
+  ReplicaStatus.CREATING,
+  ReplicaStatus.SYNCING,
+  ReplicaStatus.ACTIVE,
+]);
+
 function isNonActiveReplicaLifecycleState(replicaState) {
   return isNonEmptyString(replicaState?.state) &&
-    replicaState.state !== ReplicaStatus.ACTIVE;
+    !ROLE_PRESERVING_LIFECYCLE_STATES.has(replicaState.state.toLowerCase());
 }
 
 function filterPreservedRaftRole(role, voterOnly) {

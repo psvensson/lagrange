@@ -220,6 +220,12 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
           );
         }
         if (newStatus === ReplicaStatus.ACTIVE) {
+          this.seedLocalPriorityServiceRow?.(
+            replicaId,
+            partitionId,
+            ReplicaStatus.ACTIVE,
+            {markLocalOnly: false},
+          );
           await settlePartitionServiceActiveAdmission({
             partitionId,
             replicaId,

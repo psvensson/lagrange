@@ -430,3 +430,41 @@ test(
     t.end();
   },
 );
+
+test(
+  'ServeEligibilityOwner does not mark committed record superseded on idempotent publication re-application',
+  async (t) => {
+    const pubRow = buildPublicationRow(EPOCH_THREE);
+    const {owner} = createHarness({
+      publications: [pubRow],
+    });
+    await owner.readServeEligibility();
+    t.equal(owner.superseded, false);
+
+    // Re-applying the identical PUBLISHED publication row (e.g., via CDC catch-up
+    // hydration or cache repair) must not mark the committed record superseded.
+    owner.noteSourceChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'UPSERT', {
+      ...pubRow,
+    });
+    t.equal(
+      owner.superseded,
+      false,
+      'idempotent PUBLISHED publication re-application preserves committed currency',
+    );
+
+    // Mutating the held publication in place (e.g., revoking/superseding status)
+    // must mark the committed record superseded.
+    owner.noteSourceChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'UPDATE', {
+      ...pubRow,
+      status: 'SUPERSEDED',
+    });
+    t.equal(
+      owner.superseded,
+      true,
+      'in-place status change on held publication marks committed record superseded',
+    );
+
+    owner.shutdown();
+    t.end();
+  },
+);

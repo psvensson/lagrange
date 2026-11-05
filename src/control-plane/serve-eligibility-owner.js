@@ -206,34 +206,42 @@ function decideServeEligibility(input) {
 }
 
 function unavailable(reason, epoch, retryAfterMs) {
-  return Object.freeze({
-    state: SERVE_ELIGIBILITY_STATE.UNAVAILABLE,
-    reason,
-    epoch,
-    retryAfterMs,
-  });
+  return Object.freeze({state: SERVE_ELIGIBILITY_STATE.UNAVAILABLE, reason, epoch, retryAfterMs});
+}
+
+function isSameNodeList(committedNodes = NO_REASONS, changedNodes = NO_REASONS) {
+  if (committedNodes.length !== changedNodes.length) return false;
+  const committedSet = new Set(committedNodes);
+  return changedNodes.every((nodeId) => committedSet.has(nodeId));
+}
+
+function isSamePublicationFacts(committedPub, changedPub, isPublished) {
+  return Boolean(committedPub && isPublished) &&
+    committedPub.publicationId === changedPub.publicationId &&
+    committedPub.publicationEpoch === changedPub.publicationEpoch &&
+    isPublicationAcknowledged(committedPub) === isPublicationAcknowledged(changedPub) &&
+    resolvePrioritySpreadReason(committedPub) === resolvePrioritySpreadReason(changedPub) &&
+    isSameNodeList(committedPub.publishedActiveNodeIds, changedPub.publishedActiveNodeIds);
+}
+
+function shouldSupersedeOnPublicationChange(record, pub, isPublished) {
+  const heldEpoch = record?.epoch || null;
+  if (heldEpoch && pub.publicationId === heldEpoch.publicationId) {
+    return !isSamePublicationFacts(record?.publication, pub, isPublished);
+  }
+  return isPublished && (!heldEpoch || pub.publicationEpoch > heldEpoch.publicationEpoch);
 }
 
 function isRevokingNodeChange(committedRow, changedRow, isNodeLoadReady) {
-  if (!committedRow) {
-    return true;
-  }
-  if (readStatus(committedRow) !== readStatus(changedRow)) {
-    return true;
-  }
-  if (isNodeLoadReady(committedRow) !== isNodeLoadReady(changedRow)) {
-    return true;
-  }
-  if (readBootIncarnation(committedRow) !== readBootIncarnation(changedRow)) {
-    return true;
-  }
+  if (!committedRow) return true;
+  if (readStatus(committedRow) !== readStatus(changedRow)) return true;
+  if (isNodeLoadReady(committedRow) !== isNodeLoadReady(changedRow)) return true;
+  if (readBootIncarnation(committedRow) !== readBootIncarnation(changedRow)) return true;
   const committedLease = readLeaseExpiresAtMs(committedRow);
   const changedLease = readLeaseExpiresAtMs(changedRow);
   // A lease extension leaves the committed answer true until its own expiry;
   // a cleared or shortened lease does not.
-  if (committedLease === null) {
-    return changedLease !== null;
-  }
+  if (committedLease === null) return changedLease !== null;
   return changedLease === null || changedLease < committedLease;
 }
 
@@ -245,9 +253,7 @@ function indexNodeRows(rows) {
   const nodeRowsById = new Map();
   for (const row of rows) {
     const nodeId = readNodeId(row);
-    if (nodeId) {
-      nodeRowsById.set(nodeId, row);
-    }
+    if (nodeId) nodeRowsById.set(nodeId, row);
   }
   return nodeRowsById;
 }
@@ -258,8 +264,7 @@ function buildCommittedReadResult(reads, readAtMs) {
   const publication = reads === null ? null :
     selectLatestPublishedMembership(rowsOf(reads.publicationsResult));
   const outcome = reads === null ? OUTCOME.READ_FAILED :
-    publication === null ? OUTCOME.NO_RECORD :
-      OUTCOME.RECORD;
+    publication === null ? OUTCOME.NO_RECORD : OUTCOME.RECORD;
   return outcome !== OUTCOME.RECORD ? {outcome} : {
     outcome,
     record: Object.freeze({
@@ -276,47 +281,25 @@ function buildCommittedReadResult(reads, readAtMs) {
 }
 
 function checkOwnerUnavailability(owner) {
+  const timeout = owner.readTimeoutMs;
   if (owner.stopped) {
-    return unavailable(
-      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.OWNER_STOPPED,
-      null,
-      null,
-    );
+    return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.OWNER_STOPPED, null, null);
   }
   if (owner.outcome === OUTCOME.PENDING) {
-    return unavailable(
-      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_PENDING,
-      null,
-      owner.readTimeoutMs,
-    );
+    return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_PENDING, null, timeout);
   }
   if (owner.outcome === OUTCOME.NO_RECORD) {
-    return unavailable(
-      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.NO_RECORD,
-      null,
-      owner.readTimeoutMs,
-    );
+    return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.NO_RECORD, null, timeout);
   }
   if (owner.outcome === OUTCOME.STALE) {
     return unavailable(
-      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.STALE,
-      owner.record?.epoch ?? null,
-      owner.readTimeoutMs,
-    );
+      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.STALE, owner.record?.epoch ?? null, timeout);
   }
   if (!owner.record) {
-    return unavailable(
-      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_FAILED,
-      null,
-      owner.readTimeoutMs,
-    );
+    return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_FAILED, null, timeout);
   }
   if (owner.superseded) {
-    return unavailable(
-      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.STALE,
-      owner.record.epoch,
-      owner.readTimeoutMs,
-    );
+    return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.STALE, owner.record.epoch, timeout);
   }
   return null;
 }
@@ -593,11 +576,7 @@ class ServeEligibilityOwner {
     const isPublished = !pub.status ||
       pub.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
     if (isPublished) this.recordObservedPublicationEpoch(pub.publicationEpoch);
-    const heldEpoch = this.record?.epoch || null;
-    if (
-      (heldEpoch && pub.publicationId === heldEpoch.publicationId) ||
-      (isPublished && (!heldEpoch || pub.publicationEpoch > heldEpoch.publicationEpoch))
-    ) {
+    if (shouldSupersedeOnPublicationChange(this.record, pub, isPublished)) {
       this.markSuperseded();
     }
   }

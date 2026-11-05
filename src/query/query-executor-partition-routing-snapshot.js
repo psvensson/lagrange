@@ -435,7 +435,46 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
         refreshReason: QUERY_ROUTING_REPAIR_REASON.NO_HANDLER_STALE_SERVICE,
       },
     );
+    if (overlayRepaired && !attemptedRepair && routingSnapshot.partitionId) {
+      await this.awaitPostOverlayRoutingRepair(
+        routingSnapshot,
+        allowReadinessAuthoritativeRefresh,
+      );
+    }
     return attemptedRepair || overlayRepaired;
+  },
+
+  async awaitPostOverlayRoutingRepair(
+    routingSnapshot,
+    allowReadinessAuthoritativeRefresh,
+  ) {
+    const routingReadinessDimension =
+      routingSnapshot.routingReadinessDimension ||
+      this.defaultRoutingReadinessDimension;
+    const postOverlaySnapshot = this.getPartitionRoutingSnapshot(
+      routingSnapshot.partitionId,
+      {routingReadinessDimension},
+    );
+    const postOverlayDeniedNodeIds =
+      this.collectAllFilteredRoutingRepairNodeIds(postOverlaySnapshot);
+    if (postOverlayDeniedNodeIds.length === 0) {
+      return;
+    }
+    if (
+      routingSnapshot.routingReadinessDimension ===
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE
+    ) {
+      await this.awaitServeEligibilityRefreshForDenial(
+        postOverlayDeniedNodeIds,
+        allowReadinessAuthoritativeRefresh,
+      );
+      return;
+    }
+    await this.awaitProjectionRoutingRepair(
+      postOverlaySnapshot,
+      new Set(postOverlayDeniedNodeIds),
+      allowReadinessAuthoritativeRefresh,
+    );
   },
 
   /**
