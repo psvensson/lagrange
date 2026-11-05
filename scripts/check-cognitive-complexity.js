@@ -49,7 +49,8 @@ const TARGET_THRESHOLD = 20;
 // partition-cdc-delivery.js.
 // 2026-10-30: tightened 149 -> 147 on the checker's hint.
 // 2026-11-02 (quest serve-eligibility-committed-epoch-read attempt 1b): tightened 147 -> 146 on the checker's hint.
-const BASELINE_COUNT = 146;
+// 2026-11-05: tightened 146 -> 145 on the inventory refresh checker hint.
+const BASELINE_COUNT = 145;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

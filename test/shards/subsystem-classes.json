@@ -26,9 +26,9 @@
     "wasm-toolchain": 74
   },
   "censusSize": 2592,
-  "digest": "fnv1a32-220d38cd",
+  "digest": "fnv1a32-963fc8cf",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3bc0e684",
+  "observationDigest": "fnv1a32-2cdec622",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1158,7 +1158,7 @@
     "test/integration/seed-owner-read-diagnosis.integration.test.js": "bootstrap-membership",
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": "services-runtime",
     "test/integration/services-p1-self-referential-write.integration.test.js": "services-runtime",
-    "test/integration/single-node-default-replica-count-writes.integration.test.js": "placement-rebalance",
+    "test/integration/single-node-default-replica-count-refusal.integration.test.js": "placement-rebalance",
     "test/integration/sql-engine-system-writes-contract.integration.test.js": "query-sql",
     "test/integration/sql-workflow.integration.test.js": "query-sql",
     "test/integration/strict-benchmark-local-readiness.integration.test.js": "convergence-topology",
@@ -9680,12 +9680,12 @@
         "src/storage/data-directory-process-owner.js"
       ]
     },
-    "test/integration/single-node-default-replica-count-writes.integration.test.js": {
+    "test/integration/single-node-default-replica-count-refusal.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/storage/data-directory-process-owner.js",
-        "test/integration/helpers/seed-query-surface.js"
+        "test/integration/helpers/embedded-node-worker.js"
       ]
     },
     "test/integration/sql-engine-system-writes-contract.integration.test.js": {

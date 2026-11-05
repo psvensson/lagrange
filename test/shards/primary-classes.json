@@ -9,7 +9,7 @@
     "packaging": 4
   },
   "censusSize": 2592,
-  "digest": "fnv1a32-e556bab0",
+  "digest": "fnv1a32-690f3536",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1139,7 +1139,7 @@
     "test/integration/seed-owner-read-diagnosis.integration.test.js": "integration",
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": "integration",
     "test/integration/services-p1-self-referential-write.integration.test.js": "integration",
-    "test/integration/single-node-default-replica-count-writes.integration.test.js": "integration",
+    "test/integration/single-node-default-replica-count-refusal.integration.test.js": "integration",
     "test/integration/sql-engine-system-writes-contract.integration.test.js": "integration",
     "test/integration/sql-workflow.integration.test.js": "integration",
     "test/integration/strict-benchmark-local-readiness.integration.test.js": "integration",

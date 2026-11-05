@@ -8,7 +8,7 @@
     "exclusive": 3
   },
   "censusSize": 2592,
-  "digest": "fnv1a32-f0181ebf",
+  "digest": "fnv1a32-319c236f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1138,7 +1138,7 @@
     "test/integration/seed-owner-read-diagnosis.integration.test.js": "ordinary",
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": "ordinary",
     "test/integration/services-p1-self-referential-write.integration.test.js": "ordinary",
-    "test/integration/single-node-default-replica-count-writes.integration.test.js": "ordinary",
+    "test/integration/single-node-default-replica-count-refusal.integration.test.js": "ordinary",
     "test/integration/sql-engine-system-writes-contract.integration.test.js": "ordinary",
     "test/integration/sql-workflow.integration.test.js": "ordinary",
     "test/integration/strict-benchmark-local-readiness.integration.test.js": "ordinary",

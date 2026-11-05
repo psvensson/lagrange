@@ -13,7 +13,7 @@
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "3969ebdcb20f5da965e5c180a8bbd14a26e9942f87d31f5cc44b23dfbdb3622c"
+        "sha256": "d38981cbc3291df40dceaf94eb31b34ebb47fe8b8428f5ba2f8738f647e45d04"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3424148,
-        "sha256": "db22fc18ba2c71aab981123f6190d3850ec5053d01e7350af46d2505fbf1851f"
+        "bytes": 3424073,
+        "sha256": "c9159707563032ba604efa4a6bfd12dca061dd0779f21ccb7a9dfdb128c28a14"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "110575bdf277016426cd645682303ba36021dbeda8b3c61969830a036ca7e83b"
+        "sha256": "83a093e8c72713f6d6af54edd61cd4e7c1018b78733a2a5d46b18edb042ab001"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "98fd01c197b7fc531510f5d87babdf6624d6ee11f8f910dd131b3aced3fe0dba"
+        "sha256": "96a0cd7b84f221d96686c9cf8bfd4b80b1429318c20c4f9b45dc66b9468078ec"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "8d8ffa5c35c91d33d3be5a2792c3de6d16f07c310ebfbae3a159dcdd88e6e3d4"
+    "inputDigest": "64c57f4aa75f4f5e06207080a5ae783f20916d506fc171e033f8dc2435d49cac"
   },
   "reconciliation": {
     "complexity": {
@@ -84,7 +84,7 @@
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "3969ebdcb20f5da965e5c180a8bbd14a26e9942f87d31f5cc44b23dfbdb3622c"
+        "sha256": "d38981cbc3291df40dceaf94eb31b34ebb47fe8b8428f5ba2f8738f647e45d04"
       },
       "declaredCount": 145,
       "observedCount": 145,
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "110575bdf277016426cd645682303ba36021dbeda8b3c61969830a036ca7e83b"
+          "sha256": "83a093e8c72713f6d6af54edd61cd4e7c1018b78733a2a5d46b18edb042ab001"
         },
         "cloneGroups": 40,
         "duplicatedLines": 1267,
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "98fd01c197b7fc531510f5d87babdf6624d6ee11f8f910dd131b3aced3fe0dba"
+          "sha256": "96a0cd7b84f221d96686c9cf8bfd4b80b1429318c20c4f9b45dc66b9468078ec"
         },
         "cloneGroups": 641,
         "duplicatedLines": 24107,
@@ -173,17 +173,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3424148,
-        "sha256": "db22fc18ba2c71aab981123f6190d3850ec5053d01e7350af46d2505fbf1851f"
+        "bytes": 3424073,
+        "sha256": "c9159707563032ba604efa4a6bfd12dca061dd0779f21ccb7a9dfdb128c28a14"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "74f1d7362b25c843b2ce80cf637990506f570a5aacdd795a3ae3a7d1fba01994",
+      "sourceDigest": "9a9da06b0f45e6ec9cebd6a14975dfa5d7b8c4d64d879b9083d2c26a0fd2f1d6",
       "moduleCount": 6057,
-      "edgeCount": 33494,
+      "edgeCount": 33493,
       "unresolvedCount": 46
     }
   },
@@ -449,7 +449,7 @@
       "cloneTouches": 62,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 66,
+      "importIn": 65,
       "importOut": 355,
       "score": 285.6,
       "topPaths": [

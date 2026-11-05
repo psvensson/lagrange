@@ -267,8 +267,10 @@ const RATCHET_TARGETS = [
     // checker's hint (shared fixture helpers in the routing tests).
     // 2026-11-03 (composed-05-comparison-readiness): tightened 647/24308 -> 646/24270 on
     // the checker's hint after deduplicating query, rebalancer, and CDC test lifecycle fixtures.
-    baselineCloneGroupCount: 646,
-    baselineDuplicatedLineCount: 24270,
+    // 2026-11-05 (explicit-single-replica-partition-configuration): tightened
+    // 646/24270 -> 641/24107 on the checker hint after RF3 fixture reconciliation.
+    baselineCloneGroupCount: 641,
+    baselineDuplicatedLineCount: 24107,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

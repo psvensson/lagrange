@@ -127,10 +127,10 @@ test('partition write kernel refuses a unilateral commit against contradicted to
     // coordinator writes as a phantom leader. A known remote leader - an
     // ACTUAL, observed via raft traffic or the published leader pointer -
     // rejects the write even when the self-only group elected itself.
-    // Targets like replica_count are NOT witnesses: they legitimately exceed
-    // placed membership on single-node and degraded clusters, and using them
-    // rejected (and, through the query envelope, silently dropped) every
-    // user-table write on a default-config single-node cluster.
+    // Targets like replica_count are NOT remote-leader witnesses: they can
+    // exceed an established group's actual membership. Using them here
+    // historically rejected writes independently of the provisioning owner,
+    // which now refuses initial RF3 placement on one eligible node.
     t.equal(
       resolvePartitionWriteCommitMode({
         replicaIds: ['r5'],
@@ -159,7 +159,7 @@ test('partition write kernel refuses a unilateral commit against contradicted to
         expectedReplicaCount: 3,
       }),
       PARTITION_WRITE_COMMIT_MODE.RAFT,
-      'replica_count-style targets must NOT reject - 1-of-N placement is legitimate',
+      'a placement target must not reject an established singleton group',
     );
   });
 
