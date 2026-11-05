@@ -17,7 +17,6 @@ import {
   isTargetFailureDetectorDead,
 } from './operation-workflow-replace-owner.js';
 const {
-  EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   FAILURE_LOG_LEVEL,
   OPERATION_LIFECYCLE_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -185,7 +184,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         operation.replicaId,
         operation.partitionId,
         operation.targetNodeId,
-        EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+        this.buildObservedTargetReplicaObservationOptions(operation),
       );
     return PRIORITY_RECOVERY_OPERATION_DRAIN_ADD_TARGET_STATUSES.has(
       observedTargetStatus,
@@ -296,7 +295,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         operation.replicaId,
         operation.partitionId,
         operation.targetNodeId,
-        EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+        this.buildObservedTargetReplicaObservationOptions(operation),
       );
     return resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence({
       operation,

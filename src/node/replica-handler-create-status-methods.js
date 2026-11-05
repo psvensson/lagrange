@@ -504,6 +504,8 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
           partitionId,
           replicaId,
           error,
+          createAdmissionEvidence: options.createAdmissionEvidence,
+          createAttemptToken: options.createAttemptToken,
         });
         return true;
       }
@@ -537,28 +539,58 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         return false;
       }
       const nowMs = Date.now();
+      const trackedState = observeTrackedReplicaState(
+        this,
+        replicaId,
+      ).trackedState;
+      const trackedMatchesStatus = trackedState?.state === status;
+      const createdAt = Number.isFinite(trackedState?.createdAt) ?
+        trackedState.createdAt :
+        nowMs;
+      const stateEnteredAt = trackedMatchesStatus &&
+        Number.isFinite(trackedState?.stateEnteredAt) ?
+        trackedState.stateEnteredAt :
+        nowMs;
+      const updatedAt = trackedMatchesStatus &&
+        Number.isFinite(trackedState?.durableVersion) ?
+        trackedState.durableVersion :
+        stateEnteredAt;
+      const seededRow = {
+        service_id: replicaId,
+        service_type: REPLICA_HANDLER_SERVICE.TYPE,
+        partition_id: partitionId,
+        node_id: this.nodeId,
+        status,
+        address: this.buildTrackedServiceAddress(replicaId),
+        created_at: createdAt,
+        updated_at: updatedAt,
+      };
+      if (trackedState) {
+        seededRow.replica_id = trackedState.replicaIdentity || replicaId;
+        seededRow.state_entered_at = stateEnteredAt;
+        seededRow.previous_state = trackedMatchesStatus ?
+          trackedState.previousState ?? null :
+          trackedState.state ?? null;
+        seededRow.cleanup_token = trackedState.cleanupToken ?? null;
+        seededRow.create_attempt_token =
+          trackedState.createAttemptToken ?? null;
+      }
       this.systemTableCache.applySystemTableChange(
         SYSTEM_TABLE_NAME.SERVICES,
         LOCAL_STR_UPSERT,
-        {
-          service_id: replicaId,
-          service_type: REPLICA_HANDLER_SERVICE.TYPE,
-          partition_id: partitionId,
-          node_id: this.nodeId,
-          status,
-          address: this.buildTrackedServiceAddress(replicaId),
-          created_at: nowMs,
-          updated_at: nowMs,
-        },
+        seededRow,
         {causeId: `priority-local-create:${replicaId}`},
       );
       // Lifecycle persistence must UPSERT for this row until a durable
       // write confirms remote existence (the local row no longer proxies
-      // it).
-      this.replicaStateMachine?.markServiceRowLocalOnly?.(
-        replicaId,
-        deferredDurableWriteActivation(this, replicaId),
-      );
+      // it). Terminal FAILED rows are already durably persisted before this
+      // seed runs and must not arm local-only full-row insert reconciliation.
+      if (status !== ReplicaStatus.FAILED) {
+        this.replicaStateMachine?.markServiceRowLocalOnly?.(
+          replicaId,
+          deferredDurableWriteActivation(this, replicaId),
+        );
+      }
       return true;
     }
 

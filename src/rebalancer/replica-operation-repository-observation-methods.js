@@ -6,6 +6,8 @@ const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 const OBSERVED_REPLICA_ROW_FIELD = Object.freeze({
   ADDRESS: 'address',
+  PREVIOUS_STATE: 'previous_state',
+  PREVIOUS_STATE_CAMEL: 'previousState',
   RAFT_ROLE: 'raft_role',
   RAFT_ROLE_CAMEL: 'raftRole',
   SERVICE_TYPE: 'service_type',
@@ -553,6 +555,11 @@ function assignReplicaOperationRepositoryObservationMethods(
           lifecycleStatus: this.resolveObservedReplicaLifecycleStatus(
             observedRow,
             readOptions,
+          ),
+          previousState: this.readObservedReplicaRowString(
+            observedRow,
+            OBSERVED_REPLICA_ROW_FIELD.PREVIOUS_STATE,
+            OBSERVED_REPLICA_ROW_FIELD.PREVIOUS_STATE_CAMEL,
           ),
           lifecyclePrecondition:
             buildObservedReplicaLifecyclePrecondition(observedRow),

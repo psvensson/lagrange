@@ -95,6 +95,7 @@ function isClaimedFailedCreateObservation(
 ) {
   return observation?.state === OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED &&
     observation.lifecycleStatus === ReplicaStatus.FAILED &&
+    observation.previousState !== ReplicaStatus.ACTIVE &&
     matchesFailedCreatePreconditionTokens(
       observation.lifecyclePrecondition,
       cleanupToken,
@@ -238,6 +239,29 @@ function isTerminalFailedCreateOperation(operation) {
     hasCreateOperationIdentity(operation);
 }
 
+function matchesDelayedFailedCreateTargetPrecondition(
+  operation,
+  lifecyclePrecondition,
+) {
+  if (!lifecyclePrecondition) {
+    return false;
+  }
+  const expectedCleanupToken = buildFailedCreateCleanupToken(
+    operation?.operationId,
+  );
+  if (
+    Number.isSafeInteger(operation?.createAdmissionReplicaCreatedAt) &&
+    lifecyclePrecondition.created_at !==
+      operation.createAdmissionReplicaCreatedAt
+  ) {
+    return false;
+  }
+  return (
+    lifecyclePrecondition.cleanup_token === expectedCleanupToken ||
+    Number.isSafeInteger(operation?.createAdmissionReplicaCreatedAt)
+  );
+}
+
 /**
  * Decide whether one terminal failed ADD/REPLACE target is the same exact
  * authoritative FAILED lifecycle generation admitted by the operation owner.
@@ -263,10 +287,15 @@ async function decideFailedCreateTargetCleanup(owner, operation) {
     operation.stepsHistory,
     OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
   );
-  const eligible = lifecyclePreconditionsEqual(
-    lifecyclePrecondition,
-    claimedPrecondition,
-  );
+  const eligible = claimedPrecondition ?
+    lifecyclePreconditionsEqual(
+      lifecyclePrecondition,
+      claimedPrecondition,
+    ) :
+    matchesDelayedFailedCreateTargetPrecondition(
+      operation,
+      lifecyclePrecondition,
+    );
   return Object.freeze({
     decision: eligible ?
       CREATE_TARGET_CLEANUP_DECISION.ELIGIBLE :

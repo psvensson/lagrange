@@ -1155,4 +1155,73 @@ test('L3: the claimed FAILED target of a create that failed after admission ' +
       await coordinator.shutdown();
     }
   });
+
+  await t.test('delayed FAILED row landing after terminal failOperation ' +
+    'admits matching create-attempt incarnation for cleanup', async (t) => {
+    const delayedFailedRow = {
+      ...lifecycleRow(ReplicaStatus.FAILED, FAILED_STATE_ENTERED_AT, null),
+      previous_state: ReplicaStatus.PENDING,
+    };
+    const cache = createMockCache({
+      services: [],
+      replicaOperations: [],
+    });
+    let authoritativeAvailable = false;
+    const coordinator = createTestCoordinator({
+      nodeId: 'node-1',
+      enableTimeouts: false,
+      systemTableCache: cache,
+      sqlQueryResults: {
+        get 'FROM services WHERE service_id = ?'() {
+          if (!authoritativeAvailable) {
+            return {success: false, error: 'authority unavailable'};
+          }
+          return {success: true, affectedRows: 1, rows: [delayedFailedRow]};
+        },
+      },
+    });
+    const rebalancer = createTestRebalancer({
+      entityId: PARTITION_ID,
+      nodeId: 'node-1',
+      systemTableCache: cache,
+      rebalanceCoordinator: coordinator,
+    });
+    try {
+      const owner = coordinator.workflowOwner;
+      const replaceOp = await coordinator.createOperation({
+        type: OperationType.REPLACE,
+        partitionId: PARTITION_ID,
+        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+        entityId: PARTITION_ID,
+        sourceNodeId: 'node-1',
+        nodeId: TARGET_NODE,
+        replicaId: TARGET_ID,
+      });
+      await installCreateAdmissionAttempt(coordinator, replaceOp);
+      await owner.updateStep(replaceOp, WORKFLOW_STEP.CREATING);
+      await owner.failOperation(replaceOp, 'Step timeout exhausted');
+      const terminalReplace = await coordinator.getOperation(
+        replaceOp.operationId,
+      );
+      t.equal(
+        terminalReplace.stepsHistory.at(-1)?.[
+          OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+        ],
+        undefined,
+        'settlement while authority is unavailable records no precondition',
+      );
+
+      authoritativeAvailable = true;
+      cache.upsert(SYSTEM_TABLE_NAME.SERVICES, TARGET_ID, delayedFailedRow);
+      await rebalancer.refreshFailedCreateTargetCleanupDecisions();
+      t.same(
+        [...rebalancer.getTerminalFailedReplaceTargetReplicaIds()],
+        [replaceOp.replicaId],
+        'delayed FAILED row matching exact create admission incarnation is admitted for cleanup',
+      );
+    } finally {
+      rebalancer.shutdown();
+      await coordinator.shutdown();
+    }
+  });
 });

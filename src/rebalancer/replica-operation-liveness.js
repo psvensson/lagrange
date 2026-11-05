@@ -390,6 +390,10 @@ function normalizeReplicaOperationRecord(row, options = {}) {
       LOCAL_STR_CREATE_ADMISSION_ATTEMPT_TOKEN,
       LOCAL_STR_CREATEADMISSIONATTEMPTTOKEN,
     ),
+    createAdmissionReplicaCreatedAt: normalizeEpochMillis(
+      row?.create_admission_replica_created_at ??
+        row?.createAdmissionReplicaCreatedAt,
+    ),
     createdAt,
     updatedAt,
     completedAt,
