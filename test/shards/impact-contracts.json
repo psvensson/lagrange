@@ -284,6 +284,7 @@
         "src/rebalancer/storage-capacity-accounting-service.js",
         "src/rebalancer/storage-capacity-semantic-projection-owner.js",
         "src/rebalancer/unified-rebalancer-available-nodes.js",
+        "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
         "src/workflow/owner-key-reconcile-queue.js",
         "src/control-plane/serve-eligibility-owner.js",
         "src/control-plane/control-plane-readiness-serve-eligibility-methods.js"
@@ -301,6 +302,7 @@
         "test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js",
         "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js",
         "test/rebalancer/startup-authority-available-node-contract.test.js",
+        "test/rebalancer/critical-topology-committed-lease.test.js",
         "test/rebalancer/storage-capacity-accounting-service.test.js",
         "test/rebalancer/storage-capacity-semantic-projection-owner.test.js",
         "test/workflow/owner-key-reconcile-queue.test.js",
@@ -2312,7 +2314,8 @@
             "src/rebalancer/rebalance-coordinator.js",
             "src/rebalancer/storage-capacity-accounting-service.js",
             "src/rebalancer/storage-capacity-semantic-projection-owner.js",
-            "src/rebalancer/unified-rebalancer-available-nodes.js"
+            "src/rebalancer/unified-rebalancer-available-nodes.js",
+            "src/rebalancer/unified-rebalancer-critical-topology-methods.js"
           ]
         },
         {
@@ -2331,6 +2334,7 @@
         "test/control-plane/readiness-planning-semantic-generation.test.js",
         "test/rebalancer/storage-capacity-semantic-projection-owner.test.js",
         "test/rebalancer/startup-authority-available-node-contract.test.js",
+        "test/rebalancer/critical-topology-committed-lease.test.js",
         "test/workflow/owner-key-reconcile-queue.test.js"
       ]
     },

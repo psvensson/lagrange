@@ -53,10 +53,10 @@ node within preregistered bounds.
   full Queryable Core completion (`RM-0.2.9-stable-core-completion`). Three-node
   formation correctness in `0.4.1` does not claim five-node comparative
   performance.
-- **Integration owner:** `local-integration-owner` on composed branch
-  `work/composed-05-comparison-readiness-20261103` (mirrored to
-  `wip/handover-20261103/comparison-readiness` and
-  `wip/handover-20261103/composed-05-comparison-readiness`).
+- **Integration owner:** `codex:formation-takeover` on
+  `work/formation-takeover-20261105`. The original composed branch
+  `work/composed-05-comparison-readiness-20261103` and its preservation mirrors
+  remain unchanged.
 - **Reviewed baseline SHA:** `77e5b4c5ba01826f2ddceecb088f56fcd27b436e`.
 - **Starting candidate SHA at E0:** `63e4a854b783d4b3176b3ecd123677384c96fafa`
   (one commit ahead of `77e5b4c5ba01826f2ddceecb088f56fcd27b436e`, landing
@@ -159,12 +159,59 @@ including both returned and rejected classifier-read unavailability.
 Thirty fence controls cover terminal operations, cleanup claims, CLOSED
 admissions, boot changes and changed identities across three wait points on
 ordinary and priority partitions. Independent exact-source re-review approves
-the bounded repair and its component proof; the frozen eleven-file locked-lab
-interaction proof remains pending. This repair does not
+the bounded repair and its component proof. Frozen commit
+`9ee285e1a5d4aacdaee43c8ae9c5cd24049f94bf` passed the eleven-file locked-lab
+interaction proof on `tv-dator`: 1,019 assertions, no retries and no controller
+assignment. Independent review verified the original controller completion
+record, exact source, complete per-file ledger and archive hashes. This repair does not
 identify the physical authority delay, settle formation H1 or prove physical
 cleanup completion. The historical epic YAML parser defect was separately
-reviewed and repaired without changing acceptance fields; its checkpoint is
-pending the same metadata-consistent code freeze.
+reviewed and repaired without changing acceptance fields and is included in
+the same `9ee285e1` checkpoint.
+
+The canonical 1,350-file change cone for `340e34e4..9ee285e1` completed on four
+locked hosts, with seven reserved files explicitly assigned to `tv-dator`:
+1,325 passed, 25 failed, 44,833 runner assertions. Independent review reconciled
+the exact disjoint per-host manifests and retained nested fixture records
+separately. Same-host predecessor runs at `340e34e4` failed 23 of those files;
+package installation and seed-release custody passed there. Fresh-seed
+activation also has a different first failure. These differences remain
+unattributed, and historical reproduction does not waive any failure. Earlier
+Q6 adds six distinct unresolved files, for 31 across those two measured sets.
+
+The current WIP adds the bounded F10 committed-node liveness repair: both
+rebalancer consumers delegate lease meaning to the existing semantic owner,
+and critical topology refuses missing, non-READY, malformed or empty committed
+answers without cache fallback. Three component suites pass 188 assertions;
+four mechanism mutants fail their intended assertions. Independent exact-source
+review approves the four-file change for preservation. Its 33-file evidence
+archive is `sha256:df9403129d09ddb340e10353a8ed2bad77ccdaf3f4ef4689358f8a551aec19f4`.
+Frozen-head lab verification remains unsubmitted. No Quest was landed.
+
+At the user's WIP-push request, all agent edits were frozen. The proposed
+CDC logging fixture, hydration prerequisites, obsolete constants and simulation
+logging-clock repairs remain unimplemented. The FAILED cleanup investigation
+found an inherited recipient accepts null-token cleanup without consuming the
+exact CREATE terminal decision; a paired live-retain/terminal-cleanup proof and
+explicit bounded scope decision are required before changing that policy.
+
+All five registered lab hosts are reachable with the required toolchain.
+`carinas-windows` now uses an isolated dependency-current worker checkout at
+`/home/peter/projects/lagrange-lab-worker-20261105`; its original dirty package
+files and HEAD were hash-checked unchanged. Its exact `9ee285e1` validation
+passed ten files and failed the native authority-unavailability case at the
+release deadline, retaining all 1,019 reported assertions. This is not an
+all-green workload claim. `adam-laptop` remains usable for native tests but has
+only about 2.4 GB free on the Docker root; privileged storage maintenance is
+unexecuted. The prepared relocation script is a retained, unreviewed operator
+proposal only and needs interactive sudo. No host images or evidence were
+pruned. The final fleet probe reports all five dependency/toolchain-ready and
+all machine locks free. Fleet capability and physical service acceptance remain
+separate. The reopened 128-file WIP archive, including raw candidate/comparison
+logs, eleven actual controller completion records, triage, host preparation and
+unexecuted operator proposals, is
+`sha256:77a21c3b855adcd03d262467cc77bc43049e4ec2c6e63b4cef0c4d83a6a510e7`;
+its verified evidence-store reference is in the replay Quest log.
 
 The startup ownership dependency has current independent source review and
 seven passing suites (743 assertions). Its shutdown witness now measures live
@@ -202,16 +249,20 @@ reports starting at 11:35:44.645. Replay then rejects FAILED-to-PENDING.
 Admission materialization and the worker claim follow PENDING persistence;
 the retained trace cannot identify which authority await held startup. This
 sequence predates the takeover. Direct replay's MATERIALIZED admission versus
-FAILED lifecycle interaction needs a controlled same-operation witness before
-repair. The subsequent cleanup refusal is retained separately. There were no
+FAILED lifecycle interaction is reproduced and repaired by the bounded Quest
+above, without attributing the preceding physical delay. The subsequent cleanup
+refusal is retained separately. There were no
 learner-address refusals, so the specific H1 settling observation remains
 unavailable; aggregate CDC acceptance holds do not prove it.
 
-Next actions: freeze and independently verify the bounded F10 refresh repair,
-run its required Q6 and interaction tests on the lab, and reproduce the
-physical lifecycle/admission interaction with the real handler and state
-machine before assigning a repair. Keep every formation receipt red until its
-exact-candidate evidence closes the sealed claim.
+Next actions after WIP preservation: verify the liveness repair's focused
+contract on its frozen commit; resolve the measured historical owner/fixture
+failures and differing predecessor outcomes; finish lab workload capacity;
+then resume the unchanged physical scenario and obtain three consecutive greens
+on one exact candidate. Integration owner retains the cleanup interaction,
+H1 attribution, Quest landing, publication and milestone acceptance as distinct
+obligations. Keep every formation receipt red until its exact-candidate evidence
+closes the sealed claim. No further proof run is queued at this checkpoint.
 
 ## Approved user-visible contract
 
