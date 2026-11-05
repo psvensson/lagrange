@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 118,
+    "admin-diagnostics": 119,
     "architecture-governance": 21,
     "bootstrap-membership": 337,
     "cdc-metadata": 70,
     "cli-tooling": 99,
     "control-plane": 233,
-    "convergence-topology": 78,
+    "convergence-topology": 79,
     "distributed-harness": 210,
     "examples-e2e": 8,
     "pgwire-compat": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2590,
-  "digest": "fnv1a32-0076fca0",
+  "censusSize": 2592,
+  "digest": "fnv1a32-220d38cd",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-67aaad20",
+  "observationDigest": "fnv1a32-3bc0e684",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -94,6 +94,7 @@
     "test/admin/admin-websocket-payload-size-attribution.test.js": "admin-diagnostics",
     "test/admin/admin-websocket-service-dispatcher.test.js": "admin-diagnostics",
     "test/admin/cache-dump-completeness.property.test.js": "admin-diagnostics",
+    "test/admin/completed-placement-autonomous-progress.test.js": "admin-diagnostics",
     "test/admin/control-snapshot-stale-watermark-transitions.test.js": "admin-diagnostics",
     "test/admin/standalone-test-run-server.test.js": "admin-diagnostics",
     "test/admin/test-run-dashboard-trace-panel.test.js": "admin-diagnostics",
@@ -2452,6 +2453,7 @@
     "test/time/pct-scheduler.test.js": "runtime-primitives",
     "test/time/time-source.test.js": "runtime-primitives",
     "test/topology/cdc-group-propagation-foreground-boundary.test.js": "convergence-topology",
+    "test/topology/cdc-group-propagation-proposal-cost.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-service.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js": "convergence-topology",
@@ -2845,6 +2847,29 @@
     "test/admin/cache-dump-completeness.property.test.js": {
       "files": [
         "src/admin/admin-websocket-api.js"
+      ]
+    },
+    "test/admin/completed-placement-autonomous-progress.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/admin/standalone-test-run-server.test.js": {
@@ -20502,6 +20527,13 @@
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js",
+        "test/topology/cdc-group-propagation-service-harness.js"
+      ]
+    },
+    "test/topology/cdc-group-propagation-proposal-cost.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/raft/raft-rs-committed-peer-address.js",
         "test/topology/cdc-group-propagation-service-harness.js"
       ]
     },

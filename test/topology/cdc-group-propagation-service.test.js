@@ -460,10 +460,10 @@ test('contended durable propagation rotates 3 contending tables in deterministic
   const nodesAdmittedRes = await f.service.propagateCDCEvent(nodesAdmittedReq);
   assert.equal(nodesAdmittedRes.success, true);
 
-  // Verify healthy-schedule delivery cost bound: 9 completed waves across 2 target groups (g-2, g-3)
+  // Verify transport count: 9 completed waves across 2 target groups (g-2, g-3)
   // applied 9 source batches (1 per wave) and 18 target group deliveries (1 per target group per wave).
   assert.equal(f.source.batches.length, 9, 'healthy waves apply 1 source batch per wave');
-  assert.equal(f.calls.length, 18, 'healthy waves deliver 1 proposal per target group per wave (proposals <= c*K*M)');
+  assert.equal(f.calls.length, 18, 'healthy waves make 1 transport delivery per target group per wave');
 });
 
 test('contended durable propagation preserves FIFO position and scheduling credit across a delayed acknowledgement continuation while allowing ready work to proceed after reservation expiry', async (t) => {

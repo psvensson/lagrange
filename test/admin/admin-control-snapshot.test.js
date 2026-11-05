@@ -550,7 +550,7 @@ test(
 );
 
 test(
-  'Control-plane convergence and operation completion progress to inFlightCount === 0 with zero admin polling and READ_ONLY_SYSTEM_TABLE_CACHE_MUTATION negative control',
+  'AdminControlSnapshot reads supplied terminal publication and operation state without mutating the cache',
   async (t) => {
     const {SystemTableCache} = await import(
       '../../src/cache/system-table-cache.js'
@@ -685,7 +685,7 @@ test(
       return originalGetControlSnapshot(...args);
     };
 
-    // Drive control-plane publication convergence and replica operation completion via CDC without admin polling
+    // Supply terminal fixture state; this proves observation only, not owner-driven convergence.
     writableCache.applySystemTableChange(
       TABLES.CONTROL_PLANE_PUBLICATIONS,
       'UPDATE',
@@ -731,7 +731,7 @@ test(
     t.equal(
       adminSnapshotPollCalls,
       0,
-      'control-plane convergence and operation settlement completed with zero admin polling',
+      'terminal fixture state was supplied before the first snapshot',
     );
 
     const trackedTables = [
@@ -748,22 +748,22 @@ test(
       ]),
     );
 
-    // Inspect once after convergence and operation completion
+    // Inspect the supplied terminal state once.
     const finalSnapshot = await snapshot.getControlSnapshot({capturedAt: nowMs});
     t.equal(
       adminSnapshotPollCalls,
       1,
-      'getControlSnapshot called exactly once after convergence completed',
+      'getControlSnapshot called exactly once over the supplied terminal state',
     );
     t.equal(
       finalSnapshot.replicaOperations.inFlightCount,
       0,
-      'replica operation progressed to inFlightCount === 0 without admin polling',
+      'the supplied terminal operation is excluded from inFlightCount',
     );
     t.same(
       finalSnapshot.publishedNodes,
       ['node-1', 'node-2'],
-      'membership publication converged to published active cohort without admin polling',
+      'the supplied publication determines the published active cohort',
     );
 
     const versionsAfterSnapshot = Object.fromEntries(

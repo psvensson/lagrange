@@ -20,6 +20,7 @@ import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {
+  PARTITION_CDC_COMMAND,
   PARTITION_CDC_OBLIGATION_BOUND,
   PARTITION_CDC_OBLIGATION_DRIVE_STATE,
 } from '../../src/partition/partition-cdc-obligation-constants.js';
@@ -27,7 +28,8 @@ import {
   OBLIGATION_RETRY_DISPOSITION,
   scheduleDeliveryRetry,
 } from '../../src/partition/partition-cdc-obligation-delivery.js';
-import {acknowledgedGroupsOf} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {acknowledgedGroupsOf, buildCdcAcknowledgementCommand} from
+  '../../src/partition/partition-cdc-obligation-ledger.js';
 import {PARTITION_HYDRATION_IMAGE_STATE} from
   '../../src/partition/partition-service-hydration-image-methods.js';
 import {
@@ -42,6 +44,15 @@ import {
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
+
+function acknowledgementBatchCounts(proposed) {
+  const commands = proposed.filter((command) => command.type === PARTITION_CDC_COMMAND.DELIVERED);
+  assert.ok(commands.length >= 2, 'the witness must measure multiple ACK commands');
+  return commands.map((command) => {
+    assert.ok(Array.isArray(acknowledgedGroupsOf(command)), 'Every proposed ACK must be valid');
+    return command.acknowledged.reduce((count, group) => count + group.events.length, 0);
+  });
+}
 
 for (const earlierCount of [1, 3]) {
   test(`W-D4a: subscribe-before-hydrate delivers every ledger event above P (K=${earlierCount} ` +
@@ -159,11 +170,15 @@ test('W-D4c: acknowledgeHydratedObligationsThrough drains > 256 pre-hydration ob
     );
     const applied = new Set();
     await pump(timeSource, leader, proposed, applied);
-    const batchEventCounts = proposed
-      .map((command) => acknowledgedGroupsOf(command))
-      .filter((groups) => Array.isArray(groups))
-      .map((groups) =>
-        groups.reduce((sum, group) => sum + (group.events?.length || 0), 0));
+    const batchEventCounts = acknowledgementBatchCounts(proposed);
+    const oversized = buildCdcAcknowledgementCommand(leader.partitionId, [{
+      logIndex: 1,
+      events: Array.from({length: PARTITION_CDC_OBLIGATION_BOUND.ACK_BATCH_MAX_EVENTS + 1},
+        (_, ordinal) => ({ordinal, eventKeyDigest: 'a'.repeat(64)})),
+    }]);
+    assert.throws(() => acknowledgementBatchCounts([...proposed, oversized]),
+      /Every proposed ACK must be valid/,
+      'a mixed population of valid ACKs and a 257-event ACK must fail measurement');
     const maxBatchEvents = Math.max(0, ...batchEventCounts);
     const diagnostics = leader.cdcDelivery.getCdcObligationDiagnostics();
     assert.equal(ackResult.acknowledged, 600);

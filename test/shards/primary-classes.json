@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2241,
+    "unit": 2243,
     "integration": 123,
     "bootstrap": 219,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2590,
-  "digest": "fnv1a32-231c9ca0",
+  "censusSize": 2592,
+  "digest": "fnv1a32-e556bab0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -75,6 +75,7 @@
     "test/admin/admin-websocket-payload-size-attribution.test.js": "unit",
     "test/admin/admin-websocket-service-dispatcher.test.js": "unit",
     "test/admin/cache-dump-completeness.property.test.js": "unit",
+    "test/admin/completed-placement-autonomous-progress.test.js": "unit",
     "test/admin/control-snapshot-stale-watermark-transitions.test.js": "unit",
     "test/admin/standalone-test-run-server.test.js": "unit",
     "test/admin/test-run-dashboard-trace-panel.test.js": "unit",
@@ -2433,6 +2434,7 @@
     "test/time/pct-scheduler.test.js": "unit",
     "test/time/time-source.test.js": "unit",
     "test/topology/cdc-group-propagation-foreground-boundary.test.js": "unit",
+    "test/topology/cdc-group-propagation-proposal-cost.test.js": "unit",
     "test/topology/cdc-group-propagation-service.test.js": "unit",
     "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": "unit",
     "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js": "unit",

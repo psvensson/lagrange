@@ -29,7 +29,7 @@ const MICROTASKS = 16;
 
 function view(f) {
   return f.services.map((service) => ({replicaId: service.replicaId,
-    record: RaftRsDurableStore.readDurableRecordIn(service.db, GROUP_ID),
+    record: RaftRsDurableStore.readDurableRecordIn(service.db, f.groupId),
     row: service.systemTableCache.get(TABLES.CONFIG, f.key) ?? null}));
 }
 
@@ -67,10 +67,12 @@ async function pump(f) {
   }
 }
 
-async function recipientFixture(t, key, {replicaCount = REPLICAS.length} = {}) {
+async function recipientFixture(t, key, {
+  replicaCount = REPLICAS.length, groupId = GROUP_ID,
+} = {}) {
   assert.ok(replicaCount === 1 || replicaCount === REPLICAS.length);
-  const replicas = REPLICAS.slice(0, replicaCount);
-  const f = {key, phase: 'setup', services: [], clocks: [], queue: [], held: [],
+  const replicas = REPLICAS.slice(0, replicaCount).map((id) => id.replace(GROUP_ID, groupId));
+  const f = {key, groupId, phase: 'setup', services: [], clocks: [], queue: [], held: [],
     events: [], holdEntries: false, isolateLeader: false, leaderPeer: null,
     directory: fs.mkdtempSync(path.join(os.tmpdir(), 'mg-native-custody-'))};
   f.router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION,
@@ -111,7 +113,7 @@ async function recipientFixture(t, key, {replicaCount = REPLICAS.length} = {}) {
     }
     const timeSource = new VirtualTimeSource({startMs: 1000});
     f.clocks.push(timeSource);
-    const service = new MessageGroupService({groupId: GROUP_ID, replicaId,
+    const service = new MessageGroupService({groupId, replicaId,
       replicaIds: replicas,
       founderNodeIds: founderNodeIdsOfPlacement(replicas, addresses), nodeId: NODE_ID,
       transport: f.router, dbPath: path.join(f.directory, `${replicaId}.sqlite`),
