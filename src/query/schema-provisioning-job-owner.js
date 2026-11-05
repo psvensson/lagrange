@@ -124,6 +124,7 @@ export function isTransientProvisioningError(error) {
   const message = String(error?.message || '').toLowerCase();
   return code.includes(TRANSIENT_ERROR_FRAGMENT.TIMEOUT_CODE) ||
     code.includes(TRANSIENT_ERROR_FRAGMENT.CANCEL_CODE) ||
+    code === QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE ||
     code === QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE ||
     message.includes(TRANSIENT_ERROR_FRAGMENT.TIMEOUT_MESSAGE) ||
     message.includes(TRANSIENT_ERROR_FRAGMENT.TIMED_OUT_MESSAGE) ||
@@ -131,6 +132,24 @@ export function isTransientProvisioningError(error) {
     message.includes(TRANSIENT_ERROR_FRAGMENT.STALE_FENCE_MESSAGE) ||
     message.includes(TRANSIENT_ERROR_FRAGMENT.NOT_CONFIRMED_MESSAGE) ||
     code === SCHEMA_PROVISIONING_ERROR_CODE.STALE_OWNER;
+}
+
+function buildProvisioningRefusal(workflow, error) {
+  const {epoch, reasons, retryAfterMs} = error;
+  return {
+    success: false,
+    error: error.message,
+    errorCode: QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
+    ...buildOwnerContractOutcome({
+      contractState: OWNER_CONTRACT_STATE.DEFERRED,
+      nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+    }),
+    jobId: workflow.workflowId,
+    epoch,
+    reasons,
+    retryAfterMs,
+    detail: {epoch, reasons, retryAfterMs},
+  };
 }
 
 function recoverIntentFromRow(row) {
@@ -386,7 +405,7 @@ class SchemaProvisioningJobOwner {
     return claim.workflow;
   }
 
-  async transitionPendingForRetry(intent, executor, workflow) {
+  async transitionPendingForRetry(intent, executor, workflow, error = null) {
     const renewedWorkflow = await this.assertOwnership(workflow);
     await this.workflowCoordinator.transitionStep(workflow.workflowId, {
       nextStep: SCHEMA_PROVISIONING_JOB_STEP.RECONCILING_REPLICAS,
@@ -401,6 +420,13 @@ class SchemaProvisioningJobOwner {
       retryAfterMs: this.retryAfterMs,
     });
     this.scheduleRetry(intent, executor);
+    if ((error?.code || error?.errorCode) ===
+        QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE) {
+      // Refusal is the current committed-quorum observation, not durable job
+      // completion. Repeated/recovered step history must not replay an older
+      // observation or turn the generic PENDING result into wire success.
+      return buildProvisioningRefusal(renewedWorkflow, error);
+    }
     return this.buildOutcome(renewedWorkflow);
   }
 
@@ -484,6 +510,7 @@ class SchemaProvisioningJobOwner {
           intent,
           executor,
           ownedWorkflow,
+          error,
         );
       }
       return this.transitionTerminal(intent, ownedWorkflow, {

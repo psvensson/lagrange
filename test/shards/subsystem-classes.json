@@ -28,7 +28,7 @@
   "censusSize": 2591,
   "digest": "fnv1a32-7bb2d482",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ff4b0132",
+  "observationDigest": "fnv1a32-35b0c818",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -13404,7 +13404,9 @@
         "src/control-plane/timeout-budget.js",
         "src/query/schema-provisioning-intent.js",
         "src/query/schema-provisioning-job-constants.js",
-        "src/query/table-creation-service.js"
+        "src/query/table-creation-service.js",
+        "src/runtime/pgwire-protocol-constants.js",
+        "src/runtime/pgwire-protocol-handler.js"
       ]
     },
     "test/query/select-no-from.test.js": {
@@ -13578,6 +13580,7 @@
     "test/query/sql-query-engine-provision-partition-quorum.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/owner-contract-outcome.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-write-kernel.js",

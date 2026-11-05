@@ -8,8 +8,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
-import {
-} from '../../src/query/query-constants.js';
+import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
 import {
   ERRORS,
   TABLES,
@@ -28,8 +27,8 @@ import {
 } from '../../src/control-plane/pressure-governor.js';
 import {
 } from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
-import {
-} from '../../src/control-plane/owner-contract-outcome.js';
+import {OWNER_CONTRACT_STATE} from
+  '../../src/control-plane/owner-contract-outcome.js';
 import {
 } from './routing-repair-test-helpers.js';
 import {
@@ -621,8 +620,8 @@ test('SQLQueryEngine - provisionInitialTablePartition probes admission ' +
   );
 });
 
-test('SQLQueryEngine - provisionInitialTablePartition downscales when ' +
-  'create-phase admission leaves a smaller viable cohort', async (t) => {
+test('SQLQueryEngine - provisionInitialTablePartition refuses RF2 ' +
+  'create-phase admission shortfall below the sealed quorum', async (t) => {
   const partitionId = 'tbl-admission-race-downscale-p1';
   const localNodeId = 'node-a';
   const checkedTargetNodeIds = [];
@@ -718,10 +717,10 @@ test('SQLQueryEngine - provisionInitialTablePartition downscales when ' +
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
 
-  await engine.provisionInitialTablePartition({
+  await t.rejects(engine.provisionInitialTablePartition({
     partitionId,
     replicaCount: 2,
-  });
+  }), {code: QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE});
 
   t.same(
     uniqueNodeIds(checkedTargetNodeIds),
@@ -735,13 +734,13 @@ test('SQLQueryEngine - provisionInitialTablePartition downscales when ' +
   );
   t.same(
     executedTargetNodeIds,
-    ['node-a'],
-    'bootstrap should continue with the viable reduced cohort instead of aborting',
+    [],
+    'below-quorum founders must not be dispatched',
   );
   t.same(
     failedOperationIds,
-    [],
-    'successful provisional operations should not be failed when degraded bootstrap can continue',
+    ['op-node-a'],
+    'non-durable provisional work is aborted before dispatch',
   );
 });
 
@@ -841,13 +840,14 @@ async (t) => {
   );
 });
 
-test('SQLQueryEngine - provisionInitialTablePartition downscales RF3 ' +
-  'create-phase shortfall only to quorum, not to one replica', async (t) => {
+test('SQLQueryEngine - provisionInitialTablePartition completes RF3 ' +
+  'create-phase shortfall at the real table service quorum minimum', async (t) => {
   const partitionId = 'tbl-admission-race-quorum-floor-p1';
   const localNodeId = 'node-a';
   const checkedTargetNodeIds = [];
   const createdTargetNodeIds = [];
   const executedTargetNodeIds = [];
+  const dispatchedMemberships = [];
   const failedOperationIds = [];
   const nodes = [
     {node_id: localNodeId, status: 'active'},
@@ -907,6 +907,8 @@ test('SQLQueryEngine - provisionInitialTablePartition downscales RF3 ' +
       }
       return {
         operationId: `op-${move.nodeId}`,
+        replicaId: `${partitionId}-${move.nodeId}`,
+        targetNodeId: move.nodeId,
         createdAt: Date.now(),
         ...move,
       };
@@ -917,13 +919,15 @@ test('SQLQueryEngine - provisionInitialTablePartition downscales RF3 ' +
     async executeOperation(operation) {
       const targetNodeId = operation.targetNodeId || operation.nodeId;
       executedTargetNodeIds.push(targetNodeId);
+      dispatchedMemberships.push(operation.bootstrapMembership);
       services.push({
+        service_id: operation.replicaId,
         partition_id: operation.partitionId,
         service_type: 'partition',
         status: 'active',
         node_id: targetNodeId,
         raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
-        address: `${targetNodeId}/partition/${operation.partitionId}`,
+        address: `${targetNodeId}/partition/${operation.replicaId}`,
       });
       return {success: true};
     },
@@ -939,10 +943,25 @@ test('SQLQueryEngine - provisionInitialTablePartition downscales RF3 ' +
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
 
-  await engine.provisionInitialTablePartition({
+  const result = await engine.tableCreationService.provisionInitialPartition({
     partitionId,
     replicaCount: 3,
   });
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
+  t.equal(result.requestedReplicaCount, 3);
+  t.equal(result.committedReplicaCount, 2);
+  t.equal(result.missingReplicaCount, 1);
+  t.same(result.epoch, engine.controlPlaneReadinessService.answerServeCohort().epoch);
+  t.equal(dispatchedMemberships.length, 2);
+  for (const membership of dispatchedMemberships) {
+    t.same(new Set(membership.founders), new Set([
+      `${partitionId}-node-a`, `${partitionId}-node-b`,
+    ]), 'both actual replica identities enter the GENESIS stamp');
+    t.same(membership.founderNodeIds, {
+      [`${partitionId}-node-a`]: 'node-a',
+      [`${partitionId}-node-b`]: 'node-b',
+    }, 'the stamp binds each founder to its actual node');
+  }
 
   t.same(
     uniqueNodeIds(checkedTargetNodeIds),

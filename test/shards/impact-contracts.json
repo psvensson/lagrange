@@ -1957,6 +1957,23 @@
         "test/node/fresh-create-authority-unavailability-native.integration.test.js"
       ]
     },
+    "schema-provisioning-quorum-refusal": {
+      "description": "A committed-cohort quorum refusal remains nonterminal in the canonical durable schema owner and reaches SQL clients as the current typed DEFERRED/RETRY observation; the existing fenced retry completes the same intent when quorum becomes available.",
+      "owners": [
+        "src/query/sql-query-engine-initial-partition-provisioning.js",
+        "src/query/sql-query-engine-provision-target-methods.js",
+        "src/query/schema-provisioning-job-owner.js",
+        "src/query/table-creation-service-durable-job.js",
+        "src/runtime/pgwire-protocol-handler.js"
+      ],
+      "tests": [
+        "test/query/sql-query-engine-provision-partition-waits.test.js",
+        "test/query/sql-query-engine-provision-partition-quorum.test.js",
+        "test/query/schema-provisioning-job-owner.test.js",
+        "test/query/schema-provisioning-transient-collision.test.js",
+        "test/runtime/pgwire-schema-provisioning-job.test.js"
+      ]
+    },
     "serve-eligibility-committed-epoch": {
       "description": "Per-node serve eligibility has one owner: the readiness owner answers it from a committed, leader-required read of the nodes rows and the latest published cluster_membership epoch, as a typed answer at that epoch bounded by the committed lease; cache changes are triggers only, and user-table serve routing consumes that answer and nothing else.",
       "owners": [
@@ -4119,6 +4136,34 @@
         "test/partition/partition-admission-redrive-wakes.test.js",
         "test/raft/raft-rs-backend/admission-redrive-chain.test.js",
         "test/node/replica-handler.test.js"
+      ]
+    },
+    "schema-provisioning-quorum-refusal": {
+      "description": "Quorum admission, durable schema custody and PostgreSQL response preserve one refusal and its current observation without terminally poisoning the intent or reporting CREATE success below quorum.",
+      "endpoints": [
+        {
+          "id": "committed-quorum-admission",
+          "owners": [
+            "src/query/sql-query-engine-initial-partition-provisioning.js",
+            "src/query/sql-query-engine-provision-target-methods.js"
+          ]
+        },
+        {
+          "id": "durable-custody-and-client-answer",
+          "owners": [
+            "src/query/schema-provisioning-job-owner.js",
+            "src/query/table-creation-service-durable-job.js",
+            "src/runtime/pgwire-protocol-handler.js"
+          ]
+        }
+      ],
+      "contract": "schema-provisioning-quorum-refusal",
+      "witnessTests": [
+        "test/query/sql-query-engine-provision-partition-waits.test.js",
+        "test/query/sql-query-engine-provision-partition-quorum.test.js",
+        "test/query/schema-provisioning-job-owner.test.js",
+        "test/query/schema-provisioning-transient-collision.test.js",
+        "test/runtime/pgwire-schema-provisioning-job.test.js"
       ]
     },
     "serve-eligibility-committed-answer-and-routing": {

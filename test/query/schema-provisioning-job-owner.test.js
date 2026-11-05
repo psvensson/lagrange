@@ -1,3 +1,4 @@
+import {EventEmitter} from 'node:events';
 import {test} from '../../src/test-helpers/tap.js';
 import {TableCreationService} from
   '../../src/query/table-creation-service.js';
@@ -13,6 +14,11 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schema-shared-constants.js';
+import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
+import {PgWireProtocolHandler} from
+  '../../src/runtime/pgwire-protocol-handler.js';
+import {PG_BACKEND_MSG, PG_ERROR_CODE, PG_TRANSACTION_STATE} from
+  '../../src/runtime/pgwire-protocol-constants.js';
 
 function createAst(extraColumn = null) {
   return {
@@ -161,6 +167,164 @@ function createService(gateway, provisionCalls, overrides = {}) {
         nextAction: 'proceed',
       };
     }),
+  });
+}
+
+// Real SQL dispatch, table service, durable schema owner and wire mapping.
+// Only durable storage, provisioning availability and timer delivery are seams.
+function createSchemaWireClient(t, service, gateway) {
+  const engine = new SQLQueryEngine({
+    systemCache: {find: () => null, getAll: () => []},
+    controlPlaneSystemTableGateway: gateway,
+    autoStartDistributedTransactionRecovery: false,
+    migrationAutoWire: false,
+  });
+  engine.tableCreationService.shutdown();
+  engine.tableCreationService = service;
+  t.teardown(() => service.shutdown());
+  return async () => {
+    const socket = new EventEmitter();
+    const messages = [];
+    socket.write = (message) => messages.push(Buffer.from(message));
+    let outcome;
+    const handler = new PgWireProtocolHandler({
+      adapter: {
+        async execute(sessionId, sql, params) {
+          outcome = await engine.executeQuery(sql, params, {sessionId});
+          return outcome;
+        },
+      },
+      socket,
+      logger: {debug() {}, info() {}, warn() {}, error() {}},
+    });
+    handler._session = {
+      sessionId: 'quorum-refusal-client',
+      getTransactionState: () => PG_TRANSACTION_STATE.IDLE,
+      setTransactionState() {},
+    };
+    await handler._executeAndSend(
+      'CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY)', []);
+    return {outcome, messages};
+  };
+}
+
+function assertQuorumRefusal(t, answer, refusal) {
+  const {outcome, messages} = answer;
+  t.equal(outcome.success, false, 'below quorum cannot complete CREATE');
+  t.equal(outcome.contractState, OWNER_CONTRACT_STATE.DEFERRED);
+  t.equal(outcome.nextAction, 'retry');
+  t.equal(outcome.errorCode, QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE);
+  t.same(outcome.epoch, refusal.epoch, 'current observation epoch survives');
+  t.same(outcome.reasons, refusal.reasons, 'current refusal reasons survive');
+  t.equal(outcome.retryAfterMs, refusal.retryAfterMs);
+  t.same(outcome.detail, refusal, 'structured detail matches the observation');
+  t.equal(messages.length, 1);
+  t.equal(messages[0]?.[0], PG_BACKEND_MSG.ERROR_RESPONSE);
+  t.ok(messages[0]?.includes(Buffer.from(PG_ERROR_CODE.CANNOT_CONNECT_NOW)),
+    'public SQL maps the typed refusal to 57P03');
+  t.ok(messages[0]?.includes(Buffer.from(JSON.stringify(refusal))),
+    'the wire carries the current epoch, reasons and retry delay');
+  t.notOk(messages.some((message) =>
+    message[0] === PG_BACKEND_MSG.COMMAND_COMPLETE));
+}
+
+for (const recreateOwner of [false, true]) {
+  test('below-quorum schema work retains retry custody and wire refusal ' +
+    `through recovery (recreate owner: ${recreateOwner})`, async (t) => {
+    const gateway = createGateway();
+    const timers = [];
+    const provisionCalls = [];
+    const now = {value: 100};
+    let quorumAvailable = false;
+    let refusal = {epoch: {publicationEpoch: 7},
+      reasons: ['serve_cohort_below_quorum'], retryAfterMs: 125};
+    const overrides = {
+      now: () => now.value,
+      schemaProvisioningLeaseMs: 1000,
+      schemaProvisioningRetrySetTimeoutFn(callback, delayMs) {
+        const timer = {callback, delayMs, cleared: false, unref() {}};
+        timers.push(timer);
+        return timer;
+      },
+      schemaProvisioningRetryClearTimeoutFn(timer) {
+        timer.cleared = true;
+      },
+      async partitionProvisioner(context) {
+        provisionCalls.push(context);
+        if (!quorumAvailable) {
+          throw Object.assign(new Error('Provisioning unavailable: no quorum'), {
+            code: QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
+            ...refusal,
+            detail: {...refusal},
+          });
+        }
+        return {
+          resolvedReplicaCount: recreateOwner ? 2 : 3,
+          routableReplicaCount: recreateOwner ? 2 : 3,
+          fullReplicaCountConverged: !recreateOwner,
+          contractState: recreateOwner ? OWNER_CONTRACT_STATE.UNDER_REPLICATED :
+            OWNER_CONTRACT_STATE.READY,
+          nextAction: 'proceed',
+          epoch: {publicationEpoch: 9},
+          missingReplicaCount: recreateOwner ? 1 : 0,
+        };
+      },
+    };
+    let service = createService(gateway, provisionCalls, overrides);
+    let query = createSchemaWireClient(t, service, gateway);
+    const first = await query();
+    assertQuorumRefusal(t, first, refusal);
+    const jobId = first.outcome.jobId;
+    const jobKey = `schema_operations:${jobId}`;
+    t.equal(gateway.rows.get(jobKey)?.status, 'PENDING',
+      'temporary quorum loss must not poison the durable intent as FAILED');
+    t.equal(timers.length, 1, 'one canonical retry is retained');
+    if (gateway.rows.get(jobKey)?.status !== 'PENDING') return;
+
+    if (recreateOwner) {
+      service.shutdown();
+      t.ok(timers[0].cleared, 'old owner disarms its retry');
+      service = createService(gateway, provisionCalls, {...overrides,
+        schemaProvisioningOwnerId: 'schema-worker-b'});
+      query = createSchemaWireClient(t, service, gateway);
+      const [retained] = await service.resumeDurableProvisioningJobs();
+      t.equal(retained.contractState, OWNER_CONTRACT_STATE.PENDING);
+      t.equal(provisionCalls.length, 1,
+        'new owner cannot provision under the previous live lease');
+      now.value = gateway.rows.get(jobKey).workflow_lease_expires_at + 1;
+    }
+    refusal = {epoch: {publicationEpoch: 8},
+      reasons: ['committed_lease_unavailable'], retryAfterMs: 275};
+    const second = await query();
+    assertQuorumRefusal(t, second, refusal);
+    t.equal(second.outcome.jobId, jobId, 'repeated CREATE attaches to one job');
+    t.equal(gateway.rows.get(jobKey).status, 'PENDING');
+    t.equal(gateway.rows.get(jobKey).workflow_owner_id,
+      recreateOwner ? 'schema-worker-b' : 'schema-worker-a');
+    t.equal(service.schemaProvisioningJobOwner.retryTimersByWorkflowId.size, 1);
+    t.equal(provisionCalls.length, 2, 'latest refusal comes from a new attempt');
+
+    quorumAvailable = true;
+    timers.at(-1).callback();
+    for (let turn = 0; turn < 100; turn += 1) {
+      if (gateway.rows.get(jobKey).status === 'SUCCEEDED') break;
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    t.equal(gateway.rows.get(jobKey).status, 'SUCCEEDED',
+      'canonical owner timer completes the intent without another CREATE');
+    t.equal(gateway.rows.get(jobKey).attempt_count, 3);
+    t.equal(provisionCalls.length, 3);
+    t.equal(service.schemaProvisioningJobOwner.retryTimersByWorkflowId.size, 0);
+    t.equal(gateway.writes.filter((write) => write.tableName === 'tables' &&
+      String(write.operation).toUpperCase() === 'INSERT').length, 1,
+    'metadata is created once');
+    const replay = await query();
+    t.equal(replay.outcome.jobId, jobId);
+    t.equal(replay.outcome.contractState, recreateOwner ?
+      OWNER_CONTRACT_STATE.UNDER_REPLICATED : OWNER_CONTRACT_STATE.READY);
+    t.ok(replay.messages.some((message) =>
+      message[0] === PG_BACKEND_MSG.COMMAND_COMPLETE));
+    t.equal(provisionCalls.length, 3, 'terminal success is replayed');
   });
 }
 

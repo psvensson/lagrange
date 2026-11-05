@@ -86,9 +86,26 @@ files exceeded 800 lines, and the hydration witness lacked interaction
 registration. These are proof/steering defects, not a newly demonstrated
 formation regression. The seven focused baseline suites passed 758 assertions.
 The extracted diagnostics and CDC state helpers passed the three affected
-suites (522 assertions). Source review, the new genuine three-process
-no-admin-poll witness, and its separate native owner-wake negative control
-remain pending; their evidence ceilings are distinct.
+suites (522 assertions). Reviewed frozen candidate
+`2f344fde524ab6077033c4131881aca56e7fe9a3` then passed 17 affected suites on
+locked `lenovo-laptop` (1,173 assertions), including the separate native
+owner-wake negative control. The native cleanup witness passed eight assertions
+on locked `tv-dator`. These remain separate from public formation acceptance.
+
+The genuine three-process no-admin-poll witness failed on `2f344fde` at the
+public harness CREATE probe within its unchanged budget. All three retained
+guards report `installed:true,calls:[]`. The seed's first provisioning refusal
+at `2026-11-05T09:14:48.688Z` was typed `PROVISIONING_UNAVAILABLE`, but the schema
+job owner persisted it as terminal `FAILED`, so later attempts replayed it.
+This repeats the historical schema-provisioning collision/retry failure class.
+The repair retains the canonical fenced retry and answers the current refusal
+as `DEFERRED/RETRY`, with identical epoch/reasons/retry delay through SQLSTATE
+`57P03`. It changes no quorum, wait budget or timer policy and does not migrate
+previously terminal rows. The production-seam red and green logs, distinct-owner
+lease/recovery control, and retained six-file live evidence are recorded in the
+Quest log. Broader checks also exposed two unchanged April-era quorum fixtures;
+they now enforce RF2's quorum and exercise RF3's real caller minimum with actual
+GENESIS replica/node identities. The next frozen candidate still needs E8/E9.
 
 E9 has not been submitted on the takeover candidate. The latest inherited
 physical report failed projection/authority agreement and observation integrity
@@ -100,9 +117,10 @@ This scenario lacks `SCENARIO_CERTIFICATION_REQUIREMENT`: use its ordinary
 physical harness route with exact committed source/image evidence, and do not
 claim the distinct `--certify` certificate. The receipt remains failing.
 
-Next action: the integration owner completes proof repairs and independent
-review, freezes the candidate, then observes the actual lab execution to
-completion. No queue or background continuation is claimed.
+Next action: independently review the bounded schema-owner correction and
+updated witnesses, freeze the candidate, and rerun E8 through the locked lab
+owner before E9. The receipt remains red until exact-candidate evidence closes
+all required claims.
 
 ## Approved user-visible contract
 
