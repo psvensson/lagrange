@@ -20,6 +20,8 @@ import {
 } from '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {createMockControlPlaneReadinessService} from './test-helpers.js';
+import {PriorityPublicationSafetyTopology} from '../../src/rebalancer/priority-publication-safety-topology.js';
 
 const REMOVE_SAFETY_EVALUATION_CLASSIFICATION =
   OPERATION_WORKFLOW_OWNER_SHARED.REMOVE_SAFETY_EVALUATION_CLASSIFICATION;
@@ -39,6 +41,7 @@ function replicaRow(replicaId, nodeId) {
     service_type: 'partition',
     status: 'active',
     raft_role: 'follower',
+    address: `${nodeId}/partition/${replicaId}`,
   };
 }
 
@@ -50,6 +53,11 @@ function replicaRow(replicaId, nodeId) {
 function buildContext({rows, minReplicaCount}) {
   return {
     nodeId: 'owner-node',
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      readNodeRows: () => ['node-a', 'node-b', 'node-c'].map((nodeId) => ({
+        node_id: nodeId, status: 'active', ready_lease_expires_at: Date.now() + 60000,
+      })),
+    }),
     repository: {
       isReplaceRemovePhase: () => false,
       isReplaceRemoveDispatchPhase: () => false,
@@ -64,7 +72,10 @@ function buildContext({rows, minReplicaCount}) {
     resolveTimeoutCheckNowMs: () => Date.now(),
     getCriticalReplicaRowsForSafety: async () => rows,
     isVoterReadyRoutableReplica: () => true,
-    isVoterReadyFloorCountableReplica: () => true,
+    isVoterReadyReplicaTopology:
+      PriorityPublicationSafetyTopology.prototype.isVoterReadyReplicaTopology,
+    isVoterReadyFloorCountableReplica:
+      PriorityPublicationSafetyTopology.prototype.isVoterReadyFloorCountableReplica,
     isOperationReplicaRow: (row, op) =>
       row.replica_id === op.replicaId || row.service_id === op.replicaId,
     isReplaceSourceLeaderHandoffRequiredPartition: () => false,
@@ -82,16 +93,16 @@ function buildContext({rows, minReplicaCount}) {
       classification: REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
     }),
     buildFailedRemoveSafetyEvaluation: (reason) => ({
-      classification: REMOVE_SAFETY_EVALUATION_CLASSIFICATION.FAILED,
+      classification: REMOVE_SAFETY_EVALUATION_CLASSIFICATION.FAIL,
       reason,
     }),
     buildDeferredRemoveSafetyEvaluationForOperation: (operation, reason) => ({
-      classification: REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFERRED,
+      classification: REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
       reason,
     }),
-    buildDeferredRemoveSafetyEvaluation: (operation, reason) => ({
-      classification: REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFERRED,
-      reason,
+    buildDeferredRemoveSafetyEvaluation: (error) => ({
+      classification: REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
+      reason: error,
     }),
   };
 }
@@ -150,7 +161,7 @@ test(
     );
     t.equal(
       result.classification,
-      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFERRED,
+      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
       'removal below the min-replica floor defers, not silently safe',
     );
     t.match(
@@ -218,7 +229,7 @@ test(
     );
     t.equal(
       result.classification,
-      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFERRED,
+      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
       'system partition below the floor also defers (tier scope preserved)',
     );
     t.end();

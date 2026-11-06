@@ -1,4 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {indexCommittedNodeRows} from '../../src/control-plane/committed-node-rows.js';
 import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {
   SERVE_ELIGIBILITY_DECISION,
@@ -521,3 +522,113 @@ test(
     t.end();
   },
 );
+
+test('committed NODES rejects malformed collections before indexing and preserves retained records',
+  async (t) => {
+    let accessorCalls = 0;
+    const getterRow = Object.defineProperty({}, 'node_id', {
+      enumerable: true, get() {
+        accessorCalls++; return NODE_A;
+      },
+    });
+    const getterArray = Object.defineProperty([], '0', {
+      enumerable: true, get() {
+        accessorCalls++; return buildNodeRow();
+      },
+    });
+    const proxyRow = new Proxy(buildNodeRow(), {
+      get(target, key) {
+        accessorCalls++; return Reflect.get(target, key);
+      },
+    });
+    const invalidRows = [undefined, {}, [null], new Array(2),
+      [getterRow], getterArray, [proxyRow],
+      [{nodeId: NODE_A}], [{node_id: ''}],
+      [buildNodeRow(), buildNodeRow()]];
+    for (const nodes of invalidRows) {
+      const {owner, state} = createHarness();
+      state.nodes = nodes;
+      await owner.readServeEligibility();
+      t.equal(owner.answerCommittedNodes().reason,
+        SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_FAILED);
+      state.nodes = [buildNodeRow()];
+      await owner.readServeEligibility();
+      state.nodes = nodes;
+      await owner.readServeEligibility();
+      t.equal(owner.answer(NODE_A).decision, SERVE_ELIGIBILITY_DECISION.ELIGIBLE,
+        'a rejected collection preserves the owned valid retained-record policy');
+      owner.shutdown();
+    }
+    t.equal(accessorCalls, 0, 'authority admission never executes row or array accessors');
+  });
+
+test('committed notifications distinguish lease meaning while serving stays denied', async (t) => {
+  const {owner, state} = createHarness({nodes: [buildNodeRow(NODE_A, 5000.5)]});
+  t.teardown(() => owner.shutdown());
+  owner.isNodeLoadReady = () => false;
+  let notifications = 0;
+  owner.subscribe(() => {
+    notifications++;
+  });
+  for (const [lease, expected] of [[5000.5, 1], [null, 2], [undefined, 3],
+    [5000, 4], ['6000', 4]]) {
+    state.nodes = [buildNodeRow(NODE_A, lease)];
+    if (lease === undefined) delete state.nodes[0].ready_lease_expires_at;
+    await owner.readServeEligibility();
+    t.equal(owner.answer(NODE_A).decision, SERVE_ELIGIBILITY_DECISION.NOT_ELIGIBLE);
+    t.equal(notifications, expected,
+      'canonical meaning changes notify; a valid renewal does not');
+  }
+});
+
+test('a fractional future lease cannot grant serving through a private coercing parser', async (t) => {
+  const {owner} = createHarness({nodes: [buildNodeRow(NODE_A, 5000.5)]});
+  t.teardown(() => owner.shutdown());
+  await owner.readServeEligibility();
+  t.equal(owner.answer(NODE_A).decision, SERVE_ELIGIBILITY_DECISION.NOT_ELIGIBLE);
+});
+
+
+test('committed node admission preserves the validated population under mutable intrinsic poisons', (t) => {
+  const OriginalMap = Map;
+  const originalSet = Function.call.bind(Map.prototype.set);
+  const forged = buildNodeRow('forged-node');
+  const poisons = [
+    [Array.prototype, Symbol.iterator, function* () {
+      yield forged;
+    }],
+    [globalThis, 'Map', function() {
+      return new OriginalMap([['forged-node', forged]]);
+    }],
+    [String.prototype, 'trim', function() {
+      return String(this);
+    }],
+    [Map.prototype, 'has', () => false],
+    [Map.prototype, 'set', function() {
+      return originalSet(this, 'forged-node', forged);
+    }],
+    [Object, 'freeze', (value) => value],
+  ];
+  for (const [target, key, poison] of poisons) {
+    const original = target[key];
+    let accepted;
+    let duplicate;
+    let whitespace;
+    let missing;
+    try {
+      target[key] = poison;
+      accepted = indexCommittedNodeRows([buildNodeRow(NODE_A), buildNodeRow('node-b')]);
+      duplicate = indexCommittedNodeRows([buildNodeRow(NODE_A), buildNodeRow(NODE_A)]);
+      whitespace = indexCommittedNodeRows([buildNodeRow(' node-a ')]);
+      missing = indexCommittedNodeRows([{status: 'active'}]);
+    } finally {
+      target[key] = original;
+    }
+    t.same([...accepted.keys()], [NODE_A, 'node-b'], `${String(key)} cannot replace the input set`);
+    t.equal(Object.isFrozen(accepted.get(NODE_A)), true, 'admitted rows retain immutability');
+    t.equal(duplicate, null, 'duplicate identity remains refused');
+    t.equal(whitespace, null, 'noncanonical identity remains refused');
+    t.equal(missing, null, 'a missing identity cannot borrow an iterator value');
+  }
+  t.end();
+});

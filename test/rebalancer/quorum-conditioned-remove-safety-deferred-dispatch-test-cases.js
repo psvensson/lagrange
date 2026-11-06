@@ -323,7 +323,7 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -346,7 +346,7 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
               }),
             };
           },
-        },
+        }},
         tablePolicyService: {
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },

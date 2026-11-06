@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2250,
+    "unit": 2252,
     "integration": 124,
     "bootstrap": 219,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2600,
-  "digest": "fnv1a32-eb06d68b",
+  "censusSize": 2602,
+  "digest": "fnv1a32-5ba0d1a0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1838,6 +1838,8 @@
     "test/rebalancer/cluster-readiness-gate.test.js": "unit",
     "test/rebalancer/cluster-readiness-signal.property.test.js": "unit",
     "test/rebalancer/cluster-readiness-signal.test.js": "unit",
+    "test/rebalancer/committed-node-remove-safety-wake.test.js": "unit",
+    "test/rebalancer/committed-node-remove-safety.test.js": "unit",
     "test/rebalancer/concurrent-epoch-proposals.property.test.js": "unit",
     "test/rebalancer/coordinator-created-operation-admission.test.js": "unit",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js": "unit",

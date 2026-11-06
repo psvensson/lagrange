@@ -1,10 +1,11 @@
+import {committedNodeFloorLevel} from './operation-workflow-committed-node-floor.js';
 /**
  * Owner contract:
  * Owner: the single level-triggered wake of the REPLACE owner (quest
  * replace-source-removal-owner: R-2 as amended by challengers BR1, BR2 and
  * A9, generalised by amendment-1 step 0 to every level the owner waits on).
  * Inputs (wakes only, never authority):
- *  - the readiness owner's snapshot publications;
+ *  - the readiness owner's snapshot and committed-eligibility publications;
  *  - the node's replicated services rows (a REPLACE source's row change);
  *  - the node's partition consensus relay (the replica handler's tracked
  *    services): the applied ConfState announcement and the leader/term
@@ -22,10 +23,11 @@
  * one level key:
  *  - readiness: per node, the owner's own participation read
  *    (isNodeReadyForRouting with the remove-safety dimension and owner-read
- *    participation kind, which is getControlPlaneParticipationSync) and its
- *    evidence-absent denial read (isEvidenceAbsentReadinessDenial). A
- *    refresh-pending placeholder flips to the current answer under an
- *    UNCHANGED planning identity (BR1/A9), so the answer itself is compared;
+ *    participation kind, which is getControlPlaneParticipationSync) and
+ *    the full committed-node semantic level at one owner-clock instant.
+ *    This includes authoritative-only peers and availability, never raw
+ *    lease renewals or epoch tokens. A refresh-pending placeholder can flip
+ *    under an UNCHANGED planning identity (BR1/A9); compare the answer;
  *  - consensus: the last applied ConfState, leader and term the local relay
  *    announced for the operation's partition;
  *  - concurrency: the other non-terminal operations cached for the
@@ -94,10 +96,10 @@ function readWakeState(owner) {
       waiterByOperationId: new Map(),
       redriveInFlightOperationIds: new Set(),
       consensusLevelByPartitionId: new Map(),
-      // At most two entries: the readiness subscription's and the consensus
-      // relay subscription's release.
+      // Planning, committed-node and consensus subscriptions share this lifetime.
       unsubscribes: [],
       readinessSubscribed: false,
+      committedSubscribed: false,
       consensusSubscribed: false,
     };
     WAKE_STATE_BY_OWNER.set(owner, state);
@@ -126,12 +128,7 @@ function collectReplaceOwnerNodeIds(owner, operation) {
 
 function readNodeLevel(owner, nodeId, readinessOptions) {
   const ready = owner.isNodeReadyForRouting(nodeId, readinessOptions) === true;
-  const evidenceAbsent =
-    typeof owner.isEvidenceAbsentReadinessDenial === 'function' &&
-    owner.isEvidenceAbsentReadinessDenial(nodeId, readinessOptions) === true;
-  return nodeId + LEVEL_FIELD_SEPARATOR +
-    (ready ? LEVEL_TRUE : LEVEL_FALSE) +
-    (evidenceAbsent ? LEVEL_TRUE : LEVEL_FALSE);
+  return nodeId + LEVEL_FIELD_SEPARATOR + (ready ? LEVEL_TRUE : LEVEL_FALSE);
 }
 
 function readReplaceOwnerLevel(owner, operation, nodeIds) {
@@ -148,6 +145,7 @@ function readReplaceOwnerLevel(owner, operation, nodeIds) {
     NO_CONSENSUS_OBSERVATION;
   return [
     readinessLevel,
+    committedNodeFloorLevel(owner),
     consensusLevel,
     concurrentOperationLevel(owner, operation),
     sourceRowLevel(owner, operation),
@@ -314,6 +312,13 @@ function ensureWakeSubscriptions(owner, state) {
     state.unsubscribes.push(service.subscribeReadinessPlanningSnapshots(
       (event) => handleReadinessPublication(owner, event),
     ));
+  }
+  if (!state.committedSubscribed &&
+      typeof service?.subscribeServeEligibility === 'function') {
+    state.committedSubscribed = true;
+    state.unsubscribes.push(service.subscribeServeEligibility(() => {
+      if (!owner.isShuttingDown) wakeWaiters(owner, state, () => true);
+    }));
   }
   attachReplicaConsensusEvents(owner, owner.replicaConsensusEvents);
 }
@@ -485,6 +490,7 @@ function shutdownReplaceOwnerWake(owner) {
     }
   }
   state.readinessSubscribed = false;
+  state.committedSubscribed = false;
   state.consensusSubscribed = false;
   state.waiterByOperationId.clear();
   state.consensusLevelByPartitionId.clear();

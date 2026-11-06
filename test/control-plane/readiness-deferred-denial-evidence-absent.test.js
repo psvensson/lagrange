@@ -34,6 +34,8 @@ import {PriorityPublicationSafetyTopology} from
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED} from
   '../../src/rebalancer/priority-publication-safety-shared.js';
 import {VOTER_RAFT_ROLES} from '../../src/raft/replica-voter-readiness.js';
+import {readCommittedNodeFloor} from '../../src/rebalancer/operation-workflow-committed-node-floor.js';
+import {createMockControlPlaneReadinessService} from '../rebalancer/test-helpers.js';
 
 const EVIDENCE_ABSENT_READINESS_REASON_CODES = Object.freeze(new Set([
   CONTROL_PLANE_READINESS_REASON.PLANNING_SNAPSHOT_REFRESH_PENDING,
@@ -160,52 +162,39 @@ test('a deferral of a completed DENIAL on the read\'s dimension keeps the ' +
   t.same(leaked, [], 'no substantive denial becomes "no verdict"');
 });
 
-function createFloorHarness(readiness, decisionDimension) {
+function createFloorHarness(readiness, lease) {
   const harness = Object.create(PriorityPublicationSafetyTopology.prototype);
-  harness.controlPlaneReadinessService = {
-    getNodeReadinessSync: () => readiness,
-  };
-  harness.resolveOperationReadinessDecisionDimension = () => decisionDimension;
-  // The strict routable read is the participation gate's answer, which a
-  // deferred snapshot denies; the floor's carve-out is what is under test.
-  harness.isVoterReadyRoutableReplica = () => false;
+  harness.systemTableCache = null;
+  harness.resolveTimeoutCheckNowMs = () => 1000;
+  harness.controlPlaneReadinessService = createMockControlPlaneReadinessService({
+    readNodeRows: () => [{node_id: NODE_ID, status: 'active', ready_lease_expires_at: lease}],
+    callbacks: {getNodeReadinessSync: () => readiness},
+  });
+  // Opposing positive projection cannot replace the committed node fact.
+  harness.isVoterReadyRoutableReplica = () => true;
   return harness;
 }
 
-test('the critical voter-ready floor counts a voter row whose node answers ' +
-  'the deferral of an eligible snapshot, and not one whose node answers the ' +
-  'deferral of a denial', async (t) => {
-  const dimension =
-    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+test('R09: deferred reason classes do not grant floor credit; committed node semantics do', async (t) => {
+  const dimension = CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
   const replicaRow = {
-    node_id: NODE_ID,
-    service_id: 'replica_operations-p1-r2',
+    node_id: NODE_ID, service_id: 'replica_operations-p1-r2',
     partition_id: 'replica_operations-p1',
     status: [...VOTER_READY_REPLICA_TOPOLOGY_STATUSES][0],
     raft_role: [...VOTER_RAFT_ROLES][0],
     address: `${NODE_ID}/partition/replica_operations-p1-r2`,
   };
   for (const reasonCode of COMPLETED_REASON_CODES) {
-    const eligibleDeferral = buildDeferredSnapshot(
-      completedSnapshot(dimension, true, reasonCode), TOKEN, NODE_ID, dimension);
-    const deniedDeferral = buildDeferredSnapshot(
-      completedSnapshot(dimension, false, reasonCode), TOKEN, NODE_ID, dimension);
-    t.equal(
-      createFloorHarness(eligibleDeferral, dimension)
-        .isVoterReadyFloorCountableReplica(replicaRow, {
-          decisionDimension: dimension,
-        }),
-      true,
-      `eligible verdict + ${reasonCode}: row counted`,
-    );
-    t.equal(
-      createFloorHarness(deniedDeferral, dimension)
-        .isVoterReadyFloorCountableReplica(replicaRow, {
-          decisionDimension: dimension,
-        }),
-      false,
-      `denied verdict + ${reasonCode}: row not counted`,
-    );
+    for (const eligible of [true, false]) {
+      const deferred = buildDeferredSnapshot(
+        completedSnapshot(dimension, eligible, reasonCode), TOKEN, NODE_ID, dimension);
+      for (const lease of [0, 2000]) {
+        const harness = createFloorHarness(deferred, lease);
+        const committedNodeFloor = await readCommittedNodeFloor(harness, [replicaRow]);
+        t.equal(harness.isVoterReadyFloorCountableReplica(replicaRow, {committedNodeFloor}),
+          lease === 2000, `${reasonCode}/${eligible}/${lease}: only committed lease grants`);
+      }
+    }
   }
 });
 

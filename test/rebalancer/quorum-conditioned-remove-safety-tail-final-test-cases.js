@@ -30,7 +30,7 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -68,7 +68,7 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
               }),
             };
           },
-        },
+        }},
         tablePolicyService: {
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
@@ -181,7 +181,7 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -204,7 +204,7 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
               }),
             };
           },
-        },
+        }},
         tablePolicyService: {
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },

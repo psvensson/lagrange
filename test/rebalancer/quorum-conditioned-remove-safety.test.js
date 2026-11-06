@@ -163,7 +163,7 @@ test('RebalanceCoordinator - blocks REMOVE that drops critical voter quorum', as
     const operation = await coordinator.createOperation({
       type: OperationType.REMOVE,
       partitionId: 'nodes-p1',
-      nodeId: 'node-d',
+      nodeId: 'node-a',
       replicaId: 'nodes-p1-r1',
     });
 
@@ -807,7 +807,7 @@ test('RebalanceCoordinator - defers critical REPLACE source removal until owner-
     const coordinator = createTestCoordinator({
       nodeId: TARGET_NODE_ID,
       enableTimeouts: false,
-      controlPlaneReadinessService: withOwnerReadPlanningEvidence({
+      readinessFixture: {callbacks: withOwnerReadPlanningEvidence({
         getNodeReadinessSync(nodeId) {
           return {
             nodeId,
@@ -832,7 +832,7 @@ test('RebalanceCoordinator - defers critical REPLACE source removal until owner-
             eligible: true,
           };
         },
-      }),
+      })},
       tablePolicyService: {
         getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
       },
@@ -958,7 +958,7 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },
-      controlPlaneReadinessService: withOwnerReadPlanningEvidence({
+      readinessFixture: {callbacks: withOwnerReadPlanningEvidence({
         getNodeReadinessSync(nodeId) {
           return {
             nodeId,
@@ -1019,7 +1019,7 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
             }),
           };
         },
-      }),
+      })},
       tablePolicyService: {
         getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
       },

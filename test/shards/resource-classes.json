@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2574,
+    "ordinary": 2576,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2600,
-  "digest": "fnv1a32-37152c20",
+  "censusSize": 2602,
+  "digest": "fnv1a32-5c9b5cc9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1837,6 +1837,8 @@
     "test/rebalancer/cluster-readiness-gate.test.js": "ordinary",
     "test/rebalancer/cluster-readiness-signal.property.test.js": "ordinary",
     "test/rebalancer/cluster-readiness-signal.test.js": "ordinary",
+    "test/rebalancer/committed-node-remove-safety-wake.test.js": "ordinary",
+    "test/rebalancer/committed-node-remove-safety.test.js": "ordinary",
     "test/rebalancer/concurrent-epoch-proposals.property.test.js": "ordinary",
     "test/rebalancer/coordinator-created-operation-admission.test.js": "ordinary",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js": "ordinary",

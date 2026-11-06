@@ -197,11 +197,11 @@ export async function runReplacementElectionNudgeScenario(context, t, {
       deliveries,
       respond: () => buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'}),
     }),
-    controlPlaneReadinessService: createPublishedPlanningReadinessService({
+    readinessFixture: {callbacks: createPublishedPlanningReadinessService({
       publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
       activeNodeIds: Object.freeze(['node-a', 'node-b', 'node-c', 'node-d']),
       membershipTargetNodeId: testReplacementNodeId,
-    }),
+    })},
     tablePolicyService: {
       getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
     },

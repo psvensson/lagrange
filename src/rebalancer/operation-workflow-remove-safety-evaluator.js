@@ -1,3 +1,5 @@
+import {readCommittedNodeFloor} from './operation-workflow-committed-node-floor.js';
+import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
   evaluateProjectedPeersContactable,
@@ -20,6 +22,7 @@ const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   PRIORITY_RECOVERY_COMPLETION_STATE,
+  REBALANCE_COORDINATOR_DEFER_REASON,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
   REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   REMOVE_SAFETY_READINESS_DIMENSION,
@@ -518,7 +521,18 @@ async function evaluateRemoveSafety(context, operation) {
     );
   }
 
+  const committedNodeFloor = await readCommittedNodeFloor(context, criticalReplicaRows);
+  if (committedNodeFloor.state !== SERVE_ELIGIBILITY_STATE.READY) {
+    return context.buildDeferredRemoveSafetyEvaluation(
+      `Partition ${operation.partitionId} committed node authority unavailable: ` +
+        committedNodeFloor.reason,
+      operation.type === OperationType.REPLACE ?
+        REBALANCE_COORDINATOR_DEFER_REASON.REPLACE_REMOVE_SAFETY_BLOCKED :
+        REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED,
+    );
+  }
   const removeSafetyReadiness = {
+    committedNodeFloor,
     partitionId: operation.partitionId,
     decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
     participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,

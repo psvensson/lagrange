@@ -2012,20 +2012,36 @@
       ]
     },
     "serve-eligibility-committed-epoch": {
-      "description": "Per-node serve eligibility has one owner: the readiness owner answers it from a committed, leader-required read of the nodes rows and the latest published cluster_membership epoch, as a typed answer at that epoch bounded by the committed lease; cache changes are triggers only, and user-table serve routing consumes that answer and nothing else.",
+      "description": "Per-node serve eligibility has one owner: the readiness owner answers it from a committed, leader-required read of the nodes rows and the latest published cluster_membership epoch, as a typed answer at that epoch bounded by the committed lease; cache changes are triggers only, and user-table serve routing consumes that answer and nothing else. The same committed node record supplies partition removal-floor node facts through the single liveness semantic owner at one post-read workflow instant; invalid or missing required replica identities defer before non-countable-source SAFE. Meaningful committed changes wake the existing retained removal owner, which revalidates before effects; projected participation supplies no floor credit. The bounded owner witnesses use controlled SQL/transport, with separate native consensus and physical formation gates.",
       "owners": [
         "src/control-plane/serve-eligibility-owner.js",
         "src/control-plane/control-plane-readiness-serve-eligibility-methods.js",
         "src/control-plane/control-plane-readiness-snapshot-store.js",
         "src/query/query-executor-partition-service-resolution.js",
-        "src/query/query-executor-partition-routing-snapshot.js"
+        "src/query/query-executor-partition-routing-snapshot.js",
+        "src/control-plane/committed-node-rows.js",
+        "src/control-plane/node-liveness-semantic-projection.js",
+        "src/control-plane/node-liveness-semantic-projection-owner.js",
+        "src/node/node-readiness-policy.js",
+        "src/rebalancer/operation-workflow-committed-node-floor.js",
+        "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
+        "src/rebalancer/priority-publication-safety-topology.js",
+        "src/rebalancer/operation-workflow-replace-owner-wake.js",
+        "src/rebalancer/operation-workflow-replace-owner.js",
+        "src/rebalancer/operation-workflow-dispatch-response-reconcile.js"
       ],
       "tests": [
         "test/control-plane/serve-eligibility-committed-epoch-read.test.js",
         "test/query/query-executor-serve-eligibility-routing.test.js",
         "test/control-plane/readiness-routing-heartbeat-window.test.js",
         "test/control-plane/serve-eligibility-owner.test.js",
-        "test/query/schema-provisioning-job-owner.test.js"
+        "test/query/schema-provisioning-job-owner.test.js",
+        "test/rebalancer/committed-node-remove-safety.test.js",
+        "test/rebalancer/committed-node-remove-safety-wake.test.js",
+        "test/control-plane/node-liveness-semantic-projection-owner.test.js",
+        "test/control-plane/readiness-deferred-denial-evidence-absent.test.js",
+        "test/rebalancer/formation-ledger-spread-voter-ready-readiness.test.js",
+        "test/rebalancer/replace-owner-wake.test.js"
       ]
     },
     "partition-declaration-policy-and-placement": {
@@ -4366,6 +4382,43 @@
         "test/rebalancer/partition-policy-remove-retry.test.js",
         "test/rebalancer/rebalance-coordinator-topology-guard.test.js",
         "test/policy/table-policy-target-refusal.test.js"
+      ]
+    },
+    "committed-node-floor-and-retained-wake": {
+      "description": "Strict committed NODES admission, canonical lease meaning and the removal-floor consumer change together. One read and one post-await owner clock decide all required replica nodes; unknown evidence cannot become non-countable SAFE. Committed semantic notifications join the existing retained lane and final effect revalidation. The isolated driver witness holds planning deliveries and fallback timers in both arms, proving this trigger contribution without claiming it is the sole production trigger. Evidence admission snapshots own-data rows before scalar comparison; the existing heartbeat-watermark owner compares canonical primitive facts. Rejected callers cannot rotate shared identity, while genuine source changes remain observable. Captured node-map reads preserve the admitted meaning through floor credit.",
+      "endpoints": [
+        {
+          "id": "committed-node-and-liveness-authority",
+          "owners": [
+            "src/control-plane/serve-eligibility-owner.js",
+            "src/control-plane/control-plane-readiness-serve-eligibility-methods.js",
+            "src/control-plane/committed-node-rows.js",
+            "src/control-plane/node-liveness-semantic-projection.js",
+            "src/control-plane/node-liveness-semantic-projection-owner.js",
+            "src/node/node-readiness-policy.js"
+          ]
+        },
+        {
+          "id": "partition-removal-floor-and-retained-wake",
+          "owners": [
+            "src/rebalancer/operation-workflow-committed-node-floor.js",
+            "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
+            "src/rebalancer/priority-publication-safety-topology.js",
+            "src/rebalancer/operation-workflow-replace-owner-wake.js",
+            "src/rebalancer/operation-workflow-replace-owner.js",
+            "src/rebalancer/operation-workflow-dispatch-response-reconcile.js"
+          ]
+        }
+      ],
+      "contract": "serve-eligibility-committed-epoch",
+      "witnessTests": [
+        "test/rebalancer/committed-node-remove-safety.test.js",
+        "test/rebalancer/committed-node-remove-safety-wake.test.js",
+        "test/control-plane/serve-eligibility-owner.test.js",
+        "test/control-plane/node-liveness-semantic-projection-owner.test.js",
+        "test/control-plane/readiness-deferred-denial-evidence-absent.test.js",
+        "test/rebalancer/formation-ledger-spread-voter-ready-readiness.test.js",
+        "test/rebalancer/replace-owner-wake.test.js"
       ]
     }
   }

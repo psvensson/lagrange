@@ -104,8 +104,13 @@ function createCausalCluster(seedOwnerRoutingReady) {
       },
     },
     // The owner sees itself healthy; its own lease is live.
-    controlPlaneReadinessService:
-      buildPriorityDrainReadinessService(LEASE_VERDICT_PARTITION_ID),
+    readinessFixture: {
+      now: clock.now,
+      readNodeRows: () => Object.values(LEASE_VERDICT_NODE).map((nodeId) => ({
+        node_id: nodeId, status: 'active', ready_lease_expires_at: clock.now() + 60000,
+      })),
+      callbacks: buildPriorityDrainReadinessService(LEASE_VERDICT_PARTITION_ID),
+    },
     cacheData: {
       services: buildLeaseVerdictServiceRows(ReplicaStatus.ACTIVE),
       replicaOperations: [buildLeaseVerdictOperationRow({
@@ -131,11 +136,12 @@ function createCausalCluster(seedOwnerRoutingReady) {
         });
       },
     },
-    controlPlaneReadinessService:
-      buildLeaseVerdictReadinessService(
-        seedOwnerRoutingReady,
-        LEASE_VERDICT_NODE.TARGET,
-      ),
+    readinessFixture: {
+      now: clock.now,
+      readNodeRows: () => owner.controlPlaneReadinessService.answerCommittedNodes().nodeRows,
+      callbacks: buildLeaseVerdictReadinessService(
+        seedOwnerRoutingReady, LEASE_VERDICT_NODE.TARGET),
+    },
   });
   for (const coordinator of [owner, seed]) {
     coordinator.workflowOwner.timeSource = clock;

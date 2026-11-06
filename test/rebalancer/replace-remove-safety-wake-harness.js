@@ -28,6 +28,7 @@
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {createMockControlPlaneReadinessService} from './test-helpers.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_PARTICIPATION_DECISION,
@@ -131,7 +132,7 @@ function createFallbackClock(startMs = WAKE_START_MS) {
  * @param {Object<string, string>} profiles - nodeId -> READINESS_PROFILE
  * @return {Object}
  */
-function createReadinessAuthority(partitionId, profiles) {
+function createReadinessAuthority(partitionId, profiles, clock) {
   const profileByNode = new Map(Object.entries(profiles));
   const listeners = new Set();
   const reasonsFor = (nodeId) => PROFILE_REASONS.get(
@@ -153,77 +154,85 @@ function createReadinessAuthority(partitionId, profiles) {
       locallyEligibleNodeIds: projectedNodeIds,
     });
   };
-  const authority = {
-    reads: 0,
-    publications: 0,
-    getNodeReadinessSync(nodeId, options = {}) {
-      authority.reads++;
-      const reasons = reasonsFor(nodeId);
-      const ready = reasons.length === 0;
-      const dimension = options?.decisionDimension;
-      return {
-        nodeId,
-        reasons: [...reasons],
-        dimensions: {
-          ...(dimension ? {[dimension]: ready} : {}),
-          controlPlaneRecoveryEligible: ready,
-          repairEligible: ready,
-          serveEligible: ready,
-        },
-      };
-    },
-    getControlPlaneParticipationSync(nodeId) {
-      authority.reads++;
-      const reasons = reasonsFor(nodeId);
-      return {
-        nodeId,
-        eligible: reasons.length === 0,
-        decision: reasons.length === 0 ?
-          CONTROL_PLANE_PARTICIPATION_DECISION.READY :
-          CONTROL_PLANE_PARTICIPATION_DECISION.DEFER,
-        reasons: [...reasons],
-      };
-    },
-    getPriorityRecoveryPlanningAnswerForOwnerRead: readPlanningAnswer,
-    getPriorityRecoveryPlanningSnapshotBestEffort: readPlanningAnswer,
-    subscribeReadinessPlanningSnapshots(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    subscriberCount: () => listeners.size,
-    /** Change a node's readiness level without publishing. */
-    setProfile(nodeId, profile) {
-      profileByNode.set(nodeId, profile);
-    },
-    /**
+  const authority = createMockControlPlaneReadinessService({
+    now: clock.now,
+    readNodeRows: () => Object.values(WAKE_NODE).map((nodeId) => ({
+      node_id: nodeId, status: 'active',
+      ready_lease_expires_at: profileByNode.get(nodeId) === READINESS_PROFILE.UNSAFE ?
+        null : reasonsFor(nodeId).length === 0 ? clock.now() + 60000 : 0,
+    })),
+    callbacks: {
+      reads: 0,
+      publications: 0,
+      getNodeReadinessSync(nodeId, options = {}) {
+        authority.reads++;
+        const reasons = reasonsFor(nodeId);
+        const ready = reasons.length === 0;
+        const dimension = options?.decisionDimension;
+        return {
+          nodeId,
+          reasons: [...reasons],
+          dimensions: {
+            ...(dimension ? {[dimension]: ready} : {}),
+            controlPlaneRecoveryEligible: ready,
+            repairEligible: ready,
+            serveEligible: ready,
+          },
+        };
+      },
+      getControlPlaneParticipationSync(nodeId) {
+        authority.reads++;
+        const reasons = reasonsFor(nodeId);
+        return {
+          nodeId,
+          eligible: reasons.length === 0,
+          decision: reasons.length === 0 ?
+            CONTROL_PLANE_PARTICIPATION_DECISION.READY :
+            CONTROL_PLANE_PARTICIPATION_DECISION.DEFER,
+          reasons: [...reasons],
+        };
+      },
+      getPriorityRecoveryPlanningAnswerForOwnerRead: readPlanningAnswer,
+      getPriorityRecoveryPlanningSnapshotBestEffort: readPlanningAnswer,
+      subscribeReadinessPlanningSnapshots(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      subscriberCount: () => listeners.size,
+      /** Change a node's readiness level without publishing. */
+      setProfile(nodeId, profile) {
+        profileByNode.set(nodeId, profile);
+      },
+      /**
      * Emit the readiness owner's publication for a node, synchronously.
      * @param {string} nodeId
      * @param {string} [tokenKey]
      */
-    publishNow(nodeId, tokenKey = WAKE_PLANNING_TOKEN_KEY) {
-      authority.publications++;
-      const event = Object.freeze({
-        ownerKey: nodeId,
-        snapshot: authority.getNodeReadinessSync(nodeId),
-        capturedToken: Object.freeze({tokenKey}),
-      });
-      for (const listener of [...listeners]) {
-        listener(event);
-      }
-    },
-    /**
+      publishNow(nodeId, tokenKey = WAKE_PLANNING_TOKEN_KEY) {
+        authority.publications++;
+        const event = Object.freeze({
+          ownerKey: nodeId,
+          snapshot: authority.getNodeReadinessSync(nodeId),
+          capturedToken: Object.freeze({tokenKey}),
+        });
+        for (const listener of [...listeners]) {
+          listener(event);
+        }
+      },
+      /**
      * Emit the publication in its own macrotask (the readiness owner's queue).
      * @param {string} nodeId
      * @param {string} [tokenKey]
      * @return {Promise<void>}
      */
-    publish(nodeId, tokenKey) {
-      return new Promise((resolve) => setImmediate(() => {
-        authority.publishNow(nodeId, tokenKey);
-        resolve();
-      }));
+      publish(nodeId, tokenKey) {
+        return new Promise((resolve) => setImmediate(() => {
+          authority.publishNow(nodeId, tokenKey);
+          resolve();
+        }));
+      },
     },
-  };
+  });
   return authority;
 }
 
@@ -278,7 +287,7 @@ function buildReplaceRow(partitionId, nowMs) {
 function createWakeScenario(options) {
   const partitionId = options.partitionId;
   const clock = createFallbackClock();
-  const readiness = createReadinessAuthority(partitionId, options.profiles);
+  const readiness = createReadinessAuthority(partitionId, options.profiles, clock);
   const removals = [];
   const coordinator = createTestCoordinator({
     nodeId: WAKE_NODE.OWNER,

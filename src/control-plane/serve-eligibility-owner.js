@@ -21,6 +21,9 @@ import {
   resolvePublishedActiveNodeIds,
 } from './active-node-publication-snapshots.js';
 import {hasPriorityRecoverySpreadGap} from './priority-recovery-planning-intent.js';
+import {indexCommittedNodeRows} from './committed-node-rows.js';
+import {projectNodeLivenessSemantics, readNodeLivenessRowFacts} from
+  './node-liveness-semantic-projection.js';
 
 const SERVE_ELIGIBILITY_STATE = Object.freeze({
   READY: 'ready',
@@ -76,10 +79,7 @@ function readNodeId(row) {
 }
 
 function readLeaseExpiresAtMs(row) {
-  const value = Number(row?.[COLUMN.READY_LEASE_EXPIRES_AT] ??
-    row?.readyLeaseExpiresAt);
-  return row?.[COLUMN.READY_LEASE_EXPIRES_AT] === null ||
-    !Number.isFinite(value) ? null : value;
+  return readNodeLivenessRowFacts(row).readyLeaseExpiresAtMs;
 }
 
 function readBootIncarnation(row) {
@@ -248,18 +248,12 @@ function rowsOf(result) {
   return Array.isArray(result?.rows) ? result.rows : [];
 }
 
-function indexNodeRows(rows) {
-  const nodeRowsById = new Map();
-  for (const row of rows) {
-    const nodeId = readNodeId(row);
-    if (nodeId) nodeRowsById.set(nodeId, row);
-  }
-  return nodeRowsById;
-}
-
 // The typed outcome of one committed read: failed, no published membership,
 // or a record keyed by the publication epoch.
 function buildCommittedReadResult(reads, readAtMs) {
+  const nodeRowsById = reads === null ? null :
+    indexCommittedNodeRows(reads.nodesResult?.rows);
+  if (nodeRowsById === null) return {outcome: OUTCOME.READ_FAILED};
   const publication = reads === null ? null :
     selectLatestPublishedMembership(rowsOf(reads.publicationsResult));
   const outcome = reads === null ? OUTCOME.READ_FAILED :
@@ -273,7 +267,7 @@ function buildCommittedReadResult(reads, readAtMs) {
         readAtMs,
       }),
       publication,
-      nodeRowsById: indexNodeRows(rowsOf(reads.nodesResult)),
+      nodeRowsById,
       decisionsByNodeId: new Map(),
     }),
   };
@@ -491,6 +485,14 @@ class ServeEligibilityOwner {
         isNodeLoadReady: this.isNodeLoadReady,
       });
       this.record.decisionsByNodeId.set(nodeId, decided);
+      const {projection} = projectNodeLivenessSemantics({
+        nodeRow: this.record.nodeRowsById.get(nodeId) || null,
+        nowMs: this.record.epoch.readAtMs,
+      });
+      // Node-floor consumers also wait on known/invalid lease transitions
+      // while serving stays denied. Renewals with identical meaning coalesce.
+      parts.push(JSON.stringify([nodeId, projection.statusSemantics.state,
+        projection.leaseSemantics.state, projection.readyNow]));
       parts.push(`${nodeId}=${decided.decision}:${decided.reasons.join(REASON_SEPARATOR)}`);
     }
     return parts.join(SIGNATURE_SEPARATOR);

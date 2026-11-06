@@ -12,7 +12,7 @@
     "distributed-harness": 210,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 276,
+    "placement-rebalance": 278,
     "query-sql": 192,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2600,
-  "digest": "fnv1a32-974a92c1",
+  "censusSize": 2602,
+  "digest": "fnv1a32-bea1bda0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-98a22645",
+  "observationDigest": "fnv1a32-cae41168",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1857,6 +1857,8 @@
     "test/rebalancer/cluster-readiness-gate.test.js": "placement-rebalance",
     "test/rebalancer/cluster-readiness-signal.property.test.js": "placement-rebalance",
     "test/rebalancer/cluster-readiness-signal.test.js": "placement-rebalance",
+    "test/rebalancer/committed-node-remove-safety-wake.test.js": "placement-rebalance",
+    "test/rebalancer/committed-node-remove-safety.test.js": "placement-rebalance",
     "test/rebalancer/concurrent-epoch-proposals.property.test.js": "placement-rebalance",
     "test/rebalancer/coordinator-created-operation-admission.test.js": "placement-rebalance",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js": "placement-rebalance",
@@ -5089,6 +5091,7 @@
     "test/control-plane/readiness-deferred-denial-evidence-absent.test.js": {
       "files": [
         "src/bootstrap/lifecycle-controller-constants.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/readiness-planning-publication-contract.js",
         "src/control-plane/readiness-planning-snapshot-owner.js",
         "src/rebalancer/priority-publication-safety-shared.js",
@@ -15718,6 +15721,24 @@
         "src/rebalancer/cluster-readiness-signal.js"
       ]
     },
+    "test/rebalancer/committed-node-remove-safety-wake.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-readiness-service.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/rebalancer/committed-node-remove-safety-fixture.js"
+      ]
+    },
+    "test/rebalancer/committed-node-remove-safety.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-readiness-service.js",
+        "src/rebalancer/operation-workflow-committed-node-floor.js",
+        "src/rebalancer/priority-publication-safety-topology.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/rebalancer/committed-node-remove-safety-fixture.js"
+      ]
+    },
     "test/rebalancer/coordinator-created-operation-admission.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -16075,6 +16096,11 @@
       ]
     },
     "test/rebalancer/operation-workflow-remove-safety-concurrent-stale-phantom.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/operation-workflow-remove-safety-universal-floor.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
       ]

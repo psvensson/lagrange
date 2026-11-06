@@ -49,7 +49,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
+        readinessFixture: {callbacks: withOwnerReadPlanningEvidence({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -132,7 +132,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               }),
             };
           },
-        }),
+        })},
         tablePolicyService: {
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
@@ -237,7 +237,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
+        readinessFixture: {callbacks: withOwnerReadPlanningEvidence({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -315,7 +315,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               }),
             };
           },
-        }),
+        })},
         tablePolicyService: {
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
@@ -454,7 +454,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
+        readinessFixture: {callbacks: withOwnerReadPlanningEvidence({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -518,7 +518,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               }),
             };
           },
-        }),
+        })},
         tablePolicyService: {
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
@@ -686,7 +686,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
+        readinessFixture: {callbacks: withOwnerReadPlanningEvidence({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -750,7 +750,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               }),
             };
           },
-        }),
+        })},
         tablePolicyService: {
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
@@ -905,7 +905,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -938,7 +938,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               priorityPartitionSummary: TEST_STALE_PRIORITY_PARTITION_SUMMARY,
             };
           },
-        },
+        }},
         tablePolicyService: {
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
@@ -1063,7 +1063,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -1085,7 +1085,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               priorityPartitionSummary: TEST_STALE_PRIORITY_PARTITION_SUMMARY,
             };
           },
-        },
+        }},
         tablePolicyService: {
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },

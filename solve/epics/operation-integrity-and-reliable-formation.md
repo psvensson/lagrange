@@ -184,18 +184,19 @@ Membership-consistency Test 7 now passes, but the file exhausts its unchanged
 240-second parent bound at Test 15 after repeated bootstrap delays; that failure
 remains open. Logs and checksums are retained in `coordinator-fixture-frozen/`.
 
-Four inherited contract repairs are independently reviewed WIP: explicit S6a
+Four inherited contract repairs and `system-cache-reconciliation-ingress` are
+committed in independently reviewed checkpoint `61ce6e979`: explicit S6a
 planner-witness supersession, dead query vocabulary removal, committed readiness
-fixture construction, and removal of a helper-hidden SQL target trust fallback.
-The latter has a prior-source negative and 174 passing SQL caller assertions.
-`system-cache-reconciliation-ingress` owns the fifth guardrail finding: one
-private write primitive in the existing reconciliation owner replaces three
-query-execution writers and immediate optional-method/delete/remove ladders.
-Its implementation now has independent WIP approval, eleven final focused files
-with 1,164 reported assertions, separate receipt controls with 117 assertions,
-and all 33 static audits green. The approved six-file contract and twelve-file
-cache manifests remain frozen pending committed applicability. No Quest or epic
-receipt is admitted by these results.
+fixture construction, removal of the helper-hidden SQL target trust fallback,
+and one private write primitive in the existing cache reconciliation owner.
+The prior-source negatives remain retained. The exact committed-tree Lenovo
+check passed all 18 focused files with 1,477 reported assertions, attempt one
+without retries; `cache-and-contracts-frozen/` retains the logs and byte-verified
+manifest. Committed applicability binds the reviewed manifests to that tree.
+All 33 static audits passed the reviewed source. The canonical source-range
+selection from `2b446a7ce` to `61ce6e979` contains 1,880 files and remains owed;
+a later receipt-only change cannot replace that implementation proof. No Quest
+or epic receipt is admitted by the bounded results.
 
 The real three-process no-admin witness passed on `205b5683f` at Lenovo's measured
 factor 2.3 with zero guarded admin calls. Its predecessor used factor 1.4, so this
@@ -203,12 +204,36 @@ is bounded candidate evidence, not a same-budget causal comparison or E9.
 `committed-node-remove-safety-wake` now owns the confirmed R17 floor/wake defect:
 the workflow cache receiver is unbound, projected floor credit competes with
 committed authority, and unavailable evidence must defer before the source-not-
-counted SAFE exit. Its independent design is approved; implementation is pending.
+counted SAFE exit. Its independently approved design is implemented in the
+current worktree. The first independent implementation review held missing
+replica identity admission, unrelated initiator dependencies, mutable intrinsics,
+nested row custody, a masked clock assertion and explicit interaction registration.
+The follow-up approved four findings but retained HOLD on outer/scalar evidence
+admission and mutable map reads through floor credit. Those remaining paths are
+corrected in manifest `11308747`; both earlier reviewed byte sets and failed
+controls are preserved. The expanded 40-file caller check passes with 3,068
+reported assertions, and the unchanged reviewer counterexamples now refuse the
+hostile inputs without changing shared identity. All 33 static audits pass.
+Independent review `7af63aa2` approves those exact bytes for normal WIP checkpoint
+and frozen proof; committed applicability, the named-host check and full source-
+range proof remain required before closure.
+Four additional inherited readiness callers remain red: two planning identity/
+build-cost witnesses and two sync/bulk-readiness fixtures; their first causes
+and repairs remain required, with no predecessor-red waiver. The existing
+semantic owner now distinguishes invalid lease data from explicit clearing;
+committed node authority supplies floor credit and the existing retained owner
+subscribes to meaningful committed changes. The bounded real-owner witness
+holds planning deliveries and fallback timers in both arms: disabling only the
+committed subscription prevents progress, and releasing the held planning
+notification provides the separate recovery control. This isolates that trigger's
+contribution without claiming it is production's sole trigger.
 Its record explicitly supersedes the exhausted predecessor Quest's lease-zero
 carve-out without editing that terminal history or its separate five-node gate.
 The adjacent cached SERVICES topology fallback/merge is recorded separately and
-is not endorsed as authoritative. Runtime definition/Cell CREATE, other retained
-reds, final E8, unchanged E9, publication and main merge remain open. The current
+is not endorsed as authoritative. Runtime definition/Cell CREATE remains open: a baseline diagnostic restoring
+only suppressed handler logging captures the active Binding CREATE refusal
+before the unchanged test timeout (`runtime-create-first-refusal.log`). Other
+retained reds, final E8, unchanged E9, publication and main merge remain open. The current
 integration session owns the next committed proof and remaining causal repairs.
 Comparative measurements follow acceptance and main merge. Adam's active stores
 remain under `/mnt/old/lab`; a fresh fleet check reports about 52 GiB available

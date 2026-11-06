@@ -293,6 +293,7 @@ function createMockControlPlaneReadinessService(options = {}) {
   } = options;
   const project = (nodeRow) => projectNodeLivenessSemantics({nodeRow, nowMs: now()}).projection;
   const port = {
+    async readServeEligibility() {},
     answerCommittedNodes() {
       return {
         state: 'ready',

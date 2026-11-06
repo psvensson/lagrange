@@ -278,10 +278,14 @@ function createLeaseVerdictRemoteCoordinator(cell) {
         });
       },
     },
-    controlPlaneReadinessService: buildLeaseVerdictReadinessService(
-      cell.ownerRoutingReady,
-      cell.recordedOwnerNodeId,
-    ),
+    readinessFixture: {
+      now: () => LEASE_VERDICT_NOW_MS,
+      readNodeRows: () => Object.values(LEASE_VERDICT_NODE).map((nodeId) => ({
+        node_id: nodeId, status: 'active', ready_lease_expires_at: LEASE_VERDICT_NOW_MS + 60000,
+      })),
+      callbacks: buildLeaseVerdictReadinessService(
+        cell.ownerRoutingReady, cell.recordedOwnerNodeId),
+    },
     cacheData: {
       services: buildLeaseVerdictServiceRows(
         sourceRowStatus,
