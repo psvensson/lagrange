@@ -84,6 +84,12 @@ const CELL_WORLD = Object.freeze({
   CALL: 'call-cell',
 });
 
+function runtimeCellFor(requestCell) {
+  return isCallCell(requestCell) ?
+    Object.freeze({...requestCell, world: CELL_WORLD.CALL}) :
+    requestCell;
+}
+
 function buildDriverServiceScopedError(baseMessage, serviceId) {
   return `${baseMessage}${DRIVER_SEPARATOR.DETAIL}'${serviceId}'`;
 }
@@ -319,8 +325,12 @@ class WasmComponentDriver extends RuntimeDriver {
       }
       this._requestCells.set(serviceId, cell);
       this._prepared.set(serviceId, definition);
+      // Trigger the node's single-flight derivation now; start awaits the
+      // same named outcome, so a refusal surfaces typed at start.
+      void this._componentRuntime.prepareComponent(runtimeCellFor(cell));
       return {status: PREPARE_STATUS.READY};
     } catch (cause) {
+      this._componentRuntime.releaseComponent(serviceId);
       await this._componentRuntime.stop(serviceId);
       this._running.delete(serviceId);
       this._replicaContexts.delete(serviceId);
@@ -433,10 +443,7 @@ class WasmComponentDriver extends RuntimeDriver {
 
   async #startRequestCell(requestCell, replicaContext, serviceId) {
     try {
-      const cell = isCallCell(requestCell) ?
-        Object.freeze({...requestCell, world: CELL_WORLD.CALL}) :
-        requestCell;
-      await this._componentRuntime.start(cell);
+      await this._componentRuntime.start(runtimeCellFor(requestCell));
       if (!await this._componentRuntime.health(serviceId)) {
         throw new Error(WASM_COMPONENT_ERROR.NOT_STARTED);
       }
@@ -568,6 +575,7 @@ class WasmComponentDriver extends RuntimeDriver {
     const lifecycle = this._lifecycles.get(serviceId);
     if (this._requestCells.has(serviceId)) {
       await this._componentRuntime.stop(serviceId);
+      this._componentRuntime.releaseComponent(serviceId);
     }
     if (lifecycle) {
       try {

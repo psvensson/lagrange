@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2212,
+    "unit": 2213,
     "integration": 119,
     "bootstrap": 218,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2556,
-  "digest": "fnv1a32-d72beb45",
+  "censusSize": 2557,
+  "digest": "fnv1a32-0d9c2704",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2155,6 +2155,7 @@
     "test/runtime/service-runtime-lifecycle.test.js": "unit",
     "test/runtime/sql-query-loop-parallel-reduce-sql.test.js": "unit",
     "test/runtime/state-projection.test.js": "unit",
+    "test/runtime/wasi-component-startup-budget.test.js": "unit",
     "test/runtime/wasm-api-compat.test.js": "unit",
     "test/runtime/wasm-component-driver.test.js": "unit",
     "test/runtime/wasm-driver-contract-conformance.test.js": "unit",

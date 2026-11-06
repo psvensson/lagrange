@@ -11,6 +11,21 @@ releases without a compatibility guarantee.
 ## [Unreleased]
 
 ### Fixed
+- **WASI component Cell startup no longer redoes the transpile on every start
+  (`wasi-component-derivation.js`, `wasi-component-cell-runtime.js`, `wasi-component-cell-worker.js`, `wasm-component-driver.js`):**
+  the jco transpile, which was 97% of a Cell start (3.4-3.6 s for the 12.9 MB h1 Hono
+  component), is now derived once per (component sha256, toolchain, world,
+  instantiation mode) per node. The derivation is single-flight on one derivation lane,
+  triggered at driver prepare, and reused across starts, restarts and replicas. It is
+  bounded by the 256 MiB size cap, the single lane, a CPU-time ceiling (2 s/MiB plus
+  5 s, measured with `worker.cpuUsage()`) and owner cancellation. Refusals are typed and
+  permanent for that digest: `request_cell_component_derivation_failed` and
+  `request_cell_component_derivation_exhausted`. A Cell start is now instantiate-only
+  under the unchanged 10 s liveness bound and, on expiry, fails as `request_cell_start_failed`
+  with `phase`, `budgetMs` and `elapsedMs` after its worker is terminated. Before this
+  change, concurrent starts on slow or shared hosts (the 2-core hosted runner and the lab
+  hosts) were killed and redone indefinitely. h1, h2, h3 and q4 at four jobs pinned to two cores now
+  pass 4/4; on the base commit 3/4 failed. Quest `wasi-component-startup-budget`.
 - **PostgreSQL compatibility matrix certifies the SQL surface, not the host's client build (`postgres-compatibility-matrix.js`, `postgres-compatibility-catalog.js`, `docs/postgres-compatibility-matrix.json`):**
   the generating host's driver versions are now environment recorded beside the matrix, outside its digest and its cell receipt digests, so a host with psql 16.15 and one with psql 14.24 certify the same committed matrix (schema `lagrange-postgres-compatibility-matrix/2`). The matrix declares the client majors it certifies (psql 14 and 16, node-pg 8, pg-pool 3) and refuses any other build with `DRIVER_VERSION_UNSUPPORTED`; the generated content must still equal the committed matrix exactly.
 - **0.5 WASI service tests run in the serial toolchain lane (`test/shards/resource-external-toolchain.txt`):**

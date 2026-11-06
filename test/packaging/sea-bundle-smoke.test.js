@@ -29,15 +29,22 @@ const cliBundle = join(projectRoot, 'dist/admin-cli.bundle.cjs');
 const distNodeModules = join(projectRoot, 'dist/node_modules');
 const requestCellWorkerBundle =
   join(projectRoot, 'dist/request-cell-worker.bundle.mjs');
+const componentDerivationWorkerBundle =
+  join(projectRoot, 'dist/component-derivation-worker.bundle.mjs');
+const WORKER_PHASE_MESSAGE = 'phase';
 const mainEntrypoint = join(projectRoot, 'src/index.js');
 const stagedBindingDigest =
   join(projectRoot, 'dist', ...RAFT_RS_BINDING_LAYOUT.DIGEST_FROM_ROOT);
 const JSON_LINE_PREFIX = '{';
 const SEA_BUNDLE_SMOKE_TIMEOUT_MS = 120000;
 
+// The first non-progress message: a Cell worker reports its start phase
+// before its outcome.
 function waitForWorkerStartup(worker) {
   return new Promise((resolve, reject) => {
-    worker.once('message', resolve);
+    worker.on('message', (message) => {
+      if (message.type !== WORKER_PHASE_MESSAGE) resolve(message);
+    });
     worker.once('error', reject);
   });
 }
@@ -128,7 +135,24 @@ test('SEA bundle smoke test', {timeout: SEA_BUNDLE_SMOKE_TIMEOUT_MS}, async (t) 
   t.equal(
     workerStartup.type,
     'start_failed',
-    'bundled request Cell worker loads and rejects corrupt component bytes',
+    'bundled request Cell worker loads and rejects a start without a ' +
+      'derived component',
+  );
+
+  const derivationWorker = new Worker(componentDerivationWorkerBundle, {
+    workerData: {
+      bytes: new Uint8Array([0]),
+      instantiation: 'async',
+      name: 'request-cell',
+    },
+  });
+  t.teardown(() => derivationWorker.terminate());
+  const derivationOutcome = await waitForWorkerStartup(derivationWorker);
+  t.equal(
+    derivationOutcome.type,
+    'derivation_failed',
+    'bundled component derivation worker loads jco and refuses corrupt ' +
+      'component bytes',
   );
 
   const cliHelp = await runEntrypoint(cliBundle, {

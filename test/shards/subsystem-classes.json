@@ -16,7 +16,7 @@
     "query-sql": 191,
     "release-packaging": 15,
     "runtime-primitives": 22,
-    "services-runtime": 158,
+    "services-runtime": 159,
     "solver-tooling": 7,
     "storage-partition": 208,
     "storage-raft": 148,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2556,
-  "digest": "fnv1a32-713ef5b6",
+  "censusSize": 2557,
+  "digest": "fnv1a32-093776a2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b9d19216",
+  "observationDigest": "fnv1a32-6ffc9c9c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2174,6 +2174,7 @@
     "test/runtime/service-runtime-lifecycle.test.js": "services-runtime",
     "test/runtime/sql-query-loop-parallel-reduce-sql.test.js": "services-runtime",
     "test/runtime/state-projection.test.js": "services-runtime",
+    "test/runtime/wasi-component-startup-budget.test.js": "services-runtime",
     "test/runtime/wasm-api-compat.test.js": "services-runtime",
     "test/runtime/wasm-component-driver.test.js": "services-runtime",
     "test/runtime/wasm-driver-contract-conformance.test.js": "services-runtime",
@@ -16402,6 +16403,15 @@
       "files": [
         "src/runtime/runtime-driver-registry.js",
         "src/runtime/service-runtime-lifecycle.js"
+      ]
+    },
+    "test/runtime/wasi-component-startup-budget.test.js": {
+      "files": [
+        "package.json",
+        "src/runtime/wasi-component-cell-runtime.js",
+        "test/runtime/wasi-component-derivation-cancel-child.js",
+        "test/runtime/wasi-component-derivation-exit-worker-child.js",
+        "test/runtime/wasi-component-startup-liveness-child.js"
       ]
     },
     "test/scripts/acceptance-proof-manifest-runner.test.js": {

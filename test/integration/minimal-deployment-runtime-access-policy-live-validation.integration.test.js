@@ -252,6 +252,14 @@ class TableQueryingComponentRuntime {
     this.executeTableQuery = executeTableQuery;
   }
 
+  // The driver triggers the runtime's component derivation at prepare and
+  // releases it at stop; this table-querying fake derives nothing.
+  prepareComponent() {
+    return Promise.resolve({files: {}, outcome: 'derived'});
+  }
+
+  releaseComponent() {}
+
   async start(cell) {
     this.running.add(cell.serviceId);
   }

@@ -25,6 +25,8 @@ const DEPENDENCY_PATH = Object.freeze({
   NODE_MODULES: 'node_modules',
   REQUEST_CELL_WORKER_ENTRY:
     '(^|/)src/runtime/wasi-component-cell-worker\\.js$',
+  COMPONENT_DERIVATION_WORKER_ENTRY:
+    '(^|/)src/runtime/wasi-component-derivation-worker\\.js$',
   SCRIPTS: '^scripts/',
   TEST: '^test/',
 });
@@ -60,6 +62,7 @@ module.exports = {
           DEPENDENCY_PATH.INDEX_ENTRY,
           DEPENDENCY_PATH.ADMIN_CLI_ENTRY,
           DEPENDENCY_PATH.REQUEST_CELL_WORKER_ENTRY,
+          DEPENDENCY_PATH.COMPONENT_DERIVATION_WORKER_ENTRY,
           DEPENDENCY_PATH.TEST,
           DEPENDENCY_PATH.SCRIPTS,
         ],
