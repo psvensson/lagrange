@@ -9,7 +9,8 @@ import {
 import {
   PLACEMENT_OWNER_POLICY_FIELD,
 } from './placement-owner-evidence.js';
-import {resolveRuntimeServiceTargetReplicaCount} from
+import {resolveRuntimeServiceDefinitionPolicy, RUNTIME_SERVICE_POLICY_STATE,
+  RuntimeServicePolicyUnavailableError} from
   './runtime-service-policy.js';
 
 const {
@@ -61,10 +62,9 @@ class UnifiedRebalancerPolicySchedulerMethods {
   /**
    * Get runtime service policy.
    *
-   * Starts from the system-owned runtime-service placement policy. Legacy
-   * non-Binding definitions may override `targetReplicaCount` with their
-   * desired `replica_count`, preserving built-in scale and "ship not-started"
-   * behavior. Binding-derived definitions never supply placement intent:
+   * The definition policy owner supplies the effective target, preserving
+   * built-in scale and "ship not-started" behavior. Binding-derived
+   * definitions never supply placement intent:
    * target/min/max, topology, capacity, and affinity remain policy outputs.
    *
    * Affinity lift (service↔data affinity placement epic): fresh
@@ -82,8 +82,11 @@ class UnifiedRebalancerPolicySchedulerMethods {
       SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
       this.entityId,
     );
-    policy.targetReplicaCount =
-      resolveRuntimeServiceTargetReplicaCount(definition);
+    const decision = resolveRuntimeServiceDefinitionPolicy(definition);
+    if (decision.state !== RUNTIME_SERVICE_POLICY_STATE.READY) {
+      throw new RuntimeServicePolicyUnavailableError(decision);
+    }
+    policy.targetReplicaCount = decision.targetReplicaCount;
     // Data-local call activation pins: LIVE bounded leases published by
     // the call invocation owner deterministically pin their nodes into
     // the placement target while they last (distinct from the soft

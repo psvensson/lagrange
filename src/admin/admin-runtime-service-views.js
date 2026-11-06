@@ -17,7 +17,7 @@ import {
   WASM_SERVICE_PROTOCOL,
   WASM_SERVICE_HEALTH_STATUS,
 } from '../wasm-service/wasm-service-constants.js';
-import {resolveRuntimeServiceTargetReplicaCount} from
+import {resolveRuntimeServiceDefinitionPolicy} from
   '../rebalancer/runtime-service-policy.js';
 import {
   LOGICAL_SERVICE_HEALTH,
@@ -98,9 +98,7 @@ function groupReplicasByLogicalService(endpoints, definitions) {
   const result = [];
   for (const [serviceId, replicas] of groups) {
     const definition = defMap.get(serviceId);
-    const desiredCount = definition ?
-      resolveRuntimeServiceTargetReplicaCount(definition) :
-      0;
+    const desiredCount = resolveRuntimeServiceDefinitionPolicy(definition).targetReplicaCount;
     const healthyCount = countHealthyReplicas(replicas);
 
     result.push({
@@ -184,6 +182,7 @@ function formatEndpointUri(protocol, address, port) {
  * @return {string} Health state constant.
  */
 function resolveLogicalServiceHealth(desired, observed, healthy) {
+  if (desired === null) return LOGICAL_SERVICE_HEALTH.UNKNOWN;
   if (desired <= 0) {
     return observed === 0 ?
       LOGICAL_SERVICE_HEALTH.UNKNOWN :

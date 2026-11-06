@@ -690,6 +690,20 @@ describe('deployment Binding system-table owner', () => {
     );
   });
 
+  test('rejects noncanonical stored declaration bytes even with the canonical digest', async () => {
+    const gateway = new DurableBindingGateway();
+    const owners = createOwners(gateway);
+    const package_ = await seedPackage(owners.serviceInstallCatalogOwner);
+    const created = await owners.deploymentBindingOwner.createBinding(
+      bindingInput(package_), SECURITY_CONTEXT);
+    const row = gateway.rows(TABLES.SERVICE_BINDINGS).get(created.bindingVersionId);
+    row.normalized_binding = JSON.stringify(JSON.parse(row.normalized_binding), null, 2);
+    await assert.rejects(
+      owners.deploymentBindingOwner.getBindingByName('orders-api', SECURITY_CONTEXT),
+      (error) => assertBindingCode(error, DEPLOYMENT_BINDING_ERROR_CODE.CORRUPT_RECORD),
+    );
+  });
+
   test('accepts only the cache HLC annotation beyond durable Binding fields',
     async () => {
       const gateway = new DurableBindingGateway();

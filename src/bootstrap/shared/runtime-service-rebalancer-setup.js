@@ -27,14 +27,12 @@ import {
   INITIAL_PARTITION_IDS,
 } from '../system-table-schemas-constants.js';
 import {UNIFIED_SERVICE_TYPE} from '../../constants/unified-service-lifecycle.js';
-import {
-  WASM_SERVICE_DEFINITION_STATUS,
-} from '../../wasm-service/wasm-service-constants.js';
+import {resolveRuntimeServiceDefinitionPolicy, RUNTIME_SERVICE_POLICY_STATE} from
+  '../../rebalancer/runtime-service-policy.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {RECONCILE_REASON} from '../../workflow/reconcile-queue-constants.js';
 import {
-  getBindingServiceDefinitionSourceKind,
   hasRequestBindingServiceDefinitionLineage,
   requestBindingServiceDefinitionRowsMatch,
   supportsBindingServiceDefinitionSourceKind,
@@ -309,11 +307,9 @@ class RuntimeServiceRebalancerOwner {
   }
 
   _isRuntimeEnabledBindingDefinition(definition) {
-    return definition?.[SERVICE_DEFINITION_COLUMN.STATUS] ===
-        WASM_SERVICE_DEFINITION_STATUS.ACTIVE &&
-      isDeploymentBindingCellSourceKind(
-        getBindingServiceDefinitionSourceKind(definition),
-      );
+    const decision = resolveRuntimeServiceDefinitionPolicy(definition);
+    return decision.state === RUNTIME_SERVICE_POLICY_STATE.READY &&
+      isDeploymentBindingCellSourceKind(decision.bindingSourceKind);
   }
 
   waitForBindingRefresh() {
@@ -328,8 +324,8 @@ class RuntimeServiceRebalancerOwner {
     const rows = this.systemTableCache.filter(
       SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
       (definition) =>
-        definition?.[SERVICE_DEFINITION_COLUMN.STATUS] ===
-          WASM_SERVICE_DEFINITION_STATUS.ACTIVE &&
+        resolveRuntimeServiceDefinitionPolicy(definition).state ===
+          RUNTIME_SERVICE_POLICY_STATE.READY &&
         (
           !hasRequestBindingServiceDefinitionLineage(definition) ||
           this._isEligibleCellDefinition(definition)
@@ -346,9 +342,7 @@ class RuntimeServiceRebalancerOwner {
   }
 
   _isEligibleCellDefinition(definition) {
-    if (!isDeploymentBindingCellSourceKind(
-      getBindingServiceDefinitionSourceKind(definition),
-    )) {
+    if (!this._isRuntimeEnabledBindingDefinition(definition)) {
       return false;
     }
     const serviceId = definition?.[SERVICE_DEFINITION_COLUMN.SERVICE_ID];

@@ -15,7 +15,6 @@ import {LoggingService} from '../logging/logging-service.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/index.js';
 import {
-  resolveServiceDefinitionForCreate,
   resolveServiceDefinitionOutcomeForCreate,
 } from './runtime-service-definition-resolution.js';
 import {
@@ -376,7 +375,7 @@ class RuntimeServiceHandler extends EventEmitter {
   }
 
   /**
-   * Generic async create: resolve definition, create + start replica,
+   * Generic async create: consume the routed resolution, create + start replica,
    * persist operation transitions.
    * @param {Object} params
    * @param {string} params.operationId
@@ -384,8 +383,8 @@ class RuntimeServiceHandler extends EventEmitter {
    * @param {string} params.replicaId
    * @return {Promise<void>}
    */
-  async createGenericReplicaAsync(params, entry) {
-    return createGenericReplica(this, params, entry);
+  async createGenericReplicaAsync(params, entry, resolution) {
+    return createGenericReplica(this, params, entry, resolution);
   }
 
   hasInProgressReplicaRemoval(replicaId) {
@@ -630,10 +629,6 @@ class RuntimeServiceHandler extends EventEmitter {
       return null;
     }
     return row;
-  }
-
-  async resolveServiceDefinitionForCreate(entityId) {
-    return resolveServiceDefinitionForCreate(this, entityId);
   }
 
   async resolveServiceDefinitionOutcomeForCreate(entityId) {

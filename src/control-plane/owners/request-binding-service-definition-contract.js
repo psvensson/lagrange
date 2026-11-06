@@ -25,8 +25,10 @@ import {
   DEPLOYMENT_BINDING_SCHEMA_VERSION_V3,
   DEPLOYMENT_BINDING_SOURCE_KIND,
   declarationExportName,
+  deriveBindingDeclarationDigest,
   expectedSourceInterface,
   canonicalJson,
+  isBindingVersionId,
   isDeploymentBindingCellSourceKind,
   normalizeStoredDeploymentBinding,
   projectBinding,
@@ -123,7 +125,8 @@ function readBindingServiceDefinitionLineage(row) {
     bindingProjection,
   ];
   if (stringFields.some((value) => typeof value !== 'string')) return null;
-  if (serviceId !== deriveRequestServiceDefinitionId(bindingVersionId)) {
+  if (!isBindingVersionId(bindingVersionId) ||
+      serviceId !== deriveRequestServiceDefinitionId(bindingVersionId)) {
     return null;
   }
   return {bindingDigest, bindingProjection, bindingVersionId};
@@ -133,12 +136,17 @@ function readBindingProjectionSourceKind(lineage) {
   try {
     const projection = JSON.parse(lineage.bindingProjection);
     if (projection?.binding_version_id !== lineage.bindingVersionId ||
-        projection?.binding_digest !== lineage.bindingDigest) {
+        projection?.binding_digest !== lineage.bindingDigest ||
+        typeof projection?.tenant_id !== 'string' ||
+        projection.tenant_id.length === 0) {
       return INVALID_BINDING_SERVICE_DEFINITION_SOURCE_KIND;
     }
     const declaration = normalizeStoredDeploymentBinding(
       projection?.declaration,
     );
+    if (lineage.bindingDigest !== deriveBindingDeclarationDigest(declaration)) {
+      return INVALID_BINDING_SERVICE_DEFINITION_SOURCE_KIND;
+    }
     const sourceKind = declaration.source.kind;
     return supportsBindingServiceDefinitionSourceKind(sourceKind) ?
       sourceKind :

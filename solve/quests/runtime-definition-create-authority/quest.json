@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "runtime-definition-create-authority",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Runtime placement and CREATE consume one canonical interpretation of an authoritative service definition. Active valid Binding definitions retain producer-owned replica_count zero while receiving the system placement target; malformed or unavailable definitions cannot become scale-down or CREATE permission. One authoritative keyed read routes and executes an unrouted CREATE, while retained-origin custody keeps precedence.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/runtime-definition-create-authority/evidence/receipt.json",
+      "requiredReceipts": [
+        "canonical-definition-meaning",
+        "authoritative-create-route",
+        "retained-retry-custody",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-interpretation",
+      "statement": "Apply evidence/design-review.md. Existing runtime-service-policy owns the shared decision and consumes the full existing Binding lineage/source-kind contract. Active valid Binding stored count zero keeps the system target; non-Binding rows use only canonical non-negative safe-integer replica_count and active status. Preserve valid scale zero separately from inactive, invalid or unavailable target; no default target, camelCase count, coercion or invalid-to-zero permission. All current scheduler, discovery, admin and remote-cache consumers consume that decision. Retain compiled Binding row equality and member eligibility."
+    },
+    {
+      "id": "single-create-read",
+      "statement": "Only the explicit controlPlaneSystemTableGateway.readAuthoritativeRows port with existing OWNER_RPC_REQUIRED/REQUIRED authority supplies CREATE definitions. Validate the successful own-data dense keyed population before cache reconciliation: zero or one exact service_id row. Missing/throwing/failed/malformed authority is typed UNAVAILABLE; successful empty alone is ABSENT. Remove CREATE cache/CDC/method/Array fallbacks, bare-row resolver and repeated generic read. Carry the same named resolution from classification through generic execution; reconcile through the existing cache owner only."
+    },
+    {
+      "id": "retained-custody",
+      "statement": "Existing journal-first retained origin routing, current execution/generation, wake, shutdown and retirement fences remain. UNAVAILABLE emits its canonical retryable outcome through the existing settlement owner; confirmed absence/ineligibility remains permanent. Unknown resolution is UNAVAILABLE, never absence. No new timer, supervisor or state store. Generic REMOVE authority remains separately recorded, not represented as fixed."
+    },
+    {
+      "id": "paired-proof",
+      "statement": "Actual Binding/catalog/definition producer and actual handler/route/outcome composition with explicit controlled boundaries; old-source negative and invalid/non-Binding-zero/inactive/partial-lineage controls; stale positive cache versus missing, throwing, failed, bare-array, duplicate, sparse, wrong-id and null-row authority; one-read row-class change; finite existing-owner retry; retained-origin precedence and duplicate/current-generation/shutdown controls. Preserve the runtime lane-budget witness bound, churn negatives and assertions, correcting only its canonical gateway construction. Register the interaction and keep public Cell, full caller-cone and physical formation evidence separate."
+    }
+  ],
+  "sealedAt": "ab55403b6c315ba60b771eb11794bf7171df96a3"
+}

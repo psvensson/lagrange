@@ -9,6 +9,7 @@
  */
 
 import {createHash} from 'node:crypto';
+import {setImmediate as nextTurn} from 'node:timers/promises';
 
 import {test} from '../../src/test-helpers/tap.js';
 import {RuntimeServiceRebalancerOwner} from
@@ -19,7 +20,7 @@ import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {RUNTIME_KIND, RUNTIME_REPLICA_STATUS} from
   '../../src/constants/runtime.js';
-import {canonicalJson} from
+import {canonicalJson, deriveBindingDeclarationDigest} from
   '../../src/control-plane/owners/deployment-binding-contract.js';
 import {deriveRequestServiceDefinitionId} from
   '../../src/control-plane/owners/request-binding-service-definition-contract.js';
@@ -61,7 +62,6 @@ import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js
 const FIXED_NOW_MS = 1_900_000_000_000;
 const NODE_ID = 'node-runtime-create-lane';
 const BINDING_VERSION_ID = `binding-version-${'a'.repeat(64)}`;
-const BINDING_DIGEST = `sha256:${'b'.repeat(64)}`;
 const SERVICE_ENTITY_ID = deriveRequestServiceDefinitionId(
   BINDING_VERSION_ID,
 );
@@ -141,6 +141,19 @@ function buildChurnOperation(index) {
 }
 
 function attachServiceDefinition(cache) {
+  const declaration = {
+    budgets: RUNTIME_BUDGETS,
+    capabilities: [],
+    name: 'formation-runtime-service-create-lane',
+    schema_version: 2,
+    source: {kind: 'request', method: 'POST', path: '/orders'},
+    target: {
+      export_name: RUNTIME_EXPORT_NAME,
+      manifest_digest: RUNTIME_MANIFEST_DIGEST,
+      package_id: RUNTIME_PACKAGE_ID,
+    },
+  };
+  const bindingDigest = deriveBindingDeclarationDigest(declaration);
   const definition = Object.freeze({
     service_id: SERVICE_ENTITY_ID,
     status: 'active',
@@ -150,22 +163,11 @@ function attachServiceDefinition(cache) {
     runtime_config: JSON.stringify({export_name: RUNTIME_EXPORT_NAME}),
     resource_budget: JSON.stringify(RUNTIME_BUDGETS),
     binding_version_id: BINDING_VERSION_ID,
-    binding_digest: BINDING_DIGEST,
+    binding_digest: bindingDigest,
     binding_projection: JSON.stringify({
-      binding_digest: BINDING_DIGEST,
+      binding_digest: bindingDigest,
       binding_version_id: BINDING_VERSION_ID,
-      declaration: {
-        budgets: RUNTIME_BUDGETS,
-        capabilities: [],
-        name: 'formation-runtime-service-create-lane',
-        schema_version: 2,
-        source: {kind: 'request', method: 'POST', path: '/orders'},
-        target: {
-          export_name: RUNTIME_EXPORT_NAME,
-          manifest_digest: RUNTIME_MANIFEST_DIGEST,
-          package_id: RUNTIME_PACKAGE_ID,
-        },
-      },
+      declaration,
       tenant_id: 'tenant-a',
     }),
   });
@@ -301,10 +303,10 @@ async function assertOrdinaryChurnRemainsRejected(t, coordinator) {
   }
 }
 
-test('formation runtime-service create lane survives sustained REPLACE churn ' +
-  'and reaches the authoritative replica read model', async (t) => {
+async function runPlacementScenario(t, finiteAuthorityFailure = false) {
   const originalDateNow = Date.now;
-  Date.now = () => FIXED_NOW_MS;
+  const authority = {held: finiteAuthorityFailure, reads: 0, now: FIXED_NOW_MS};
+  Date.now = () => authority.now;
 
   let coordinator = null;
   let messageRouter = null;
@@ -360,6 +362,7 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
       messageRouter,
       controlPlaneReadinessService,
       enableTimeouts: false,
+      ...controlledRetryScheduler(finiteAuthorityFailure),
     });
     coordinator.config.maxConcurrentAdds = 5;
     coordinator.logger = QUIET_LOGGER;
@@ -463,6 +466,14 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
       systemTableCache,
       serviceLifecycleManager,
       executorOutcomeEmitter: coordinator.executorOutcomeEmitter,
+      controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows(table, _sql, [id]) {
+          authority.reads++;
+          if (authority.held) throw new Error('finite definition authority failure');
+          const row = systemTableCache.get(table, id);
+          return {success: true, rows: row ? [row] : []};
+        },
+      },
     }));
     runtimeServiceHandler.logger = QUIET_LOGGER;
 
@@ -550,6 +561,12 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
     t.equal(dispatchResult.success, true,
       'public coordinator dispatch accepts the runtime create');
 
+    if (finiteAuthorityFailure) {
+      await releaseThroughRetainedRetry(t, {
+        coordinator, authority, systemTableCache, loadedArtifactTargets, deliveries,
+      });
+    }
+
     const projected = await activeProjection;
     const completed = await operationCompleted;
     t.equal(loadedArtifactTargets.length, 1,
@@ -561,8 +578,6 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
     t.equal(completed.operation.workflowStep, 'ACTIVE',
       'executor outcome completes the coordinator-owned workflow');
 
-    t.equal(deliveries.length, 1,
-      'the coordinator performs one runtime create delivery');
     t.equal(deliveries[0].target, HANDLER_ADDRESS,
       'dispatch targets the registered runtime-service handler');
     t.equal(
@@ -591,6 +606,9 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
       'UnifiedRebalancer now observes replicas > 0');
     t.equal(currentReplicas[0].service_id, REPLICA_ID,
       'the observed replica is the dispatched canonical replica');
+    assertDeliveryAndRetryCompletion(t, {
+      finiteAuthorityFailure, authority, systemTableCache, coordinator, deliveries,
+    });
   } finally {
     if (placementOwner) placementOwner.shutdown();
     if (runtimeServiceHandler && messageRouter) {
@@ -602,4 +620,70 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
   }
 
   t.end();
+}
+
+function controlledRetryScheduler(finiteAuthorityFailure) {
+  return finiteAuthorityFailure ? {
+    setTimeoutFn: (callback, delay) => ({callback, delay}),
+    clearTimeoutFn() {},
+  } : {};
+}
+
+function assertDeliveryAndRetryCompletion(t, {
+  finiteAuthorityFailure, authority, systemTableCache, coordinator, deliveries,
+}) {
+  t.equal(deliveries.length, finiteAuthorityFailure ? 2 : 1,
+    finiteAuthorityFailure ? 'the retained owner retries the same create once' :
+      'the coordinator performs one runtime create delivery');
+  if (!finiteAuthorityFailure) return;
+  t.equal(authority.reads, 2, 'one authority read per owner-dispatched attempt');
+  const terminal = systemTableCache.get(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, OPERATION_ID);
+  t.equal(terminal.workflow_step, 'ACTIVE', 'the durable operation reaches ACTIVE');
+  t.ok(terminal.completed_at, 'the durable operation records completion');
+  t.equal(coordinator.workflowOwner.transitionRetryTimerByOperationId.size, 0,
+    'the retry timer obligation drains');
+  t.equal(coordinator.workflowOwner.transitionRetryOperationSnapshotByOperationId.size, 0,
+    'retained operation retry custody drains');
+  t.same(deliveries.map(({request}) => request.operationId), [OPERATION_ID, OPERATION_ID],
+    'retry preserves the operation identity');
+  t.same(deliveries.map(({request}) => request.replicaId), [REPLICA_ID, REPLICA_ID],
+    'retry preserves the replica identity');
+}
+
+async function releaseThroughRetainedRetry(t, {
+  coordinator, authority, systemTableCache, loadedArtifactTargets, deliveries,
+}) {
+  const owner = coordinator.workflowOwner;
+  for (let turn = 0;
+    turn < 20 && !owner.transitionRetryTimerByOperationId.has(OPERATION_ID); turn++) {
+    await nextTurn();
+  }
+  const timer = owner.transitionRetryTimerByOperationId.get(OPERATION_ID);
+  t.ok(timer?.callback, 'the actual workflow owner retains its transition retry');
+  if (!timer?.callback) throw new Error('required retained transition retry missing');
+  const held = systemTableCache.get(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, OPERATION_ID);
+  t.equal(held.workflow_step, 'CREATING', 'finite refusal retains the durable creating step');
+  t.equal(held.completed_at, null, 'finite refusal cannot terminally complete the operation');
+  t.equal(loadedArtifactTargets.length, 0, 'no Artifact load while authority is unavailable');
+  t.equal(authority.reads, 1, 'the held attempt consumed one authority read');
+  authority.held = false;
+  // Controlled scheduler negative: releasing the read alone does not run the
+  // retained callback. No handler or durable terminal-state write drives progress.
+  for (let turn = 0; turn < 20; turn++) await nextTurn();
+  t.equal(deliveries.length, 1, 'withheld callback prevents resumed dispatch in the declared window');
+  t.equal(loadedArtifactTargets.length, 0, 'withheld callback prevents runtime progress');
+  t.equal(systemTableCache.get(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, OPERATION_ID).completed_at,
+    null, 'withheld callback leaves the original operation nonterminal');
+  authority.now += timer.delay;
+  await timer.callback();
+}
+
+test('formation runtime-service create lane survives sustained REPLACE churn ' +
+  'and reaches the authoritative replica read model', async (t) => {
+  await runPlacementScenario(t);
 });
+
+test('the retained coordinator callback resumes runtime placement after finite authority refusal',
+  async (t) => {
+    await runPlacementScenario(t, true);
+  });

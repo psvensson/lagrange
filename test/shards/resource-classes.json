@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2576,
+    "ordinary": 2577,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2602,
-  "digest": "fnv1a32-5c9b5cc9",
+  "censusSize": 2603,
+  "digest": "fnv1a32-620ba874",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1301,6 +1301,7 @@
     "test/node/replica-transport-handler-identity.test.js": "ordinary",
     "test/node/runtime-service-bound-route.test.js": "ordinary",
     "test/node/runtime-service-call-cell-handler.test.js": "ordinary",
+    "test/node/runtime-service-definition-authority.test.js": "ordinary",
     "test/node/runtime-service-handler.test.js": "ordinary",
     "test/node/runtime-service-remove-execution-custody.test.js": "ordinary",
     "test/node/runtime-service-restart-inventory-custody.test.js": "ordinary",

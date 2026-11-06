@@ -1,0 +1,38 @@
+# Runtime definition authority: corrected implementation review
+
+Reviewer: `subagent:/root/independent_review`, 2026-11-06. Rule-set revision 5. Base: `d511e4f0bb4aa534aab90c816edcb455913329d8`.
+
+**APPROVE the bounded implementation content for the normal WIP checkpoint and subsequent frozen verification.** This resolves the findings in `independent-implementation-review-hold.md` (SHA-256 `348fe9930679821ae30fe184ce648c46acefcb127c0175918587ab1d94d22395`). It does not approve Quest closure, public Cell composition, the full affected corpus, E8, E9, publication or release acceptance. Normal mandatory checks and exact committed applicability remain required.
+
+The approval is bound to all 31 paths in `implementation-content-v4.json`, SHA-256 `337b3a6b796898bca94baaac348e945d25cb8108899130591b633b78688f0439`. Every current file hash matches. The 27 retained v2 files and 31 retained v3 files also match their respective manifests. V4 differs from v3 only in two test files: named local scheduler/assertion extraction and formatting. No production byte changed in that mechanical correction. The extraction preserves the actual retry callback, held interval, healthy delivery count, completion assertions, schedule and bounds.
+
+## Finding dispositions
+
+**R1 — resolved at the shared Binding owner.** `deployment-binding-contract.js` now owns `isBindingVersionId` and `deriveBindingDeclarationDigest`. The generated version representation is validated without trimming or accepting an arbitrary string; exact derived service identity remains required. The shared definition lineage reader requires matching projection identities and a nonempty tenant under the existing producer meaning, normalizes the declaration, and compares its actual canonical digest. The producer and durable Binding inspector consume that same digest calculation. The inspector retains its separate exact normalized-byte equality check, with a new actual-owner negative for noncanonical stored JSON bytes carrying the canonical digest.
+
+The existing policy and CREATE reader consume the strengthened shared contract without adding a second validator, compatibility fallback, new authority lookup or generation assumption. Valid producer Binding/count-zero remains target 3 and eligible; malformed lineage remains INVALID with no placement target and permanent CREATE INELIGIBLE. Eleven malformed-lineage handler/planner controls include blank/padded/arbitrary versions, mirrored invalid and wrong digests, missing/empty tenant, and altered declaration. Their actual handler outcomes assert no lifecycle calls.
+
+I independently reran the unchanged `independent-lineage-boundary-probe.mjs`. It exits 0: the actual-producer positive remains READY/3/ELIGIBLE and all ten previously admitted mutations now produce INVALID/null/INELIGIBLE. The output is `independent-lineage-boundary-reviewer-after.log`, SHA-256 `49dd721dafc9976ba35d44e4afa8fe7d31da946bbe2863ef70abe72b1d9269b6`, identical to the author's after result. The original failed probe and log remain intact. Small additional direct checks of the version predicate reject trailing whitespace and line terminators. This is structural/declaration-integrity validation; the projection still does not prove that a corresponding durable Binding or Artifact exists or remains current.
+
+**R2 — resolved by an explicit caller world.** `call-activation-pin-planning.test.js` now supplies its own ACTIVE definition with the declared positive target only for the expected table and service key. The live, expired and foreign pin assertions remain. No production default or stale cache fallback was restored. The test is included in the 25-file result and the interaction contract.
+
+**R3 — resolved at the required evidence scope.** The original explicit-handler retry test is accurately renamed. The additional lane scenario uses the actual coordinator, repository/workflow operations, message router, handler, outcome emitter, lifecycle and runtime adapter with the existing controlled persistence boundary. Its constructor-supplied scheduler captures the callback created by real `deferTransitionRetry`; the test does not replace that owner or directly invoke the handler to recover.
+
+The finite failed read produces a retained CREATING operation, no completion, no Artifact load, and one read. Releasing authority while withholding the callback leaves dispatch and completion unchanged for the declared 20-turn interval. Invoking the actual retained callback then results in exactly one resumed dispatch, a second authoritative read, the same operation and replica identity, one Artifact load, ACTIVE lifecycle/projection, terminal operation state and drained retry timer/snapshot custody. The callback's existing current-handle, initialized-owner and single-flight gates remain real. This proves retained-owner recovery through an explicitly driven scheduler; it does not prove automatic wall-clock scheduling, native durable consensus, or that no other production trigger exists.
+
+The original healthy lane continues with count zero, the same runtime budgets, churn refusals, reservation assertions and deadlines. Its previously arbitrary digest is now computed by the canonical owner for the existing declaration. The controlled Binding version still has the admitted generated shape; the fixture does not claim a live Binding lookup.
+
+## Applicable measured evidence
+
+| Record | Result and applicability | SHA-256 |
+| --- | --- | --- |
+| `final-25-callers.log` | V3: 25/25 files, 792 reported assertions, exit 0. Actual count is 713 ordinary + 52 bootstrap + 27 exclusive. | `82708a22cd236ec7065429ec58a373348494bb19c1b25820a94fec9f4e02347d` |
+| `mechanical-correction-callers.log` | Final V4's two changed test files: 2/2, 94 reported assertions, exit 0. This supplements the V3 run; it is not a second full 25-file run. | `4c37163ff78e0c299b42f9a810250f1caf852de21c2a6243ed383c623be4cfbe` |
+| `independent-lineage-boundary-reviewer-after.log` | Reviewer execution of the unchanged paired lineage program: valid control preserved; incorrectly eligible count 10 → 0. | `49dd721dafc9976ba35d44e4afa8fe7d31da946bbe2863ef70abe72b1d9269b6` |
+| `static-corrected-final.log` | Final V4: all 33 audits pass. Complexity 1719/1719; unused exports 1387/1387; source duplication 37/1187 and test duplication 632/23837, with no baseline increase. | `6dce3c4e9c742e00a6927c4c9a3b98d18f17fd2617781bfb6404491d1959a837` |
+
+The V3 static result of 31/33 is retained honestly: it identified test complexity and formatting only. The V4 full static rerun completed while this review was being finalized, and its terminal all-33 result was independently inspected. Neither baseline is raised by this review, and the previously approved downward ratchets remain unchanged.
+
+The existing impact contract and coupled-pair binding now include the shared declaration/lineage owners, direct Binding inspector test and call-activation caller, alongside policy, bootstrap, required keyed read, route, generic execution and outward views. The earlier reviewed population validation, one-resolution routing, typed outcomes, DTO identity, projection exclusion and retained-journal precedence remain byte-identical. Generic REMOVE and unrelated runtime authority migrations remain excluded.
+
+No tracked code was edited and no lab/native job or suite was launched by this reviewer. Exact review inputs and retained evidence are recorded in `independent-corrected-review-inputs.json`. Freeze and review the actual committed tree before admitting later proof; this WIP approval does not convert the current red Quest receipt or broader acceptance state into green.

@@ -117,6 +117,7 @@ function createHandler(overrides = {}) {
       {
         service_id: 'sys-postgres-wire',
         service_type: 'runtime_service',
+        status: 'active', replica_count: 1,
         runtime_kind: 'native_js',
         runtime_ref: 'postgres-wire-runtime',
         runtime_config: JSON.stringify({
@@ -136,6 +137,12 @@ function createHandler(overrides = {}) {
     nodeId: overrides.nodeId || 'test-node',
     systemTableCache: cache,
     cdcIntegrationService: cdc,
+    controlPlaneSystemTableGateway: overrides.gateway ?? {
+      async readAuthoritativeRows(_table, _sql, [id]) {
+        const row = cache.get('service_definitions', id);
+        return {success: true, rows: row ? [row] : []};
+      },
+    },
     serviceLifecycleManager: lifecycle,
     executorOutcomeEmitter: overrides.executorOutcomeEmitter || null,
     legacyRemovalAuthority: overrides.legacyRemovalAuthority,
@@ -1190,6 +1197,7 @@ describe('RuntimeServiceHandler shutdown', () => {
 
   it('refreshes stale ship-not-started (replica_count=0) service_definitions from authority on CREATE_REPLICA', async () => {
     const staleRow = {
+      status: 'active',
       service_id: 'sys-postgres-wire',
       service_type: 'runtime_service',
       replica_count: 0,
@@ -1229,16 +1237,15 @@ describe('RuntimeServiceHandler shutdown', () => {
         updatedDef = row;
       }
     };
-    const cdc = {
-      ...createMockCdc(),
-      async executeAuthoritativeSystemTableRead(tableName, sql, params) {
+    const gateway = {
+      async readAuthoritativeRows(tableName, sql, params) {
         assert.equal(tableName, 'service_definitions');
         assert.match(sql, /FROM service_definitions WHERE service_id = \?/);
         assert.deepEqual(params, ['sys-postgres-wire']);
         return {success: true, rows: [scaledRow]};
       },
     };
-    const {handler, lifecycle} = createHandler({cache, cdc});
+    const {handler, lifecycle} = createHandler({cache, gateway});
 
     const response = await handler.handleMessage({
       correlationId: 'corr-stale-def-1',
@@ -1264,6 +1271,7 @@ describe('RuntimeServiceHandler shutdown', () => {
 
   it('refuses CREATE_REPLICA when service_definitions remains replica_count=0 in authority', async () => {
     const disabledRow = {
+      status: 'active',
       service_id: 'sys-postgres-wire',
       service_type: 'runtime_service',
       replica_count: 0,
@@ -1279,13 +1287,12 @@ describe('RuntimeServiceHandler shutdown', () => {
       service_definitions: [disabledRow],
       replica_operations: [],
     });
-    const cdc = {
-      ...createMockCdc(),
-      async executeAuthoritativeSystemTableRead() {
+    const gateway = {
+      async readAuthoritativeRows() {
         return {success: true, rows: [disabledRow]};
       },
     };
-    const {handler, lifecycle} = createHandler({cache, cdc});
+    const {handler, lifecycle} = createHandler({cache, gateway});
 
     await handler.handleMessage({
       correlationId: 'corr-disabled-def-1',
@@ -1309,6 +1316,7 @@ describe('RuntimeServiceHandler shutdown', () => {
 
   it('authoritative service_definitions overrides stale-positive cache and defers on temporary authority failure', async () => {
     const staleActiveRow = {
+      status: 'active',
       service_id: 'sys-postgres-wire',
       service_type: 'runtime_service',
       replica_count: 1,
@@ -1334,16 +1342,15 @@ describe('RuntimeServiceHandler shutdown', () => {
       service_definitions: [staleActiveRow],
       replica_operations: [],
     });
-    const cdc = {
-      ...createMockCdc(),
-      async executeAuthoritativeSystemTableRead(_tableName, _sql, _params, options) {
+    const gateway = {
+      async readAuthoritativeRows(_tableName, _sql, _params, options) {
         observedReadAuthorities.push(options?.readAuthority);
         return authorityResponse;
       },
     };
     const {handler, lifecycle} = createHandler({
       cache,
-      cdc,
+      gateway,
       executorOutcomeEmitter: {
         emitOutcome(outcomeType, operationId, workflowStep, options) {
           emittedOutcomes.push({

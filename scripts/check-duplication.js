@@ -278,8 +278,9 @@ const RATCHET_TARGETS = [
     // to 637/23975 on the checker hint after unifying readiness fixtures.
     // 2026-11-06 (required-entity-operation-observation): tightened 637/23975
     // to 633/23857 after consolidating coordinator fixture construction.
-    baselineCloneGroupCount: 633,
-    baselineDuplicatedLineCount: 23857,
+    // 2026-11-06: shared Binding producer fixture, 632 groups / 23837 lines.
+    baselineCloneGroupCount: 632,
+    baselineDuplicatedLineCount: 23837,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

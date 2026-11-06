@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 120,
     "architecture-governance": 21,
-    "bootstrap-membership": 338,
+    "bootstrap-membership": 339,
     "cdc-metadata": 70,
     "cli-tooling": 99,
     "control-plane": 235,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2602,
-  "digest": "fnv1a32-bea1bda0",
+  "censusSize": 2603,
+  "digest": "fnv1a32-8154e382",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-cae41168",
+  "observationDigest": "fnv1a32-ec7e7702",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1321,6 +1321,7 @@
     "test/node/replica-transport-handler-identity.test.js": "bootstrap-membership",
     "test/node/runtime-service-bound-route.test.js": "bootstrap-membership",
     "test/node/runtime-service-call-cell-handler.test.js": "bootstrap-membership",
+    "test/node/runtime-service-definition-authority.test.js": "bootstrap-membership",
     "test/node/runtime-service-handler.test.js": "bootstrap-membership",
     "test/node/runtime-service-remove-execution-custody.test.js": "bootstrap-membership",
     "test/node/runtime-service-restart-inventory-custody.test.js": "bootstrap-membership",
@@ -2762,6 +2763,12 @@
         "src/admin/admin-websocket-api-shared.js"
       ]
     },
+    "test/admin/admin-runtime-service-views.test.js": {
+      "files": [
+        "src/control-plane/owners/service-install-catalog-contract.js",
+        "test/control-plane/request-binding-service-definition-fixture.js"
+      ]
+    },
     "test/admin/admin-shared-metadata-consistency.test.js": {
       "files": [
         "src/admin/admin-shared-metadata-consistency.js"
@@ -4094,6 +4101,12 @@
         "src/config/listener-port-model.js"
       ]
     },
+    "test/cli/core/remote-cache.test.js": {
+      "files": [
+        "src/control-plane/owners/service-install-catalog-contract.js",
+        "test/control-plane/request-binding-service-definition-fixture.js"
+      ]
+    },
     "test/cli/q8-resumable-bulk-data-load.test.js": {
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
@@ -5381,7 +5394,8 @@
       "files": [
         "src/config/configuration-manager.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
-        "src/control-plane/owners/service-install-catalog-contract.js"
+        "src/control-plane/owners/service-install-catalog-contract.js",
+        "test/control-plane/request-binding-service-definition-fixture.js"
       ]
     },
     "test/control-plane/runtime-access-policy-owner.test.js": {
@@ -11034,12 +11048,14 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/owners/service-install-catalog-contract.js",
         "src/node/runtime-service-handler-constants.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/executor-outcome-emitter.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-status.js",
         "src/service/service-lifecycle-command-contract.js",
+        "test/control-plane/request-binding-service-definition-fixture.js",
         "test/control-plane/service-instance-creation-sqlite-fixture.js"
       ]
     },
@@ -11047,6 +11063,17 @@
       "files": [
         "src/node/runtime-service-call-cell-handler.js",
         "src/node/runtime-service-handler.js"
+      ]
+    },
+    "test/node/runtime-service-definition-authority.test.js": {
+      "files": [
+        "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/control-plane/owners/service-install-catalog-contract.js",
+        "src/node/runtime-service-definition-resolution.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/executor-outcome-emitter.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/control-plane/request-binding-service-definition-fixture.js"
       ]
     },
     "test/node/runtime-service-handler.test.js": {
@@ -16708,6 +16735,12 @@
         "src/rebalancer/rebalancer-constants.js"
       ]
     },
+    "test/rebalancer/runtime-service-entity.test.js": {
+      "files": [
+        "src/control-plane/owners/service-install-catalog-contract.js",
+        "test/control-plane/request-binding-service-definition-fixture.js"
+      ]
+    },
     "test/rebalancer/runtime-service-expired-lease-candidate-admission.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -17413,7 +17446,9 @@
     },
     "test/runtime/service-discovery-catalog.test.js": {
       "files": [
-        "src/wasm-service/wasm-service-constants.js"
+        "src/control-plane/owners/service-install-catalog-contract.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "test/control-plane/request-binding-service-definition-fixture.js"
       ]
     },
     "test/runtime/service-lifecycle-pgwire-executor-handoff.test.js": {

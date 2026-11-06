@@ -2080,6 +2080,39 @@
         "test/query/table-creation-service.test.js",
         "test/admin/admin-owner-operations.test.js"
       ]
+    },
+    "runtime-definition-create-authority": {
+      "description": "One validated definition interpretation supplies placement, CREATE eligibility and outward target views. One explicit authoritative keyed read routes and executes each unrouted CREATE, while retained journal origin precedes mutable lookup. Unavailable authority never grants cache permission or becomes permanent absence.",
+      "owners": [
+        "src/control-plane/owners/deployment-binding-contract.js",
+        "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/control-plane/owners/service-definitions-owner.js",
+        "src/rebalancer/runtime-service-policy.js",
+        "src/rebalancer/unified-rebalancer-policy-scheduler-methods.js",
+        "src/bootstrap/shared/runtime-service-rebalancer-setup.js",
+        "src/node/runtime-service-definition-resolution.js",
+        "src/node/runtime-service-bound-creation-route.js",
+        "src/node/runtime-service-generic-replica.js",
+        "src/node/runtime-service-handler.js",
+        "src/admin/admin-runtime-service-views.js",
+        "src/runtime/service-discovery-catalog.js",
+        "src/cli/core/remote-cache-service-rows.js"
+      ],
+      "tests": [
+        "test/node/runtime-service-definition-authority.test.js",
+        "test/node/runtime-service-handler.test.js",
+        "test/node/runtime-service-bound-route.test.js",
+        "test/control-plane/request-binding-service-definition-owner.test.js",
+        "test/rebalancer/runtime-service-entity.test.js",
+        "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js",
+        "test/bootstrap/runtime-service-rebalancer-owner.test.js",
+        "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+        "test/admin/admin-runtime-service-views.test.js",
+        "test/runtime/service-discovery-catalog.test.js",
+        "test/cli/core/remote-cache.test.js",
+        "test/control-plane/deployment-binding-owner.test.js",
+        "test/rebalancer/call-activation-pin-planning.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -4419,6 +4452,50 @@
         "test/control-plane/readiness-deferred-denial-evidence-absent.test.js",
         "test/rebalancer/formation-ledger-spread-voter-ready-readiness.test.js",
         "test/rebalancer/replace-owner-wake.test.js"
+      ]
+    },
+    "runtime-definition-create-authority": {
+      "description": "Producer-owned Binding count zero, canonical lineage and declaration digest, validated effective target, typed keyed authority, one-resolution CREATE route, actual outcome emission and retained-origin precedence change and are reviewed together. Existing real coordinator/lifecycle lane preserves its healthy budgets and churn controls; finite refusal recovery runs the actual retained retry callback with an explicitly driven scheduler boundary, not automatic wall-clock scheduling. Physical formation and public Cell composition remain separate.",
+      "endpoints": [
+        {
+          "id": "definition-producer-and-policy",
+          "owners": [
+            "src/control-plane/owners/deployment-binding-contract.js",
+            "src/control-plane/owners/request-binding-service-definition-contract.js",
+            "src/control-plane/owners/service-definitions-owner.js",
+            "src/rebalancer/runtime-service-policy.js",
+            "src/rebalancer/unified-rebalancer-policy-scheduler-methods.js",
+            "src/bootstrap/shared/runtime-service-rebalancer-setup.js"
+          ]
+        },
+        {
+          "id": "authoritative-create-route-and-execution",
+          "owners": [
+            "src/node/runtime-service-definition-resolution.js",
+            "src/node/runtime-service-bound-creation-route.js",
+            "src/node/runtime-service-generic-replica.js",
+            "src/node/runtime-service-handler.js",
+            "src/admin/admin-runtime-service-views.js",
+            "src/runtime/service-discovery-catalog.js",
+            "src/cli/core/remote-cache-service-rows.js"
+          ]
+        }
+      ],
+      "contract": "runtime-definition-create-authority",
+      "witnessTests": [
+        "test/node/runtime-service-definition-authority.test.js",
+        "test/node/runtime-service-handler.test.js",
+        "test/node/runtime-service-bound-route.test.js",
+        "test/control-plane/request-binding-service-definition-owner.test.js",
+        "test/rebalancer/runtime-service-entity.test.js",
+        "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js",
+        "test/bootstrap/runtime-service-rebalancer-owner.test.js",
+        "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+        "test/admin/admin-runtime-service-views.test.js",
+        "test/runtime/service-discovery-catalog.test.js",
+        "test/cli/core/remote-cache.test.js",
+        "test/control-plane/deployment-binding-owner.test.js",
+        "test/rebalancer/call-activation-pin-planning.test.js"
       ]
     }
   }

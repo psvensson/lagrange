@@ -31,12 +31,16 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {serializeServiceDefinition} from '../../src/wasm-service/wasm-service-models.js';
 import {selectInstanceState} from '../../src/control-plane/owners/service-instance-state.js';
 
+import {createRequestBindingFixture} from
+  '../control-plane/request-binding-service-definition-fixture.js';
+
 const QUIET = {debug() {}, info() {}, warn() {}, error() {}};
 const NODE_ID = 'host-1';
 const DRAIN_TURNS = 200;
 const HELD_STATUS = 'BOOTSTRAPPED_HELD';
 const NATIVE_ENTITY = 'sys-postgres-wire';
 const NATIVE_ROW = Object.freeze({service_id: NATIVE_ENTITY, service_type: 'runtime_service',
+  status: 'active', replica_count: 1,
   runtime_kind: 'native_js', runtime_ref: 'postgres-wire-runtime',
   runtime_config: JSON.stringify({host: '127.0.0.1', authMode: 'trust', tlsMode: 'disable'})});
 
@@ -135,14 +139,6 @@ function boundRow(serviceId) {
     runtimeRef: 'fixture/component@1.0.0', runtimeConfig: '{}'}, 1000);
 }
 
-function cellRow(serviceId) {
-  return serializeServiceDefinition({serviceId, serviceName: serviceId,
-    handlerFunctionId: 'handler', runtimeKind: 'wasm_component',
-    runtimeRef: 'fixture/component@1.0.0', runtimeConfig: '{}',
-    bindingVersionId: 'binding-version-1', bindingDigest: `sha256:${'b'.repeat(64)}`,
-    bindingProjection: '{"binding_version_id":"binding-version-1"}'}, 1000);
-}
-
 async function world(t, {journal = true, rows = null} = {}) {
   quietLogging();
   const metadata = await createOriginFixture({after: (fn) => t.after(fn)},
@@ -156,7 +152,12 @@ async function world(t, {journal = true, rows = null} = {}) {
   const cache = cacheOf(rows ?? {service_definitions: [boundRow(metadata.serviceId), NATIVE_ROW],
     services: []});
   const handler = new RuntimeServiceHandler({nodeId: NODE_ID, systemTableCache: cache,
-    cdcIntegrationService: {}, serviceLifecycleManager: manager, executorOutcomeEmitter: emitter});
+    cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: {async readAuthoritativeRows(_table, _sql, [id]) {
+      const row = cache.get('service_definitions', id);
+      return {success: true, rows: row ? [row] : []};
+    }},
+    serviceLifecycleManager: manager, executorOutcomeEmitter: emitter});
   handler.logger = QUIET;
   handler.initialize();
   return {metadata, runtime, manager, emitter, outcomes, cache, handler,
@@ -225,6 +226,11 @@ describe('stage 1c: RuntimeServiceHandler bound CREATE route (RV2.2, RV3.2, RV3.
     async (t) => {
       const w = await world(t);
       const retained = await w.metadata.prepare();
+      let definitionReads = 0;
+      w.handler.controlPlaneSystemTableGateway.readAuthoritativeRows = async () => {
+        definitionReads++;
+        throw new Error('mutable definition unavailable after retained admission');
+      };
       const granted = await w.metadata.primary.grantInstanceResource(
         retained.intent.consensusBinding, retained.token);
       assert.equal(granted.outcome, 'PUBLISHED', JSON.stringify(granted));
@@ -242,6 +248,7 @@ describe('stage 1c: RuntimeServiceHandler bound CREATE route (RV2.2, RV3.2, RV3.
       assert.equal(w.manager._replicaStateById.get(w.replicaId).state, 'running');
       assert.deepEqual([lastOutcome(w).outcomeType, lastOutcome(w).workflowStep],
         [EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE, WORKFLOW_STEP.ACTIVE]);
+      assert.equal(definitionReads, 0, 'retained origin precedes mutable definition authority');
     });
 
   test('Revision 4: a PUBLISHED_UNPROJECTED answer for an ungranted slot is contradicted and retired',
@@ -325,9 +332,12 @@ describe('stage 1c: RuntimeServiceHandler bound CREATE route (RV2.2, RV3.2, RV3.
 
   test('cell (a) production-shaped manager (no journal): native_js and Cell generic, bound-class deferred',
     async (t) => {
-      const cellId = 'req-cell-a';
+      const producer = await createRequestBindingFixture();
+      const {serviceDefinition: cell} = await producer.owners.serviceDefinitionsOwner
+        .reconcileRequestBinding(producer.bindingRow);
+      const cellId = cell.service_id;
       const w = await world(t, {journal: false, rows: {services: [], service_definitions: [
-        NATIVE_ROW, cellRow(cellId), boundRow('bound-a')]}});
+        NATIVE_ROW, cell, boundRow('bound-a')]}});
       await create(w, NATIVE_ENTITY, `${NATIVE_ENTITY}-r1`, 'op-native');
       assert.equal(lastOutcome(w).outcomeType, EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE);
       await create(w, cellId, `${cellId}-r1`, 'op-cell');

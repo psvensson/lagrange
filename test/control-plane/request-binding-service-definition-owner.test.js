@@ -4,9 +4,6 @@ import {beforeEach, describe, test} from 'node:test';
 import {
   RuntimeServiceRebalancerOwner,
 } from '../../src/bootstrap/shared/runtime-service-rebalancer-setup.js';
-import {
-  SYSTEM_TABLE_SCHEMAS,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
   REQUEST_BINDING_SERVICE_DEFINITION_ERROR_CODE,
@@ -15,164 +12,15 @@ import {
   createSystemMetadataOwners,
   deriveRequestServiceDefinitionId,
 } from '../../src/control-plane/owners/index.js';
-import {deriveTenantPackageId} from
-  '../../src/control-plane/owners/service-install-catalog-contract.js';
 import {supportsBindingServiceDefinitionSourceKind} from
   '../../src/control-plane/owners/request-binding-service-definition-contract.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SD_COL} from '../../src/wasm-service/wasm-service-models.js';
-
-const TENANT_ID = 'tenant-a';
-const ARTIFACT_DIGEST = `sha256:${'a'.repeat(64)}`;
-const SECURITY_CONTEXT = Object.freeze({
-  tenantId: TENANT_ID,
-  principal: 'alice',
-  roles: Object.freeze(['deployer']),
-});
-
-function clone(value) {
-  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
-}
-
-class DurableGateway {
-  constructor() {
-    this.storage = new Map(SYSTEM_TABLE_SCHEMAS.map(
-      (schema) => [schema.tableName, new Map()],
-    ));
-    this.writes = [];
-    this.lostInsertResponses = new Set();
-    this.lostUpdateResponses = new Set();
-  }
-
-  schema(tableName) {
-    return SYSTEM_TABLE_SCHEMAS.find(
-      (schema) => schema.tableName === tableName,
-    );
-  }
-
-  primaryKey(tableName) {
-    const schema = this.schema(tableName);
-    return schema.primaryKey?.[0] ||
-      schema.columns.find((column) => column.primaryKey)?.name;
-  }
-
-  rows(tableName) {
-    return this.storage.get(tableName);
-  }
-
-  async readAuthoritativeRows(tableName, sql, params) {
-    const rows = [...this.rows(tableName).values()];
-    const field = / WHERE ([a-z_]+) = \?$/u.exec(sql)?.[1];
-    const selected = field ?
-      rows.filter((row) => row[field] === params[0]) : rows;
-    return {success: true, rows: clone(selected)};
-  }
-
-  async insertSystemTableRow(tableName, row) {
-    const table = this.rows(tableName);
-    const key = row[this.primaryKey(tableName)];
-    if (table.has(key)) return {success: false, error: 'duplicate key'};
-    table.set(key, clone(row));
-    this.writes.push({operation: 'insert', tableName, row: clone(row)});
-    if (this.lostInsertResponses.delete(tableName)) {
-      throw new Error('insert response lost after durable apply');
-    }
-    return {success: true, affectedRows: 1};
-  }
-
-  async upsertSystemTableRow(tableName, row) {
-    this.rows(tableName).set(
-      row[this.primaryKey(tableName)], clone(row),
-    );
-    this.writes.push({operation: 'upsert', tableName, row: clone(row)});
-    return {success: true, affectedRows: 1};
-  }
-
-  async updateSystemTableRow(tableName, whereClause, data) {
-    const table = this.rows(tableName);
-    const key = whereClause[this.primaryKey(tableName)];
-    const existing = table.get(key);
-    if (!existing) return {success: true, affectedRows: 0};
-    const row = {...existing, ...clone(data)};
-    table.set(key, row);
-    this.writes.push({
-      operation: 'update',
-      tableName,
-      row: clone(row),
-    });
-    if (this.lostUpdateResponses.delete(tableName)) {
-      throw new Error('update response lost after durable apply');
-    }
-    return {success: true, affectedRows: 1};
-  }
-
-  loseNextInsertResponse(tableName) {
-    this.lostInsertResponses.add(tableName);
-  }
-
-  loseNextUpdateResponse(tableName) {
-    this.lostUpdateResponses.add(tableName);
-  }
-}
-
-function manifest() {
-  return {
-    schema_version: 3,
-    name: 'orders-service',
-    version: '1.0.0',
-    capabilities: ['network.client', 'clock.read'],
-    exports: [{
-      name: 'request-handler',
-      interface: 'request_v1',
-    }],
-    artifact: {
-      type: 'oci',
-      ref: 'registry.example.test/acme/orders:1.0.0',
-      digest: ARTIFACT_DIGEST,
-      media_type: 'application/vnd.oci.image.manifest.v1+json',
-    },
-    runtime: {
-      kind: 'oci_container',
-      entrypoint: 'server',
-      runtime_options: {memoryLimitMb: 128, networkPolicy: 'isolated'},
-    },
-  };
-}
-
-function resolvedArtifact() {
-  return {
-    status: 'resolved',
-    artifact: {
-      digest: ARTIFACT_DIGEST,
-      payloadMediaType: 'application/vnd.oci.image.manifest.v1+json',
-      signature: {status: 'verified', keyId: 'publisher-main'},
-    },
-  };
-}
-
-function bindingInput(package_, overrides = {}) {
-  return {
-    schema_version: 2,
-    name: 'orders-api',
-    target: {
-      package_id: package_.packageId,
-      manifest_digest: package_.manifestDigest,
-      export_name: 'request-handler',
-    },
-    source: {kind: 'request', method: 'POST', path: '/orders'},
-    budgets: {
-      cpu_time_ms: 100,
-      wall_time_ms: 1000,
-      memory_bytes: 1048576,
-      input_bytes: 4096,
-      output_bytes: 8192,
-      context_bytes: 16384,
-    },
-    ...overrides,
-  };
-}
+import {createRequestBindingFixture, bindingInput, clone,
+  TENANT_ID, ARTIFACT_DIGEST, SECURITY_CONTEXT} from
+  './request-binding-service-definition-fixture.js';
 
 function createCache(gateway) {
   const listeners = new Set();
@@ -204,33 +52,6 @@ function makeFakeRebalancer(record, options) {
   };
   record.push(rebalancer);
   return rebalancer;
-}
-
-async function createFixture(options = {}) {
-  const gateway = new DurableGateway();
-  const owners = createSystemMetadataOwners({
-    controlPlaneSystemTableGateway: gateway,
-    now: () => 1000,
-  });
-  const value = manifest();
-  const packageId = deriveTenantPackageId(value, TENANT_ID);
-  const package_ = await owners.serviceInstallCatalogOwner.recordPackage({
-    packageId,
-    manifest: value,
-    resolvedArtifact: resolvedArtifact(),
-  });
-  const binding = await owners.deploymentBindingOwner.createBinding(
-    bindingInput(package_), SECURITY_CONTEXT,
-  );
-  const bindingRow = gateway.rows(TABLES.SERVICE_BINDINGS)
-    .get(binding.bindingVersionId);
-  if (options.loseDesiredInsertResponse) {
-    gateway.loseNextInsertResponse(TABLES.SERVICE_DEFINITIONS);
-  }
-  if (options.loseActivationUpdateResponse) {
-    gateway.loseNextUpdateResponse(TABLES.SERVICE_DEFINITIONS);
-  }
-  return {binding, bindingRow, gateway, owners, package_};
 }
 
 function createPlanner(fixture) {
@@ -285,7 +106,7 @@ describe('request Binding desired-service compilation owner', () => {
 
   test('the planning leader activates the complete pinned projection without ' +
     'declaring replica intent and admits one placement owner', async () => {
-    const fixture = await createFixture();
+    const fixture = await createRequestBindingFixture();
     fixture.gateway.writes.length = 0;
     const planner = createPlanner(fixture);
 
@@ -344,7 +165,7 @@ describe('request Binding desired-service compilation owner', () => {
 
   test('an existing inactive compiled request row advances with one owner update',
     async () => {
-      const fixture = await createFixture();
+      const fixture = await createRequestBindingFixture();
       const artifact = await fixture.owners.serviceInstallCatalogOwner
         .getBindableArtifactForTenant(
           fixture.bindingRow.package_id,
@@ -379,7 +200,7 @@ describe('request Binding desired-service compilation owner', () => {
 
   test('CDC wake, replay, and leadership reacquisition are stable and repair ' +
     'a missing derived row', async () => {
-    const fixture = await createFixture();
+    const fixture = await createRequestBindingFixture();
     const planner = createPlanner(fixture);
     planner.owner.setLeader(true);
     await planner.owner.waitForBindingRefresh();
@@ -426,7 +247,7 @@ describe('request Binding desired-service compilation owner', () => {
   });
 
   test('lost insert responses recover by authoritative replay', async () => {
-    const fixture = await createFixture({loseDesiredInsertResponse: true});
+    const fixture = await createRequestBindingFixture({loseDesiredInsertResponse: true});
     const planner = createPlanner(fixture);
     planner.owner.setLeader(true);
     await planner.owner.waitForBindingRefresh();
@@ -436,7 +257,7 @@ describe('request Binding desired-service compilation owner', () => {
   });
 
   test('lost activation responses recover by authoritative replay', async () => {
-    const fixture = await createFixture({loseActivationUpdateResponse: true});
+    const fixture = await createRequestBindingFixture({loseActivationUpdateResponse: true});
     const planner = createPlanner(fixture);
     planner.owner.setLeader(true);
     await planner.owner.waitForBindingRefresh();
@@ -448,7 +269,7 @@ describe('request Binding desired-service compilation owner', () => {
   });
 
   test('the declaration owner exposes no generic row-mutation API', async () => {
-    const fixture = await createFixture();
+    const fixture = await createRequestBindingFixture();
     for (const methodName of [
       'insertRow',
       'upsertRow',
@@ -464,7 +285,7 @@ describe('request Binding desired-service compilation owner', () => {
   });
 
   test('conflicting derived state fails closed and cannot activate', async () => {
-    const fixture = await createFixture();
+    const fixture = await createRequestBindingFixture();
     const artifact = await fixture.owners.serviceInstallCatalogOwner
       .getBindableArtifactForTenant(
         fixture.bindingRow.package_id,
@@ -494,7 +315,7 @@ describe('request Binding desired-service compilation owner', () => {
   });
 
   test('alternate service IDs cannot duplicate one Binding lineage', async () => {
-    const fixture = await createFixture();
+    const fixture = await createRequestBindingFixture();
     const artifact = await fixture.owners.serviceInstallCatalogOwner
       .getBindableArtifactForTenant(
         fixture.bindingRow.package_id,
@@ -526,7 +347,7 @@ describe('request Binding desired-service compilation owner', () => {
 
   test('malformed request declaration state is ignored without a partial row',
     async () => {
-      const fixture = await createFixture();
+      const fixture = await createRequestBindingFixture();
       const malformed = {
         ...fixture.bindingRow,
         binding_version_id: `binding-version-${'f'.repeat(64)}`,
@@ -544,7 +365,7 @@ describe('request Binding desired-service compilation owner', () => {
     });
 
   test('concurrent owner replay inserts one deterministic row', async () => {
-    const fixture = await createFixture();
+    const fixture = await createRequestBindingFixture();
     fixture.gateway.writes.length = 0;
     const results = await Promise.all([
       fixture.owners.serviceDefinitionsOwner.reconcileRequestBinding(
@@ -564,7 +385,7 @@ describe('request Binding desired-service compilation owner', () => {
 
   test('overlapping planning-owner instances converge through insert and ' +
     'activation races', async () => {
-    const fixture = await createFixture();
+    const fixture = await createRequestBindingFixture();
     const peerOwners = createSystemMetadataOwners({
       controlPlaneSystemTableGateway: fixture.gateway,
       now: () => 1000,

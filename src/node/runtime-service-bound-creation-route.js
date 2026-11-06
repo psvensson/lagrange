@@ -34,6 +34,8 @@ import {matchesCreationRequest, matchesCreationWake, replicaExecution, currentEx
   joinRetirementObserver, replyToGenericExecutionGate} from
   './runtime-service-creation-execution.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
+import {SERVICE_DEFINITION_RESOLUTION_OUTCOME as DEFINITION} from
+  './runtime-service-definition-resolution.js';
 import {RUNTIME_SERVICE_CREATION_MEMO as MEMO,
   RUNTIME_SERVICE_RESTART_ACTION as ACTION, RUNTIME_SERVICE_RESTART_PLAN_STATE as PLAN_STATE,
   RUNTIME_SERVICE_CREATION_WAKE_OUTCOME as WAKE,
@@ -104,7 +106,7 @@ function unroutedDecision(answer) {
 
 function failureOptions(replicaId, decision) {
   return {replicaId, errorMessage: decision.errorCode, errorCode: decision.errorCode,
-    ...(decision.kind === DECISION.DEFERRED ? {deferRetry: true} : {})};
+    deferRetry: decision.kind === DECISION.DEFERRED};
 }
 
 /**
@@ -239,19 +241,35 @@ function retainResumeAdmission(entry, answer) {
   entry.origin = origin;
 }
 
+function definitionRefusal(resolution) {
+  switch (resolution?.outcome) {
+  case DEFINITION.ELIGIBLE:
+    if (resolution.definition) return null;
+    break;
+  case DEFINITION.ABSENT:
+    return {kind: DECISION.FAILED, names: false,
+      errorCode: HANDLER_ERROR.DEFINITION_NOT_FOUND_CODE};
+  case DEFINITION.INELIGIBLE:
+    return {kind: DECISION.FAILED, names: false, errorCode: HANDLER_ERROR.DEFINITION_INELIGIBLE};
+  default:
+    break;
+  }
+  return {kind: DECISION.DEFERRED, names: false,
+    errorCode: HANDLER_ERROR.DEFINITION_AUTHORITY_UNAVAILABLE_CODE};
+}
+
 async function createRouteDecision(handler, params, entry) {
   const hydration = await hydrateCreation(handler, params, entry);
   if (!currentExecution(handler, entry)) return;
   switch (hydration.kind) {
   case HYDRATION.UNROUTED: {
-    const definition =
-      typeof handler.resolveServiceDefinitionForCreate === 'function' ?
-        await handler.resolveServiceDefinitionForCreate(params.entityId) :
-        handler.resolveServiceDefinition(params.entityId);
-    return isBoundClassDefinition(definition) ?
+    const resolution = await handler.resolveServiceDefinitionOutcomeForCreate(params.entityId);
+    const refusal = definitionRefusal(resolution);
+    if (refusal !== null) return {route: CREATE_ROUTE.BOUND, decision: refusal};
+    return isBoundClassDefinition(resolution.definition) ?
       {route: CREATE_ROUTE.BOUND,
         decision: {...unroutedDecision(hydration.answer), names: false}} :
-      {route: CREATE_ROUTE.GENERIC};
+      {route: CREATE_ROUTE.GENERIC, resolution};
   }
   case HYDRATION.DECIDED:
     return {route: CREATE_ROUTE.BOUND, decision: hydration.decision};
@@ -279,7 +297,7 @@ async function routeRuntimeServiceCreate(handler, params, installed) {
     if (!currentExecution(handler, entry)) return;
     generic = routed.route === CREATE_ROUTE.GENERIC;
     if (generic) {
-      await handler.createGenericReplicaAsync(params, entry);
+      await handler.createGenericReplicaAsync(params, entry, routed.resolution);
       return;
     }
     decision = routed.decision;

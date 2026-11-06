@@ -17,7 +17,7 @@ import {
   normalizeEndpointRows,
 } from './endpoint-sync-source-query.js';
 import {groupEndpointRows} from './endpoint-sync-planner.js';
-import {resolveRuntimeServiceTargetReplicaCount} from
+import {resolveRuntimeServiceDefinitionPolicy} from
   '../rebalancer/runtime-service-policy.js';
 
 
@@ -75,10 +75,7 @@ function resolveDefinitionServiceId(row) {
  * @return {number|null}
  */
 function resolveDefinitionReplicaCount(row) {
-  if (!row || typeof row !== 'object') {
-    return null;
-  }
-  return resolveRuntimeServiceTargetReplicaCount(row);
+  return resolveRuntimeServiceDefinitionPolicy(row).targetReplicaCount;
 }
 
 /**

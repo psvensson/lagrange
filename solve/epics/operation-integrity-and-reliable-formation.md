@@ -28,6 +28,8 @@ quests:
   - required-entity-operation-observation
   - committed-node-remove-safety-wake
   - system-cache-reconciliation-ingress
+  - runtime-definition-create-authority
+  - tap-default-machine-factor-portability
 authorizes:
   - src
   - test
@@ -215,8 +217,18 @@ controls are preserved. The expanded 40-file caller check passes with 3,068
 reported assertions, and the unchanged reviewer counterexamples now refuse the
 hostile inputs without changing shared identity. All 33 static audits pass.
 Independent review `7af63aa2` approves those exact bytes for normal WIP checkpoint
-and frozen proof; committed applicability, the named-host check and full source-
-range proof remain required before closure.
+and frozen proof. Committed applicability was verified at `ab55403b`; its
+first frozen Lenovo schedule passed 39/40 files and retained the completion
+file's unscaled 30-second TAP root timeout. Same-host single-file diagnostics
+passed on both parent and candidate without changing their source. The separate
+`tap-default-machine-factor-portability` repair owns that execution defect.
+Its reviewed and committed `d511e4f0` candidate passes the original 40-file
+schedule with 3,068 reported assertions and no retries; the completion file
+passes 147 assertions in 33,095 ms process duration. Fresh machine factor 2.4
+differs from the prior 2.3 and is recorded, not presented as identical-budget
+causal evidence. Independent applicability `325afcdb` verifies the committed
+inputs and bounded result. Full source-range/runner proof and receipts remain
+required before closure.
 Four additional inherited readiness callers remain red: two planning identity/
 build-cost witnesses and two sync/bulk-readiness fixtures; their first causes
 and repairs remain required, with no predecessor-red waiver. The existing
@@ -230,10 +242,23 @@ contribution without claiming it is production's sole trigger.
 Its record explicitly supersedes the exhausted predecessor Quest's lease-zero
 carve-out without editing that terminal history or its separate five-node gate.
 The adjacent cached SERVICES topology fallback/merge is recorded separately and
-is not endorsed as authoritative. Runtime definition/Cell CREATE remains open: a baseline diagnostic restoring
-only suppressed handler logging captures the active Binding CREATE refusal
-before the unchanged test timeout (`runtime-create-first-refusal.log`). Other
-retained reds, final E8, unchanged E9, publication and main merge remain open. The current
+is not endorsed as authoritative. The bounded runtime-definition/CREATE repair
+now has one canonical policy and one explicit authoritative keyed read, with
+retained-origin precedence. The shared Binding owner validates generated version
+identity and canonical declaration digest; invalid lineage cannot grant placement
+or CREATE. Local expanded proof passes 25 files/792 reported assertions, followed
+by 2 files/94 after mechanical test corrections, and all 33 static audits. The real
+coordinator recovery witness holds then runs its retained retry callback after a
+finite authority failure, preserving the durable operation and replica identity;
+its scheduler and persistence boundaries are controlled. Independent review
+`71b2104e` approves exact content manifest `337b3a6b` for WIP checkpoint only.
+Committed applicability, frozen affected proof, public Cell composition and full
+source-range proof remain required. The old-source negatives and independent
+malformed-lineage failures remain retained. Readiness diagnostics now attribute
+100 additional heavy builds to nested fresh bulk evaluations during publication
+planning, not the unexecuted background queue; the required-node output contract
+must be preserved while repairing that cost. Other retained reds, final E8,
+unchanged E9, publication and main merge remain open. The current
 integration session owns the next committed proof and remaining causal repairs.
 Comparative measurements follow acceptance and main merge. Adam's active stores
 remain under `/mnt/old/lab`; a fresh fleet check reports about 52 GiB available

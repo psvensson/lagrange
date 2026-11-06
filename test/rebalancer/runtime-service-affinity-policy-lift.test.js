@@ -87,6 +87,7 @@ function buildClusterCache({accessRows = [], readLocality} = {}) {
       {
         service_id: SVC_ID,
         service_name: 'lift-svc',
+        status: 'active',
         replica_count: 1,
         read_locality: readLocality,
       },

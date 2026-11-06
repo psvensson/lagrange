@@ -7,64 +7,10 @@ import {ReplicaOperationMessageType, ReplicaOperationResponseStatus} from
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
 import {currentExecution, releaseExecution, executionRefusal,
   replyToGenericExecutionGate} from './runtime-service-creation-execution.js';
-import {
-  SERVICE_DEFINITION_RESOLUTION_OUTCOME,
-} from './runtime-service-definition-resolution.js';
-import {RUNTIME_SERVICE_HANDLER_ERROR_MSG, RUNTIME_SERVICE_HANDLER_LOG_MSG} from
+import {RUNTIME_SERVICE_HANDLER_LOG_MSG} from
   './runtime-service-handler-constants.js';
 
-const FUNCTION_TYPE = 'function';
 const BOOLEAN_TYPE = 'boolean';
-
-function buildDefinitionResolutionError(entityId, outcome) {
-  if (outcome === SERVICE_DEFINITION_RESOLUTION_OUTCOME.UNAVAILABLE) {
-    const formatAuthorityUnavailable =
-      RUNTIME_SERVICE_HANDLER_ERROR_MSG.DEFINITION_AUTHORITY_UNAVAILABLE;
-    const error = new Error(formatAuthorityUnavailable(entityId));
-    error.errorCode =
-      RUNTIME_SERVICE_HANDLER_ERROR_MSG.DEFINITION_AUTHORITY_UNAVAILABLE_CODE;
-    error.deferRetry = true;
-    return error;
-  }
-  const formatDefinitionNotFound =
-    RUNTIME_SERVICE_HANDLER_ERROR_MSG.DEFINITION_NOT_FOUND;
-  const error = new Error(formatDefinitionNotFound(entityId));
-  error.errorCode =
-    outcome === SERVICE_DEFINITION_RESOLUTION_OUTCOME.INELIGIBLE ?
-      RUNTIME_SERVICE_HANDLER_ERROR_MSG.DEFINITION_INELIGIBLE :
-      RUNTIME_SERVICE_HANDLER_ERROR_MSG.DEFINITION_NOT_FOUND_CODE;
-  error.deferRetry = false;
-  return error;
-}
-
-async function resolveDefinitionForGenericCreate(handler, entityId) {
-  if (typeof handler.resolveServiceDefinitionOutcomeForCreate === FUNCTION_TYPE) {
-    const resolution = await handler.resolveServiceDefinitionOutcomeForCreate(
-      entityId,
-    );
-    if (
-      resolution?.outcome !== SERVICE_DEFINITION_RESOLUTION_OUTCOME.ELIGIBLE ||
-      !resolution?.definition
-    ) {
-      throw buildDefinitionResolutionError(
-        entityId,
-        resolution?.outcome || SERVICE_DEFINITION_RESOLUTION_OUTCOME.ABSENT,
-      );
-    }
-    return resolution.definition;
-  }
-  const definition =
-    typeof handler.resolveServiceDefinitionForCreate === FUNCTION_TYPE ?
-      await handler.resolveServiceDefinitionForCreate(entityId) :
-      handler.resolveServiceDefinition(entityId);
-  if (!definition) {
-    throw buildDefinitionResolutionError(
-      entityId,
-      SERVICE_DEFINITION_RESOLUTION_OUTCOME.ABSENT,
-    );
-  }
-  return definition;
-}
 
 function buildGenericFailedOutcomeOptions(replicaId, error) {
   return {
@@ -77,33 +23,31 @@ function buildGenericFailedOutcomeOptions(replicaId, error) {
   };
 }
 
-async function genericCreateHandle(handler, entityId, replicaId) {
-  const definition = await resolveDefinitionForGenericCreate(handler, entityId);
+function genericCreateHandle(handler, entityId, replicaId, resolution) {
+  const definition = resolution.definition;
 
   return {
+    ...definition,
     serviceId: replicaId,
     serviceType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
     replicaId,
     entityId,
     nodeId: handler.nodeId,
-    ...definition,
     // service_definitions rows are stored snake_case, but the runtime
     // descriptor validator (and adapter) read camelCase. Provide the
-    // camelCase runtime fields additively so a placed replica validates;
-    // without this every runtime-service create fails "runtime_kind is
-    // required". (Accept an already-camelCase definition too.)
-    runtimeKind: definition.runtime_kind ?? definition.runtimeKind ?? null,
-    runtimeRef: definition.runtime_ref ?? definition.runtimeRef ?? null,
+    // camelCase runtime fields at this representation boundary.
+    runtimeKind: definition.runtime_kind ?? null,
+    runtimeRef: definition.runtime_ref ?? null,
     runtimeConfig:
-        definition.runtime_config ?? definition.runtimeConfig ?? null,
+        definition.runtime_config ?? null,
   };
 }
 
-async function createGenericReplica(handler, params, entry) {
+async function createGenericReplica(handler, params, entry, resolution) {
   if (!currentExecution(handler, entry) || entry.params !== params) return;
   const {operationId, entityId, replicaId} = params;
   try {
-    const replicaHandle = await genericCreateHandle(handler, entityId, replicaId);
+    const replicaHandle = genericCreateHandle(handler, entityId, replicaId, resolution);
     if (!currentExecution(handler, entry)) return;
 
     await handler.serviceLifecycleManager.createReplica(

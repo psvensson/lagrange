@@ -214,6 +214,7 @@ test('RuntimeServiceRebalancerOwner', async (t) => {
         service_id: 'svc-2',
         service_type: 'runtime_service',
         status: 'active',
+        replica_count: 3,
       });
       owner.refresh();
       t.equal(record.length, 2, 'newly-deployed service picked up');
