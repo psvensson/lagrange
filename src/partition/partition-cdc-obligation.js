@@ -63,7 +63,7 @@ import {eventCdcSourceScope} from '../cdc/cdc-source-scope-evidence.js';
 import {CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
 import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
 import {applyCommittedPartitionCdcEventToCache} from
-  '../control-plane/control-plane-system-table-gateway-query-execution.js';
+  '../control-plane/control-plane-system-table-gateway-cache-reconciliation.js';
 
 const FAILED_LOCAL_COMMITTED_CDC_APPLY =
   'Failed local committed CDC apply';

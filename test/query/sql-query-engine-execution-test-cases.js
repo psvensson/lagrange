@@ -653,15 +653,6 @@ function registerSqlQueryEngineExecutionTestCases({
       }
       return {success: false, rows: []};
     },
-    applySystemTableRowsToCache(targetCache, tableName, rows) {
-      if (tableName === TABLES.TABLES) {
-        targetCache.tables.push(...rows);
-      } else if (tableName === TABLES.PARTITIONS) {
-        targetCache.partitions.push(...rows);
-      } else if (tableName === TABLES.SERVICES) {
-        targetCache.services.push(...rows);
-      }
-    },
   });
 
   test('SQLQueryEngine - fetches table and partition routing metadata from authority on cache miss for SELECT', async (t) => {

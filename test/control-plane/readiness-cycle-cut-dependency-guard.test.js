@@ -43,12 +43,22 @@ test('W7 dependency guard - provisioning consumes the readiness owner and ' +
   );
   t.match(
     diagnosticsMethod,
+    /answerServeCohort/,
+    'SQL consumes the readiness-owned committed serving cohort',
+  );
+  t.match(
+    diagnosticsMethod,
+    /extractCohortStrictNodeIds/,
+    'SQL selects eligible node IDs from that same committed cohort',
+  );
+  t.notMatch(
+    sqlSource,
     /getProvisioningNodeTrustViewSync/,
-    'SQL consumes the readiness-owned observer-local trust view',
+    'no extracted SQL helper may restore observer-local target authority',
   );
   t.notMatch(
     diagnosticsMethod,
-    /systemCache|messageRouter|hasLiveTransportEvidence/,
+    /systemCache|messageRouter|hasLiveTransportEvidence|getProvisioningNodeTrustViewSync/,
     'SQL cannot reconstruct trust by joining cache and router evidence',
   );
   t.notMatch(

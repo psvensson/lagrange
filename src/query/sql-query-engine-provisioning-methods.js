@@ -10,19 +10,8 @@ const {
   STORAGE_CAPACITY_DEFAULT,
 } = SQL_QUERY_ENGINE_SHARED;
 
-function extractCohortStrictNodeIds(engine, readinessService, cohort) {
-  if (cohort) {
-    return engine.orderProvisionTargetNodeIds(cohort.eligibleNodeIds || []);
-  }
-  if (typeof readinessService.getProvisioningNodeTrustViewSync === LOCAL_STR_FUNCTION) {
-    return engine.orderProvisionTargetNodeIds(
-      (readinessService.getProvisioningNodeTrustViewSync() || [])
-        .filter((entry) => entry?.serveEligible === true)
-        .map((entry) => entry.nodeId)
-        .filter(Boolean),
-    );
-  }
-  return [];
+function extractCohortStrictNodeIds(engine, cohort) {
+  return engine.orderProvisionTargetNodeIds(cohort?.eligibleNodeIds || []);
 }
 
 class SQLQueryEngineProvisioningMethods {
@@ -162,7 +151,7 @@ class SQLQueryEngineProvisioningMethods {
 
   /**
    * Resolve provision-target diagnostics from the readiness owner's
-   * observer-local trust view.
+   * committed serving cohort.
    * @param {number} requestedReplicaCount
    * @return {Object}
    * @private
@@ -188,7 +177,7 @@ class SQLQueryEngineProvisioningMethods {
     const cohort = typeof readinessService.answerServeCohort === LOCAL_STR_FUNCTION ?
       readinessService.answerServeCohort() :
       null;
-    const strictNodeIds = extractCohortStrictNodeIds(this, readinessService, cohort);
+    const strictNodeIds = extractCohortStrictNodeIds(this, cohort);
     const selectedNodeIds = strictNodeIds;
 
     return {

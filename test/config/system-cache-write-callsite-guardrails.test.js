@@ -22,7 +22,7 @@ const SANCTIONED_APPLY_CALL_COUNTS = Object.freeze({
   // same single write, so the entry moves with it (as the d07505a1f
   // decomposition moved it from the segment file) rather than adding a site.
   'cdc/cdc-integration-service-cache-visibility-authority.js': 1,
-  'control-plane/control-plane-system-table-gateway-cache-reconciliation.js': 2,
+  'control-plane/control-plane-system-table-gateway-cache-reconciliation.js': 1,
   'message-group/cdc-handler.js': 1,
   // Documented local-only-truth seed writes (CL-016 priority local-commit
   // fallback; CL-035 seed raft_role at voter-ready). Both are superseded by

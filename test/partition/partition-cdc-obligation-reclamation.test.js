@@ -420,3 +420,38 @@ test('W-D1g: applyCommittedEventsToPartitionState updates cdcIntegrationService.
   }
 });
 
+
+test('W-D1h: a local cache apply failure stays with the partition catch and preserves committed CDC debt', async () => {
+  const {leader} = await startLeader({...CDC});
+  const attempts = [];
+  const failures = [];
+  const originalDebug = leader.logger.debug;
+  leader.logger.debug = function(message, fields) {
+    if (message === 'Failed local committed CDC apply') failures.push(fields);
+    else originalDebug.call(this, message, fields);
+  };
+  leader.cdcIntegrationService = {cacheMutationTarget: {
+    applySystemTableChange(tableName, operation, row, options) {
+      attempts.push({tableName, operation, row, options});
+      if (attempts.length === 1) throw new Error('controlled cache refusal');
+    },
+  }};
+  try {
+    for (const index of [1, 2]) {
+      assert.equal(applyCommitted(leader, upsertOf(leader, 'cache-failure', index)), null,
+        'committed SQL application completes');
+    }
+    assert.equal(attempts.length, 2, 'later committed events still reach cache application');
+    assert.equal(failures.length, 1, 'the existing partition boundary records the one failure');
+    assert.equal(failures[0].error, 'controlled cache refusal');
+    assert.ok(attempts.every((attempt) => Number.isFinite(attempt.options.cdcObservedAtMs)),
+      'the partition provides its observation timestamp');
+    const facts = ledgerFactsOf(leader);
+    assert.equal(facts.owed, 2, 'a cache catch cannot discharge durable obligations');
+    assert.equal(facts.delivered, 0, 'cache application never invents an ACK');
+    assert.equal(leader.db.prepare(IMAGE_SQL).all().length, 2);
+  } finally {
+    leader.logger.debug = originalDebug;
+    await shutdownAll(leader);
+  }
+});

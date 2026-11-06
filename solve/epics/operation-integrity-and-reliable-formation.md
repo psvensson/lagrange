@@ -27,6 +27,7 @@ quests:
   - committed-readiness-fixture-custody
   - required-entity-operation-observation
   - committed-node-remove-safety-wake
+  - system-cache-reconciliation-ingress
 authorizes:
   - src
   - test
@@ -174,12 +175,27 @@ Collected logs and their byte-verified manifest are retained under
 Same-host `b15227816` controls reproduce 27 of those failures; 13 files pass
 the predecessor, including 12 corrected fixture callers and a retained-seed R1
 timeout still under investigation. Neither inherited redness nor a predecessor
-pass establishes a cause by itself. The next fixture continuation
-consolidates duplicate coordinator construction, supplies required read ports,
-uses the storage owner's result builder and preserves gateway session options.
-Its 28 focused files pass locally (1,262 reported assertions); the subsequent
-explicit selected-owner custody correction passes all 48 assertions in that
-file. Independent review and exact-committed caller proof remain due. The receipts remain red.
+pass establishes a cause by itself. The independently reviewed `2b446a7ce`
+checkpoint consolidates coordinator construction, storage result construction,
+and gateway session forwarding. All 33 static audits pass. Its frozen Lenovo
+run passes 30 of 31 files (1,451 reported assertions): all 27 ordinary files,
+message-group routing and two partition-policy integrations are green.
+Membership-consistency Test 7 now passes, but the file exhausts its unchanged
+240-second parent bound at Test 15 after repeated bootstrap delays; that failure
+remains open. Logs and checksums are retained in `coordinator-fixture-frozen/`.
+
+Four inherited contract repairs are independently reviewed WIP: explicit S6a
+planner-witness supersession, dead query vocabulary removal, committed readiness
+fixture construction, and removal of a helper-hidden SQL target trust fallback.
+The latter has a prior-source negative and 174 passing SQL caller assertions.
+`system-cache-reconciliation-ingress` owns the fifth guardrail finding: one
+private write primitive in the existing reconciliation owner replaces three
+query-execution writers and immediate optional-method/delete/remove ladders.
+Its implementation now has independent WIP approval, eleven final focused files
+with 1,164 reported assertions, separate receipt controls with 117 assertions,
+and all 33 static audits green. The approved six-file contract and twelve-file
+cache manifests remain frozen pending committed applicability. No Quest or epic
+receipt is admitted by these results.
 
 The real three-process no-admin witness passed on `205b5683f` at Lenovo's measured
 factor 2.3 with zero guarded admin calls. Its predecessor used factor 1.4, so this
@@ -195,7 +211,7 @@ is not endorsed as authoritative. Runtime definition/Cell CREATE, other retained
 reds, final E8, unchanged E9, publication and main merge remain open. The current
 integration session owns the next committed proof and remaining causal repairs.
 Comparative measurements follow acceptance and main merge. Adam's active stores
-remain under `/mnt/old/lab`; a fresh fleet check reports about 51 GiB available
+remain under `/mnt/old/lab`; a fresh fleet check reports about 52 GiB available
 there, and the migration rollback is retained.
 
 - Candidate base: `fffd9addfd600cf58bc0c40b1c7df43d5ba4a899`, clean on takeover;

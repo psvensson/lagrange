@@ -12,7 +12,9 @@ import {
   assignControlPlaneSystemTableGatewayDependencyResolution,
 } from './control-plane-system-table-gateway-dependency-resolution.js';
 import {
+  applyAuthoritativeSystemTableRowsToCache,
   assignControlPlaneSystemTableGatewayCacheReconciliation,
+  evictAuthoritativeAbsentSystemTableRowsFromCache,
 } from './control-plane-system-table-gateway-cache-reconciliation.js';
 import {
   assignControlPlaneSystemTableGatewayCapabilityDiagnostics,
@@ -27,9 +29,7 @@ import {
   assignControlPlaneSystemTableGatewayRequestCoalescing,
 } from './control-plane-system-table-gateway-request-coalescing.js';
 import {
-  applyAuthoritativeSystemTableRowsToCache,
   assignControlPlaneSystemTableGatewayQueryExecution,
-  evictAuthoritativeAbsentSystemTableRowsFromCache,
 } from './control-plane-system-table-gateway-query-execution.js';
 import {
   assignControlPlaneSystemTableGatewayReadDispatch,

@@ -7,7 +7,7 @@
     "bootstrap-membership": 338,
     "cdc-metadata": 70,
     "cli-tooling": 99,
-    "control-plane": 234,
+    "control-plane": 235,
     "convergence-topology": 79,
     "distributed-harness": 210,
     "examples-e2e": 8,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2599,
-  "digest": "fnv1a32-df37584a",
+  "censusSize": 2600,
+  "digest": "fnv1a32-974a92c1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-375c98b4",
+  "observationDigest": "fnv1a32-98a22645",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -737,6 +737,7 @@
     "test/control-plane/single-readiness-owner.receipt.test.js": "control-plane",
     "test/control-plane/startup-authority-serve-eligible-spread-satisfied.repro.test.js": "control-plane",
     "test/control-plane/startup-authority-snapshot.test.js": "control-plane",
+    "test/control-plane/system-cache-reconciliation-ingress.test.js": "control-plane",
     "test/control-plane/system-metadata-owner-modules.test.js": "control-plane",
     "test/control-plane/system-row-normalizers.test.js": "control-plane",
     "test/control-plane/task27-membership-publication-interleavings.property.test.js": "control-plane",
@@ -5410,6 +5411,11 @@
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/service/service-lifecycle-command-contract.js",
         "src/service/service-lifecycle-command-owner.js"
+      ]
+    },
+    "test/control-plane/system-cache-reconciliation-ingress.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway.js"
       ]
     },
     "test/control-plane/system-metadata-owner-modules.test.js": {
@@ -13259,6 +13265,14 @@
         "src/query/pg/postgres-wire-adapter.js",
         "src/query/query-constants.js",
         "test/helpers/pgwire-auth-handler.js"
+      ]
+    },
+    "test/query/provision-target-live-transport-rescue.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/query/provisioning-parent-deadline-dependency-guard.test.js": {

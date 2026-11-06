@@ -6,8 +6,9 @@
 // the CONSUMER INVENTORY: every behaviour-changing desired-RF consumer in the
 // partition/message-group plane resolves its target through
 // resolveDesiredReplicationFactor, an undeclared policy fails closed in the
-// non-releasing direction each consumer documents, the one recorded planner
-// divergence is WITNESSED and not silently repaired, and the self-hosted
+// non-releasing direction each consumer documents, the recorded planner
+// divergence is explicitly superseded by partition-placement-declared-target,
+// and the self-hosted
 // message-group hand-off (declared RF 3, recovery convergible) holds.
 //
 // It makes NO service-plane claim (service descriptors, join-admission
@@ -71,6 +72,8 @@ import {
 import {
   MessageGroupAssignment,
 } from '../../src/bootstrap/message-group-assignment.js';
+import {MovePlanner} from '../../src/rebalancer/move-planner.js';
+import {POLICY_ERROR_CODE} from '../../src/policy/policy-constants.js';
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(TEST_DIR, '..', '..');
@@ -705,16 +708,27 @@ test('undeclared-policy-fails-closed-in-consumers', async () => {
   assert.notEqual(reused.replicaCount, 1);
 });
 
-test('planner-placement-divergence-witnessed-not-repaired', () => {
-  // Constraint planner-exception-not-repaired: move-planner's divergent
-  // fallback is S6b scope. This receipt WITNESSES the divergence so a silent
-  // repair (or a silent widening) turns the quest red instead of passing
-  // unremarked.
+test('planner-placement-declared-target-supersedes-s6a-divergence', () => {
+  // R09: partition-placement-declared-target records the explicit S6b
+  // successor. The historical S6a seal and receipt anchor remain unchanged;
+  // this current-tree witness cannot mint that historical divergence receipt.
   const plannerSource = readRepoFile(MOVE_PLANNER_FILE);
-  assert.ok(plannerSource.includes(MOVE_PLANNER_DIVERGENT_FALLBACK),
-    'move-planner must still carry its recorded divergent fallback verbatim');
-  assert.ok(!plannerSource.includes(AUTHORITY_MODULE_TOKEN),
-    'move-planner must not import the authority behind this receipt\'s back');
+  assert.ok(!plannerSource.includes(MOVE_PLANNER_DIVERGENT_FALLBACK),
+    'the recorded default/alias fallback must stay retired');
+  const planner = new MovePlanner({
+    entityId: 'declared-p1', entityType: SERVICE_TYPE.PARTITION,
+    moveStateProvider: {},
+  });
+  for (const targetReplicaCount of [1, 3, 5]) {
+    assert.equal(planner.calculateTargetReplicaCount([], {
+      targetReplicaCount, minReplicaCount: 3, maxReplicaCount: 3,
+    }), targetReplicaCount, 'observed count and bounds cannot retarget a partition');
+  }
+  for (const policy of [{}, {replicaCount: 3}]) {
+    assert.throws(() => planner.calculateTargetReplicaCount([], policy), {
+      code: POLICY_ERROR_CODE.READ_UNAVAILABLE, deferRetry: true,
+    }, 'missing canonical target never falls back to an alias or default');
+  }
 });
 
 test('self-hosted-group-declared-policy-recovery-convergible', async () => {
@@ -768,8 +782,8 @@ test('no-consumer-fallback-grammar-outside-authority', () => {
   // spelled `<x>.replica_count || y` / `?? y` was the class-(1) grammar this
   // quest removes. The only permitted right operand is a DECLARED_* authority
   // export (declared-default grammar), and every consumer must import the
-  // authority. move-planner is deliberately absent from this census: its
-  // divergence is witnessed, not repaired (S6b).
+  // authority. The historical eleven-consumer census stays unchanged;
+  // partition-placement-declared-target owns the separate S6b planner proof.
   // A leading `!` makes the left side a boolean guard (`!x || x < min`),
   // which cannot yield a policy value; only un-negated reads are fallbacks.
   const fallbackPattern =

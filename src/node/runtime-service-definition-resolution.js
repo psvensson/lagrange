@@ -56,14 +56,6 @@ function readCachedServiceDefinition(handler, entityId) {
 
 function evictStaleCachedServiceDefinition(handler, gateway, entityId) {
   const cache = handler?.systemTableCache;
-  if (typeof cache?.delete === FUNCTION_TYPE) {
-    cache.delete(SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS, entityId);
-    return;
-  }
-  if (typeof cache?.remove === FUNCTION_TYPE) {
-    cache.remove(SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS, entityId);
-    return;
-  }
   const cached = readCachedServiceDefinition(handler, entityId);
   if (cached) {
     evictAuthoritativeAbsentSystemTableRowsFromCache(

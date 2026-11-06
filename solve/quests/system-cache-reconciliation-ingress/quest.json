@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "system-cache-reconciliation-ingress",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Authoritative subset repair, authoritative absence, committed partition CDC and full cache reconciliation mutate through one private apply primitive in the existing gateway cache-reconciliation owner. Immediate callers cannot choose old gateway methods or cache delete/remove alternatives. Provenance, error custody, full-observation receipts and durable CDC obligations remain unchanged.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/system-cache-reconciliation-ingress/evidence/receipt.json",
+      "requiredReceipts": [
+        "one-sanctioned-cache-ingress",
+        "provenance-and-error-custody",
+        "no-alternate-mutation-route",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "canonical-owner-and-port",
+      "statement": "Follow evidence/design-review.md. Remove all query-execution cache writers, the optional gateway mutation method ladder, and immediate SQL/runtime delete/remove ladders. Use one existing-owner writable capability resolver and tighten the sanctioned direct-call count from two to one without adding allowed files."
+    },
+    {
+      "id": "preserve-source-semantics",
+      "statement": "Pass operation, original row, causeId and explicit CDC timestamp unchanged. Authoritative absence carries only its owned mutation mode. Subset repair catches and logs each failed row; committed helper propagates to the existing partition catch; full reconciliation still propagates. No subset or CDC path may mint a complete-observation receipt or discharge durable obligations."
+    },
+    {
+      "id": "result-and-proof",
+      "statement": "The subset Boolean means a usable mutation target accepted the row batch, not that all rows changed or any durable work completed. Prove actual owner entry paths, read-only views with gateway targets, absent ports, throwing retired methods, throwing apply ports, real-cache tombstone/provenance and full receipt controls. Retain prior red guard and independently review exact implementation."
+    },
+    {
+      "id": "bounded-scope",
+      "statement": "Runtime definition read and eligibility authority, R17 node floor/wake, other corpus failures and E8/E9 remain separate. No deadline, retry, acceptance threshold or guard allowlist is widened."
+    }
+  ],
+  "sealedAt": "2b446a7ce2ac5166d5905e445e8405e4338eacb3"
+}

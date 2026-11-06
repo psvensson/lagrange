@@ -55,9 +55,6 @@ test(
         queryCalls += 1;
         return {rows: [{service_id: 's-auth', state: 'active'}]};
       },
-      applySystemTableRowsToCache() {
-        cacheMutationCalls += 1;
-      },
     };
 
     registerControlPlaneSystemTableGateway(gateway);

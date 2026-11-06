@@ -469,15 +469,6 @@ function applyTableResultToStore(store, gateway, tableName, result) {
 
 function evictStoreRow(store, gateway, systemTable, row) {
   if (!store || !row || typeof row !== LOCAL_STR_OBJECT) return;
-  const key = resolveSystemCacheRowKey(systemTable, row);
-  if (typeof store.delete === LOCAL_STR_FUNCTION && key) {
-    store.delete(systemTable, key);
-    return;
-  }
-  if (typeof store.remove === LOCAL_STR_FUNCTION && key) {
-    store.remove(systemTable, key);
-    return;
-  }
   evictAuthoritativeAbsentSystemTableRowsFromCache(gateway, store, systemTable, [row]);
 }
 

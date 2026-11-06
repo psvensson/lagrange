@@ -23,6 +23,7 @@ import {
   ADMISSION_MODE,
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {serveEligibilityFromFixture} from './serve-eligibility-test-support.js';
+import {createMockControlPlaneReadinessService} from '../rebalancer/test-helpers.js';
 
 const FIXTURE_NODE_ID = 'node-readiness-1';
 const FIXTURE_PARTITION_ID = 'partition-readiness-1';
@@ -291,8 +292,13 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
       {node_id: readyNodeId},
       {node_id: unreadyNodeId},
     ]);
-    const readinessService =
-      createControlledReadinessService(readinessMap, readinessCalls);
+    const readinessService = createMockControlPlaneReadinessService({
+      readNodeRows: () => {
+        readinessCalls.push({kind: 'committed'});
+        return cache.getAll(SYSTEM_TABLE_NAME.NODES);
+      },
+      callbacks: createControlledReadinessService(readinessMap, readinessCalls),
+    });
 
     const rebalancer = new UnifiedRebalancer({
       entityId: FIXTURE_PARTITION_ID,
@@ -336,23 +342,22 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
           'unready node should be excluded',
         );
         const decisionCalls = readinessCalls.filter((call) =>
-          call.kind !== 'liveness');
-        const livenessCalls = readinessCalls.filter((call) =>
-          call.kind === 'liveness');
+          call.kind === 'sync' || call.kind === 'async');
+        const committedCalls = readinessCalls.filter((call) =>
+          call.kind === 'committed');
         t.ok(
           decisionCalls.length > 0 && decisionCalls.every((call) =>
             call.options?.decisionDimension ===
               CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE),
           'steady-state rebalancer availability should record repairEligible decisions',
         );
-        t.same(
-          livenessCalls.map((call) => call.nodeId),
-          [readyNodeId],
-          'steady-state availability projects liveness before admitting the ready candidate',
+        t.equal(
+          committedCalls.length, 1,
+          'availability obtains its candidate rows from the committed owner',
         );
       });
 
-    await t.test('default service uses cache when none injected',
+    await t.test('missing committed reader cannot turn positive cache rows into candidates',
       async (t) => {
         const noReadiness = new UnifiedRebalancer({
           entityId: FIXTURE_PARTITION_ID,
@@ -383,9 +388,9 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
           cdcGroupPropagationService: createPublicationOwner(),
         });
         const available = noReadiness.getAvailableNodes();
-        t.ok(
-          available.length > 0,
-          'default readiness service should use cache',
+        t.same(
+          available, [],
+          'unavailable committed authority cannot be replaced by cache rows',
         );
       });
   });
@@ -1113,21 +1118,26 @@ test('regression: rebalancer cannot bypass canonical readiness',
     );
 
     let callCount = 0;
-    const blockingService = {
-      getNodeReadinessSync: (nodeId) => {
-        callCount++;
-        return buildReadiness(nodeId, false);
-      },
-      getNodeReadiness: async (nodeId) => {
-        callCount++;
-        return buildReadiness(nodeId, false);
-      },
-      getAllNodeReadiness: async () => [],
-    };
-
     const cache = createMinimalCache([
       {node_id: FIXTURE_NODE_ID},
     ]);
+    const blockingService = createMockControlPlaneReadinessService({
+      readNodeRows: () => {
+        callCount++;
+        return cache.getAll(SYSTEM_TABLE_NAME.NODES);
+      },
+      callbacks: {
+        getNodeReadinessSync: (nodeId) => {
+          callCount++;
+          return buildReadiness(nodeId, false);
+        },
+        getNodeReadiness: async (nodeId) => {
+          callCount++;
+          return buildReadiness(nodeId, false);
+        },
+        getAllNodeReadiness: async () => [],
+      },
+    });
 
     const rebalancer = new UnifiedRebalancer({
       entityId: FIXTURE_PARTITION_ID,

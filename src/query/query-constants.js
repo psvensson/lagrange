@@ -216,8 +216,6 @@ const QUERY_ERROR_MSG = Object.freeze({
     'Timed out waiting for table partition metadata for partition ',
   TABLE_PARTITION_SERVICE_METADATA_TIMEOUT_PREFIX:
     'Timed out waiting for partition service metadata for replica ',
-  TABLE_PARTITION_TARGET_NODE_TIMEOUT_PREFIX:
-    'Timed out waiting for active provisioning target nodes for partition ',
   TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX:
     'Timed out waiting for routable partition service for partition ',
   TABLE_PARTITION_LEADER_TIMEOUT_PREFIX:
@@ -319,8 +317,6 @@ const QUERY_LOG_MSG = Object.freeze({
   TABLE_PARTITION_PROVISION_START: 'Provisioning initial table partition replica',
   TABLE_PARTITION_PROVISION_SUCCESS: 'Initial table partition provisioning completed',
   TABLE_PARTITION_PROVISION_FAILED: 'Initial table partition provisioning failed',
-  TABLE_PARTITION_TARGET_NODE_FALLBACK_USED:
-    'Using degraded provisioning target-node fallback',
   TABLE_PARTITION_TRANSIENT_HOLD_WAIT:
     'Whole-cluster transient provisioning hold; waiting it out under the ' +
     'provisioning budget instead of failing the create',

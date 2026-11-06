@@ -1299,6 +1299,13 @@ test('SQLQueryEngine & RuntimeServiceDefinitionResolution - authoritative SQL ab
     'service definition initially cached',
   );
 
+  cache.delete = () => {
+    throw new Error('retired cache.delete must not run');
+  };
+  cache.remove = () => {
+    throw new Error('retired cache.remove must not run');
+  };
+
   const gateway = {
     async readAuthoritativeRows() {
       return {success: true, rows: []};

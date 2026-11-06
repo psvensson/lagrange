@@ -1,5 +1,4 @@
 import {
-  CDC_OPERATION,
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_GATEWAY_ERROR_CODE,
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -29,7 +28,6 @@ import {
   getSchemaByTableName,
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
-import {SYSTEM_TABLE_CACHE_MUTATION_MODE} from '../cache/cache-constants.js';
 import {runControlPlaneWrite} from './control-plane-write-identity.js';
 
 function buildSchemaFilteredSqlMutationEntries(tableName, data) {
@@ -88,10 +86,6 @@ function buildExplicitReadRequestKey(tableName, explicitKey, options) {
   }:${explicitKey}:${stableSerialize(buildReadExecutionContract(options))}`;
 }
 
-const LOCAL_STR_APPLYSYSTEMTABLECHANGE = 'applySystemTableChange';
-const CONTROL_PLANE_GATEWAY_APPLY_CACHE_FAILED =
-  'control_plane_gateway_apply_cache_failed';
-
 function buildImplicitReadRequestKey(tableName, sql, params, options) {
   return stableSerialize({
     kind:
@@ -103,37 +97,6 @@ function buildImplicitReadRequestKey(tableName, sql, params, options) {
     ...buildReadExecutionContract(options),
     ...buildReadPressureContract(options),
   });
-}
-
-function isWritableSystemTableCache(cache) {
-  return Boolean(
-    cache &&
-    typeof cache === 'object' &&
-    LOCAL_STR_APPLYSYSTEMTABLECHANGE in cache &&
-    typeof cache.applySystemTableChange === 'function',
-  );
-}
-
-function resolveWritableCacheTarget(gateway, writableCache) {
-  if (isWritableSystemTableCache(writableCache)) {
-    return writableCache;
-  }
-  const cdcTarget = gateway.resolveCdcIntegrationService?.()?.cacheMutationTarget;
-  return isWritableSystemTableCache(cdcTarget) ? cdcTarget : null;
-}
-
-function applySingleRowToCache(logger, targetCache, tableName, row) {
-  if (!row || typeof row !== 'object') {
-    return;
-  }
-  try {
-    targetCache.applySystemTableChange(tableName, CDC_OPERATION.UPSERT, row);
-  } catch (e) {
-    logger?.debug?.(CONTROL_PLANE_GATEWAY_APPLY_CACHE_FAILED, {
-      tableName,
-      error: e?.message ?? String(e),
-    });
-  }
 }
 
 const controlPlaneSystemTableGatewayQueryExecutionMethods = {
@@ -508,93 +471,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
     return this.executeQuery(firstArg, secondArg || [], thirdArg || {});
   },
 
-  applySystemTableRowsToCache(writableCache, tableName, rows) {
-    const targetCache = resolveWritableCacheTarget(this, writableCache);
-    if (!targetCache || !Array.isArray(rows)) {
-      return;
-    }
-    for (const row of rows) {
-      applySingleRowToCache(this.logger, targetCache, tableName, row);
-    }
-  },
 };
-
-function applyCommittedPartitionCdcEventToCache(
-  systemTableCache,
-  cdcEvent,
-  observedAtMs = Date.now(),
-) {
-  if (
-    !isWritableSystemTableCache(systemTableCache) ||
-    !cdcEvent?.tableName ||
-    !cdcEvent?.operation ||
-    !cdcEvent?.data
-  ) {
-    return;
-  }
-  systemTableCache.applySystemTableChange(
-    cdcEvent.tableName,
-    cdcEvent.operation,
-    cdcEvent.data,
-    {
-      causeId: cdcEvent.causeId,
-      cdcObservedAtMs: observedAtMs,
-    },
-  );
-}
-
-function applyAuthoritativeSystemTableRowsToCache(
-  gateway,
-  writableCache,
-  tableName,
-  rows,
-) {
-  if (typeof gateway?.applySystemTableRowsToCache === 'function') {
-    gateway.applySystemTableRowsToCache(writableCache, tableName, rows);
-    return isWritableSystemTableCache(writableCache);
-  }
-  const targetCache = resolveWritableCacheTarget(gateway || {}, writableCache);
-  if (!targetCache || !Array.isArray(rows)) {
-    return false;
-  }
-  for (const row of rows) {
-    applySingleRowToCache(gateway?.logger, targetCache, tableName, row);
-  }
-  return true;
-}
-
-function evictSingleRowFromCache(logger, targetCache, tableName, row) {
-  if (!row || typeof row !== 'object') {
-    return;
-  }
-  try {
-    targetCache.applySystemTableChange(tableName, CDC_OPERATION.DELETE, row, {
-      mutationMode:
-        SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_ABSENCE_RECONCILIATION,
-    });
-  } catch (e) {
-    logger?.debug?.(CONTROL_PLANE_GATEWAY_APPLY_CACHE_FAILED, {
-      tableName,
-      error: e?.message ?? String(e),
-    });
-  }
-}
-
-function evictAuthoritativeAbsentSystemTableRowsFromCache(
-  gateway,
-  writableCache,
-  tableName,
-  rows,
-) {
-  const targetCache = resolveWritableCacheTarget(gateway || {}, writableCache);
-  if (!targetCache || !Array.isArray(rows)) {
-    return false;
-  }
-  for (const row of rows) {
-    evictSingleRowFromCache(gateway?.logger, targetCache, tableName, row);
-  }
-  return true;
-}
 
 function assignControlPlaneSystemTableGatewayQueryExecution(targetClass) {
   Object.assign(
@@ -604,8 +481,5 @@ function assignControlPlaneSystemTableGatewayQueryExecution(targetClass) {
 }
 
 export {
-  applyAuthoritativeSystemTableRowsToCache,
-  applyCommittedPartitionCdcEventToCache,
   assignControlPlaneSystemTableGatewayQueryExecution,
-  evictAuthoritativeAbsentSystemTableRowsFromCache,
 };
