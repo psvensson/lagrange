@@ -55,10 +55,10 @@ import {
   gracefulShutdown,
   createVirginSeedBootstrapService,
   initializeTestEnvironment,
-  scaleByMachineFactor,
   stopAllRebalancers,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 
 const TEST_TIMEOUT_MS = 300000;
 const READY_TIMEOUT_MS = 12000;

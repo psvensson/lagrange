@@ -37,8 +37,8 @@ import {
   getUniquePort,
   seedStartupAuthorityOf,
   initializeTestEnvironment,
-  scaleByMachineFactor,
 } from '../integration/helpers/cluster-test-helpers.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 
 const SEED_RELEASE_BUDGET_MS = scaleByMachineFactor(15000);
 const CONTROL_PARTITION = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];

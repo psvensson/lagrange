@@ -46,8 +46,8 @@ import {buildSystemTableMutationSqlParts} from
 import {commitDurably} from '../../src/raft/raft-rs-durable-store.js';
 import {transitionOriginalRight} from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {cleanupTestEnvironment, createOwnedVirginSeedBootstrapService,
-  initializeTestEnvironment, scaleByMachineFactor} from
-  '../integration/helpers/cluster-test-helpers.js';
+  initializeTestEnvironment} from '../integration/helpers/cluster-test-helpers.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 import {RIGHT_COLUMNS, declaredRightKeys, readIssuedDeclaration, readOwnerRights} from
   '../test-helpers/original-allocation-durable-reader.js';
 import {openOriginalSeedReplica} from '../test-helpers/open-original-seed-replica.js';

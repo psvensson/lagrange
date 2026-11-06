@@ -1,18 +1,16 @@
 {
   "questId": "committed-readiness-fixture-custody",
-  "stage": "followup-fixture-and-machine-factor-timeout-verification",
+  "stage": "scale-by-machine-factor-import-fix-verification",
   "verdict": "approve",
   "verifier": "subagent:b53f502d-cb6d-4d3b-b17c-9e51dbbbcf82",
   "ruleSetRevision": 5,
-  "baseCommit": "af6c25132afd193494cf2ed9ff709f3cb6cfa338",
+  "baseCommit": "3ef020d0328c07afb9ed608fb78229c79acfba87",
   "productionFilesModified": 0,
   "files": {
-    "test/rebalancer/test-helpers.js": "5fca9a0e9a4136d75e386d6cba40a23604ece87f0cf1da2c4f6eae7eeb6903d2",
-    "test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js": "4ff87071e5665ad2411cdd18844119252228794544674213ad1c03dc020d010d",
-    "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "dbd01c7450901cf4184cd95087e3e65ab28f0a723af2428abfb08db331e8cb2b",
-    "test/test-helpers/seed-release-failure-custody-fixture.js": "e86e0f316576bd84d9f409b89fec7292434ec08eafbe6d66f080270307263657",
-    "test/bootstrap/retained-seed-original-handoff.integration.test.js": "7e9e3d72fad48010d943ac0b70ac9571ca3731b7827d80f983448e51c4fd1100",
-    "test/bootstrap/fresh-seed-activation.integration.test.js": "32aedd08c2fa85157cf8e01f21517086c368f052c79b02613288e7ec9db0955f",
-    "test/integration/critical-replica-placement-causal-trace.integration.test.js": "a8e4068c391b792a87e6abc101d1c155e39379c80754b5c686f6202b8f1060d2"
+    "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "1572dd597751fff6262836572ed6b19cf3925c6a6704fe26669ce4b818daf67d",
+    "test/test-helpers/seed-release-failure-custody-fixture.js": "68168f983ae4ddcb95aefaf424856149340b67903f9af6eeb34fe7d999aa9101",
+    "test/bootstrap/retained-seed-original-handoff.integration.test.js": "014f1bb2b49b3d5442fcaaab6e2ae3032a941dbddc8f09c2de821419aab160eb",
+    "test/bootstrap/fresh-seed-activation.integration.test.js": "a543c476b7dc1d2c9add28d4133c7adb204bb9b9c8fcdc2dac6ca60242128cfa",
+    "test/integration/critical-replica-placement-causal-trace.integration.test.js": "3affe2a79156164db0b8616e669ffc64edfb988e603cd2a0cc3141c4dc813993"
   }
 }

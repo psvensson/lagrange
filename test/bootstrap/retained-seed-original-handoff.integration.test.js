@@ -36,8 +36,8 @@ import {
   cleanupTestEnvironment,
   createRetainedSeedBootstrapService,
   initializeTestEnvironment,
-  scaleByMachineFactor,
 } from '../integration/helpers/cluster-test-helpers.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 import {SEED_RETAINED_EFFECT_STATE} from
   '../../src/bootstrap/seed-retained-effects-constants.js';
 import {

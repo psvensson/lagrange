@@ -51,9 +51,9 @@ import {
   getUniquePort,
   gracefulShutdown,
   initializeTestEnvironment,
-  scaleByMachineFactor,
   waitFor,
 } from '../../integration/helpers/cluster-test-helpers.js';
+import {scaleByMachineFactor} from '../../../scripts/test-machine-factor.js';
 import {createSeedQuerySurface} from
   '../../integration/helpers/seed-query-surface.js';
 import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
