@@ -1,7 +1,7 @@
 {
   "schema": "test-receipt/1",
   "quest": "dynamic-config-startup-owned-initialization",
-  "status": "fail",
+  "status": "pass",
   "receipts": [
     {
       "id": "history-and-supersession-recorded",
@@ -45,8 +45,28 @@
     },
     {
       "id": "independent-verification",
-      "passed": false,
-      "reason": "awaiting the verifier spawned by the lead"
+      "passed": true,
+      "detail": "Independent current-source review by subagent:/root/formation_independent_review approves bounded startup ownership and corrected subscribe-before-hydrate shutdown witness. No physical restart/replay or release acceptance; spent-bound certification remains strict."
     }
-  ]
+  ],
+  "currentApplicability": {
+    "sourceCommit": "9f9e039269bf04a6f19def12c5940cd8244df5df",
+    "sourceUnchangedFrom": "fffd9addfd600cf58bc0c40b1c7df43d5ba4a899",
+    "sourceSha256": {
+      "src/config/dynamic-config-service.js": "b0cad77897e3911f3a3f601b42480e4a5835c244ba4aaff067c651408731213c",
+      "src/config/dynamic-config-startup-wiring.js": "2f021447835a2f2c3e4ff1e27961c41141f87d1101819d195fd8933e113dc89a",
+      "src/config/raft-adaptive-timing-controller.js": "8ffb427a9d2d39b1af666065c9681193cbc106f9813e81d093b96dcb0ff6663b"
+    },
+    "witnessSha256": "007d753ea2cbd97b204914abf5d97e7b04eb7e6ddd32d77239f1b4910cb92b31",
+    "interaction": "dynamic-config-startup-ownership",
+    "evidence": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--lagrange-formation-takeover-20261105-evidence-r1.tar.gz",
+    "archiveSha256": "ea38366b8e7fdfb90123d5cfcb6589a75cd8443b628e6f5e41d9eda3f0a64019",
+    "currentResults": "Seven suites743assertions pass; final corrected witness147assertions rerun passes. Archive includes original stale-witness red and both green logs. Historical732 is not represented as current.",
+    "limits": [
+      "No physical restart was executed by these fixtures.",
+      "Replay convergence remains conditional on a later tail entry, as historically recorded.",
+      "A never-settling read may remain pending after shutdown; live watchers and loop custody are cancelled.",
+      "No startup bound or certification policy was changed."
+    ]
+  }
 }

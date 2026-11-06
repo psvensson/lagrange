@@ -91,6 +91,18 @@ test('front-matter: scalars, lists, empty lists and nested doneWhen', () => {
   assert.equal(parseFrontMatter('# no front').front, null);
 });
 
+test('front-matter preserves nested receipt lists and their sibling fields', () => {
+  const {front} = parseFrontMatter(['---', 'id: receipt-epic', 'doneWhen:',
+    '  probe: test-receipt', '  args:', '    file: receipt.json',
+    '    requiredReceipts:', '      - cause-repaired', '      - independent-review',
+    '    target: 0', '  explanation: receipt gate', 'quests:', '  - repair',
+    'authorizes:', '- src', '---'].join('\n'));
+  assert.deepEqual(front, {id: 'receipt-epic', doneWhen: {
+    probe: 'test-receipt', args: {file: 'receipt.json',
+      requiredReceipts: ['cause-repaired', 'independent-review'], target: 0},
+    explanation: 'receipt gate'}, quests: ['repair'], authorizes: ['src']});
+});
+
 test('disk: quest dirs, append-only log, epics skip README and template', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'solve-v2-store-'));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));

@@ -12,6 +12,20 @@ function deferredProgressError(operationId) {
   return error;
 }
 
+// Direct replay and retained recovery consume the same authoritative
+// lifecycle fact; timeout settlement need not wait for another startup scan.
+async function reconcileCreateAdmissionProgress(owner, evidence, lifecycleStatus) {
+  if (lifecycleStatus === ReplicaStatus.FAILED &&
+      [CREATE_ADMISSION_STATE.ADMITTED, CREATE_ADMISSION_STATE.MATERIALIZED]
+        .includes(evidence.admissionState)) {
+    return owner.markProgress(evidence, CREATE_ADMISSION_STATE.FAILED);
+  }
+  if (evidence.admissionState === CREATE_ADMISSION_STATE.ADMITTED) {
+    return owner.markMaterialized(evidence);
+  }
+  return evidence;
+}
+
 function isSupersededAdmissionError(error) {
   return error?.bootIncarnationSuperseded === true ||
     error?.code === CREATE_ADMISSION_ERROR_CODE.STALE;
@@ -277,6 +291,7 @@ async function recoverRetainedCreateAdmissionRows(
 }
 
 export {
+  reconcileCreateAdmissionProgress,
   isSupersededAdmissionError,
   recoverRetainedCreateAdmissionRow,
   recoverRetainedCreateAdmissionRows,

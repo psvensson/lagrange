@@ -20,6 +20,12 @@ const NODE_B = 'node-b';
 const NODE_C = 'node-c';
 const SYSTEM_PARTITION_ID = 'control_plane_publications-p1';
 const NON_PRIORITY_SYSTEM_PARTITION_ID = 'services-p1';
+const SEMANTIC_NOW_MS = 100_000;
+const COMMITTED_EPOCH = Object.freeze({
+  publicationEpoch: 1,
+  publicationId: 'committed-lease-witness',
+  readAtMs: SEMANTIC_NOW_MS,
+});
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -94,10 +100,12 @@ function createCache(options = {}) {
 function createRebalancer(overrides = {}) {
   const cache = overrides.cache || createCache();
   const partitionId = overrides.partitionId || SYSTEM_PARTITION_ID;
+  const committedNodeRows = overrides.committedNodeRows || cache.getAll('nodes');
   const rebalancer = new UnifiedRebalancer({
     entityId: partitionId,
     entityType: EntityType.PARTITION,
     nodeId: SEED_NODE_ID,
+    nowFn: overrides.nowFn,
     systemTableCache: cache,
     cdcIntegrationService: {
       insertSystemTableRow: async () => ({success: true}),
@@ -131,7 +139,15 @@ function createRebalancer(overrides = {}) {
         return {success: true, rows: []};
       },
     },
-    controlPlaneReadinessService: overrides.controlPlaneReadinessService || {
+    controlPlaneReadinessService: {
+      // This fixture substitutes the committed reader, not its lease decision.
+      answerCommittedNodes() {
+        return {
+          state: SERVE_ELIGIBILITY_STATE.READY,
+          epoch: COMMITTED_EPOCH,
+          nodeRows: committedNodeRows,
+        };
+      },
       getNodeReadinessSync(nodeId) {
         return {
           nodeId,
@@ -155,10 +171,158 @@ function createRebalancer(overrides = {}) {
           canonicalStartupNodeIds: [SEED_NODE_ID, NODE_B, NODE_C],
         };
       },
+      ...overrides.controlPlaneReadinessService,
     },
   });
   return rebalancer;
 }
+
+function createCommittedLeaseRig(committedLease, cachedLease = SEMANTIC_NOW_MS + 1000) {
+  let nowMs = SEMANTIC_NOW_MS;
+  const nodes = [SEED_NODE_ID, NODE_B, NODE_C].map((nodeId) => ({
+    node_id: nodeId,
+    status: 'active',
+    ready_lease_expires_at: nodeId === NODE_B ? cachedLease : SEMANTIC_NOW_MS + 1000,
+  }));
+  const cache = createCache({nodes});
+  const committedNodeRows = cache.getAll('nodes').map((row) => ({...row}));
+  const target = committedNodeRows.find((row) => row.node_id === NODE_B);
+  target.ready_lease_expires_at = committedLease;
+  const rebalancer = createRebalancer({
+    cache,
+    committedNodeRows,
+    partitionId: NON_PRIORITY_SYSTEM_PARTITION_ID,
+    nowFn: () => nowMs,
+    controlPlaneReadinessService: {getStartupAuthoritySnapshotSync: () => null},
+  });
+  return {
+    rebalancer,
+    target,
+    setNow: (value) => {
+      nowMs = value;
+    },
+  };
+}
+
+function availableNodeIds(rebalancer) {
+  return rebalancer.getAvailableNodes().map((node) => node.node_id).sort();
+}
+
+test('committed lease semantics reject coercible and non-integral timestamps at both consumers',
+  (t) => {
+    initEnv();
+    let coercions = 0;
+    const invalidLeases = [
+      {name: 'fractional', value: SEMANTIC_NOW_MS + 0.5},
+      {name: 'unsafe integer', value: Number.MAX_SAFE_INTEGER + 1},
+      {name: 'array', value: [SEMANTIC_NOW_MS + 1000]},
+      {name: 'coercible object', value: {valueOf() {
+        coercions += 1;
+        return SEMANTIC_NOW_MS + 1000;
+      }}},
+    ];
+    for (const {name, value} of invalidLeases) {
+      const {rebalancer} = createCommittedLeaseRig(value);
+      t.same(availableNodeIds(rebalancer), [NODE_C, SEED_NODE_ID],
+        `${name}: malformed committed lease cannot admit the node`);
+      const blocker = rebalancer.getCriticalSystemTopologySettlingBlocker();
+      t.equal(blocker?.reason, 'node_ready_lease_incomplete',
+        `${name}: malformed committed lease cannot settle critical topology`);
+      t.same(blocker?.unreadyNodeIds, [NODE_B], `${name}: exact committed node is held`);
+    }
+    t.equal(coercions, 0, 'lease evidence never executes caller coercion');
+    t.end();
+  });
+
+test('both lease consumers use committed evidence through expiry and a later committed renewal',
+  (t) => {
+    initEnv();
+    const rig = createCommittedLeaseRig(SEMANTIC_NOW_MS + 1, SEMANTIC_NOW_MS - 1);
+    const allNodeIds = [NODE_B, NODE_C, SEED_NODE_ID];
+    t.same(availableNodeIds(rig.rebalancer), allNodeIds,
+      'current committed lease admits despite an expired cache lease');
+    t.equal(rig.rebalancer.getCriticalSystemTopologySettlingBlocker(), null,
+      'current committed lease settles despite an expired cache lease');
+    rig.setNow(SEMANTIC_NOW_MS + 1);
+    t.same(availableNodeIds(rig.rebalancer), [NODE_C, SEED_NODE_ID],
+      'the exact committed expiry stops placement without a cache event');
+    t.equal(rig.rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      'node_ready_lease_incomplete', 'the same expiry stops critical settling');
+    rig.target.ready_lease_expires_at = SEMANTIC_NOW_MS + 2;
+    t.same(availableNodeIds(rig.rebalancer), allNodeIds,
+      'a later committed renewal restores useful placement');
+    t.equal(rig.rebalancer.getCriticalSystemTopologySettlingBlocker(), null,
+      'the same committed renewal restores critical settling');
+    const inverse = createCommittedLeaseRig(SEMANTIC_NOW_MS - 1);
+    t.same(availableNodeIds(inverse.rebalancer), [NODE_C, SEED_NODE_ID],
+      'fresh cached lease cannot rescue expired committed evidence');
+    t.equal(inverse.rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      'node_ready_lease_incomplete', 'fresh cache cannot settle expired committed evidence');
+    t.end();
+  });
+
+test('committed lease is necessary for placement but does not replace its readiness dimension',
+  (t) => {
+    initEnv();
+    const {rebalancer} = createCommittedLeaseRig(SEMANTIC_NOW_MS + 1);
+    rebalancer.controlPlaneReadinessService.getNodeReadinessSync = (nodeId) => ({
+      nodeId,
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: nodeId !== NODE_B,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: nodeId !== NODE_B,
+        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+      },
+      reasons: [],
+    });
+    t.same(availableNodeIds(rebalancer), [NODE_C, SEED_NODE_ID],
+      'a current lease does not overrule an explicit placement-readiness refusal');
+    t.equal(rebalancer.getCriticalSystemTopologySettlingBlocker(), null,
+      'critical settle consumes current committed leases without a circular serve requirement');
+    t.end();
+  });
+
+test('critical topology requires a nonempty committed answer and never consults a fallback reader',
+  (t) => {
+    initEnv();
+    let fallbackReads = 0;
+    const replies = [
+      {name: 'missing reader', reader: undefined},
+      {name: 'missing answer', reader: () => null},
+      {name: 'unknown answer', reader: () => ({state: 'unknown'})},
+      {name: 'missing rows', reader: () => ({state: SERVE_ELIGIBILITY_STATE.READY})},
+      {name: 'empty rows', reader: () => ({
+        state: SERVE_ELIGIBILITY_STATE.READY, epoch: COMMITTED_EPOCH, nodeRows: [],
+      })},
+    ];
+    for (const {name, reader} of replies) {
+      const cache = createCache();
+      const rebalancer = createRebalancer({
+        cache,
+        controlPlaneReadinessService: {
+          answerCommittedNodes: reader,
+          getServeEligibilityOwner() {
+            fallbackReads += 1;
+            return {answerCommittedNodes: () => ({
+              state: SERVE_ELIGIBILITY_STATE.READY, nodeRows: cache.getAll('nodes'),
+            })};
+          },
+        },
+      });
+      const getAll = cache.getAll;
+      cache.getAll = (table) => {
+        if (table === 'nodes') fallbackReads += 1;
+        return getAll(table);
+      };
+      const blocker = rebalancer.getCriticalSystemTopologySettlingBlocker();
+      t.equal(blocker?.reason, 'unavailable', `${name} cannot settle critical topology`);
+      if (name === 'empty rows') {
+        t.equal(blocker?.epoch, COMMITTED_EPOCH, 'unavailability retains the observed epoch');
+      }
+      t.same(availableNodeIds(rebalancer), [], `${name} cannot admit placement`);
+    }
+    t.equal(fallbackReads, 0, 'neither cache nor a second reader substitutes missing evidence');
+    t.end();
+  });
 
 test(
   'Attempt 3 (a): placeholder readiness for N but committed lease current -> settle blocker is null',

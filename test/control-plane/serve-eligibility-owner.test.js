@@ -12,7 +12,6 @@ const NODE_A = 'node-a';
 const INITIAL_NOW_MS = 1000;
 const LEASE_EXPIRES_AT_MS = 5000;
 const READ_TIMEOUT_MS = 2500;
-const READ_FAILURE_RETRY_MS = 100;
 const EPOCH_THREE = 3;
 const EPOCH_FOUR = 4;
 const EPOCH_FIVE = 5;
@@ -98,6 +97,69 @@ async function flushMicrotasks() {
   await Promise.resolve();
   await Promise.resolve();
 }
+
+for (const stopBeforeCompletion of [false, true]) {
+  test('ServeEligibilityOwner retains an in-flight publication wake through ' +
+    `read failure (shutdown: ${stopBeforeCompletion})`, async (t) => {
+    const {owner, state} = createHarness({
+      publications: [buildPublicationRow(EPOCH_THREE)],
+    });
+    t.teardown(() => owner.shutdown());
+    await owner.readServeEligibility();
+    const readRows = owner.readCommittedRows;
+    let release;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    owner.readCommittedRows = async (tableName) => {
+      const answer = await readRows(tableName);
+      await held;
+      return answer;
+    };
+    state.failReads = true;
+    const inFlight = owner.readServeEligibility();
+    state.failReads = false;
+    state.publications = [buildPublicationRow(EPOCH_FIVE)];
+    owner.noteSourceChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'UPDATE',
+      buildPublicationRow(EPOCH_FIVE));
+    owner.readCommittedRows = readRows;
+    if (stopBeforeCompletion) owner.shutdown();
+    release();
+    await inFlight;
+    await new Promise((resolve) => setImmediate(resolve));
+    t.equal(state.readCount, stopBeforeCompletion ? 4 : 6,
+      'one retained event authorizes one successor, unless its owner stopped');
+    t.equal(owner.answer(NODE_A).state, stopBeforeCompletion ?
+      SERVE_ELIGIBILITY_STATE.UNAVAILABLE : SERVE_ELIGIBILITY_STATE.READY);
+    if (stopBeforeCompletion) {
+      t.equal(owner.answer(NODE_A).reason,
+        SERVE_ELIGIBILITY_UNAVAILABLE_REASON.OWNER_STOPPED);
+      t.equal(state.timers.filter((timer) => !timer.cleared).length, 0);
+    } else {
+      t.equal(owner.answer(NODE_A).epoch.publicationEpoch, EPOCH_FIVE);
+      t.equal(isServeEligibilityAnswerEligible(owner.answer(NODE_A)), true);
+    }
+    const settledReadCount = state.readCount;
+    await new Promise((resolve) => setImmediate(resolve));
+    t.equal(state.readCount, settledReadCount, 'the wake is consumed once');
+  });
+}
+
+test('ServeEligibilityOwner cold NO_RECORD waits for an actual source change',
+  async (t) => {
+    const {owner, state} = createHarness({publications: []});
+    t.teardown(() => owner.shutdown());
+    await owner.readServeEligibility();
+    t.equal(owner.answer(NODE_A).reason,
+      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.NO_RECORD);
+    t.equal(state.timers.length, 0);
+    state.publications = [buildPublicationRow(EPOCH_FIVE)];
+    owner.noteSourceChange(TABLES.NODES, 'UPDATE', buildNodeRow());
+    await new Promise((resolve) => setImmediate(resolve));
+    t.equal(state.readCount, 4);
+    t.equal(owner.answer(NODE_A).epoch.publicationEpoch, EPOCH_FIVE);
+    t.equal(isServeEligibilityAnswerEligible(owner.answer(NODE_A)), true);
+  });
 
 test(
   'ServeEligibilityOwner expired lease while refresh fails becomes ineligible and does not arm a 0ms retry loop',
@@ -263,7 +325,7 @@ test(
 );
 
 test(
-  'ServeEligibilityOwner ignores non-membership publication rows and recovers from initial regressed or NO_RECORD reads via bounded retry',
+  'ServeEligibilityOwner ignores non-membership rows and recovers from regressed or NO_RECORD reads on demand and source change',
   async (t) => {
     // 1. Initial regressed read when record === null: noteSourceChange observes
     // epoch 5 before the first read completes, and the first read returns a
@@ -316,23 +378,14 @@ test(
     const activeRetryTimers = state.timers.filter((timer) => !timer.cleared);
     t.equal(
       activeRetryTimers.length,
-      1,
-      'bounded retry timer is armed when regressed read finishes with no newer trigger',
-    );
-    t.equal(
-      activeRetryTimers[0].delayMs,
-      READ_FAILURE_RETRY_MS,
-      'bounded retry timer uses READ_FAILURE_RETRY_MS (100ms)',
+      0,
+      'a regressed read without a committed lease arms no polling timer',
     );
 
     // 2. Stale NO_RECORD when minPublicationEpoch > 0 is also treated as a
-    // regressed read and arms a bounded retry timer.
+    // regressed read; an actual caller may demand a refresh.
     state.publications = [];
-    activeRetryTimers[0].fn();
-    await flushMicrotasks();
-    if (owner.inFlight) {
-      await owner.inFlight;
-    }
+    await owner.readServeEligibility();
 
     t.equal(owner.superseded, true, 'stale NO_RECORD keeps superseded = true');
     t.equal(
@@ -341,18 +394,18 @@ test(
       'stale NO_RECORD when minPublicationEpoch > 0 answers unavailable_stale',
     );
 
-    // 3. When the bounded retry timer fires after the source catches up to
-    // epoch 5, the owner adopts epoch 5 and clears superseded.
+    // 3. A node source change after authority catches up retains the refresh
+    // needed to adopt epoch 5; no diagnostic reader or timer drives progress.
     const nextRetryTimers = state.timers.filter((timer) => !timer.cleared);
-    t.equal(nextRetryTimers.length, 1, 'bounded retry timer re-armed after stale NO_RECORD');
+    t.equal(nextRetryTimers.length, 0, 'stale NO_RECORD creates no polling timer');
     state.publications = [buildPublicationRow(EPOCH_FIVE)];
-    nextRetryTimers[0].fn();
+    owner.noteSourceChange(TABLES.NODES, 'UPDATE', buildNodeRow());
     await flushMicrotasks();
     if (owner.inFlight) {
       await owner.inFlight;
     }
 
-    t.equal(owner.superseded, false, 'bounded retry clears superseded once source catches up');
+    t.equal(owner.superseded, false, 'source-triggered refresh adopts current authority');
     t.equal(owner.record?.epoch?.publicationEpoch, EPOCH_FIVE, 'epoch 5 record adopted');
     t.equal(isServeEligibilityAnswerEligible(owner.answer(NODE_A)), true);
 

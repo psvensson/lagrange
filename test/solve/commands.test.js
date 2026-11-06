@@ -87,6 +87,27 @@ function goGreen(root) {
   write(root, ORACLE, JSON.stringify({metric: 0, target: 0}));
 }
 
+test('a receipt epic seals a red quest and keeps every required receipt in its probe', (t) => {
+  const root = repo(t);
+  const receipt = 'solve/quests/demo/evidence/receipt.json';
+  write(root, 'solve/epics/demo-epic.md', ['---', `id: ${EPIC_ID}`, 'status: open',
+    'proof: deterministic', 'doneWhen:', '  probe: test-receipt', '  args:',
+    `    file: ${receipt}`, '    requiredReceipts:', '      - cause-repaired',
+    '      - independent-review', 'quests:', `  - ${QUEST_ID}`,
+    'authorizes:', '  - src/**', '---'].join('\n'));
+  write(root, receipt, JSON.stringify({schema: 'test-receipt/1', status: 'pass',
+    receipts: [{id: 'cause-repaired', passed: true}]}));
+  assert.match(start(root, {id: QUEST_ID}).sealedAt, /^[0-9a-f]{40}$/u);
+  const result = probe(root, {epic: EPIC_ID});
+  assert.equal(result.probe.measuring, true);
+  assert.equal(result.probe.done, false, 'missing review cannot become success');
+  assert.deepEqual(result.probe.outstanding, ['independent-review']);
+  write(root, receipt, JSON.stringify({schema: 'test-receipt/1', status: 'pass',
+    receipts: [{id: 'cause-repaired', passed: true},
+      {id: 'independent-review', passed: true}]}));
+  assert.equal(probe(root, {epic: EPIC_ID}).probe.done, true);
+});
+
 test('start refuses a green or non-measuring probe; a red one seals', (t) => {
   refuses(() => start(repo(t, {metric: 0}), {id: QUEST_ID}), /green probe/u);
   const unmeasured = repo(t);

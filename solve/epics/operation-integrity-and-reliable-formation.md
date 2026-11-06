@@ -22,6 +22,7 @@ quests:
   - explicit-single-replica-partition-configuration
   - parallel-query-read-authority-propagation
   - admin-diagnostic-owner-consolidation
+  - replica-create-timeout-replay-custody
 authorizes:
   - src
   - test
@@ -55,10 +56,10 @@ node within preregistered bounds.
   full Queryable Core completion (`RM-0.2.9-stable-core-completion`). Three-node
   formation correctness in `0.4.1` does not claim five-node comparative
   performance.
-- **Integration owner:** `local-integration-owner` on composed branch
-  `work/composed-05-comparison-readiness-20261103` (mirrored to
-  `wip/handover-20261103/comparison-readiness` and
-  `wip/handover-20261103/composed-05-comparison-readiness`).
+- **Integration owner:** the current local integration session on
+  `work/composed-05-comparison-readiness-20261103`, now composing the reviewed
+  `work/formation-takeover-20261105` lineage. Earlier handover mirrors preserve
+  historical checkpoints; they do not identify this unpushed candidate.
 - **Reviewed baseline SHA:** `77e5b4c5ba01826f2ddceecb088f56fcd27b436e`.
 - **Starting candidate SHA at E0:** `63e4a854b783d4b3176b3ecd123677384c96fafa`
   (one commit ahead of `77e5b4c5ba01826f2ddceecb088f56fcd27b436e`, landing
@@ -72,6 +73,56 @@ node within preregistered bounds.
   `solve/quests/serve-eligibility-committed-epoch-read/quest.json`,
   `solve/quests/fresh-create-release-authority-from-committed-operation/quest.json`,
   and `solve/quests/replica-admission-from-committed-operation/quest.json`.
+
+## Reconciled integration status (6 November)
+
+The two work branches diverged after `fffd9add`. The current composition retains
+all seven reviewed takeover commits through `5e1d3223f` together with the
+composed branch through `827f7be7d`. Production edits do not overlap. Both
+lineages of the formation Quest log are retained byte-for-byte, in their
+original order; earlier timestamps below are historical evidence, not current
+acceptance. Generated inventories and test metadata are regenerated from the
+combined tree.
+
+The takeover contributes schema-job retry custody for temporary provisioning
+refusals (`79088e840`, simplified by `9f9e03926`), retained serving-owner source
+wakes without the 100 ms polling arm (`340e34e48`), exact FAILED lifecycle/replay
+custody and the nested epic YAML parser (`9ee285e1a`), and committed-node lease
+consumption without cache fallback (`5e1d3223f`). Its diagnostics/CDC helper
+extractions and genuine three-process no-admin witness (`2f344fde5`), plus
+startup-owner evidence (`d717874ca`), are retained. The bounded completed-handoff
+E3 witness and its disabled-trigger control remain separate from the new
+three-process proof. The E6 every-ACK negative, native proposal-count proof and
+seven-field E7 accounting remain intact.
+
+The three bounded prerequisites `explicit-single-replica-partition-configuration`,
+`parallel-query-read-authority-propagation` and
+`admin-diagnostic-owner-consolidation` have each passed independent review and
+normal `solve.js land`. Their receipts bind their bounded evidence to source
+`26f786b2`; none closes E8, E9 or publication. The takeover's broader gates
+remain red: 25 failed files in its 1,350-file change cone, plus six distinct
+failures in the earlier Q6 set. Reproduction on a predecessor does not waive
+any of these failures. Final F10 liveness lab proof, startup/replay Quest
+landing, combined-tree verification and broader publication proof remain due.
+
+The current transaction-facade blocker is also retained. The single permitted
+unchanged `26f786b2` standalone retry again timed out at I2.1. A separately
+instrumented, product-source-identical diagnostic passed I2.1 but failed I2.2b
+(expected one callback step, observed zero; 48/49 TAP assertions passed).
+Complete logs show `replica_operations-p1` release refusing
+`current_control_owner_fact`, then recovering after about a minute. This is
+bounded-progress evidence, not proof of a permanent deadlock or of the exact
+nested control-owner cause. Tracing the declared priority target and table-policy
+authority, and examining the existing release owners, remain investigations;
+no speculative repair or deadline relaxation is admitted.
+
+Adam's completed migration keeps both active container stores and rollback data
+under `/mnt/old/lab`; the last direct check found 12 GiB free on root and 52 GiB
+on `/mnt/old`. E9 retains `adam-laptop,lenovo-laptop,tv-dator`, the same physical
+scenario and three consecutive fresh-state successes on one final candidate.
+The takeover's temporary `adams-gamla` substitution and low-space warning are
+historical. No current-candidate E9 run, publication, main merge or comparative
+measurement has completed. Comparative measurements follow the main merge.
 
 ## Current proof package (6 November)
 
@@ -238,7 +289,7 @@ node within preregistered bounds.
 | `E5` Deferred join, config & runtime handoffs | Deferred join message-group activation retains owned retry trigger; subscribe-before-hydrate config initialization; `WasmComponentDriver.#prepareRequestCell` generation fence before and after `stop(serviceId)` | `src/bootstrap/node-joining-message-group-runtime-delegation.js`, `src/config/raft-adaptive-timing-controller.js`, `src/config/dynamic-config-service.js`, `src/runtime/wasm-component-driver.js` | Retained `deferredMessageGroupServiceReplicaIds` re-drives on bounded timer until empty or shutdown; `WasmComponentDriver.#prepareRequestCell` aborts after `await stop(serviceId)` if service generation changed | `test/bootstrap/node-joining-service-message-group-activation.test.js`, `test/config/raft-adaptive-timing-controller.test.js`, `test/config/dynamic-config-service.test.js`, `test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js` | Complete (`65cc65b62`) |
 | `E6` CDC fairness, exact coverage & hydration handoff | 3+ contender FIFO slice fairness with live credit retention across delayed ACK continuations and lifecycle-only contender retirement; bounded `<= 256` hydration ACK batches with actual-prefix pressure preserved; absolute retry timer deadlines (`dueAtMs`); pre-hydration invocation retirement via progress-cell `logIndex` and verified `command.acknowledged` batches | `src/topology/cdc-group-propagation-durable-delivery.js`, `src/topology/cdc-group-propagation-service.js`, `src/partition/partition-cdc-obligation-progress.js`, `src/partition/partition-cdc-obligation-delivery.js` | Reservation hold expiry (`300ms`) allows ready work without dropping a live contender's FIFO queue position or credit; actual owed-prefix pressure (`readOwedCdcHead`) bounds retained delivered rows; retry timer preemption compares absolute `dueAtMs`; `command.acknowledged` batches verified `<= 256` | `test/topology/cdc-group-propagation-service.test.js`, `test/topology/cdc-group-propagation-proposal-cost.test.js`, `test/partition/cdc-hydration-live-handoff.test.js`, `test/partition/partition-cdc-obligation-reclamation.test.js` | Bounded fixes and explicit ACK/proposal measurements independently approved; E8/E9 pending |
 | `E7` First-cause diagnostics & required-domain evaluation | Bounded key-based diagnostic aggregation retaining `firstSample`, `latestSample`, original cause, boundary, owner, trigger, and explicit truncation/eviction loss accounting outward on `AdminControlSnapshot`; complete keyed readiness disposition over published required node domain | `src/control-plane/control-plane-diagnostics-ledger.js`, `src/control-plane/authoritative-node-evidence-reconciler.js`, `src/control-plane/control-plane-readiness-diagnostics-eligibility.js`, `src/control-plane/control-plane-system-table-gateway-dependency-resolution.js`, `src/admin/admin-control-snapshot-readiness-diagnostics-methods.js`, `src/admin/admin-control-snapshot-control-plane-diagnostics.js`, `src/control-plane/control-plane-readiness-service-node-methods.js` | Every required node in published membership receives an explicit readiness entry; `ControlPlaneDiagnosticsLedger` bounds payload values, preserves distinct-key root causes under secondary churn, and exposes explicit loss accounting (`evictedKeys`, `overwrittenEntries`, `droppedSamples`, `truncatedStrings`, `truncatedArrays`, `truncatedObjects`, `totalLossEvents`) outward on `AdminControlSnapshot` | `test/control-plane/control-plane-readiness-service-cluster-health-and-recovery-diagnostics.test.js`, `test/admin/admin-control-snapshot.test.js` | Bounded mechanism verified at `fffd9add`; outward field names reconciled; E8/E9 pending |
-| `E8` Composed verification on faithful substrates | Deterministic repros with negative controls and process-isolated embedded-cluster verification covering E1–E7 on one canonical candidate SHA | `test/closure/registry.json`, `test/integration/helpers/embedded-cluster-harness.js`, focused unit/integration suites | Fresh independent verifier must bind approval and negative controls to the final committed candidate; earlier approvals retain only their measured scope | Focused + embedded-cluster tests (`test/integration/public-application-database-multinode.integration.test.js`) + independent verification `approve` | In progress |
+| `E8` Composed verification on faithful substrates | Deterministic repros with negative controls and process-isolated embedded-cluster verification covering E1–E7 on one canonical candidate SHA | `test/closure/registry.json`, `test/integration/helpers/embedded-cluster-harness.js`, focused unit/integration suites | Fresh independent verifier must bind approval and negative controls to the final committed candidate; earlier approvals retain only their measured scope | Focused witnesses, genuine three-process `test/integration/fresh-formation-without-admin-polling.integration.test.js`, native owner-wake negative in `test/convergence/dt6-publication-quorum-failback-network.test.js`, public application fixtures and exact-candidate independent verification `approve` | In progress |
 | `E9` Unchanged physical acceptance & closure | Three consecutive green fresh-state runs of `fresh-formation-user-table-routability` on `local-three-node.json` (`adam-laptop,lenovo-laptop,tv-dator`) and admitted proof receipt | `scripts/lab.js`, `solve/quests/fresh-formation-user-table-routability/evidence/receipt.json` | Full node logs, harness reports, and admitted receipt bound to exact candidate SHA | `node scripts/lab.js harness run fresh-formation-user-table-routability --base test/distributed/config/local-three-node.json --nodes adam-laptop,lenovo-laptop,tv-dator` (x3 consecutive, frozen clean candidate) + `node scripts/solve.js probe --id fresh-formation-user-table-routability` | In progress |
 
 ## Decision log
@@ -262,3 +313,9 @@ node within preregistered bounds.
   `dueAtMs` retry deadlines + `command.acknowledged` batch verification (`E6`),
   and bounded cost / progress-without-admin-polling / diagnostic loss accounting
   / receipt applicability (`E3`/`E4`/`E7`/`E8`/`E9`).
+- 2026-11-05 takeover: preserved the sealed Quest and previous failures;
+  corrected the E8 evidence ceiling and registered the hydration interaction
+  witness. Diagnostics aggregation and CDC lane bookkeeping are extracted
+  within their existing owners to satisfy the scoped size rule. The physical
+  host substitution above resolves a disk preflight refusal without deleting
+  another run's data, lowering the requirement, or changing the scenario.

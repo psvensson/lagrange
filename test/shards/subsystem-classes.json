@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 119,
+    "admin-diagnostics": 120,
     "architecture-governance": 21,
-    "bootstrap-membership": 337,
+    "bootstrap-membership": 338,
     "cdc-metadata": 70,
     "cli-tooling": 99,
     "control-plane": 233,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2592,
-  "digest": "fnv1a32-963fc8cf",
+  "censusSize": 2594,
+  "digest": "fnv1a32-92ed9498",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2efc6f25",
+  "observationDigest": "fnv1a32-44f5ff16",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1109,6 +1109,7 @@
     "test/integration/debug-join-flow.test.js": "admin-diagnostics",
     "test/integration/developer-journey-j1-j2-j3.integration.test.js": "services-runtime",
     "test/integration/failure-scenarios.integration.test.js": "distributed-harness",
+    "test/integration/fresh-formation-without-admin-polling.integration.test.js": "admin-diagnostics",
     "test/integration/http-to-call-composition.integration.test.js": "services-runtime",
     "test/integration/insert-or-ignore-raft-replay.integration.test.js": "storage-raft",
     "test/integration/lagrange-server-npm-package.integration.test.js": "release-packaging",
@@ -1287,6 +1288,7 @@
     "test/node/replica-cleanup-token-authority.test.js": "bootstrap-membership",
     "test/node/replica-create-admission-owner.test.js": "bootstrap-membership",
     "test/node/replica-create-admission-recovery.test.js": "bootstrap-membership",
+    "test/node/replica-create-timeout-replay-custody.test.js": "bootstrap-membership",
     "test/node/replica-executor-activation-handler-boundary.test.js": "bootstrap-membership",
     "test/node/replica-failed-create-cleanup-generation.test.js": "bootstrap-membership",
     "test/node/replica-handler-cache-state.test.js": "bootstrap-membership",
@@ -9081,6 +9083,23 @@
         "TAP"
       ]
     },
+    "test/integration/fresh-formation-without-admin-polling.integration.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/control-plane/membership-publication-row-contract.js",
+        "src/control-plane/system-row-normalizers.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/distributed/config/local.json",
+        "test/integration/helpers/embedded-node-worker.js",
+        "test/integration/helpers/forbid-admin-snapshot-preload.js"
+      ],
+      "env": [
+        "NODE_OPTIONS"
+      ]
+    },
     "test/integration/http-to-call-composition.integration.test.js": {
       "files": [
         "src/bootstrap/shared/call-cell-invocation-setup.js",
@@ -10716,6 +10735,18 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-status.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/node/replica-create-timeout-replay-custody.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schema-sql.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/executor-outcome-emitter.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-status.js",
+        "test/test-helpers/replica-create-admission-recovery-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -13413,11 +13444,14 @@
     "test/query/schema-provisioning-job-owner.test.js": {
       "files": [
         "src/bootstrap/system-table-schema-shared-constants.js",
+        "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/owner-contract-outcome.js",
         "src/control-plane/timeout-budget.js",
         "src/query/schema-provisioning-intent.js",
         "src/query/schema-provisioning-job-constants.js",
-        "src/query/table-creation-service.js"
+        "src/query/table-creation-service.js",
+        "src/runtime/pgwire-protocol-constants.js",
+        "src/runtime/pgwire-protocol-handler.js"
       ]
     },
     "test/query/select-no-from.test.js": {
@@ -13591,6 +13625,7 @@
     "test/query/sql-query-engine-provision-partition-quorum.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/owner-contract-outcome.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-write-kernel.js",

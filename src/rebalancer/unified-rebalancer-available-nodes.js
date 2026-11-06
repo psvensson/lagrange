@@ -14,6 +14,8 @@ import {
   resolvePublishedActiveNodeIds,
 } from '../control-plane/active-node-publication-snapshots.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
+import {projectNodeLivenessSemantics} from
+  '../control-plane/node-liveness-semantic-projection.js';
 import {
   AVAILABLE_PLANNING_SURFACE_ORDER,
   hasAvailablePriorityRecoveryPlanningProvider as hasAvailablePlanningProvider,
@@ -23,7 +25,6 @@ import {
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DIMENSION,
-  NodeStatus,
   SYSTEM_TABLE_NAME,
   UNIFIED_REBALANCER_LITERAL,
   buildPriorityRecoveryOperationAssessment,
@@ -183,7 +184,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
   }
 
   /**
-   * Filter cache-backed nodes through canonical readiness, optionally
+   * Filter committed nodes through canonical readiness, optionally
    * constraining membership to a caller-provided node-id set.
    *
    * @param {Set<string>|null} constrainedNodeIds
@@ -265,15 +266,8 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     readinessDecisionDimension,
     now,
   ) {
-    if (node?.status !== NodeStatus.ACTIVE) {
-      return false;
-    }
-    const leaseExpiresAtMs = Number(
-      node.ready_lease_expires_at ??
-      node.readyLeaseExpiresAt ??
-      node.readyLeaseExpiresAtMs,
-    );
-    if (!Number.isFinite(leaseExpiresAtMs) || leaseExpiresAtMs <= now) {
+    const liveness = projectNodeLivenessSemantics({nodeRow: node, nowMs: now}).projection;
+    if (liveness.readyNow !== true) {
       return false;
     }
     if (

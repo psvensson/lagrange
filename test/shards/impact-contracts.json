@@ -206,12 +206,15 @@
         "src/partition/partition-service-row-owner.js",
         "src/bootstrap/phases/seed-partitions-phase.js",
         "src/bootstrap/rejoin-hints-durable-evidence.js",
-        "src/cdc/cdc-integration-service-mutations.js"
+        "src/cdc/cdc-integration-service-mutations.js",
+        "src/node/replica-handler-create-admission-methods.js",
+        "src/node/replica-create-admission-owner.js"
       ],
       "tests": [
         "test/node/replica-lifecycle-durable-generation.test.js",
         "test/node/replica-handler.test.js",
-        "test/partition/partition-service-cleanup-token-schema.test.js"
+        "test/partition/partition-service-cleanup-token-schema.test.js",
+        "test/node/replica-create-timeout-replay-custody.test.js"
       ]
     },
     "failed-create-target-authoritative-cleanup": {
@@ -281,7 +284,10 @@
         "src/rebalancer/storage-capacity-accounting-service.js",
         "src/rebalancer/storage-capacity-semantic-projection-owner.js",
         "src/rebalancer/unified-rebalancer-available-nodes.js",
-        "src/workflow/owner-key-reconcile-queue.js"
+        "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
+        "src/workflow/owner-key-reconcile-queue.js",
+        "src/control-plane/serve-eligibility-owner.js",
+        "src/control-plane/control-plane-readiness-serve-eligibility-methods.js"
       ],
       "tests": [
         "test/control-plane/single-readiness-owner.receipt.test.js",
@@ -296,9 +302,12 @@
         "test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js",
         "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js",
         "test/rebalancer/startup-authority-available-node-contract.test.js",
+        "test/rebalancer/critical-topology-committed-lease.test.js",
         "test/rebalancer/storage-capacity-accounting-service.test.js",
         "test/rebalancer/storage-capacity-semantic-projection-owner.test.js",
-        "test/workflow/owner-key-reconcile-queue.test.js"
+        "test/workflow/owner-key-reconcile-queue.test.js",
+        "test/control-plane/serve-eligibility-owner.test.js",
+        "test/query/schema-provisioning-job-owner.test.js"
       ]
     },
     "active-gate-convergence": {
@@ -327,7 +336,8 @@
         "test/convergence/dt6-publication-ack-recovery-gate-network.test.js",
         "test/convergence/dt6-publication-quorum-failback-network.test.js",
         "test/convergence/dt6-publication-failback-pct-search.test.js",
-        "test/convergence/membership-publication-owner-driver-host.test.js"
+        "test/convergence/membership-publication-owner-driver-host.test.js",
+        "test/integration/fresh-formation-without-admin-polling.integration.test.js"
       ]
     },
     "admin-cache-owner-lifecycle": {
@@ -407,7 +417,7 @@
       ]
     },
     "CL-041": {
-      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
+      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft \u00a75.2 Election Safety).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -418,7 +428,7 @@
       ]
     },
     "CL-040": {
-      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
+      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft \u00a75.3 Log Matching).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -429,7 +439,7 @@
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft \u00a75.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -1421,7 +1431,8 @@
         "src/utils/canonical-json-data.js",
         "src/topology/cdc-group-propagation-retry-wait-report.js",
         "src/transport/transport-query-semantic-outcome.js",
-        "src/partition/partition-cdc-owed-admission.js"
+        "src/partition/partition-cdc-owed-admission.js",
+        "src/partition/partition-cdc-obligation-lane.js"
       ],
       "tests": [
         "test/cdc/cdc-delivery-outcome.test.js",
@@ -1467,7 +1478,8 @@
         "test/partition/partition-cdc-prepared-capacity.test.js",
         "test/partition/partition-cdc-drain-admission.test.js",
         "test/partition/partition-cdc-owed-admission-native.test.js",
-        "test/message-group/message-group-peer-address-committed-configuration.test.js"
+        "test/message-group/message-group-peer-address-committed-configuration.test.js",
+        "test/partition/cdc-hydration-live-handoff.test.js"
       ]
     },
     "router-delivery-envelope": {
@@ -1925,18 +1937,26 @@
       ]
     },
     "replica-create-failure-claim-and-retry-type": {
-      "description": "A failed replica CREATE whose admission input may exist (runtime opened, or its own admissible durable row resumed) is published as a terminal create failure carrying the failed-create cleanup claim and no deferRetry; only a create whose admission input is absent may stay unclaimed and re-dispatchable. The owner-path guard and the fresh-create witnesses exercise that rule.",
+      "description": "A failed replica CREATE whose admission input may exist (runtime opened, or its own admissible durable row resumed) is published as a terminal create failure carrying the failed-create cleanup claim and no deferRetry; only a create whose admission input is absent may stay unclaimed and re-dispatchable. The owner-path guard and the fresh-create witnesses exercise that rule. A real PENDING timeout during materialization confirmation reconciles exact lifecycle FAILED into admission FAILED before legal attempt rotation; direct identical replay uses the same authority as retained recovery. Terminal, claimed-cleanup, CLOSED, boot and identity fences remain effective.",
       "owners": [
         "src/node/replica-create-admission-input.js",
         "src/node/replica-handler-create-methods.js",
         "src/node/replica-handler-create-status-methods.js",
-        "src/node/replica-handler-create-admission-methods.js"
+        "src/node/replica-handler-create-admission-methods.js",
+        "src/node/replica-create-admission-owner.js",
+        "src/node/replica-create-admission-retained-recovery.js",
+        "src/node/replica-state-machine",
+        "src/node/replica-handler-failed-create-publication.js"
       ],
       "tests": [
         "test/node/replica-handler-owner-path-bypass.test.js",
         "test/node/fresh-create-resumed-syncing-claim.test.js",
         "test/node/replica-handler.test.js",
-        "test/node/fresh-create-authority-unavailability-native.integration.test.js"
+        "test/node/fresh-create-authority-unavailability-native.integration.test.js",
+        "test/node/replica-create-timeout-replay-custody.test.js",
+        "test/node/replica-create-admission-recovery.test.js",
+        "test/node/replica-create-admission-owner.test.js",
+        "test/rebalancer/terminal-failed-add-target-cleanup.test.js"
       ]
     },
     "fresh-create-release-authority": {
@@ -1954,6 +1974,43 @@
         "test/node/fresh-create-authority-unavailability-native.integration.test.js"
       ]
     },
+    "dynamic-config-startup-ownership": {
+      "description": "The config service fences late reads against CDC, startup wiring retains late application and its single controller, and the controller subscribes before hydration while shutdown detaches every watcher and prevents later loop startup; existing wait-bound certification remains strict.",
+      "owners": [
+        "src/config/dynamic-config-service.js",
+        "src/config/dynamic-config-startup-wiring.js",
+        "src/config/raft-adaptive-timing-controller.js",
+        "src/entrypoint-runtime-shutdown-lifecycle.js"
+      ],
+      "tests": [
+        "test/config/dynamic-config-startup-owned-initialization.test.js",
+        "test/config/dynamic-config-startup-wait-bound-spent.test.js",
+        "test/config/dynamic-config-startup-wiring.test.js",
+        "test/config/dynamic-config-cdc-update-shape.test.js",
+        "test/config/dynamic-config-service.test.js",
+        "test/config/raft-adaptive-timing-controller.test.js",
+        "test/distributed/harness/__tests__/scenario-certification.test.js"
+      ]
+    },
+    "schema-provisioning-quorum-refusal": {
+      "description": "A committed-cohort quorum refusal remains nonterminal in the canonical durable schema owner and reaches SQL clients as the current typed DEFERRED/RETRY observation; the existing fenced retry completes the same intent when quorum becomes available. Committed refreshes retain source events across in-flight reads; no polling timer grants a cohort or substitutes for the schema retry.",
+      "owners": [
+        "src/query/sql-query-engine-initial-partition-provisioning.js",
+        "src/query/sql-query-engine-provision-target-methods.js",
+        "src/query/schema-provisioning-job-owner.js",
+        "src/query/table-creation-service-durable-job.js",
+        "src/runtime/pgwire-protocol-handler.js",
+        "src/control-plane/serve-eligibility-owner.js",
+        "src/control-plane/control-plane-readiness-serve-eligibility-methods.js"
+      ],
+      "tests": [
+        "test/query/sql-query-engine-provision-partition-waits.test.js",
+        "test/query/sql-query-engine-provision-partition-quorum.test.js",
+        "test/query/schema-provisioning-job-owner.test.js",
+        "test/query/schema-provisioning-transient-collision.test.js",
+        "test/runtime/pgwire-schema-provisioning-job.test.js"
+      ]
+    },
     "serve-eligibility-committed-epoch": {
       "description": "Per-node serve eligibility has one owner: the readiness owner answers it from a committed, leader-required read of the nodes rows and the latest published cluster_membership epoch, as a typed answer at that epoch bounded by the committed lease; cache changes are triggers only, and user-table serve routing consumes that answer and nothing else.",
       "owners": [
@@ -1966,7 +2023,9 @@
       "tests": [
         "test/control-plane/serve-eligibility-committed-epoch-read.test.js",
         "test/query/query-executor-serve-eligibility-routing.test.js",
-        "test/control-plane/readiness-routing-heartbeat-window.test.js"
+        "test/control-plane/readiness-routing-heartbeat-window.test.js",
+        "test/control-plane/serve-eligibility-owner.test.js",
+        "test/query/schema-provisioning-job-owner.test.js"
       ]
     }
   },
@@ -2157,7 +2216,9 @@
             "src/node/replica-handler-create-methods.js",
             "src/bootstrap/phases/seed-partitions-phase.js",
             "src/bootstrap/rejoin-hints-durable-evidence.js",
-            "src/cdc/cdc-integration-service-mutations.js"
+            "src/cdc/cdc-integration-service-mutations.js",
+            "src/node/replica-handler-create-admission-methods.js",
+            "src/node/replica-create-admission-owner.js"
           ]
         }
       ],
@@ -2165,7 +2226,8 @@
       "witnessTests": [
         "test/node/replica-lifecycle-durable-generation.test.js",
         "test/node/replica-handler.test.js",
-        "test/partition/partition-service-cleanup-token-schema.test.js"
+        "test/partition/partition-service-cleanup-token-schema.test.js",
+        "test/node/replica-create-timeout-replay-custody.test.js"
       ]
     },
     "failed-create-target-authoritative-cleanup": {
@@ -2252,7 +2314,8 @@
             "src/rebalancer/rebalance-coordinator.js",
             "src/rebalancer/storage-capacity-accounting-service.js",
             "src/rebalancer/storage-capacity-semantic-projection-owner.js",
-            "src/rebalancer/unified-rebalancer-available-nodes.js"
+            "src/rebalancer/unified-rebalancer-available-nodes.js",
+            "src/rebalancer/unified-rebalancer-critical-topology-methods.js"
           ]
         },
         {
@@ -2271,6 +2334,7 @@
         "test/control-plane/readiness-planning-semantic-generation.test.js",
         "test/rebalancer/storage-capacity-semantic-projection-owner.test.js",
         "test/rebalancer/startup-authority-available-node-contract.test.js",
+        "test/rebalancer/critical-topology-committed-lease.test.js",
         "test/workflow/owner-key-reconcile-queue.test.js"
       ]
     },
@@ -2300,7 +2364,8 @@
         "test/admin/admin-control-snapshot.test.js",
         "test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js",
         "test/admin/admin-control-snapshot-retry-decision.test.js",
-        "test/active-gate/active-gate-authoritative-repair-convergence.test.js"
+        "test/active-gate/active-gate-authoritative-repair-convergence.test.js",
+        "test/integration/fresh-formation-without-admin-polling.integration.test.js"
       ]
     },
     "admin-notification-repair-cache-owner-handoff": {
@@ -3461,7 +3526,8 @@
             "src/topology/cdc-group-propagation-routing.js",
             "src/utils/canonical-json-data.js",
             "src/topology/cdc-group-propagation-retry-wait-report.js",
-            "src/partition/partition-cdc-owed-admission.js"
+            "src/partition/partition-cdc-owed-admission.js",
+            "src/partition/partition-cdc-obligation-lane.js"
           ]
         },
         {
@@ -3537,7 +3603,8 @@
         "test/partition/partition-cdc-prepared-capacity.test.js",
         "test/partition/partition-cdc-drain-admission.test.js",
         "test/partition/partition-cdc-owed-admission-native.test.js",
-        "test/message-group/message-group-peer-address-committed-configuration.test.js"
+        "test/message-group/message-group-peer-address-committed-configuration.test.js",
+        "test/partition/cdc-hydration-live-handoff.test.js"
       ]
     },
     "router-envelope-query": {
@@ -4115,6 +4182,63 @@
         "test/node/replica-handler.test.js"
       ]
     },
+    "dynamic-config-startup-ownership": {
+      "description": "CDC ordering, retained startup application and adaptive-controller shutdown must agree on the same current values and one owned lifecycle across delayed hydration.",
+      "endpoints": [
+        {
+          "id": "config-read-and-cdc-ordering",
+          "owners": [
+            "src/config/dynamic-config-service.js"
+          ]
+        },
+        {
+          "id": "startup-and-controller-custody",
+          "owners": [
+            "src/config/dynamic-config-startup-wiring.js",
+            "src/config/raft-adaptive-timing-controller.js",
+            "src/entrypoint-runtime-shutdown-lifecycle.js"
+          ]
+        }
+      ],
+      "contract": "dynamic-config-startup-ownership",
+      "witnessTests": [
+        "test/config/dynamic-config-startup-owned-initialization.test.js",
+        "test/config/dynamic-config-startup-wait-bound-spent.test.js",
+        "test/config/dynamic-config-startup-wiring.test.js",
+        "test/config/dynamic-config-cdc-update-shape.test.js",
+        "test/config/raft-adaptive-timing-controller.test.js"
+      ]
+    },
+    "schema-provisioning-quorum-refusal": {
+      "description": "Quorum admission, durable schema custody and PostgreSQL response preserve one refusal and its current observation without terminally poisoning the intent or reporting CREATE success below quorum.",
+      "endpoints": [
+        {
+          "id": "committed-quorum-admission",
+          "owners": [
+            "src/query/sql-query-engine-initial-partition-provisioning.js",
+            "src/query/sql-query-engine-provision-target-methods.js",
+            "src/control-plane/serve-eligibility-owner.js",
+            "src/control-plane/control-plane-readiness-serve-eligibility-methods.js"
+          ]
+        },
+        {
+          "id": "durable-custody-and-client-answer",
+          "owners": [
+            "src/query/schema-provisioning-job-owner.js",
+            "src/query/table-creation-service-durable-job.js",
+            "src/runtime/pgwire-protocol-handler.js"
+          ]
+        }
+      ],
+      "contract": "schema-provisioning-quorum-refusal",
+      "witnessTests": [
+        "test/query/sql-query-engine-provision-partition-waits.test.js",
+        "test/query/sql-query-engine-provision-partition-quorum.test.js",
+        "test/query/schema-provisioning-job-owner.test.js",
+        "test/query/schema-provisioning-transient-collision.test.js",
+        "test/runtime/pgwire-schema-provisioning-job.test.js"
+      ]
+    },
     "serve-eligibility-committed-answer-and-routing": {
       "description": "The committed serve answer and the user-table serve routing that consumes it change together: a routing decision never reads the projected serve dimension, and the answer's stale/unavailable states are what routing refuses on.",
       "endpoints": [
@@ -4139,6 +4263,34 @@
         "test/control-plane/serve-eligibility-committed-epoch-read.test.js",
         "test/query/query-executor-serve-eligibility-routing.test.js",
         "test/control-plane/readiness-routing-heartbeat-window.test.js"
+      ]
+    },
+    "replica-create-failure-claim-and-retry-type": {
+      "description": "Partition CREATE reconciles the exact expired lifecycle and admitted operation before existing failed-attempt rotation. Retry custody and terminal cleanup remain paired with current durable identity and worker ownership.",
+      "endpoints": [
+        {
+          "id": "lifecycle-and-admission",
+          "owners": [
+            "src/node/replica-state-machine",
+            "src/node/replica-create-admission-owner.js",
+            "src/node/replica-create-admission-retained-recovery.js"
+          ]
+        },
+        {
+          "id": "create-replay",
+          "owners": [
+            "src/node/replica-handler-create-admission-methods.js",
+            "src/node/replica-handler-create-status-methods.js",
+            "src/node/replica-handler-create-methods.js",
+            "src/node/replica-handler-failed-create-publication.js"
+          ]
+        }
+      ],
+      "contract": "replica-create-failure-claim-and-retry-type",
+      "witnessTests": [
+        "test/node/replica-create-timeout-replay-custody.test.js",
+        "test/node/replica-create-admission-recovery.test.js",
+        "test/rebalancer/terminal-failed-add-target-cleanup.test.js"
       ]
     }
   }

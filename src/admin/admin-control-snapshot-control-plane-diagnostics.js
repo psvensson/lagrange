@@ -1,3 +1,5 @@
+import {attachControlPlaneDiagnosticsLossAccounting} from
+  './admin-control-snapshot-diagnostic-loss-accounting.js';
 /**
  * Control snapshot building for the admin WebSocket API.
  *
@@ -655,7 +657,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
         this.resolveLocalPartitionServices() :
         null;
     const cdcReplay = buildCdcReplayRetentionDiagnostics(partitionServices);
-    return {
+    return attachControlPlaneDiagnosticsLossAccounting(this, {
       schemaVersion: CONTROL_PLANE_DIAGNOSTICS_SCHEMA_VERSION,
       nodeId: this.nodeId,
       capturedAt,
@@ -701,7 +703,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
       controlPlaneOwnerQueueDepth,
       cdcReplay,
       cdcReplayByPartitionId: cdcReplay?.byPartitionId || null,
-    };
+    });
   }
   /**
    * Build priority-recovery cross-service decision snapshots keyed by

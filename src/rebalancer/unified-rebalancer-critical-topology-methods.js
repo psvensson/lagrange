@@ -2,6 +2,8 @@ import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {selectCurrentEndpointRows} from
   '../control-plane/owners/endpoint-incarnation-currentness.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
+import {projectNodeLivenessSemantics} from
+  '../control-plane/node-liveness-semantic-projection.js';
 
 const {
   COLUMN,
@@ -12,7 +14,6 @@ const {
   NodeStatus,
   REBALANCER_LOG_MSG,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  SYSTEM_TABLE_NAME,
   TABLES,
   TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE,
   TRANSPORT_TYPE,
@@ -52,27 +53,19 @@ function resolveCriticalNodeRows(rebalancer) {
   ) {
     return rebalancer.controlPlaneReadinessService.answerCommittedNodes();
   }
-  if (
-    typeof rebalancer.controlPlaneReadinessService?.getServeEligibilityOwner ===
-      'function'
-  ) {
-    const owner =
-      rebalancer.controlPlaneReadinessService.getServeEligibilityOwner();
-    if (typeof owner?.answerCommittedNodes === 'function') {
-      return owner.answerCommittedNodes();
-    }
-  }
-  return {
-    state: SERVE_ELIGIBILITY_STATE.READY,
-    nodeRows:
-      typeof rebalancer.systemTableCache?.getAll === 'function' ?
-        rebalancer.systemTableCache.getAll(SYSTEM_TABLE_NAME.NODES) :
-        [],
-  };
+  return null;
+}
+function buildCriticalNodeUnavailableBlocker(resolvedNodes) {
+  return Object.freeze({
+    reason: CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.UNAVAILABLE,
+    epoch: resolvedNodes?.epoch ?? null,
+    retryAfterMs: resolvedNodes?.retryAfterMs ?? null,
+  });
 }
 function buildCriticalNodeContext(rebalancer) {
   const startupAuthorityNodeIds = rebalancer.getStartupAuthorityNodeIdSet();
   return {
+    nowMs: ownerNowMs(rebalancer),
     startupAuthorityNodeIds,
     constrainToStartupAuthority:
       startupAuthorityNodeIds instanceof Set &&
@@ -85,19 +78,8 @@ function isWithinStartupAuthority(context, nodeId) {
   return !context.constrainToStartupAuthority ||
     context.startupAuthorityNodeIds.has(nodeId);
 }
-function isCriticalNodeReady(rebalancer, nodeRow, _nodeId, _context) {
-  if (!nodeRow || nodeRow.status !== NodeStatus.ACTIVE) {
-    return false;
-  }
-  const leaseExpiresAtMs = Number(
-    nodeRow.ready_lease_expires_at ??
-    nodeRow.readyLeaseExpiresAt ??
-    nodeRow.readyLeaseExpiresAtMs,
-  );
-  if (!Number.isFinite(leaseExpiresAtMs)) {
-    return false;
-  }
-  return leaseExpiresAtMs > ownerNowMs(rebalancer);
+function isCriticalNodeReady(nodeRow, nowMs) {
+  return projectNodeLivenessSemantics({nodeRow, nowMs}).projection.readyNow === true;
 }
 function classifyCriticalNode(rebalancer, nodeRow, context) {
   const {status, nodeId} = normalizeNodeRow(nodeRow);
@@ -113,7 +95,7 @@ function classifyCriticalNode(rebalancer, nodeRow, context) {
       return {kind: CRITICAL_NODE_KIND.TRANSITIONAL, nodeId};
     }
     return {
-      kind: isCriticalNodeReady(rebalancer, nodeRow, nodeId, context) ?
+      kind: isCriticalNodeReady(nodeRow, context.nowMs) ?
         CRITICAL_NODE_KIND.READY :
         CRITICAL_NODE_KIND.UNREADY_ACTIVE,
       nodeId,
@@ -460,20 +442,10 @@ class UnifiedRebalancerCriticalTopologyMethods {
       return null;
     }
     const resolvedNodes = resolveCriticalNodeRows(this);
-    if (resolvedNodes?.state === SERVE_ELIGIBILITY_STATE.UNAVAILABLE) {
-      return Object.freeze({
-        reason:
-          CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.UNAVAILABLE,
-        epoch: resolvedNodes.epoch || null,
-        retryAfterMs: resolvedNodes.retryAfterMs || null,
-      });
-    }
     const nodeRows = resolvedNodes?.nodeRows;
-    if (
-      !Array.isArray(nodeRows) ||
-      nodeRows.length === UNIFIED_REBALANCER_LITERAL.ZERO
-    ) {
-      return null;
+    if (resolvedNodes?.state !== SERVE_ELIGIBILITY_STATE.READY ||
+        !Array.isArray(nodeRows) || nodeRows.length === 0) {
+      return buildCriticalNodeUnavailableBlocker(resolvedNodes);
     }
 
     const evidence = collectCriticalNodeEvidence(this, nodeRows);
