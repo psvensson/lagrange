@@ -1,0 +1,11 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "publication-ratchets", "passed": false},
+    {"id": "diagnostic-behaviour-preserved", "passed": false},
+    {"id": "independent-verification", "passed": false}
+  ],
+  "evidence": [],
+  "applicability": "At 6b0d1f2ae3e84c5045cab6448bca93247de79264 the whole-tree complexity count is 1726 against 1720, and source duplication is 40 groups / 1267 lines against 39 / 1236. Bounded publication prerequisite; formation acceptance remains separate."
+}

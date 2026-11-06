@@ -100,8 +100,10 @@ const RATCHET_TARGETS = [
     // checker's hint.
     // 2026-11-03 (composed-05-comparison-readiness): tightened 41/1302 -> 39/1236 on the
     // checker's hint.
-    baselineCloneGroupCount: 39,
-    baselineDuplicatedLineCount: 1236,
+    // 2026-11-06: tightened 39/1236 -> 38/1207 on the checker's hint after
+    // control snapshots delegated their duplicate diagnostic helpers.
+    baselineCloneGroupCount: 38,
+    baselineDuplicatedLineCount: 1207,
     strictEligible: true,
   },
   {

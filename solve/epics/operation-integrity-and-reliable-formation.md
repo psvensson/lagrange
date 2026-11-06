@@ -21,6 +21,7 @@ quests:
   - dynamic-config-startup-owned-initialization
   - explicit-single-replica-partition-configuration
   - parallel-query-read-authority-propagation
+  - admin-diagnostic-owner-consolidation
 authorizes:
   - src
   - test
@@ -72,7 +73,7 @@ node within preregistered bounds.
   `solve/quests/fresh-create-release-authority-from-committed-operation/quest.json`,
   and `solve/quests/replica-admission-from-committed-operation/quest.json`.
 
-## Current proof package (5 November evening)
+## Current proof package (6 November)
 
 - Candidate base: `fffd9addfd600cf58bc0c40b1c7df43d5ba4a899`, clean on takeover;
   rule-set revision 5. The user-provided evening review accepts the bounded
@@ -146,6 +147,37 @@ node within preregistered bounds.
   change formation decisions or retroactively admit unwitnessed observations.
   Historical diagnostic runs are separate from E9's untouched physical gate;
   no current-candidate E9 run has yet been submitted.
+- E8 on frozen `6b0d1f2ae3e84c5045cab6448bca93247de79264` passed all
+  36 files on tv-dator: 2,708 reported assertions, each file on its first
+  attempt. Independent review verified the retained manifest, source hashes,
+  worker identity and clean candidate. The default-RF3 negative ends at its
+  scoped CREATE refusal and retained RF3; it makes no INSERT latency claim.
+  Subsequent admin source consolidation requires a fresh frozen E8 binding.
+- The fourth historical run on `e5770352` plus the explicit read-witness
+  diagnostic overlay reproduced red in 553,301 ms. Independent review admits
+  the prescribed H1 observation for two current learners: witnessed SERVICES
+  leader rows, complete seed cache absence brackets, and later same-key
+  address refusals whose synchronous resolver had no usable mapping. A third
+  capture observes arrival within the bracket and is classified separately.
+  The earliest logged visibility-bound breach and repeated CDC holds are
+  retained; identifying the precise withholding obligation/subscriber and
+  binding the repair to that cause remain distinct from this observation.
+  Full logs, report, raw envelopes and review are retained in the
+  [verified H1 evidence archive](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--h1-authority-e5770352-diagnostic-20261106.tar.gz)
+  (SHA-256 `580c684639ae62838ef17f83cfacc1994d784700474be908e2faebde833eb9a9`).
+- Adam's user-run storage migration is complete. Docker and containerd use
+  `/mnt/old/lab`; root has 12 GiB free and `/mnt/old` has 52 GiB free after the
+  historical run. Original stores are retained in the migration rollback
+  directory. This removes the storage prerequisite, not the formation gate.
+- The publication ratchets reproduced 1,726 complexity violations against
+  1,720 and source duplication 40 groups / 1,267 lines against 39 / 1,236.
+  Bounded Quest `admin-diagnostic-owner-consolidation` removes two exact
+  diagnostic clones, shares CDC diagnostic reads and separates per-partition
+  projection from aggregation. First measurements are 1,720 complexity
+  violations and 38 duplicate groups / 1,207 lines; the duplicate baseline is
+  tightened on the checker's hint. Independent review and committed lab proof
+  remain required. No physical E9 sequence, publication, merge or comparative
+  measurement has been completed.
 
 ## Approved user-visible contract
 

@@ -44,6 +44,11 @@ import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordina
 import {assignAdminControlSnapshotReadinessDiagnosticsMethods} from './admin-control-snapshot-readiness-diagnostics-methods.js';
 import {assignAdminControlSnapshotLocalDiagnosticsMethods} from './admin-control-snapshot-local-diagnostics-methods.js';
 import {AdminControlSnapshot} from './admin-control-snapshot-leadership-summary.js';
+import {attachAuthoritativeRepairDiagnostics} from './admin-control-snapshot-repair-diagnostics.js';
+import {
+  hasDurablePublishedMembershipObservation,
+  selectDurablePublishedMembershipObservation,
+} from './admin-control-snapshot-node-view-projection.js';
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
   '../control-plane/membership-publication-row-contract.js';
 // ── file-local constants ────────────────────────────────────────────────────
@@ -131,27 +136,6 @@ function buildMembershipPublicationReadOptions(options = {}) {
     } :
     {readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS};
 }
-function attachAuthoritativeRepairDiagnostics(snapshot, options = {}) {
-  if (!snapshot || typeof snapshot !== 'object') {
-    return snapshot;
-  }
-  const activeProjection =
-    options.repairEvaluation?.nodeCoverage?.activeProjection || null;
-  snapshot.authoritativeRepair = {
-    applied: options.repair?.applied === true,
-    forced: options.forceAuthoritativeRepair === true,
-    triggerCodes: Array.isArray(options.repairEvaluation?.triggerCodes) ?
-      [...options.repairEvaluation.triggerCodes] :
-      ADMIN_CACHE_DUMP.EMPTY,
-    activeProjectionCoverageGap: activeProjection?.hasCoverageGap === true,
-    activeProjectionMissingNodeIds: Array.isArray(
-      activeProjection?.missingNodeIds,
-    ) ?
-      [...activeProjection.missingNodeIds] :
-      ADMIN_CACHE_DUMP.EMPTY,
-  };
-  return snapshot;
-}
 function resolvePublicationOrderingValue(row, keys = []) {
   for (const key of keys) {
     const value = Number(row?.[key]);
@@ -229,45 +213,6 @@ function resolveLatestMembershipPublicationRow(
     );
   });
   return normalizedRows[0] || null;
-}
-const CONTROL_SNAPSHOT_PUBLICATION_OBSERVATION_STATE = Object.freeze({
-  AVAILABLE: 'available',
-});
-function hasDurablePublishedMembershipObservation(
-  publicationDiagnostics = null,
-) {
-  if (
-    !publicationDiagnostics ||
-    typeof publicationDiagnostics !== 'object'
-  ) {
-    return false;
-  }
-  if (
-    publicationDiagnostics?.publicationObservation?.state ===
-    CONTROL_SNAPSHOT_PUBLICATION_OBSERVATION_STATE.AVAILABLE
-  ) {
-    return true;
-  }
-  if (
-    publicationDiagnostics?.publishedActiveNodeIdsPresent === true ||
-    Array.isArray(publicationDiagnostics?.publishedActiveNodeIds)
-  ) {
-    return true;
-  }
-  const publicationStatus = String(
-    publicationDiagnostics?.status ||
-      publicationDiagnostics?.publicationStatus ||
-      publicationDiagnostics?.publicationObservation?.status ||
-      ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
-  ).toUpperCase();
-  return publicationStatus === ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED;
-}
-function selectDurablePublishedMembershipObservation(
-  publicationDiagnostics = null,
-) {
-  return hasDurablePublishedMembershipObservation(publicationDiagnostics) ?
-    publicationDiagnostics :
-    null;
 }
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
