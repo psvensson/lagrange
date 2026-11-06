@@ -46,7 +46,8 @@ import {buildSystemTableMutationSqlParts} from
 import {commitDurably} from '../../src/raft/raft-rs-durable-store.js';
 import {transitionOriginalRight} from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {cleanupTestEnvironment, createOwnedVirginSeedBootstrapService,
-  initializeTestEnvironment} from '../integration/helpers/cluster-test-helpers.js';
+  initializeTestEnvironment, scaleByMachineFactor} from
+  '../integration/helpers/cluster-test-helpers.js';
 import {RIGHT_COLUMNS, declaredRightKeys, readIssuedDeclaration, readOwnerRights} from
   '../test-helpers/original-allocation-durable-reader.js';
 import {openOriginalSeedReplica} from '../test-helpers/open-original-seed-replica.js';
@@ -171,7 +172,7 @@ function pass(observed, receipt) {
 }
 
 test('R1 protected activation happens only for openings admitted under the exact allocation',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
     const observed = await servedObservation(t, 'R1');
     const {declaration, first: {report}} = observed;
     const declaredGroups = [...new Set(declaration.members.map(({groupId}) => groupId))].sort();
@@ -207,7 +208,7 @@ test('R1 protected activation happens only for openings admitted under the exact
   });
 
 test('R2 each original right moves UNUSED -> SUBMITTED -> TRANSFERRED durably and never resets',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
     const observed = await servedObservation(t, 'R2');
     const {declaration, transferred, first: {report}} = observed;
     const sequences = report.observation.rightSequences;
@@ -231,7 +232,7 @@ test('R2 each original right moves UNUSED -> SUBMITTED -> TRANSFERRED durably an
   });
 
 test('R3 public admission is closed until the handoff completes and open after',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
     const observed = await servedObservation(t, 'R3');
     const {report} = observed.first;
     const samples = report.observation.admission;
@@ -257,7 +258,7 @@ test('R3 public admission is closed until the handoff completes and open after',
   });
 
 test('R4 a write and a read succeed through public admission',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
     const observed = await servedObservation(t, 'R4');
     const {service} = observed.first.report;
     assert.equal(service.error, undefined, `public write/read failed: ${JSON.stringify(service.error)}`);
@@ -267,7 +268,7 @@ test('R4 a write and a read succeed through public admission',
   });
 
 test('R5 a restart on the same durable data serves or is held typed and resets no right',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
     const observed = await servedObservation(t, 'R5');
     const {report, exit} = observed.second;
     t.diagnostic(JSON.stringify({restart: report.returnedRuntime ? 'served' : 'held',

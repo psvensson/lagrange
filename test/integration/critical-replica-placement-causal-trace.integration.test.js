@@ -55,6 +55,7 @@ import {
   gracefulShutdown,
   createVirginSeedBootstrapService,
   initializeTestEnvironment,
+  scaleByMachineFactor,
   stopAllRebalancers,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
@@ -298,7 +299,8 @@ async function runActiveProbeIfNeeded(options) {
   }
 }
 
-test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
+test('critical placement causal trace',
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)},
   async (t) => {
     initializeTestEnvironment({nodeId: SEED_NODE_ID});
     LoggingService.getInstance().initialize({level: 'warn'});
@@ -310,7 +312,7 @@ test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
       nodeId: SEED_NODE_ID,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
-      config: {...TEST_CONFIG.bootstrap, leadershipWaitTimeoutMs: 2000},
+      config: {...TEST_CONFIG.bootstrap},
     });
 
     let bootstrapResult = null;

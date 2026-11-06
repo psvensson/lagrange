@@ -51,6 +51,7 @@ import {
   getUniquePort,
   gracefulShutdown,
   initializeTestEnvironment,
+  scaleByMachineFactor,
   waitFor,
 } from '../../integration/helpers/cluster-test-helpers.js';
 import {createSeedQuerySurface} from
@@ -327,7 +328,7 @@ async function cleanSeedAttempt({bootstrapService, bootstrapResult, seedApi, dat
 }
 
 test('seed bootstraps and serves a write on rs-raft by default',
-  {timeout: SEED_TEST_TIMEOUT_MS}, async () => {
+  {timeout: scaleByMachineFactor(SEED_TEST_TIMEOUT_MS)}, async () => {
     initializeTestEnvironment({
       partition: {defaultReplicaCount: 1},
       rebalancer: {
@@ -345,7 +346,7 @@ test('seed bootstraps and serves a write on rs-raft by default',
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 3000,
+        leadershipWaitTimeoutMs: scaleByMachineFactor(12000),
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,

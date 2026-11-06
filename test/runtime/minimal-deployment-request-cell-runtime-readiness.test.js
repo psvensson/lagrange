@@ -8,6 +8,7 @@ import {
 } from '../../src/constants/index.js';
 import {
   canonicalJson,
+  deriveBindingDeclarationDigest,
 } from '../../src/control-plane/owners/deployment-binding-contract.js';
 import {RuntimeServiceHandler} from
   '../../src/node/runtime-service-handler.js';
@@ -75,7 +76,10 @@ const MEMORY_COMPONENT_BYTES = Buffer.from(
 const PAYLOAD_DIGEST = `sha256:${createHash('sha256')
   .update(COMPONENT_BYTES)
   .digest('hex')}`;
-const SERVICE_ID = 'binding-service-request-cell';
+const BINDING_VERSION_ID = `binding-version-${'a'.repeat(64)}`;
+const SERVICE_ID = `binding-service-${createHash('sha256')
+  .update(BINDING_VERSION_ID)
+  .digest('hex')}`;
 const PACKAGE_ID = `service-package-${'c'.repeat(64)}`;
 const ACCESS_TABLES = Object.freeze([
   Object.freeze({
@@ -146,15 +150,16 @@ function definition(overrides = {}) {
       package_id: PACKAGE_ID,
     },
   };
+  const bindingDigest = deriveBindingDeclarationDigest(declaration);
   return {
-    binding_digest: `sha256:${'b'.repeat(64)}`,
+    binding_digest: bindingDigest,
     binding_projection: JSON.stringify({
-      binding_digest: `sha256:${'b'.repeat(64)}`,
-      binding_version_id: 'binding-version-request-cell',
+      binding_digest: bindingDigest,
+      binding_version_id: BINDING_VERSION_ID,
       declaration,
       tenant_id: 'tenant-a',
     }),
-    binding_version_id: 'binding-version-request-cell',
+    binding_version_id: BINDING_VERSION_ID,
     resource_budget: JSON.stringify(declaration.budgets),
     runtime_config: JSON.stringify({export_name: 'run'}),
     runtime_kind: RUNTIME_KIND.WASM_COMPONENT,
@@ -305,10 +310,19 @@ function createProductionPlacementFixture() {
   const definitionRow = {
     ...runtime.replica.definition,
     service_type: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+    status: 'active',
   };
   const outcomes = [];
   const handler = new RuntimeServiceHandler({
     cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: {
+      async readAuthoritativeRows(_tableName, _sql, [serviceId]) {
+        return {
+          rows: serviceId === SERVICE_ID ? [definitionRow] : [],
+          success: true,
+        };
+      },
+    },
     executorOutcomeEmitter: {
       emitOutcome(...args) {
         outcomes.push(args);

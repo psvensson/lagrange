@@ -502,13 +502,20 @@ function findFixtureClaimServiceRow(cache, replicaId, precondition) {
     candidate?.service_id === precondition?.service_id) || null;
 }
 
+function matchesFixtureClaimOperationTarget(operation, payload) {
+  return Boolean(operation && payload) &&
+    operation.type === payload[ReplicaOperationField.OPERATION_TYPE] &&
+    operation.partition_id === payload[ReplicaOperationField.PARTITION_ID] &&
+    operation.replica_id === payload[ReplicaOperationField.REPLICA_ID];
+}
+
 function isFixtureClaimOperationTerminalFailed(operation, payload, precondition) {
-  return Boolean(operation && precondition) &&
-    operation.type === payload?.[ReplicaOperationField.OPERATION_TYPE] &&
-    operation.partition_id === payload?.[ReplicaOperationField.PARTITION_ID] &&
-    operation.replica_id === payload?.[ReplicaOperationField.REPLICA_ID] &&
-    operation.completed_at !== null &&
-    operation.completed_at !== undefined &&
+  if (!matchesFixtureClaimOperationTarget(operation, payload) || !precondition) {
+    return false;
+  }
+  const hasCompletedTimestamp =
+    operation.completed_at !== null && operation.completed_at !== undefined;
+  return hasCompletedTimestamp &&
     String(operation.workflow_step || '').toUpperCase() ===
       WORKFLOW_STEP.FAILED &&
     String(operation.status || '').toLowerCase() === ReplicaStatus.FAILED &&

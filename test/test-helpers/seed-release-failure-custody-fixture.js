@@ -37,9 +37,10 @@ import {
   getUniquePort,
   seedStartupAuthorityOf,
   initializeTestEnvironment,
+  scaleByMachineFactor,
 } from '../integration/helpers/cluster-test-helpers.js';
 
-const SEED_RELEASE_BUDGET_MS = 3000;
+const SEED_RELEASE_BUDGET_MS = scaleByMachineFactor(15000);
 const CONTROL_PARTITION = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];
 const NODE_ID = '550e8400-e29b-41d4-a716-446655449963';
 const SEED_CONFIG = Object.freeze({

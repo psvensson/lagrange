@@ -1,30 +1,36 @@
-# Independent Review: Step 4 Retained Source-Cone Fixture and Host-Factor Repairs
+# Independent Verification: Follow-Up Test Fixture and Machine-Factor Timeout Adjustments
 
-## Verdict
+- **Verdict**: `APPROVE`
+- **Verifier**: `subagent:b53f502d-cb6d-4d3b-b17c-9e51dbbbcf82`
+- **Worktree / Base Commit**: `/mnt/data/peter/projects/.worktrees/lagrange-composed-05-20261103` at `af6c25132afd193494cf2ed9ff709f3cb6cfa338`
+- **Rule-Set Revision**: 5 (`AGENTS.md`, `docs/steering/rules.md`, `docs/steering/router.md`)
 
-APPROVE
+---
 
-## Scope Reviewed
+## 1. Exact SHA-256 Verification of Modified Files
 
-- Worktree: `/mnt/data/peter/projects/.worktrees/lagrange-composed-05-20261103`
-- Base Commit: `6317f224bf356aa390af83f64bb34ff855264025`
-- Quest: `committed-readiness-fixture-custody` (`16585233eecd880b75f10e9e60a8689d7cdd8f2058c58ef207223ed26c82dc05`)
-- Rule-Set Revision: 5 (`AGENTS.md`, `docs/steering/rules.md`, `docs/steering/router.md`)
+Zero production (`src/`) files are modified. The 7 modified test/helper files and their SHA-256 digests are:
+- `5fca9a0e9a4136d75e386d6cba40a23604ece87f0cf1da2c4f6eae7eeb6903d2  test/rebalancer/test-helpers.js`
+- `4ff87071e5665ad2411cdd18844119252228794544674213ad1c03dc020d010d  test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js`
+- `dbd01c7450901cf4184cd95087e3e65ab28f0a723af2428abfb08db331e8cb2b  test/raft/raft-rs-backend/single-path-partition-cutover.test.js`
+- `e86e0f316576bd84d9f409b89fec7292434ec08eafbe6d66f080270307263657  test/test-helpers/seed-release-failure-custody-fixture.js`
+- `7e9e3d72fad48010d943ac0b70ac9571ca3731b7827d80f983448e51c4fd1100  test/bootstrap/retained-seed-original-handoff.integration.test.js`
+- `32aedd08c2fa85157cf8e01f21517086c368f052c79b02613288e7ec9db0955f  test/bootstrap/fresh-seed-activation.integration.test.js`
+- `a8e4068c391b792a87e6abc101d1c155e39379c80754b5c686f6202b8f1060d2  test/integration/critical-replica-placement-causal-trace.integration.test.js`
 
-## Findings
+---
 
-1. Zero Production Changes:
-   No files under `src/` are modified. All changes are strictly bounded to test/helper fixtures and epic progress documentation.
+## 2. Verification of Checklist Items
 
-2. Explicit Single-Node RF1 Seed Fixture Configuration:
-   - `test/integration/helpers/cluster-test-helpers.js` (`a0b4daa3c4499fce8c43f9dbe63e4585a88d7c9e5f5ef9a90a96e0d9c00727c0`) forwards `options.partition` to `ConfigurationManager.getInstance().initialize(...)` only when explicitly provided.
-   - `test/raft/raft-rs-backend/single-path-partition-cutover.test.js` (`569d9a0698fcca62e2e53d98c0fb980b604e9957a655c972ae840a1de5a00fef`), `test/integration/seed-migration-cutover-persisted.integration.test.js` (`89223ae6cdaef266b05086e5ef34422034fbdb0a76e804eeb197b41be01a5ea6`), and `test/test-helpers/fresh-seed-activation-public-child.js` (`6989d1f01309c230c578802232de2a567892d66a1b0e8d6d3bd657b8a131ae4a`) explicitly declare `partition: {defaultReplicaCount: 1}` for single-node seed tests while preserving default RF3 production semantics.
+1. **`test/rebalancer/test-helpers.js` (`5fca9a0e9a4136d75e386d6cba40a23604ece87f0cf1da2c4f6eae7eeb6903d2`)**:
+   - Extracts `matchesFixtureClaimOperationTarget(operation, payload)` (lines 505-510) from `isFixtureClaimOperationTerminalFailed(operation, payload, precondition)` (lines 512-524) with zero semantic change, reducing cyclomatic complexity below 12 so whole-tree `npm run test:complexity` satisfies `1719/1719` (`BASELINE_COUNT = 1719`).
 
-3. Owner-Clock Committed Readiness Fixture in `replace-source-removal-owner.test.js`:
-   - `test/rebalancer/replace-source-removal-owner.test.js` (`776ffa1617f992fa24c3d91146a3fd621102926f23b063aefe71283aef5226a8`) passes `readinessFixture` with `now: () => Date.now() + clock.offsetMs` and committed active/ready node rows for `SOURCE_NODE_ID`, `TARGET_NODE_ID`, and `PEER_NODE_ID` through the single fixture construction owner (`createMockControlPlaneReadinessService`).
+2. **`test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js` (`4ff87071e5665ad2411cdd18844119252228794544674213ad1c03dc020d010d`)**:
+   - Aligns `definition()` and `createProductionPlacementFixture()` with the canonical definition-authority contract from `04459151a`: derives `BINDING_VERSION_ID`, `SERVICE_ID`, and `bindingDigest = deriveBindingDeclarationDigest(declaration)`, sets `status: 'active'` on `definitionRow`, and supplies `controlPlaneSystemTableGateway.readAuthoritativeRows` returning `[definitionRow]` for `SERVICE_ID`.
 
-4. Causal Trace Readiness Port and E1 Deferred-Provisioning Alignment:
-   - `test/integration/critical-replica-placement-causal-trace.integration.test.js` (`820b5d48be45105e0f1d6c3fb5759d1eb561f22d3309b03800bf553f5bcb9ba5`) wires `controlPlaneReadinessService: bootstrapService.controlPlaneReadinessService` into `SQLQueryEngine`, accepts either immediate creation or the E1 deferred initial-provisioning envelope (`contractState === 'deferred' && errorCode === 'PROVISIONING_UNAVAILABLE'`), and checks `row.table_name === CONTROL_TABLE_NAME || row.table_id === CONTROL_TABLE_NAME` when locating the provisioned partition row.
-
-5. Host-Factor Suite Timeout Scaling in `membership-consistency.integration.test.js`:
-   - `test/integration/membership-consistency.integration.test.js` (`e1a28b478ab1df3be912447f21a1277591b6f2bba6c2d2b18c0c58694a2c3e89`) scales its existing `240000` reference suite timeout via `scaleByMachineFactor(SUITE_TIMEOUT_MS)` in the AST-resolvable form required by `scripts/checks/test-timeout-declarations.js` without changing any internal protocol bounds or subtest assertions.
+3. **Machine-Factor Timeout and Seed-Release Budget Scaling (`scaleByMachineFactor`)**:
+   - `test/raft/raft-rs-backend/single-path-partition-cutover.test.js` (`dbd01c7450901cf4184cd95087e3e65ab28f0a723af2428abfb08db331e8cb2b`): applies `{timeout: scaleByMachineFactor(SEED_TEST_TIMEOUT_MS)}` and `leadershipWaitTimeoutMs: scaleByMachineFactor(12000)` on the seed bootstrap subtest.
+   - `test/test-helpers/seed-release-failure-custody-fixture.js` (`e86e0f316576bd84d9f409b89fec7292434ec08eafbe6d66f080270307263657`): sets `const SEED_RELEASE_BUDGET_MS = scaleByMachineFactor(15000);`.
+   - `test/bootstrap/retained-seed-original-handoff.integration.test.js` (`7e9e3d72fad48010d943ac0b70ac9571ca3731b7827d80f983448e51c4fd1100`): keeps `const TEST_TIMEOUT_MS = 180000;` literal for static AST extraction and passes `{timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}` to all `test(...)` declarations.
+   - `test/bootstrap/fresh-seed-activation.integration.test.js` (`32aedd08c2fa85157cf8e01f21517086c368f052c79b02613288e7ec9db0955f`): keeps `const TEST_TIMEOUT_MS = 240000;` literal for static AST extraction and passes `{timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}` to all `test(...)` declarations.
+   - `test/integration/critical-replica-placement-causal-trace.integration.test.js` (`a8e4068c391b792a87e6abc101d1c155e39379c80754b5c686f6202b8f1060d2`): removes the 2s `leadershipWaitTimeoutMs: 2000` override so `TEST_CONFIG.bootstrap`'s standard `15000ms` leadership wait applies, and passes `{timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}` to `test('critical placement causal trace', ...)`.
