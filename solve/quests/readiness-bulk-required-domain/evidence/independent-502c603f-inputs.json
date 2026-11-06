@@ -1,0 +1,175 @@
+{
+  "reviewer": "subagent:/root/independent_review",
+  "ruleSetRevision": 5,
+  "candidate": "502c603f2460bb2ff5f2c46e62517c00086f5428",
+  "parent": "04459151a2813fe24e0cc99e2d3eda431f8902a7",
+  "reviewedCommittedInputs": [
+    {
+      "path": "src/control-plane/control-plane-readiness-service-node-methods.js",
+      "sha256": "d558b1ce3fa215b25586767d8f88663709f00d0f333cc0193a63820f4c26a922",
+      "committedMatch": true
+    },
+    {
+      "path": "test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js",
+      "sha256": "c3e73eceefb2453ecec9f4f145827256c30bfa0a1ac4c2b642493f510baea3be",
+      "committedMatch": true
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "sha256": "c9e51afa08ecae90db4e4378110f3401f2a7f845002aa50027223ba04d528f2c",
+      "committedMatch": true
+    }
+  ],
+  "commitPaths": [
+    {
+      "path": "solve/changes/global-owner-debt-inventory/inventory.json",
+      "sha256": "fced34baf64430eceedc695c8912e83f791120efd1e3fda4b96eb58f93fa4e7b"
+    },
+    {
+      "path": "solve/epics/operation-integrity-and-reliable-formation.md",
+      "sha256": "450d9f58b473941f8c7e1fb8e6414dd1e9151f5872e80a5cfffb4efc9e817d68"
+    },
+    {
+      "path": "solve/quests/readiness-bulk-required-domain/evidence/bulk-implementation-content.json",
+      "sha256": "0a346fe6107fb774c27298fc419a5e45641ef1145dc909d12cb6ff814b9c5464"
+    },
+    {
+      "path": "solve/quests/readiness-bulk-required-domain/evidence/design.md",
+      "sha256": "f17a78c9809efffd66a7fa19c14f7d909a71a2a76d2c16b9651d63d390724505"
+    },
+    {
+      "path": "solve/quests/readiness-bulk-required-domain/evidence/independent-bulk-implementation-review.md",
+      "sha256": "59cec4ff6fb1d7aa8d7b4f7d2143954e45c1667167e4a7e731b5db8969ca4ba4"
+    },
+    {
+      "path": "solve/quests/readiness-bulk-required-domain/evidence/independent-bulk-review-inputs.json",
+      "sha256": "360700401b6f00b8c4c6897279460feb6923752b329426c344cc8bab34c0962b"
+    },
+    {
+      "path": "solve/quests/readiness-bulk-required-domain/evidence/receipt.json",
+      "sha256": "0c2ec314fcea066b61ec9d9425fcac2511340fe113dcf789cf1773475ea6cebf"
+    },
+    {
+      "path": "solve/quests/readiness-bulk-required-domain/log.ndjson",
+      "sha256": "0b59f30b9b6eb8d9fc7f266c3a7df6181fa7ca1afa5d7adfba962ccb70b4f5c4"
+    },
+    {
+      "path": "solve/quests/readiness-bulk-required-domain/quest.json",
+      "sha256": "db4317027f08e1a28a0b74578b2d1e4ed5ec1329652d128f698ba4555dd98942"
+    },
+    {
+      "path": "solve/quests/runtime-definition-create-authority/evidence/independent-04459151a-applicability.md",
+      "sha256": "5231611c06976c55873a35296b9010b69d9ae5639a8c2f8296e480a57a06603b"
+    },
+    {
+      "path": "solve/quests/runtime-definition-create-authority/log.ndjson",
+      "sha256": "d9cbabe5d74c19faef91c02d9843a20ed74f185f951f3d82ac3c9c1c95fb7f44"
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-service-node-methods.js",
+      "sha256": "d558b1ce3fa215b25586767d8f88663709f00d0f333cc0193a63820f4c26a922"
+    },
+    {
+      "path": "test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js",
+      "sha256": "c3e73eceefb2453ecec9f4f145827256c30bfa0a1ac4c2b642493f510baea3be"
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "sha256": "c9e51afa08ecae90db4e4378110f3401f2a7f845002aa50027223ba04d528f2c"
+    },
+    {
+      "path": "test/shards/impact-graph-seal.json",
+      "sha256": "4bad0d82527a4f1ada2b096e8b05f44dd94d8ba648e4fca7b009fec11d9c3e03"
+    }
+  ],
+  "runtimeLogPreservesParentPrefix": true,
+  "receiptStatus": "fail",
+  "receiptPassed": [
+    false,
+    false,
+    false,
+    false
+  ],
+  "proof": {
+    "fileCount": 2,
+    "assertions": 163,
+    "scheduleAttempt": 1,
+    "automaticRetries": 0,
+    "worker": "lenovo-laptop",
+    "machineFactor": 2.5,
+    "workerNodeVersionClaim": null,
+    "note": "environment.json runtime version is controller-only; no new worker runtime/boot fingerprint claimed"
+  },
+  "artifacts": [
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/bulk-implementation-content.json",
+      "bytes": 700,
+      "sha256": "0a346fe6107fb774c27298fc419a5e45641ef1145dc909d12cb6ff814b9c5464"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/independent-bulk-implementation-review.md",
+      "bytes": 4336,
+      "sha256": "59cec4ff6fb1d7aa8d7b4f7d2143954e45c1667167e4a7e731b5db8969ca4ba4"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/independent-bulk-review-inputs.json",
+      "bytes": 2501,
+      "sha256": "360700401b6f00b8c4c6897279460feb6923752b329426c344cc8bab34c0962b"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/bulk-before.log",
+      "bytes": 54726,
+      "sha256": "61c083d30f01aea61e70cab10fe53eb4a874fcd7bcfe61aba60d1eea619cb7b5"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/bulk-domain-after.log",
+      "bytes": 422,
+      "sha256": "a09a69e24c8bdb33cbfaa840177cda48b272b06e126d8a94500a692db016bae4"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/bulk-static.log",
+      "bytes": 9408,
+      "sha256": "166ffdb911d9e60c6cda2c239ab993813b2f5ac6b4d6dd553e83a0d8a031398e"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/bulk-files.json",
+      "bytes": 197,
+      "sha256": "1dbd3cd4f7933fccaaea43d2de392647630e15e22406218d05271058af253b33"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/run-frozen-bulk-502c603f.mjs",
+      "bytes": 2625,
+      "sha256": "2812c74236192935988fca71d6143a4986181227bbeff5e3b70ba3bb2f34113b"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-bulk-502c603f.log",
+      "bytes": 2205,
+      "sha256": "8eef7653561fb56366c465ccfeffe6d452247cd63561018d8b7074c107c5558e"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-bulk-502c603f/environment.json",
+      "bytes": 836,
+      "sha256": "f61d94409fa36696488f6d864ff7872754eb5c7c169c8a41c7b19049eae61217"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-bulk-502c603f/completion.json",
+      "bytes": 118,
+      "sha256": "b21b70bb04f7e84f117ddca7890060522ed87b8fc7e4bfa99adab5b6994e3851"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-bulk-502c603f/test-results-lenovo-laptop.ndjson",
+      "bytes": 406,
+      "sha256": "327355ecc3dfdd140a6620da87b25761a1a144a5e2ad7a2a04cbc6a26e1d6047"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/bulk-commit.log",
+      "bytes": 4049,
+      "sha256": "06ba4da985ae1b651caabfc6985e8291a1b05118c24f007223f7ce0a92e6ce46"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/bulk-push.log",
+      "bytes": 597,
+      "sha256": "505980a83ffff1c076cb136c91fe71e67196e4c394d1b486a133b6d2aad8fc94"
+    }
+  ]
+}

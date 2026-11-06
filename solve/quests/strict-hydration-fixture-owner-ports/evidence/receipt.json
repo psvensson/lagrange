@@ -1,0 +1,22 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "strict-hydration-fixture-owner-ports",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "strict-hydration-reached",
+      "passed": false,
+      "detail": "Incomplete fixture refuses before intended hydration verifier; complete fixture and reviewed proof pending."
+    },
+    {
+      "id": "no-mode-swap",
+      "passed": false,
+      "detail": "Incomplete fixture refuses before intended hydration verifier; complete fixture and reviewed proof pending."
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "detail": "Incomplete fixture refuses before intended hydration verifier; complete fixture and reviewed proof pending."
+    }
+  ]
+}

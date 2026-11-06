@@ -1,0 +1,87 @@
+{
+  "reviewer": "subagent:/root/independent_review",
+  "ruleSetRevision": 5,
+  "base": "502c603f2460bb2ff5f2c46e62517c00086f5428",
+  "reviewedInputs": [
+    {
+      "path": "test/bootstrap/cache-hydration-strictness.test.js",
+      "sha256": "f40f2b69d67d0111b7421f232d66649559aa23683965efb68044421fa9cf78af"
+    }
+  ],
+  "productAndScriptsDiffEmpty": true,
+  "sourceApplicability": [
+    {
+      "path": "src/bootstrap/phases/seed-cache-hydration-phase.js",
+      "bytes": 26638,
+      "sha256": "af1970907f184cd9e5d80bf330bf9a519fd83d48b6f138a9d02f337d19de9d70"
+    },
+    {
+      "path": "src/bootstrap/owners/seed-runtime-bridge-owner.js",
+      "bytes": 7563,
+      "sha256": "2810695ed1ca4326262d69d615267f3956c82452a2b391355b3edaab6ac6a328"
+    },
+    {
+      "path": "src/bootstrap/shared/latency-topology-setup.js",
+      "bytes": 4673,
+      "sha256": "3d3d8a4b921d4105cdc0472580822cb55ea8c449b6d41093b3eeb7044b04d931"
+    },
+    {
+      "path": "src/bootstrap/phases/seed-cleanup-handler.js",
+      "bytes": 20492,
+      "sha256": "7b997644d9f652b68eb218bb10403b6a70d340dcf1a86c36ee8a1852e05c071b"
+    },
+    {
+      "path": "src/cache/system-table-cache.js",
+      "bytes": 27344,
+      "sha256": "d63437fe65ad46178651abc747826c515f7efc7c6304d6b80621b088c50ee73d"
+    },
+    {
+      "path": "src/cache/system-cache-key-descriptor.js",
+      "bytes": 2855,
+      "sha256": "764878d2701601043a5cc83f4a3b737d9cc1096a9fd34411c1e71730d402a338"
+    },
+    {
+      "path": "src/topology/latency-tree-service.js",
+      "bytes": 14756,
+      "sha256": "f476b3f92406ee0f9acb3abd56dd629019ff77c1f3abfe991fcb25ffaed213af"
+    },
+    {
+      "path": "src/topology/cdc-group-propagation-service.js",
+      "bytes": 15106,
+      "sha256": "359b33594598b5b7019930a74dc1a5fbfd98cf9cdc2ca1235d2f87b582bbfe45"
+    },
+    {
+      "path": "test/bootstrap/latency-topology-owner-delegation.test.js",
+      "bytes": 4429,
+      "sha256": "10195dc403b6b29f1c0424a079928d1fc259bae9be18fdf5d4b6ecb9e7bdbe22"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/hydration-implementation-content.json",
+      "bytes": 388,
+      "sha256": "e4902b7dea5960075baef3403ddf08ae92481d45eb5b841008144345a609a3df"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/hydration-fixture-before.log",
+      "bytes": 1897,
+      "sha256": "dd5659055a7b64ef92687e00b7753cf0e6b7dc3b18570992f5906e95141cd6c5"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/hydration-fixture-after.log",
+      "bytes": 2558,
+      "sha256": "987ab30dd94e6cbe8a6464b15722b8c8a8b542cd09459c4d727b5a2a7207972a"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/hydration-real-cache.log",
+      "bytes": 344,
+      "sha256": "cf219d97f4901df5ce0d646739a2ea324762496ab0b274bc834d0d9d48527ef2"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/hydration-final.log",
+      "bytes": 345,
+      "sha256": "4a6e0b8830a60fd872c6ab365c437a7b3c690ed5f60dce2a5cb0a1dd71d056c1"
+    }
+  ],
+  "scope": "Bounded fixture WIP implementation approval; no source change, frozen candidate, Quest closure or formation claim"
+}

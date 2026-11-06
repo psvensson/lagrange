@@ -30,6 +30,7 @@ quests:
   - system-cache-reconciliation-ingress
   - runtime-definition-create-authority
   - readiness-bulk-required-domain
+  - strict-hydration-fixture-owner-ports
   - tap-default-machine-factor-portability
 authorizes:
   - src
@@ -234,7 +235,12 @@ The bounded bulk-readiness domain repair removes only unconditional observer-ID
 injection. Both bulk readers retain published, required and observed nodes,
 including negative missing-row entries. Two focused files pass 163 assertions and
 all 33 static audits pass; independent review 59cec4ff approves the three-path
-manifest 0a346fe6 for WIP checkpoint. Committed/frozen proof remains pending.
+manifest 0a346fe6 for WIP checkpoint. Exact committed applicability at 502c603f
+and its first-attempt Lenovo frozen proof (2 files/163 assertions) are approved
+by 4dafa304. The strict-hydration fixture now supplies the actual cache and one
+explicit router, reaches the real missing-SERVICES verifier and prevents mode
+swap; its two files/11 assertions and owned teardown are independently approved
+by 9a3a85f9. This is a fixture correction; committed applicability remains due.
 Three inherited readiness callers remain red: two planning identity/build-cost
 witnesses and the missing-both-rows self-grace fixture; their first causes and
 repairs remain required, with no predecessor-red waiver. The existing
@@ -262,8 +268,11 @@ Exact committed applicability at 04459151a is approved by 5231611c, and its froz
 Lenovo 25-file schedule passes 792 reported assertions on the first attempt.
 The separate public Binding journey on 04459151a fails before application CALL:
 sys-postgres-wire never publishes its endpoint and CREATE repeatedly reports
-service_definition_authority_unavailable. Its actual gateway refusal must be
-traced; the focused result cannot close that public composition gap. Full
+service_definition_authority_unavailable. Diagnostic-only 339a5463, with product
+bytes unchanged from 04459151a, observes the actual handler missing its gateway.
+ControlPlaneSetup creates the owner but does not return it, and seed/join do not
+retain it for the guarded runtime setup. That composition must be repaired
+without restoring a fallback; the focused result cannot close this gap. Full
 source-range proof remains required. The old-source negatives and independent
 malformed-lineage failures remain retained. Readiness diagnostics now attribute
 100 additional heavy builds to nested fresh bulk evaluations during publication
