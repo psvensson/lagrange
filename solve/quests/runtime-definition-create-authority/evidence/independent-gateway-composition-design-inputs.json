@@ -1,0 +1,223 @@
+{
+  "reviewer": "subagent:/root/independent_review",
+  "ruleSetRevision": 5,
+  "sourceBase": "6cd5753fb23e32d0f9d73676ab7651ba650cb6b5",
+  "diagnosticCandidate": "339a5463fdd3151a7840f5b88b766ce1dd28eb82",
+  "diagnosticProduct": "04459151a2813fe24e0cc99e2d3eda431f8902a7",
+  "diagnosticSourceDiffEmpty": true,
+  "collection": {
+    "path": "test-output/runtime-definition-create-authority-20261106/gateway-observer-339a5463-collection.json",
+    "bytes": 1182,
+    "sha256": "48f72349be079f0420c9338dba98df7d8dd035e96beb482c026b435286a900c6"
+  },
+  "files": [
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/gateway-observer-339a5463.log",
+      "bytes": 111426,
+      "sha256": "5cf6754e3a1b5ff54e039594372280c3c766732ad3358bfad8489ad543a643de"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/run-gateway-observer-339a5463.mjs",
+      "bytes": 2774,
+      "sha256": "6bcea6ef3838b45972a3dd346551929d8c14c030fe25be71e3703c1f43c4403b"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/gateway-observer-339a5463/completion.json",
+      "bytes": 118,
+      "sha256": "57c2fa1b0119510dccfec4aa890d49597a5c27b23fcd1291990d47dabd134829"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/gateway-observer-339a5463/test-results-lenovo-laptop.ndjson",
+      "bytes": 484,
+      "sha256": "3dea58a7c1ad99f1ef70f9ef2b4f5baa99ec7d239f8e31055c89180005f7d94e"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/gateway-observer-339a5463/environment.json",
+      "bytes": 841,
+      "sha256": "f6d963e4531d3de9a90968c374bb3624b1f794e78e07f8111d5bb9aae4a8356d"
+    }
+  ],
+  "recordedResolutionCount": 12,
+  "observationLimit": 12,
+  "records": [
+    {
+      "diagnostic": "runtime-definition-observation",
+      "stage": "create-resolution",
+      "hasGateway": false,
+      "readerType": "undefined",
+      "outcome": "UNAVAILABLE",
+      "errorMessage": ""
+    },
+    {
+      "diagnostic": "runtime-definition-observation",
+      "stage": "create-resolution",
+      "hasGateway": false,
+      "readerType": "undefined",
+      "outcome": "UNAVAILABLE",
+      "errorMessage": ""
+    },
+    {
+      "diagnostic": "runtime-definition-observation",
+      "stage": "create-resolution",
+      "hasGateway": false,
+      "readerType": "undefined",
+      "outcome": "UNAVAILABLE",
+      "errorMessage": ""
+    },
+    {
+      "diagnostic": "runtime-definition-observation",
+      "stage": "create-resolution",
+      "hasGateway": false,
+      "readerType": "undefined",
+      "outcome": "UNAVAILABLE",
+      "errorMessage": ""
+    },
+    {
+      "diagnostic": "runtime-definition-observation",
+      "stage": "create-resolution",
+      "hasGateway": false,
+      "readerType": "undefined",
+      "outcome": "UNAVAILABLE",
+      "errorMessage": ""
+    },
+    {
+      "diagnostic": "runtime-definition-observation",
+      "stage": "create-resolution",
+      "hasGateway": false,
+      "readerType": "undefined",
+      "outcome": "UNAVAILABLE",
+      "errorMessage": ""
+    },
+    {
+      "diagnostic": "runtime-definition-observation",
+      "stage": "create-resolution",
+      "hasGateway": false,
+      "readerType": "undefined",
+      "outcome": "UNAVAILABLE",
+      "errorMessage": ""
+    },
+    {
+      "diagnostic": "runtime-definition-observation",
+      "stage": "create-resolution",
+      "hasGateway": false,
+      "readerType": "undefined",
+      "outcome": "UNAVAILABLE",
+      "errorMessage": ""
+    },
+    {
+      "diagnostic": "runtime-definition-observation",
+      "stage": "create-resolution",
+      "hasGateway": false,
+      "readerType": "undefined",
+      "outcome": "UNAVAILABLE",
+      "errorMessage": ""
+    },
+    {
+      "diagnostic": "runtime-definition-observation",
+      "stage": "create-resolution",
+      "hasGateway": false,
+      "readerType": "undefined",
+      "outcome": "UNAVAILABLE",
+      "errorMessage": ""
+    },
+    {
+      "diagnostic": "runtime-definition-observation",
+      "stage": "create-resolution",
+      "hasGateway": false,
+      "readerType": "undefined",
+      "outcome": "UNAVAILABLE",
+      "errorMessage": ""
+    },
+    {
+      "diagnostic": "runtime-definition-observation",
+      "stage": "create-resolution",
+      "hasGateway": false,
+      "readerType": "undefined",
+      "outcome": "UNAVAILABLE",
+      "errorMessage": ""
+    }
+  ],
+  "source": [
+    {
+      "path": "src/bootstrap/shared/control-plane-setup.js",
+      "sha256": "eb9237090ae81e4916348d668490dd0ed0136c72f00067459d38030e9cfcd004",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
+      "sha256": "4b96ae6f087e52279d2956d9a6da96d1564b4168973a5917eb85e1af01e614ba",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/bootstrap/node-joining-publication-activation.js",
+      "sha256": "61dc793b34e1e25dfdcba66c4a50a2ab3bced8c6d0b91edbf78efabc2c5121a1",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/bootstrap/shared/guarded-runtime-service-handler.js",
+      "sha256": "6cc13dbd4bb15ae1062a46710a5517dc3083aa69bf2a07ab2a8db1290ac77284",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/bootstrap/shared/runtime-service-handler-setup.js",
+      "sha256": "ec5c3522bc123acf17ed83b8444c7531a97a4a74118789d158ab3b6417093ffe",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/bootstrap/pgwire-startup-safety-gate.js",
+      "sha256": "c4d2e3ff177287f41cf3633083a35b45b765595bb6b58d446449d1eac89686c3",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/bootstrap/pgwire-startup-safety-gate-constants.js",
+      "sha256": "7fe6c7de4533fac636b0c4d67fdefe13246966f9710119dcaf781fc810325ae6",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service.js",
+      "sha256": "6228fef7d93f13c9c5b3a66bde23712040889f2aa08e8d54021b0105c4c17fcf",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/bootstrap/node-joining-owner-construction.js",
+      "sha256": "003798811ffef42adbc013b8e08efa20f151c302084eb06c761a0778b369a30c",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service-seed-delegates.js",
+      "sha256": "687326f25dc28618156fa7cd9b55910f6f1250681afcdf41d28c73565b5e858d",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/bootstrap/node-joining-delegate-bundles.js",
+      "sha256": "26d13aec975b422fe39807d65344718ae0c1292283ea2201695a5350aaa8d08f",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/bootstrap/join-cleanup-handler.js",
+      "sha256": "4d60615d4920b5fc046b5739b27ba85d7062db43839c9dff43ea7048c0a6c0f0",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/bootstrap/phases/seed-cleanup-handler.js",
+      "sha256": "7b997644d9f652b68eb218bb10403b6a70d340dcf1a86c36ee8a1852e05c071b",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/control-plane/control-plane-runtime-bundle.js",
+      "sha256": "5353305b9e88bf3ae7eb5d4d64d0abfd9d76f776be2826b38b1989a8fb483c0a",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway.js",
+      "sha256": "7c578e09e39e7853d6bf8f8e213980c1f94d43e945f65363938316078b5ebee6",
+      "unchangedFromProduct044": true
+    },
+    {
+      "path": "src/node/runtime-service-definition-resolution.js",
+      "sha256": "543358d837a2c578b29554a67116849474f18e09b6b6fdda5ce5ea35a079500f",
+      "unchangedFromProduct044": true
+    }
+  ],
+  "scope": "Design approval only, incorporating explicit gateway retention, named startup prerequisite and reference cleanup; no implementation or public journey success claim"
+}

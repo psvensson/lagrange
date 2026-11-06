@@ -2098,7 +2098,18 @@
         "src/node/runtime-service-handler.js",
         "src/admin/admin-runtime-service-views.js",
         "src/runtime/service-discovery-catalog.js",
-        "src/cli/core/remote-cache-service-rows.js"
+        "src/cli/core/remote-cache-service-rows.js",
+        "src/bootstrap/shared/control-plane-setup.js",
+        "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
+        "src/bootstrap/node-joining-publication-activation.js",
+        "src/bootstrap/shared/guarded-runtime-service-handler.js",
+        "src/bootstrap/pgwire-startup-safety-gate.js",
+        "src/bootstrap/pgwire-startup-safety-gate-constants.js",
+        "src/bootstrap/bootstrap-service.js",
+        "src/bootstrap/node-joining-owner-construction.js",
+        "src/bootstrap/bootstrap-service-seed-delegates.js",
+        "src/bootstrap/node-joining-delegate-bundles.js",
+        "src/bootstrap/join-cleanup-handler.js"
       ],
       "tests": [
         "test/node/runtime-service-definition-authority.test.js",
@@ -2113,7 +2124,13 @@
         "test/runtime/service-discovery-catalog.test.js",
         "test/cli/core/remote-cache.test.js",
         "test/control-plane/deployment-binding-owner.test.js",
-        "test/rebalancer/call-activation-pin-planning.test.js"
+        "test/rebalancer/call-activation-pin-planning.test.js",
+        "test/bootstrap/shared/control-plane-setup.test.js",
+        "test/bootstrap/bootstrap-sequence.test.js",
+        "test/bootstrap/node-joining-service-join-lifecycle-resume.test.js",
+        "test/bootstrap/guarded-runtime-service-handler.test.js",
+        "test/bootstrap/pgwire-startup-safety-gate.test.js",
+        "test/bootstrap/cleanup-ownership-order-characterization.test.js"
       ]
     }
   },
@@ -4459,7 +4476,7 @@
       ]
     },
     "runtime-definition-create-authority": {
-      "description": "Producer-owned Binding count zero, canonical lineage and declaration digest, validated effective target, typed keyed authority, one-resolution CREATE route, actual outcome emission and retained-origin precedence change and are reviewed together. Existing real coordinator/lifecycle lane preserves its healthy budgets and churn controls; finite refusal recovery runs the actual retained retry callback with an explicitly driven scheduler boundary, not automatic wall-clock scheduling. Physical formation and public Cell composition remain separate.",
+      "description": "Producer-owned Binding count zero, canonical lineage and declaration digest, validated effective target, typed keyed authority, one-resolution CREATE route, actual outcome emission and retained-origin precedence change and are reviewed together. Existing real coordinator/lifecycle lane preserves its healthy budgets and churn controls; finite refusal recovery runs the actual retained retry callback with an explicitly driven scheduler boundary, not automatic wall-clock scheduling. Physical formation and public Cell composition remain separate. Seed and join retain the exact setup-created gateway; their shared guarded startup refuses missing or malformed readers before handler registration, and existing cleanup clears the retained reference.",
       "endpoints": [
         {
           "id": "definition-producer-and-policy",
@@ -4481,7 +4498,18 @@
             "src/node/runtime-service-handler.js",
             "src/admin/admin-runtime-service-views.js",
             "src/runtime/service-discovery-catalog.js",
-            "src/cli/core/remote-cache-service-rows.js"
+            "src/cli/core/remote-cache-service-rows.js",
+            "src/bootstrap/shared/control-plane-setup.js",
+            "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
+            "src/bootstrap/node-joining-publication-activation.js",
+            "src/bootstrap/shared/guarded-runtime-service-handler.js",
+            "src/bootstrap/pgwire-startup-safety-gate.js",
+            "src/bootstrap/pgwire-startup-safety-gate-constants.js",
+            "src/bootstrap/bootstrap-service.js",
+            "src/bootstrap/node-joining-owner-construction.js",
+            "src/bootstrap/bootstrap-service-seed-delegates.js",
+            "src/bootstrap/node-joining-delegate-bundles.js",
+            "src/bootstrap/join-cleanup-handler.js"
           ]
         }
       ],
@@ -4499,7 +4527,13 @@
         "test/runtime/service-discovery-catalog.test.js",
         "test/cli/core/remote-cache.test.js",
         "test/control-plane/deployment-binding-owner.test.js",
-        "test/rebalancer/call-activation-pin-planning.test.js"
+        "test/rebalancer/call-activation-pin-planning.test.js",
+        "test/bootstrap/shared/control-plane-setup.test.js",
+        "test/bootstrap/bootstrap-sequence.test.js",
+        "test/bootstrap/node-joining-service-join-lifecycle-resume.test.js",
+        "test/bootstrap/guarded-runtime-service-handler.test.js",
+        "test/bootstrap/pgwire-startup-safety-gate.test.js",
+        "test/bootstrap/cleanup-ownership-order-characterization.test.js"
       ]
     }
   }

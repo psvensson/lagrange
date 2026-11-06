@@ -32,6 +32,7 @@ const CONTROL_PLANE_PREREQUISITE = Object.freeze({
   LIFECYCLE_MANAGER: 'lifecycle_manager',
   SYSTEM_TABLE_CACHE: 'system_table_cache',
   HEARTBEAT_SERVICE: 'heartbeat_service',
+  AUTHORITATIVE_READER: 'authoritative_reader',
 });
 
 class PgWireStartupSafetyGate {
@@ -40,6 +41,7 @@ class PgWireStartupSafetyGate {
    * @param {string} options.nodeId - Local node ID.
    * @param {Object} options.serviceLifecycleManager - Lifecycle manager.
    * @param {Object} options.systemTableCache - System table cache.
+   * @param {Object} options.controlPlaneSystemTableGateway - Authoritative reader.
    * @param {Object} options.heartbeatService - Heartbeat service
    *   (control-plane readiness indicator).
    */
@@ -49,6 +51,7 @@ class PgWireStartupSafetyGate {
       options.serviceLifecycleManager || null;
     this.systemTableCache = options.systemTableCache || null;
     this.heartbeatService = options.heartbeatService || null;
+    this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -131,6 +134,12 @@ class PgWireStartupSafetyGate {
         dependency: CONTROL_PLANE_PREREQUISITE.HEARTBEAT_SERVICE,
         available: Boolean(this.heartbeatService),
         blockedReason: PGWIRE_SAFETY_GATE_ERROR_MSG.CONTROL_PLANE_NOT_READY,
+      },
+      {
+        dependency: CONTROL_PLANE_PREREQUISITE.AUTHORITATIVE_READER,
+        available: typeof this.controlPlaneSystemTableGateway?.readAuthoritativeRows ===
+          'function',
+        blockedReason: PGWIRE_SAFETY_GATE_ERROR_MSG.AUTHORITATIVE_READER_MISSING,
       },
     ];
   }

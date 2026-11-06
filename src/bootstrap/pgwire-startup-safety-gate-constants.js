@@ -25,6 +25,8 @@ const PGWIRE_SAFETY_GATE_ERROR_MSG = Object.freeze({
     'serviceLifecycleManager not available',
   SYSTEM_CACHE_MISSING:
     'systemTableCache not available',
+  AUTHORITATIVE_READER_MISSING:
+    'controlPlaneSystemTableGateway.readAuthoritativeRows not available',
   CONTROL_PLANE_NOT_READY:
     'heartbeatService not initialized (control plane not ready)',
 });

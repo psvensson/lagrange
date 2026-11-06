@@ -392,6 +392,7 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
     let assignedReporter = null;
     let capturedUpdateOptions = null;
     const commandOwner = {ownerId: 'join-command-owner'};
+    let controlPlaneSystemTableGateway = {readAuthoritativeRows: async () => ({rows: []})};
     const systemMetadataOwners = {ownerId: 'join-metadata-owners'};
 
     const service = new NodeJoiningService({
@@ -421,6 +422,7 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
 
     ControlPlaneSetup.create = async () => ({
       heartbeatService: {
+        stop() {},
         setNodeStateReporter(reporter) {
           assignedReporter = reporter;
         },
@@ -431,6 +433,7 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
       rebalanceCoordinator: {},
       serviceLifecycleCommandOwner: commandOwner,
       systemMetadataOwners,
+      controlPlaneSystemTableGateway,
     });
 
     try {
@@ -442,6 +445,15 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
         'join should retain the exact lifecycle command owner');
       t.equal(service.systemMetadataOwners, systemMetadataOwners,
         'join should retain the exact lifecycle metadata owners');
+      t.equal(service.controlPlaneSystemTableGateway, controlPlaneSystemTableGateway,
+        'join retains the exact authoritative read owner for runtime setup');
+      service.joinCleanupHandler.stopControlPlaneServices();
+      t.equal(service.controlPlaneSystemTableGateway, null,
+        'join cleanup clears the retained read owner');
+      controlPlaneSystemTableGateway = {readAuthoritativeRows: async () => ({rows: []})};
+      await service.initializeControlPlaneService();
+      t.equal(service.controlPlaneSystemTableGateway, controlPlaneSystemTableGateway,
+        'next join initialization installs its fresh exact owner');
 
       await assignedReporter({
         state: STATE.READY,

@@ -749,6 +749,7 @@ class JoinCleanupHandler {
       this.delegates.getDispatchService(),
       this.delegates.setDispatchService,
     );
+    this.delegates.setControlPlaneSystemTableGateway(null);
   }
 
   stopControlPlaneService(service, setter) {

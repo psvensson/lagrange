@@ -352,6 +352,14 @@ describe('ControlPlaneSetup', () => {
         assert.ok(result.rebalanceCoordinator);
         assert.ok(result.systemMetadataOwners);
         assert.strictEqual(
+          typeof result.controlPlaneSystemTableGateway?.readAuthoritativeRows,
+          'function',
+        );
+        assert.strictEqual(result.controlPlaneSystemTableGateway,
+          result.dispatchService.controlPlaneSystemTableGateway);
+        assert.strictEqual(result.controlPlaneSystemTableGateway,
+          result.rebalanceCoordinator.controlPlaneSystemTableGateway);
+        assert.strictEqual(
           result.serviceLifecycleCommandOwner.catalogOwner,
           result.systemMetadataOwners.serviceInstallCatalogOwner,
         );

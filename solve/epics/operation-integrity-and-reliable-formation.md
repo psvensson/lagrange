@@ -240,7 +240,9 @@ and its first-attempt Lenovo frozen proof (2 files/163 assertions) are approved
 by 4dafa304. The strict-hydration fixture now supplies the actual cache and one
 explicit router, reaches the real missing-SERVICES verifier and prevents mode
 swap; its two files/11 assertions and owned teardown are independently approved
-by 9a3a85f9. This is a fixture correction; committed applicability remains due.
+by 9a3a85f9. Exact 6cd5753f committed/frozen applicability is approved by
+c5c95acb (2 files/11 assertions, first attempt). This remains a fixture
+correction; full source proof and receipt admission are still due.
 Three inherited readiness callers remain red: two planning identity/build-cost
 witnesses and the missing-both-rows self-grace fixture; their first causes and
 repairs remain required, with no predecessor-red waiver. The existing
@@ -270,9 +272,12 @@ The separate public Binding journey on 04459151a fails before application CALL:
 sys-postgres-wire never publishes its endpoint and CREATE repeatedly reports
 service_definition_authority_unavailable. Diagnostic-only 339a5463, with product
 bytes unchanged from 04459151a, observes the actual handler missing its gateway.
-ControlPlaneSetup creates the owner but does not return it, and seed/join do not
-retain it for the guarded runtime setup. That composition must be repaired
-without restoring a fallback; the focused result cannot close this gap. Full
+ControlPlaneSetup created the owner without returning it, and seed/join did not
+retain it for guarded runtime setup. The bounded repair returns that exact
+owner and shares its seed/join handoff, checks the named gateway prerequisite
+in the existing startup gate, and clears the retained reference through existing
+cleanup owners. Seven focused files/334 assertions and all 33 static audits pass;
+frozen committed proof and a new public journey are still required. Full
 source-range proof remains required. The old-source negatives and independent
 malformed-lineage failures remain retained. Readiness diagnostics now attribute
 100 additional heavy builds to nested fresh bulk evaluations during publication

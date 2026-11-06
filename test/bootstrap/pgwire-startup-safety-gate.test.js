@@ -23,6 +23,7 @@ describe('PgWireStartupSafetyGate', () => {
   let mockServiceLifecycleManager;
   let mockSystemTableCache;
   let mockHeartbeatService;
+  const mockGateway = {readAuthoritativeRows: async () => ({success: true, rows: []})};
 
   beforeEach(() => {
     mockServiceLifecycleManager = {
@@ -44,9 +45,28 @@ describe('PgWireStartupSafetyGate', () => {
   });
 
   describe('checkControlPlaneReady()', () => {
+    it('names the blocked authoritative-reader prerequisite', () => {
+      for (const gateway of [undefined, {}, {readAuthoritativeRows: true}]) {
+        const gate = new PgWireStartupSafetyGate({
+          nodeId: 'test-node',
+          serviceLifecycleManager: mockServiceLifecycleManager,
+          systemTableCache: mockSystemTableCache,
+          heartbeatService: mockHeartbeatService,
+          controlPlaneSystemTableGateway: gateway,
+        });
+        assert.deepStrictEqual(gate.checkControlPlaneReady(), {
+          ready: false,
+          state: 'blocked',
+          reason: PGWIRE_SAFETY_GATE_ERROR_MSG.AUTHORITATIVE_READER_MISSING,
+          blockingDependency: 'authoritative_reader',
+        });
+      }
+    });
+
     it('should return not ready when serviceLifecycleManager is missing',
       () => {
         const gate = new PgWireStartupSafetyGate({
+          controlPlaneSystemTableGateway: mockGateway,
           nodeId: 'test-node',
           systemTableCache: mockSystemTableCache,
           heartbeatService: mockHeartbeatService,
@@ -64,6 +84,7 @@ describe('PgWireStartupSafetyGate', () => {
     it('should return not ready when systemTableCache is missing',
       () => {
         const gate = new PgWireStartupSafetyGate({
+          controlPlaneSystemTableGateway: mockGateway,
           nodeId: 'test-node',
           serviceLifecycleManager: mockServiceLifecycleManager,
           heartbeatService: mockHeartbeatService,
@@ -81,6 +102,7 @@ describe('PgWireStartupSafetyGate', () => {
     it('should return not ready when heartbeatService is missing',
       () => {
         const gate = new PgWireStartupSafetyGate({
+          controlPlaneSystemTableGateway: mockGateway,
           nodeId: 'test-node',
           serviceLifecycleManager: mockServiceLifecycleManager,
           systemTableCache: mockSystemTableCache,
@@ -97,6 +119,7 @@ describe('PgWireStartupSafetyGate', () => {
 
     it('should return ready when all prerequisites are met', () => {
       const gate = new PgWireStartupSafetyGate({
+        controlPlaneSystemTableGateway: mockGateway,
         nodeId: 'test-node',
         serviceLifecycleManager: mockServiceLifecycleManager,
         systemTableCache: mockSystemTableCache,
@@ -115,6 +138,7 @@ describe('PgWireStartupSafetyGate', () => {
   describe('guardedSetup()', () => {
     it('should return null when control plane is not ready', () => {
       const gate = new PgWireStartupSafetyGate({
+        controlPlaneSystemTableGateway: mockGateway,
         nodeId: 'test-node',
       });
 
@@ -132,6 +156,7 @@ describe('PgWireStartupSafetyGate', () => {
     it('should call setup function when control plane is ready',
       () => {
         const gate = new PgWireStartupSafetyGate({
+          controlPlaneSystemTableGateway: mockGateway,
           nodeId: 'test-node',
           serviceLifecycleManager: mockServiceLifecycleManager,
           systemTableCache: mockSystemTableCache,
@@ -151,6 +176,7 @@ describe('PgWireStartupSafetyGate', () => {
 
     it('should isolate setup failure and return null', () => {
       const gate = new PgWireStartupSafetyGate({
+        controlPlaneSystemTableGateway: mockGateway,
         nodeId: 'test-node',
         serviceLifecycleManager: mockServiceLifecycleManager,
         systemTableCache: mockSystemTableCache,
@@ -167,6 +193,7 @@ describe('PgWireStartupSafetyGate', () => {
 
     it('should not throw when setup function throws', () => {
       const gate = new PgWireStartupSafetyGate({
+        controlPlaneSystemTableGateway: mockGateway,
         nodeId: 'test-node',
         serviceLifecycleManager: mockServiceLifecycleManager,
         systemTableCache: mockSystemTableCache,
@@ -185,6 +212,7 @@ describe('PgWireStartupSafetyGate', () => {
     it('should not deadlock bootstrap when PG wire setup fails',
       () => {
         const gate = new PgWireStartupSafetyGate({
+          controlPlaneSystemTableGateway: mockGateway,
           nodeId: 'seed-node',
           serviceLifecycleManager: mockServiceLifecycleManager,
           systemTableCache: mockSystemTableCache,
@@ -207,6 +235,7 @@ describe('PgWireStartupSafetyGate', () => {
       () => {
         // Simulate early bootstrap: no heartbeat service yet
         const gate = new PgWireStartupSafetyGate({
+          controlPlaneSystemTableGateway: mockGateway,
           nodeId: 'seed-node',
           serviceLifecycleManager: mockServiceLifecycleManager,
           systemTableCache: mockSystemTableCache,
@@ -228,6 +257,7 @@ describe('PgWireStartupSafetyGate', () => {
   describe('join safety (Req 11.2, 11.3, 11.4)', () => {
     it('should not deadlock join when PG wire setup fails', () => {
       const gate = new PgWireStartupSafetyGate({
+        controlPlaneSystemTableGateway: mockGateway,
         nodeId: 'joining-node',
         serviceLifecycleManager: mockServiceLifecycleManager,
         systemTableCache: mockSystemTableCache,
@@ -245,6 +275,7 @@ describe('PgWireStartupSafetyGate', () => {
       () => {
         // Simulate join flow before control plane init
         const gate = new PgWireStartupSafetyGate({
+          controlPlaneSystemTableGateway: mockGateway,
           nodeId: 'joining-node',
           serviceLifecycleManager: null,
           systemTableCache: mockSystemTableCache,
@@ -274,6 +305,7 @@ describe('PgWireStartupSafetyGate', () => {
 
         // Step 2: PG wire gate check
         const gate = new PgWireStartupSafetyGate({
+          controlPlaneSystemTableGateway: mockGateway,
           nodeId: 'test-node',
           serviceLifecycleManager: mockServiceLifecycleManager,
           systemTableCache: mockSystemTableCache,
@@ -297,6 +329,7 @@ describe('PgWireStartupSafetyGate', () => {
 
         // PG wire gate check BEFORE control plane
         const gate = new PgWireStartupSafetyGate({
+          controlPlaneSystemTableGateway: mockGateway,
           nodeId: 'test-node',
           serviceLifecycleManager: null,
           systemTableCache: null,

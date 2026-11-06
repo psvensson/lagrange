@@ -231,6 +231,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     this.leaseService = null;
     this.endpointService = null;
     this.dispatchService = null;
+    this.controlPlaneSystemTableGateway = null;
     this.rebalanceCoordinator = null; // Unified runtime ownership wiring.
     const runtimeWiring = createRuntimeStartupWiring({
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),

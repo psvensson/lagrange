@@ -1,0 +1,157 @@
+{
+  "reviewer": "subagent:/root/independent_review",
+  "ruleSetRevision": 5,
+  "candidate": "6cd5753fb23e32d0f9d73676ab7651ba650cb6b5",
+  "parent": "502c603f2460bb2ff5f2c46e62517c00086f5428",
+  "reviewedInputMatchesCommit": [
+    {
+      "path": "test/bootstrap/cache-hydration-strictness.test.js",
+      "sha256": "f40f2b69d67d0111b7421f232d66649559aa23683965efb68044421fa9cf78af"
+    }
+  ],
+  "productAndScriptsDiffEmpty": true,
+  "commitPaths": [
+    {
+      "path": "solve/changes/global-owner-debt-inventory/inventory.json",
+      "sha256": "462e2d6ffc989fae1ff5973ec4dc794194bf3ec2a71f398ed0edf461ef5cfeaf"
+    },
+    {
+      "path": "solve/epics/operation-integrity-and-reliable-formation.md",
+      "sha256": "7e70ec12be5f29a618b2a23bd4e0a6eaa4a09bdc56958a1317f2f3f93cdd4601"
+    },
+    {
+      "path": "solve/quests/readiness-bulk-required-domain/evidence/independent-502c603f-applicability.md",
+      "sha256": "4dafa304a571a73616c851d0e92fedbefea5a00a6e949842474928841f84df82"
+    },
+    {
+      "path": "solve/quests/readiness-bulk-required-domain/evidence/independent-502c603f-inputs.json",
+      "sha256": "a54ebe76bacab2ceca3de1792896b3f89e5912d20f339daea8d3113d5a5d0d94"
+    },
+    {
+      "path": "solve/quests/readiness-bulk-required-domain/log.ndjson",
+      "sha256": "3834371af0d292e20c87f7c2b94337cc0df541df0b3dcd0c147c6781f60f7c35"
+    },
+    {
+      "path": "solve/quests/runtime-definition-create-authority/log.ndjson",
+      "sha256": "e7bba0ca3880bcc7a4c3f1a058a09544b4899e107aa8107d11bdf77cf73539ce"
+    },
+    {
+      "path": "solve/quests/strict-hydration-fixture-owner-ports/evidence/independent-hydration-fixture-inputs.json",
+      "sha256": "aacd59283a90a767cfec1cc429b3fee8ffecf3adf8d1d5cf542ba01368a81eec"
+    },
+    {
+      "path": "solve/quests/strict-hydration-fixture-owner-ports/evidence/independent-hydration-fixture-review.md",
+      "sha256": "9a3a85f9ec9128fd41b64bfb536e91beb0969a5a688c9f8910b240c70e9bd174"
+    },
+    {
+      "path": "solve/quests/strict-hydration-fixture-owner-ports/evidence/receipt.json",
+      "sha256": "2c690b82e3fcec7cdc9a592d65b6fba8ac96dc1b4935ab6b70dbd9919ecb8217"
+    },
+    {
+      "path": "solve/quests/strict-hydration-fixture-owner-ports/log.ndjson",
+      "sha256": "49d45c6b1865d3e008e4ca1f8fcea24e71c65720dabb7e974835c4bfbdb0702a"
+    },
+    {
+      "path": "solve/quests/strict-hydration-fixture-owner-ports/quest.json",
+      "sha256": "b1b771f7a7186e37d987d656465fdf39d88599424c678fc0a424089c4b8b5a40"
+    },
+    {
+      "path": "test/bootstrap/cache-hydration-strictness.test.js",
+      "sha256": "f40f2b69d67d0111b7421f232d66649559aa23683965efb68044421fa9cf78af"
+    },
+    {
+      "path": "test/shards/impact-graph-seal.json",
+      "sha256": "46b6b828e2104f7222c1efce709f755c333b3fa417da79fa1126468974691d63"
+    }
+  ],
+  "existingQuestLogsPrefixPreserved": true,
+  "reviewCopiesByteExact": true,
+  "receiptStatus": "fail",
+  "receiptPassed": [
+    false,
+    false,
+    false
+  ],
+  "proof": {
+    "files": 2,
+    "assertions": 11,
+    "worker": "lenovo-laptop",
+    "machineFactor": 2.2,
+    "scheduleAttempt": 1,
+    "automaticRetries": 0,
+    "exitCode": 0,
+    "runtimeVersionScope": "controller only"
+  },
+  "artifacts": [
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/hydration-implementation-content.json",
+      "bytes": 388,
+      "sha256": "e4902b7dea5960075baef3403ddf08ae92481d45eb5b841008144345a609a3df"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/independent-hydration-fixture-review.md",
+      "bytes": 4479,
+      "sha256": "9a3a85f9ec9128fd41b64bfb536e91beb0969a5a688c9f8910b240c70e9bd174"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/independent-hydration-fixture-inputs.json",
+      "bytes": 3178,
+      "sha256": "aacd59283a90a767cfec1cc429b3fee8ffecf3adf8d1d5cf542ba01368a81eec"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/hydration-final.log",
+      "bytes": 345,
+      "sha256": "4a6e0b8830a60fd872c6ab365c437a7b3c690ed5f60dce2a5cb0a1dd71d056c1"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/hydration-fixture-before.log",
+      "bytes": 1897,
+      "sha256": "dd5659055a7b64ef92687e00b7753cf0e6b7dc3b18570992f5906e95141cd6c5"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/hydration-fixture-after.log",
+      "bytes": 2558,
+      "sha256": "987ab30dd94e6cbe8a6464b15722b8c8a8b542cd09459c4d727b5a2a7207972a"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/hydration-files.json",
+      "bytes": 120,
+      "sha256": "116c0c9383592b576ab565ccea8b2f3c9e8cc27d53cb3f87087087bc0cabd8e8"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/run-frozen-hydration-6cd5753f.mjs",
+      "bytes": 2631,
+      "sha256": "0c3091f34a9fc8ddd2eae1332c092ab8ff6c076da0ce2dde299fc7d58111e0e1"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-hydration-6cd5753f.log",
+      "bytes": 2044,
+      "sha256": "b21100ac22e877d27343e801fdc10669faeef66ca1133b00a8294055bbbcf140"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-hydration-6cd5753f/environment.json",
+      "bytes": 755,
+      "sha256": "80e7833ad57ecd258bef3265340fab7ae3046db54cd2c9d32f83d23c4325d50a"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-hydration-6cd5753f/completion.json",
+      "bytes": 118,
+      "sha256": "4cb182b952e69d39c439c7686b1eb1f4eb71f2f1d8755ff80f7faa29def2d4a4"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-hydration-6cd5753f/test-results-lenovo-laptop.ndjson",
+      "bytes": 327,
+      "sha256": "83ccb324ce391e9938d7bb1a3c8a6a24253e5d20fb5b1e4b9d900579febf4c05"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/hydration-commit.log",
+      "bytes": 3845,
+      "sha256": "7e08dacee829caf1b404bb402d869f6cfa3ae800715ba3115a00ab6f4a3f72d2"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/hydration-push.log",
+      "bytes": 597,
+      "sha256": "6416b887dcde6f979fac4c8002e93839b93e3873cafe5043bff54770be69ed57"
+    }
+  ]
+}
