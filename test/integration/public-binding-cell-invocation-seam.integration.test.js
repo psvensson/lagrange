@@ -31,6 +31,7 @@
  * surface starts the listener) and one managed split for shaping.
  */
 
+import './helpers/runtime-definition-authority-observer.js';
 import {mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';

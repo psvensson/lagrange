@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3441253,
-        "sha256": "9692ecd1a115467f89e84c63aea18655fb37f04807a0a758362eddc224861477"
+        "bytes": 3441754,
+        "sha256": "32b5f30d49020c61f60bbe2d0cf91139b073ce8f8c4cf4715b18c59e13116bb8"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "d0ae9abb8b30c12c4039e93b0ff878b9de7eb26fce7e8481e22e417bbfb7f1a0"
+        "sha256": "8615c2514b5ff3a4f714725d520399ae0c3ac1cd18c4ac53b1472ddcb6a8635d"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "f5266220db2c144811088005721870941fc22d098f1ee0d7cf7494e62d4a82ac"
+    "inputDigest": "b8a67e1847341ac8465bb52c7f80bcb701206a73631fa0cfa12788271a4fac0e"
   },
   "reconciliation": {
     "complexity": {
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "d0ae9abb8b30c12c4039e93b0ff878b9de7eb26fce7e8481e22e417bbfb7f1a0"
+          "sha256": "8615c2514b5ff3a4f714725d520399ae0c3ac1cd18c4ac53b1472ddcb6a8635d"
         },
         "cloneGroups": 632,
         "duplicatedLines": 23837,
@@ -173,17 +173,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3441253,
-        "sha256": "9692ecd1a115467f89e84c63aea18655fb37f04807a0a758362eddc224861477"
+        "bytes": 3441754,
+        "sha256": "32b5f30d49020c61f60bbe2d0cf91139b073ce8f8c4cf4715b18c59e13116bb8"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "db832999a81c6b0fbbeb293e937a789de80441ae6563f9e7d590e93c7221eef8",
-      "moduleCount": 6078,
-      "edgeCount": 33698,
+      "sourceDigest": "5ec2f3620a37840b9960513d12fe8f6ac66a8ded4726b265cbd3e2ad885217cc",
+      "moduleCount": 6079,
+      "edgeCount": 33701,
       "unresolvedCount": 46
     }
   },
@@ -757,7 +757,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 205,
+      "importIn": 206,
       "importOut": 48,
       "score": 129.8,
       "topPaths": [
@@ -953,7 +953,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 240,
+      "importIn": 241,
       "importOut": 113,
       "score": 92,
       "topPaths": [
