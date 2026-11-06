@@ -1,0 +1,27 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "tap-default-machine-factor-portability",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "child-default-budget",
+      "passed": false,
+      "detail": "Inherited unscaled TAP default is confirmed on ab554; independent implementation and exact-candidate proof pending."
+    },
+    {
+      "id": "precedence-and-refusal",
+      "passed": false,
+      "detail": "Inherited unscaled TAP default is confirmed on ab554; independent implementation and exact-candidate proof pending."
+    },
+    {
+      "id": "real-group-caller",
+      "passed": false,
+      "detail": "Inherited unscaled TAP default is confirmed on ab554; independent implementation and exact-candidate proof pending."
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "detail": "Inherited unscaled TAP default is confirmed on ab554; independent implementation and exact-candidate proof pending."
+    }
+  ]
+}
