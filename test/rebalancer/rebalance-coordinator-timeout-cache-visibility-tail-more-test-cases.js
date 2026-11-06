@@ -58,7 +58,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -136,7 +136,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -195,7 +195,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -267,7 +267,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -330,7 +330,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -407,7 +407,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -592,7 +592,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine,
@@ -879,7 +879,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         sqlQueryEngine,
@@ -1039,7 +1039,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine,
@@ -1096,7 +1096,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       sqlQueryEngine: {
@@ -1163,7 +1163,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {

@@ -203,7 +203,7 @@ export function registerPriorityRecoverySpreadSatisfiedStallReentryTestCases(
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       setTimeoutFn(fn, delayMs) {

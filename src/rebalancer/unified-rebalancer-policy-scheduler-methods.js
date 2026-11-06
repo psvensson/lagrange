@@ -1,3 +1,5 @@
+import {readPolicyForPartition} from '../policy/table-policy-resolution.js';
+
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {liveActivationPinNodeIds} from
   '../service/call-activation-lease-owner.js';
@@ -44,7 +46,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
    * @return {Promise<Object>} Table policy.
    */
   async getTablePolicy() {
-    return this.tablePolicyService.getPolicyForPartition(this.entityId);
+    return readPolicyForPartition(this.tablePolicyService, this.entityId);
   }
 
   /**

@@ -216,7 +216,7 @@ test('REMOVE must not rest terminal REMOVED while the retired ' +
     enableTimeouts: false,
     messageRouter: buildInitiatedDeliveryRouter(deliveries),
     tablePolicyService: {
-      getPolicyForPartition: () => ({minReplicaCount: 3}),
+      getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
     },
     cacheData: {
       nodes: [

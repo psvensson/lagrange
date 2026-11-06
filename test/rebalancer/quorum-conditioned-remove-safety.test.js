@@ -127,7 +127,7 @@ test('RebalanceCoordinator - blocks REMOVE that drops critical voter quorum', as
       isOutboundQueueAvailable: () => true,
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({minReplicaCount: 3}),
+      getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
     },
     cacheData: {
       nodes: [
@@ -199,7 +199,7 @@ test('RebalanceCoordinator - logs quorum safety block as warning, not error', as
       isOutboundQueueAvailable: () => true,
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({minReplicaCount: 3}),
+      getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
     },
     cacheData: {
       nodes: [
@@ -269,7 +269,7 @@ test('RebalanceCoordinator - lower-case remove preflight respects safety policy'
     nodeId: 'seed-node',
     enableTimeouts: false,
     tablePolicyService: {
-      getPolicyForPartition: () => ({minReplicaCount: 3}),
+      getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
     },
     cacheData: {
       nodes: [
@@ -346,7 +346,7 @@ test('RebalanceCoordinator - normalizes object error payloads for safety-blocked
         isOutboundQueueAvailable: () => true,
       },
       tablePolicyService: {
-        getPolicyForPartition: () => ({minReplicaCount: 3}),
+        getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
       },
       cacheData: {
         nodes: [
@@ -434,7 +434,7 @@ test('RebalanceCoordinator - normalizes errorMessage payloads for safety-blocked
         isOutboundQueueAvailable: () => true,
       },
       tablePolicyService: {
-        getPolicyForPartition: () => ({minReplicaCount: 3}),
+        getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
       },
       cacheData: {
         nodes: [
@@ -519,7 +519,7 @@ test('RebalanceCoordinator - allows REMOVE when projected quorum remains safe', 
       isOutboundQueueAvailable: () => true,
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({minReplicaCount: 2}),
+      getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 2}),
     },
     cacheData: {
       nodes: [
@@ -591,7 +591,7 @@ test('RebalanceCoordinator - defers REPLACE remove until replacement is voter-re
         isOutboundQueueAvailable: () => true,
       },
       tablePolicyService: {
-        getPolicyForPartition: () => ({minReplicaCount: 2}),
+        getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 2}),
       },
       cacheData: {
         nodes: [
@@ -705,7 +705,7 @@ test('RebalanceCoordinator - defers over-replicated REMOVE until quorum is voter
         isOutboundQueueAvailable: () => true,
       },
       tablePolicyService: {
-        getPolicyForPartition: () => ({minReplicaCount: 3}),
+        getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
       },
       cacheData: {
         nodes: [
@@ -834,7 +834,7 @@ test('RebalanceCoordinator - defers critical REPLACE source removal until owner-
         },
       }),
       tablePolicyService: {
-        getPolicyForPartition: () => ({minReplicaCount: 3}),
+        getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
       },
       cacheData: {
         nodes: [
@@ -1021,7 +1021,7 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
         },
       }),
       tablePolicyService: {
-        getPolicyForPartition: () => ({minReplicaCount: 3}),
+        getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
       },
       cacheData: {
         nodes: [

@@ -54,7 +54,7 @@ const policyArb = fc.integer({min: 3, max: 7}).chain((maxReplica) => {
   // Ensure maxReplica is odd
   const adjustedMax = maxReplica % 2 === 0 ? maxReplica + 1 : maxReplica;
   return fc.record({
-    replicaCount: fc.constantFrom(3, 5, 7).filter((r) => r <= adjustedMax),
+    targetReplicaCount: fc.constantFrom(3, 5, 7).filter((r) => r <= adjustedMax),
     minReplicaCount: fc.constant(3),
     maxReplicaCount: fc.constant(adjustedMax),
     placementConstraints: fc.record({
@@ -130,7 +130,7 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
           });
 
           const policy = {
-            replicaCount: 3,
+            targetReplicaCount: 3,
             minReplicaCount: 3,
             maxReplicaCount: 7,
             placementConstraints: {spreadAcrossNodes: true},

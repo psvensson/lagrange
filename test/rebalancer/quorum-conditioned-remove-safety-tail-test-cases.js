@@ -134,7 +134,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           },
         }),
         tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
         cacheData: {
           nodes: [
@@ -317,7 +317,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           },
         }),
         tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
         cacheData: {
           nodes: [
@@ -520,7 +520,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           },
         }),
         tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
         cacheData: {
           nodes: [
@@ -752,7 +752,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           },
         }),
         tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
         cacheData: {
           nodes: [
@@ -940,7 +940,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           },
         },
         tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
         cacheData: {
           nodes: [
@@ -1087,7 +1087,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           },
         },
         tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
         cacheData: {
           nodes: [

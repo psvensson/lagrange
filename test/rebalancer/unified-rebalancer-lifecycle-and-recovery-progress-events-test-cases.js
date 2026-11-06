@@ -217,7 +217,7 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
         ),
         cdcIntegrationService: createMockCdcService(),
         tablePolicyService: {
-          getPolicyForPartition: () => ({
+          getPolicyForPartition: () => ({minReplicaCount: 3,
             targetReplicaCount: 2,
             placementConstraints: {},
           }),

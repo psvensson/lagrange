@@ -44,7 +44,7 @@ function createMockTablePolicyService() {
   return {
     getDefaultPolicy: () => ({...DEFAULT_TABLE_POLICY}),
     getTablePolicy: () => ({...DEFAULT_TABLE_POLICY}),
-    getPolicyForPartition: () => ({...DEFAULT_TABLE_POLICY}),
+    getPolicyForPartition: () => ({...DEFAULT_TABLE_POLICY, targetReplicaCount: 3}),
   };
 }
 

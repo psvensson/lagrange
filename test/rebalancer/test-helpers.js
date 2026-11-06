@@ -1,3 +1,4 @@
+import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 /**
  * Shared test helpers for rebalancer tests.
  * Provides mock factories for all required dependencies.
@@ -19,7 +20,6 @@ import {
   DistributedTransactionCoordinator,
 } from '../../src/query/distributed/distributed-transaction-coordinator.js';
 import {
-  DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
   EntityType,
   MoveType,
@@ -458,10 +458,11 @@ function createMockPolicyService(options = {}) {
   return {
     getPolicyForPartition: (partitionId) => {
       const partition = partitions.find((p) => p.partition_id === partitionId);
-      if (!partition) return {...DEFAULT_TABLE_POLICY};
+      if (!partition) return {...DEFAULT_TABLE_POLICY, targetReplicaCount: 3};
       const table = tables.find((t) => t.table_id === partition.table_id);
-      if (!table || !table.table_policies) return {...DEFAULT_TABLE_POLICY};
-      return {...DEFAULT_TABLE_POLICY, ...JSON.parse(table.table_policies)};
+      if (!table || !table.table_policies) return {...DEFAULT_TABLE_POLICY, targetReplicaCount: 3};
+      return {...DEFAULT_TABLE_POLICY, ...JSON.parse(table.table_policies),
+        targetReplicaCount: partition.replica_count ?? 3};
     },
     getMessageGroupPolicy: async () => ({...DEFAULT_MESSAGE_GROUP_POLICY}),
   };

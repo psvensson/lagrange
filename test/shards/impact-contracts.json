@@ -2027,6 +2027,43 @@
         "test/control-plane/serve-eligibility-owner.test.js",
         "test/query/schema-provisioning-job-owner.test.js"
       ]
+    },
+    "partition-declaration-policy-and-placement": {
+      "description": "Partition declarations supply the only placement target. Policy absence remains a typed retryable refusal; table-target mutation requests are terminal before effects; existing planning and REMOVE owners retain custody and recover after finite unavailability.",
+      "owners": [
+        "src/bootstrap/replication-target-authority.js",
+        "src/policy/policy-constants.js",
+        "src/policy/table-policy-resolution.js",
+        "src/policy/table-policy-validation.js",
+        "src/policy/table-policy-service.js",
+        "src/rebalancer/move-planner.js",
+        "src/rebalancer/move-planner-state-methods.js",
+        "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
+        "src/rebalancer/rebalance-coordinator-shared.js",
+        "src/rebalancer/priority-publication-safety-rows.js",
+        "src/rebalancer/unified-rebalancer-policy-scheduler-methods.js",
+        "src/partition/partition-split-merge-manager-core-methods.js",
+        "src/query/user-table-create-intent.js",
+        "src/query/table-creation-service-create-table.js",
+        "src/admin/admin-owner-operations.js"
+      ],
+      "tests": [
+        "test/rebalancer/planner-target-authority-divergence-probe.test.js",
+        "test/rebalancer/partition-policy-unavailability-redrive.test.js",
+        "test/rebalancer/partition-policy-remove-retry.test.js",
+        "test/rebalancer/rebalance-coordinator-topology-guard.test.js",
+        "test/policy/table-policy-target-refusal.test.js",
+        "test/policy/table-policy-service.test.js",
+        "test/policy/table-policy-application.property.test.js",
+        "test/policy/policy-driven-adjustment.property.test.js",
+        "test/policy/table-policy-clock-seam.test.js",
+        "test/rebalancer/unified-rebalancer-odd-replica-policy-rebalancing.test.js",
+        "test/rebalancer/unified-rebalancer-node-readiness-replica-state.test.js",
+        "test/partition/partition-split-policy-precedence.test.js",
+        "test/sql-engine-read-migration.test.js",
+        "test/query/table-creation-service.test.js",
+        "test/admin/admin-owner-operations.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -4291,6 +4328,44 @@
         "test/node/replica-create-timeout-replay-custody.test.js",
         "test/node/replica-create-admission-recovery.test.js",
         "test/rebalancer/terminal-failed-add-target-cleanup.test.js"
+      ]
+    },
+    "partition-declaration-policy-and-placement": {
+      "description": "The policy adapter projects the canonical persisted partition target and its consumers preserve that target and unavailable outcome through planning, admission, REMOVE safety, split/merge and request ingress.",
+      "endpoints": [
+        {
+          "id": "partition-target-and-policy-owner",
+          "owners": [
+            "src/bootstrap/replication-target-authority.js",
+            "src/policy/policy-constants.js",
+            "src/policy/table-policy-resolution.js",
+            "src/policy/table-policy-validation.js",
+            "src/policy/table-policy-service.js"
+          ]
+        },
+        {
+          "id": "placement-safety-and-request-consumers",
+          "owners": [
+            "src/rebalancer/move-planner.js",
+            "src/rebalancer/move-planner-state-methods.js",
+            "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
+            "src/rebalancer/rebalance-coordinator-shared.js",
+            "src/rebalancer/priority-publication-safety-rows.js",
+            "src/rebalancer/unified-rebalancer-policy-scheduler-methods.js",
+            "src/partition/partition-split-merge-manager-core-methods.js",
+            "src/query/user-table-create-intent.js",
+            "src/query/table-creation-service-create-table.js",
+            "src/admin/admin-owner-operations.js"
+          ]
+        }
+      ],
+      "contract": "partition-declaration-policy-and-placement",
+      "witnessTests": [
+        "test/rebalancer/planner-target-authority-divergence-probe.test.js",
+        "test/rebalancer/partition-policy-unavailability-redrive.test.js",
+        "test/rebalancer/partition-policy-remove-retry.test.js",
+        "test/rebalancer/rebalance-coordinator-topology-guard.test.js",
+        "test/policy/table-policy-target-refusal.test.js"
       ]
     }
   }

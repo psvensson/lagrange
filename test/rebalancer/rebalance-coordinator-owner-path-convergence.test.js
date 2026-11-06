@@ -255,7 +255,7 @@ function createConvergenceCoordinator(options = {}) {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -870,7 +870,7 @@ test('Owner-path convergence: all progression entry points ' +
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {

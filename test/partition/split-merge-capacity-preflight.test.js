@@ -115,7 +115,7 @@ function buildManager(options = {}) {
     keyRangeManager,
     getPartitionMetrics: async (id) => metricsMap[id] || {},
     tablePolicyService: {
-      getPolicyForPartition: async () => ({}),
+      getPolicyForPartition: async () => ({targetReplicaCount: 3, minReplicaCount: 3}),
     },
     storageAdmissionService: options.admission || null,
     storageAccountingService: options.accounting || null,
@@ -342,7 +342,7 @@ test('evaluateAllPartitions - merge candidates remain eligible ' +
     listPartitions,
     getPartitionMetrics: async (id) => metricsMap[id] || {},
     tablePolicyService: {
-      getPolicyForPartition: async () => ({}),
+      getPolicyForPartition: async () => ({targetReplicaCount: 3, minReplicaCount: 3}),
     },
     storageAdmissionService: admission,
     storageAccountingService: accounting,

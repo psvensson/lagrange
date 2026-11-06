@@ -203,7 +203,7 @@ export async function runReplacementElectionNudgeScenario(context, t, {
       membershipTargetNodeId: testReplacementNodeId,
     }),
     tablePolicyService: {
-      getPolicyForPartition: () => ({minReplicaCount: 3}),
+      getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
     },
     cacheData: {
       nodes: ['node-a', 'node-b', 'node-c', 'node-d'].map(createReadyNode),

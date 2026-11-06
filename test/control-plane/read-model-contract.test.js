@@ -171,7 +171,7 @@ test('RebalanceCoordinator.getEntityInFlightReplicaIds fails closed when its ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -235,7 +235,7 @@ test('emitReplicaStatusDivergence emits FIELD_MISMATCH when cache ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -301,7 +301,7 @@ test('emitReplicaStatusDivergence emits CACHE_MISSING when cache ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -363,7 +363,7 @@ test('emitReplicaStatusDivergence emits AUTHORITATIVE_MISSING when ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -425,7 +425,7 @@ test('emitReplicaStatusDivergence does not emit when cache and ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -482,7 +482,7 @@ test('emitReplicaStatusDivergence does not emit when replicaId ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {

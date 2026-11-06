@@ -1,3 +1,5 @@
+import {createMockPolicyService} from './test-helpers.js';
+import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 /**
  * Unit tests for UnifiedRebalancer.
  * Tests the core rebalancing logic for partitions and message groups.
@@ -21,7 +23,6 @@ import {
   MoveType,
   ReplicaStatus,
   NodeStatus,
-  DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {
@@ -251,22 +252,7 @@ function createMockCdcService() {
 }
 
 // Create mock table policy service
-function createMockPolicyService(partitions = [], tables = []) {
-  return {
-    getPolicyForPartition: (partitionId) => {
-      const partition = partitions.find((p) => p.partition_id === partitionId);
-      if (!partition) return {...DEFAULT_TABLE_POLICY};
-      const table = tables.find((t) => t.table_id === partition.table_id);
-      if (!table || !table.table_policies) return {...DEFAULT_TABLE_POLICY};
-      try {
-        return {...DEFAULT_TABLE_POLICY, ...JSON.parse(table.table_policies)};
-      } catch (_e) {
-        return {...DEFAULT_TABLE_POLICY};
-      }
-    },
-    getMessageGroupPolicy: async () => ({...DEFAULT_MESSAGE_GROUP_POLICY}),
-  };
-}
+
 
 // Create mock message router
 function createMockMessageRouter(
@@ -417,9 +403,7 @@ function createTestRebalancer(options = {}) {
     serviceEndpoints,
   );
   const mockCdcService = cdcIntegrationService || createMockCdcService();
-  const mockPolicyService = createMockPolicyService(
-    partitions, tables,
-  );
+  const mockPolicyService = createMockPolicyService({partitions: partitions, tables: tables});
   const mockMessageRouter = messageRouter ||
     createMockMessageRouter(connectionState);
   const mockCoordinator = rebalanceCoordinator || createMockCoordinator();
@@ -500,7 +484,6 @@ const unifiedRebalancerTestContext = {
   createMockReadinessService,
   createTestRebalancer,
   DEFAULT_MESSAGE_GROUP_POLICY,
-  DEFAULT_TABLE_POLICY,
   EntityType,
   initializeTestEnvironment,
   LOCAL_MUTATION_TEST_CONTROL_PLANE_WRITE_UNHEALTHY,
@@ -607,3 +590,5 @@ registerUnifiedRebalancerSurrogateFollowupSynthesisTests(unifiedRebalancerTestCo
 registerUnifiedRebalancerClosureWitnessFollowupTests(unifiedRebalancerTestContext);
 registerUnifiedRebalancerBudgetArbitrationCleanupTests(unifiedRebalancerTestContext);
 registerUnifiedRebalancerBudgetQueryGatewayTests(unifiedRebalancerTestContext);
+
+export {DEFAULT_TABLE_POLICY};

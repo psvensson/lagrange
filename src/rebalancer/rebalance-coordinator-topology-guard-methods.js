@@ -1,5 +1,9 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
+  readPolicyForPartition,
+  requirePolicyTargetReplicaCount,
+} from '../policy/table-policy-resolution.js';
+import {
   countsTowardVoterTarget,
   occupiesNode,
 } from './replica-inventory.js';
@@ -30,7 +34,6 @@ const {
   SERVICE_TYPE,
   STORAGE_ADMISSION_DECISION_TYPE,
   SYSTEM_TABLE_NAME,
-  TOPOLOGY_GUARD_DEFAULT_PARTITION_TARGET_REPLICA_COUNT,
   TOPOLOGY_GUARD_REASON,
   TOPOLOGY_GUARD_STATE,
   UNIFIED_SERVICE_TYPE,
@@ -318,52 +321,19 @@ class RebalanceCoordinatorTopologyGuardMethods {
     if (entityType !== SERVICE_TYPE.PARTITION) {
       return null;
     }
-    let policy = null;
     try {
-      if (
-        this.tablePolicyService &&
-        typeof this.tablePolicyService.getPolicyForPartition === LOCAL_STR_FUNCTION
-      ) {
-        policy =
-          await this.tablePolicyService.getPolicyForPartition(partitionId);
-      }
-    } catch (_error) {
-      policy = null;
+      const policy = await readPolicyForPartition(this.tablePolicyService, partitionId);
+      return requirePolicyTargetReplicaCount(policy);
+    } catch {
+      return null;
     }
-    const rawTargetReplicaCount = Number(
-      policy?.targetReplicaCount || policy?.replicaCount,
-    );
-    if (
-      Number.isFinite(rawTargetReplicaCount) &&
-      rawTargetReplicaCount > 0
-    ) {
-      return Math.floor(rawTargetReplicaCount);
-    }
-    return TOPOLOGY_GUARD_DEFAULT_PARTITION_TARGET_REPLICA_COUNT;
   }
 
   async resolvePrioritySurplusRemoveFenceTargetReplicaCount({
     partitionId,
     entityType,
   }) {
-    if (
-      entityType !== SERVICE_TYPE.PARTITION ||
-      typeof this.tablePolicyService?.getPolicyForPartition !==
-        LOCAL_STR_FUNCTION
-    ) {
-      return null;
-    }
-    try {
-      const policy =
-        await this.tablePolicyService.getPolicyForPartition(partitionId);
-      const targetReplicaCount = Number(
-        policy?.targetReplicaCount ?? policy?.replicaCount,
-      );
-      return Number.isInteger(targetReplicaCount) && targetReplicaCount > 0 ?
-        targetReplicaCount : null;
-    } catch {
-      return null;
-    }
+    return this.resolveTopologyGuardTargetReplicaCount({partitionId, entityType});
   }
 
   isPrioritySurplusRemovePlacementFenceApplicable(context) {
@@ -581,6 +551,11 @@ class RebalanceCoordinatorTopologyGuardMethods {
         targetReplicaCount,
       );
     const topologyGuardDecisionTable = Object.freeze([
+      Object.freeze({
+        matches: entityType === SERVICE_TYPE.PARTITION && targetReplicaCount === null,
+        state: TOPOLOGY_GUARD_STATE.TARGET_UNAVAILABLE,
+        blockingReason: TOPOLOGY_GUARD_REASON.PARTITION_TARGET_UNAVAILABLE,
+      }),
       Object.freeze({
         matches:
           !inventory.provenance.topologyIncreaseUsable &&

@@ -6,7 +6,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {TablePolicyService} from '../../src/policy/table-policy-service.js';
 import {NUM, STRING, TYPEOF} from '../../src/constants/index.js';
-import {POLICY_ERROR_MSG} from '../../src/policy/policy-constants.js';
+import {POLICY_ERROR_CODE, POLICY_ERROR_MSG} from '../../src/policy/policy-constants.js';
 import {CDC_TABLE_POLICY_REFUSAL} from '../../src/cache/cdc-table-policy.js';
 import {
   STORAGE_PLACEMENT_CONSTRAINT,
@@ -60,8 +60,8 @@ test('TablePolicyService - getDefaultPolicy returns complete policy',
     const service = new TablePolicyService();
     const policy = service.getDefaultPolicy();
 
-    t.equal(policy.replicaCount, 3,
-      'Default replica count should be 3');
+    t.notOk(Object.hasOwn(policy, 'targetReplicaCount'),
+      'Table defaults do not declare a partition target');
     t.equal(policy.minReplicaCount, 3,
       'Default min replica count should be 3');
     t.equal(policy.maxReplicaCount, 7,
@@ -102,14 +102,12 @@ test('TablePolicyService - getDefaultPolicy returns complete policy',
     t.end();
   });
 
-test('TablePolicyService - getTablePolicy without engine returns default',
+test('TablePolicyService - unavailable table read is retryable, never a default',
   async (t) => {
     const service = new TablePolicyService();
-    const policy = await service.getTablePolicy('non-existent');
-
-    t.equal(policy.replicaCount, 3,
-      'Should return default policy without engine');
-    t.end();
+    await t.rejects(service.getTablePolicy('non-existent'), {
+      code: POLICY_ERROR_CODE.READ_UNAVAILABLE, deferRetry: true,
+    });
   });
 
 test('TablePolicyService - getTablePolicy merges stored policy',
@@ -120,7 +118,7 @@ test('TablePolicyService - getTablePolicy merges stored policy',
           table_id: 'table-1',
           table_name: 'test_table',
           table_policies: JSON.stringify({
-            replicaCount: 5,
+            splitTrafficThreshold: 5,
             splitStorageThreshold: 5 * 1024 * 1024 * 1024,
           }),
         },
@@ -132,8 +130,8 @@ test('TablePolicyService - getTablePolicy merges stored policy',
     });
     const policy = await service.getTablePolicy('table-1');
 
-    t.equal(policy.replicaCount, 5,
-      'Should use stored replica count');
+    t.equal(policy.splitTrafficThreshold, 5,
+      'Should use stored traffic threshold');
     t.equal(policy.splitStorageThreshold,
       5 * 1024 * 1024 * 1024, 'Should use stored threshold');
     t.equal(policy.minReplicaCount, 3,
@@ -151,12 +149,13 @@ test('TablePolicyService - getPolicyForPartition looks up table',
         'partition-1': {
           partition_id: 'partition-1',
           table_id: 'table-1',
+          replica_count: 5,
         },
       },
       tables: {
         'table-1': {
           table_id: 'table-1',
-          table_policies: JSON.stringify({replicaCount: 5}),
+          table_policies: JSON.stringify({splitTrafficThreshold: 5}),
         },
       },
     });
@@ -167,12 +166,12 @@ test('TablePolicyService - getPolicyForPartition looks up table',
     const policy =
       await service.getPolicyForPartition('partition-1');
 
-    t.equal(policy.replicaCount, 5,
+    t.equal(policy.splitTrafficThreshold, 5,
       'Should get policy from partition table');
     t.end();
   });
 
-test('TablePolicyService - getPolicyForPartition uses system cache fallback',
+test('TablePolicyService - getPolicyForPartition reads the configured system-cache observation',
   async (t) => {
     const mockCache = {
       getAll(tableName) {
@@ -180,13 +179,14 @@ test('TablePolicyService - getPolicyForPartition uses system cache fallback',
           return [{
             partition_id: 'partition-1',
             table_id: 'table-1',
+            replica_count: 5,
           }];
         }
         if (tableName === 'tables') {
           return [{
             table_id: 'table-1',
             table_policies: JSON.stringify({
-              replicaCount: 5,
+              splitTrafficThreshold: 5,
               splitStorageThreshold: 16384,
             }),
           }];
@@ -201,7 +201,7 @@ test('TablePolicyService - getPolicyForPartition uses system cache fallback',
     const policy =
       await service.getPolicyForPartition('partition-1');
 
-    t.equal(policy.replicaCount, 5,
+    t.equal(policy.splitTrafficThreshold, 5,
       'Should resolve replica count from cached table policy');
     t.equal(policy.splitStorageThreshold, 16384,
       'Should resolve split threshold from cached table policy');
@@ -213,7 +213,6 @@ test('TablePolicyService - validatePolicy accepts valid policy',
     const service = new TablePolicyService();
 
     const validPolicy = {
-      replicaCount: 5,
       minReplicaCount: 3,
       maxReplicaCount: 7,
       splitStorageThreshold: 10 * 1024 * 1024 * 1024,
@@ -231,7 +230,7 @@ test('TablePolicyService - validatePolicy rejects even replica counts',
     const service = new TablePolicyService();
 
     const invalidPolicy = {
-      replicaCount: 4,
+      minReplicaCount: 4,
     };
 
     const result = service.validatePolicy(invalidPolicy);
@@ -326,7 +325,7 @@ test('TablePolicyService - updateTablePolicy writes via CDC',
       cdcIntegrationService: mockCDC,
     });
 
-    await service.updateTablePolicy('table-1', {replicaCount: 5});
+    await service.updateTablePolicy('table-1', {splitTrafficThreshold: 5});
 
     t.equal(mockCDC.updates.length, 1,
       'Should have one CDC update');
@@ -338,8 +337,8 @@ test('TablePolicyService - updateTablePolicy writes via CDC',
 
     const updatedPolicy =
       JSON.parse(mockCDC.updates[0].data.table_policies);
-    t.equal(updatedPolicy.replicaCount, 5,
-      'Should have updated replica count');
+    t.equal(updatedPolicy.splitTrafficThreshold, 5,
+      'Should have updated traffic threshold');
     t.end();
   });
 
@@ -361,7 +360,7 @@ test('TablePolicyService - updateTablePolicy rejects invalid updates',
     });
 
     try {
-      await service.updateTablePolicy('table-1', {replicaCount: 4});
+      await service.updateTablePolicy('table-1', {minReplicaCount: 4});
       t.fail('Should have thrown error');
     } catch (error) {
       t.ok(error.message.includes('Invalid'),
@@ -455,34 +454,19 @@ test('TablePolicyService - getMergeThresholds returns correct values',
     t.end();
   });
 
-test('TablePolicyService - getReplicationSettings returns values',
+test('TablePolicyService - table policy exposes safety limits without a target',
   async (t) => {
-    const mockEngine = createMockSqlEngine({
-      tables: {
-        'table-1': {
-          table_id: 'table-1',
-          table_policies: JSON.stringify({
-            replicaCount: 5,
-            minReplicaCount: 3,
-            maxReplicaCount: 9,
-          }),
-        },
-      },
-    });
-
-    const service = new TablePolicyService({
-      sqlQueryEngine: mockEngine,
-    });
-    const settings =
-      await service.getReplicationSettings('table-1');
-
-    t.equal(settings.replicaCount, 5,
-      'Should return replica count');
-    t.equal(settings.minReplicaCount, 3,
-      'Should return min replica count');
-    t.equal(settings.maxReplicaCount, 9,
-      'Should return max replica count');
-    t.end();
+    const service = new TablePolicyService({sqlQueryEngine: createMockSqlEngine({
+      tables: {'table-1': {table_id: 'table-1',
+        table_policies: JSON.stringify({minReplicaCount: 5, maxReplicaCount: 9})}},
+    })});
+    const policy = await service.getTablePolicy('table-1');
+    t.equal(policy.minReplicaCount, 5);
+    t.equal(policy.maxReplicaCount, 9);
+    t.notOk(Object.hasOwn(policy, 'targetReplicaCount'));
+    t.notOk(Object.hasOwn(policy, 'replicaCount'));
+    t.equal(service.getReplicationSettings, undefined);
+    t.equal(service.setTablePolicy, undefined);
   });
 
 test('TablePolicyService - cache invalidation', async (t) => {
@@ -495,7 +479,7 @@ test('TablePolicyService - cache invalidation', async (t) => {
         return {
           rows: [{
             table_id: 'table-1',
-            table_policies: JSON.stringify({replicaCount: 5}),
+            table_policies: JSON.stringify({splitTrafficThreshold: 5}),
           }],
         };
       }
@@ -508,18 +492,18 @@ test('TablePolicyService - cache invalidation', async (t) => {
   });
 
   // First call - should hit SQL engine
-  await service.getTablePolicy('table-1');
+  const first = await service.getTablePolicy('table-1');
   t.equal(callCount, 1, 'First call should query SQL engine');
 
-  // Second call - should use local cache
-  await service.getTablePolicy('table-1');
-  t.equal(callCount, 1, 'Second call should use local cache');
+  // Observe the row, then reuse its parsed policy within the TTL.
+  t.equal(await service.getTablePolicy('table-1'), first);
+  t.equal(callCount, 2, 'Every read still observes table availability');
 
   // Invalidate and call again
   service.invalidateCache('table-1');
-  await service.getTablePolicy('table-1');
-  t.equal(callCount, 2,
-    'After invalidation should query SQL engine again');
+  t.not(await service.getTablePolicy('table-1'), first);
+  t.equal(callCount, 3,
+    'After invalidation should query and resolve policy again');
 
   t.end();
 });
@@ -580,7 +564,7 @@ test('TablePolicyService - getMessageGroupPolicy without engine returns default'
     t.end();
   });
 
-test('TablePolicyService - getMessageGroupPolicy uses system cache fallback',
+test('TablePolicyService - getMessageGroupPolicy reads the configured system-cache observation',
   async (t) => {
     const service = new TablePolicyService({
       systemTableCache: {
@@ -918,10 +902,10 @@ test('TablePolicyService - updateTablePolicy enforces read-your-writes fence ' +
 
   // Prime policyCache with pre-update default policy.
   const initialPolicy = await service.getTablePolicy('table-fence');
-  t.equal(initialPolicy.replicaCount, 3);
+  t.equal(initialPolicy.splitTrafficThreshold, 1000);
 
   await service.updateTablePolicy('table-fence', {
-    replicaCount: 5,
+    splitTrafficThreshold: 5,
     mergeStorageThreshold: 1,
     mergeTrafficThreshold: 0,
   });
@@ -933,16 +917,16 @@ test('TablePolicyService - updateTablePolicy enforces read-your-writes fence ' +
   // Even before systemTableCache receives the CDC event, getTablePolicy
   // must return the newly committed policy and never cache the stale pre-update row.
   const fencedPolicy = await service.getTablePolicy('table-fence');
-  t.equal(fencedPolicy.replicaCount, 5);
+  t.equal(fencedPolicy.splitTrafficThreshold, 5);
   t.equal(fencedPolicy.mergeStorageThreshold, 1);
   t.equal(fencedPolicy.mergeTrafficThreshold, 0);
 
   // When systemTableCache subsequently advances to a newer policy, getTablePolicy
   // observes the newer table_policies instead of serving a stale cached entry.
-  tableRow.table_policies = JSON.stringify({replicaCount: 7});
+  tableRow.table_policies = JSON.stringify({splitTrafficThreshold: 7});
   tableRow.updated_at = Date.now() + 1000;
   const advancedPolicy = await service.getTablePolicy('table-fence');
-  t.equal(advancedPolicy.replicaCount, 7,
+  t.equal(advancedPolicy.splitTrafficThreshold, 7,
     'policyCache invalidates when systemTableCache table_policies advances');
   t.end();
 });
@@ -1004,7 +988,7 @@ test('site 6: with the projection paused, consecutive policy updates keep ' +
     {table_id: 'table-site6', table_policies: null, updated_at: 1000});
   const service = policyServiceOver(gateway);
 
-  await service.updateTablePolicy('table-site6', {replicaCount: 5});
+  await service.updateTablePolicy('table-site6', {splitTrafficThreshold: 5});
   const afterFirst = {...gateway.row};
   await service.updateTablePolicy('table-site6', {mergeStorageThreshold: 1});
 
@@ -1019,7 +1003,7 @@ test('site 6: with the projection paused, consecutive policy updates keep ' +
     updated_at: afterFirst.updated_at},
   'the second write is conditional on the kept committed policy');
   t.same(JSON.parse(gateway.row.table_policies),
-    {replicaCount: 5, mergeStorageThreshold: 1},
+    {splitTrafficThreshold: 5, mergeStorageThreshold: 1},
     'both updates applied, none lost');
   t.end();
 });
@@ -1030,9 +1014,9 @@ async (t) => {
   const gateway = committedPolicyGateway(
     {table_id: 'table-site6', table_policies: null, updated_at: 1000});
   const service = policyServiceOver(gateway);
-  await service.updateTablePolicy('table-site6', {replicaCount: 5});
+  await service.updateTablePolicy('table-site6', {splitTrafficThreshold: 5});
   // Another writer of the shared TABLES row (another node's policy update).
-  gateway.row.table_policies = JSON.stringify({replicaCount: 7});
+  gateway.row.table_policies = JSON.stringify({splitTrafficThreshold: 7});
   gateway.row.updated_at += 1;
   const otherWriter = {...gateway.row};
 
@@ -1048,7 +1032,7 @@ async (t) => {
   t.equal(gateway.committedReads, readsBefore + 1,
     'after a conflict the base is re-read from the committed authority');
   t.same(JSON.parse(gateway.row.table_policies),
-    {replicaCount: 7, mergeStorageThreshold: 1},
+    {splitTrafficThreshold: 7, mergeStorageThreshold: 1},
     'the retry builds on the other writer\'s committed policy');
   t.equal(gateway.projectionReads, 0, 'no projection read');
   t.end();
@@ -1061,7 +1045,7 @@ test('site 6: an unavailable committed read refuses the update typed and ' +
   gateway.readUnavailable = true;
   const service = policyServiceOver(gateway);
   const refusal = await service.updateTablePolicy('table-site6',
-    {replicaCount: 5}).then(() => null, (error) => error);
+    {splitTrafficThreshold: 5}).then(() => null, (error) => error);
   t.equal(refusal?.code, 'TABLE_POLICY_BASE_UNAVAILABLE', 'typed unavailable');
   t.equal(refusal?.retryAfterMs, 250, 'with the authority\'s retryAfterMs');
   t.equal(gateway.writes.length, 0, 'no write without a committed base');

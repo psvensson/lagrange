@@ -58,7 +58,7 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
           isOutboundQueueAvailable: () => true,
         },
         tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
         cacheData: {
           nodes: [
@@ -196,7 +196,7 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
         isOutboundQueueAvailable: () => true,
       },
       tablePolicyService: {
-        getPolicyForPartition: () => ({minReplicaCount: 3}),
+        getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
       },
       cacheData: {
         nodes: [
@@ -348,7 +348,7 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
           },
         },
         tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
         cacheData: {
           nodes: [

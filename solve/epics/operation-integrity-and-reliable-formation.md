@@ -23,6 +23,7 @@ quests:
   - parallel-query-read-authority-propagation
   - admin-diagnostic-owner-consolidation
   - replica-create-timeout-replay-custody
+  - partition-placement-declared-target
 authorizes:
   - src
   - test
@@ -76,9 +77,10 @@ node within preregistered bounds.
 
 ## Reconciled integration status (6 November)
 
-The two work branches diverged after `fffd9add`. The current composition retains
-all seven reviewed takeover commits through `5e1d3223f` together with the
-composed branch through `827f7be7d`. Production edits do not overlap. Both
+The two work branches diverged after `fffd9add`. The reviewed composition was
+committed and pushed as `4024a23e7`, retaining all seven takeover commits through
+`5e1d3223f` together with the composed branch through `827f7be7d`. Production
+edits do not overlap. Both
 lineages of the formation Quest log are retained byte-for-byte, in their
 original order; earlier timestamps below are historical evidence, not current
 acceptance. Generated inventories and test metadata are regenerated from the
@@ -105,7 +107,7 @@ failures in the earlier Q6 set. Reproduction on a predecessor does not waive
 any of these failures. Final F10 liveness lab proof, startup/replay Quest
 landing, combined-tree verification and broader publication proof remain due.
 
-The current transaction-facade blocker is also retained. The single permitted
+The pre-composition transaction-facade failures are retained. The single permitted
 unchanged `26f786b2` standalone retry again timed out at I2.1. A separately
 instrumented, product-source-identical diagnostic passed I2.1 but failed I2.2b
 (expected one callback step, observed zero; 48/49 TAP assertions passed).
@@ -114,7 +116,37 @@ Complete logs show `replica_operations-p1` release refusing
 bounded-progress evidence, not proof of a permanent deadlock or of the exact
 nested control-owner cause. Tracing the declared priority target and table-policy
 authority, and examining the existing release owners, remain investigations;
-no speculative repair or deadline relaxation is admitted.
+no speculative cutover repair or deadline relaxation is admitted. The unchanged
+transaction fixture passes on composed `4024a23e7` (58 runner assertions,
+106,454 ms, first attempt on TV); this does not identify which change affected
+its outcome.
+
+All 33 static audits pass on `4024a23e7`. Its 17-file composition proof on Lenovo
+passes 16 files (1,372 total reported assertions). The genuine three-process
+no-admin witness fails at the application CREATE probe: quorum remains
+unavailable within the existing 68,702 ms factor-scaled bound. All three guards
+report `installed: true, calls: []`; six retained log/guard files match their
+remote hashes. The complete package manifest is
+`sha256:36cf52246105c954ec61abd2002e3532931544b285fce33c2686839488977ea4`.
+No retry of that combined-source formation witness has been submitted, and E8
+remains red.
+
+A separate real-owner discriminator now exposes the historical S6b target
+divergence: actual seeded system partition rows and readiness declare RF3,
+while table policy with the explicit RF1 application default feeds RF1 into
+the actual planner, which emits REMOVE r2 for both `replica_operations` and
+`sql_transactions`. Supplying only the existing declared-target answer makes
+both planners emit no move. The sealed `partition-placement-declared-target`
+repair now projects that sole declaration through table policy, the planner
+and coordinator. It removes the alternate table target field, inert setter
+APIs, clamping/default target paths and unavailable-policy permission. Admin
+and CREATE reject unsupported target requests before effects. Real-owner
+local witnesses cover declared RF1/3/5/9, finite policy-read recovery through
+the existing scheduler with a disabled-trigger negative, and minimum-five
+REMOVE refusal with retained retry custody. Shared policy test fixtures have
+one implementation. Independent implementation review, frozen lab proof and
+normal Quest landing remain required; this is not E8 or E9 acceptance and
+does not explain the separate default-RF3 three-process failure by itself.
 
 Adam's completed migration keeps both active container stores and rollback data
 under `/mnt/old/lab`; the last direct check found 12 GiB free on root and 52 GiB

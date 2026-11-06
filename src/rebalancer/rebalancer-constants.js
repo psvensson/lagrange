@@ -1,10 +1,6 @@
 import {NUM, SERVICE_STATUS, UNIFIED_SERVICE_TYPE} from '../constants/index.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {
-  STORAGE_PLACEMENT_CONSTRAINT,
-  STORAGE_PLACEMENT_DEFAULT,
-} from './storage-capacity-constants.js';
-import {
   DEFAULT_MESSAGE_GROUP_POLICY,
 } from '../policy/policy-constants.js';
 
@@ -125,23 +121,6 @@ const REBALANCER_DEFAULT = Object.freeze({
 });
 
 const REBALANCER_DEFAULT_POLICY = Object.freeze({
-  TABLE: Object.freeze({
-    replicaCount: NUM.THREE,
-    minReplicaCount: NUM.THREE,
-    maxReplicaCount: NUM.SEVEN,
-    placementConstraints: {
-      spreadAcrossNodes: true,
-      considerDiskSpace: true,
-      considerCpuLoad: true,
-      considerMemoryLoad: true,
-      [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
-        STORAGE_PLACEMENT_DEFAULT.MIN_FREE_BYTES_PER_NODE,
-      [STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT]:
-        STORAGE_PLACEMENT_DEFAULT.MAX_BUDGET_UTILIZATION_PERCENT,
-      [STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM]:
-        STORAGE_PLACEMENT_DEFAULT.RESERVE_EMERGENCY_HEADROOM,
-    },
-  }),
   MESSAGE_GROUP: DEFAULT_MESSAGE_GROUP_POLICY,
   RUNTIME_SERVICE: Object.freeze({
     targetReplicaCount: NUM.THREE,

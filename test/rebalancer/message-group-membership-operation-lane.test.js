@@ -148,7 +148,7 @@ function createCoordinator(database, nodeId) {
     sqlQueryEngine: gateway,
     messageRouter: {deliver: async () => (buildDeliveryEnvelope({acknowledged: true}))},
     tablePolicyService: {
-      getPolicyForPartition: async () => ({minReplicaCount: 1}),
+      getPolicyForPartition: async () => ({targetReplicaCount: 3, minReplicaCount: 1}),
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService(),
     transactionCoordinator: createMockTransactionCoordinator(),

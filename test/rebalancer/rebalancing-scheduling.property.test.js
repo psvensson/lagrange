@@ -140,7 +140,7 @@ test('Property 23: Rebalancing Scheduling', async (t) => {
             cacheData: {nodes},
           });
 
-          const policy = {replicaCount: 3, minReplicaCount: 3, maxReplicaCount: 7};
+          const policy = {targetReplicaCount: 3, minReplicaCount: 3, maxReplicaCount: 7};
 
           // Current replica count below minimum should trigger rebalance
           const belowMinimum = currentReplicaCount < policy.minReplicaCount;

@@ -211,7 +211,7 @@ function createHarness(options = {}) {
     nodeId: 'node-1',
     systemTableCache: cache,
     cdcIntegrationService: createMockCdcService(),
-    tablePolicyService: createMockPolicyService(partitions, tables),
+    tablePolicyService: createMockPolicyService({partitions: partitions, tables: tables}),
     messageRouter,
     rebalanceCoordinator: coordinator,
     controlPlaneReadinessService:

@@ -144,12 +144,10 @@ function createCriticalRebalancer({budget, inFlightCount, neededMoves}) {
   const adjustedTarget = targetCount % 2 === 0 ?
     targetCount + 1 : targetCount;
 
-  const partitions = [{partition_id: entityId, table_id: 'table-1'}];
+  const partitions = [{partition_id: entityId, table_id: 'table-1', replica_count: adjustedTarget}];
   const tables = [{
     table_id: 'table-1',
     table_policies: JSON.stringify({
-      replicaCount: adjustedTarget,
-      targetReplicaCount: adjustedTarget,
       minReplicaCount: 3,
       maxReplicaCount: adjustedTarget + 2,
     }),

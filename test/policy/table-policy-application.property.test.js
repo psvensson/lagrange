@@ -32,8 +32,7 @@ const trafficThreshold = fc.integer({min: 1, max: 10000});
 
 // Generate valid table policies
 const validTablePolicy = fc.record({
-  replicaCount: oddReplicaCount,
-  minReplicaCount: fc.constant(3),
+  minReplicaCount: oddReplicaCount,
   maxReplicaCount: fc.constant(9),
   splitStorageThreshold: storageThreshold,
   splitTrafficThreshold: trafficThreshold,
@@ -65,6 +64,7 @@ function createMockSqlEngine(tablePolicy) {
           rows: [{
             partition_id: params[0],
             table_id: 'table-1',
+            replica_count: 5,
           }],
         };
       }
@@ -181,7 +181,7 @@ test('Property 16: Table Policy Application', async (t) => {
     t.end();
   });
 
-  t.test('replication settings follow table policy',
+  t.test('partition target and table safety limits keep their own authority',
     async (t) => {
       await fc.assert(
         fc.asyncProperty(
@@ -193,10 +193,9 @@ test('Property 16: Table Policy Application', async (t) => {
             });
 
             const settings =
-              await service.getReplicationSettings('table-1');
+              await service.getPolicyForPartition('partition-1');
 
-            return settings.replicaCount ===
-                     policy.replicaCount &&
+            return settings.targetReplicaCount === 5 &&
                    settings.minReplicaCount ===
                      policy.minReplicaCount &&
                    settings.maxReplicaCount ===
@@ -205,7 +204,7 @@ test('Property 16: Table Policy Application', async (t) => {
         ),
         {numRuns: 10},
       );
-      t.pass('Replication settings match policy values');
+      t.pass('Declared target and table safety limits are preserved');
       t.end();
     });
 
@@ -219,7 +218,7 @@ test('Property 16: Table Policy Application', async (t) => {
           (evenCount) => {
             const service = new TablePolicyService();
             const result = service.validatePolicy({
-              replicaCount: evenCount,
+              minReplicaCount: evenCount,
             });
 
             return !result.valid &&
@@ -268,12 +267,13 @@ test('Property 16: Table Policy Application', async (t) => {
         oddReplicaCount,
         storageThreshold,
         (
-          includeReplica, includeStorage,
-          replicaCount, storageThresh,
+          includeMinimum, includeStorage,
+          minReplicaCount, storageThresh,
         ) => {
           const partialPolicy = {};
-          if (includeReplica) {
-            partialPolicy.replicaCount = replicaCount;
+          if (includeMinimum) {
+            partialPolicy.minReplicaCount = minReplicaCount;
+            partialPolicy.maxReplicaCount = 9;
           }
           if (includeStorage) {
             partialPolicy.splitStorageThreshold =
@@ -284,8 +284,8 @@ test('Property 16: Table Policy Application', async (t) => {
           const merged =
             service.mergeWithDefaults(partialPolicy);
 
-          if (includeReplica) {
-            if (merged.replicaCount !== replicaCount) {
+          if (includeMinimum) {
+            if (merged.minReplicaCount !== minReplicaCount) {
               return false;
             }
           }
@@ -296,9 +296,9 @@ test('Property 16: Table Policy Application', async (t) => {
             }
           }
 
-          if (!includeReplica) {
-            if (merged.replicaCount !==
-                DEFAULT_TABLE_POLICY.replicaCount) {
+          if (!includeMinimum) {
+            if (merged.minReplicaCount !==
+                DEFAULT_TABLE_POLICY.minReplicaCount) {
               return false;
             }
           }

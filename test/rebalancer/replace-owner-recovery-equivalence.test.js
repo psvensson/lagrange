@@ -304,7 +304,9 @@ function startCoordinator(world) {
       isOutboundQueueAvailable: () => true,
     },
     controlPlaneReadinessService: world.readiness,
-    tablePolicyService: {getPolicyForPartition: () => ({minReplicaCount: 3})},
+    tablePolicyService: {getPolicyForPartition: () => ({
+      targetReplicaCount: 3, minReplicaCount: 3,
+    })},
     setTimeoutFn(fn, delayMs) {
       const handle = {fn, delayMs, cleared: false, unref() {}};
       world.fallbackTimers.push(handle);

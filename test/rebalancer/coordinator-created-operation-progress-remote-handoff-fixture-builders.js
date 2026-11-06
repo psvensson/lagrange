@@ -512,7 +512,7 @@ export function createRemotePriorityVisibilityCoordinator() {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     sqlQueryEngine: {
@@ -572,7 +572,7 @@ export function createRemoteHandoffCoordinator({
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     storageAccountingService: {
@@ -674,7 +674,7 @@ export function createRecentIntentPolicyCoordinator() {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     sqlQueryEngine: {

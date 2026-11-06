@@ -6,9 +6,16 @@ import {
   DEFAULT_MESSAGE_GROUP_POLICY,
   DEFAULT_TABLE_POLICY,
   MESSAGE_GROUP_POLICY_FIELD_TYPES,
+  POLICY_ERROR_CODE,
   POLICY_ERROR_MSG,
   POLICY_FIELD_TYPES,
+  TABLE_POLICY_TARGET_FIELDS,
 } from './policy-constants.js';
+import {buildPolicyRefusal} from './table-policy-resolution.js';
+
+const POLICY_OBJECT_TYPE = 'object';
+const POLICY_NUMBER_TYPE = 'number';
+const POLICY_ERROR_SEPARATOR = ', ';
 
 /**
  * Extract storage-related placement constraints from a constraints object.
@@ -81,6 +88,17 @@ function validateTablePolicy(
 ) {
   const errors = [];
 
+  if (!policy || typeof policy !== POLICY_OBJECT_TYPE || Array.isArray(policy)) {
+    return {valid: false, errors: [POLICY_ERROR_MSG.POLICY_OBJECT_REQUIRED]};
+  }
+  if (TABLE_POLICY_TARGET_FIELDS.some((field) => Object.hasOwn(policy, field))) {
+    return {
+      valid: false,
+      errors: [POLICY_ERROR_MSG.TARGET_UPDATE_UNSUPPORTED],
+      code: POLICY_ERROR_CODE.TARGET_UPDATE_UNSUPPORTED,
+    };
+  }
+
   for (const [field, expectedType] of Object.entries(POLICY_FIELD_TYPES)) {
     if (policy[field] !== undefined) {
       const actualType = typeof policy[field];
@@ -91,20 +109,14 @@ function validateTablePolicy(
           actualType,
         ));
       }
-    }
-  }
-
-  if (policy.replicaCount !== undefined) {
-    if (policy.replicaCount < 1) {
-      errors.push(POLICY_ERROR_MSG.REPLICA_COUNT_MIN);
-    }
-    if (policy.replicaCount % 2 === 0) {
-      errors.push(POLICY_ERROR_MSG.REPLICA_COUNT_ODD);
+      if (actualType === POLICY_NUMBER_TYPE && !Number.isFinite(policy[field])) {
+        errors.push(POLICY_ERROR_MSG.fieldFiniteRequired(field));
+      }
     }
   }
 
   if (policy.minReplicaCount !== undefined) {
-    if (policy.minReplicaCount < 1) {
+    if (!Number.isSafeInteger(policy.minReplicaCount) || policy.minReplicaCount < 1) {
       errors.push(POLICY_ERROR_MSG.MIN_REPLICA_COUNT_MIN);
     }
     if (policy.minReplicaCount % 2 === 0) {
@@ -113,7 +125,7 @@ function validateTablePolicy(
   }
 
   if (policy.maxReplicaCount !== undefined) {
-    if (policy.maxReplicaCount < 1) {
+    if (!Number.isSafeInteger(policy.maxReplicaCount) || policy.maxReplicaCount < 1) {
       errors.push(POLICY_ERROR_MSG.MAX_REPLICA_COUNT_MIN);
     }
     if (policy.maxReplicaCount % 2 === 0) {
@@ -121,15 +133,11 @@ function validateTablePolicy(
     }
   }
 
-  const min = policy.minReplicaCount || DEFAULT_TABLE_POLICY.minReplicaCount;
-  const max = policy.maxReplicaCount || DEFAULT_TABLE_POLICY.maxReplicaCount;
-  const replica = policy.replicaCount || DEFAULT_TABLE_POLICY.replicaCount;
+  const min = policy.minReplicaCount ?? DEFAULT_TABLE_POLICY.minReplicaCount;
+  const max = policy.maxReplicaCount ?? DEFAULT_TABLE_POLICY.maxReplicaCount;
 
   if (min > max) {
     errors.push(POLICY_ERROR_MSG.MIN_GT_MAX);
-  }
-  if (replica < min || replica > max) {
-    errors.push(POLICY_ERROR_MSG.REPLICA_BETWEEN);
   }
 
   if (policy.splitStorageThreshold !== undefined &&
@@ -159,6 +167,17 @@ function validateTablePolicy(
     valid: errors.length === 0,
     errors,
   };
+}
+
+function assertValidTablePolicy(policy) {
+  const validation = validateTablePolicy(policy);
+  if (!validation.valid) {
+    throw buildPolicyRefusal(
+      validation.code || POLICY_ERROR_CODE.POLICY_INVALID,
+      `${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(POLICY_ERROR_SEPARATOR)}`,
+    );
+  }
+  return policy;
 }
 
 /**
@@ -229,6 +248,7 @@ function validateMessageGroupPolicy(
 }
 
 export {
+  assertValidTablePolicy,
   extractStorageConstraints,
   validateMessageGroupPolicy,
   validatePlacementConstraints,

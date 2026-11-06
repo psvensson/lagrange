@@ -106,7 +106,7 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       sqlQueryEngine,
@@ -255,7 +255,7 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       enableTimeouts: false,
@@ -436,7 +436,7 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     sqlQueryEngine,
@@ -538,7 +538,7 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       sqlQueryEngine,
@@ -610,7 +610,7 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 3};
+          return {targetReplicaCount: 3, minReplicaCount: 3};
         },
       },
       sqlQueryEngine: {
@@ -778,7 +778,7 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 3};
+          return {targetReplicaCount: 3, minReplicaCount: 3};
         },
       },
       systemTableCache: {
@@ -1035,7 +1035,7 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       enableTimeouts: false,

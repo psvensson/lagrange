@@ -101,7 +101,7 @@ function createRemoveCoordinator({
     nodeId: OWNER_NODE_ID,
     enableTimeouts: false,
     tablePolicyService: {
-      getPolicyForPartition: () => ({minReplicaCount: 2}),
+      getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 2}),
     },
     cacheData: {
       services: serviceRows,

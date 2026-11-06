@@ -1,3 +1,4 @@
+import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 /**
  * Unit tests for UnifiedRebalancer.
  * Tests the core rebalancing logic for partitions and message groups.
@@ -18,7 +19,6 @@ import {
   MoveType,
   ReplicaStatus,
   NodeStatus,
-  DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {
@@ -90,9 +90,7 @@ function createTestRebalancer(options = {}) {
     serviceEndpoints,
   );
   const mockCdcService = cdcIntegrationService || createMockCdcService();
-  const mockPolicyService = createMockPolicyService(
-    partitions, tables,
-  );
+  const mockPolicyService = createMockPolicyService({partitions: partitions, tables: tables});
   const mockMessageRouter = messageRouter ||
     createMockMessageRouter(connectionState);
   const mockCoordinator = rebalanceCoordinator || createMockCoordinator();
@@ -394,7 +392,7 @@ test('UnifiedRebalancer keeps reserved priority move capacity during transient p
 test('UnifiedRebalancer - Policy Management', async (t) => {
   initializeTestEnvironment();
 
-  await t.test('returns default table policy when no cache data', async (t) => {
+  await t.test('returns the explicit policy-owner fixture declaration', async (t) => {
     const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
@@ -403,7 +401,7 @@ test('UnifiedRebalancer - Policy Management', async (t) => {
 
     const policy = await rebalancer.getPolicy();
 
-    t.equal(policy.replicaCount, DEFAULT_TABLE_POLICY.replicaCount);
+    t.equal(policy.targetReplicaCount, 3);
     t.equal(policy.minReplicaCount, DEFAULT_TABLE_POLICY.minReplicaCount);
     t.equal(policy.maxReplicaCount, DEFAULT_TABLE_POLICY.maxReplicaCount);
   });
@@ -426,16 +424,16 @@ test('UnifiedRebalancer - Policy Management', async (t) => {
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
-      partitions: [{partition_id: 'partition-1', table_id: 'table-1'}],
+      partitions: [{partition_id: 'partition-1', table_id: 'table-1', replica_count: 5}],
       tables: [{
         table_id: 'table-1',
-        table_policies: JSON.stringify({replicaCount: 5, minReplicaCount: 3}),
+        table_policies: JSON.stringify({minReplicaCount: 3}),
       }],
     });
 
     const policy = await rebalancer.getPolicy();
 
-    t.equal(policy.replicaCount, 5);
+    t.equal(policy.targetReplicaCount, 5);
     t.equal(policy.minReplicaCount, 3);
   });
 

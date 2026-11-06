@@ -169,7 +169,7 @@ function createRebalancer(cache, partitionId) {
       updateSystemTableRow: async () => ({success: true}),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({targetReplicaCount: 5}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 5}),
     },
     messageRouter: {
       getConnectionState: () => 'connected',

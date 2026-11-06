@@ -4,8 +4,6 @@ import {resolveDeclaredPartitionKeyType} from '../partition/partition-boundary-r
 import {STATE, TABLES} from '../constants/index.js';
 import {CONTROL_PLANE_MUTATION_OPERATION} from '../control-plane/control-plane-system-table-gateway.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
-import {validateTablePolicy} from '../policy/table-policy-validation.js';
-import {assertTablePolicyCdcRequestSupported} from '../cache/cdc-table-policy.js';
 import {
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
@@ -20,21 +18,6 @@ import {
 } from './table-creation-service-completion.js';
 
 const EMPTY_SCHEMA_DEFINITION_JSON = '{}';
-const LOCAL_STR_COMMA_SPACE = ', ';
-
-function resolveCreateTablePolicy(ast) {
-  const tablePolicy = ast?.options?.tablePolicy || {};
-  assertTablePolicyCdcRequestSupported(tablePolicy);
-  const validation = validateTablePolicy(tablePolicy);
-  if (!validation.valid) {
-    throw new Error(
-      `Invalid CREATE TABLE policy: ${validation.errors.join(
-        LOCAL_STR_COMMA_SPACE,
-      )}`,
-    );
-  }
-  return tablePolicy;
-}
 
 function sortObject(value) {
   if (Array.isArray(value)) return value.map(sortObject);
@@ -193,7 +176,7 @@ function buildCreateTableMetadataContext(service, ast, options) {
     table_name: ast.tableName,
     schema_definition: JSON.stringify(schemaDefinition),
     partition_key: partitionKey,
-    table_policies: JSON.stringify(resolveCreateTablePolicy(ast)),
+    table_policies: JSON.stringify(ast.options?.tablePolicy ?? {}),
     partition_count: 1,
     active_partition_version: 1,
     pending_partition_version: null,

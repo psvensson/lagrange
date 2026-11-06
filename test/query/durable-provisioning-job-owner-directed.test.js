@@ -278,7 +278,7 @@ function createRuntime(options) {
     messageRouter,
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {replicaCount: NODE_IDS.length, minReplicaCount: 2};
+        return {targetReplicaCount: NODE_IDS.length, minReplicaCount: 2};
       },
     },
     sqlQueryEngine: sqlPersistence,

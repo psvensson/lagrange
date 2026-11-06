@@ -1,4 +1,8 @@
 import {PriorityPublicationSafetyTopology} from './priority-publication-safety-topology.js';
+import {
+  readPolicyForPartition,
+  requirePolicyMinimumReplicaCount,
+} from '../policy/table-policy-resolution.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {UNIFIED_SERVICE_TYPE} from
@@ -17,8 +21,6 @@ import {
 } from './priority-recovery-planning-read.js';
 
 const {
-  DEFAULT_MIN_REPLICA_COUNT,
-  OPERATION_WORKFLOW_OWNER_LITERAL,
   REMOVE_SAFETY_READ_QUERY_OPTIONS,
   REMOVE_SAFETY_SQL,
   SERVICE_TYPE,
@@ -273,33 +275,8 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
   }
 
   async getCriticalMinReplicaCount(partitionId) {
-    if (
-      !this.tablePolicyService ||
-      typeof this.tablePolicyService.getPolicyForPartition !==
-        OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION
-    ) {
-      return DEFAULT_MIN_REPLICA_COUNT;
-    }
-
-    try {
-      const policy =
-        await this.tablePolicyService.getPolicyForPartition(partitionId);
-      const minReplicaCount = Number(policy?.minReplicaCount);
-      if (Number.isFinite(minReplicaCount) && minReplicaCount > 0) {
-        return Math.floor(minReplicaCount);
-      }
-    } catch (error) {
-      this.logger.warn(
-        OPERATION_WORKFLOW_OWNER_LITERAL.FAILED_TO_RESOLVE_MINREPLICACOUNT_FOR_CRITICAL +
-          OPERATION_WORKFLOW_OWNER_LITERAL.PARTITION_SAFETY_CHECK,
-        {
-          partitionId,
-          error: error.message,
-        },
-      );
-    }
-
-    return DEFAULT_MIN_REPLICA_COUNT;
+    const policy = await readPolicyForPartition(this.tablePolicyService, partitionId);
+    return requirePolicyMinimumReplicaCount(policy);
   }
 
   isNodeReadyForRouting(nodeId, options = {}) {

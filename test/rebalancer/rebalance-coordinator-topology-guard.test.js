@@ -39,7 +39,8 @@ const TEST_REPLACE_OPERATION_TYPE = 'REPLACE';
 const TEST_ADD_OPERATION_TYPE = 'ADD';
 const TEST_FAILED_STATUS = 'failed';
 const TEST_TABLE_POLICY = Object.freeze({
-  replicaCount: 3,
+  targetReplicaCount: 3,
+  minReplicaCount: 3,
 });
 
 function initializeTestEnvironment() {
@@ -467,6 +468,30 @@ test(
       },
     };
 
+    const policyOwner = coordinator.tablePolicyService;
+    const unavailableOwners = [null,
+      ...[null, {}, {replicaCount: 3}, {targetReplicaCount: '3'},
+        {targetReplicaCount: 1.5}, {targetReplicaCount: 3}].map((policy) => ({
+        getPolicyForPartition: async () => policy,
+      })),
+      {getPolicyForPartition: async () => {
+        throw new Error('finite policy read fault');
+      }},
+    ];
+    for (const owner of unavailableOwners) {
+      coordinator.tablePolicyService = owner;
+      for (const normalizedMoveType of [TEST_REPLACE_OPERATION_TYPE, TEST_ADD_OPERATION_TYPE]) {
+        const denied = await coordinator.buildTopologyGuardSnapshot({
+          ...context, normalizedMoveType,
+        });
+        t.equal(denied.state, 'target_unavailable',
+          'unavailable target precedes the recovery-cure exception');
+        t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      }
+      t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+        'the surplus REMOVE fence also has no target permission');
+    }
+    coordinator.tablePolicyService = policyOwner;
     const recovery = await coordinator.buildTopologyGuardSnapshot(context);
     t.equal(recovery.state, 'allowed',
       'the count-neutral ledger spread cure breaks the owner-read circularity');
@@ -1036,4 +1061,38 @@ test('s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED â
   t.ok(error, 'target node already occupied (full-occupancy check intact) -> blocked');
   t.equal(sqlEngine.getOperations().length, 0, 'no double-placement on the orphan node');
   coordinator.shutdown();
+});
+
+
+test('ADD and REPLACE refuse unavailable policy before persistence ' +
+  'and recover through the same topology guard', async (t) => {
+  initializeTestEnvironment();
+  for (const type of [TEST_ADD_OPERATION_TYPE, TEST_REPLACE_OPERATION_TYPE]) {
+    const rows = [createServiceRow(TEST_SOURCE_REPLICA_ID, TEST_NODE_ID)];
+    const {coordinator, sqlEngine} = createCoordinator({
+      cacheServices: rows, authoritativeServices: rows,
+    });
+    try {
+      const owner = coordinator.tablePolicyService;
+      coordinator.tablePolicyService = {
+        getPolicyForPartition: async () => ({targetReplicaCount: null}),
+      };
+      const move = {type, partitionId: TEST_PARTITION_ID, nodeId: TEST_TARGET_NODE_ID,
+        replicaId: type === TEST_REPLACE_OPERATION_TYPE ? TEST_SOURCE_REPLICA_ID : null,
+        sourceNodeId: type === TEST_REPLACE_OPERATION_TYPE ? TEST_NODE_ID : null,
+        emitOperationCreated: false, enforceConcurrentOperationBudget: true};
+      const error = await captureOperationCreateError(() => coordinator.createOperation(move));
+      t.same(error.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      t.equal(sqlEngine.getOperations().length, 0, 'no operation is recorded without its target');
+      coordinator.tablePolicyService = owner;
+      await coordinator.ensureCreateTopologyGuardAllowed({
+        normalizedMoveType: type, entityType: SERVICE_TYPE.PARTITION,
+        entityId: TEST_PARTITION_ID, partitionId: TEST_PARTITION_ID, move,
+      });
+      t.pass('valid policy restoration admits this move at the same topology guard');
+      t.equal(sqlEngine.getOperations().length, 0, 'a topology decision alone does not persist an operation');
+    } finally {
+      await coordinator.shutdown();
+    }
+  }
 });

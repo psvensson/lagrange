@@ -262,7 +262,7 @@ test('RebalanceCoordinator executeOperation skips operations owned by another no
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -339,7 +339,7 @@ async (t) => {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -403,7 +403,7 @@ async (t) => {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -480,7 +480,7 @@ async (t) => {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -563,7 +563,7 @@ async (t) => {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: SINGLE_CONCURRENT_ADD_LIMIT};
+        return {targetReplicaCount: 3, minReplicaCount: SINGLE_CONCURRENT_ADD_LIMIT};
       },
     },
     messageRouter: {
@@ -658,7 +658,7 @@ test('RebalanceCoordinator createOperation uses injected workflow coordinator si
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -739,7 +739,7 @@ test('RebalanceCoordinator createOperation defers background mutation when local
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -813,7 +813,7 @@ test('RebalanceCoordinator createOperation enforces concurrent add budget when r
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -875,7 +875,7 @@ test('RebalanceCoordinator createOperation rejects stale membership publication 
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -952,7 +952,7 @@ test('RebalanceCoordinator createOperation rejects stale membership plans using 
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -1031,7 +1031,7 @@ test('RebalanceCoordinator createOperation persists membership publication epoch
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {

@@ -53,9 +53,26 @@ workflows perform — note that the `KeyRangeManager` validator in
 `src/partition/key-range-manager.js` is not wired into the runtime, so do not
 read it as the enforcer; only its `KeyRange` class is used elsewhere.
 
-The replica count comes from the `partition.defaultReplicaCount` config (default
-3, minimum 3). A `replicaCount` supplied in a `CREATE TABLE` policy is currently
-not honoured — the service default is applied unconditionally.
+Initial application partition creation takes its replica count from
+`partition.defaultReplicaCount` (default 3; accepts 1 or an integer of at least 3). Seeded system
+partitions retain their declared seed count. Once persisted, a partition's
+`replica_count` is its sole desired target; placement and readiness consume the
+shared replication-target authority. Available nodes do not redefine that target.
+
+Table policy owns thresholds, placement constraints, and minimum/maximum safety
+limits. It has no replication-target setter. CREATE and admin table-policy
+updates reject `replicaCount` and `targetReplicaCount` before recording intent or
+writing metadata. Resolved partition policies expose only `targetReplicaCount`,
+projected from the partition declaration without changing cached table policy.
+Partition targets are not clamped to table-policy defaults.
+
+Existing stored table policies containing either target field are unsupported:
+reads return `TABLE_POLICY_READ_UNAVAILABLE` with retry custody retained by the
+existing planning or operation owner. Missing rows, failed reads and malformed
+policy likewise cannot become defaults or REMOVE permission. This change does
+not migrate durable policy data. Any such migration needs a separately owned
+mutation; fresh formation seeds empty table policies. Valid sparse table policies
+still inherit their authored non-target defaults.
 
 ## Resolving a query to partitions
 

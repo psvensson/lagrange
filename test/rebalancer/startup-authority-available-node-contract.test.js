@@ -118,7 +118,7 @@ test('UnifiedRebalancer uses readiness-owned startup cohort for startup-sensitiv
       updateSystemTableRow: async () => ({success: true}),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
       getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
     },
     messageRouter: {
@@ -430,7 +430,7 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
       updateSystemTableRow: async () => ({success: true}),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
       getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
     },
     messageRouter,
@@ -534,7 +534,7 @@ test('UnifiedRebalancer does not use local startup bypass as placement readiness
       updateSystemTableRow: async () => ({success: true}),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
       getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
     },
     messageRouter: {
@@ -629,7 +629,7 @@ async (t) => {
       updateSystemTableRow: async () => ({success: true}),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
       getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
     },
     messageRouter: {
@@ -730,7 +730,7 @@ test(
         updateSystemTableRow: async () => ({success: true}),
       },
       tablePolicyService: {
-        getPolicyForPartition: () => ({targetReplicaCount: 3}),
+        getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
         getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
       },
       messageRouter: {
@@ -832,7 +832,7 @@ test(
         updateSystemTableRow: noopAsync,
       },
       tablePolicyService: {
-        getPolicyForPartition: () => ({targetReplicaCount: 3}),
+        getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
       },
       messageRouter: {
         getConnectedNodes: () => ['seed-node', 'node-2'],

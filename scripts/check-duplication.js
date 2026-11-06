@@ -272,8 +272,10 @@ const RATCHET_TARGETS = [
     // the checker's hint after deduplicating query, rebalancer, and CDC test lifecycle fixtures.
     // 2026-11-05 (explicit-single-replica-partition-configuration): tightened
     // 646/24270 -> 641/24107 on the checker hint after RF3 fixture reconciliation.
+    // 2026-11-06 (partition-placement-declared-target): tightened 24107 -> 24100
+    // on the checker hint after consolidating shared table-policy fixtures.
     baselineCloneGroupCount: 641,
-    baselineDuplicatedLineCount: 24107,
+    baselineDuplicatedLineCount: 24100,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

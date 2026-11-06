@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2568,
+    "ordinary": 2571,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2594,
-  "digest": "fnv1a32-f1c49cff",
+  "censusSize": 2597,
+  "digest": "fnv1a32-b27c1055",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1505,6 +1505,7 @@
     "test/policy/table-policy-application.property.test.js": "ordinary",
     "test/policy/table-policy-clock-seam.test.js": "ordinary",
     "test/policy/table-policy-service.test.js": "ordinary",
+    "test/policy/table-policy-target-refusal.test.js": "ordinary",
     "test/query/aggregate-function-correctness.property.test.js": "ordinary",
     "test/query/application-database.test.js": "ordinary",
     "test/query/automatic-partition-key.property.test.js": "ordinary",
@@ -1919,6 +1920,8 @@
     "test/rebalancer/operation-workflow-target-progress-advance-reentry.test.js": "ordinary",
     "test/rebalancer/operation-workflow-target-sync-active-progress-contract.test.js": "ordinary",
     "test/rebalancer/orphaned-operation-reconcile-redrive.test.js": "ordinary",
+    "test/rebalancer/partition-policy-remove-retry.test.js": "ordinary",
+    "test/rebalancer/partition-policy-unavailability-redrive.test.js": "ordinary",
     "test/rebalancer/pending-move-tracking.property.test.js": "ordinary",
     "test/rebalancer/placement-wrapping-duplicate-adds.test.js": "ordinary",
     "test/rebalancer/planner-single-path-enforcement.test.js": "ordinary",

@@ -207,7 +207,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 3};
+          return {targetReplicaCount: 3, minReplicaCount: 3};
         },
       },
       enableTimeouts: false,
@@ -439,7 +439,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 3};
+          return {targetReplicaCount: 3, minReplicaCount: 3};
         },
       },
       enableTimeouts: false,
@@ -684,7 +684,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 3};
+          return {targetReplicaCount: 3, minReplicaCount: 3};
         },
       },
       enableTimeouts: false,
@@ -932,7 +932,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 3};
+          return {targetReplicaCount: 3, minReplicaCount: 3};
         },
       },
       enableTimeouts: false,
@@ -1153,7 +1153,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 3};
+          return {targetReplicaCount: 3, minReplicaCount: 3};
         },
       },
       enableTimeouts: false,
@@ -1260,7 +1260,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         enableTimeouts: false,
@@ -1381,7 +1381,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 3};
+            return {targetReplicaCount: 3, minReplicaCount: 3};
           },
         },
         enableTimeouts: false,

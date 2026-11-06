@@ -1,3 +1,4 @@
+import {createMockPolicyService} from './test-helpers.js';
 /**
  * Shared test support for UnifiedRebalancer unit tests.
  *
@@ -13,10 +14,6 @@
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
-import {
-  DEFAULT_TABLE_POLICY,
-  DEFAULT_MESSAGE_GROUP_POLICY,
-} from '../../src/rebalancer/unified-rebalancer.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
@@ -116,22 +113,7 @@ export function createMockCdcService() {
 }
 
 // Create mock table policy service
-export function createMockPolicyService(partitions = [], tables = []) {
-  return {
-    getPolicyForPartition: (partitionId) => {
-      const partition = partitions.find((p) => p.partition_id === partitionId);
-      if (!partition) return {...DEFAULT_TABLE_POLICY};
-      const table = tables.find((t) => t.table_id === partition.table_id);
-      if (!table || !table.table_policies) return {...DEFAULT_TABLE_POLICY};
-      try {
-        return {...DEFAULT_TABLE_POLICY, ...JSON.parse(table.table_policies)};
-      } catch (_e) {
-        return {...DEFAULT_TABLE_POLICY};
-      }
-    },
-    getMessageGroupPolicy: async () => ({...DEFAULT_MESSAGE_GROUP_POLICY}),
-  };
-}
+
 
 // Create mock message router
 export function createMockMessageRouter(
@@ -309,3 +291,5 @@ export function createMockMembershipPublicationService(
     },
   };
 }
+
+export {createMockPolicyService};

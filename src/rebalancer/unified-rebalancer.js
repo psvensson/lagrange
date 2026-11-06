@@ -25,6 +25,5 @@ export {
   getPreviousOddCount,
   isOddReplicaCount,
 } from './odd-replica-count.js';
-export const DEFAULT_TABLE_POLICY = REBALANCER_DEFAULT_POLICY.TABLE;
 export const DEFAULT_MESSAGE_GROUP_POLICY =
   REBALANCER_DEFAULT_POLICY.MESSAGE_GROUP;

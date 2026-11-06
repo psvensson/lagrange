@@ -20,6 +20,10 @@ import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {assertTablePolicyCdcRequestSupported} from '../cache/cdc-table-policy.js';
 import {
+  REPLICATION_TARGET_SOURCE,
+  resolveDesiredReplicationFactor,
+} from '../bootstrap/replication-target-authority.js';
+import {
   DEFAULT_MESSAGE_GROUP_POLICY,
   DEFAULT_TABLE_POLICY,
   POLICY_DEFAULT,
@@ -27,42 +31,33 @@ import {
   POLICY_ERROR_MSG,
   POLICY_EVENT,
   POLICY_LOG_MSG,
+  POLICY_READ_REASON,
   POLICY_SUBSYSTEM,
   POLICY_VALUE,
 } from './policy-constants.js';
 import {
+  assertValidTablePolicy,
   extractStorageConstraints,
   validateMessageGroupPolicy as validateMessageGroupPolicyFields,
   validatePlacementConstraints as validatePolicyPlacementConstraints,
   validateTablePolicy,
 } from './table-policy-validation.js';
 import {
+  buildPolicyRefusal,
   mergeStoredTablePolicyOverrides,
+  policyReadUnavailable,
   resolveConfiguredTablePolicyDefaults,
 } from './table-policy-resolution.js';
 
 const LOCAL_STR_PLACEMENTCONSTRAINTS = 'placementConstraints';
 const LOCAL_STR_OBJECT = 'object';
 const TABLE_POLICY_FUNCTION_TYPE = 'function';
-const LOCAL_STR_COMMA_SPACE = ', ';
 
 /**
  * TablePolicyService manages table policies for partition behavior.
- * Policies control splitting thresholds, merging criteria, and replication factors.
+ * Table policies control thresholds, placement constraints and safety limits.
+ * Partition declarations supply replication targets through their sole decoder.
  */
-/**
- * A typed refusal of a policy write: nothing was written.
- * @param {string} code - POLICY_ERROR_CODE value.
- * @param {string} message - Refusal message.
- * @return {Error}
- */
-function buildPolicyRefusal(code, message) {
-  const error = new Error(message);
-  error.code = code;
-  return error;
-}
-
-
 class TablePolicyService extends EventEmitter {
   /**
    * Create a new TablePolicyService.
@@ -87,7 +82,6 @@ class TablePolicyService extends EventEmitter {
     // Configuration
     const config = ConfigurationManager.getInstance();
     this.defaultTablePolicy = resolveConfiguredTablePolicyDefaults(config);
-    this.defaultReplicaCount = this.defaultTablePolicy.replicaCount;
 
     // Logging
     const loggingService = LoggingService.getInstance();
@@ -214,43 +208,28 @@ class TablePolicyService extends EventEmitter {
    * @return {Promise<Object>} Table policy (merged with defaults).
    */
   async getTablePolicy(tableId) {
-    if (!tableId) {
-      return this.getDefaultPolicy();
+    try {
+      const table = tableId ? await this.readTableRow(tableId) : null;
+      if (!table) {
+        throw policyReadUnavailable(POLICY_READ_REASON.TABLE_UNAVAILABLE, {tableId});
+      }
+      // A cached policy cannot outlive observation of its table row.
+      const cached = this.policyCache.get(tableId);
+      if (cached && this.now() - cached.timestamp < this.cacheTTLMs &&
+          (table.table_policies ?? null) === cached.rawTablePolicies) {
+        return cached.policy;
+      }
+      const storedPolicy = this.parseStoredTablePolicy(table, tableId);
+      const mergedPolicy = assertValidTablePolicy(this.mergeWithDefaults(storedPolicy));
+      this.policyCache.set(tableId, {
+        policy: mergedPolicy,
+        rawTablePolicies: table.table_policies ?? null,
+        timestamp: this.now(),
+      });
+      return mergedPolicy;
+    } catch (cause) {
+      throw policyReadUnavailable(POLICY_READ_REASON.READ_FAILED, {cause, tableId});
     }
-
-    // Check local cache first
-    const cached = this.policyCache.get(tableId);
-    const cachedTableRow = this.lookupCachedTable(tableId);
-    if (
-      cached &&
-      this.now() - cached.timestamp < this.cacheTTLMs &&
-      (!cachedTableRow ||
-        (cachedTableRow.table_policies ?? null) === cached.rawTablePolicies)
-    ) {
-      return cached.policy;
-    }
-
-    const table = await this.readTableRow(tableId);
-    if (!table) {
-      this.logger.debug(
-        POLICY_LOG_MSG.TABLE_NOT_FOUND_DEFAULT, {tableId},
-      );
-      return this.getDefaultPolicy();
-    }
-
-    const storedPolicy = this.parseStoredTablePolicy(table, tableId);
-
-    // Merge with defaults
-    const mergedPolicy = this.mergeWithDefaults(storedPolicy);
-
-    // Update cache
-    this.policyCache.set(tableId, {
-      policy: mergedPolicy,
-      rawTablePolicies: table.table_policies ?? null,
-      timestamp: this.now(),
-    });
-
-    return mergedPolicy;
   }
 
   /**
@@ -259,16 +238,20 @@ class TablePolicyService extends EventEmitter {
    * @return {Promise<Object>} Table policy for the partition's table.
    */
   async getPolicyForPartition(partitionId) {
-    const partition = await this.readPartitionRow(partitionId);
-    if (!partition) {
-      this.logger.debug(
-        POLICY_LOG_MSG.PARTITION_NOT_FOUND_DEFAULT,
-        {partitionId},
-      );
-      return this.getDefaultPolicy();
+    try {
+      const partition = await this.readPartitionRow(partitionId);
+      if (!partition) {
+        throw policyReadUnavailable(POLICY_READ_REASON.PARTITION_UNAVAILABLE, {partitionId});
+      }
+      const target = resolveDesiredReplicationFactor(partition);
+      if (target.source !== REPLICATION_TARGET_SOURCE.PARTITION_ROW) {
+        throw policyReadUnavailable(POLICY_READ_REASON.TARGET_UNDECLARED, {partitionId});
+      }
+      const policy = await this.getTablePolicy(partition.table_id);
+      return {...policy, targetReplicaCount: target.replicationFactor};
+    } catch (cause) {
+      throw policyReadUnavailable(POLICY_READ_REASON.READ_FAILED, {cause, partitionId});
     }
-
-    return this.getTablePolicy(partition.table_id);
   }
 
   /**
@@ -294,18 +277,17 @@ class TablePolicyService extends EventEmitter {
   }
 
   parseStoredTablePolicy(table, tableId) {
-    if (!table?.table_policies) {
-      return POLICY_VALUE.EMPTY_POLICY;
-    }
     try {
-      return typeof table.table_policies === 'string' ?
-        JSON.parse(table.table_policies) : table.table_policies;
+      const raw = table.table_policies ?? POLICY_VALUE.EMPTY_POLICY;
+      return assertValidTablePolicy(typeof raw === 'string' ? JSON.parse(raw) : raw);
     } catch (error) {
       this.logger.warn(POLICY_LOG_MSG.POLICY_PARSE_FAILED, {
         tableId,
         error: error.message,
       });
-      throw error;
+      throw policyReadUnavailable(POLICY_READ_REASON.POLICY_INVALID, {
+        cause: error, tableId,
+      });
     }
   }
 
@@ -345,16 +327,12 @@ class TablePolicyService extends EventEmitter {
         POLICY_ERROR_MSG.TABLE_ID_REQUIRED);
     }
 
-    if (!this.cdcIntegrationService) {
-      throw new Error(POLICY_ERROR_MSG.CDC_REQUIRED_FOR_UPDATE);
-    }
-
     // Validate the policy updates; a request for external CDC is refused typed.
     assertTablePolicyCdcRequestSupported(policyUpdates);
-    const validation = this.validatePolicy(policyUpdates);
-    if (!validation.valid) {
-      throw buildPolicyRefusal(POLICY_ERROR_CODE.POLICY_INVALID,
-        `${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_COMMA_SPACE)}`);
+    assertValidTablePolicy(policyUpdates);
+
+    if (!this.cdcIntegrationService) {
+      throw new Error(POLICY_ERROR_MSG.CDC_REQUIRED_FOR_UPDATE);
     }
 
     const table = await readCommittedPolicyBase(this, tableId);
@@ -364,15 +342,7 @@ class TablePolicyService extends EventEmitter {
       storedPolicy,
       policyUpdates,
     );
-    const newPolicy = this.mergeWithDefaults(updatedStoredPolicy);
-
-    // Validate the merged policy
-    const mergedValidation = this.validatePolicy(newPolicy);
-    if (!mergedValidation.valid) {
-      throw buildPolicyRefusal(POLICY_ERROR_CODE.POLICY_INVALID,
-        `${POLICY_ERROR_MSG.INVALID_MERGED_POLICY_PREFIX}${mergedValidation.errors.join(LOCAL_STR_COMMA_SPACE)}`,
-      );
-    }
+    const newPolicy = assertValidTablePolicy(this.mergeWithDefaults(updatedStoredPolicy));
 
     this.logger.info(POLICY_LOG_MSG.UPDATE_TABLE_POLICY, {
       tableId,
@@ -417,29 +387,6 @@ class TablePolicyService extends EventEmitter {
   }
 
   /**
-   * Set the complete policy for a table (replaces existing).
-   * @param {string} tableId - Table ID.
-   * @param {Object} policy - Complete policy object.
-   * @return {Promise<Object>} Update result.
-   */
-  async setTablePolicy(tableId, policy) {
-    if (!tableId) {
-      throw new Error(POLICY_ERROR_MSG.TABLE_ID_REQUIRED);
-    }
-
-    // Merge with defaults to ensure all fields are present
-    const completePolicy = this.mergeWithDefaults(policy);
-
-    // Validate
-    const validation = this.validatePolicy(completePolicy);
-    if (!validation.valid) {
-      throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_COMMA_SPACE)}`);
-    }
-
-    return this.updateTablePolicy(tableId, completePolicy);
-  }
-
-  /**
    * Get split thresholds for a table.
    * @param {string} tableId - Table ID.
    * @return {Promise<Object>} Split thresholds.
@@ -462,20 +409,6 @@ class TablePolicyService extends EventEmitter {
     return {
       storageThreshold: policy.mergeStorageThreshold,
       trafficThreshold: policy.mergeTrafficThreshold,
-    };
-  }
-
-  /**
-   * Get replication settings for a table.
-   * @param {string} tableId - Table ID.
-   * @return {Promise<Object>} Replication settings.
-   */
-  async getReplicationSettings(tableId) {
-    const policy = await this.getTablePolicy(tableId);
-    return {
-      replicaCount: policy.replicaCount,
-      minReplicaCount: policy.minReplicaCount,
-      maxReplicaCount: policy.maxReplicaCount,
     };
   }
 

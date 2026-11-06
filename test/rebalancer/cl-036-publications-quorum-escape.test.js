@@ -130,7 +130,7 @@ function createRebalancer() {
       updateSystemTableRow: async () => ({success: true}),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
       getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
     },
     messageRouter: {

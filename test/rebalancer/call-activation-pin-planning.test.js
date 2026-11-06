@@ -160,7 +160,7 @@ test('a REAL UnifiedRebalancer policy pass attaches live pins from the ' +
     systemTableCache: cache,
     tablePolicyService: {
       getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
     },
   });
   const policy = await rebalancer.getPolicy();

@@ -290,7 +290,7 @@ function createWedgeCoordinator({denialReasonCodesByNodeId}) {
     tablePolicyService: {
       getPolicyForPartition: () => ({
         minReplicaCount: TEST_MIN_REPLICA_COUNT,
-        replicaCount: TEST_TARGET_REPLICA_COUNT,
+        targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
       }),
     },
     cacheData: {

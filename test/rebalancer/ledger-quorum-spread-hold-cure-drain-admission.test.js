@@ -187,7 +187,7 @@ function createFixedTargetPolicyService() {
   return {
     getPolicyForPartition: () => ({
       minReplicaCount: TEST_TARGET_REPLICA_COUNT,
-      replicaCount: TEST_TARGET_REPLICA_COUNT,
+      targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
     }),
   };
 }

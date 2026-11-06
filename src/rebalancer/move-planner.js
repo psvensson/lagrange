@@ -277,8 +277,7 @@ class MovePlanner {
     inventorySourceStateBefore = null,
   ) {
     const nodes = this.moveStateProvider.getAvailableNodes();
-    const targetReplicaCount =
-      policy.targetReplicaCount || policy.replicaCount || NUM.THREE;
+    const targetReplicaCount = this.getPolicyTargetReplicaCount(policy);
     const estimatedBytes = this.getEstimatedBytesForEntity();
     const transitionSnapshot = this.buildTopologyTransitionSnapshot(
       currentReplicas,

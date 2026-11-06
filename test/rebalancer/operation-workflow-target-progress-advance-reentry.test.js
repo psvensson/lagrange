@@ -211,7 +211,7 @@ function createCoordinator(operation, operationRow) {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: NUM.THREE};
+        return {targetReplicaCount: 3, minReplicaCount: NUM.THREE};
       },
     },
     setTimeoutFn(fn, delayMs) {

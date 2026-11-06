@@ -189,7 +189,7 @@ function createMockCoordinatorDeps(sqlEngine) {
         sqlEngine.executeQuery(sql, params, queryOptions),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({replicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
     },
     sqlQueryEngine: sqlEngine,
     transactionCoordinator: createMockTransactionCoordinator(),

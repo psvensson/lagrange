@@ -28,7 +28,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       cdcIntegrationService: {
       },
       tablePolicyService: {
-        getPolicyForPartition: async () => ({minReplicaCount: 1}),
+        getPolicyForPartition: async () => ({targetReplicaCount: 3, minReplicaCount: 1}),
       },
       messageRouter: {
         deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
@@ -95,7 +95,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -163,7 +163,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -235,7 +235,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -310,7 +310,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -383,7 +383,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -483,7 +483,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -555,7 +555,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -621,7 +621,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -702,7 +702,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -766,7 +766,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -884,7 +884,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {

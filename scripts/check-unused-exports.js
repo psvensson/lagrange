@@ -67,7 +67,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-11-03 (composed-05-comparison-readiness): tightened 1390 -> 1389 on
 // the checker hint after de-exporting buildNoticeResponse and
 // resolveControlPlaneSystemTableVisibilityState.
-const BASELINE_UNUSED_EXPORT_COUNT = 1389;
+// 2026-11-06 (partition-placement-declared-target): tightened 1389 -> 1388
+// on the checker hint after consolidating partition policy target authority.
+const BASELINE_UNUSED_EXPORT_COUNT = 1388;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

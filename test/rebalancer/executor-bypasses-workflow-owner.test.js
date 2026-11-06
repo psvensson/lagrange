@@ -172,7 +172,7 @@ test('executor-side replica creation succeeds but owner-side ' +
     cdcIntegrationService: cdcService,
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {

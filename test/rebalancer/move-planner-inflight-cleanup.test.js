@@ -130,7 +130,6 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
 
       const targetState = await planner.calculateTargetState(currentReplicas, {
         targetReplicaCount: 3,
-        replicaCount: 3,
         minReplicaCount: 3,
         maxReplicaCount: 7,
         placementConstraints: {
@@ -468,7 +467,6 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
 
       const targetState = await planner.calculateTargetState(currentReplicas, {
         targetReplicaCount: 3,
-        replicaCount: 3,
         minReplicaCount: 3,
         maxReplicaCount: 7,
         placementConstraints: {

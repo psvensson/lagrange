@@ -58,7 +58,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -165,7 +165,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -300,7 +300,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -410,7 +410,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -563,7 +563,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount};
+            return {targetReplicaCount: 3, minReplicaCount};
           },
         },
         messageRouter: {
@@ -705,7 +705,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -842,7 +842,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount};
+            return {targetReplicaCount: 3, minReplicaCount};
           },
         },
         messageRouter: {
@@ -922,7 +922,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {

@@ -359,7 +359,7 @@ test('boundary-transition scenario defers critical partition create admission ' 
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {

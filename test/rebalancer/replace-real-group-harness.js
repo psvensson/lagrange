@@ -930,7 +930,7 @@ function startCoordinator(world) {
     },
     controlPlaneReadinessService: world.readiness,
     tablePolicyService: {getPolicyForPartition: () =>
-      ({minReplicaCount: world.members.length - 1})},
+      ({targetReplicaCount: 3, minReplicaCount: world.members.length - 1})},
     setTimeoutFn(fn, delayMs) {
       const handle = {fn, delayMs, cleared: false, fired: false, unref() {}};
       world.fallbackTimers.push(handle);

@@ -16,7 +16,6 @@ import {
   STABILIZATION_RESET_TRIGGER,
   REBALANCER_ENTITY_TYPE,
   REBALANCER_NODE_STATUS,
-  REBALANCER_DEFAULT_POLICY,
 } from '../../src/rebalancer/rebalancer-constants.js';
 
 /**
@@ -66,7 +65,7 @@ function createMockDependencies() {
   const mockCdc = {};
 
   const mockPolicy = {
-    getPolicyForPartition: () => ({...REBALANCER_DEFAULT_POLICY.TABLE}),
+    getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3, maxReplicaCount: 7}),
   };
 
   const mockRouter = {};

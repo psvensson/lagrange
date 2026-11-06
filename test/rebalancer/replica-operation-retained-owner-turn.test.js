@@ -86,7 +86,7 @@ function createCoordinator(operation, deliveries) {
     systemTableCache: {get: () => null},
     cdcIntegrationService: {},
     tablePolicyService: {
-      getPolicyForPartition: async () => ({minReplicaCount: 1}),
+      getPolicyForPartition: async () => ({targetReplicaCount: 3, minReplicaCount: 1}),
     },
     messageRouter: {
       async deliver() {

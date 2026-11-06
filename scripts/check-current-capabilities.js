@@ -12,7 +12,6 @@ import {
   LISTENER_PORT_DEFAULT,
   LISTENER_PORT_ENV,
 } from '../src/config/listener-port-model.js';
-import {POLICY_DEFAULT} from '../src/policy/policy-constants.js';
 import {
   ALLOWED_AUTH_MODES,
   ALLOWED_TLS_MODES,
@@ -34,6 +33,8 @@ import {
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEXT_ENCODING = 'utf8';
 const EXPECTED_SCHEMA_VERSION = 1;
+const DEFAULT_REPLICA_COUNT_MISMATCH =
+  'default replica count does not match partition creation configuration';
 const CHART_VALUES_PATH = 'charts/lagrange-node/values.yaml';
 const PARTITIONING_ARCHITECTURE_PATH = 'architecture/process-partitioning.md';
 const REPLICATION_ARCHITECTURE_PATH = 'architecture/process-replication.md';
@@ -216,8 +217,8 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
     'storage admission default does not match configuration owner');
   addProblem(problems,
     capabilities.dataAndQueries.defaultReplicaCount ===
-      POLICY_DEFAULT.REPLICA_COUNT,
-    'default replica count does not match table-policy owner');
+      DEFAULT_CONFIG.partition.defaultReplicaCount,
+    DEFAULT_REPLICA_COUNT_MISMATCH);
 
   addProblem(problems,
     sameValues(

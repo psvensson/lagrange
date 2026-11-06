@@ -90,7 +90,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine,
@@ -181,7 +181,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       sqlQueryEngine: {
@@ -231,7 +231,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -353,7 +353,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -447,7 +447,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -555,7 +555,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         enableTimeouts: false,

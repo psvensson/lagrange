@@ -340,7 +340,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         messageRouter: {
@@ -484,7 +484,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       messageRouter: {
@@ -693,7 +693,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 3};
+          return {targetReplicaCount: 3, minReplicaCount: 3};
         },
       },
       setTimeoutFn(fn, delayMs) {
@@ -945,7 +945,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         setTimeoutFn(fn, delayMs) {
@@ -1138,7 +1138,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 3};
+          return {targetReplicaCount: 3, minReplicaCount: 3};
         },
       },
       enableTimeouts: false,

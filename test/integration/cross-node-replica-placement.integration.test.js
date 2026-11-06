@@ -117,7 +117,7 @@ function createMockTablePolicyService() {
       return {...DEFAULT_TABLE_POLICY};
     },
     getPolicyForPartition() {
-      return {...DEFAULT_TABLE_POLICY};
+      return {...DEFAULT_TABLE_POLICY, targetReplicaCount: 3};
     },
   };
 }

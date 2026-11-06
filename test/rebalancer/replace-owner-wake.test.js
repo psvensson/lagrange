@@ -250,7 +250,7 @@ async function createDeferredReplaceHarness(profile) {
     },
     controlPlaneReadinessService: readiness,
     tablePolicyService: {
-      getPolicyForPartition: () => ({minReplicaCount: 3}),
+      getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
     },
     cacheData: {
       nodes: [

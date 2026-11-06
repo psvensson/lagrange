@@ -710,7 +710,7 @@ test(
       deleteSystemTableRow: async () => ({success: true}),
     };
     partition.tablePolicyService = {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
     };
     partition.messageRouter = {
       getConnectionState: () => 'connected',
@@ -777,7 +777,7 @@ test(
       deleteSystemTableRow: async () => ({success: true}),
     };
     partition.tablePolicyService = {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
     };
     partition.messageRouter = {
       getConnectionState: () => 'connected',
@@ -1288,7 +1288,7 @@ test('PartitionService - initializeRebalancer passes sqlQueryEngine to gateway',
       deleteSystemTableRow: async () => ({success: true}),
     };
     const mockTablePolicyService = {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
     };
     const mockMessageRouter = {
       getConnectionState: () => 'connected',
@@ -1371,7 +1371,7 @@ async (t) => {
     deleteSystemTableRow: async () => ({success: true}),
   };
   const mockTablePolicyService = {
-    getPolicyForPartition: () => ({targetReplicaCount: 3}),
+    getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
   };
   const mockMessageRouter = {
     getConnectionState: () => 'connected',

@@ -87,9 +87,7 @@ function createTestRebalancer(options = {}) {
     serviceEndpoints,
   );
   const mockCdcService = cdcIntegrationService || createMockCdcService();
-  const mockPolicyService = createMockPolicyService(
-    partitions, tables,
-  );
+  const mockPolicyService = createMockPolicyService({partitions: partitions, tables: tables});
   const mockMessageRouter = messageRouter ||
     createMockMessageRouter(connectionState);
   const mockCoordinator = rebalanceCoordinator || createMockCoordinator();
@@ -236,7 +234,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         },
       ];
       const policy = {
-        replicaCount: 3,
+        targetReplicaCount: 3,
         minReplicaCount: 3,
         maxReplicaCount: 7,
         placementConstraints: {spreadAcrossNodes: true},
@@ -1079,7 +1077,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
     ];
 
     const policy = {
-      replicaCount: 5,
+      targetReplicaCount: 5,
       minReplicaCount: 3,
       maxReplicaCount: 7,
     };
@@ -1103,7 +1101,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
     ];
 
     const policy = {
-      replicaCount: 3,
+      targetReplicaCount: 3,
       minReplicaCount: 3,
       maxReplicaCount: 7,
     };
@@ -1129,7 +1127,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
     }));
 
     const policy = {
-      replicaCount: 5,
+      targetReplicaCount: 5,
       minReplicaCount: 3,
       maxReplicaCount: 7,
     };

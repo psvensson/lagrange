@@ -51,7 +51,7 @@ test('armCoordinatorCreatedOperation immediately dispatches locally owned ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: TEST_CRITICAL_CREATED_MIN_REPLICA_COUNT};
+        return {targetReplicaCount: 3, minReplicaCount: TEST_CRITICAL_CREATED_MIN_REPLICA_COUNT};
       },
     },
     messageRouter: {
@@ -277,7 +277,7 @@ async (t) => {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -504,7 +504,7 @@ test('createOperation defers retryable participant-pressure failures and ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -727,7 +727,7 @@ test('dispatchOperation defers priority claim misses when durable ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -887,7 +887,7 @@ test('dispatchOperationInternal executes the claimed operation snapshot ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -1032,7 +1032,7 @@ test('dispatchOperationInternal rehydrates REPLACE source replica metadata ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -1207,7 +1207,7 @@ async (t) => {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {

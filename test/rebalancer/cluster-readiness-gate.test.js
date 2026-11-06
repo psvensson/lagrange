@@ -73,7 +73,7 @@ function createMockCdcService() {
 
 function createMockPolicyService() {
   return {
-    getPolicyForPartition: () => ({targetReplicaCount: 3}),
+    getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
     getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
   };
 }

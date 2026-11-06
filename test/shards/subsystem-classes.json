@@ -7,12 +7,12 @@
     "bootstrap-membership": 338,
     "cdc-metadata": 70,
     "cli-tooling": 99,
-    "control-plane": 233,
+    "control-plane": 234,
     "convergence-topology": 79,
     "distributed-harness": 210,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 272,
+    "placement-rebalance": 274,
     "query-sql": 192,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2594,
-  "digest": "fnv1a32-92ed9498",
+  "censusSize": 2597,
+  "digest": "fnv1a32-62481b5a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-44f5ff16",
+  "observationDigest": "fnv1a32-ab5a9eb1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1525,6 +1525,7 @@
     "test/policy/table-policy-application.property.test.js": "control-plane",
     "test/policy/table-policy-clock-seam.test.js": "control-plane",
     "test/policy/table-policy-service.test.js": "control-plane",
+    "test/policy/table-policy-target-refusal.test.js": "control-plane",
     "test/query/aggregate-function-correctness.property.test.js": "query-sql",
     "test/query/application-database.test.js": "query-sql",
     "test/query/automatic-partition-key.property.test.js": "query-sql",
@@ -1939,6 +1940,8 @@
     "test/rebalancer/operation-workflow-target-progress-advance-reentry.test.js": "placement-rebalance",
     "test/rebalancer/operation-workflow-target-sync-active-progress-contract.test.js": "placement-rebalance",
     "test/rebalancer/orphaned-operation-reconcile-redrive.test.js": "placement-rebalance",
+    "test/rebalancer/partition-policy-remove-retry.test.js": "placement-rebalance",
+    "test/rebalancer/partition-policy-unavailability-redrive.test.js": "placement-rebalance",
     "test/rebalancer/pending-move-tracking.property.test.js": "placement-rebalance",
     "test/rebalancer/placement-wrapping-duplicate-adds.test.js": "placement-rebalance",
     "test/rebalancer/planner-single-path-enforcement.test.js": "placement-rebalance",
@@ -15867,6 +15870,7 @@
     },
     "test/rebalancer/formation-liveness-dependency-serial-planner.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -16062,6 +16066,16 @@
       ]
     },
     "test/rebalancer/orphaned-operation-reconcile-redrive.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/partition-policy-remove-retry.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/partition-policy-unavailability-redrive.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
       ]
@@ -16627,6 +16641,7 @@
     },
     "test/rebalancer/runtime-service-expired-lease-candidate-admission.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -16796,31 +16811,37 @@
     },
     "test/rebalancer/unified-rebalancer-move-calculation-state-evaluation.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-node-readiness-replica-state.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-odd-replica-policy-rebalancing.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-planning-clock-seam.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-replica-state-management-node-state-change.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-start-jitter-seam.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -16831,51 +16852,61 @@
     },
     "test/rebalancer/unified-rebalancer-triggers-bootstrap-lifecycle.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-critical-deferral.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-priority-cohort.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-priority-recovery-cache-bypass.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-priority-surrogate-followup.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-priority-surrogate-gates.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-publication-visibility.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-scheduling.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-system-partition-defer.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },

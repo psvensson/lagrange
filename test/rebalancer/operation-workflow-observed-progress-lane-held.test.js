@@ -342,7 +342,7 @@ function createObservedProgressCoordinator({
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+        return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
       },
     },
     enableTimeouts: false,

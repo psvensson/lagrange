@@ -32,7 +32,7 @@ function buildRebalancer({nowMs, draw}) {
     nodeId: 'node-1',
     systemTableCache: cache,
     cdcIntegrationService: createMockCdcService(),
-    tablePolicyService: createMockPolicyService([], []),
+    tablePolicyService: createMockPolicyService({partitions: [], tables: []}),
     messageRouter: createMockMessageRouter(CONNECTED),
     rebalanceCoordinator: createMockCoordinator(),
     sqlQueryEngine: {async executeQuery() {

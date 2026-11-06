@@ -223,7 +223,7 @@ function createRebalancer(
       updateSystemTableRow: async () => ({success: true}),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({targetReplicaCount: TARGET_REPLICA_COUNT}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: TARGET_REPLICA_COUNT}),
     },
     messageRouter: {
       getConnectionState: (nodeId) =>

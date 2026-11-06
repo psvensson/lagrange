@@ -125,7 +125,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
         tablePolicyService: {
           // Setting minReplicaCount to 5 will trigger the minimum replica count check violation
           // since we only have 4 replicas total (source, follow1, follow2, replacement)
-          getPolicyForPartition: () => ({minReplicaCount: 5}),
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 5}),
         },
         cacheData: {
           nodes: [
@@ -338,7 +338,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           },
         }),
         tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
         cacheData: {
           nodes: [
@@ -579,7 +579,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           },
         }),
         tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         },
         cacheData: {
           nodes: [

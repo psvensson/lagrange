@@ -289,7 +289,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         enableTimeouts: false,
@@ -440,7 +440,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         setTimeoutFn(fn, delayMs) {
@@ -617,7 +617,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         setTimeoutFn(fn, delayMs) {
@@ -802,7 +802,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         setTimeoutFn(fn, delayMs) {
@@ -953,7 +953,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       setTimeoutFn(fn, delayMs) {
@@ -1075,7 +1075,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       setTimeoutFn(fn, delayMs) {
@@ -1184,7 +1184,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         setTimeoutFn(fn, delayMs) {
@@ -1314,7 +1314,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         setTimeoutFn(fn, delayMs) {
@@ -1502,7 +1502,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
           },
         },
         tablePolicyService: {async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         }},
         setTimeoutFn(fn, delayMs) {
           const handle = {fn, delayMs};

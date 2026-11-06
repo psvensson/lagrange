@@ -196,7 +196,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       enableTimeouts: false,
@@ -378,7 +378,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         setTimeoutFn(fn, delayMs) {
@@ -526,7 +526,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         setTimeoutFn(fn, delayMs) {
@@ -701,7 +701,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       enableTimeouts: false,
@@ -876,7 +876,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       setTimeoutFn(fn, delayMs) {
@@ -1080,7 +1080,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       enableTimeouts: false,
@@ -1238,7 +1238,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         messageRouter: initiatedRouter(deliveries),
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         enableTimeouts: false,
@@ -1404,7 +1404,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       enableTimeouts: false,

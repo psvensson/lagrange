@@ -254,7 +254,7 @@ test('table policy invokes TablePolicyService.updateTablePolicy',
       {splitStorageThreshold: 1024});
 
     const invalid = await operations.updateTablePolicy(TABLE_ID,
-      {policy: {replicaCount: 2}});
+      {policy: {minReplicaCount: 2}});
     t.equal(invalid.statusCode, 400);
     t.equal(invalid.body.errorCode, POLICY_ERROR_CODE.POLICY_INVALID);
     t.equal(gateway.submittedMutations.length, 1, 'nothing written');

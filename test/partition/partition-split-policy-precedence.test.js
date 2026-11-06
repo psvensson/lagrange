@@ -32,11 +32,13 @@ function createPolicyCache() {
   }];
   const partitions = [{
     partition_id: DEFAULT_PARTITION_ID,
+    replica_count: 3,
     table_id: DEFAULT_TABLE_ID,
     table_name: 'ratings_default',
     size_bytes: OBSERVED_RATINGS_SIZE_BYTES,
   }, {
     partition_id: 'ratings-override-p1',
+    replica_count: 3,
     table_id: 'tbl-ratings-override',
     table_name: 'ratings_override',
     size_bytes: OBSERVED_RATINGS_SIZE_BYTES,
@@ -148,14 +150,14 @@ test('unrelated policy updates preserve configured split threshold ' +
     cdcIntegrationService,
   });
 
-  await policyService.updateTablePolicy(DEFAULT_TABLE_ID, {replicaCount: 5});
+  await policyService.updateTablePolicy(DEFAULT_TABLE_ID, {minReplicaCount: 5});
 
   const persistedPolicy = JSON.parse(
     cdcIntegrationService.updates[0].data.table_policies,
   );
   t.same(
     persistedPolicy,
-    {minReplicaCount: 3, replicaCount: 5},
+    {minReplicaCount: 5},
     'an unrelated update persists only stored and explicitly updated fields',
   );
   t.notOk(
@@ -219,11 +221,13 @@ test('MovieLens ratings override leaves system logs on the production ' +
     }],
     partitions: [{
       partition_id: SCENARIO_PARTITION_ID,
+      replica_count: 3,
       table_id: SCENARIO_TABLE_ID,
       table_name: 'ratings',
       size_bytes: OBSERVED_RATINGS_SIZE_BYTES,
     }, {
       partition_id: SYSTEM_LOGS_PARTITION_ID,
+      replica_count: 3,
       table_id: 'logs',
       table_name: 'logs',
       size_bytes: OBSERVED_RATINGS_SIZE_BYTES,

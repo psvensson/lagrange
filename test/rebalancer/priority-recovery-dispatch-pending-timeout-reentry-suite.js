@@ -600,7 +600,7 @@ function createTopologyOperatorWitnessCoordinator() {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+        return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
       },
     },
     enableTimeouts: false,
@@ -903,7 +903,7 @@ registerCase(TEST_BOUNDED_OWNER_REENTRY_CONTRACT_TEST_NAME, async (t) => {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+        return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
       },
     },
     setTimeoutFn(fn, delayMs) {
@@ -1013,7 +1013,7 @@ registerCase(
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       setTimeoutFn(fn, delayMs) {
@@ -1100,7 +1100,7 @@ registerCase(
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       setTimeoutFn(fn, delayMs) {
