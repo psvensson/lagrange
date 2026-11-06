@@ -1,0 +1,21 @@
+{
+  "questId": "committed-readiness-fixture-custody",
+  "stage": "step4-retained-fixture-and-host-factor-repairs-verification",
+  "verdict": "approve",
+  "verifier": "subagent:b53f502d-cb6d-4d3b-b17c-9e51dbbbcf82",
+  "ruleSetRevision": 5,
+  "baseCommit": "6317f224bf356aa390af83f64bb34ff855264025",
+  "productionFilesModified": 0,
+  "files": {
+    "test/integration/helpers/cluster-test-helpers.js": "a0b4daa3c4499fce8c43f9dbe63e4585a88d7c9e5f5ef9a90a96e0d9c00727c0",
+    "test/rebalancer/replace-source-removal-owner.test.js": "776ffa1617f992fa24c3d91146a3fd621102926f23b063aefe71283aef5226a8",
+    "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "569d9a0698fcca62e2e53d98c0fb980b604e9957a655c972ae840a1de5a00fef",
+    "test/test-helpers/fresh-seed-activation-public-child.js": "6989d1f01309c230c578802232de2a567892d66a1b0e8d6d3bd657b8a131ae4a",
+    "test/integration/seed-migration-cutover-persisted.integration.test.js": "89223ae6cdaef266b05086e5ef34422034fbdb0a76e804eeb197b41be01a5ea6",
+    "test/integration/critical-replica-placement-causal-trace.integration.test.js": "820b5d48be45105e0f1d6c3fb5759d1eb561f22d3309b03800bf553f5bcb9ba5",
+    "test/integration/membership-consistency.integration.test.js": "e1a28b478ab1df3be912447f21a1277591b6f2bba6c2d2b18c0c58694a2c3e89",
+    "solve/epics/operation-integrity-and-reliable-formation.md": "0e227547a6d476999f01230c5d082cda7b8b6aff3645265a87de775180522915",
+    "solve/quests/committed-readiness-fixture-custody/quest.json": "16585233eecd880b75f10e9e60a8689d7cdd8f2058c58ef207223ed26c82dc05",
+    "solve/quests/committed-readiness-fixture-custody/evidence/receipt.json": "839f8602d3b0d1bc9d27f6b1a9226f2ba3be1f63ce079fe8c86414e4a4dedd7e"
+  }
+}

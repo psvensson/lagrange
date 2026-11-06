@@ -43,8 +43,10 @@ import {
 const PARTITION_ID = 'users-p1';
 const SOURCE_NODE_ID = 'seed-node';
 const TARGET_NODE_ID = 'node-2';
+const PEER_NODE_ID = 'node-3';
 const SOURCE_REPLICA_ID = `${PARTITION_ID}-r1`;
 const TARGET_REPLICA_ID = `${PARTITION_ID}-r2`;
+const PEER_REPLICA_ID = `${PARTITION_ID}-r3`;
 const INTENT_COMMIT_INDEX = 10;
 // Past the former STOPPING step budget (60 s) and operation budget (300 s).
 const LONG_AFTER_MS = 3_600_000;
@@ -116,6 +118,17 @@ async function createHarness({
       return handle;
     },
     clearTimeoutFn() {},
+    readinessFixture: {
+      now: () => Date.now() + clock.offsetMs,
+      readNodeRows: () => [SOURCE_NODE_ID, TARGET_NODE_ID, PEER_NODE_ID].map(
+        (nodeId) => ({
+          node_id: nodeId,
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: Date.now() + clock.offsetMs + 60_000,
+        }),
+      ),
+    },
     sqlQueryResults: {
       'FROM services WHERE service_id = ?': {
         success: true,
@@ -735,9 +748,6 @@ test('W13 (BR12): a deferred-visibility snapshot waits at the removal ' +
 // authority is the group's leader-answered CURRENT committed configuration,
 // reached through the witness read (one redirect from the target to the
 // leader it names). The target's own view is never the verdict.
-const PEER_REPLICA_ID = `${PARTITION_ID}-r3`;
-const PEER_NODE_ID = 'node-3';
-
 function peerRow() {
   return {...targetRow(ReplicaStatus.ACTIVE), service_id: PEER_REPLICA_ID,
     replica_id: PEER_REPLICA_ID, node_id: PEER_NODE_ID, raft_role: 'leader',

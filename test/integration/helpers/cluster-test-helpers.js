@@ -172,6 +172,7 @@ export function resetPortCounter(startPort = 18000) {
 export function initializeTestEnvironment(options = {}) {
   const {
     nodeId = 'test-node',
+    partition = null,
     raft = {},
     rebalancer = {},
     replicaHandler = {},
@@ -190,6 +191,9 @@ export function initializeTestEnvironment(options = {}) {
   const config = ConfigurationManager.getInstance();
   config.initialize({
     node: {id: nodeId},
+    ...(partition && typeof partition === 'object' ?
+      {partition: {...partition}} :
+      {}),
     logging: {level: 'error'},
     transport: {wsHost: '127.0.0.1'},
     raft: {

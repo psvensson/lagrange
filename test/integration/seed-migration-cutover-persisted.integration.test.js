@@ -406,7 +406,10 @@ test('TX1 M1: the schema-migration cutover on the production seed-hydration engi
   'its two-participant transaction (tables-p1 and schema_migration_partitions-p1) with a ' +
   'durable COMMITTED decision, and both cutover UPDATEs apply', {timeout: TEST_TIMEOUT_MS},
 async (t) => {
-  initializeTestEnvironment({nodeId: SEED_NODE_ID});
+  initializeTestEnvironment({
+    nodeId: SEED_NODE_ID,
+    partition: {defaultReplicaCount: 1},
+  });
   const wsPort = getUniquePort();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tx1-m1-authorized-'));
   const nodeAddress = `ws://localhost:${wsPort}`;

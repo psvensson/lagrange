@@ -264,9 +264,20 @@ preserving the 1,020 observed readiness results, and its corrected two-file
 proof passes 31 reported assertions; committed `ad0d64de` and its first-attempt
 Lenovo frozen proof (2 files/31 assertions) are approved by `5e8512cf`. The
 missing-both-rows self-grace contract (`readiness-self-grace-service-evidence-contract`)
-is now independently reviewed and brings the 28-file readiness caller suite to
-28/28 passing (2,738 reported assertions); committed frozen proof and receipt
-admission remain pending. The existing
+is committed at `e8fd1cc6`, passes the frozen 28-file readiness caller proof on
+Lenovo (28/28 files, 2,738 reported assertions, first attempt), and is
+independently approved (`independent-e8fd1cc6-applicability.md`). Operation-bound
+failed-create cleanup claim normalization (`failed-create-cleanup-claim-normalization`)
+is committed at `6317f224`, passes the frozen 9-file cleanup and admission proof
+on Lenovo (9/9 files, 359 reported assertions, first attempt), and is
+independently approved (`independent-6317f224-applicability.md`). The remaining
+retained source-cone fixture and host-factor repairs (`cluster-test-helpers.js`
+partition forwarding, `replace-source-removal-owner.test.js` readiness fixture,
+`single-path-partition-cutover.test.js`, `fresh-seed-activation-public-child.js`,
+`seed-migration-cutover-persisted.integration.test.js`,
+`critical-replica-placement-causal-trace.integration.test.js`, and
+`membership-consistency.integration.test.js` machine-factor scaling) are locally
+verified and ready for independent review and frozen lab proof. The existing
 semantic owner now distinguishes invalid lease data from explicit clearing;
 committed node authority supplies floor credit and the existing retained owner
 subscribes to meaningful committed changes. The bounded real-owner witness

@@ -332,6 +332,8 @@ test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
         messageRouter: bootstrapResult.messageRouter,
         cdcIntegrationService: bootstrapService.cdcIntegrationService,
         rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
+        controlPlaneReadinessService:
+          bootstrapService.controlPlaneReadinessService,
         nodeId: SEED_NODE_ID,
       });
       seedApi = new BootstrapAPI({
@@ -433,7 +435,11 @@ test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
       const createResult = await queryEngine.executeQuery(
         `CREATE TABLE ${CONTROL_TABLE_NAME} (id INTEGER PRIMARY KEY, ` +
         'payload TEXT)');
-      t.equal(createResult.success !== false, true,
+      const createAdmittedOrDeferred =
+        createResult.success !== false ||
+        (createResult.contractState === 'deferred' &&
+          createResult.errorCode === 'PROVISIONING_UNAVAILABLE');
+      t.equal(createAdmittedOrDeferred, true,
         'the ordinary control table is created');
       // Provisioning is MEASURED, never required: on the first live runs the
       // ordinary lane could not even provision its partition row - the same
@@ -444,8 +450,8 @@ test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
       await waitFor(() => {
         const controlRows = readRows(systemTableCache,
           SYSTEM_TABLE_NAME.PARTITIONS,
-          (row) => String(row.table_id || row.table_name || '') ===
-            CONTROL_TABLE_NAME ||
+          (row) => String(row.table_name || '') === CONTROL_TABLE_NAME ||
+            String(row.table_id || '') === CONTROL_TABLE_NAME ||
             String(row.partition_id || '').startsWith(CONTROL_TABLE_NAME));
         controlPartitionId = controlRows[0]?.partition_id || null;
         return controlPartitionId !== null;

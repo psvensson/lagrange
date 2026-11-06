@@ -329,6 +329,7 @@ async function cleanSeedAttempt({bootstrapService, bootstrapResult, seedApi, dat
 test('seed bootstraps and serves a write on rs-raft by default',
   {timeout: SEED_TEST_TIMEOUT_MS}, async () => {
     initializeTestEnvironment({
+      partition: {defaultReplicaCount: 1},
       rebalancer: {
         periodicCheckIntervalMs: 600000,
         periodicCheckJitterMs: 100,

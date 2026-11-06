@@ -69,12 +69,16 @@ import {
   waitForPublishedMembership,
 } from './membership-consistency-integration-test-helpers.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 
 // ============================================================================
 // TEST SUITE
 // ============================================================================
 
-test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) => {
+const SUITE_NAME = 'Membership Consistency Integration Tests';
+const SUITE_TIMEOUT_MS = 240000;
+
+test(SUITE_NAME, {timeout: scaleByMachineFactor(SUITE_TIMEOUT_MS)}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
   });
