@@ -44,7 +44,10 @@ import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordina
 import {assignAdminControlSnapshotReadinessDiagnosticsMethods} from './admin-control-snapshot-readiness-diagnostics-methods.js';
 import {assignAdminControlSnapshotLocalDiagnosticsMethods} from './admin-control-snapshot-local-diagnostics-methods.js';
 import {AdminControlSnapshot} from './admin-control-snapshot-leadership-summary.js';
-import {attachAuthoritativeRepairDiagnostics} from './admin-control-snapshot-repair-diagnostics.js';
+import {
+  attachAuthoritativeRepairDiagnostics,
+  hasPressureOrTimeoutRepairCause,
+} from './admin-control-snapshot-repair-diagnostics.js';
 import {
   hasDurablePublishedMembershipObservation,
   selectDurablePublishedMembershipObservation,
@@ -68,9 +71,6 @@ const CONTROL_PLANE_PUBLICATION_STORY_SYNC_METHOD =
   'getControlPlanePublicationStorySync';
 const AUTHORITATIVE_REPAIR_CAUSE_LEADER_RESOLUTION_GAP =
   'leader_resolution_gap';
-const AUTHORITATIVE_REPAIR_CAUSE_QUERY_TIMEOUT = 'query_timeout';
-const AUTHORITATIVE_REPAIR_CAUSE_CONTROL_PLANE_BACKPRESSURE =
-  'control_plane_backpressure';
 const CONTROL_SNAPSHOT_PUBLICATION_READ_REPAIR_ERROR_FRAGMENTS = Object.freeze([
   'leader is unknown',
   'leader unknown',
@@ -103,17 +103,6 @@ function hasOnlyLeaderResolutionGapRepairCause(repair = null) {
     causeChain.every(
       (value) => value === AUTHORITATIVE_REPAIR_CAUSE_LEADER_RESOLUTION_GAP,
     )
-  );
-}
-function hasPressureOrTimeoutRepairCause(repair = null) {
-  const causeChain = Array.isArray(repair?.causeChain) ?
-    repair.causeChain.filter(
-      (value) => typeof value === 'string' && value.length > 0,
-    ) :
-    ADMIN_CACHE_DUMP.EMPTY;
-  return (
-    causeChain.includes(AUTHORITATIVE_REPAIR_CAUSE_QUERY_TIMEOUT) ||
-    causeChain.includes(AUTHORITATIVE_REPAIR_CAUSE_CONTROL_PLANE_BACKPRESSURE)
   );
 }
 function isRecoverableControlSnapshotPublicationReadError(error = null) {

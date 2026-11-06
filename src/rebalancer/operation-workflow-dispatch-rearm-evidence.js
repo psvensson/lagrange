@@ -161,8 +161,7 @@ function isRetryableControlPlaneOperationTarget(operation) {
     return false;
   }
   if (
-    (operation.entityType || operation.entity_type) ===
-    UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE
+    operation.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE
   ) {
     return true;
   }

@@ -178,6 +178,21 @@ node within preregistered bounds.
   tightened on the checker's hint. Independent review and committed lab proof
   remain required. No physical E9 sequence, publication, merge or comparative
   measurement has been completed.
+- Expanded E8 at `de8ccfe430d7836a3ba69df41112089b81573f59` passed
+  39/40 files (2,856 reported assertions). The added outward admin fixture
+  alone expected an ACTIVE target service to hide a CREATING ADD. The same
+  two failures reproduced at `6b0d1f2` on the same tv-dator host; the liveness
+  owner and fixture were unchanged. Its correction retains in-flight `1`
+  and timeline `true`, as E3 requires. All five isolated embedded/runtime
+  files passed. This red package remains retained, not accepted as E8.
+- Whole static checks at `de8ccfe43` passed 31/33. The remaining unused
+  pressure/timeout helper is now consumed through its existing diagnostic
+  owner (unused exports 1,389/1,389). The separate bounded retry-contract
+  repair removes an inherited `entity_type` alternative from the normalized
+  operation decision; repository ingress already owns conversion to
+  `entityType`. Its authority guard passes without changing retry budgets or
+  canonical runtime-service retry behaviour. These repairs require the next
+  committed 42-file E8 package and exact-candidate review before E9.
 
 ## Approved user-visible contract
 

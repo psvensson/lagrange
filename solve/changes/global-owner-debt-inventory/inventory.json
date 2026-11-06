@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "05bdf593f82d11f23a4229b6927e87e98a22511dc229e2862f03b7180ff0e949"
+        "sha256": "869b1302163bba39eb6d3fb3978d49c51312d127e6ff48fd68c82a452a8d3dd1"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -24,7 +24,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 3424245,
-        "sha256": "9a937a8d11ab46d8d44ec433b5e92853e2321dee8ca08d3b5b7dccb806337fc6"
+        "sha256": "312e50f20c5c3b5ef2c649fc17060e335dca43b5f50898c3cd1a75445c457278"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "aacc5b884d3c0c1d540646e944ff6c1606e562bc88c1f2e13df81a879913a76e"
+        "sha256": "caaa8a62d7554e7cb6faf6e875fd8f223ae2895eb07e06576ee7df80c095d6b6"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "02b1213ab45b259394960ac8d672d893d44d5705c84683b2b92e280358d1cce5"
+    "inputDigest": "140ed1c4866c1041d5242cb398d327962583387120d935ce007c74e19d128fbc"
   },
   "reconciliation": {
     "complexity": {
@@ -73,7 +73,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "05bdf593f82d11f23a4229b6927e87e98a22511dc229e2862f03b7180ff0e949"
+        "sha256": "869b1302163bba39eb6d3fb3978d49c51312d127e6ff48fd68c82a452a8d3dd1"
       },
       "declaredCount": 1720,
       "observedCount": 1720,
@@ -117,12 +117,12 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "aacc5b884d3c0c1d540646e944ff6c1606e562bc88c1f2e13df81a879913a76e"
+          "sha256": "caaa8a62d7554e7cb6faf6e875fd8f223ae2895eb07e06576ee7df80c095d6b6"
         },
-        "cloneGroups": 38,
-        "duplicatedLines": 1207,
-        "sourceCloneTouches": 76,
-        "sourceDuplicatedLineTouches": 2414,
+        "cloneGroups": 37,
+        "duplicatedLines": 1187,
+        "sourceCloneTouches": 74,
+        "sourceDuplicatedLineTouches": 2374,
         "nonzeroSourceCount": 51,
         "touchMultiplicity": 2
       },
@@ -174,14 +174,14 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 3424245,
-        "sha256": "9a937a8d11ab46d8d44ec433b5e92853e2321dee8ca08d3b5b7dccb806337fc6"
+        "sha256": "312e50f20c5c3b5ef2c649fc17060e335dca43b5f50898c3cd1a75445c457278"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "e569f4843cfc4a7b426fe683274744b79d72d271e541b4b67f4235c079be32e9",
+      "sourceDigest": "3f5e141d8cc0b8dc7fa5aa4aadeea6203bf98d19fd806664b767e888e87076e2",
       "moduleCount": 6057,
       "edgeCount": 33497,
       "unresolvedCount": 46
@@ -191,7 +191,7 @@
     "sourceSignalCount": 2415,
     "assignedSignalCount": 2415,
     "uniqueAssignmentCount": 2415,
-    "digest": "0bbb307497b868cd743547cef45f069cdb2301f42eaf51bc7df8abf64405e91e"
+    "digest": "9bf0486bd07e3cccf96db076a0beae944be846b3a531696fd751833faa98c094"
   },
   "signalCounts": {
     "cognitive": 145,
@@ -529,13 +529,13 @@
       "complexity": 30,
       "cognitive": 7,
       "oversizedFiles": 3,
-      "duplicatedLines": 294,
-      "cloneTouches": 10,
+      "duplicatedLines": 254,
+      "cloneTouches": 8,
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 45,
       "importOut": 91,
-      "score": 241.4,
+      "score": 237.4,
       "topPaths": [
         "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
         "src/admin/admin-control-snapshot-local-build-base.js",

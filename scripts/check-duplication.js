@@ -102,8 +102,9 @@ const RATCHET_TARGETS = [
     // checker's hint.
     // 2026-11-06: tightened 39/1236 -> 38/1207 on the checker's hint after
     // control snapshots delegated their duplicate diagnostic helpers.
-    baselineCloneGroupCount: 38,
-    baselineDuplicatedLineCount: 1207,
+    // The remaining pressure/timeout clone tightens the measured bound again.
+    baselineCloneGroupCount: 37,
+    baselineDuplicatedLineCount: 1187,
     strictEligible: true,
   },
   {
