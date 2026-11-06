@@ -33,6 +33,7 @@ quests:
   - readiness-direct-publication-planning-identity
   - readiness-direct-publication-planning-custody
   - readiness-self-grace-service-evidence-contract
+  - failed-create-cleanup-claim-normalization
   - strict-hydration-fixture-owner-ports
   - tap-default-machine-factor-portability
 authorizes:

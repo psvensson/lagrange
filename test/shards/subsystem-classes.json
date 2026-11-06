@@ -28,7 +28,7 @@
   "censusSize": 2604,
   "digest": "fnv1a32-4cdf03c6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3f9e26ae",
+  "observationDigest": "fnv1a32-6ca1691c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4442,6 +4442,7 @@
         "src/control-plane/replica-dispatch-service.js",
         "src/query/query-executor.js",
         "src/query/sql-query-engine.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/storage-admission-service.js",
         "src/rebalancer/unified-rebalancer.js",
@@ -4554,6 +4555,7 @@
         "src/control-plane/projection-readiness-evidence.js",
         "src/control-plane/published-membership-epoch-reading.js",
         "src/control-plane/recovery-protocol-snapshot.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-dispatch-epoch-gate.js",
         "src/rebalancer/operation-workflow-owner-retry-registry.js",
         "src/rebalancer/rebalance-coordinator-lifecycle.js",
@@ -4850,6 +4852,7 @@
         "src/control-plane/system-row-normalizers.js",
         "src/diagnostics/topology-convergence-publication-normalizers.js",
         "src/diagnostics/topology-convergence-replay.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
         "src/rebalancer/operation-workflow-remove-safety-membership.js",
         "src/rebalancer/priority-placement-observation-memo.js",
@@ -5114,6 +5117,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/readiness-planning-publication-contract.js",
         "src/control-plane/readiness-planning-snapshot-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/priority-publication-safety-shared.js",
         "src/rebalancer/priority-publication-safety-topology.js"
       ]
@@ -5225,7 +5229,8 @@
         "src/config/configuration-manager.js",
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
-        "src/control-plane/replica-dispatch-service.js"
+        "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/control-plane/replica-dispatch-atomic-claim-ready-trigger.integration.test.js": {
@@ -5364,6 +5369,7 @@
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js"
       ]
     },
@@ -5380,7 +5386,8 @@
         "src/config/configuration-manager.js",
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
-        "src/control-plane/replica-dispatch-service.js"
+        "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js": {
@@ -5389,7 +5396,8 @@
         "src/config/configuration-manager.js",
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
-        "src/control-plane/replica-dispatch-service.js"
+        "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/control-plane/replica-dispatch-startup-operation-replay.test.js": {
@@ -5465,18 +5473,21 @@
     "test/convergence/dt-formation-barrier-spread-release-oscillation.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt-formation-priority-placement-before-active.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt-ledger-completion-continuity-discriminator.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -5567,6 +5578,7 @@
     "test/convergence/dt6-formation-ledger-quorum-spread-first.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
@@ -5574,6 +5586,7 @@
     "test/convergence/dt6-formation-ledger-spread-completion-self-move-interlock-deadlock.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -5633,24 +5646,28 @@
     },
     "test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/convergence/dt6-operation-ledger-self-move-hold-engagement.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-operation-ledger-self-move-holder-release.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/storage-reservation-authority.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
@@ -5658,24 +5675,28 @@
     "test/convergence/dt6-operation-ledger-terminal-hold.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-priority-recovery-drain-parked-self-move.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/convergence/dt6-publication-ack-recovery-gate-network.test.js": {
@@ -5759,6 +5780,7 @@
     "test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -5772,6 +5794,7 @@
     "test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -5800,6 +5823,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -9053,6 +9077,7 @@
     "test/integration/cross-node-replica-placement.integration.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
@@ -9113,6 +9138,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/storage/data-directory-process-owner.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/lifecycle-state-store.js",
@@ -9535,6 +9561,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -9573,6 +9600,7 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -9809,6 +9837,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/unified-rebalancer.js",
         "src/storage/data-directory-process-owner.js"
       ]
@@ -9820,6 +9849,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -10465,6 +10495,7 @@
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/runtime/oci-host-agent-durable-files.js",
         "src/transport/transport-semantic-outcome.js",
@@ -10496,6 +10527,7 @@
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/transport/transport-semantic-outcome.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
@@ -10527,6 +10559,7 @@
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/transport/transport-semantic-outcome.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
@@ -10557,6 +10590,7 @@
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/transport/transport-semantic-outcome.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
@@ -10587,6 +10621,7 @@
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/index.js",
         "src/rebalancer/rebalancer-constants.js",
         "src/rebalancer/replica-operation-constants.js",
@@ -10619,6 +10654,7 @@
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/transport/transport-semantic-outcome.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
@@ -10649,6 +10685,7 @@
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/transport/transport-semantic-outcome.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
@@ -10680,6 +10717,7 @@
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/transport/transport-semantic-outcome.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
@@ -10966,6 +11004,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/transport/transport-semantic-outcome.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -10986,6 +11025,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/transport/transport-semantic-outcome.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -11005,6 +11045,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/transport/transport-semantic-outcome.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -12160,17 +12201,20 @@
     },
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/partition/partition-rebalancer-readiness-edge-gate.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/partition/partition-registration-exact-birth.test.js": {
@@ -15669,12 +15713,14 @@
     },
     "test/rebalancer/add-workflow-step-progression.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/admission-real-size-estimates.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js"
       ]
     },
@@ -15696,6 +15742,7 @@
     "test/rebalancer/assignment-epoch-fencing.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/rebalancer-constants.js",
         "src/rebalancer/replica-operation-constants.js",
@@ -15704,7 +15751,8 @@
     },
     "test/rebalancer/batching-concurrency.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/call-activation-pin-planning.test.js": {
@@ -15729,6 +15777,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/executor-outcome-emitter.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-operation-update-disposition.js",
         "src/rebalancer/replica-status.js",
@@ -15738,12 +15787,14 @@
     "test/rebalancer/cl-036-publications-quorum-escape.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/cleanup-moves-failed-replicas.property.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
@@ -15761,6 +15812,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-readiness-service.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "test/rebalancer/committed-node-remove-safety-fixture.js"
       ]
@@ -15769,6 +15821,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-readiness-service.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-committed-node-floor.js",
         "src/rebalancer/priority-publication-safety-topology.js",
         "src/rebalancer/replica-operation-constants.js",
@@ -15778,6 +15831,7 @@
     "test/rebalancer/coordinator-created-operation-admission.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js"
       ]
     },
@@ -15787,19 +15841,22 @@
         "src/control-plane/priority-recovery-completion.js",
         "src/control-plane/timeout-budget.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-owner.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/rebalancer/coordinator-created-operation-progress.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/coordinator-created-user-partition-remote-outcome.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/executor-outcome-emitter.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/rebalancer-constants.js",
@@ -15808,7 +15865,8 @@
     },
     "test/rebalancer/coordinator-dedup-gap.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/coordinator-handoff-step-timeout-wait-bound-spent.test.js": {
@@ -15820,28 +15878,33 @@
     },
     "test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/coordinator-reservation-lifecycle.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js"
       ]
     },
     "test/rebalancer/coordinator-reused-operation-rearm-guard.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/coordinator-shared-readiness-policy.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/critical-spread-terminal-stall-repro.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/critical-topology-committed-lease.test.js": {
@@ -15853,23 +15916,27 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-operation-constants.js"
       ]
     },
     "test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/duplicate-move-prevention.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/duplicate-operation-prevention.property.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -15877,6 +15944,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/config/configuration-manager.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-status.js",
         "src/workflow/durable-workflow-coordinator.js"
@@ -15895,6 +15963,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/diagnostics/runtime-build-provenance.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/transport/transport-semantic-outcome.js",
@@ -15905,7 +15974,8 @@
     },
     "test/rebalancer/failed-authoritative-read-admission-verdict.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/failed-create-cleanup-recovery-owner-lifetime.test.js": {
@@ -15929,35 +15999,41 @@
     "test/rebalancer/formation-barrier-spread-cure-lane-discrimination.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/formation-cure-reservation-progress-obligation.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/formation-cure-reservation-progress-successor.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalancer-constants.js",
         "src/rebalancer/storage-capacity-constants.js"
       ]
     },
     "test/rebalancer/formation-ledger-spread-voter-ready-readiness.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/formation-liveness-dependency-serial-planner.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/formation-placement-target-evidence-absent.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js": {
@@ -15971,6 +16047,7 @@
         "src/control-plane/owners/deployment-binding-contract.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
         "src/query/runtime-replica-state-projection.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-status.js",
         "src/rebalancer/unified-rebalancer.js",
         "src/runtime/runtime-driver-registry.js",
@@ -16006,12 +16083,14 @@
     },
     "test/rebalancer/late-dispatch-honored-stops-redrive.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/message-group-fresh-identity-two-replace.test.js": {
@@ -16044,12 +16123,14 @@
     },
     "test/rebalancer/message-group-membership-change-parked.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/message-group-membership-operation-lane.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-gate-operation-row-repair.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-status.js"
@@ -16057,22 +16138,26 @@
     },
     "test/rebalancer/message-group-operation-routing.integration.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/no-duplicate-add-moves.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/no-duplicate-remove-moves.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/no-orphaned-replicas-after-recovery.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/node-storage-budget-service.test.js": {
@@ -16082,38 +16167,45 @@
     },
     "test/rebalancer/operation-log-persistence.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/operation-ownership-lease-fencing.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/operation-progress-store-persistence.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/operation-record-completeness.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/operation-step-staleness-anchor.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/operation-workflow-active-cache-handoff.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
-        "src/constants/unified-service-lifecycle.js"
+        "src/constants/unified-service-lifecycle.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js": {
@@ -16121,6 +16213,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/priority-recovery-completion.js",
         "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-owner-shared.js",
         "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
         "src/rebalancer/replica-operation-update-disposition.js"
@@ -16128,62 +16221,74 @@
     },
     "test/rebalancer/operation-workflow-remove-safety-concurrent-down-target.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/operation-workflow-remove-safety-concurrent-stale-phantom.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/operation-workflow-remove-safety-universal-floor.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/operation-workflow-target-progress-advance-reentry.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/operation-workflow-target-sync-active-progress-contract.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/orphaned-operation-reconcile-redrive.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/partition-policy-remove-retry.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/partition-policy-unavailability-redrive.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/pending-move-tracking.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/planner-target-authority-divergence-probe.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/planning-sweep-memoization.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/priority-follow-up-target-readiness.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/priority-publication-per-leg-evidence-census.test.js": {
@@ -16206,22 +16311,26 @@
     },
     "test/rebalancer/priority-recovery-follow-up-count-aware-add-gate.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/priority-recovery-stale-planning-visibility.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/priority-recovery-visibility-wakeup.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/priority-replace-exact-target-observation.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/projection-boundary.guard.test.js": {
@@ -16232,23 +16341,27 @@
     },
     "test/rebalancer/quorum-conditioned-remove-safety.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/readiness-fixture-custody.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/readiness-policy-equivalence-characterization.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/rebalance-budget-enforcement.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/rebalance-coordinator-operation-ownership.test.js": {
@@ -16262,6 +16375,7 @@
     "test/rebalancer/rebalance-coordinator-outcome-routing.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/workflow/durable-workflow-coordinator.js"
       ]
@@ -16269,28 +16383,33 @@
     "test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/workflow/durable-workflow-coordinator.js"
       ]
     },
     "test/rebalancer/rebalance-coordinator-stopping-reconcile-cache-visibility.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/rebalance-coordinator-stopping-reconcile-source-removal.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/rebalance-coordinator-stopping-reconcile-stale-priority.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/rebalance-coordinator-terminal-intent-collision.test.js": {
@@ -16306,49 +16425,58 @@
     "test/rebalancer/rebalance-coordinator-topology-guard.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/rebalancer/rebalancer-entity-interaction-contract.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/priority-publication-safety-rows.js",
         "src/rebalancer/priority-recovery-superseded-target.js"
       ]
     },
     "test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/rebalancer-shutdown-idempotent.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/rebalancing-scheduling.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/recent-completed-replace-target-visibility.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/recovery-handles-incomplete-operations.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/remove-active-dispatch-redrive.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/remove-workflow-step-progression.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/removed-replica-cleanup-debt-owner.test.js": {
@@ -16361,48 +16489,57 @@
     "test/rebalancer/replace-dispatch-epoch-gate-scope.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-operation-constants.js"
       ]
     },
     "test/rebalancer/replace-drain-hand-back.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replace-in-flight-blocks-planning.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replace-named-handoff-attempt.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replace-owner-lease-causal.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replace-owner-lease-verdict-property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replace-owner-phase-staleness.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replace-owner-recovery-equivalence.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replace-owner-wake.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replace-real-group-completion.test.js": {
@@ -16420,6 +16557,7 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -16442,6 +16580,7 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -16461,6 +16600,7 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -16482,6 +16622,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -16502,6 +16643,7 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -16523,6 +16665,7 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
@@ -16544,6 +16687,7 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -16563,6 +16707,7 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -16570,27 +16715,32 @@
     },
     "test/rebalancer/replace-remove-safety-wake-property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replace-replica-workflow.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replace-source-planner-set-exclusion.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replace-source-removal-owner.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replace-temporary-extra-voter-planner.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replace-witness-boundary.test.js": {
@@ -16608,6 +16758,7 @@
         "src/partition/partition-service-constants.js",
         "src/partition/partition-service-entry-apply-base.js",
         "src/partition/partition-service.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/move-planner-move-calculation-methods.js",
         "src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js",
         "src/rebalancer/operation-workflow-dispatch-epoch-gate.js",
@@ -16647,19 +16798,22 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
-        "src/partition/partition-write-kernel.js"
+        "src/partition/partition-write-kernel.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replica-operation-retained-owner-turn.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/workflow/durable-workflow-coordinator.js"
       ]
     },
     "test/rebalancer/replica-operation-terminal-cas.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replica-operations-single-writer.test.js": {
@@ -16670,6 +16824,7 @@
         "src/node/message-group-service-handler.js",
         "src/node/replica-handler.js",
         "src/node/runtime-service-handler.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-status.js",
         "src/workflow/durable-workflow-coordinator.js"
@@ -16677,17 +16832,20 @@
     },
     "test/rebalancer/replica-placement-policy.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/replica-retirement-terminal-actuals-coherence.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/required-entity-operation-observation.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-repository-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -16696,6 +16854,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-status.js"
       ]
@@ -16704,6 +16863,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-gate-operation-row-repair.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-status.js",
@@ -16714,6 +16874,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/storage-capacity-constants.js"
       ]
@@ -16721,6 +16882,7 @@
     "test/rebalancer/reservation-reconcile-premature-orphan-release.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js"
       ]
     },
@@ -16753,6 +16915,7 @@
     "test/rebalancer/runtime-service-expired-lease-candidate-admission.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -16762,6 +16925,7 @@
         "scripts/test-machine-factor.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/node/runtime-service-handler.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-status.js",
         "test/node/runtime-service-handler.test.js",
         "test/partition/replica-operations-schema-migration.test.js",
@@ -16781,27 +16945,32 @@
         "src/bootstrap/system-table-schema-sql.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/unified-service-lifecycle.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-status.js"
       ]
     },
     "test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/spread-cure-at-target-minting-gap.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/spread-cure-transition-authorization-production-path.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/spread-cure-transition-authorization-row.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/spread-cure-transition-authorization.test.js": {
@@ -16822,12 +16991,14 @@
     },
     "test/rebalancer/stabilization-period-bounds.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/stabilization-timer-reset.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ],
       "directories": [
         "test"
@@ -16835,12 +17006,14 @@
     },
     "test/rebalancer/stabilization-waiting.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/startup-authority-topology-settling-contract.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -16868,24 +17041,28 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/partition/partition-write-kernel.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js"
       ]
     },
     "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/system-partition-start-delay-preservation.property.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
-        "src/config/configuration-manager.js"
+        "src/config/configuration-manager.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/system-partition-start-delay-removal.property.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
-        "src/config/configuration-manager.js"
+        "src/config/configuration-manager.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/terminal-failed-add-target-cleanup.test.js": {
@@ -16901,124 +17078,145 @@
     "test/rebalancer/timeout-triggers-failure.property.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/rebalancer/topology-settling-node-ready-lease-wake.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-affinity-policy-refetch-parity.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/placement-owner-constants.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-behavior.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-move-calculation-state-evaluation.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-node-readiness-replica-state.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-odd-replica-policy-rebalancing.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-planning-clock-seam.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-replica-state-management-node-state-change.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-start-jitter-seam.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-timer-binding-time.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-bootstrap-lifecycle.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-critical-deferral.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-priority-cohort.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-priority-recovery-cache-bypass.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-priority-surrogate-followup.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-priority-surrogate-gates.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-publication-visibility.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-scheduling.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-triggers-system-partition-defer.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },

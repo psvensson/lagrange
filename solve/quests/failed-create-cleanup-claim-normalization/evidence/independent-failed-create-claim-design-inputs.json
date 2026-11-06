@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "reviewType": "independent-pre-implementation-design-review",
+  "questId": "failed-create-cleanup-claim-normalization",
+  "epic": "operation-integrity-and-reliable-formation",
+  "questClass": "fix",
+  "verifier": "subagent:b53f502d-cb6d-4d3b-b17c-9e51dbbbcf82",
+  "verdict": "approve",
+  "ruleSetRevision": 5,
+  "headCommit": "ad0d64de8cfc06b574b0589f33985d4be1f3a4d0",
+  "causalHistoryCommits": {
+    "unclaimedPreRuntimeRetryAndNullTokenCleanup": "74ca864b84e00ac61484dec6e89502444b82cd36",
+    "delayedFailedCreateTargetPrecondition": "95660380fcc779be4717163ece0b3a9c69974864"
+  },
+  "verifiedFiles": [
+    {
+      "path": "src/constants/messages.js",
+      "sha256": "5c26e12359b9ca08ff0b72ba33e6144b2aa10aaeb463e36a581234f1c270a80b"
+    },
+    {
+      "path": "src/rebalancer/replica-operation-constants.js",
+      "sha256": "bd97f38e67a482ba811f39e42bc64f2518a7738d873ae2c520b391f1e22b7e5b"
+    },
+    {
+      "path": "src/rebalancer/failed-create-cleanup-token.js",
+      "sha256": "f362fdd3c3ada4b916d4205815e3381c01e788c920b049510843a0ddbfa2fb9e"
+    },
+    {
+      "path": "src/node/replica-handler-remove-request-methods.js",
+      "sha256": "7df0e407042ab133c5bc67da8135d0de73b2691a33f12bd66a77c3e582eda7b4"
+    },
+    {
+      "path": "src/rebalancer/operation-workflow-replace-terminal-admission.js",
+      "sha256": "41f92c6043fcb55e0f6118185be6b34e3d92d67f66eeaab8bcf2fe2ec77f4e37"
+    },
+    {
+      "path": "src/rebalancer/operation-workflow-terminal-transition-repair.js",
+      "sha256": "ebfa7dce27ef2436670a9998d53d7f858611f8db7ec12b5a3dd2294486c63ae5"
+    },
+    {
+      "path": "src/rebalancer/unified-rebalancer-failed-create-cleanup.js",
+      "sha256": "f6f57f92196255bf2d25a5285dae5753222551236d5fb925ea62e72c5aaf6528"
+    },
+    {
+      "path": "src/node/replica-handler-lifecycle-methods.js",
+      "sha256": "05209ca9ae26dd52330961285bc55a1eab0a4f038349624b6691d983d2275d0b"
+    },
+    {
+      "path": "src/node/replica-handler-failed-create-publication.js",
+      "sha256": "2a78bf77d7d15fe439db4125d8d301de6c69ec70d5af2858e3d6e301ad6219c9"
+    },
+    {
+      "path": "src/node/replica-handler-create-admission-methods.js",
+      "sha256": "baaf184c51af1e060aaa6ae7c0fda3202d8658138834e5d21fc1e9a6dd0a7f2f"
+    },
+    {
+      "path": "src/node/replica-handler-create-status-methods.js",
+      "sha256": "7e1daa9de179e8f31fab8da6fe8c83dcb3ae1ff4ea4bec62067f5821bd3650c6"
+    },
+    {
+      "path": "src/node/replica-create-admission-retained-recovery.js",
+      "sha256": "07592ce9fb4aaa461f58c5da177ad1c81670b9d8dd33b23f9295b42e07748643"
+    },
+    {
+      "path": "src/node/replica-state-machine-failed-create-claim.js",
+      "sha256": "c3804ae501b221e7f11891b74ee5dc09cb0f6f8c2dd225200e70749a61ff0a2a"
+    },
+    {
+      "path": "test/node/replica-failed-create-cleanup-generation.test.js",
+      "sha256": "f57b1e7b7265c6a2494f630aa7bf1d8b94e94a31af3974d3ed44e4621bee8a1e"
+    },
+    {
+      "path": "test/rebalancer/terminal-failed-add-target-cleanup.test.js",
+      "sha256": "0aff1be85e4e587b12f1a7f7009d13cea601e0cd214279d04c4b28d1b46f39b2"
+    },
+    {
+      "path": "test/rebalancer/test-helpers.js",
+      "sha256": "6cc7add7e91980d84d2268420602a63d93a3efe530e4c3f385dce5bf2e286dad"
+    },
+    {
+      "path": "test-output/verification-20261106-partition-target/independent-readiness-cleanup-design-review.md",
+      "sha256": "0206272720dacb4325d11efd85bc529d18c380c2607f34290ee8fe0a7116b6ac"
+    }
+  ]
+}

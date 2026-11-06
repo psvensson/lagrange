@@ -1114,22 +1114,35 @@ test('L3: the claimed FAILED target of a create that failed after admission ' +
 
       // Recovery path witness: if the create operation terminally fails while
       // the target row is still unclaimed FAILED for its exact attempt token,
-      // admitCreateTerminalFailure records the precondition and MovePlanner removes it.
+      // failOperation does not record a null-token precondition; instead,
+      // refreshFailedCreateTargetCleanupDecisions normalizes the row to an
+      // operation-bound cleanup_token before admitting it for cleanup.
       await owner.failOperation(replaceOp, 'Step timeout exhausted');
       const terminalReplace = await coordinator.getOperation(replaceOp.operationId);
       t.equal(terminalReplace.workflowStep, WORKFLOW_STEP.FAILED);
-      t.same(
+      t.equal(
         terminalReplace.stepsHistory.at(-1)?.[
           OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
         ],
-        lifecyclePrecondition(unclaimedFailedRow),
-        'terminal create failure captures exact unclaimed FAILED attempt precondition',
+        undefined,
+        'terminal create failure does not persist a null-token cleanup precondition',
       );
       await rebalancer.refreshFailedCreateTargetCleanupDecisions();
+      t.equal(
+        unclaimedFailedRow.cleanup_token,
+        buildFailedCreateCleanupToken(replaceOp.operationId),
+        'participant claim normalization stamps the operation-bound cleanup token',
+      );
       t.same(
         [...rebalancer.getTerminalFailedReplaceTargetReplicaIds()],
         [replaceOp.replicaId],
-        'unclaimed FAILED row of a terminal operation is admitted for cleanup',
+        'normalized FAILED row of a terminal operation is admitted for cleanup',
+      );
+      t.equal(
+        rebalancer.getFailedCreateTargetCleanupPrecondition(replaceOp.replicaId)
+          ?.cleanup_token,
+        buildFailedCreateCleanupToken(replaceOp.operationId),
+        'cleanup precondition carries the non-null operation-bound cleanup token',
       );
 
       // Inverse counterexample: a claimed FAILED row immediately counts as

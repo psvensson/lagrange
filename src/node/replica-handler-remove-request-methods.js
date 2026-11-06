@@ -34,8 +34,7 @@ function matchesFailedCreateCleanupPrecondition(precondition, expected) {
 
 function hasValidFailedCreateCleanupPrecondition(precondition) {
   if (!precondition) return false;
-  if (!isFailedCreateCleanupToken(precondition.cleanup_token) &&
-      precondition.cleanup_token !== null) {
+  if (!isFailedCreateCleanupToken(precondition.cleanup_token)) {
     return false;
   }
   return typeof precondition.create_attempt_token === 'string' &&

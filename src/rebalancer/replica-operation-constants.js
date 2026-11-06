@@ -18,6 +18,7 @@ const ReplicaOperationMessageType = Object.freeze({
   // answered by the node hosting its leader (owner decision O1, committed-
   // read amendment 1, section 3.1).
   READ_COMMITTED_MEMBERSHIP: MESSAGE_TYPE.READ_COMMITTED_MEMBERSHIP,
+  CLAIM_FAILED_CREATE_CLEANUP: MESSAGE_TYPE.CLAIM_FAILED_CREATE_CLEANUP,
 });
 
 const ReplicaOperationReason = Object.freeze({

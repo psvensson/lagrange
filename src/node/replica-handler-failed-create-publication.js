@@ -1,14 +1,22 @@
 /**
  * Authoritative FAILED publication for an admitted replica create.
  */
+import {WORKFLOW_STEP} from '../constants/index.js';
 import {
   isRetryableControlPlaneError,
 } from '../control-plane/control-plane-error-classification.js';
-import {ReplicaStatus} from '../rebalancer/replica-status.js';
-import {isUnclaimedPreRuntimeFailedCreateRow} from
-  '../rebalancer/failed-create-cleanup-token.js';
+import {
+  ReplicaOperationField,
+  ReplicaOperationResponseStatus,
+} from '../rebalancer/replica-operation-constants.js';
+import {OperationType, ReplicaStatus} from '../rebalancer/replica-status.js';
+import {
+  buildFailedCreateCleanupToken,
+  isUnclaimedPreRuntimeFailedCreateRow,
+} from '../rebalancer/failed-create-cleanup-token.js';
 import {CREATE_ADMISSION_ERROR_CODE} from './replica-create-admission-owner.js';
 import {isReplicaCreateProgressRowSuperseded} from './replica-create-process-owner.js';
+import {REPLICA_HANDLER_SERVICE} from './replica-handler-constants.js';
 
 function initialStatusDeferral(evidence, cause) {
   return Object.assign(new Error(
@@ -131,4 +139,171 @@ async function persistFailedCreateLifecycle(
   )};
 }
 
-export {expiredCreateInitialStatusError, persistFailedCreateLifecycle};
+const FAILED_CREATE_CLAIM_ERROR = Object.freeze({
+  INVALID_PRECONDITION: 'Invalid failed-create cleanup claim precondition',
+  NOT_TERMINAL_FAILED: 'Operation is not durably terminal FAILED for attempt',
+  CAS_REJECTED: 'Failed-create cleanup claim CAS rejected',
+});
+
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function matchesUnclaimedFailedCreateIdentity(
+  handler,
+  partitionId,
+  replicaId,
+  precondition,
+) {
+  return Boolean(precondition) &&
+    typeof precondition === 'object' &&
+    !Array.isArray(precondition) &&
+    precondition.service_id === replicaId &&
+    precondition.replica_id === replicaId &&
+    precondition.partition_id === partitionId &&
+    precondition.node_id === handler.nodeId &&
+    precondition.service_type === REPLICA_HANDLER_SERVICE.TYPE;
+}
+
+function hasValidUnclaimedFailedCreatePrecondition(
+  handler,
+  partitionId,
+  replicaId,
+  precondition,
+) {
+  if (!matchesUnclaimedFailedCreateIdentity(
+    handler,
+    partitionId,
+    replicaId,
+    precondition,
+  )) {
+    return false;
+  }
+  return precondition.status === ReplicaStatus.FAILED &&
+    precondition.cleanup_token === null &&
+    isNonEmptyString(precondition.create_attempt_token) &&
+    Number.isFinite(precondition.created_at) &&
+    Number.isFinite(precondition.state_entered_at);
+}
+
+function isTerminalFailedOperationRow(operation) {
+  return Boolean(operation) &&
+    operation.completed_at !== null &&
+    operation.completed_at !== undefined &&
+    String(operation.workflow_step || '').toUpperCase() ===
+      WORKFLOW_STEP.FAILED &&
+    String(operation.status || '').toLowerCase() === ReplicaStatus.FAILED;
+}
+
+function matchesTerminalFailedCreateOperation(
+  handler,
+  operation,
+  {operationId, operationType, partitionId, replicaId, precondition},
+) {
+  if (!isTerminalFailedOperationRow(operation) ||
+      operation.operation_id !== operationId ||
+      operation.type !== operationType ||
+      operation.partition_id !== partitionId ||
+      operation.replica_id !== replicaId ||
+      operation.target_node_id !== handler.nodeId ||
+      operation.create_admission_attempt_token !==
+        precondition.create_attempt_token) {
+    return false;
+  }
+  return !Number.isSafeInteger(operation.create_admission_replica_created_at) ||
+    operation.create_admission_replica_created_at === precondition.created_at;
+}
+
+function extractFailedCreateClaimRequest(payload) {
+  return {
+    operationId: payload?.[ReplicaOperationField.OPERATION_ID] || null,
+    operationType: payload?.[ReplicaOperationField.OPERATION_TYPE] || null,
+    partitionId: payload?.[ReplicaOperationField.PARTITION_ID] || null,
+    replicaId: payload?.[ReplicaOperationField.REPLICA_ID] || null,
+    precondition: payload?.[
+      ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+    ] || null,
+  };
+}
+
+function isValidFailedCreateClaimRequest(handler, request) {
+  const validType = request.operationType === OperationType.ADD ||
+    request.operationType === OperationType.REPLACE;
+  return isNonEmptyString(request.operationId) &&
+    validType &&
+    isNonEmptyString(request.partitionId) &&
+    isNonEmptyString(request.replicaId) &&
+    hasValidUnclaimedFailedCreatePrecondition(
+      handler,
+      request.partitionId,
+      request.replicaId,
+      request.precondition,
+    );
+}
+
+function buildClaimErrorResponse(handler, request, error) {
+  return handler.buildReplicaOperationResponse(
+    ReplicaOperationResponseStatus.ERROR,
+    {
+      operationId: request.operationId,
+      replicaId: request.replicaId,
+      error,
+      nodeId: handler.nodeId,
+    },
+  );
+}
+
+async function executeFailedCreateCleanupClaim(handler, owner, request) {
+  const operation = await owner.readOperation(request.operationId);
+  if (!matchesTerminalFailedCreateOperation(handler, operation, request)) {
+    return buildClaimErrorResponse(
+      handler,
+      request,
+      FAILED_CREATE_CLAIM_ERROR.NOT_TERMINAL_FAILED,
+    );
+  }
+  const claimed = await handler.replicaStateMachine.claimFailedCreateCleanup(
+    request.precondition,
+    buildFailedCreateCleanupToken(request.operationId),
+  );
+  if (claimed !== true) {
+    return buildClaimErrorResponse(
+      handler,
+      request,
+      FAILED_CREATE_CLAIM_ERROR.CAS_REJECTED,
+    );
+  }
+  return handler.buildReplicaOperationResponse(
+    ReplicaOperationResponseStatus.COMPLETED,
+    {
+      operationId: request.operationId,
+      replicaId: request.replicaId,
+      nodeId: handler.nodeId,
+    },
+  );
+}
+
+async function claimTerminalFailedCreateTargetCleanup(handler, payload) {
+  const request = extractFailedCreateClaimRequest(payload);
+  if (!isValidFailedCreateClaimRequest(handler, request)) {
+    return buildClaimErrorResponse(
+      handler,
+      request,
+      FAILED_CREATE_CLAIM_ERROR.INVALID_PRECONDITION,
+    );
+  }
+  const owner = handler.getReplicaCreateAdmissionOwner();
+  return owner.runExclusive(request.operationId, async () => {
+    try {
+      return await executeFailedCreateCleanupClaim(handler, owner, request);
+    } catch (error) {
+      return buildClaimErrorResponse(handler, request, error.message);
+    }
+  });
+}
+
+export {
+  claimTerminalFailedCreateTargetCleanup,
+  expiredCreateInitialStatusError,
+  persistFailedCreateLifecycle,
+};

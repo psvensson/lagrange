@@ -20,6 +20,8 @@ import {
   getOperationMetadataObject,
   getOperationMetadataStringArray,
 } from '../rebalancer/replica-status.js';
+import {buildFailedCreateCleanupToken} from
+  '../rebalancer/failed-create-cleanup-token.js';
 import {
   CREATE_ADMISSION_ERROR_CODE,
   CREATE_ADMISSION_STATE,
@@ -466,6 +468,16 @@ async function terminalFailedCreateResponse(handler, prepared) {
   const {createRequest, reconciledAdmission} = prepared;
   if (reconciledAdmission.evidence?.operationTerminal !== true ||
       reconciledAdmission.row?.status !== ReplicaStatus.FAILED) return null;
+  if (reconciledAdmission.row.cleanup_token === null &&
+      typeof reconciledAdmission.evidence.attemptToken === 'string' &&
+      reconciledAdmission.evidence.attemptToken.length > 0 &&
+      reconciledAdmission.row.create_attempt_token ===
+        reconciledAdmission.evidence.attemptToken) {
+    await handler.replicaStateMachine?.claimFailedCreateCleanup?.(
+      reconciledAdmission.row,
+      buildFailedCreateCleanupToken(reconciledAdmission.evidence.operationId),
+    );
+  }
   await handler.getReplicaCreateAdmissionOwner().markProgress(
     reconciledAdmission.evidence,
     CREATE_ADMISSION_STATE.FAILED,

@@ -39,6 +39,8 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {buildFailedCreateCleanupToken} from
+  '../../src/rebalancer/failed-create-cleanup-token.js';
 
 const SYSTEM_TABLE_PRIMARY_KEY_FIELD = {
   [SYSTEM_TABLE_NAME.NODES]: 'node_id',
@@ -235,7 +237,10 @@ function createMockCache(options = {}) {
       if (!table) return [];
       return Array.from(table.values());
     },
-    upsert: (tableName, row) => {
+    upsert: (tableName, rowOrKey, maybeRow) => {
+      const row = typeof rowOrKey === 'object' && rowOrKey !== null ?
+        rowOrKey :
+        maybeRow;
       const table = getTable(tableName);
       if (!table || !row || typeof row !== 'object') {
         return null;
@@ -481,8 +486,75 @@ function trackFixtureServiceDeletions(cache) {
   }
 }
 
+function findFixtureClaimOperation(cache, operationId) {
+  const operations = typeof cache?.getAll === 'function' ?
+    cache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) : [];
+  return operations.find((candidate) =>
+    (candidate?.operation_id ?? candidate?.operationId) === operationId) || null;
+}
+
+function findFixtureClaimServiceRow(cache, replicaId, precondition) {
+  const serviceRows = typeof cache?.getAll === 'function' ?
+    cache.getAll(SYSTEM_TABLE_NAME.SERVICES) : [];
+  return serviceRows.find((candidate) =>
+    candidate?.service_id === replicaId ||
+    candidate?.replica_id === replicaId ||
+    candidate?.service_id === precondition?.service_id) || null;
+}
+
+function isFixtureClaimOperationTerminalFailed(operation, payload, precondition) {
+  return Boolean(operation && precondition) &&
+    operation.type === payload?.[ReplicaOperationField.OPERATION_TYPE] &&
+    operation.partition_id === payload?.[ReplicaOperationField.PARTITION_ID] &&
+    operation.replica_id === payload?.[ReplicaOperationField.REPLICA_ID] &&
+    operation.completed_at !== null &&
+    operation.completed_at !== undefined &&
+    String(operation.workflow_step || '').toUpperCase() ===
+      WORKFLOW_STEP.FAILED &&
+    String(operation.status || '').toLowerCase() === ReplicaStatus.FAILED &&
+    operation.create_admission_attempt_token ===
+      precondition.create_attempt_token;
+}
+
+function matchesFixtureClaimServicePrecondition(serviceRow, precondition) {
+  return Boolean(serviceRow && precondition) &&
+    serviceRow.status === ReplicaStatus.FAILED &&
+    serviceRow.cleanup_token === null &&
+    serviceRow.create_attempt_token === precondition.create_attempt_token &&
+    serviceRow.created_at === precondition.created_at &&
+    serviceRow.state_entered_at === precondition.state_entered_at;
+}
+
+function answerFixtureClaimFailedCreateCleanup(cache, payload) {
+  const operationId = payload?.[ReplicaOperationField.OPERATION_ID];
+  const replicaId = payload?.[ReplicaOperationField.REPLICA_ID];
+  const precondition = payload?.[
+    ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+  ];
+  const operation = findFixtureClaimOperation(cache, operationId);
+  const serviceRow = findFixtureClaimServiceRow(cache, replicaId, precondition);
+  if (!isFixtureClaimOperationTerminalFailed(operation, payload, precondition) ||
+      !matchesFixtureClaimServicePrecondition(serviceRow, precondition)) {
+    return {
+      status: ReplicaOperationResponseStatus.ERROR,
+      error: 'fixture failed-create cleanup claim precondition mismatch',
+    };
+  }
+  serviceRow.cleanup_token = buildFailedCreateCleanupToken(operationId);
+  serviceRow.state_entered_at = Number(serviceRow.state_entered_at) + 1;
+  cache.upsert?.(SYSTEM_TABLE_NAME.SERVICES, replicaId, serviceRow);
+  return {
+    status: ReplicaOperationResponseStatus.COMPLETED,
+    operationId,
+    replicaId,
+  };
+}
+
 function answerFixtureReplaceWitness(cache, payload) {
   const type = payload?.type;
+  if (type === ReplicaOperationMessageType.CLAIM_FAILED_CREATE_CLEANUP) {
+    return answerFixtureClaimFailedCreateCleanup(cache, payload);
+  }
   if (type === ReplicaOperationMessageType.RETIRE_REPLICA_PEER) {
     return {
       status: ReplicaOperationResponseStatus.INITIATED,

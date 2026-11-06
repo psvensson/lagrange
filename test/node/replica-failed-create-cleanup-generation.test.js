@@ -16,9 +16,10 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {
   ReplicaOperationField,
+  ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
-import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {buildFailedCreateCleanupToken} from
   '../../src/rebalancer/failed-create-cleanup-token.js';
 import {
@@ -538,3 +539,108 @@ test('stale local REMOVING cannot shortcut a failed-create cleanup token',
     t.equal(store.durable[SERVICES].get(failed.service_id)?.status,
       ReplicaState.CREATING, 'the newer authoritative generation survives');
   });
+
+test('CLAIM_FAILED_CREATE_CLEANUP normalizes an unclaimed FAILED row only ' +
+  'after its create operation is durably terminal FAILED', async (t) => {
+  initializeEnvironment();
+  const operationId = 'replace-unclaimed-failed-claim';
+  const failed = serviceRow(
+    'replica-failed-create-claim-normalize',
+    ReplicaState.FAILED,
+    350,
+    'partition-1',
+    {cleanupToken: null},
+  );
+  const store = createLifecycleRowStore({
+    services: [failed],
+    partitions: [partitionRow()],
+  });
+  const stateMachine = createStateMachine(store, {now: () => 400});
+  registerRow(stateMachine, failed);
+  const handler = createHandler(store, stateMachine);
+  handler.localReplicas.set(failed.service_id, {
+    replicaId: failed.service_id,
+    partitionId: failed.partition_id,
+    status: ReplicaStatus.FAILED,
+    service: null,
+  });
+  handler.startRemoveReplicaAsync = () => {};
+
+  const claimPayload = {
+    [ReplicaOperationField.TYPE]:
+      ReplicaOperationMessageType.CLAIM_FAILED_CREATE_CLEANUP,
+    [ReplicaOperationField.OPERATION_ID]: operationId,
+    [ReplicaOperationField.OPERATION_TYPE]: OperationType.REPLACE,
+    [ReplicaOperationField.PARTITION_ID]: failed.partition_id,
+    [ReplicaOperationField.REPLICA_ID]: failed.service_id,
+    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]: failed,
+  };
+
+  store.durable.replica_operations = new Map([[operationId, {
+    operation_id: operationId,
+    type: OperationType.REPLACE,
+    partition_id: failed.partition_id,
+    replica_id: failed.service_id,
+    target_node_id: NODE_ID,
+    status: ReplicaStatus.CREATING,
+    workflow_step: 'creating',
+    completed_at: null,
+    create_admission_replica_created_at: failed.created_at,
+    create_admission_attempt_token: failed.create_attempt_token,
+  }]]);
+
+  const inFlightClaim = await handler.handleClaimFailedCreateCleanup(
+    claimPayload,
+  );
+  t.equal(
+    inFlightClaim.status,
+    ReplicaOperationResponseStatus.ERROR,
+    'an in-flight create operation cannot claim destructive cleanup',
+  );
+  t.equal(
+    store.durable[SERVICES].get(failed.service_id)?.cleanup_token,
+    null,
+    'the unclaimed FAILED row remains retryable while the operation is in-flight',
+  );
+
+  store.durable.replica_operations.set(operationId, {
+    operation_id: operationId,
+    type: OperationType.REPLACE,
+    partition_id: failed.partition_id,
+    replica_id: failed.service_id,
+    target_node_id: NODE_ID,
+    status: ReplicaStatus.FAILED,
+    workflow_step: 'failed',
+    completed_at: 390,
+    create_admission_replica_created_at: failed.created_at,
+    create_admission_attempt_token: failed.create_attempt_token,
+  });
+
+  const terminalClaim = await handler.handleClaimFailedCreateCleanup(
+    claimPayload,
+  );
+  t.equal(
+    terminalClaim.status,
+    ReplicaOperationResponseStatus.COMPLETED,
+    'a durably terminal FAILED operation claims its exact FAILED row',
+  );
+  const claimedRow = store.durable[SERVICES].get(failed.service_id);
+  t.equal(
+    claimedRow?.cleanup_token,
+    buildFailedCreateCleanupToken(operationId),
+    'the durable SERVICES row is stamped with the operation-bound cleanup token',
+  );
+
+  const removeResponse = await handler.handleRemoveReplica({
+    operationId: 'remove-after-normalized-claim',
+    partitionId: failed.partition_id,
+    replicaId: failed.service_id,
+    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]:
+      claimedRow,
+  });
+  t.equal(
+    removeResponse.status,
+    ReplicaOperationResponseStatus.INITIATED,
+    'the normalized precondition authorizes failed-create removal',
+  );
+});

@@ -7,10 +7,38 @@ import {
   ReplicaStatus,
   getOperationMetadataObject,
 } from './replica-status.js';
+import {isFailedCreateCleanupToken} from './failed-create-cleanup-token.js';
 import {normalizeReplicaOperationRecord} from
   './replica-operation-liveness.js';
 
 const LOCAL_TYPEOF_FUNCTION = 'function';
+
+function resolveTerminalFailedCreateClaimCandidate(
+  normalizedOperation,
+  decision,
+) {
+  const claimedPrecondition = getOperationMetadataObject(
+    normalizedOperation.stepsHistory,
+    OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
+  );
+  if (isFailedCreateCleanupToken(claimedPrecondition?.cleanup_token)) {
+    return claimedPrecondition;
+  }
+  if (decision?.cleanupEligible === true &&
+      isFailedCreateCleanupToken(decision.lifecyclePrecondition?.cleanup_token)) {
+    return decision.lifecyclePrecondition;
+  }
+  return null;
+}
+
+function appendTerminalClaim(terminalClaims, targetReplicaId, claimCandidate) {
+  if (!claimCandidate) return;
+  const claims = terminalClaims.get(targetReplicaId) || [];
+  terminalClaims.set(
+    targetReplicaId,
+    Object.freeze([...claims, claimCandidate]),
+  );
+}
 
 const UNIFIED_REBALANCER_FAILED_CREATE_CLEANUP_METHODS = Object.freeze({
   /**
@@ -50,28 +78,23 @@ const UNIFIED_REBALANCER_FAILED_CREATE_CLEANUP_METHODS = Object.freeze({
       return decisions;
     }
     for (const operation of this.getTerminalFailedCreateOperations()) {
+      const normalizedOperation = normalizeReplicaOperationRecord(operation, {
+        nowMs: this.nowFn(),
+      });
       const targetReplicaId = this.getReplicaIdFromOperationRow(operation);
-      if (targetReplicaId.length > 0) {
-        terminalTargets.add(targetReplicaId);
-        const claimedPrecondition = getOperationMetadataObject(
-          normalizeReplicaOperationRecord(operation, {nowMs: this.nowFn()})
-            .stepsHistory,
-          OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
-        );
-        if (claimedPrecondition) {
-          const claims = terminalClaims.get(targetReplicaId) || [];
-          terminalClaims.set(
-            targetReplicaId,
-            Object.freeze([...claims, claimedPrecondition]),
-          );
-        }
-      }
       const decision = await this.rebalanceCoordinator
-        .decideFailedCreateTargetCleanup(
-          normalizeReplicaOperationRecord(operation, {nowMs: this.nowFn()}),
-        );
-      if (targetReplicaId.length > 0 &&
-          decision?.cleanupEligible === true &&
+        .decideFailedCreateTargetCleanup(normalizedOperation);
+      if (targetReplicaId.length === 0) continue;
+      terminalTargets.add(targetReplicaId);
+      appendTerminalClaim(
+        terminalClaims,
+        targetReplicaId,
+        resolveTerminalFailedCreateClaimCandidate(
+          normalizedOperation,
+          decision,
+        ),
+      );
+      if (decision?.cleanupEligible === true &&
           decision.lifecyclePrecondition) {
         decisions.set(targetReplicaId, decision.lifecyclePrecondition);
       }

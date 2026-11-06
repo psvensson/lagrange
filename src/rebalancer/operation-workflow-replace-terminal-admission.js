@@ -13,6 +13,10 @@
  * Prohibited: no terminal is decided or written here, and settlement never
  * derives deletion authority from target lifecycle evidence.
  */
+import {
+  deliveryAnswerOf,
+  deliveryTransportOf,
+} from '../transport/transport-semantic-outcome.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
   REPLACE_COMPLETION_VERDICT,
@@ -25,16 +29,23 @@ import {
 import {isLiveCreateTargetStatus} from './replica-status.js';
 import {buildFailedCreateCleanupToken} from
   './failed-create-cleanup-token.js';
+import {assertCanonicalRebalancerEntityIdentity} from
+  './rebalancer-entity-identity.js';
 
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   OPERATION_METADATA_KEY,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
+  ReplicaOperationField,
+  ReplicaOperationMessageType,
   ReplicaStatus,
   SERVICE_TYPE,
   WORKFLOW_STEP,
   getOperationMetadataObject,
+  isCompletedReplicaOperationAnswer,
+  isDeliveredTransportDeliveryOutcome,
+  resolveOperationHandlerType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 const CREATE_TARGET_CLEANUP_DECISION = Object.freeze({
@@ -80,9 +91,7 @@ function matchesFailedCreatePreconditionTokens(
   if (!precondition || precondition.status !== ReplicaStatus.FAILED) {
     return false;
   }
-  const validCleanupToken = precondition.cleanup_token === cleanupToken ||
-    precondition.cleanup_token === null;
-  return validCleanupToken &&
+  return precondition.cleanup_token === cleanupToken &&
     typeof createAttemptToken === 'string' &&
     createAttemptToken.length > 0 &&
     precondition.create_attempt_token === createAttemptToken;
@@ -198,6 +207,13 @@ function lifecyclePreconditionsEqual(left, right) {
     );
 }
 
+function hasCompleteLifecyclePrecondition(observation) {
+  return Boolean(observation?.lifecyclePrecondition) &&
+    CREATE_TARGET_LIFECYCLE_PRECONDITION_FIELDS.every(
+      (field) => Object.hasOwn(observation.lifecyclePrecondition, field),
+    );
+}
+
 async function captureFailedCreateTargetCleanupClaim(owner, operation) {
   if ((!isPartitionAdd(operation) && !isPartitionReplace(operation)) ||
       typeof operation?.operationId !== 'string' ||
@@ -212,10 +228,99 @@ async function captureFailedCreateTargetCleanupClaim(owner, operation) {
     observation,
     expectedCleanupToken,
     operation.createAdmissionAttemptToken,
-  ) && CREATE_TARGET_LIFECYCLE_PRECONDITION_FIELDS.every(
-    (field) => Object.hasOwn(observation.lifecyclePrecondition, field),
-  );
+  ) && hasCompleteLifecyclePrecondition(observation);
   return eligible ? observation.lifecyclePrecondition : null;
+}
+
+function isObservedUnclaimedFailedTarget(observation) {
+  return observation?.state === OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED &&
+    observation.lifecycleStatus === ReplicaStatus.FAILED &&
+    observation.previousState !== ReplicaStatus.ACTIVE &&
+    hasCompleteLifecyclePrecondition(observation) &&
+    observation.lifecyclePrecondition.status === ReplicaStatus.FAILED &&
+    observation.lifecyclePrecondition.cleanup_token === null;
+}
+
+function isUnclaimedFailedCreateObservationForAttempt(observation, operation) {
+  const attemptToken = operation?.createAdmissionAttemptToken;
+  if (!isObservedUnclaimedFailedTarget(observation) ||
+      typeof attemptToken !== 'string' ||
+      attemptToken.length === 0 ||
+      observation.lifecyclePrecondition.create_attempt_token !== attemptToken) {
+    return false;
+  }
+  return !Number.isSafeInteger(operation?.createAdmissionReplicaCreatedAt) ||
+    observation.lifecyclePrecondition.created_at ===
+      operation.createAdmissionReplicaCreatedAt;
+}
+
+async function deliverClaimFailedCreateCleanup(owner, operation, precondition) {
+  try {
+    const canDeliver = typeof owner?.deliverReplicaOperationRequest ===
+      OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ||
+      typeof owner?.messageRouter?.deliver ===
+        OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION;
+    if (!canDeliver) return false;
+    const {entityType, entityId} =
+      assertCanonicalRebalancerEntityIdentity(operation);
+    const target = `${operation.targetNodeId}/service/` +
+      resolveOperationHandlerType(entityType);
+    const request = {
+      [ReplicaOperationField.TYPE]:
+        ReplicaOperationMessageType.CLAIM_FAILED_CREATE_CLEANUP,
+      [ReplicaOperationField.OPERATION_ID]: operation.operationId,
+      [ReplicaOperationField.OPERATION_TYPE]: operation.type,
+      [ReplicaOperationField.PARTITION_ID]: operation.partitionId,
+      [ReplicaOperationField.REPLICA_ID]: operation.replicaId,
+      [ReplicaOperationField.ENTITY_TYPE]: entityType,
+      [ReplicaOperationField.ENTITY_ID]: entityId,
+      [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]:
+        precondition,
+    };
+    const deliveryEnvelope = typeof owner.deliverReplicaOperationRequest ===
+      OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
+      await owner.deliverReplicaOperationRequest(
+        operation,
+        target,
+        request,
+        operation.targetNodeId,
+      ) :
+      await owner.messageRouter.deliver(target, request);
+    const transport = deliveryTransportOf(deliveryEnvelope);
+    const answer = deliveryAnswerOf(deliveryEnvelope);
+    return isDeliveredTransportDeliveryOutcome(transport) &&
+      isCompletedReplicaOperationAnswer(answer);
+  } catch (_error) {
+    return false;
+  }
+}
+
+async function resolveTerminalFailedCreateCleanupPrecondition(
+  owner,
+  operation,
+) {
+  const observation = await observeCreateTarget(owner, operation);
+  const expectedCleanupToken = buildFailedCreateCleanupToken(
+    operation.operationId,
+  );
+  if (isClaimedFailedCreateObservation(
+    observation,
+    expectedCleanupToken,
+    operation.createAdmissionAttemptToken,
+  ) && hasCompleteLifecyclePrecondition(observation)) {
+    return observation.lifecyclePrecondition;
+  }
+  if (!isUnclaimedFailedCreateObservationForAttempt(observation, operation)) {
+    return null;
+  }
+  const claimed = await deliverClaimFailedCreateCleanup(
+    owner,
+    operation,
+    observation.lifecyclePrecondition,
+  );
+  return claimed ?
+    captureFailedCreateTargetCleanupClaim(owner, operation) :
+    null;
 }
 
 function isTerminalFailedOperation(operation) {
@@ -249,6 +354,14 @@ function matchesDelayedFailedCreateTargetPrecondition(
   const expectedCleanupToken = buildFailedCreateCleanupToken(
     operation?.operationId,
   );
+  const attemptToken = operation?.createAdmissionAttemptToken;
+  if (
+    typeof attemptToken !== 'string' ||
+    attemptToken.length === 0 ||
+    lifecyclePrecondition.create_attempt_token !== attemptToken
+  ) {
+    return false;
+  }
   if (
     Number.isSafeInteger(operation?.createAdmissionReplicaCreatedAt) &&
     lifecyclePrecondition.created_at !==
@@ -256,10 +369,7 @@ function matchesDelayedFailedCreateTargetPrecondition(
   ) {
     return false;
   }
-  return (
-    lifecyclePrecondition.cleanup_token === expectedCleanupToken ||
-    Number.isSafeInteger(operation?.createAdmissionReplicaCreatedAt)
-  );
+  return lifecyclePrecondition.cleanup_token === expectedCleanupToken;
 }
 
 /**
@@ -279,10 +389,11 @@ async function decideFailedCreateTargetCleanup(owner, operation) {
       lifecyclePrecondition: null,
     });
   }
-  const lifecyclePrecondition = await captureFailedCreateTargetCleanupClaim(
-    owner,
-    operation,
-  );
+  const lifecyclePrecondition =
+    await resolveTerminalFailedCreateCleanupPrecondition(
+      owner,
+      operation,
+    );
   const claimedPrecondition = getOperationMetadataObject(
     operation.stepsHistory,
     OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,

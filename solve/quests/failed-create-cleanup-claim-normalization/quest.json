@@ -1,0 +1,30 @@
+{
+  "schema": "solve-quest/2",
+  "id": "failed-create-cleanup-claim-normalization",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Destructive failed-create cleanup and release classification require an operation-bound cleanup_token (failed-create:<operationId>); live pre-runtime retry and ordinary terminal settlement remain independent of claim availability, while terminal unclaimed FAILED target rows normalize through ReplicaStateMachine.claimFailedCreateCleanup before cleanup.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/failed-create-cleanup-claim-normalization/evidence/receipt.json",
+      "requiredReceipts": [
+        "unclaimed-failed-row-rejected-for-destructive-cleanup-and-release",
+        "live-pre-runtime-retry-and-terminal-settlement-preserved",
+        "terminal-unclaimed-failed-row-normalized-via-lifecycle-claim-owner",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "strict-cleanup-token-precondition",
+      "statement": "hasValidFailedCreateCleanupPrecondition, matchesFailedCreatePreconditionTokens, matchesDelayedFailedCreateTargetPrecondition and isTerminalFailedCreateCleanupRemove require isFailedCreateCleanupToken (never null). admitCreateTerminalFailure never records a cleanup_token: null precondition in stepMetadata and never blocks failOperation on claim availability."
+    },
+    {
+      "id": "participant-lifecycle-claim-normalization",
+      "statement": "Preserve isUnclaimedPreRuntimeFailedCreateRow for in-flight pre-runtime CREATE retry. Normalize terminal unclaimed FAILED target rows through ReplicaStateMachine.claimFailedCreateCleanup under replicaCreateAdmissionOwner.runExclusive after verifying durable terminal FAILED operation identity and create_attempt_token, and preserve the 2-call-site deliverReplicaOperationRequest census."
+    }
+  ],
+  "sealedAt": "e8fd1cc6e6717a6321ece53873f60fdc5e70c31f"
+}

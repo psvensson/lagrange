@@ -1,0 +1,182 @@
+{
+  "reviewer": "subagent:b53f502d-cb6d-4d3b-b17c-9e51dbbbcf82",
+  "ruleSetRevision": 5,
+  "candidate": "e8fd1cc6e6717a6321ece53873f60fdc5e70c31f",
+  "parent": "ad0d64de8cfc06b574b0589f33985d4be1f3a4d0",
+  "reviewedManifestSha256": "842c162485c218819634c61046e5a89386074bc7bc1f67ae0534cbf63206831a",
+  "reviewedCommittedInputs": [
+    {
+      "path": "src/control-plane/control-plane-readiness-evidence-reasons.js",
+      "sha256": "d0057424ef951d397cd3b1d973aee6e1fb3a7baceb5dc4528eae3327bd6a32f8",
+      "committedMatch": true
+    },
+    {
+      "path": "architecture/readiness-and-owner-contracts.md",
+      "sha256": "26d21516cad46e6c0cca454cbc4484273a981cfc1f38c86cdffeb63b4ca4dd73",
+      "committedMatch": true
+    },
+    {
+      "path": "test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js",
+      "sha256": "282597a40fc77d569a176b535ea1cf8de8c7a0fbc6516fba94696af4629d0654",
+      "committedMatch": true
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/quest.json",
+      "sha256": "72d08b6f83d5a42e3b4f25cf972c14b569b38b961c81b4c3111edb88149ea853",
+      "committedMatch": true
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/evidence/receipt.json",
+      "sha256": "7d4f2a09d9c3776cdef806a712bd757bf48194389e0b7708a49cc4376b4210b8",
+      "committedMatch": true
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/evidence/independent-self-grace-design-review.md",
+      "sha256": "0f872061ba6c80636f589a49ee712e8e9fd7b2839d357a777c975289abbd34da",
+      "committedMatch": true
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/evidence/independent-self-grace-design-inputs.json",
+      "sha256": "1fda7a7fb4b540e8aa0b766f6cd136a1d89d3780cdddd110c2d1377250c560c9",
+      "committedMatch": true
+    }
+  ],
+  "commitPaths": [
+    {
+      "path": "architecture/readiness-and-owner-contracts.md",
+      "sha256": "26d21516cad46e6c0cca454cbc4484273a981cfc1f38c86cdffeb63b4ca4dd73"
+    },
+    {
+      "path": "solve/changes/global-owner-debt-inventory/inventory.json",
+      "sha256": "2201a3c58dde7f91569f151bdaffdec66bec9f1123e9c253518cf2d267bf4770"
+    },
+    {
+      "path": "solve/epics/operation-integrity-and-reliable-formation.md",
+      "sha256": "663c844366c850388bb363094d3d1c1e3d1e83be55a89e990dc20a9d815e7de0"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/independent-ad0d64de-applicability.md",
+      "sha256": "5e8512cfb7f396758bbfe2252e77efb8d1e5deed7db98388de252d75a87557f6"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/independent-ad0d64de-inputs.json",
+      "sha256": "f9ce4bc1213dcd3779b7dfeb42e080c1d5fe823475c95e9464b0f8f0cce559cf"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/log.ndjson",
+      "sha256": "19eb974495e0d0289520d0f1d8d585cb6b5fb533d5b1227f69488e1fd08fdbe1"
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/evidence/independent-self-grace-design-inputs.json",
+      "sha256": "1fda7a7fb4b540e8aa0b766f6cd136a1d89d3780cdddd110c2d1377250c560c9"
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/evidence/independent-self-grace-design-review.md",
+      "sha256": "0f872061ba6c80636f589a49ee712e8e9fd7b2839d357a777c975289abbd34da"
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/evidence/independent-self-grace-implementation-inputs.json",
+      "sha256": "4b397bae5dca9f2bb98363adcc4d53615e2241035a69cdd6f4abae726f34e083"
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/evidence/independent-self-grace-implementation-review.md",
+      "sha256": "165f258ada1eefe01f914520276f88cdeeae8664ca182cf783707d42f4224e1b"
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/evidence/receipt.json",
+      "sha256": "7d4f2a09d9c3776cdef806a712bd757bf48194389e0b7708a49cc4376b4210b8"
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/evidence/self-grace-implementation-content.json",
+      "sha256": "842c162485c218819634c61046e5a89386074bc7bc1f67ae0534cbf63206831a"
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/log.ndjson",
+      "sha256": "58088df2017dd10638c9b6a4d323f5b3677ad4194fd7aa5c853c60f0483106ce"
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/quest.json",
+      "sha256": "72d08b6f83d5a42e3b4f25cf972c14b569b38b961c81b4c3111edb88149ea853"
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-evidence-reasons.js",
+      "sha256": "d0057424ef951d397cd3b1d973aee6e1fb3a7baceb5dc4528eae3327bd6a32f8"
+    },
+    {
+      "path": "test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js",
+      "sha256": "282597a40fc77d569a176b535ea1cf8de8c7a0fbc6516fba94696af4629d0654"
+    },
+    {
+      "path": "test/shards/impact-graph-seal.json",
+      "sha256": "754302da121364c4ad1d24d91c1f6dcc34ce100e44870d978f259666970621b4"
+    }
+  ],
+  "unchangedProductionFiles": [
+    {
+      "path": "src/control-plane/control-plane-readiness-node-service-rows.js",
+      "sha256": "9013b217e01eaf6281612fab52d5c7ef87cbe0633ad925ab29c7ebc10f45d5ad"
+    }
+  ],
+  "receiptStatus": "fail",
+  "receiptPassed": [
+    false,
+    false,
+    false,
+    false
+  ],
+  "proof": {
+    "fileCount": 28,
+    "assertions": 2738,
+    "targetTestFile": "test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js",
+    "targetTestAssertions": 116,
+    "scheduleAttempt": 1,
+    "automaticRetries": 0,
+    "worker": "lenovo-laptop",
+    "machineFactor": 2.2,
+    "packageLockSha256": "8ac4b4fb882a5a93a67f192b37167fe8d5884c9a6778ca5b4b2dff7b28b76b04",
+    "workerNodeVersionClaim": null,
+    "note": "environment.json runtime version is controller-only; no new worker runtime/boot fingerprint claimed"
+  },
+  "artifacts": [
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/self-grace-28-callers.log",
+      "bytes": 2805,
+      "sha256": "f05df9d18965f58edcdedbc9088254b15d56a3d44cdf9d1dbac45dc516d67a29"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-complete-caller-files.json",
+      "bytes": 2021,
+      "sha256": "6f3c068fc60ea7a5d616bdbc81b52b8a3183a1b27c2a5a3b190bc742ec6b477e"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-self-grace-e8fd1cc6-collection.json",
+      "bytes": 1352,
+      "sha256": "2e3684d19fc0a80c6f3aeedef2151cb47e9084f80771a703283fa29ad7332064"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/run-frozen-self-grace-e8fd1cc6.mjs",
+      "bytes": 2710,
+      "sha256": "7b63cd85b5fae1eb2f85dfc2ddc0a47537e41720c5d81a3885b29b776de5f0d4"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-self-grace-e8fd1cc6.log",
+      "bytes": 6835,
+      "sha256": "24c698628a6a6e68584115a8abdaa529d9135c658e9b727a195305bcb2fe4d86"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-self-grace-e8fd1cc6/environment.json",
+      "bytes": 2772,
+      "sha256": "415dd444608c1c8b7a8806323f107f2c3b825e0efcd1994f7380f1dbd4add5bf"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-self-grace-e8fd1cc6/completion.json",
+      "bytes": 118,
+      "sha256": "53c58b914a6b6971a3f5f6d1cfb02aff462cc6af290a458643c92d0a15ba8e32"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-self-grace-e8fd1cc6/test-results-lenovo-laptop.ndjson",
+      "bytes": 4986,
+      "sha256": "d3b55721d014ef13b9f18e681fd0525ac3fb88eec40caf4f686d83d8f932bf80"
+    }
+  ]
+}

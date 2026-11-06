@@ -2,6 +2,8 @@ import {
   CREATE_ADMISSION_ERROR_CODE,
   CREATE_ADMISSION_STATE,
 } from './replica-create-admission-owner.js';
+import {buildFailedCreateCleanupToken} from
+  '../rebalancer/failed-create-cleanup-token.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 
 function deferredProgressError(operationId) {
@@ -198,6 +200,23 @@ async function settleRetainedLifecycleProgress(
   }
 }
 
+async function claimRetainedTerminalFailedCreateRow(handler, reconciled) {
+  if (
+    reconciled.row?.status !== ReplicaStatus.FAILED ||
+    reconciled.evidence?.operationTerminal !== true ||
+    reconciled.row?.cleanup_token !== null ||
+    typeof reconciled.evidence.attemptToken !== 'string' ||
+    reconciled.evidence.attemptToken.length === 0 ||
+    reconciled.row.create_attempt_token !== reconciled.evidence.attemptToken
+  ) {
+    return;
+  }
+  await handler.replicaStateMachine?.claimFailedCreateCleanup?.(
+    reconciled.row,
+    buildFailedCreateCleanupToken(reconciled.evidence.operationId),
+  );
+}
+
 async function recoverRetainedCreateAdmissionRow(
   handler,
   owner,
@@ -227,6 +246,7 @@ async function recoverRetainedCreateAdmissionRow(
       lifecycleStatus === ReplicaStatus.ACTIVE ||
       lifecycleStatus === ReplicaStatus.FAILED
     ) {
+      await claimRetainedTerminalFailedCreateRow(handler, reconciled);
       await settleRetainedLifecycleProgress(
         owner,
         row,
