@@ -1,11 +1,28 @@
 {
   "schema": "test-receipt/1",
-  "status": "fail",
+  "status": "pass",
   "receipts": [
-    {"id": "publication-ratchets", "passed": false},
-    {"id": "diagnostic-behaviour-preserved", "passed": false},
-    {"id": "independent-verification", "passed": false}
+    {
+      "id": "publication-ratchets",
+      "passed": true
+    },
+    {
+      "id": "diagnostic-behaviour-preserved",
+      "passed": true
+    },
+    {
+      "id": "independent-verification",
+      "passed": true
+    }
   ],
-  "evidence": [],
-  "applicability": "At 6b0d1f2ae3e84c5045cab6448bca93247de79264 the whole-tree complexity count is 1726 against 1720, and source duplication is 40 groups / 1267 lines against 39 / 1236. Bounded publication prerequisite; formation acceptance remains separate."
+  "evidence": [
+    {
+      "sha256": "5bdb8dbf7c645c8f29e0c177a7dd6b3d1f283fb406884fa9a098458a683c47a7",
+      "archive": "operation-integrity-bounded-proofs-26f786b-20261106.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--operation-integrity-bounded-proofs-26f786b-20261106.tar.gz",
+      "verification": "125 evidence files plus MANIFEST.json independently reopened; repository evidence store re-downloaded and verified the archive SHA-256"
+    }
+  ],
+  "applicability": "Existing admin diagnostic helper reuse preserves publication precedence, data shapes, getter order/count and exceptions. 93 differential comparisons plus two rejecting controls and the later34-check supplement are retained; current26f affected admin/E3 tests and all33 static audits pass. Source duplication tightens to37groups/1187lines, complexity1720 baseline unchanged. Separate operation-identity and fixture repairs are not part of this sealed three-admin-file runtime scope.",
+  "candidate": "26f786b202b5b8614d6fc927f6d457be75273d4f"
 }
