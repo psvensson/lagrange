@@ -26,6 +26,7 @@ quests:
   - partition-placement-declared-target
   - committed-readiness-fixture-custody
   - required-entity-operation-observation
+  - committed-node-remove-safety-wake
 authorizes:
   - src
   - test
@@ -163,33 +164,39 @@ measurement has completed. Comparative measurements follow the main merge.
 Current integration status: the takeover history is composed and the three
 bounded prerequisite Quests have terminal land records. `51269c445` preserves
 the lab inventory temporary-file race repair and partition-target fixture
-corrections. `b15227816` consolidates readiness test ports at one construction
-owner and preserves supplied-port custody. Its frozen 192-file caller run
-reported 178 passing files and 14 failures (8,696 reported assertions). Same-host
-predecessor controls identify seven caller-fixture regressions; their corrected
-construction inputs now pass locally. The remaining failed files include older
-wake/lease, runtime CREATE, self-move and embedded-cluster failures. Controller
-startup timeout and the old observation-field expectations also reproduce on
-`51269c445`; reproduction is not a waiver. Complete logs and controls remain in
-`test-output/verification-20261106-partition-target/`. The fixture receipt remains
-failing pending final committed proof and independent verification.
+corrections. `b15227816` consolidates readiness test-port construction and
+supplied-port custody. `8b08183a7` carries the independently reviewed required
+entity-operation observation repair and seven caller-fixture corrections.
+Its frozen affected selection reports **1,095 passing files, 40 failing files,
+and 43,906 reported assertions across 1,135 files**. This is not the full corpus.
+Collected logs and their byte-verified manifest are retained under
+`test-output/verification-20261106-partition-target/operation-observation-frozen-callers/`.
+Same-host `b15227816` controls reproduce 27 of those failures; 13 files pass
+the predecessor, including 12 corrected fixture callers and a retained-seed R1
+timeout still under investigation. Neither inherited redness nor a predecessor
+pass establishes a cause by itself. The next fixture continuation
+consolidates duplicate coordinator construction, supplies required read ports,
+uses the storage owner's result builder and preserves gateway session options.
+Its 28 focused files pass locally (1,262 reported assertions); the subsequent
+explicit selected-owner custody correction passes all 48 assertions in that
+file. Independent review and exact-committed caller proof remain due. The receipts remain red.
+
 The real three-process no-admin witness passed on `205b5683f` at Lenovo's measured
 factor 2.3 with zero guarded admin calls. Its predecessor used factor 1.4, so this
 is bounded candidate evidence, not a same-budget causal comparison or E9.
-A separate real-owner probe reproduces loss of deferred required operation-read
-evidence in coordinator/planning consumers. The sealed
-`required-entity-operation-observation` repair removes the alternate authoritative
-Array API and required-mode cache substitution. The canonical observation retains
-deferral through topology, inventory and replica identity; malformed members are
-refused before merge and before contained-pressure classification. The existing
-pressure owner alone may grant its explicit bounded use. Fifteen focused files
-pass locally (1,427 reported assertions), including the review's malformed-member
-and retry-mirror controls. Independent implementation re-review and frozen caller
-proof remain due; the receipt is still red. Retained Cell/create-lane and other inherited reds,
-final E8, unchanged E9, publication and main merge remain open. The current
+`committed-node-remove-safety-wake` now owns the confirmed R17 floor/wake defect:
+the workflow cache receiver is unbound, projected floor credit competes with
+committed authority, and unavailable evidence must defer before the source-not-
+counted SAFE exit. Its independent design is approved; implementation is pending.
+Its record explicitly supersedes the exhausted predecessor Quest's lease-zero
+carve-out without editing that terminal history or its separate five-node gate.
+The adjacent cached SERVICES topology fallback/merge is recorded separately and
+is not endorsed as authoritative. Runtime definition/Cell CREATE, other retained
+reds, final E8, unchanged E9, publication and main merge remain open. The current
 integration session owns the next committed proof and remaining causal repairs.
 Comparative measurements follow acceptance and main merge. Adam's active stores
-remain under `/mnt/old/lab`; the migration rollback is retained.
+remain under `/mnt/old/lab`; a fresh fleet check reports about 51 GiB available
+there, and the migration rollback is retained.
 
 - Candidate base: `fffd9addfd600cf58bc0c40b1c7df43d5ba4a899`, clean on takeover;
   rule-set revision 5. The user-provided evening review accepts the bounded

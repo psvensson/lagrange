@@ -108,14 +108,20 @@ test('helper-owned port reads its live world without borrowing another cache', (
 
 test('a supplied coordinator keeps its own selected readiness owner', (t) => {
   initializeTestEnvironment();
-  const coordinator = createMockCoordinator();
-  const originalOwner = coordinator.controlPlaneReadinessService;
+  const originalOwner = Object.freeze(createMockControlPlaneReadinessService({
+    readNodeRows: () => [readyNode('coordinator-owned')],
+  }));
+  const coordinator = createMockCoordinator({controlPlaneReadinessService: originalOwner});
   const supplied = Object.freeze({answerCommittedNodes: () => ({state: 'unavailable'})});
   const rebalancer = createTestRebalancer({rebalanceCoordinator: coordinator,
     controlPlaneReadinessService: supplied});
   t.teardown(() => rebalancer.shutdown());
   t.equal(coordinator.controlPlaneReadinessService, originalOwner,
     'helper does not overwrite a caller-selected coordinator dependency');
+  t.equal(rebalancer.controlPlaneReadinessService, originalOwner,
+    'the production binding selects the coordinator owner for the shared interaction');
+  t.equal(createMockCoordinator().controlPlaneReadinessService, null,
+    'an undeclared coordinator dependency creates no alternate empty-world owner');
   t.end();
 });
 

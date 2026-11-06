@@ -385,7 +385,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
     }
   });
 
-  await t.test('rebalancer - maintains odd replica count', async (t) => {
+  await t.test('rebalancer - preserves the declared partition target', async (t) => {
     // Use real BootstrapService to create seed node
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440030';
     const seedWsPort = getUniquePort();
@@ -421,8 +421,12 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
         });
       }
 
+      const declaredPartition = systemTableCache.get(
+        SYSTEM_TABLE_NAME.PARTITIONS, 'replica_operations-p1',
+      );
+      t.ok(declaredPartition, 'bootstrap declares the operation-ledger partition');
       const rebalancer = new UnifiedRebalancer({
-        entityId: 'partition-odd',
+        entityId: declaredPartition.partition_id,
         entityType: EntityType.PARTITION,
         systemTableCache,
         cdcIntegrationService: cdcService,
@@ -434,18 +438,13 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
 
       rebalancer.initialize();
 
-      // Test odd count validation
       const policy = await rebalancer.getPolicy();
-      t.equal(policy.replicaCount % 2, 1, 'default replica count should be odd');
-
-      const validated3 = rebalancer.validateReplicaCount(3, policy);
-      t.equal(validated3, 3, 'should keep 3 as is');
-
-      const validated4 = rebalancer.validateReplicaCount(4, policy);
-      t.equal(validated4 % 2, 1, 'should adjust 4 to odd');
-
-      const validated5 = rebalancer.validateReplicaCount(5, policy);
-      t.equal(validated5, 5, 'should keep 5 as is');
+      t.equal(policy.targetReplicaCount, declaredPartition.replica_count,
+        'the policy consumes the declared target');
+      for (const observedCount of [3, 4, 5]) {
+        t.equal(rebalancer.validateReplicaCount(observedCount, policy),
+          declaredPartition.replica_count, 'observed availability does not redefine the target');
+      }
 
       rebalancer.shutdown();
     } finally {

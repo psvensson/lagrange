@@ -1,4 +1,4 @@
-import {createMockControlPlaneReadinessService} from './test-helpers.js';
+import {createMockCoordinator, createMockControlPlaneReadinessService} from './test-helpers.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   UnifiedRebalancer,
@@ -118,6 +118,7 @@ function createReadinessService(cache) {
 
 function createRebalancer() {
   const cache = createCache();
+  const controlPlaneReadinessService = createReadinessService(cache);
   return new UnifiedRebalancer({
     entityId: TEST_PARTITION_ID,
     entityType: EntityType.PARTITION,
@@ -136,25 +137,13 @@ function createRebalancer() {
       isOutboundQueueAvailable: () => true,
       getConnectedNodes: () => [],
     },
-    rebalanceCoordinator: {
-      getMoveSafetyError: () => null,
-      createOperation: async () => ({}),
-      executeOperation: async () => ({success: true}),
-      canStartAddOperation: async () => true,
-      canStartRemoveOperation: async () => true,
-      getStats: () => ({inFlightOperations: 0, totalOperations: 0}),
-      storageAccountingService: {estimateReplicaBytes: () => 1},
-      storageAdmissionService: {
-        checkAdd: async () => ({decision: 'allow'}),
-        checkReplace: async () => ({decision: 'allow'}),
-      },
-    },
+    rebalanceCoordinator: createMockCoordinator({controlPlaneReadinessService}),
     sqlQueryEngine: {
       async executeQuery() {
         return {success: true, rows: []};
       },
     },
-    controlPlaneReadinessService: createReadinessService(cache),
+    controlPlaneReadinessService,
   });
 }
 

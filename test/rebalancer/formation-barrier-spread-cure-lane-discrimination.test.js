@@ -1,3 +1,4 @@
+import {createMockCoordinator} from './test-helpers.js';
 /**
  * CL-044 fail-honest lane-discrimination witness.
  *
@@ -183,18 +184,6 @@ function createReadinessService() {
   };
 }
 
-function createCoordinator() {
-  return {
-    getMoveSafetyError: () => null,
-    getStats: () => ({inFlightOperations: 0, totalOperations: 0}),
-    storageAccountingService: {estimateReplicaBytes: () => 1},
-    storageAdmissionService: {
-      checkAdd: async () => ({decision: 'allow'}),
-      checkReplace: async () => ({decision: 'allow'}),
-    },
-  };
-}
-
 function buildOpenSpreadBlocker() {
   return {
     requiredDistinctNodeCount: TARGET_REPLICA_COUNT,
@@ -213,6 +202,7 @@ function createRebalancer(
   entityId = PRIORITY_PARTITION_ID,
   options = {},
 ) {
+  const controlPlaneReadinessService = createReadinessService();
   const rebalancer = new UnifiedRebalancer({
     entityId,
     entityType: EntityType.PARTITION,
@@ -233,13 +223,13 @@ function createRebalancer(
       getConnectedNodes: () => [...STARTUP_AUTHORITY_NODE_IDS],
       isOutboundQueueAvailable: () => true,
     },
-    rebalanceCoordinator: createCoordinator(),
+    rebalanceCoordinator: createMockCoordinator({controlPlaneReadinessService}),
     sqlQueryEngine: {
       async executeQuery() {
         return {success: true, rows: []};
       },
     },
-    controlPlaneReadinessService: createReadinessService(),
+    controlPlaneReadinessService,
     nowFn: () => FAKE_NOW_MS,
     randomSource: {random: () => 0},
   });

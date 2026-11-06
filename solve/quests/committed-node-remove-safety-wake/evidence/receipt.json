@@ -1,0 +1,27 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "committed-node-remove-safety-wake",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "canonical-node-floor",
+      "passed": false,
+      "detail": "Construction defect and current negative evidence retained; implementation and exact-candidate proof pending."
+    },
+    {
+      "id": "retained-committed-wake",
+      "passed": false,
+      "detail": "Construction defect and current negative evidence retained; implementation and exact-candidate proof pending."
+    },
+    {
+      "id": "effect-boundary-revalidation",
+      "passed": false,
+      "detail": "Construction defect and current negative evidence retained; implementation and exact-candidate proof pending."
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "detail": "Construction defect and current negative evidence retained; implementation and exact-candidate proof pending."
+    }
+  ]
+}

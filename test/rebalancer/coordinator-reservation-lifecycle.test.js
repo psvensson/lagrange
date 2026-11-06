@@ -27,6 +27,7 @@ import {
   createMockPolicyService,
   createMockMessageRouter,
   createMockControlPlaneReadinessService,
+  createMockControlPlaneSystemTableGateway,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 
@@ -230,14 +231,7 @@ function createCoordinatorWithStorage(options = {}) {
     nodeId,
     systemTableCache: cache,
     cdcIntegrationService: createMockCdcService(),
-    controlPlaneSystemTableGateway: {
-      readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>
-        sqlEngine.executeQuery(sql, params, queryOptions),
-      readRows: async (_tableName, sql, params = [], queryOptions = {}) =>
-        sqlEngine.executeQuery(sql, params, queryOptions),
-      executeQuery: async (sql, params = [], queryOptions = {}) =>
-        sqlEngine.executeQuery(sql, params, queryOptions),
-    },
+    controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlEngine),
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine: sqlEngine,
@@ -405,6 +399,7 @@ test('createOperation - fails fast when accounting service is absent',
       tablePolicyService: createMockPolicyService(),
       messageRouter: createMockMessageRouter(),
       sqlQueryEngine: sqlEngine,
+      controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlEngine),
       transactionCoordinator: createMockTransactionCoordinator(),
       controlPlaneReadinessService: createMockControlPlaneReadinessService({
         defaultRepairEligible: true,

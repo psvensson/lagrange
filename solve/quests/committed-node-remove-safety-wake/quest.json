@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "committed-node-remove-safety-wake",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Partition remove-safety floor credit consumes one committed-node owner observation at one post-read owner-clock instant. Unavailable node authority retains the operation with an explicit defer before any non-countable-source SAFE branch. Lease recovery re-enters the existing retained owner through the committed-owner trigger and is revalidated before effects, without projected readiness grants, local lease parsing, polling or a second reader.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/committed-node-remove-safety-wake/evidence/receipt.json",
+      "requiredReceipts": [
+        "canonical-node-floor",
+        "retained-committed-wake",
+        "effect-boundary-revalidation",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-node-authority",
+      "statement": "Apply evidence/design-review.md: one existing readServeEligibility refresh and answerCommittedNodes observation per floor; one resolveTimeoutCheckNowMs capture after await; projectNodeLivenessSemantics alone supplies node meaning. Remove isEvidenceAbsentReadinessDenial and the projected-readiness OR. Missing/malformed/empty committed rows, missing referenced identity and invalid time explicitly defer before filtering. Preserve the committed owner retained-record policy."
+    },
+    {
+      "id": "one-retained-execution",
+      "statement": "Existing committed-owner subscription triggers the same retained retry body. Preserve capture-before-evaluation, subscribe/register/recheck, dirty lane, 16-run bound, shutdown disposal, existing timer backstop and effect-boundary revalidation. Canonical semantic-level comparison includes authoritative-only peers and excludes raw renewal tokens/timestamps. A wake grants no permission."
+    },
+    {
+      "id": "discriminating-proof",
+      "statement": "Actual constructed workflow and committed owners with controlled authoritative boundary and owner clock: opposing positive projection/cache, expired/malformed source and peer, held read across expiry, finite recovery, disabled committed-subscription negative, authoritative-only peer, lease-only unsafe wake with zero effects, later safe progress. Preserve lost-wake/held-lane/same-token/dirty/event/shutdown/fallback controls and unchanged removal minimum/leader/handoff/peer guards."
+    },
+    {
+      "id": "explicit-historical-disposition",
+      "statement": "Supersede only the exhausted formation-ledger-spread-voter-ready-readiness-closure lease-zero evidence-absence carve-out through an append-only finding. Retain its seal/history and broader five-node gate disposition. The current epic E9 remains three consecutive local-three-node fresh formations. Cached SERVICES topology authority debt is recorded separately and is not endorsed or described as fixed by this node-liveness unit."
+    }
+  ],
+  "sealedAt": "8b08183a7adf89f279e7816f70410e48414cc728"
+}

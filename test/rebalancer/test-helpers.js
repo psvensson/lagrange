@@ -1,3 +1,5 @@
+import {buildStorageAdmissionResult} from '../../src/rebalancer/storage-admission-result.js';
+import {STORAGE_ADMISSION_DECISION_TYPE} from '../../src/rebalancer/storage-admission-constants.js';
 import {projectNodeLivenessSemantics} from '../../src/control-plane/node-liveness-semantic-projection.js';
 import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 /**
@@ -347,7 +349,7 @@ function createMockControlPlaneSystemTableGateway(sqlQueryEngine = null) {
     async executeQuery(sql, params = [], _queryOptions = {}) {
       if (sqlQueryEngine &&
           typeof sqlQueryEngine.executeQuery === 'function') {
-        return sqlQueryEngine.executeQuery(sql, params);
+        return sqlQueryEngine.executeQuery(sql, params, _queryOptions);
       }
       return {success: true, rows: []};
     },
@@ -572,20 +574,28 @@ function createMockSqlQueryEngine(options = {}) {
   };
 }
 
+function createMockStorageAdmissionService() {
+  const admission = buildStorageAdmissionResult({
+    allowed: true,
+    decisionType: STORAGE_ADMISSION_DECISION_TYPE.ADMITTED,
+  });
+  return {
+    checkAdd: async () => admission,
+    checkReplace: async () => admission,
+    checkSplit: async () => admission,
+  };
+}
+
 /**
  * Create a mock rebalance coordinator.
  * @return {Object} Mock coordinator.
  */
-function createMockCoordinator({controlPlaneReadinessService =
-createMockControlPlaneReadinessService(), readOperationsByEntity = async () => []} = {}) {
+function createMockCoordinator({controlPlaneReadinessService = null,
+  readOperationsByEntity = async () => []} = {}) {
   const storageAccountingService = {
     estimateReplicaBytes: () => 1,
   };
-  const storageAdmissionService = {
-    checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
-    checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
-    checkSplit: async () => ({allowed: true, decisionType: 'admitted'}),
-  };
+  const storageAdmissionService = createMockStorageAdmissionService();
   return {
     // This controlled owner models an empty operation ledger unless the test
     // supplies its entity reader. It is not a cache fallback or a real read.
@@ -598,8 +608,8 @@ createMockControlPlaneReadinessService(), readOperationsByEntity = async () => [
       type: move.type,
       partitionId: move.partitionId,
       targetNodeId: move.nodeId,
-      status: 'pending',
-      workflowStep: 'pending',
+      status: ReplicaStatus.PENDING,
+      workflowStep: WORKFLOW_STEP.PENDING,
     }),
     executeOperation: async () => ({success: true}),
     canStartAddOperation: async () => true,
@@ -1066,11 +1076,7 @@ function createTestCoordinator(options = {}) {
         ...options.readinessFixture,
         systemTableCache: mockCache,
       }),
-    storageAdmissionService: options.storageAdmissionService || {
-      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
-      checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
-      checkSplit: async () => ({allowed: true, decisionType: 'admitted'}),
-    },
+    storageAdmissionService: options.storageAdmissionService || createMockStorageAdmissionService(),
     storageAccountingService: options.storageAccountingService || {
       estimateReplicaBytes: () => 1,
     },
@@ -1144,11 +1150,7 @@ function createTestRebalancer(options = {}) {
   const mockCoordinator = options.rebalanceCoordinator ||
     createMockCoordinator({controlPlaneReadinessService});
   const storageAdmissionService = options.storageAdmissionService ||
-    mockCoordinator.storageAdmissionService || {
-    checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
-    checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
-    checkSplit: async () => ({allowed: true, decisionType: 'admitted'}),
-  };
+    mockCoordinator.storageAdmissionService || createMockStorageAdmissionService();
   const storageAccountingService = options.storageAccountingService ||
     mockCoordinator.storageAccountingService || {
     estimateReplicaBytes: () => 1,

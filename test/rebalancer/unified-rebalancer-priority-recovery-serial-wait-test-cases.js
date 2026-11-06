@@ -223,7 +223,7 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
         },
       };
       const missingSerialWaitCoordinator = {
-        ...createMockCoordinator(),
+        ...createMockCoordinator({controlPlaneReadinessService: missingSerialWaitReadinessService}),
         getConcurrentAddCountByPriorityClass: async () => ({
           priorityCount: TEST_NUMBER.ONE,
           ordinaryPriorityCount: TEST_NUMBER.ONE,
@@ -307,7 +307,7 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
       };
       const createdOperations = [];
       const coordinator = {
-        ...createMockCoordinator(),
+        ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
         getConcurrentAddCountByPriorityClass: async () => ({
           priorityCount: TEST_NUMBER.ONE,
           ordinaryPriorityCount: TEST_NUMBER.ONE,
@@ -471,7 +471,7 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
       };
       const createdOperations = [];
       const coordinator = {
-        ...createMockCoordinator(),
+        ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
         getConcurrentAddCountByPriorityClass: async () => ({
           priorityCount: TEST_NUMBER.ONE,
           ordinaryPriorityCount: TEST_NUMBER.ONE,
@@ -763,7 +763,7 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
       };
       const createdOperations = [];
       const coordinator = {
-        ...createMockCoordinator(),
+        ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
         createOperation: async (move) => {
           createdOperations.push(move);
           return {

@@ -1,3 +1,4 @@
+import {createMockCoordinator} from './test-helpers.js';
 /**
  * Unit tests for UnifiedRebalancer.
  * Tests the core rebalancing logic for partitions and message groups.
@@ -160,42 +161,6 @@ function createMockMessageRouter(
   };
 }
 
-// Create mock rebalance coordinator
-function createMockCoordinator() {
-  const storageAccountingService = {
-    estimateReplicaBytes: () => 1,
-  };
-  const storageAdmissionService = {
-    checkAdd: async () => ({decision: 'allow'}),
-    checkReplace: async () => ({decision: 'allow'}),
-  };
-  return {
-    getMoveSafetyError: () => null,
-    createOperation: async (move) => ({
-      operationId: TEST_SCALAR.OPERATION_ID_PREFIX + Date.now(),
-      type: move.type,
-      partitionId: move.partitionId,
-      targetNodeId: move.nodeId,
-      status: ReplicaStatus.PENDING,
-      workflowStep: WORKFLOW_STEP.PENDING,
-    }),
-    executeOperation: async () => ({success: true}),
-    canStartAddOperation: async () => true,
-    canStartRemoveOperation: async () => true,
-    // getStats is called synchronously by UnifiedRebalancer.getStats()
-    getStats: () => ({
-      operationsCreated: TEST_NUMBER.ZERO,
-      operationsCompleted: TEST_NUMBER.ZERO,
-      operationsFailed: TEST_NUMBER.ZERO,
-      operationsTimedOut: TEST_NUMBER.ZERO,
-      inFlightOperations: TEST_NUMBER.ZERO,
-      totalOperations: TEST_NUMBER.ZERO,
-    }),
-    storageAccountingService,
-    storageAdmissionService,
-  };
-}
-
 // Create mock readiness service backed by the same cache
 // Create a fully configured rebalancer for testing
 function createTestRebalancer(options = {}) {
@@ -235,7 +200,6 @@ function createTestRebalancer(options = {}) {
   const mockPolicyService = createMockPolicyService({partitions: partitions, tables: tables});
   const mockMessageRouter = messageRouter ||
     createMockMessageRouter(connectionState);
-  const mockCoordinator = rebalanceCoordinator || createMockCoordinator();
   const mockSqlQueryEngine = sqlQueryEngine || {
     async executeQuery() {
       return {success: true, rows: []};
@@ -243,6 +207,9 @@ function createTestRebalancer(options = {}) {
   };
   const mockReadinessService = controlPlaneReadinessService ||
     createMockControlPlaneReadinessService({systemTableCache: mockCache});
+  const mockCoordinator = rebalanceCoordinator || createMockCoordinator({
+    controlPlaneReadinessService: mockReadinessService,
+  });
 
   return new UnifiedRebalancer({
     entityId,

@@ -1,3 +1,4 @@
+import {createMockCoordinator} from './test-helpers.js';
 // Seam proof (formation-sim, bounded-seams constraint): the unified
 // rebalancer's first eligible instant and its stabilisation anchor are drawn
 // from the owner's own clock and random seams, so a virtual clock and a seed
@@ -12,7 +13,6 @@ import {
 import {
   createMockCache,
   createMockCdcService,
-  createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
   createMockControlPlaneReadinessService,

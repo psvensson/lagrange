@@ -827,6 +827,8 @@ function scheduleHolderReleaseExtras(context, {settlement}) {
           holderBefore,
           holderAfter: snapshotHolder(target),
           skipReason: result?.skipReason || result?.reason || null,
+          success: result?.success,
+          terminal: result?.terminal,
           error: result?.error || null,
           row: describeRow(selfMoveId()),
         };

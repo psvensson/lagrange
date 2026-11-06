@@ -614,9 +614,14 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       t.equal(await waitForPublishedMembership(systemTableCache, publishedNodeIds),
         true, 'the publication owner publishes the node rows it witnessed READY');
 
+      const firstPartition = systemTableCache.get(SYSTEM_TABLE_NAME.PARTITIONS, 'tables-p1');
+      const secondPartition = systemTableCache.get(SYSTEM_TABLE_NAME.PARTITIONS, 'partitions-p1');
+      t.ok(firstPartition, 'bootstrap declares the first concurrent planning entity');
+      t.ok(secondPartition, 'bootstrap declares the second concurrent planning entity');
+
       // Create two rebalancers simulating partition leaders on different nodes
       rebalancer1 = new UnifiedRebalancer({
-        entityId: 'partition-1',
+        entityId: firstPartition.partition_id,
         entityType: EntityType.PARTITION,
         systemTableCache,
         cdcIntegrationService: cdcService,
@@ -629,7 +634,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       });
 
       rebalancer2 = new UnifiedRebalancer({
-        entityId: 'partition-2',
+        entityId: secondPartition.partition_id,
         entityType: EntityType.PARTITION,
         systemTableCache,
         cdcIntegrationService: cdcService,

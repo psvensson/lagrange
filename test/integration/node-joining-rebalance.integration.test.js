@@ -559,7 +559,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
       };
 
       const result = await rebalancer.rebalance('integration_test', {
-        replicaCount: 5,
+        targetReplicaCount: 5,
         minReplicaCount: 1,
         maxReplicaCount: 7,
         placementConstraints: {spreadAcrossNodes: true},

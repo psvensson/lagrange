@@ -135,42 +135,6 @@ export function createPostgresWireEndpoint(nodeId) {
   };
 }
 
-// Create mock rebalance coordinator
-export function createMockCoordinator() {
-  const storageAccountingService = {
-    estimateReplicaBytes: () => 1,
-  };
-  const storageAdmissionService = {
-    checkAdd: async () => ({decision: 'allow'}),
-    checkReplace: async () => ({decision: 'allow'}),
-  };
-  return {
-    getMoveSafetyError: () => null,
-    createOperation: async (move) => ({
-      operationId: 'op-' + Date.now(),
-      type: move.type,
-      partitionId: move.partitionId,
-      targetNodeId: move.nodeId,
-      status: 'pending',
-      workflowStep: 'pending',
-    }),
-    executeOperation: async () => ({success: true}),
-    canStartAddOperation: async () => true,
-    canStartRemoveOperation: async () => true,
-    // getStats is called synchronously by UnifiedRebalancer.getStats()
-    getStats: () => ({
-      operationsCreated: 0,
-      operationsCompleted: 0,
-      operationsFailed: 0,
-      operationsTimedOut: 0,
-      inFlightOperations: 0,
-      totalOperations: 0,
-    }),
-    storageAccountingService,
-    storageAdmissionService,
-  };
-}
-
 // Create mock readiness service backed by the same cache
 
 

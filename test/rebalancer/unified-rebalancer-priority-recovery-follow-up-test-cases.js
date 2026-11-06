@@ -240,7 +240,7 @@ export async function registerPriorityRecoveryFollowUpTestCases(t, context) {
       };
       const createdOperations = [];
       const coordinator = {
-        ...createMockCoordinator(),
+        ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
         createOperation: async (move) => {
           createdOperations.push(move);
           return {
@@ -508,7 +508,7 @@ export async function registerPriorityRecoveryFollowUpTestCases(t, context) {
       };
       const createdOperations = [];
       const coordinator = {
-        ...createMockCoordinator(),
+        ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
         createOperation: async (move) => {
           createdOperations.push(move);
           return {
@@ -716,7 +716,7 @@ export async function registerPriorityRecoveryFollowUpTestCases(t, context) {
       };
       const createdOperations = [];
       const coordinator = {
-        ...createMockCoordinator(),
+        ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
         createOperation: async (move) => {
           createdOperations.push(move);
           return {

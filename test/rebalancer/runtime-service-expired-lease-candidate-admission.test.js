@@ -1,3 +1,4 @@
+import {createMockCoordinator} from './test-helpers.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   EntityType,
@@ -10,7 +11,6 @@ import {
 import {
   createMockCache,
   createMockCdcService,
-  createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
   initializeTestEnvironment,

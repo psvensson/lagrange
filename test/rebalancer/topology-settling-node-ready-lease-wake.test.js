@@ -1,4 +1,4 @@
-import {createMockControlPlaneReadinessService} from './test-helpers.js';
+import {createMockCoordinator, createMockControlPlaneReadinessService} from './test-helpers.js';
 /**
  * Deterministic latency witness for the staggered-joiner dead-scheduling gap.
  *
@@ -135,6 +135,9 @@ function createSharedCache() {
 }
 
 function createRebalancer(cache, partitionId) {
+  const controlPlaneReadinessService = createMockControlPlaneReadinessService({
+    systemTableCache: cache, now: () => 1_800_000_000_000,
+  });
   const rebalancer = new UnifiedRebalancer({
     entityId: partitionId,
     entityType: EntityType.PARTITION,
@@ -152,19 +155,9 @@ function createRebalancer(cache, partitionId) {
       getConnectedNodes: () => [SEED_NODE_ID],
       isOutboundQueueAvailable: () => true,
     },
-    rebalanceCoordinator: {
-      getMoveSafetyError: () => null,
-      getStats: () => ({inFlightOperations: 0, totalOperations: 0}),
-      storageAccountingService: {estimateReplicaBytes: () => 1},
-      storageAdmissionService: {
-        checkAdd: async () => ({decision: 'allow'}),
-        checkReplace: async () => ({decision: 'allow'}),
-      },
-    },
+    rebalanceCoordinator: createMockCoordinator({controlPlaneReadinessService}),
     sqlQueryEngine: {executeQuery: async () => ({success: true, rows: []})},
-    controlPlaneReadinessService: createMockControlPlaneReadinessService({
-      systemTableCache: cache, now: () => 1_800_000_000_000,
-    }),
+    controlPlaneReadinessService,
     nowFn: () => 1_800_000_000_000,
     randomSource: {random: () => 0},
   });

@@ -1,3 +1,4 @@
+import {createMockCoordinator} from './test-helpers.js';
 // Seam proof (formation-sim, bounded-seams constraint): the unified
 // rebalancer's planning-gate pass reads no ambient clock - every read goes
 // through the owner's nowFn - so a virtual clock decides start-delay,
@@ -14,7 +15,6 @@ import {
 import {
   createMockCache,
   createMockCdcService,
-  createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
   createMockControlPlaneReadinessService,
