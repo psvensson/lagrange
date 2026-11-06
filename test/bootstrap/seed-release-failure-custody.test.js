@@ -27,6 +27,7 @@ import {
 import {CONTROL_PARTITION, SEED_RELEASE_BUDGET_MS,
   withSeedReleaseFailureCustody} from
   '../test-helpers/seed-release-failure-custody-fixture.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 
 const SEED_TEST_TIMEOUT_MS = 90000;
 const FAILURE_PREFIX = 'Seed participant release failed: ';
@@ -204,7 +205,7 @@ async function assertRetainedRestartFrontier(host, t) {
 }
 
 test('actual seed committed-origin expiry retains cleanup custody and restart refusal',
-  {timeout: SEED_TEST_TIMEOUT_MS}, async (t) => {
+  {timeout: scaleByMachineFactor(SEED_TEST_TIMEOUT_MS)}, async (t) => {
     await withSeedReleaseFailureCustody(async (host) => {
       assertCommittedExpiryEngaged(host);
       t.diagnostic(JSON.stringify({nodeId: host.bootstrap.nodeId,
