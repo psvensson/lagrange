@@ -191,8 +191,24 @@ node within preregistered bounds.
   repair removes an inherited `entity_type` alternative from the normalized
   operation decision; repository ingress already owns conversion to
   `entityType`. Its authority guard passes without changing retry budgets or
-  canonical runtime-service retry behaviour. These repairs require the next
-  committed 42-file E8 package and exact-candidate review before E9.
+  canonical runtime-service retry behaviour.
+- Candidate `26f786b202b5b8614d6fc927f6d457be75273d4f` passes all 33
+  whole-tree static audits. Its expanded E8 package passes 41/42 files
+  (2,888 reported assertions); the first transaction-facade request times
+  out and later assertions cascade. The unmodified predecessor `de8ccfe43`
+  reproduces that first timeout on the same TV host. Both red runs are
+  retained. Warning logs show operation-ledger writes paused after membership
+  removal; a separate INFO-level diagnostic must establish the release
+  owner's refusal before assigning a repair. No timeout, hold or acceptance
+  condition has been relaxed.
+- The same `26f786b2` passes ten additional causal witnesses on Lenovo
+  (348 reported assertions), independently verified. Existing accepted
+  learner/admission/peer repairs implement H1's prescribed alternative:
+  the decision reads committed authority instead of awaiting a cache row.
+  The historical witness and accepted rejecting controls support that
+  boundary; they do not identify a particular CDC subscriber's withholding
+  mechanism. Full E8, unchanged E9, receipt admission, publication and merge
+  remain open. Comparative measurements follow the main-branch merge.
 
 ## Approved user-visible contract
 

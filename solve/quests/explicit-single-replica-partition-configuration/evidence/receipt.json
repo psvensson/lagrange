@@ -1,12 +1,32 @@
 {
   "schema": "test-receipt/1",
-  "status": "fail",
+  "status": "pass",
   "receipts": [
-    {"id": "configuration-boundary", "passed": false},
-    {"id": "public-embedded-rf1", "passed": false},
-    {"id": "requested-quorum-preserved", "passed": false},
-    {"id": "independent-verification", "passed": false}
+    {
+      "id": "configuration-boundary",
+      "passed": true
+    },
+    {
+      "id": "public-embedded-rf1",
+      "passed": true
+    },
+    {
+      "id": "requested-quorum-preserved",
+      "passed": true
+    },
+    {
+      "id": "independent-verification",
+      "passed": true
+    }
   ],
-  "evidence": [],
-  "applicability": "Bounded E8 prerequisite; not physical formation or release acceptance. Startup schema currently rejects explicit RF1, and the one-runtime E8 fixture requests unavailable default RF3 at 0bafa0f3e5fba82ab6b580d3f2bc185f70dddf01."
+  "evidence": [
+    {
+      "sha256": "5bdb8dbf7c645c8f29e0c177a7dd6b3d1f283fb406884fa9a098458a683c47a7",
+      "archive": "operation-integrity-bounded-proofs-26f786b-20261106.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--operation-integrity-bounded-proofs-26f786b-20261106.tar.gz",
+      "verification": "125 evidence files plus MANIFEST.json reopened locally; repository evidence store re-downloaded and verified the archive SHA-256"
+    }
+  ],
+  "applicability": "Configuration permits explicit RF1, retains omitted RF3 and RF2 rejection. Current 26f configuration/provisioning controls and public RF1 table writes pass; public omitted-RF3 CREATE returns typed unavailability with persisted target3. Transaction-facade semantic timeout remains open in E8 and is not covered by this configuration receipt. No claim about INSERT after failed RF3 CREATE.",
+  "candidate": "26f786b202b5b8614d6fc927f6d457be75273d4f"
 }
