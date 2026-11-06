@@ -1,12 +1,32 @@
 {
   "schema": "test-receipt/1",
-  "status": "fail",
+  "status": "pass",
   "receipts": [
-    {"id": "ordinary-success-propagation", "passed": false},
-    {"id": "speculative-success-propagation", "passed": false},
-    {"id": "absence-preserved", "passed": false},
-    {"id": "independent-verification", "passed": false}
+    {
+      "id": "ordinary-success-propagation",
+      "passed": true
+    },
+    {
+      "id": "speculative-success-propagation",
+      "passed": true
+    },
+    {
+      "id": "absence-preserved",
+      "passed": true
+    },
+    {
+      "id": "independent-verification",
+      "passed": true
+    }
   ],
-  "evidence": [],
-  "applicability": "Bounded diagnostic propagation repair. The existing success mapper drops a supplied remote read witness at 5d678fca9c22ff4bf10b0a04e93928246d58111e; historical H1 observations remain unconfirmed."
+  "evidence": [
+    {
+      "sha256": "5bdb8dbf7c645c8f29e0c177a7dd6b3d1f283fb406884fa9a098458a683c47a7",
+      "archive": "operation-integrity-bounded-proofs-26f786b-20261106.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--operation-integrity-bounded-proofs-26f786b-20261106.tar.gz",
+      "verification": "125 evidence files plus MANIFEST.json independently reopened; repository evidence store re-downloaded and verified the archive SHA-256"
+    }
+  ],
+  "applicability": "The actual parallel coordinator preserves supplied witnesses in ordinary and winning speculative completion, with absent-witness and losing/failed hedge controls, actual SQL/admin envelope propagation, retained prior-source red and current 26f focused green. No serving permission, formation or downstream CDC cause is inferred.",
+  "candidate": "26f786b202b5b8614d6fc927f6d457be75273d4f"
 }
