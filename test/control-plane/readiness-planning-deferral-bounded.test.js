@@ -73,7 +73,8 @@ const ALL_FILTERED = 'all_services_filtered_by_readiness';
 // floor. The shared rig is deterministic, so these exact counts make any
 // future amplification visible instead of preserving the superseded pre-Q2
 // write-driven baseline.
-const SEALED_RIG_HEAVY_BUILDS = 585;
+// R09 direct-publication custody tightens the same complete rig from 585.
+const SEALED_RIG_HEAVY_BUILDS = 565;
 // The number of serve admissions this audit OBSERVES on this drive, sealed so
 // a read path that stops reaching the decision through
 // canReuseCompletedSnapshot cannot quietly shrink the audit's coverage while

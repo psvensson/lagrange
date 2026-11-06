@@ -309,7 +309,14 @@
         "test/control-plane/serve-eligibility-owner.test.js",
         "test/query/schema-provisioning-job-owner.test.js",
         "test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js",
-        "test/control-plane/control-plane-readiness-service-cluster-health-and-recovery-diagnostics.test.js"
+        "test/control-plane/control-plane-readiness-service-cluster-health-and-recovery-diagnostics.test.js",
+        "test/control-plane/readiness-planning-consistency-mode.test.js",
+        "test/control-plane/readiness-planning-diagnostics-retention.test.js",
+        "test/control-plane/readiness-planning-identity-churn-currency.test.js",
+        "test/control-plane/readiness-planning-liveness-veto.test.js",
+        "test/control-plane/readiness-planning-publication-atomicity.test.js",
+        "test/control-plane/readiness-planning-publication-version-key.test.js",
+        "test/control-plane/readiness-planning-read-amplification.test.js"
       ]
     },
     "active-gate-convergence": {
@@ -2389,7 +2396,7 @@
       ]
     },
     "readiness-freshness-macrotask-bound": {
-      "description": "The readiness owner may reflect every final semantic token only through a globally macrotask-bounded heavy-work scheduler.",
+      "description": "The readiness owner may reflect every final semantic token only through a globally macrotask-bounded heavy-work scheduler. Direct sync final answers retain exact context custody; raw protocol representation is retained only under its exact frozen diagnostics and published domain while every call normalizes. Epoch-advance accounting includes all fresh node work (3 candidate plus2per expected node), with omission/extra/unknown negatives; aggregate rig bounds only tighten.",
       "endpoints": [
         {
           "id": "semantic-token-freshness",
@@ -2442,7 +2449,16 @@
         "test/rebalancer/critical-topology-committed-lease.test.js",
         "test/workflow/owner-key-reconcile-queue.test.js",
         "test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js",
-        "test/control-plane/control-plane-readiness-service-cluster-health-and-recovery-diagnostics.test.js"
+        "test/control-plane/control-plane-readiness-service-cluster-health-and-recovery-diagnostics.test.js",
+        "test/control-plane/readiness-planning-consistency-mode.test.js",
+        "test/control-plane/readiness-planning-deferral-bounded.test.js",
+        "test/control-plane/readiness-planning-diagnostics-retention.test.js",
+        "test/control-plane/readiness-planning-identity-churn-currency.test.js",
+        "test/control-plane/readiness-planning-liveness-veto.test.js",
+        "test/control-plane/readiness-planning-publication-atomicity.test.js",
+        "test/control-plane/readiness-planning-publication-version-key.test.js",
+        "test/control-plane/readiness-planning-read-amplification.test.js",
+        "test/control-plane/readiness-planning-snapshot-identity-owner.test.js"
       ]
     },
     "active-gate-authoritative-repair-backoff": {

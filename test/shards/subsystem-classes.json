@@ -28,7 +28,7 @@
   "censusSize": 2604,
   "digest": "fnv1a32-4cdf03c6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c208576d",
+  "observationDigest": "fnv1a32-3f9e26ae",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -5192,7 +5192,9 @@
     "test/control-plane/readiness-planning-snapshot-identity-owner.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-service.js",
-        "src/control-plane/membership-publication-coordinator.js"
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/priority-recovery-planning-answer-origin.js",
+        "src/control-plane/recovery-protocol-snapshot.js"
       ]
     },
     "test/control-plane/readiness-routing-heartbeat-window.test.js": {

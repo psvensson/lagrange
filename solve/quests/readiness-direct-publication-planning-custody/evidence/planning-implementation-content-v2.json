@@ -1,0 +1,26 @@
+{
+  "base": "3bd7e2e8875c5ff32fd94162a3775aea991a35df",
+  "scope": "Bounded direct-publication answer and raw-input custody under explicit successor Quest; H1 and H2 proof corrections complete",
+  "files": [
+    {
+      "path": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "sha256": "00dd263106903cf567a97d831a9c6aa65036bdbf7dfe152bb1f090e9d955ce27"
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+      "sha256": "72adeea1ff4c1d56454d501f84c66e2b83b147afae03417bab246ee191d3e3fd"
+    },
+    {
+      "path": "test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "sha256": "54dc5f98cd4045497e488c6223b64b246dab2ecd0e74576ec26ff0420298b7dc"
+    },
+    {
+      "path": "test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "sha256": "3e3f72b9126633ab7a4475f7053d7163f50e01c05ea9bfa739b8abefb2c9eb6e"
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "sha256": "d2f9e556629722dd458fdef7f35aa829998f422a4516379f931d2bbb09a7607d"
+    }
+  ]
+}

@@ -684,10 +684,16 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
       this.resolveMembershipPublicationPlanningSource(options) ===
       MEMBERSHIP_PUBLICATION_PLANNING_SOURCE.DIRECT_PUBLICATION_ROW
     ) {
-      return this.buildDirectMembershipPublicationPlanningAnswer(
+      return rememberResolvedNodePlanningAnswer(
+        this,
         nodeId,
         observedAt,
         membershipPublication,
+        this.buildDirectMembershipPublicationPlanningAnswer(
+          nodeId,
+          observedAt,
+          membershipPublication,
+        ),
       );
     }
     return this.resolveAvailableNodePlanningAnswer(

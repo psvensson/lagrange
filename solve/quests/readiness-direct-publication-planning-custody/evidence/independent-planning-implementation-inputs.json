@@ -1,0 +1,101 @@
+{
+  "schema": "independent-implementation-review-inputs/1",
+  "verdict": "approve bounded WIP implementation checkpoint; H1 and H2 proof corrections verified and zero production defects found",
+  "base": "3bd7e2e8875c5ff32fd94162a3775aea991a35df",
+  "manifestSha256": "652fdae4b12e8a91f0587acbf2bcd2b45232abad341141ada056d8c3dddf3532",
+  "files": [
+    {
+      "path": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "sha256": "00dd263106903cf567a97d831a9c6aa65036bdbf7dfe152bb1f090e9d955ce27"
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+      "sha256": "72adeea1ff4c1d56454d501f84c66e2b83b147afae03417bab246ee191d3e3fd"
+    },
+    {
+      "path": "test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "sha256": "54dc5f98cd4045497e488c6223b64b246dab2ecd0e74576ec26ff0420298b7dc"
+    },
+    {
+      "path": "test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "sha256": "3e3f72b9126633ab7a4475f7053d7163f50e01c05ea9bfa739b8abefb2c9eb6e"
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "sha256": "d2f9e556629722dd458fdef7f35aa829998f422a4516379f931d2bbb09a7607d"
+    }
+  ],
+  "productionBytesUnchangedFromHoldReview": true,
+  "h1Resolved": true,
+  "h2Resolved": true,
+  "oldDescriptorMatchesPriorReview": true,
+  "predecessorSuperseded": true,
+  "bothReceiptsFail": true,
+  "oldSourceCollectionVerified": true,
+  "evidence": [
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/planning-implementation-content-v2.json",
+      "sha256": "652fdae4b12e8a91f0587acbf2bcd2b45232abad341141ada056d8c3dddf3532"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/independent-planning-implementation-hold.md",
+      "sha256": "66b16f9a7faece36c103ff79e224fa4459d874250939a55fa527a53803741fc9"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/independent-planning-implementation-hold-inputs.json",
+      "sha256": "a3b0a4f3de72c9582d42ac4d9e457b270421ea91436bc25f54320ec7ea78ed7d"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-proof-correction-second.log",
+      "sha256": "7cf6017f5da6fba48e2394dbe7291604f85fe27dd00c267adba95bb4f42f027e"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-corrected-metadata.log",
+      "sha256": "2ebcdc4f3d1d4abe8cfb969ffcd1252f13ff450e622a046759eb83e85614ef97"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-predecessor-3bd7e2e8-collection.json",
+      "sha256": "74fb92b80518c13a3c5d7191e82ce525581602ba9373453d816f9abef4f4567c"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-complete-callers-corrected.log",
+      "sha256": "2390a5dfaf0e1a86a5c185ac066c5c664ecb15d7cf704537a2ae8e14c7e48bec"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-static-first.log",
+      "sha256": "8507c12cec325bfa28aa4d46aba16dbf20deb42e4b62c9e7e853f172377fbe4b"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-lint-corrected.log",
+      "sha256": "592732f4ae2bf4ab61d3f2f08c0d265e5265c825ab339e75949ab76cade9975c"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-closed-shape-corrected.log",
+      "sha256": "23349cc64cc9bbdacc6155665ade4c715247786b031bfa669a7f564260a37f66"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-identity/quest.json",
+      "sha256": "2cc2ad00402ae635c7533bc8ec056ac4ee4b2cfe3a32b613583c66758681abfc"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-identity/log.ndjson",
+      "sha256": "98d541be3a37ec55493e33b8d7f08d57a4d2c93ddc2763b58eaaf9e8ca0e28cf"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-identity/evidence/receipt.json",
+      "sha256": "dfba26a6587e7a8ca7c83f9f4080559b328bc9f3117b18e77fd7f0ac1058fc5f"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/quest.json",
+      "sha256": "e5df44c4c0565d0b393848e23a9541d67ea456e59b5c87915ce6360d1dd321f7"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/log.ndjson",
+      "sha256": "a2342a6bc6c92679651509474037bd08bf2a4227c74c1abfb2146c23abb1b92b"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/receipt.json",
+      "sha256": "8cd6a8ef2532de327e43312d6d16d664df9599e6da223afceb227b575e2730e1"
+    }
+  ]
+}

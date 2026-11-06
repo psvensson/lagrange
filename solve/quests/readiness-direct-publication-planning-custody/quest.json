@@ -1,0 +1,39 @@
+{
+  "schema": "solve-quest/2",
+  "id": "readiness-direct-publication-planning-custody",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Synchronous direct-publication readiness retains exact resolved-answer custody and bounded raw protocol input under its existing diagnostics owner; complete fresh-node observations and all projection work are measured without bypassing normalization, authority or currency.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/readiness-direct-publication-planning-custody/evidence/receipt.json",
+      "requiredReceipts": [
+        "resolved-direct-sync-context",
+        "owned-protocol-input-reuse",
+        "complete-readiness-cost-bound",
+        "invalidation-and-retirement",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-semantic-path",
+      "statement": "Sync DIRECT_PUBLICATION_ROW answers use the existing rememberResolvedNodePlanningAnswer owner as async answers do. Reuse only the pure protocol representation for the exact frozen diagnostics object retained by the existing membershipPublicationDiagnosticsMemo, bounded by its published node domain. All calls still use the existing normalizer and verified planning identity owner; unowned/mutable inputs take that same full construction path. No new permission source, readiness shortcut, timer, supervisor or persisted state."
+    },
+    {
+      "id": "truth-and-cost",
+      "statement": "R09 explicitly supersedes the historical total-three publication-advance counter and the predecessor blanket count wording. Retain exactly3 candidate-owner builds, independently require every expected published fixture node to be freshly evaluated once with exactly2 projection/verification builds, classify every event, and require total3+2*N (13for the five-node fixture). Stable repeats cost0 and owner-observed publication changes mint fresh identity. Omission, extra and unknown-work negatives must fail. Keep complete published/required/observed bulk dispositions. Whole unchanged-rig585/3184 limits only tighten to independently verified565/3164; no additional winner reads, raised whole-rig bounds, weakened fixed-point validation or freshness."
+    },
+    {
+      "id": "currency-and-lifetime",
+      "statement": "Cover target separation and bounded retained inputs, diagnostic replacement, current semantic generation, source cache/owner/admission-fence replacement, unowned/mutable inputs and shutdown/invalidation. Preserve the existing memo invalidation and projection authority owners. A diagnostic-only method experiment is not implementation, frozen proof or acceptance."
+    },
+    {
+      "id": "explicit-history",
+      "statement": "Predecessor readiness-direct-publication-planning-identity is superseded, not solved. Preserve its sealed descriptor, failing receipt, original red tests and pre-supersession implementation manifest. Fresh-miss bulk evaluation was introduced by2cd37024e; required-domain enumeration63e4a854b is distinct. Preserve canonical owner-observed epoch changes fromf95fccaf, not its retired competing live-winner probe. This R09 change does not raise static ratchets or imply full source/E8/E9 acceptance."
+    }
+  ],
+  "sealedAt": "3bd7e2e8875c5ff32fd94162a3775aea991a35df"
+}

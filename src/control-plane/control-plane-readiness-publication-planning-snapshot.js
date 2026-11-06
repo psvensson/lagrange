@@ -660,13 +660,30 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     });
   }
 
+  buildMembershipPublicationProtocolInput(context) {
+    const memo = this.membershipPublicationDiagnosticsMemo;
+    const reuseOwnedInput = memo && memo.diagnostics &&
+      memo.diagnostics === context.membershipPublication &&
+      Object.isFrozen(memo.diagnostics) &&
+      memo.diagnostics.publishedActiveNodeIds.includes(context.nodeId);
+    if (!reuseOwnedInput) {
+      return buildPublicationRecoveryProtocolSnapshot(context.membershipPublication,
+        {targetNodeId: context.nodeId});
+    }
+    // Representation reuse shares the diagnostics lifetime and its finite
+    // published domain. This input never skips the normalizer below: only the
+    // existing identity owner can admit a current, verified projection.
+    if (!memo.protocolSnapshotsByNodeId) memo.protocolSnapshotsByNodeId = new Map();
+    if (!memo.protocolSnapshotsByNodeId.has(context.nodeId)) {
+      memo.protocolSnapshotsByNodeId.set(context.nodeId,
+        buildPublicationRecoveryProtocolSnapshot(context.membershipPublication,
+          {targetNodeId: context.nodeId}));
+    }
+    return memo.protocolSnapshotsByNodeId.get(context.nodeId);
+  }
+
   buildMembershipPublicationPlanningSnapshot(context = {}) {
-    const protocolSnapshot = buildPublicationRecoveryProtocolSnapshot(
-      context.membershipPublication,
-      {
-        targetNodeId: context.nodeId,
-      },
-    );
+    const protocolSnapshot = this.buildMembershipPublicationProtocolInput(context);
     if (!protocolSnapshot) {
       return null;
     }

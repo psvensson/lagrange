@@ -30,6 +30,8 @@ quests:
   - system-cache-reconciliation-ingress
   - runtime-definition-create-authority
   - readiness-bulk-required-domain
+  - readiness-direct-publication-planning-identity
+  - readiness-direct-publication-planning-custody
   - strict-hydration-fixture-owner-ports
   - tap-default-machine-factor-portability
 authorizes:
@@ -66,9 +68,9 @@ node within preregistered bounds.
   formation correctness in `0.4.1` does not claim five-node comparative
   performance.
 - **Integration owner:** the current local integration session on
-  `work/composed-05-comparison-readiness-20261103`, now composing the reviewed
-  `work/formation-takeover-20261105` lineage. Earlier handover mirrors preserve
-  historical checkpoints; they do not identify this unpushed candidate.
+  `work/composed-05-comparison-readiness-20261103`, composing the reviewed
+  `work/formation-takeover-20261105` lineage and resuming from the 6 November
+  handover at `3bd7e2e8875c5ff32fd94162a3775aea991a35df`.
 - **Reviewed baseline SHA:** `77e5b4c5ba01826f2ddceecb088f56fcd27b436e`.
 - **Starting candidate SHA at E0:** `63e4a854b783d4b3176b3ecd123677384c96fafa`
   (one commit ahead of `77e5b4c5ba01826f2ddceecb088f56fcd27b436e`, landing
@@ -84,6 +86,16 @@ node within preregistered bounds.
   and `solve/quests/replica-admission-from-committed-operation/quest.json`.
 
 ## Reconciled integration status (6 November)
+
+Resumed after the 14:44 UTC / 15:44 CET handover checkpoint on 6 November
+(`/home/peter/Downloads/lagrange-handover-20261106T144624Z/`). The H1 and H2
+proof corrections from `independent-planning-implementation-hold.md` are now
+complete, including the retained-evidence fixture at
+`readiness-planning-snapshot-identity-owner.test.js:854-865`, and the two-file
+planning proof passes (2/2 files, 31 reported assertions) alongside all 33
+static audits. Rule-set revision 5 remains in force; committed planning proof,
+remaining causal repairs, E8, E9, publication, main merge and comparative
+measurements remain open.
 
 The two work branches diverged after `fffd9add`. The reviewed composition was
 committed and pushed as `4024a23e7`, retaining all seven takeover commits through
@@ -243,9 +255,13 @@ swap; its two files/11 assertions and owned teardown are independently approved
 by 9a3a85f9. Exact 6cd5753f committed/frozen applicability is approved by
 c5c95acb (2 files/11 assertions, first attempt). This remains a fixture
 correction; full source proof and receipt admission are still due.
-Three inherited readiness callers remain red: two planning identity/build-cost
-witnesses and the missing-both-rows self-grace fixture; their first causes and
-repairs remain required, with no predecessor-red waiver. The existing
+The unchanged predecessor has three inherited readiness callers red: two
+planning identity/build-cost witnesses and the missing-both-rows self-grace
+fixture. Planning custody now reduces whole-rig builds from 685 to 565 while
+preserving the 1,020 observed readiness results, and its corrected two-file
+proof passes 31 reported assertions; committed frozen proof and receipt
+admission remain pending. The separate self-grace failure
+remains open, with no predecessor-red waiver. The existing
 semantic owner now distinguishes invalid lease data from explicit clearing;
 committed node authority supplies floor credit and the existing retained owner
 subscribes to meaningful committed changes. The bounded real-owner witness
@@ -276,15 +292,22 @@ ControlPlaneSetup created the owner without returning it, and seed/join did not
 retain it for guarded runtime setup. The bounded repair returns that exact
 owner and shares its seed/join handoff, checks the named gateway prerequisite
 in the existing startup gate, and clears the retained reference through existing
-cleanup owners. Seven focused files/334 assertions and all 33 static audits pass;
-frozen committed proof and a new public journey are still required. Full
-source-range proof remains required. The old-source negatives and independent
+cleanup owners. Seven focused files/334 assertions and all 33 static audits pass.
+Committed `3bd7e2e8` passes the public Binding journey (one file/70 reported
+assertions) and the first executed frozen focused batch (31 files/1,117), both
+on Lenovo without retries. Independent committed applicability `31d8337a` and
+focused addendum `0e464513` approve these bounded claims. The initial wrapper
+finished the public journey, then failed before focused planning by reusing a
+released source snapshot; its exit-1 disposition is retained. The focused batch
+used a fresh snapshot of the same SHA. Full source-range proof and formal receipt
+admission remain required. The old-source negatives and independent
 malformed-lineage failures remain retained. Readiness diagnostics now attribute
 100 additional heavy builds to nested fresh bulk evaluations during publication
 planning, not the unexecuted background queue; the required-node output contract
 must be preserved while repairing that cost. Other retained reds, final E8,
 unchanged E9, publication and main merge remain open. The current
-integration session owns the next committed proof and remaining causal repairs.
+integration session owns the committed planning proof and remaining causal
+repairs.
 Comparative measurements follow acceptance and main merge. Adam's active stores
 remain under `/mnt/old/lab`; a fresh fleet check reports about 52 GiB available
 there, and the migration rollback is retained.
