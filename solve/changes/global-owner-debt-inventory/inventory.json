@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3442716,
-        "sha256": "ad71d70cb9fb5640dc04a17922812c9b712fe9d4919b54103fe011134474b5b5"
+        "bytes": 3443048,
+        "sha256": "4bfacdca9af790ebce34d96429935cc5aae7c2d01ef2869eb25c76a26a302ddd"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "a72d87b62b91593855b808e165b14e5a7f7f8cb053f603ecceaa1580196a33d9"
+        "sha256": "2dad9833dc37eb671d5a181fe34a5c72c26a32948ccf261c96b00e24f5040c50"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "1a773431b27fe1ec4abc94f8648fc09c569827cfba3c35dcc32571d9d0166b86"
+    "inputDigest": "b66413f3d1ca7fc97003eddb6a8d8552439d10746e0a4bff1ba34f4863bee888"
   },
   "reconciliation": {
     "complexity": {
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "a72d87b62b91593855b808e165b14e5a7f7f8cb053f603ecceaa1580196a33d9"
+          "sha256": "2dad9833dc37eb671d5a181fe34a5c72c26a32948ccf261c96b00e24f5040c50"
         },
         "cloneGroups": 632,
         "duplicatedLines": 23837,
@@ -173,17 +173,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3442716,
-        "sha256": "ad71d70cb9fb5640dc04a17922812c9b712fe9d4919b54103fe011134474b5b5"
+        "bytes": 3443048,
+        "sha256": "4bfacdca9af790ebce34d96429935cc5aae7c2d01ef2869eb25c76a26a302ddd"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "8aad0c18e8da7e5009a6a225c682bb514ed923e3f2192088ea70acba27cf704c",
+      "sourceDigest": "75ba9043ebca39a68ba3555f716952383d429042133d1296462fbb261aa9a9ec",
       "moduleCount": 6079,
-      "edgeCount": 33720,
+      "edgeCount": 33725,
       "unresolvedCount": 46
     }
   },
@@ -450,7 +450,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 65,
-      "importOut": 338,
+      "importOut": 339,
       "score": 279.6,
       "topPaths": [
         "test/integration/versioned-cdc-readiness-convergence.integration.test.js",
