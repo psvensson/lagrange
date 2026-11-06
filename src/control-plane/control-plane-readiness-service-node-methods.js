@@ -244,7 +244,6 @@ function collectPublishedRequiredNodeIds(service, options = {}) {
   return [
     ...publishedActiveNodeIds,
     ...explicitRequiredNodeIds,
-    ...(service.nodeId ? [service.nodeId] : []),
   ].filter((nodeId) => typeof nodeId === 'string' && nodeId.length > 0);
 }
 

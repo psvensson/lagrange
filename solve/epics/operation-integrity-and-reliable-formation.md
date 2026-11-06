@@ -29,6 +29,7 @@ quests:
   - committed-node-remove-safety-wake
   - system-cache-reconciliation-ingress
   - runtime-definition-create-authority
+  - readiness-bulk-required-domain
   - tap-default-machine-factor-portability
 authorizes:
   - src
@@ -229,9 +230,14 @@ differs from the prior 2.3 and is recorded, not presented as identical-budget
 causal evidence. Independent applicability `325afcdb` verifies the committed
 inputs and bounded result. Full source-range/runner proof and receipts remain
 required before closure.
-Four additional inherited readiness callers remain red: two planning identity/
-build-cost witnesses and two sync/bulk-readiness fixtures; their first causes
-and repairs remain required, with no predecessor-red waiver. The existing
+The bounded bulk-readiness domain repair removes only unconditional observer-ID
+injection. Both bulk readers retain published, required and observed nodes,
+including negative missing-row entries. Two focused files pass 163 assertions and
+all 33 static audits pass; independent review 59cec4ff approves the three-path
+manifest 0a346fe6 for WIP checkpoint. Committed/frozen proof remains pending.
+Three inherited readiness callers remain red: two planning identity/build-cost
+witnesses and the missing-both-rows self-grace fixture; their first causes and
+repairs remain required, with no predecessor-red waiver. The existing
 semantic owner now distinguishes invalid lease data from explicit clearing;
 committed node authority supplies floor credit and the existing retained owner
 subscribes to meaningful committed changes. The bounded real-owner witness
@@ -252,8 +258,13 @@ coordinator recovery witness holds then runs its retained retry callback after a
 finite authority failure, preserving the durable operation and replica identity;
 its scheduler and persistence boundaries are controlled. Independent review
 `71b2104e` approves exact content manifest `337b3a6b` for WIP checkpoint only.
-Committed applicability, frozen affected proof, public Cell composition and full
-source-range proof remain required. The old-source negatives and independent
+Exact committed applicability at 04459151a is approved by 5231611c, and its frozen
+Lenovo 25-file schedule passes 792 reported assertions on the first attempt.
+The separate public Binding journey on 04459151a fails before application CALL:
+sys-postgres-wire never publishes its endpoint and CREATE repeatedly reports
+service_definition_authority_unavailable. Its actual gateway refusal must be
+traced; the focused result cannot close that public composition gap. Full
+source-range proof remains required. The old-source negatives and independent
 malformed-lineage failures remain retained. Readiness diagnostics now attribute
 100 additional heavy builds to nested fresh bulk evaluations during publication
 planning, not the unexecuted background queue; the required-node output contract

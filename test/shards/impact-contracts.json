@@ -307,7 +307,9 @@
         "test/rebalancer/storage-capacity-semantic-projection-owner.test.js",
         "test/workflow/owner-key-reconcile-queue.test.js",
         "test/control-plane/serve-eligibility-owner.test.js",
-        "test/query/schema-provisioning-job-owner.test.js"
+        "test/query/schema-provisioning-job-owner.test.js",
+        "test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js",
+        "test/control-plane/control-plane-readiness-service-cluster-health-and-recovery-diagnostics.test.js"
       ]
     },
     "active-gate-convergence": {
@@ -2421,7 +2423,9 @@
         "test/rebalancer/storage-capacity-semantic-projection-owner.test.js",
         "test/rebalancer/startup-authority-available-node-contract.test.js",
         "test/rebalancer/critical-topology-committed-lease.test.js",
-        "test/workflow/owner-key-reconcile-queue.test.js"
+        "test/workflow/owner-key-reconcile-queue.test.js",
+        "test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js",
+        "test/control-plane/control-plane-readiness-service-cluster-health-and-recovery-diagnostics.test.js"
       ]
     },
     "active-gate-authoritative-repair-backoff": {

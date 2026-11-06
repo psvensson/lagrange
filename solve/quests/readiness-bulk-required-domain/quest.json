@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "readiness-bulk-required-domain",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Bulk readiness evaluates the published, explicitly required and observed node domain through one shared collector. An observer ID alone is not a node fact; required or published nodes with missing rows remain explicit negative observations.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/readiness-bulk-required-domain/evidence/receipt.json",
+      "requiredReceipts": [
+        "missing-observer-excluded",
+        "required-domain-preserved",
+        "affected-caller-proof",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-domain",
+      "statement": "Remove only the unconditional observer-node injection in collectPublishedRequiredNodeIds. Retain published IDs, existing requiredNodeIds, current node/service/endpoint rows, authoritative-only enumeration and retained snapshots. Both sync and async bulk callers share the collector. Request self explicitly through requiredNodeIds; do not add another include-self mode or infer liveness."
+    },
+    {
+      "id": "preserved-refusals",
+      "statement": "Unknown required/published nodes remain present and unhealthy; never omit them to improve a count. Preserve fresh sync evaluation, read authority, incarnation, lease and serving semantics. The separate missing-both-rows grace and planning build-cost findings remain open; this repair does not change their contracts."
+    },
+    {
+      "id": "proof",
+      "statement": "Retain predecessor red in the bulk refresh witness. Test absent unobserved self in both bulk entrypoints, explicit required self as a negative observation, and existing authoritative-only, visible self, retained snapshot, published/required missing-row controls. Independent content and exact-candidate proof precede receipt admission; broader E8/E9 remain separate."
+    }
+  ],
+  "sealedAt": "04459151a2813fe24e0cc99e2d3eda431f8902a7"
+}

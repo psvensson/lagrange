@@ -37,6 +37,30 @@ import {
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
 
+test('both bulk readers require evidence or an explicit request to enumerate the observer',
+  async (t) => {
+    for (const method of ['getAllNodeReadiness', 'getAllNodeReadinessSync']) {
+      const readiness = new ControlPlaneReadinessService({
+        nodeId: 'unobserved-self',
+        systemTableCache: createCache({nodes: [], services: []}),
+        now: () => 350000,
+      });
+      try {
+        t.same(await readiness[method](), [], `${method}: observer ID alone is not a member`);
+        const required = await readiness[method]({requiredNodeIds: ['unobserved-self']});
+        t.same(required.map((entry) => entry.nodeId), ['unobserved-self'],
+          `${method}: explicit required domain still includes missing self`);
+        t.equal(required[0].dimensions.clusterMemberHealthy, false,
+          `${method}: missing self is an explicit negative observation`);
+        t.same((await readiness[method]()).map((entry) => entry.nodeId), ['unobserved-self'],
+          `${method}: the retained observation remains in the enumerated domain`);
+      } finally {
+        readiness.shutdownReadinessPlanningOwner();
+      }
+    }
+    t.end();
+  });
+
 test('ControlPlaneReadinessService getAllNodeReadiness propagates ' +
   'authoritative refresh for stale connected rows',
 async (t) => {
