@@ -25,6 +25,7 @@ quests:
   - replica-create-timeout-replay-custody
   - partition-placement-declared-target
   - committed-readiness-fixture-custody
+  - required-entity-operation-observation
 authorizes:
   - src
   - test
@@ -162,18 +163,31 @@ measurement has completed. Comparative measurements follow the main merge.
 Current integration status: the takeover history is composed and the three
 bounded prerequisite Quests have terminal land records. `51269c445` preserves
 the lab inventory temporary-file race repair and partition-target fixture
-corrections. `committed-readiness-fixture-custody` now consolidates the affected
-test ports at one construction owner, preserves supplied-port custody, and
-removes stale projection/lease assumptions. Constituent checks pass; its receipt
-remains failing pending a committed caller-cone run and independent verification.
+corrections. `b15227816` consolidates readiness test ports at one construction
+owner and preserves supplied-port custody. Its frozen 192-file caller run
+reported 178 passing files and 14 failures (8,696 reported assertions). Same-host
+predecessor controls identify seven caller-fixture regressions; their corrected
+construction inputs now pass locally. The remaining failed files include older
+wake/lease, runtime CREATE, self-move and embedded-cluster failures. Controller
+startup timeout and the old observation-field expectations also reproduce on
+`51269c445`; reproduction is not a waiver. Complete logs and controls remain in
+`test-output/verification-20261106-partition-target/`. The fixture receipt remains
+failing pending final committed proof and independent verification.
 The real three-process no-admin witness passed on `205b5683f` at Lenovo's measured
 factor 2.3 with zero guarded admin calls. Its predecessor used factor 1.4, so this
 is bounded candidate evidence, not a same-budget causal comparison or E9.
 A separate real-owner probe reproduces loss of deferred required operation-read
-evidence in coordinator/planning consumers; its repair belongs to that existing
-owner, not the fixture Quest. Retained Cell/create-lane and other inherited reds,
+evidence in coordinator/planning consumers. The sealed
+`required-entity-operation-observation` repair removes the alternate authoritative
+Array API and required-mode cache substitution. The canonical observation retains
+deferral through topology, inventory and replica identity; malformed members are
+refused before merge and before contained-pressure classification. The existing
+pressure owner alone may grant its explicit bounded use. Fifteen focused files
+pass locally (1,427 reported assertions), including the review's malformed-member
+and retry-mirror controls. Independent implementation re-review and frozen caller
+proof remain due; the receipt is still red. Retained Cell/create-lane and other inherited reds,
 final E8, unchanged E9, publication and main merge remain open. The current
-integration session owns the next committed fixture run and operation-read repair.
+integration session owns the next committed proof and remaining causal repairs.
 Comparative measurements follow acceptance and main merge. Adam's active stores
 remain under `/mnt/old/lab`; the migration rollback is retained.
 

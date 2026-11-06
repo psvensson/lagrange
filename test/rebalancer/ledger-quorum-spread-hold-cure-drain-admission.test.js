@@ -201,10 +201,6 @@ function createFormationReadinessService(
   cache,
   {cohortNodeIds = TEST_COHORT_NODE_IDS, prioritySpreadSatisfied},
 ) {
-  const base = createMockControlPlaneReadinessService({
-    systemTableCache: cache,
-    defaultRepairEligible: true,
-  });
   const buildPlanningSnapshot = (nodeId) => ({
     publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
     publishedActiveNodeIdsPresent: true,
@@ -219,21 +215,22 @@ function createFormationReadinessService(
       missingPartitionIds: [],
     },
   });
-  return {
-    getNodeReadinessSync: (nodeId, readOptions) =>
-      base.getNodeReadinessSync(nodeId, readOptions),
+  return createMockControlPlaneReadinessService({
+    systemTableCache: cache,
+    callbacks: {
     // REMOVE safety reads the owner surface; this fixture models the same
     // planning state there, unchanged. The best-effort surfaces stay for the
     // narration and admission consumers that read AVAILABLE evidence.
-    getPriorityRecoveryPlanningAnswerForOwnerRead: async (nodeId) =>
-      buildPlanningSnapshot(nodeId),
-    getMembershipPublicationPlanningSnapshotBestEffort: async (nodeId) =>
-      buildPlanningSnapshot(nodeId),
-    getMembershipPublicationPlanningSnapshot: async (nodeId) =>
-      buildPlanningSnapshot(nodeId),
-    getMembershipPublicationPlanningSnapshotSync: (nodeId) =>
-      buildPlanningSnapshot(nodeId),
-  };
+      getPriorityRecoveryPlanningAnswerForOwnerRead: async (nodeId) =>
+        buildPlanningSnapshot(nodeId),
+      getMembershipPublicationPlanningSnapshotBestEffort: async (nodeId) =>
+        buildPlanningSnapshot(nodeId),
+      getMembershipPublicationPlanningSnapshot: async (nodeId) =>
+        buildPlanningSnapshot(nodeId),
+      getMembershipPublicationPlanningSnapshotSync: (nodeId) =>
+        buildPlanningSnapshot(nodeId),
+    },
+  });
 }
 
 // Answer the coordinator's authoritative (owner-lane) services reads from

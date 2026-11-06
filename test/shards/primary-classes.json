@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2248,
+    "unit": 2249,
     "integration": 124,
     "bootstrap": 219,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2598,
-  "digest": "fnv1a32-a2373fe8",
+  "censusSize": 2599,
+  "digest": "fnv1a32-ce7fd1b0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2021,6 +2021,7 @@
     "test/rebalancer/replica-placement-policy.property.test.js": "unit",
     "test/rebalancer/replica-retirement-terminal-actuals-coherence.test.js": "unit",
     "test/rebalancer/replica-status-completeness.property.test.js": "unit",
+    "test/rebalancer/required-entity-operation-observation.test.js": "unit",
     "test/rebalancer/reservation-expiry-operation-aware.test.js": "unit",
     "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js": "unit",
     "test/rebalancer/reservation-file-backed-restart.test.js": "unit",

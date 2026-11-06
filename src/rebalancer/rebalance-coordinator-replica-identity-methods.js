@@ -113,14 +113,10 @@ function shouldLeaseRecentPriorityReplaceTarget({
 class RebalanceCoordinatorReplicaIdentityMethods {
   async getEntityAllocatedOperationReplicaIds({entityType, entityId}) {
     const replicaIds = new Set();
-    const authoritativeOperations =
-      typeof this.repository?.getOperationsByEntityAuthoritative ===
-      LOCAL_STR_FUNCTION ?
-        await this.repository.getOperationsByEntityAuthoritative(
-          entityType,
-          entityId,
-        ) :
-        [];
+    const observation = await this.getEntityRecoveryOperationObservation(entityType, entityId);
+    const authoritativeOperations = this.requireEntityOperationRows(
+      observation, entityType, entityId,
+    );
     const cacheVisibleOperations =
       typeof this.repository?.getOperationsByEntity === LOCAL_STR_FUNCTION ?
         await this.repository.getOperationsByEntity(entityType, entityId) :
@@ -169,14 +165,10 @@ class RebalanceCoordinatorReplicaIdentityMethods {
   }) {
     const retiredSourceReplicaIds = new Set();
     const observedAtMs = this.nowFn();
-    const authoritativeOperations =
-      typeof this.repository?.getOperationsByEntityAuthoritative ===
-      LOCAL_STR_FUNCTION ?
-        await this.repository.getOperationsByEntityAuthoritative(
-          entityType,
-          entityId,
-        ) :
-        [];
+    const observation = await this.getEntityRecoveryOperationObservation(entityType, entityId);
+    const authoritativeOperations = this.requireEntityOperationRows(
+      observation, entityType, entityId,
+    );
     const cacheVisibleOperations =
       typeof this.repository?.getOperationsByEntity === LOCAL_STR_FUNCTION ?
         await this.repository.getOperationsByEntity(entityType, entityId) :

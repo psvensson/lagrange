@@ -471,12 +471,10 @@ class RebalanceCoordinatorTopologyGuardMethods {
       authoritativeObservation.rows,
     );
     const operationObservation =
-      await this.getEntityTopologyInventoryOperationObservation(
+      await this.getEntityRecoveryOperationObservation(
         entityType,
         entityId,
       );
-    const liveOperationRows = Array.isArray(operationObservation?.operations) ?
-      operationObservation.operations : [];
     const cacheStateAfter = captureInventoryCacheState(
       this.systemTableCache,
       this.nowFn(),
@@ -505,8 +503,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
         observedAtMs: authoritativeObservation.observedAtMs,
       },
       inFlightOperationObservation: {
-        state: operationObservation?.state || 'unavailable',
-        operations: liveOperationRows,
+        ...operationObservation,
         revisionBefore: cacheStateBefore.inFlightOperations.revision,
         revisionAfter: cacheStateAfter.inFlightOperations.revision,
         revision: cacheStateAfter.inFlightOperations.revision,

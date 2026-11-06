@@ -66,6 +66,9 @@ function overTargetServiceRows() {
 async function createVerdictCoordinator(t, overrides) {
   const coordinator = createTestCoordinator({
     nodeId: TEST_NODE_ID,
+    cacheData: {nodes: [TEST_NODE_ID, 'node-verdict-b'].map((nodeId) => ({
+      node_id: nodeId, status: 'active',
+    }))},
     enableTimeouts: false,
   });
   coordinator.initialize();

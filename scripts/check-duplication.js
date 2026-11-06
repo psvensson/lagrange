@@ -276,8 +276,10 @@ const RATCHET_TARGETS = [
     // on the checker hint after consolidating shared table-policy fixtures.
     // 2026-11-06 (committed-readiness-fixture-custody): tightened 641/24100
     // to 637/23975 on the checker hint after unifying readiness fixtures.
-    baselineCloneGroupCount: 637,
-    baselineDuplicatedLineCount: 23975,
+    // 2026-11-06 (required-entity-operation-observation): tightened 637/23975
+    // to 635/23918 after using the canonical observation builder in fixtures.
+    baselineCloneGroupCount: 635,
+    baselineDuplicatedLineCount: 23918,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

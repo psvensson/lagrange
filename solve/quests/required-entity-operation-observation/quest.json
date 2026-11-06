@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "required-entity-operation-observation",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Required entity-operation reads preserve one canonical owner observation through coordinator, planning, inventory and replica identity decisions. Unavailable or malformed authority never becomes empty success; retained rows preserve deferral, and only the existing contained-priority-pressure owner may explicitly authorize bounded use.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/required-entity-operation-observation/evidence/receipt.json",
+      "requiredReceipts": [
+        "canonical-required-observation",
+        "inventory-and-identity-custody",
+        "bounded-pressure-and-recovery",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-observation-owner",
+      "statement": "Remove the alternate authoritative Array repository API, prototype/custom-reader adaptations and required-mode ordinary-cache fallback. Carry one validated envelope; preserve reason, retry, entity and retained-work meaning. Missing, thrown or malformed contracts refuse before any pressure classification."
+    },
+    {
+      "id": "complete-affected-interaction",
+      "statement": "Cover real repository to coordinator to required facade to critical topology, topology guard to inventory, ID allocation and retired REPLACE source safety. Generic present plus deferral stays unavailable. Cache rows may add conservative exclusion evidence but cannot prove authority absent."
+    },
+    {
+      "id": "preserve-owned-recovery",
+      "statement": "Keep the existing contained-priority-pressure policy and explicit bounded_usable disposition as the sole narrow exception. Prove intended useful creation through later identity/safety gates; zero retained work and valid envelope required. Restore finite owner fault and exercise the existing owner attempt. Do not claim autonomous scheduling without a real trigger witness."
+    },
+    {
+      "id": "bounded-claim",
+      "statement": "No new supervisor, fallback, poll, deadline increase or receipt relaxation. Ordinary cache mode, global incomplete/count and per-operation visibility APIs are outside this entity-read repair. Preserve named deadlock/hold witnesses. Final E8, unchanged E9 and publication/main merge remain separate."
+    }
+  ],
+  "sealedAt": "b152278161603d35ed9700c38ee0cd1384031abf"
+}

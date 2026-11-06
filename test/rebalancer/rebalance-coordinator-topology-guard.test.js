@@ -303,22 +303,20 @@ test('RebalanceCoordinator topology guard invokes the injected inventory owner',
   },
 );
 
-test('RebalanceCoordinator fails topology increase closed when owner rows are unavailable',
+test('RebalanceCoordinator fails topology increase closed when service owner rows are unavailable',
   async (t) => {
     initializeTestEnvironment();
-    const unavailable = async () => ({
-      success: false,
-      rows: [],
-      error: 'owner unavailable',
-    });
+    const readRows = async (table) => table === SYSTEM_TABLE_NAME.SERVICES ? {
+      success: false, rows: [], error: 'service owner unavailable',
+    } : {success: true, rows: []};
     const {coordinator} = createCoordinator({
       cacheServices: [
         createServiceRow(TEST_SOURCE_REPLICA_ID, TEST_NODE_ID),
       ],
       controlPlaneSystemTableGateway: {
-        readAuthoritativeRows: unavailable,
-        readRows: unavailable,
-        executeQuery: unavailable,
+        readAuthoritativeRows: readRows,
+        readRows,
+        executeQuery: async () => ({success: true, rows: []}),
       },
     });
 
@@ -721,6 +719,8 @@ test('RebalanceCoordinator applies topology occupancy guard to message-group cre
 // surplus drains. The net-new catch vs the existing rows-only distinct-node ADD
 // guard is REPLACE (which that guard exempts), so the red-on-revert is a REPLACE.
 const CRIT_PARTITION_ID = 'control_plane_publications-p1';
+const CRIT_NODE_ROWS = ['node-1', 'node-2', 'node-3', 'node-4', 'node-5']
+  .map((nodeId) => ({node_id: nodeId, status: 'active'}));
 function critRow(replicaId, nodeId, status) {
   return createServiceRow(replicaId, nodeId, {
     partitionId: CRIT_PARTITION_ID,
@@ -740,6 +740,7 @@ test('count-keyed lane HOLDS a REPLACE churn create while the critical partition
     critRow(CRIT_PARTITION_ID + '-r4', 'node-4'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -771,6 +772,7 @@ test('count-keyed lane consumes canonical identity deduplication', async (t) => 
     critRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -804,6 +806,7 @@ async (t) => {
     critRow(CRIT_PARTITION_ID + '-r4', 'node-4', TEST_FAILED_STATUS),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -837,6 +840,7 @@ test('count-keyed lane HOLDS a REPLACE churn create when the surplus is a draini
     critRow(CRIT_PARTITION_ID + '-r4', 'node-4', ReplicaStatusForTest.REMOVING),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -874,6 +878,7 @@ test('count-keyed lane EXEMPTS the priority-spread cure ADD: over target on aliv
     critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -903,6 +908,7 @@ test('count-keyed lane STILL HOLDS an over-target ADD without the spread-cure ' 
     critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -930,6 +936,7 @@ async (t) => {
     critRow(CRIT_PARTITION_ID + '-r4', 'node-4'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -956,6 +963,7 @@ test('count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target n
     critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -993,6 +1001,7 @@ test('s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op
     orphanRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -1022,6 +1031,7 @@ test('s14 orphan census: a CATCHING-UP learner (status=creating) still counts, '
     {...critRow(CRIT_PARTITION_ID + '-r3', 'node-3'), raft_role: 'learner', status: 'creating'},
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -1047,6 +1057,7 @@ test('s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED â
     orphanRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });

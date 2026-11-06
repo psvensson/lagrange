@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2572,
+    "ordinary": 2573,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2598,
-  "digest": "fnv1a32-e1ef8bc9",
+  "censusSize": 2599,
+  "digest": "fnv1a32-f614910b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2020,6 +2020,7 @@
     "test/rebalancer/replica-placement-policy.property.test.js": "ordinary",
     "test/rebalancer/replica-retirement-terminal-actuals-coherence.test.js": "ordinary",
     "test/rebalancer/replica-status-completeness.property.test.js": "ordinary",
+    "test/rebalancer/required-entity-operation-observation.test.js": "ordinary",
     "test/rebalancer/reservation-expiry-operation-aware.test.js": "ordinary",
     "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js": "ordinary",
     "test/rebalancer/reservation-file-backed-restart.test.js": "ordinary",

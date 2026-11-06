@@ -185,3 +185,18 @@ test('explicit live callbacks preserve readiness and planning arguments', async 
   t.equal(createMockControlPlaneReadinessService().getNodeReadinessSync('absent')
     .dimensions.repairEligible, false, 'missing nodes are not implicitly approved');
 });
+
+test('constructed coordinator forwards the declared operation reader without adaptation', async (t) => {
+  const options = {visibilityReadMode: 'owner_rpc_required'};
+  const rows = [{operationId: 'op-reader'}];
+  const calls = [];
+  const coordinator = createMockCoordinator({readOperationsByEntity(...args) {
+    calls.push(args);
+    return rows;
+  }});
+  t.equal(await coordinator.getOperationsByEntity('partition', 'p1', options), rows);
+  t.same(calls[0].slice(0, 2), ['partition', 'p1']);
+  t.equal(calls[0][2], options, 'required-read options retain their identity');
+  t.same(await createMockCoordinator().getOperationsByEntity('partition', 'p1', options), [],
+    'the default explicitly models an empty ledger');
+});

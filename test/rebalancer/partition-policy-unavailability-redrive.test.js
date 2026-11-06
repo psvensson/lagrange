@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
-import {CONTROL_PLANE_READINESS_DIMENSION} from '../../src/control-plane/control-plane-readiness-constants.js';
 import {TablePolicyService} from '../../src/policy/table-policy-service.js';
 import {createMockCache, createMockCoordinator, createMockControlPlaneReadinessService, createTestRebalancer} from './test-helpers.js';
 
@@ -33,7 +32,10 @@ async function runFinitePolicyFault(disableRetryTrigger) {
       },
     }});
   const operations = [];
-  const coordinator = createMockCoordinator();
+  const readiness = createMockControlPlaneReadinessService({
+    systemTableCache: cache, now: () => clock.now(),
+  });
+  const coordinator = createMockCoordinator({controlPlaneReadinessService: readiness});
   const createOperation = coordinator.createOperation;
   coordinator.createOperation = async (move) => {
     operations.push(move);
@@ -43,13 +45,6 @@ async function runFinitePolicyFault(disableRetryTrigger) {
     checkAdd: async () => ({decision: 'allow'}),
     checkReplace: async () => ({decision: 'allow'}),
   };
-  const readiness = createMockControlPlaneReadinessService({systemTableCache: cache,
-    readinessByNodeId: Object.fromEntries([1, 2, 3].map((index) => [`node-${index}`, {
-      nodeId: `node-${index}`, dimensions: Object.fromEntries(
-        Object.values(CONTROL_PLANE_READINESS_DIMENSION).map((name) => [name, true])),
-    }])),
-  });
-  readiness.projectNodeLiveness = () => ({readyNow: true});
   const rebalancer = createTestRebalancer({entityId: PARTITION, nodeId: 'node-1',
     systemTableCache: cache, tablePolicyService: policyOwner,
     rebalanceCoordinator: coordinator, controlPlaneReadinessService: readiness,

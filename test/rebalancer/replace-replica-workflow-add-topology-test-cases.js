@@ -1,3 +1,4 @@
+import {createMockCache} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export async function registerReplaceReplicaWorkflowAddTopologyTests({
   t,
@@ -68,7 +69,12 @@ export async function registerReplaceReplicaWorkflowAddTopologyTests({
   await t.test('UnifiedRebalancer skips ADD scheduling when storage admission blocks it',
     async (t) => {
       const admissionCalls = [];
+      const cache = createMockCache({nodes: [
+        {node_id: 'node-1', status: 'active'},
+        {node_id: 'node-2', status: 'active'},
+      ]});
       const coordinator = createTestCoordinator({
+        systemTableCache: cache,
         storageAdmissionService: {
           async checkAdd(options) {
             admissionCalls.push(options);
@@ -86,12 +92,7 @@ export async function registerReplaceReplicaWorkflowAddTopologyTests({
       const rebalancer = createTestRebalancer({
         entityId: 'nodes-p1',
         rebalanceCoordinator: coordinator,
-        cacheData: {
-          nodes: [
-            {node_id: 'node-1', status: 'active'},
-            {node_id: 'node-2', status: 'active'},
-          ],
-        },
+        systemTableCache: cache,
       });
 
       try {

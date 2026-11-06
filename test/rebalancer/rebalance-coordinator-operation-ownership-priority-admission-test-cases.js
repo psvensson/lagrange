@@ -49,7 +49,8 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         enableTimeouts: false,
       });
       coordinator.initialize();
-      coordinator.repository.getOperationsByEntityAuthoritative = async () => [];
+      coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+        async () => coordinator.repository.buildEntityOperationVisibilityObservation([], null);
       coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 60_000;
       coordinator.workflowOwner.lastEmptyIncompleteOperationQueryAtMs = Date.now();
 

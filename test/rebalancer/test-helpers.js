@@ -577,7 +577,7 @@ function createMockSqlQueryEngine(options = {}) {
  * @return {Object} Mock coordinator.
  */
 function createMockCoordinator({controlPlaneReadinessService =
-createMockControlPlaneReadinessService()} = {}) {
+createMockControlPlaneReadinessService(), readOperationsByEntity = async () => []} = {}) {
   const storageAccountingService = {
     estimateReplicaBytes: () => 1,
   };
@@ -587,6 +587,11 @@ createMockControlPlaneReadinessService()} = {}) {
     checkSplit: async () => ({allowed: true, decisionType: 'admitted'}),
   };
   return {
+    // This controlled owner models an empty operation ledger unless the test
+    // supplies its entity reader. It is not a cache fallback or a real read.
+    getOperationsByEntity(entityType, entityId, options) {
+      return readOperationsByEntity(entityType, entityId, options);
+    },
     getMoveSafetyError: () => null,
     createOperation: async (move) => ({
       operationId: 'op-' + Date.now(),

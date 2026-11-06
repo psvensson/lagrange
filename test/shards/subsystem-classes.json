@@ -12,7 +12,7 @@
     "distributed-harness": 210,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 275,
+    "placement-rebalance": 276,
     "query-sql": 192,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2598,
-  "digest": "fnv1a32-a44ddd75",
+  "censusSize": 2599,
+  "digest": "fnv1a32-df37584a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-95f9d290",
+  "observationDigest": "fnv1a32-651bb4be",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2040,6 +2040,7 @@
     "test/rebalancer/replica-placement-policy.property.test.js": "placement-rebalance",
     "test/rebalancer/replica-retirement-terminal-actuals-coherence.test.js": "placement-rebalance",
     "test/rebalancer/replica-status-completeness.property.test.js": "placement-rebalance",
+    "test/rebalancer/required-entity-operation-observation.test.js": "placement-rebalance",
     "test/rebalancer/reservation-expiry-operation-aware.test.js": "placement-rebalance",
     "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js": "placement-rebalance",
     "test/rebalancer/reservation-file-backed-restart.test.js": "placement-rebalance",
@@ -16175,6 +16176,7 @@
     "test/rebalancer/rebalance-coordinator-operation-ownership.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/replica-operation-repository.js",
         "src/workflow/durable-workflow-coordinator.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
@@ -16605,6 +16607,13 @@
         "src/bootstrap/system-table-schemas-constants.js"
       ]
     },
+    "test/rebalancer/required-entity-operation-observation.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/replica-operation-repository-constants.js",
+        "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
     "test/rebalancer/reservation-expiry-operation-aware.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -16820,7 +16829,6 @@
     "test/rebalancer/unified-rebalancer-affinity-policy-refetch-parity.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
-        "src/control-plane/control-plane-readiness-constants.js",
         "src/rebalancer/placement-owner-constants.js"
       ]
     },

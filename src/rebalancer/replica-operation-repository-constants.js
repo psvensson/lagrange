@@ -1,4 +1,9 @@
+const REPLICA_OPERATION_REPOSITORY_ERROR_CODE = Object.freeze({
+  ENTITY_OPERATION_OBSERVATION_MALFORMED: 'entity_operation_observation_malformed',
+});
+
 const REPLICA_OPERATION_REPOSITORY_ERROR_MSG = Object.freeze({
+  ENTITY_OPERATION_OBSERVATION_MALFORMED: 'Required entity operation observation is malformed',
   TERMINAL_FAILED_CREATE_CLEANUP_RECOVERY_READ_UNAVAILABLE:
     'Terminal failed-create cleanup recovery read unavailable',
 });
@@ -22,5 +27,6 @@ const REPLICA_OPERATION_INSERT_SQL = `INSERT INTO replica_operations (
 
 export {
   REPLICA_OPERATION_INSERT_SQL,
+  REPLICA_OPERATION_REPOSITORY_ERROR_CODE,
   REPLICA_OPERATION_REPOSITORY_ERROR_MSG,
 };

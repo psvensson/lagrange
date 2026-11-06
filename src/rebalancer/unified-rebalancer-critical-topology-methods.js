@@ -375,12 +375,6 @@ async function revalidateEndpointVisibilityBlocker(rebalancer, blocker) {
 }
 
 async function revalidateInFlightTopologyBlocker(rebalancer, blocker) {
-  if (
-    typeof rebalancer.rebalanceCoordinator?.getOperationsByEntity !==
-      'function'
-  ) {
-    return blocker;
-  }
   let entityOperations;
   try {
     entityOperations =
@@ -392,6 +386,9 @@ async function revalidateInFlightTopologyBlocker(rebalancer, blocker) {
             REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
         },
       );
+    if (!Array.isArray(entityOperations)) {
+      throw new TypeError(CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.UNAVAILABLE);
+    }
   } catch (error) {
     warnTopologyRevalidationFailure(rebalancer, blocker, error);
     return Object.freeze({

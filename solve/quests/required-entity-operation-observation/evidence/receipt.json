@@ -1,0 +1,27 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "required-entity-operation-observation",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "canonical-required-observation",
+      "passed": false,
+      "detail": "Independent design and controlled real-owner red witness retained; implementation and frozen proof pending."
+    },
+    {
+      "id": "inventory-and-identity-custody",
+      "passed": false,
+      "detail": "Independent design and controlled real-owner red witness retained; implementation and frozen proof pending."
+    },
+    {
+      "id": "bounded-pressure-and-recovery",
+      "passed": false,
+      "detail": "Independent design and controlled real-owner red witness retained; implementation and frozen proof pending."
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "detail": "Independent design and controlled real-owner red witness retained; implementation and frozen proof pending."
+    }
+  ]
+}
