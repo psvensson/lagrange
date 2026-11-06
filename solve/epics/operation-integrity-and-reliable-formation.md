@@ -20,6 +20,7 @@ quests:
   - replica-admission-from-committed-operation
   - dynamic-config-startup-owned-initialization
   - explicit-single-replica-partition-configuration
+  - parallel-query-read-authority-propagation
 authorizes:
   - src
   - test
@@ -123,6 +124,28 @@ node within preregistered bounds.
   historical H1 investigation; the current reviewer is checking retained
   owner diagnostics. Three future green runs alone cannot supply that causal
   observation. This does not change any physical acceptance predicate.
+- E8 on frozen `1bbbe17dcec3db9c93eb846e9d70f36c0d8d7bf2` passed all
+  30 focused/process-isolated files on tv-dator (2,326 reported assertions)
+  and received exact-candidate independent approval. Later fixture and
+  diagnostic changes require a new frozen verification; this result is not
+  current-candidate or whole-corpus acceptance. Two additional public fixtures
+  on `5d678fca9c22ff4bf10b0a04e93928246d58111e` passed with explicit RF1
+  (transaction facade: 58 assertions; consumer contract: 123 assertions).
+  The new default-RF3 fixture observed the specific provisioning refusal and
+  retained RF3, then timed out on a follow-on INSERT; that failed attempt is
+  preserved and is not counted as a passing file.
+- Three bounded historical H1 attempts remain unadmitted. The first used a
+  different seed placement; the next two used the original tv-dator/Adam/
+  adams-gamla placement. The admin log feed missed native refusal events;
+  the corrected container-stdout observer captured them. The original SQL
+  shape still used a local-cache shortcut. A corrected routed DISTINCT read
+  returned rows but no authority witness because the existing parallel-query
+  success mapper dropped that field. The bounded diagnostic prerequisite
+  `parallel-query-read-authority-propagation` forwards the serving owner's
+  supplied evidence through ordinary and speculative success. It does not
+  change formation decisions or retroactively admit unwitnessed observations.
+  Historical diagnostic runs are separate from E9's untouched physical gate;
+  no current-candidate E9 run has yet been submitted.
 
 ## Approved user-visible contract
 

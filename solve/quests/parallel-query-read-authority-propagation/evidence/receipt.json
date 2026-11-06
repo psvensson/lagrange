@@ -1,0 +1,12 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "ordinary-success-propagation", "passed": false},
+    {"id": "speculative-success-propagation", "passed": false},
+    {"id": "absence-preserved", "passed": false},
+    {"id": "independent-verification", "passed": false}
+  ],
+  "evidence": [],
+  "applicability": "Bounded diagnostic propagation repair. The existing success mapper drops a supplied remote read witness at 5d678fca9c22ff4bf10b0a04e93928246d58111e; historical H1 observations remain unconfirmed."
+}

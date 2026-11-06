@@ -1,8 +1,12 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ParallelQueryCoordinator} from '../../src/query/distributed/parallel-query-coordinator.js';
-import {QueryExecutionMetrics} from '../../src/query/distributed/parallel-query-execution-metrics.js';
+import {PartitionQueryMetrics, QueryExecutionMetrics} from '../../src/query/distributed/parallel-query-execution-metrics.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {CancellationToken} from '../../src/query/cancellation-token.js';
+import {PARTITION_SERVICE_REMOTE_QUERY_METHODS} from
+  '../../src/partition/partition-service-remote-query-methods.js';
+import {resolvePartitionExecutionBuilders} from
+  '../../src/query/query-executor-partition-request-builders.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -23,6 +27,73 @@ function createMockSystemCache(partitions) {
       return null;
     },
   };
+}
+
+for (const hasWitness of [true, false]) {
+  test(`parallel reads preserve ${hasWitness ? 'supplied' : 'absent'} authority`,
+    async (t) => {
+      const partitionId = 'services-p1';
+      const sql = 'SELECT DISTINCT service_id AS learner_service_id ' +
+        'FROM services WHERE service_id = ? AND service_id IS NOT NULL';
+      const witness = PARTITION_SERVICE_REMOTE_QUERY_METHODS
+        .buildRemoteReadAuthorityWitness.call({
+          partitionId,
+          nodeId: 'serving-node',
+          replicaId: 'services-p1-r1',
+          role: 'leader',
+          raft: {readStatus: () => ({term: 7})},
+          timeSource: {now: () => 12345},
+        }, false);
+      t.equal(witness.state, 'observed', 'remote owner supplies the witness');
+      const response = {success: true, rows: [{learner_service_id: 'learner'}]};
+      if (hasWitness) response.readAuthorityWitness = witness;
+      const expected = hasWitness ? witness : undefined;
+      const {buildSuccessResult} = resolvePartitionExecutionBuilders({
+        partitionId, sql, params: ['learner'],
+      });
+      const raw = buildSuccessResult(response);
+      t.same(raw.readAuthorityWitness, expected,
+        'request owner preserves the controlled remote answer');
+      let calls = 0;
+      const coordinator = new ParallelQueryCoordinator({
+        partitionQueryExecutor: async () => {
+          calls++;
+          return raw;
+        },
+      });
+      const primary = await coordinator.executeParallel(
+        sql, [partitionId], ['learner'], {forRead: true, timeoutMs: 1000});
+      t.equal(calls, 1, 'ordinary fan-out executes the partition once');
+      t.same(primary.results[0].rows, response.rows, 'rows are retained');
+      t.same(primary.results[0].readAuthorityWitness, expected,
+        'ordinary completion preserves supplied evidence or its absence');
+
+      const metrics = new QueryExecutionMetrics('authority-hedge', 1);
+      const results = new Map();
+      const pendingPartitions = new Set([partitionId]);
+      const accept = (result) => {
+        const speculativeMetrics = new PartitionQueryMetrics(partitionId);
+        speculativeMetrics.start();
+        coordinator.acceptSpeculativeResult({
+          partitionId, result, speculativeMetrics, metrics,
+          results, pendingPartitions,
+        });
+      };
+      accept(raw);
+      const accepted = results.get(partitionId);
+      t.equal(pendingPartitions.size, 0, 'successful hedge completes partition');
+      t.same(accepted.rows, response.rows, 'winning hedge retains its rows');
+      t.same(accepted.readAuthorityWitness, expected,
+        'winning hedge preserves supplied evidence or its absence');
+      accept({...raw,
+        readAuthorityWitness: {...witness, servingNodeId: 'losing-node'}});
+      t.equal(results.get(partitionId), accepted,
+        'late losing hedge cannot replace the accepted answer');
+      accept({success: false, error: 'controlled refusal',
+        readAuthorityWitness: witness});
+      t.equal(results.get(partitionId), accepted,
+        'failed hedge cannot replace the accepted answer');
+    });
 }
 
 test('ParallelQueryCoordinator - chunk scheduling executes all partitions', async (t) => {

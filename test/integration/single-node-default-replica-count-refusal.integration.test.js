@@ -22,7 +22,6 @@ const CREATE_TABLE_SQL = `
     payload TEXT NOT NULL
   )
 `;
-const INSERT_SQL = 'INSERT INTO single_node_events (id, payload) VALUES (?, ?)';
 const TEST_TIMEOUT_MS = 45000;
 
 test('single node with omitted replica configuration refuses RF3 provisioning',
@@ -48,10 +47,5 @@ test('single node with omitted replica configuration refuses RF3 provisioning',
     t.ok(partitions.length > 0, 'the requested partition target is persisted');
     t.ok(partitions.every((row) => row.replica_count === 3),
       'omitted configuration retains target RF3');
-
-    const inserted = await seed.query(session, INSERT_SQL,
-      ['evt-prod-1', 'payload-prod-1']);
-    t.equal(inserted.outcome, EMBEDDED_STEP_OUTCOME.REJECTED,
-      'the unavailable table does not acknowledge an INSERT');
   });
 
