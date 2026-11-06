@@ -1,0 +1,10 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "committed-readiness-fixture-custody",
+  "status": "fail",
+  "receipts": [
+    {"id": "single-construction-and-caller-custody", "passed": false, "detail": "Frozen supplied readiness ports fail in the injector on both 205b5683f and 4024a23e7."},
+    {"id": "committed-evidence-fixture-regressions", "passed": false, "detail": "Affected fixtures omit committed answers or expect superseded projection/lease decisions."},
+    {"id": "independent-verification", "passed": false, "detail": "Design reviewed; implementation and frozen proof pending."}
+  ]
+}

@@ -22,7 +22,7 @@ const OPERATIONS = [
   {kind: 'config', existing: true, method: 'PUT', url: '/api/admin/config/' + CONFIG_KEY,
     payload: {value: 'warn'}, prefix: 'CONFIG_MUTATION'},
   {kind: 'policy', method: 'PATCH', url: '/api/admin/tables/' + TABLE_ID + '/policy',
-    payload: {policy: {replicaCount: 3}}, prefix: 'TABLE_POLICY_MUTATION'},
+    payload: {policy: {splitTrafficThreshold: 123}}, prefix: 'TABLE_POLICY_MUTATION'},
 ];
 
 function fixture(t, operation, initialResult) {
@@ -67,7 +67,7 @@ function fixture(t, operation, initialResult) {
       result = answer;
     },
     callOwner: () => operation.kind === 'config' ? config.set(CONFIG_KEY, 'warn') :
-      policy.updateTablePolicy(TABLE_ID, {replicaCount: 3})};
+      policy.updateTablePolicy(TABLE_ID, {splitTrafficThreshold: 123})};
 }
 
 function assertNoPublication(t, f) {
@@ -119,7 +119,7 @@ test('confirmed single-row insert/update publishes once and clears prior deferra
     } else {
       t.equal(f.policy.policyCache.has(TABLE_ID), false);
       t.equal(f.events.length, 1);
-      t.equal(response.json().policy.replicaCount, 3);
+      t.equal(response.json().policy.splitTrafficThreshold, 123);
     }
   }
 });

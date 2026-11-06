@@ -1,4 +1,5 @@
-import {mkdir, readFile, rename, writeFile} from 'node:fs/promises';
+import {mkdir, readFile, rename, rm, writeFile} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
 import {dirname, join} from 'node:path';
 import {homedir} from 'node:os';
 
@@ -63,10 +64,14 @@ export async function loadState({allowMissing = true} = {}) {
 export async function saveState(state) {
   const path = statePath();
   await mkdir(dirname(path), {recursive: true});
-  const temporaryPath = `${path}.tmp-${process.pid}`;
+  const temporaryPath = `${path}.tmp-${process.pid}-${randomUUID()}`;
   const content = `${JSON.stringify(state, null, JSON_INDENT)}\n`;
-  await writeFile(temporaryPath, content, {mode: INVENTORY_FILE_MODE});
-  await rename(temporaryPath, path);
+  try {
+    await writeFile(temporaryPath, content, {mode: INVENTORY_FILE_MODE});
+    await rename(temporaryPath, path);
+  } finally {
+    await rm(temporaryPath, {force: true});
+  }
   return path;
 }
 

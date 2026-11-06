@@ -24,6 +24,7 @@ import {
   recordFleet, runLabTest, runPlacedTestFiles,
 } from '../../scripts/lab/probe.js';
 import * as selector from '../../scripts/select-change-tests.js';
+import {createEmptyState, loadState, saveState} from '../../scripts/lab/state.js';
 
 // What this process was started with; every scratch lab home restores it.
 const ORIGINAL_LAB_HOME = process.env.LAGRANGE_LAB_HOME;
@@ -458,6 +459,24 @@ function scratchLabHome(t, inventory = null) {
   process.env.LAGRANGE_LAB_HOME = home;
   return home;
 }
+
+test('concurrent inventory saves in one process publish whole snapshots without temporary-file collisions', async (t) => {
+  const home = scratchLabHome(t);
+  const states = Array.from({length: 32}, (_unused, index) => ({
+    ...createEmptyState(),
+    controller: {revision: index, marker: `snapshot-${index}-`.repeat(128)},
+  }));
+  const results = await Promise.allSettled(states.map((state) => saveState(state)));
+  assert.deepEqual(results.filter((result) => result.status === 'rejected'), [],
+    'every concurrent writer must finish its own atomic replacement');
+  const observed = await loadState({allowMissing: false});
+  assert.deepEqual(observed, states[observed.controller.revision],
+    'last completed replacement is one complete submitted snapshot, not merged or torn bytes');
+  assert.deepEqual(fs.readdirSync(home), ['inventory.json'], 'writers leave no temporary files');
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(path.join(home, 'inventory.json')).mode & 0o777, 0o600);
+  }
+});
 
 const UNREADABLE_SHA = 'f'.repeat(40);
 const HOUR_COSTS = (files) => files.map((file) => ({file, ms: 60 * 60 * 1000, jobs: 1}));

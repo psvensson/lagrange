@@ -24,6 +24,7 @@ quests:
   - admin-diagnostic-owner-consolidation
   - replica-create-timeout-replay-custody
   - partition-placement-declared-target
+  - committed-readiness-fixture-custody
 authorizes:
   - src
   - test

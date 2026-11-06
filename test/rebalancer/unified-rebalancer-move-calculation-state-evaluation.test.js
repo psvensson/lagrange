@@ -693,7 +693,7 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
       {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.FAILED},
     ];
 
-    const policy = {minReplicaCount: 3};
+    const policy = {targetReplicaCount: 3, minReplicaCount: 3};
 
     t.equal(rebalancer.isCriticalState(replicas, policy), true);
   });
