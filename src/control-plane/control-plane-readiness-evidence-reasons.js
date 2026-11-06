@@ -449,11 +449,10 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
         reason: MISSING_NODE_READINESS_REASON.PROCESS_NOT_ALIVE,
       });
     }
-    // Missing-row self grace must admit the same local control-plane service
-    // evidence shapes that the canonical serveEligible model already treats as
-    // cache-lag-safe. Otherwise a temporary cache gap on both the node row and
-    // service rows synthesizes node_row_missing before the dimension model can
-    // classify the live local runtime state.
+    // Missing-row self grace requires live local control-plane service
+    // evidence (an active addressed message_group row in serviceRows, from
+    // cache or authoritative SERVICES refresh). Without service evidence,
+    // missing node and service rows fail closed rather than claiming grace.
     if (!this.hasServeEligibleControlPlaneService(serviceRows)) {
       return Object.freeze({
         state: MISSING_NODE_READINESS_STATE.FAIL_CLOSED,

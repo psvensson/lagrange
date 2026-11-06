@@ -1,0 +1,27 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "readiness-self-grace-service-evidence-contract",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "missing-both-rows-fails-closed-after-authoritative-refresh",
+      "passed": false,
+      "detail": "Subtest 7 in test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js is red on ad0d64de8cfc06b574b0589f33985d4be1f3a4d0; implementation and frozen proof pending."
+    },
+    {
+      "id": "authoritative-service-refresh-restores-self-runtime-grace",
+      "passed": false,
+      "detail": "Positive authoritative SERVICES refresh companion witness and frozen proof pending."
+    },
+    {
+      "id": "r09-supersession-and-comment-aligned",
+      "passed": false,
+      "detail": "R09 supersession in architecture/readiness-and-owner-contracts.md and comment repair in src/control-plane/control-plane-readiness-evidence-reasons.js pending."
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "detail": "Independent implementation and frozen committed-tree verification pending."
+    }
+  ]
+}

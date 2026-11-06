@@ -32,6 +32,7 @@ quests:
   - readiness-bulk-required-domain
   - readiness-direct-publication-planning-identity
   - readiness-direct-publication-planning-custody
+  - readiness-self-grace-service-evidence-contract
   - strict-hydration-fixture-owner-ports
   - tap-default-machine-factor-portability
 authorizes:
@@ -259,9 +260,12 @@ The unchanged predecessor has three inherited readiness callers red: two
 planning identity/build-cost witnesses and the missing-both-rows self-grace
 fixture. Planning custody now reduces whole-rig builds from 685 to 565 while
 preserving the 1,020 observed readiness results, and its corrected two-file
-proof passes 31 reported assertions; committed frozen proof and receipt
-admission remain pending. The separate self-grace failure
-remains open, with no predecessor-red waiver. The existing
+proof passes 31 reported assertions; committed `ad0d64de` and its first-attempt
+Lenovo frozen proof (2 files/31 assertions) are approved by `5e8512cf`. The
+missing-both-rows self-grace contract (`readiness-self-grace-service-evidence-contract`)
+is now independently reviewed and brings the 28-file readiness caller suite to
+28/28 passing (2,738 reported assertions); committed frozen proof and receipt
+admission remain pending. The existing
 semantic owner now distinguishes invalid lease data from explicit clearing;
 committed node authority supplies floor credit and the existing retained owner
 subscribes to meaningful committed changes. The bounded real-owner witness

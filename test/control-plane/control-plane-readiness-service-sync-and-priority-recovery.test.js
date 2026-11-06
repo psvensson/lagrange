@@ -461,79 +461,85 @@ async (t) => {
   t.end();
 });
 
-test('ControlPlaneReadinessService keeps self runtime grace when the ' +
-  'local node row and control-plane service rows are both missing',
+test('ControlPlaneReadinessService fails closed when the local node row and ' +
+  'control-plane service rows both remain missing after refresh, and ' +
+  'restores self runtime grace when authoritative SERVICES supplies them',
 async (t) => {
+  // R09 supersession (architecture/readiness-and-owner-contracts.md, quest
+  // readiness-self-grace-service-evidence-contract, commit e4d0f3294f).
+  const buildService = (nodeId, executeAuthoritativeSystemTableRead) => {
+    const cache = createCache({nodes: [], services: []});
+    return new ControlPlaneReadinessService({
+      nodeId,
+      systemTableCache: cache,
+      cacheMutationTarget: cache,
+      messageRouter: {
+        getConnectionState: () => STATE.READY,
+        getQueryDataPlaneTransportReadiness: () => ({
+          ready: true, reason: null, retryAfterMs: null,
+        }),
+      },
+      nodeLifecycleStateMachine: {getState: () => SERVICE_STATUS.ACTIVE},
+      storageAccountingService: createAccountingService({
+        [nodeId]: {nodeId, budgetBytes: 1000, pressureState: 'normal'},
+      }),
+      cdcIntegrationService: {executeAuthoritativeSystemTableRead},
+      cdcGroupPropagationService: createPublicationService({
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: '2026-03-04T00:00:00.000Z',
+        recentTransitions: [],
+      }),
+      now: () => 1500,
+    });
+  };
+  const readOpts = {
+    allowAuthoritativeRefresh: true,
+    requireFreshOnIneligible: true,
+    decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+  };
   const nodeId = 'node-self-missing-row-no-services';
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
-    nodeId,
-    systemTableCache: createCache({
-      nodes: [],
-      services: [],
-    }),
-    cacheMutationTarget: createCache({
-      nodes: [],
-      services: [],
-    }),
-    messageRouter: {
-      getConnectionState() {
-        return STATE.READY;
-      },
-    },
-    nodeLifecycleStateMachine: {
-      getState() {
-        return SERVICE_STATUS.ACTIVE;
-      },
-    },
-    storageAccountingService: createAccountingService({
-      [nodeId]: {
-        nodeId,
-        budgetBytes: 1000,
-        pressureState: 'normal',
-      },
-    }),
-    cdcIntegrationService: {
-      async executeAuthoritativeSystemTableRead(tableName) {
-        authoritativeReads.push(tableName);
-        return {
-          success: false,
-          rows: [],
-        };
-      },
-    },
-    cdcGroupPropagationService: createPublicationService({
-      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
-      reasonCode: null,
-      enteredAt: '2026-03-04T00:00:00.000Z',
-      recentTransitions: [],
-    }),
-    now: () => 1500,
+  const readinessService = buildService(nodeId, async (tableName) => {
+    authoritativeReads.push(tableName);
+    return {success: false, rows: []};
   });
+  const readiness = await readinessService.getNodeReadiness(nodeId, readOpts);
+  const reasonCodes = readiness.reasons.map((reason) => reason.code);
+  t.equal(readiness.dimensions.clusterMemberHealthy, false);
+  t.equal(readiness.dimensions.controlPlaneWritable, false);
+  t.equal(readiness.dimensions.repairEligible, false);
+  t.equal(readiness.dimensions.serveEligible, false);
+  t.ok(reasonCodes.includes(CONTROL_PLANE_READINESS_REASON.NODE_ROW_MISSING));
+  t.same(authoritativeReads, [TABLES.NODES, TABLES.SERVICES]);
 
-  const readiness = await readinessService.getNodeReadiness(
-    nodeId,
-    {
-      allowAuthoritativeRefresh: true,
-      requireFreshOnIneligible: true,
-      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+  const refreshedNodeId = 'node-self-missing-row-repaired-services';
+  const refreshedReads = [];
+  const refreshedReadinessService = buildService(
+    refreshedNodeId,
+    async (tableName) => {
+      refreshedReads.push(tableName);
+      return {
+        success: true,
+        rows: tableName === TABLES.SERVICES ?
+          [createMessageGroupService(refreshedNodeId)] : [],
+      };
     },
   );
-  const reasonCodes = readiness.reasons.map((reason) => reason.code);
-
-  t.equal(readiness.dimensions.clusterMemberHealthy, true,
-    'self runtime grace should keep cluster-member health open through ' +
-    'node-row and service-row cache lag');
-  t.equal(readiness.dimensions.controlPlaneWritable, true,
-    'self runtime grace should keep control-plane writes open when local ' +
-    'service rows have not propagated yet');
-  t.equal(readiness.dimensions.serveEligible, false,
-    'serving follows the committed answer, not a self runtime grace');
-  t.notOk(reasonCodes.includes(CONTROL_PLANE_READINESS_REASON.NODE_ROW_MISSING),
-    'the missing-row grace path should not synthesize node_row_missing ' +
-    'when local cache service evidence is also absent');
-  t.same(authoritativeReads, [],
-    'local self-node grace should not force authoritative repair reads');
+  const refreshedReadiness = await refreshedReadinessService.getNodeReadiness(
+    refreshedNodeId, readOpts,
+  );
+  const refreshedReasonCodes = refreshedReadiness.reasons.map((r) => r.code);
+  t.same(refreshedReads, [TABLES.NODES, TABLES.SERVICES]);
+  t.equal(refreshedReadiness.dimensions.clusterMemberHealthy, true);
+  t.equal(refreshedReadiness.dimensions.controlPlaneWritable, true);
+  t.equal(refreshedReadiness.dimensions.repairEligible, true);
+  t.equal(refreshedReadiness.dimensions.serveEligible, false);
+  t.notOk(
+    refreshedReasonCodes.includes(
+      CONTROL_PLANE_READINESS_REASON.NODE_ROW_MISSING,
+    ),
+  );
   t.end();
 });
 
