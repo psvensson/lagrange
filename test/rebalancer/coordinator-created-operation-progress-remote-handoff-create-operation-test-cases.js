@@ -258,7 +258,9 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           return buildDeliveryEnvelope({acknowledged: true});
         },
       },
-      controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+      controlPlaneReadinessService: createMockControlPlaneReadinessService({
+        defaultRepairEligible: true,
+      }),
       transactionCoordinator: createMockTransactionCoordinator(),
       setTimeoutFn(fn, delayMs) {
         const handle = {fn, delayMs};
@@ -445,7 +447,9 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           return buildDeliveryEnvelope({acknowledged: true});
         },
       },
-      controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+      controlPlaneReadinessService: createMockControlPlaneReadinessService({
+        defaultRepairEligible: true,
+      }),
       transactionCoordinator: createMockTransactionCoordinator(),
       setTimeoutFn(fn, delayMs) {
         const handle = {fn, delayMs};
@@ -631,7 +635,9 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           return buildDeliveryEnvelope({acknowledged: true});
         },
       },
-      controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+      controlPlaneReadinessService: createMockControlPlaneReadinessService({
+        defaultRepairEligible: true,
+      }),
       transactionCoordinator: createMockTransactionCoordinator(),
       setTimeoutFn(fn, delayMs) {
         const handle = {fn, delayMs};

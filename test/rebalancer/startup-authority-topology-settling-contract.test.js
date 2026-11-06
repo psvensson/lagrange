@@ -1,3 +1,4 @@
+import {createMockControlPlaneReadinessService} from './test-helpers.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   UnifiedRebalancer,
@@ -5,9 +6,6 @@ import {
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
 import {withRegisteredIncarnations} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 
@@ -40,6 +38,7 @@ function createNodeRow(nodeId, readyLeaseOffsetMs) {
   return {
     node_id: nodeId,
     status: 'active',
+    connection_state: 'ready',
     ready_lease_expires_at: Date.now() + readyLeaseOffsetMs,
   };
 }
@@ -103,30 +102,7 @@ function createCache() {
 }
 
 function createReadinessService(cache) {
-  return {
-    getNodeReadinessSync(nodeId) {
-      const nodeRow = cache.get('nodes', nodeId);
-      const ready =
-        nodeRow !== null &&
-        Number(nodeRow.ready_lease_expires_at) > Date.now() &&
-        nodeRow.status === 'active';
-      return {
-        nodeId,
-        dimensions: {
-          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: ready,
-          [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: ready,
-          [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: ready,
-          [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: ready,
-          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: ready,
-          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: ready,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: ready,
-          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: ready,
-        },
-        reasons: [],
-      };
-    },
+  return createMockControlPlaneReadinessService({systemTableCache: cache, callbacks: {
     getStartupAuthoritySnapshotSync() {
       return {
         authorityAvailable: true,
@@ -137,7 +113,7 @@ function createReadinessService(cache) {
         ],
       };
     },
-  };
+  }});
 }
 
 function createRebalancer() {

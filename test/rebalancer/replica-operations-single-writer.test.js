@@ -213,7 +213,9 @@ function createTestCoordinator(options = {}) {
     executorOutcomeEmitter: emitter,
     transactionCoordinator:
       transactionCoordinator || createMockTransactionCoordinator(),
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     enableTimeouts: false,
   });
   coordinator.initialize();

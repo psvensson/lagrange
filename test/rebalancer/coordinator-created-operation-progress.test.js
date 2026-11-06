@@ -70,7 +70,9 @@ test('armCoordinatorCreatedOperation immediately dispatches locally owned ' +
         };
       },
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
   });
@@ -285,7 +287,9 @@ async (t) => {
         return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
   });
@@ -513,7 +517,9 @@ test('createOperation defers retryable participant-pressure failures and ' +
         return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     setTimeoutFn(fn, delayMs) {
       const handle = {fn, delayMs};
@@ -736,7 +742,9 @@ test('dispatchOperation defers priority claim misses when durable ' +
         return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     setTimeoutFn(fn, delayMs) {
       const handle = {fn, delayMs};
@@ -895,7 +903,9 @@ test('dispatchOperationInternal executes the claimed operation snapshot ' +
         return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
   });
@@ -1040,7 +1050,9 @@ test('dispatchOperationInternal rehydrates REPLACE source replica metadata ' +
         return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
   });
@@ -1216,7 +1228,9 @@ async (t) => {
         return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     setTimeoutFn(fn, delayMs) {
       const handle = {fn, delayMs};

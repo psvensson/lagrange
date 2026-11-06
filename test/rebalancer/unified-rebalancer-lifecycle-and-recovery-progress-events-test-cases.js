@@ -7,7 +7,7 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
     createMockCoordinator,
     createMockMessageRouter,
     createMockPolicyService,
-    createMockReadinessService,
+    createMockControlPlaneReadinessService,
     createTestRebalancer,
     EntityType,
     initializeTestEnvironment,
@@ -415,7 +415,7 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
         const coordinator = createEventedMockCoordinator();
         const membershipPublicationReconcileCalls = [];
         const controlPlaneReadinessService = {
-          ...createMockReadinessService(createMockCache()),
+          ...createMockControlPlaneReadinessService({systemTableCache: createMockCache()}),
           membershipPublicationService: {
             enqueueClusterMembershipReconcile(reason, context) {
               membershipPublicationReconcileCalls.push({reason, context});
@@ -479,7 +479,7 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
         const replacementCoordinator = createEventedMockCoordinator();
         const membershipPublicationReconcileCalls = [];
         const controlPlaneReadinessService = {
-          ...createMockReadinessService(createMockCache()),
+          ...createMockControlPlaneReadinessService({systemTableCache: createMockCache()}),
           membershipPublicationService: {
             enqueueClusterMembershipReconcile(reason, context) {
               membershipPublicationReconcileCalls.push({reason, context});
@@ -560,7 +560,7 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
         const membershipPublicationReconcileCalls = [];
         const rebalanceReasons = [];
         const controlPlaneReadinessService = {
-          ...createMockReadinessService(createMockCache()),
+          ...createMockControlPlaneReadinessService({systemTableCache: createMockCache()}),
           membershipPublicationService: {
             enqueueClusterMembershipReconcile(reason, context) {
               membershipPublicationReconcileCalls.push({reason, context});
@@ -618,7 +618,7 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
         const membershipPublicationReconcileCalls = [];
         const rebalanceReasons = [];
         const controlPlaneReadinessService = {
-          ...createMockReadinessService(createMockCache()),
+          ...createMockControlPlaneReadinessService({systemTableCache: createMockCache()}),
           membershipPublicationService: {
             enqueueClusterMembershipReconcile(reason, context) {
               membershipPublicationReconcileCalls.push({reason, context});
@@ -706,7 +706,7 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
         const membershipPublicationReconcileCalls = [];
         const rebalanceReasons = [];
         const controlPlaneReadinessService = {
-          ...createMockReadinessService(systemTableCache),
+          ...createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
           membershipPublicationService: {
             enqueueClusterMembershipReconcile(reason, context) {
               membershipPublicationReconcileCalls.push({reason, context});

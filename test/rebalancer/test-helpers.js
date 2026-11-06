@@ -1,3 +1,4 @@
+import {projectNodeLivenessSemantics} from '../../src/control-plane/node-liveness-semantic-projection.js';
 import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 /**
  * Shared test helpers for rebalancer tests.
@@ -272,140 +273,61 @@ function createMockCache(options = {}) {
   };
 }
 
-function isNodeRepairEligible(node) {
-  if (!node || typeof node !== 'object') {
-    return false;
-  }
-  if (typeof node.repair_eligible === 'boolean') {
-    return node.repair_eligible;
-  }
-
-  const status = typeof node.status === 'string' ?
-    node.status.toLowerCase() : 'active';
-  const connectionState = typeof node.connection_state === 'string' ?
-    node.connection_state.toLowerCase() : 'ready';
-  const readyLeaseExpiresAt = typeof node.ready_lease_expires_at === 'number' ?
-    node.ready_lease_expires_at :
-    Date.now() + 10000;
-
-  if (status === 'failed' || status === 'stopped' || status === 'shutting_down') {
-    return false;
-  }
-  if (connectionState !== 'ready') {
-    return false;
-  }
-  return readyLeaseExpiresAt > Date.now();
-}
-
-function withFixtureCommittedNodes(readinessService, systemTableCache) {
-  if (!readinessService || typeof readinessService !== 'object') {
-    return readinessService;
-  }
-  if (systemTableCache) {
-    readinessService.fixtureSystemTableCache = systemTableCache;
-  }
-  if (typeof readinessService.answerCommittedNodes !== 'function') {
-    readinessService.answerCommittedNodes = () => {
-      const activeCache =
-        readinessService.fixtureSystemTableCache || systemTableCache;
-      return {
-        state: 'ready',
-        epoch: {
-          publicationEpoch: 1,
-          publicationId: 'cluster_membership-1',
-          readAtMs: 0,
-        },
-        nodeRows:
-          typeof activeCache?.filter === 'function' ?
-            activeCache.filter(SYSTEM_TABLE_NAME.NODES, () => true) :
-            typeof activeCache?.getAll === 'function' ?
-              activeCache.getAll(SYSTEM_TABLE_NAME.NODES) :
-              [],
-      };
-    };
-  }
-  return readinessService;
-}
-
+/**
+ * Construct a controlled readiness port over one declared fixture world.
+ * The node rows stand in for a committed reader; this does not execute consensus.
+ * Explicit callbacks model scenario answers. Caller-owned ports are never adapted.
+ */
 function createMockControlPlaneReadinessService(options = {}) {
   const {
     systemTableCache = null,
-    defaultRepairEligible = true,
+    readNodeRows = () => systemTableCache?.getAll(SYSTEM_TABLE_NAME.NODES) ?? [],
+    now = () => Date.now(),
+    defaultRepairEligible = false,
     readinessByNodeId = {},
     livenessProjectionByNodeId = null,
     membershipPublicationPlanningSnapshot = null,
+    callbacks = {},
   } = options;
-
-  return withFixtureCommittedNodes({
-    ...(livenessProjectionByNodeId &&
-      typeof livenessProjectionByNodeId === 'object' ? {
-        projectNodeLiveness(nodeId) {
-          return livenessProjectionByNodeId[nodeId] || null;
-        },
-      } : {}),
-    getNodeReadinessSync(nodeId) {
-      const explicit = readinessByNodeId[nodeId];
-      if (explicit) {
-        return explicit;
-      }
-
-      const activeCache = this.fixtureSystemTableCache || systemTableCache;
-      const nodeRow = activeCache &&
-        typeof activeCache.get === 'function' ?
-        activeCache.get(SYSTEM_TABLE_NAME.NODES, nodeId) :
-        null;
-      const repairEligible = nodeRow ?
-        isNodeRepairEligible(nodeRow) :
-        defaultRepairEligible;
-      const dimensions = {
-        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: repairEligible,
-        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: repairEligible,
+  const project = (nodeRow) => projectNodeLivenessSemantics({nodeRow, nowMs: now()}).projection;
+  const port = {
+    answerCommittedNodes() {
+      return {
+        state: 'ready',
+        epoch: {publicationEpoch: 1, publicationId: 'cluster_membership-1', readAtMs: now()},
+        nodeRows: readNodeRows(),
       };
-
-      for (const dimensionName of Object.values(CONTROL_PLANE_READINESS_DIMENSION)) {
-        if (typeof dimensionName === 'string' &&
-            dimensionName.toLowerCase().endsWith('eligible') &&
-            !Object.hasOwn(dimensions, dimensionName)) {
-          dimensions[dimensionName] = repairEligible;
-        }
-      }
-
+    },
+    getNodeReadinessSync(nodeId) {
+      if (readinessByNodeId[nodeId]) return readinessByNodeId[nodeId];
+      const nodeRow = readNodeRows().find((row) => row.node_id === nodeId);
+      const eligible = nodeRow ? project(nodeRow).readyNow : defaultRepairEligible;
       return {
         nodeId,
-        dimensions,
-      };
-    },
-    getMembershipPublicationPlanningSnapshotSync(nodeId) {
-      if (typeof membershipPublicationPlanningSnapshot === 'function') {
-        return membershipPublicationPlanningSnapshot(nodeId);
-      }
-      if (membershipPublicationPlanningSnapshot &&
-          typeof membershipPublicationPlanningSnapshot === 'object') {
-        return membershipPublicationPlanningSnapshot;
-      }
-
-      const activeCache = this.fixtureSystemTableCache || systemTableCache;
-      const nodeRows = activeCache &&
-        typeof activeCache.getAll === 'function' ?
-        activeCache.getAll(SYSTEM_TABLE_NAME.NODES) :
-        [];
-      const publishedActiveNodeIds = nodeRows
-        .filter((nodeRow) => isNodeRepairEligible(nodeRow))
-        .map((nodeRow) => nodeRow.node_id)
-        .filter((candidate) => typeof candidate === 'string');
-      return {
-        publishedActiveNodeIdsPresent: true,
-        publishedActiveNodeIds,
-        publishedMembershipIncludesTargetNode:
-          typeof nodeId === 'string' ?
-            publishedActiveNodeIds.includes(nodeId) :
-            null,
-        priorityPartitionSummary: {
-          satisfied: true,
+        dimensions: {
+          ...Object.fromEntries(Object.values(CONTROL_PLANE_READINESS_DIMENSION)
+            .map((dimension) => [dimension, eligible])),
+          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: Boolean(nodeRow),
         },
+        reasons: [],
       };
     },
-  }, systemTableCache);
+    async getNodeReadiness(nodeId, options) {
+      return port.getNodeReadinessSync(nodeId, options);
+    },
+    projectNodeLiveness(nodeId) {
+      if (livenessProjectionByNodeId) return livenessProjectionByNodeId[nodeId] ?? null;
+      return project(readNodeRows().find((row) => row.node_id === nodeId));
+    },
+    getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt) {
+      if (typeof membershipPublicationPlanningSnapshot === 'function') {
+        return membershipPublicationPlanningSnapshot(nodeId, observedAt);
+      }
+      return membershipPublicationPlanningSnapshot;
+    },
+    ...callbacks,
+  };
+  return port;
 }
 
 /**
@@ -654,7 +576,8 @@ function createMockSqlQueryEngine(options = {}) {
  * Create a mock rebalance coordinator.
  * @return {Object} Mock coordinator.
  */
-function createMockCoordinator() {
+function createMockCoordinator({controlPlaneReadinessService =
+createMockControlPlaneReadinessService()} = {}) {
   const storageAccountingService = {
     estimateReplicaBytes: () => 1,
   };
@@ -663,7 +586,6 @@ function createMockCoordinator() {
     checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
     checkSplit: async () => ({allowed: true, decisionType: 'admitted'}),
   };
-  const controlPlaneReadinessService = createMockControlPlaneReadinessService();
   return {
     getMoveSafetyError: () => null,
     createOperation: async (move) => ({
@@ -1133,14 +1055,12 @@ function createTestCoordinator(options = {}) {
     messageRouter: mockMessageRouter,
     sqlQueryEngine: mockSqlEngine,
     transactionCoordinator,
-    controlPlaneReadinessService: withFixtureCommittedNodes(
-      options.controlPlaneReadinessService ||
-        createMockControlPlaneReadinessService({
-          systemTableCache: mockCache,
-          defaultRepairEligible: true,
-        }),
-      mockCache,
-    ),
+    controlPlaneReadinessService: Object.hasOwn(options, 'controlPlaneReadinessService') ?
+      options.controlPlaneReadinessService :
+      createMockControlPlaneReadinessService({
+        ...options.readinessFixture,
+        systemTableCache: mockCache,
+      }),
     storageAdmissionService: options.storageAdmissionService || {
       checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
       checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
@@ -1209,7 +1129,15 @@ function createTestRebalancer(options = {}) {
     createMockPolicyService(mergedCacheData);
   const mockMessageRouter = options.messageRouter ||
     createMockMessageRouter({connectionState});
-  const mockCoordinator = options.rebalanceCoordinator || createMockCoordinator();
+  const controlPlaneReadinessService = Object.hasOwn(options, 'controlPlaneReadinessService') ?
+    options.controlPlaneReadinessService :
+    options.rebalanceCoordinator?.controlPlaneReadinessService ??
+      createMockControlPlaneReadinessService({
+        ...options.readinessFixture,
+        systemTableCache: mockCache,
+      });
+  const mockCoordinator = options.rebalanceCoordinator ||
+    createMockCoordinator({controlPlaneReadinessService});
   const storageAdmissionService = options.storageAdmissionService ||
     mockCoordinator.storageAdmissionService || {
     checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
@@ -1220,23 +1148,6 @@ function createTestRebalancer(options = {}) {
     mockCoordinator.storageAccountingService || {
     estimateReplicaBytes: () => 1,
   };
-  const controlPlaneReadinessService = withFixtureCommittedNodes(
-    options.controlPlaneReadinessService ||
-      (options.livenessProjectionByNodeId ?
-        createMockControlPlaneReadinessService({
-          systemTableCache: mockCache,
-          livenessProjectionByNodeId: options.livenessProjectionByNodeId,
-        }) :
-        mockCoordinator.controlPlaneReadinessService) ||
-      createMockControlPlaneReadinessService({
-        systemTableCache: mockCache,
-        defaultRepairEligible: true,
-      }),
-    mockCache,
-  );
-  mockCoordinator.controlPlaneReadinessService =
-    controlPlaneReadinessService;
-
   return new UnifiedRebalancer({
     entityId,
     entityType,

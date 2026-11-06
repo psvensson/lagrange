@@ -1,24 +1,13 @@
-import {createMockPolicyService} from './test-helpers.js';
+import {createMockPolicyService, createMockControlPlaneReadinessService} from './test-helpers.js';
 /**
- * Shared test support for UnifiedRebalancer unit tests.
- *
- * Centralizes the canonical mock factories and the test environment
- * initializer used by the unified-rebalancer test suites. Helper bodies
- * are the canonical copies extracted verbatim from
- * unified-rebalancer.test.js; the concern-specific suites import the
- * factories they share from here instead of re-declaring local copies.
- *
- * Suites that need a divergent variant of a factory (for example a
- * readiness service that exposes extra dimensions) keep that variant
- * local to the suite; only byte-identical duplicates are sourced here.
+ * Shared world, transport and coordinator fixtures for UnifiedRebalancer.
+ * Readiness ports are constructed by test-helpers.js from explicit world
+ * and callback inputs. This module owns no second readiness implementation.
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   ENDPOINT_STATUS,
   META_SERVICE_ID,
@@ -47,7 +36,6 @@ export function initializeTestEnvironment() {
   }
 }
 
-let latestMockCache = null;
 
 // Create a mock system table cache
 export function createMockCache(
@@ -100,7 +88,6 @@ export function createMockCache(
       return Array.from(table.values());
     },
   };
-  latestMockCache = mockCache;
   return mockCache;
 }
 
@@ -185,95 +172,7 @@ export function createMockCoordinator() {
 }
 
 // Create mock readiness service backed by the same cache
-export function createMockReadinessService(mockCache) {
-  const getNodeReadinessSync = (nodeId) => {
-    const nodeRow = mockCache.get('nodes', nodeId);
-    if (!nodeRow) {
-      return {
-        nodeId,
-        dimensions: {
-          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
-          [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
-              false,
-          [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
-          [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
-          [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
-          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
-              false,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .METADATA_PUBLICATION_HEALTHY]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
-          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
-        },
-        reasons: [],
-      };
-    }
-    const now = Date.now();
-    const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
-    const leaseValid =
-        Number.isFinite(leaseExpiry) && leaseExpiry > now;
-    const isActive = nodeRow.status === 'active';
-    const healthy = isActive && leaseValid;
-    return {
-      nodeId,
-      dimensions: {
-        [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
-            healthy,
-        [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: healthy,
-        [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: healthy,
-        [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]:
-            healthy,
-        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
-            healthy,
-        [CONTROL_PLANE_READINESS_DIMENSION
-          .METADATA_PUBLICATION_HEALTHY]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
-            healthy,
-        [CONTROL_PLANE_READINESS_DIMENSION
-          .CONTROL_PLANE_RECOVERY_ELIGIBLE]: healthy,
-        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
-            healthy,
-      },
-      reasons: [],
-    };
-  };
-  return {
-    getNodeReadinessSync,
-    getNodeReadiness: async (nodeId) => getNodeReadinessSync(nodeId),
-    answerCommittedNodes() {
-      const activeCache = this.systemTableCache || mockCache;
-      const explicitRows =
-        typeof activeCache?.getAll === 'function' ?
-          activeCache.getAll('nodes') :
-          [];
-      const nodeRows =
-        explicitRows.length > 0 || typeof latestMockCache?.getAll !== 'function' ?
-          explicitRows :
-          latestMockCache.getAll('nodes');
-      return {
-        state: 'ready',
-        epoch: {
-          publicationEpoch: 1,
-          publicationId: 'cluster_membership-1',
-          readAtMs: 0,
-        },
-        nodeRows,
-      };
-    },
-    projectNodeLiveness(nodeId) {
-      const readiness = getNodeReadinessSync(nodeId);
-      return Object.freeze({
-        readyNow:
-          readiness?.dimensions?.[
-            CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
-          ] === true,
-      });
-    },
-  };
-}
+
 
 export function createMockMembershipPublicationService(
   publishedActiveNodeIds = [],
@@ -292,4 +191,4 @@ export function createMockMembershipPublicationService(
   };
 }
 
-export {createMockPolicyService};
+export {createMockPolicyService, createMockControlPlaneReadinessService};

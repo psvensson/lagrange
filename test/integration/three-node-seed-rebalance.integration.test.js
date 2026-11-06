@@ -27,7 +27,7 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 import {
-  createAlwaysReadyControlPlaneReadinessService,
+  createMockControlPlaneReadinessService,
   createMockStorageAccountingService,
   createMockStorageAdmissionService,
   createMockStoragePressureBehavior,
@@ -407,7 +407,7 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
               messageRouter: bootstrapResult.messageRouter,
               rebalanceCoordinator: createMockProbeRebalanceCoordinator(),
               controlPlaneReadinessService:
-              createAlwaysReadyControlPlaneReadinessService(),
+              createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
               storageAdmissionService: createMockStorageAdmissionService(),
               storageAccountingService: createMockStorageAccountingService(),
               storagePressureBehavior: createMockStoragePressureBehavior(),

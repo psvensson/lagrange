@@ -38,7 +38,7 @@ import {
   createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 
@@ -93,7 +93,7 @@ function createTestRebalancer(options = {}) {
     },
   };
   const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
+    createMockControlPlaneReadinessService({systemTableCache: mockCache});
 
   return new UnifiedRebalancer({
     entityId,

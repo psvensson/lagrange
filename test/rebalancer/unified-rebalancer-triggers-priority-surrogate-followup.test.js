@@ -42,7 +42,7 @@ import {
   createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 
@@ -98,7 +98,7 @@ function createTestRebalancer(options = {}) {
     },
   };
   const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
+    createMockControlPlaneReadinessService({systemTableCache: mockCache});
 
   return new UnifiedRebalancer({
     entityId,
@@ -386,7 +386,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
         ],
       );
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
@@ -587,7 +587,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
         ],
       );
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
@@ -974,7 +974,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
         replicaOperations,
       );
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },

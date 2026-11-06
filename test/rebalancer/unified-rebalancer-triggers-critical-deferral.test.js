@@ -1,3 +1,4 @@
+import {createMockControlPlaneReadinessService} from './test-helpers.js';
 /**
  * Unit tests for UnifiedRebalancer.
  * Tests the core rebalancing logic for partitions and message groups.
@@ -51,64 +52,7 @@ import {
 // Create mock message router
 // Create mock rebalance coordinator
 // Create mock readiness service backed by the same cache
-function createMockReadinessService(mockCache) {
-  return {
-    getNodeReadinessSync: (nodeId) => {
-      const nodeRow = mockCache.get('nodes', nodeId);
-      if (!nodeRow) {
-        return {
-          nodeId,
-          dimensions: {
-            [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
-              false,
-            [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
-              false,
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .METADATA_PUBLICATION_HEALTHY]: true,
-            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
-          },
-          reasons: [],
-        };
-      }
-      const now = Date.now();
-      const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
-      const leaseValid =
-        Number.isFinite(leaseExpiry) && leaseExpiry > now;
-      const isActive = nodeRow.status === 'active';
-      const healthy = isActive && leaseValid;
-      return {
-        nodeId,
-        dimensions: {
-          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .METADATA_PUBLICATION_HEALTHY]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
-            healthy,
-        },
-        reasons: [],
-      };
-    },
-    getNodeReadiness: async (nodeId) => {
-      return createMockReadinessService(mockCache)
-        .getNodeReadinessSync(nodeId);
-    },
-  };
-}
+
 
 // Create a fully configured rebalancer for testing
 function createTestRebalancer(options = {}) {
@@ -129,7 +73,7 @@ function createTestRebalancer(options = {}) {
     cdcIntegrationService = null,
     messageRouter = null,
     rebalanceCoordinator = null,
-    controlPlaneReadinessService = null,
+    readinessCallbacks = {},
     bootstrapReadinessState = null,
     nowFn = null,
     priorityRecoveryActivityStaleGraceMs = null,
@@ -154,8 +98,9 @@ function createTestRebalancer(options = {}) {
       return {success: true, rows: []};
     },
   };
-  const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
+  const mockReadinessService = createMockControlPlaneReadinessService({
+    systemTableCache: mockCache, callbacks: readinessCallbacks,
+  });
 
   return new UnifiedRebalancer({
     entityId,
@@ -276,10 +221,9 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
   await t.test(
     'checkRebalance does not defer critical system partitions for a ' +
-    'transport-connected ACTIVE node when canonical readiness keeps ' +
-    'cluster membership healthy despite a stale lease',
+    'third node with an expired lease when two committed nodes retain quorum',
     async (t) => {
-      const readinessService = {
+      const readinessCallbacks = {
         getNodeReadinessSync(nodeId) {
           return {
             nodeId,
@@ -324,7 +268,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           createPostgresWireEndpoint('node-2'),
           createPostgresWireEndpoint('node-3'),
         ],
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -347,19 +291,19 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       t.equal(
         evaluateCalls,
         1,
-        'critical system partitions should follow canonical readiness rather than raw stale ready-lease rows',
+        'two current committed leases satisfy the priority quorum despite the third expired lease',
       );
       t.equal(
         scheduledDelayMs,
         null,
-        'topology-settling gate should stay open when canonical readiness already recovered cluster membership',
+        'the required committed quorum keeps the topology gate open',
       );
     });
 
   await t.test(
     'checkRebalance keeps priority control-plane partitions open when readiness quorum is healthy',
     async (t) => {
-      const readinessService = {
+      const readinessCallbacks = {
         getNodeReadinessSync(nodeId) {
           const healthy = nodeId !== 'node-5';
           return {
@@ -405,7 +349,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           createPostgresWireEndpoint('node-3'),
           createPostgresWireEndpoint('node-4'),
         ],
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -446,7 +390,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         'node-2',
         'node-3',
       ]);
-      const readinessService = {
+      const readinessCallbacks = {
         getNodeReadinessSync(nodeId) {
           const recoveryEligible = recoveryEligibleNodeIds.has(nodeId);
           return {
@@ -495,7 +439,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           .map((nodeId) => createNodeEndpoint(nodeId)),
         serviceEndpoints: [...recoveryEligibleNodeIds]
           .map((nodeId) => createPostgresWireEndpoint(nodeId)),
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -545,7 +489,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     'checkRebalance keeps nodes-p1 fail-closed below its recovery quorum',
     async (t) => {
       const recoveryEligibleNodeIds = new Set(['node-1']);
-      const readinessService = {
+      const readinessCallbacks = {
         getNodeReadinessSync(nodeId) {
           const recoveryEligible = recoveryEligibleNodeIds.has(nodeId);
           return {
@@ -594,7 +538,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           .map((nodeId) => createNodeEndpoint(nodeId)),
         serviceEndpoints: [...recoveryEligibleNodeIds]
           .map((nodeId) => createPostgresWireEndpoint(nodeId)),
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -623,7 +567,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     'checkRebalance keeps priority control-plane partitions open when ' +
     'quorum is recovery-eligible during ACK_PENDING convergence',
     async (t) => {
-      const readinessService = {
+      const readinessCallbacks = {
         getNodeReadinessSync(nodeId) {
           const recoveryEligibleNodeIds = new Set([
             'node-1',
@@ -681,7 +625,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           createPostgresWireEndpoint('node-2'),
           createPostgresWireEndpoint('node-3'),
         ],
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -808,7 +752,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     'checkRebalance keeps priority control-plane recovery open when ' +
     'transport sees unpublished extra peers beyond the readiness quorum',
     async (t) => {
-      const readinessService = {
+      const readinessCallbacks = {
         membershipPublicationService:
           createMockMembershipPublicationService(
             ['node-1', 'node-2'],
@@ -861,7 +805,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           'node-3',
           'node-4',
         ]),
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -910,7 +854,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         'node-3',
         'node-4',
       ]);
-      const readinessService = {
+      const readinessCallbacks = {
         membershipPublicationService:
           createMockMembershipPublicationService(
             [...publishedActiveNodeIds],
@@ -961,7 +905,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         messageRouter: createMockMessageRouter('connected', [
           ...connectedNodeIds,
         ]),
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -1110,7 +1054,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     'checkRebalance waits for a readiness-healthy connected peer\'s ' +
       'websocket endpoint row: no other endpoint table can vouch for it',
     async (t) => {
-      const readinessService = {
+      const readinessCallbacks = {
         getNodeReadinessSync(nodeId) {
           return {
             nodeId,
@@ -1151,7 +1095,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           'node-2',
           'node-3',
         ]),
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -1193,7 +1137,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     'checkRebalance keeps priority control-plane partitions open when no ' +
       'postgres wire endpoint exists anywhere',
     async (t) => {
-      const readinessService = {
+      const readinessCallbacks = {
         getNodeReadinessSync(nodeId) {
           return {
             nodeId,
@@ -1231,7 +1175,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           createNodeEndpoint('node-3'),
         ],
         serviceEndpoints: [],
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -1267,7 +1211,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     'checkRebalance keeps control_plane_publications open when no ' +
       'postgres wire endpoint exists anywhere',
     async (t) => {
-      const readinessService = {
+      const readinessCallbacks = {
         getNodeReadinessSync(nodeId) {
           return {
             nodeId,
@@ -1309,7 +1253,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           createNodeEndpoint('node-3'),
         ],
         serviceEndpoints: [],
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -1344,9 +1288,9 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
   await t.test(
     'checkRebalance still defers control_plane_publications when ' +
-      'an active peer is not control-plane-writable (readiness-owned)',
+      'an active peer has an expired committed lease',
     async (t) => {
-      const readinessService = {
+      const readinessCallbacks = {
         getNodeReadinessSync(nodeId) {
           const controlPlaneWritable = nodeId !== 'node-3';
           return {
@@ -1377,7 +1321,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         nodes: [
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
-          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE, ready_lease_expires_at: 0},
         ],
         partitions: [{
           partition_id: 'control_plane_publications-p1',
@@ -1389,7 +1333,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           createNodeEndpoint('node-3'),
         ],
         serviceEndpoints: [],
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -1410,8 +1354,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       await rebalancer.checkRebalance();
 
       // The deferral is owned by the transitional-node blocker
-      // (node_ready_lease_incomplete): readiness says node-3 is not yet a
-      // writable member. Endpoint visibility no longer stands in for that
+      // (node_ready_lease_incomplete): the committed node-3 lease expired. Endpoint visibility no longer stands in for that
       // through a missing postgres-wire row.
       t.equal(
         evaluateCalls,

@@ -1,3 +1,4 @@
+import {createMockControlPlaneReadinessService} from './test-helpers.js';
 /**
  * Preservation Property Tests — System Partition Start Delay (Bug F)
  *
@@ -23,9 +24,6 @@ import {SYSTEM_TABLE_NAME} from
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 const SYSTEM_PARTITION_SUFFIX = '-p1';
 const SYSTEM_PARTITION_IDS = Object.values(SYSTEM_TABLE_NAME)
@@ -84,16 +82,6 @@ function createMockCache() {
   };
 }
 
-function createMockReadinessService() {
-  return {
-    getNodeReadinessSync: (nodeId) => ({
-      nodeId,
-      dimensions: {
-        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
-      },
-    }),
-  };
-}
 
 function createRebalancer(entityId, entityType = EntityType.PARTITION) {
   const mockCache = createMockCache();
@@ -136,7 +124,9 @@ function createRebalancer(entityId, entityType = EntityType.PARTITION) {
         return {success: true, rows: []};
       },
     },
-    controlPlaneReadinessService: createMockReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      systemTableCache: mockCache, defaultRepairEligible: true,
+    }),
   });
 }
 

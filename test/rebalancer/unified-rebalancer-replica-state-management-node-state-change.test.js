@@ -42,7 +42,7 @@ import {
   createMockMembershipPublicationService,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 
@@ -97,7 +97,7 @@ function createTestRebalancer(options = {}) {
     },
   };
   const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
+    createMockControlPlaneReadinessService({systemTableCache: mockCache});
 
   return new UnifiedRebalancer({
     entityId,
@@ -341,11 +341,11 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
   await t.test('derives priority spread blocker from the sync planning answer owner',
     async (t) => {
       const readinessService = {
-        ...createMockReadinessService(createMockCache([
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache([
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
-        ])),
+        ])}),
         getMembershipPublicationPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
@@ -404,31 +404,35 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         {node_id: 'node-2', status: NodeStatus.ACTIVE},
         {node_id: 'node-3', status: NodeStatus.ACTIVE},
       ]);
-      const baseReadinessService = createMockReadinessService(mockCache);
+      const baseReadinessService = createMockControlPlaneReadinessService({
+        systemTableCache: mockCache,
+      });
       const readinessCalls = [];
-      const readinessService = {
-        ...baseReadinessService,
-        getNodeReadinessSync(nodeId, options) {
-          if (!options || typeof options !== 'object') {
-            throw new Error('readiness options object required');
-          }
-          readinessCalls.push(nodeId);
-          return baseReadinessService.getNodeReadinessSync(nodeId, options);
+      const readinessService = createMockControlPlaneReadinessService({
+        systemTableCache: mockCache,
+        callbacks: {
+          getNodeReadinessSync(nodeId, options) {
+            if (!options || typeof options !== 'object') {
+              throw new Error('readiness options object required');
+            }
+            readinessCalls.push(nodeId);
+            return baseReadinessService.getNodeReadinessSync(nodeId, options);
+          },
+          getMembershipPublicationPlanningAnswerSync() {
+            return {
+              publishedActiveNodeIdsPresent: true,
+              publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+              projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
+              locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
+              priorityPartitionSummary: {
+                satisfied: true,
+                missingPartitionIds: [],
+                blockedPartitions: [],
+              },
+            };
+          },
         },
-        getMembershipPublicationPlanningAnswerSync() {
-          return {
-            publishedActiveNodeIdsPresent: true,
-            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-            projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
-            locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
-            priorityPartitionSummary: {
-              satisfied: true,
-              missingPartitionIds: [],
-              blockedPartitions: [],
-            },
-          };
-        },
-      };
+      });
 
       const rebalancer = createTestRebalancer({
         entityId: 'user-partition-1',
@@ -504,28 +508,32 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         {node_id: 'node-2', status: NodeStatus.ACTIVE},
         {node_id: 'node-3', status: NodeStatus.ACTIVE},
       ]);
-      const baseReadinessService = createMockReadinessService(mockCache);
+      const baseReadinessService = createMockControlPlaneReadinessService({
+        systemTableCache: mockCache,
+      });
       const readinessCalls = [];
-      const readinessService = {
-        ...baseReadinessService,
-        getNodeReadinessSync(nodeId, options) {
-          readinessCalls.push(nodeId);
-          return baseReadinessService.getNodeReadinessSync(nodeId, options);
+      const readinessService = createMockControlPlaneReadinessService({
+        systemTableCache: mockCache,
+        callbacks: {
+          getNodeReadinessSync(nodeId, options) {
+            readinessCalls.push(nodeId);
+            return baseReadinessService.getNodeReadinessSync(nodeId, options);
+          },
+          getMembershipPublicationPlanningAnswerSync() {
+            return {
+              publishedActiveNodeIdsPresent: true,
+              publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+              projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
+              locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
+              priorityPartitionSummary: {
+                satisfied: true,
+                missingPartitionIds: [],
+                blockedPartitions: [],
+              },
+            };
+          },
         },
-        getMembershipPublicationPlanningAnswerSync() {
-          return {
-            publishedActiveNodeIdsPresent: true,
-            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-            projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
-            locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
-            priorityPartitionSummary: {
-              satisfied: true,
-              missingPartitionIds: [],
-              blockedPartitions: [],
-            },
-          };
-        },
-      };
+      });
       const rebalancer = createTestRebalancer({
         entityId: 'user-partition-1',
         entityType: EntityType.PARTITION,
@@ -597,11 +605,11 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
   await t.test('holds non-priority work while a spread priority partition has no active leader',
     async (t) => {
       const readinessService = {
-        ...createMockReadinessService(createMockCache([
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache([
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
-        ])),
+        ])}),
         getMembershipPublicationPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
@@ -660,11 +668,11 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
   await t.test('rebuilds stale embedded publication gates from the current sync planning answer',
     async (t) => {
       const readinessService = {
-        ...createMockReadinessService(createMockCache([
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache([
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
-        ])),
+        ])}),
         getMembershipPublicationPlanningAnswerSync() {
           return {
             publicationEpoch: 9,
@@ -924,7 +932,9 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         },
       ]);
       const readinessService = {
-        ...createMockReadinessService(createMockCache(leasedNodes())),
+        ...createMockControlPlaneReadinessService({
+          systemTableCache: createMockCache(leasedNodes()),
+        }),
         membershipPublicationService: createMockMembershipPublicationService([
           'node-1',
           'node-2',

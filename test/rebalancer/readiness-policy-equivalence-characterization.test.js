@@ -1,3 +1,4 @@
+import {createMockControlPlaneReadinessService} from './test-helpers.js';
 /**
  * Characterization tests: Readiness-policy equivalence for rebalancer
  * decisions.
@@ -40,9 +41,6 @@ import {
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
-import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 // ── Suite-local fixture constants ──────────────────────────────────
 
@@ -63,92 +61,7 @@ const PING_TIMEOUT_MS = 500;
  * @param {Object} systemTableCache - Mock system table cache.
  * @return {Object} Mock readiness service.
  */
-function createMockReadinessService(systemTableCache) {
-  return {
-    projectNodeLiveness: (nodeId) => {
-      const nodeRow = systemTableCache.get(TABLES.NODES, nodeId);
-      const leaseExpiry = Number(nodeRow?.ready_lease_expires_at);
-      return {
-        leaseSemantics: {
-          state: Number.isFinite(leaseExpiry) && leaseExpiry > Date.now() ?
-            'valid' : 'expired',
-        },
-      };
-    },
-    answerCommittedNodes: () => ({
-      state: 'ready',
-      epoch: {
-        publicationEpoch: 1,
-        publicationId: 'cluster_membership-1',
-        readAtMs: 0,
-      },
-      nodeRows: systemTableCache.getAll(TABLES.NODES),
-    }),
-    getNodeReadinessSync: (nodeId) => {
-      const nodeRow = systemTableCache.get(TABLES.NODES, nodeId);
-      if (!nodeRow) {
-        return {
-          nodeId,
-          dimensions: {
-            [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .CLUSTER_MEMBER_HEALTHY]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .PLACEMENT_ELIGIBLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .CONTROL_PLANE_WRITABLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .METADATA_PUBLICATION_HEALTHY]: true,
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .REPAIR_ELIGIBLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .SERVE_ELIGIBLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
-          },
-          reasons: [],
-        };
-      }
-      const now = Date.now();
-      const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
-      const leaseValid =
-        Number.isFinite(leaseExpiry) && leaseExpiry > now;
-      const isActive = nodeRow.status === SERVICE_STATUS.ACTIVE;
-      const healthy = isActive && leaseValid;
-      return {
-        nodeId,
-        dimensions: {
-          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .CLUSTER_MEMBER_HEALTHY]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .PLACEMENT_ELIGIBLE]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .CONTROL_PLANE_WRITABLE]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .METADATA_PUBLICATION_HEALTHY]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .REPAIR_ELIGIBLE]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .SERVE_ELIGIBLE]: healthy,
-          // nodes-p1 is a formation-liveness dependency: readiness fails
-          // closed unless this dimension is explicitly true (only a real
-          // heartbeat-owned current lease makes a node recovery-eligible).
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: healthy,
-        },
-        reasons: [],
-      };
-    },
-    getNodeReadiness: async function(nodeId) {
-      return this.getNodeReadinessSync(nodeId);
-    },
-  };
-}
+
 
 /**
  * Build a system table cache with one or more node rows.
@@ -224,7 +137,7 @@ function createRebalancer(systemTableCache, messageRouter, overrides = {}) {
     },
     rebalanceCoordinator: {},
     controlPlaneReadinessService:
-      createMockReadinessService(systemTableCache),
+      createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
     ...overrides,
   });
 }

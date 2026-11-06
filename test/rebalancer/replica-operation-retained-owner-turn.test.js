@@ -103,7 +103,9 @@ function createCoordinator(operation, deliveries) {
     },
     operationWorkflowCoordinator: new DurableWorkflowCoordinator(),
     transactionCoordinator: createMockTransactionCoordinator(),
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     enableTimeouts: false,
   });
   coordinator.initialize();

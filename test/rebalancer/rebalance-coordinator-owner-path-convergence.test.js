@@ -271,7 +271,9 @@ function createConvergenceCoordinator(options = {}) {
       checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
     },
     storageAccountingService: {estimateReplicaBytes: () => 1},
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     operationWorkflowCoordinator: workflowCoordinator,
     executorOutcomeEmitter: emitter,
     enableTimeouts: false,
@@ -945,7 +947,9 @@ test('Owner-path convergence: all progression entry points ' +
           checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
         },
         storageAccountingService: {estimateReplicaBytes: () => 1},
-        controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+        controlPlaneReadinessService: createMockControlPlaneReadinessService({
+          defaultRepairEligible: true,
+        }),
         operationWorkflowCoordinator: workflowCoordinator,
         executorOutcomeEmitter: emitter,
         enableTimeouts: false,

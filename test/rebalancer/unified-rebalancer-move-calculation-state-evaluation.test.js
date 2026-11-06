@@ -45,7 +45,7 @@ import {
   createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 
@@ -75,6 +75,7 @@ function createTestRebalancer(options = {}) {
     messageRouter = null,
     rebalanceCoordinator = null,
     controlPlaneReadinessService = null,
+    readinessFixture = {},
     bootstrapReadinessState = null,
     nowFn = null,
     priorityRecoveryActivityStaleGraceMs = null,
@@ -100,23 +101,7 @@ function createTestRebalancer(options = {}) {
     },
   };
   const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
-  if (
-    mockReadinessService &&
-    typeof mockReadinessService === 'object' &&
-    typeof mockReadinessService.answerCommittedNodes !== 'function'
-  ) {
-    mockReadinessService.answerCommittedNodes = () => ({
-      state: 'ready',
-      epoch: {
-        publicationEpoch: 1,
-        publicationId: 'cluster_membership-1',
-        readAtMs: 0,
-      },
-      nodeRows: mockCache.getAll('nodes'),
-    });
-  }
-
+    createMockControlPlaneReadinessService({...readinessFixture, systemTableCache: mockCache});
   return new UnifiedRebalancer({
     entityId,
     entityType,
@@ -958,7 +943,7 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
             address: 'node-2/partition/control_plane_publications-p1-r3',
           },
         ],
-        controlPlaneReadinessService: {
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -984,7 +969,7 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
           getCurrentPublishedMembershipEpochSync() {
             return 2;
           },
-        },
+        }},
         rebalanceCoordinator: {
           ...createMockCoordinator(),
           async createOperation(move) {

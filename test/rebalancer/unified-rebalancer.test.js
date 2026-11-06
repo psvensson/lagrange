@@ -65,7 +65,7 @@ import {
   registerUnifiedRebalancerPlanningGateDecisionsTests,
 } from './unified-rebalancer-planning-gate-decisions-test-cases.js';
 import {
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
 } from './unified-rebalancer-test-support.js';
 import {
   registerUnifiedRebalancerPriorityFollowupCreationTests,
@@ -388,6 +388,7 @@ function createTestRebalancer(options = {}) {
     messageRouter = null,
     rebalanceCoordinator = null,
     controlPlaneReadinessService = null,
+    readinessFixture = {},
     bootstrapReadinessState = null,
     nowFn = null,
     priorityRecoveryActivityStaleGraceMs = null,
@@ -413,22 +414,7 @@ function createTestRebalancer(options = {}) {
     },
   };
   const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
-  if (mockReadinessService && typeof mockReadinessService === 'object') {
-    mockReadinessService.systemTableCache = mockCache;
-    if (typeof mockReadinessService.answerCommittedNodes !== 'function') {
-      mockReadinessService.answerCommittedNodes = () => ({
-        state: 'ready',
-        epoch: {
-          publicationEpoch: 1,
-          publicationId: 'cluster_membership-1',
-          readAtMs: 0,
-        },
-        nodeRows: mockCache.getAll('nodes'),
-      });
-    }
-  }
-
+    createMockControlPlaneReadinessService({...readinessFixture, systemTableCache: mockCache});
   return new UnifiedRebalancer({
     entityId,
     entityType,
@@ -481,7 +467,7 @@ const unifiedRebalancerTestContext = {
   createMockMembershipPublicationService,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   createTestRebalancer,
   DEFAULT_MESSAGE_GROUP_POLICY,
   EntityType,

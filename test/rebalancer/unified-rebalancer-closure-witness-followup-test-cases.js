@@ -3,7 +3,7 @@ export function registerUnifiedRebalancerClosureWitnessFollowupTests(context) {
     createMockCache,
     createMockCoordinator,
     createMockMembershipPublicationService,
-    createMockReadinessService,
+    createMockControlPlaneReadinessService,
     createTestRebalancer,
     EntityType,
     initializeTestEnvironment,
@@ -181,7 +181,7 @@ export function registerUnifiedRebalancerClosureWitnessFollowupTests(context) {
       replicaOperations,
     );
     const readinessService = {
-      ...createMockReadinessService(cache),
+      ...createMockControlPlaneReadinessService({systemTableCache: cache}),
       getPriorityRecoveryPlanningSnapshotBestEffort() {
         return planningSnapshot;
       },
@@ -424,7 +424,7 @@ export function registerUnifiedRebalancerClosureWitnessFollowupTests(context) {
       replicaOperations,
     );
     const readinessService = {
-      ...createMockReadinessService(cache),
+      ...createMockControlPlaneReadinessService({systemTableCache: cache}),
       getPriorityRecoveryPlanningSnapshotBestEffort() {
         return planningSnapshot;
       },
@@ -682,7 +682,7 @@ export function registerUnifiedRebalancerClosureWitnessFollowupTests(context) {
     };
     const cache = createMockCache(nodeRows, serviceRows, partitionRows);
     const readinessService = {
-      ...createMockReadinessService(cache),
+      ...createMockControlPlaneReadinessService({systemTableCache: cache}),
       getPriorityRecoveryPlanningSnapshotBestEffort() {
         return planningSnapshot;
       },

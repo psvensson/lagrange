@@ -61,7 +61,9 @@ function buildCoordinatorWithDeliverySpy(nodeId) {
         return buildDeliveryEnvelope({acknowledged: true});
       },
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     setTimeoutFn() {
       return {};

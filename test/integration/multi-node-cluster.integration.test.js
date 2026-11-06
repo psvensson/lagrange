@@ -1,3 +1,4 @@
+import {createMockControlPlaneReadinessService} from '../rebalancer/test-helpers.js';
 /**
  * Multi-node cluster integration tests.
  * Tests node joining, leaving, replica rebalancing, and message routing.
@@ -18,8 +19,6 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
-import {CONTROL_PLANE_READINESS_DIMENSION} from
-  '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   createVirginSeedBootstrapService,
   initializeTestEnvironment,
@@ -32,30 +31,7 @@ import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
-function createAlwaysReadyControlPlaneReadinessService() {
-  const dimensions = {
-    [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
-  };
-  return {
-    getNodeReadinessSync: (_nodeId, options = {}) => ({
-      dimensions: {
-        ...dimensions,
-        ...(options.decisionDimension ?
-          {[options.decisionDimension]: true} :
-          {}),
-      },
-    }),
-  };
-}
+
 
 function createMockStorageAdmissionService() {
   return {
@@ -237,7 +213,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
           messageRouter: bootstrapResult.messageRouter,
         }),
         controlPlaneReadinessService:
-          createAlwaysReadyControlPlaneReadinessService(),
+          createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
         storageAdmissionService: createMockStorageAdmissionService(),
         storageAccountingService: createMockStorageAccountingService(),
         enableTimeouts: false,
@@ -255,7 +231,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
         rebalanceCoordinator,
         nodeId: seedNodeId,
         controlPlaneReadinessService:
-          createAlwaysReadyControlPlaneReadinessService(),
+          createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
         storageAdmissionService: createMockStorageAdmissionService(),
         storageAccountingService: createMockStorageAccountingService(),
         storagePressureBehavior: createMockStoragePressureBehavior(),

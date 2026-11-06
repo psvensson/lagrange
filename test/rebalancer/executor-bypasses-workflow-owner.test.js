@@ -190,7 +190,9 @@ test('executor-side replica creation succeeds but owner-side ' +
       },
     },
     transactionCoordinator: createMockTransactionCoordinator(),
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      systemTableCache: cache, defaultRepairEligible: true,
+    }),
     enableTimeouts: false,
   });
   coordinator.initialize();

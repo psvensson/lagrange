@@ -23,6 +23,7 @@ import {
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   createMockControlPlaneReadinessService,
+  createMockCache,
   createMockCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
@@ -272,43 +273,32 @@ function buildPriorityPlacementCacheData({
   };
 }
 
-function createPlanningReadinessService(planningSnapshot) {
-  const readinessService = createMockControlPlaneReadinessService();
-  readinessService.getPriorityRecoveryPlanningSnapshotBestEffort = async () =>
-    planningSnapshot;
-  readinessService.getPriorityRecoveryPlanningAnswerSync = () =>
-    planningSnapshot;
-  return readinessService;
-}
-
-function createRecoveryOnlyTargetPlanningReadinessService(
-  planningSnapshot,
-  recoveryOnlyNodeId,
-) {
-  const readinessService = createPlanningReadinessService(planningSnapshot);
-  const getDefaultNodeReadiness =
-    readinessService.getNodeReadinessSync.bind(readinessService);
-  readinessService.getNodeReadinessSync = (nodeId) => {
-    const readiness = getDefaultNodeReadiness(nodeId);
-    if (nodeId !== recoveryOnlyNodeId) {
-      return readiness;
-    }
-    return Object.freeze({
-      ...readiness,
-      dimensions: Object.freeze({
-        ...readiness.dimensions,
-        [CONTROL_PLANE_READINESS_DIMENSION
-          .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
-      }),
-    });
+function planningReadinessFixture(planningSnapshot) {
+  return {
+    defaultRepairEligible: true,
+    callbacks: {
+      getPriorityRecoveryPlanningSnapshotBestEffort: async () => planningSnapshot,
+      getPriorityRecoveryPlanningAnswerSync: () => planningSnapshot,
+    },
   };
-  return readinessService;
 }
 
-function createBlockedLocalServePlanningReadinessService(planningSnapshot) {
-  const readinessService = createPlanningReadinessService(planningSnapshot);
-  readinessService.getNodeReadinessSync = (nodeId) => Object.freeze({
+function recoveryOnlyTargetReadinessFixture(planningSnapshot, recoveryOnlyNodeId) {
+  return {
+    ...planningReadinessFixture(planningSnapshot),
+    readinessByNodeId: {
+      [recoveryOnlyNodeId]: {nodeId: recoveryOnlyNodeId, dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+      }},
+    },
+  };
+}
+
+function blockedLocalServeReadinessFixture(planningSnapshot) {
+  const fixture = planningReadinessFixture(planningSnapshot);
+  fixture.callbacks.getNodeReadinessSync = (nodeId) => Object.freeze({
     nodeId,
     dimensions: Object.freeze({
       [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
@@ -332,31 +322,33 @@ function createBlockedLocalServePlanningReadinessService(planningSnapshot) {
       }),
     ]),
   });
-  return readinessService;
+  return fixture;
 }
 
 function createPriorityRebalancer(options = {}) {
   const planningSnapshot = options.planningSnapshot || buildStalePlanningSnapshot();
-  const readinessService =
-    options.controlPlaneReadinessService ||
-    createPlanningReadinessService(planningSnapshot);
-  const rebalanceCoordinator =
-    options.rebalanceCoordinator || createMockCoordinator();
-  rebalanceCoordinator.controlPlaneReadinessService = readinessService;
   const cacheData = options.cacheData || {};
+  const systemTableCache = createMockCache({
+    ...cacheData,
+    partitions: cacheData.partitions || [{
+      partition_id: TEST_PARTITION_ID,
+      table_id: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+    }],
+    replicaOperations: options.replicaOperations || cacheData.replicaOperations || [],
+  });
+  const readinessService = createMockControlPlaneReadinessService({
+    ...(options.readinessFixture || planningReadinessFixture(planningSnapshot)),
+    systemTableCache,
+  });
+  const rebalanceCoordinator = {
+    ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
+    ...options.coordinatorCallbacks,
+  };
   return createTestRebalancer({
     entityId: TEST_PARTITION_ID,
     entityType: EntityType.PARTITION,
     nodeId: TEST_OWNER_NODE_ID,
-    cacheData: {
-      ...cacheData,
-      partitions: cacheData.partitions || [{
-        partition_id: TEST_PARTITION_ID,
-        table_id: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
-      }],
-      replicaOperations:
-        options.replicaOperations || cacheData.replicaOperations || [],
-    },
+    systemTableCache,
     controlPlaneReadinessService: readinessService,
     rebalanceCoordinator,
     nowFn: options.nowFn,
@@ -452,7 +444,7 @@ test(
     initializeTestEnvironment();
 
     const planningSnapshot = buildStickySatisfiedPlanningSnapshot();
-    const coordinator = createMockCoordinator();
+    const coordinator = {};
     coordinator.workflowOwner = {
       async getPriorityRecoveryDecisionSnapshotForPartitionOperations() {
         return Object.freeze({
@@ -474,9 +466,9 @@ test(
     };
     const rebalancer = createPriorityRebalancer({
       planningSnapshot,
-      rebalanceCoordinator: coordinator,
-      controlPlaneReadinessService:
-        createRecoveryOnlyTargetPlanningReadinessService(
+      coordinatorCallbacks: coordinator,
+      readinessFixture:
+        recoveryOnlyTargetReadinessFixture(
           planningSnapshot,
           TEST_SUPPORTING_NODE_ID,
         ),
@@ -562,7 +554,7 @@ test(
     initializeTestEnvironment();
 
     const planningSnapshot = buildStalePlanningSnapshot();
-    const coordinator = createMockCoordinator();
+    const coordinator = {};
     coordinator.workflowOwner = {
       async getPriorityRecoveryDecisionSnapshotForPartitionOperations() {
         return Object.freeze({
@@ -585,7 +577,7 @@ test(
     const rebalancer = createPriorityRebalancer({
       planningSnapshot,
       replicaOperations: [buildInFlightReplaceOperation()],
-      rebalanceCoordinator: coordinator,
+      coordinatorCallbacks: coordinator,
     });
 
     const decision =
@@ -610,7 +602,7 @@ test(
     initializeTestEnvironment();
 
     const planningSnapshot = buildStalePlanningSnapshot();
-    const coordinator = createMockCoordinator();
+    const coordinator = {};
     coordinator.workflowOwner = {
       async getPriorityRecoveryDecisionSnapshotForPartitionOperations() {
         return Object.freeze({
@@ -633,7 +625,7 @@ test(
     };
     const rebalancer = createPriorityRebalancer({
       planningSnapshot,
-      rebalanceCoordinator: coordinator,
+      coordinatorCallbacks: coordinator,
     });
 
     const decision =
@@ -666,7 +658,7 @@ test(
 
     const createdOperations = [];
     const planningSnapshot = buildStalePlanningSnapshot();
-    const coordinator = createMockCoordinator();
+    const coordinator = {};
     coordinator.workflowOwner = {
       async getPriorityRecoveryDecisionSnapshotForPartitionOperations() {
         return Object.freeze({
@@ -697,7 +689,7 @@ test(
     };
     const rebalancer = createPriorityRebalancer({
       planningSnapshot,
-      rebalanceCoordinator: coordinator,
+      coordinatorCallbacks: coordinator,
       cacheData: {
         nodes: [
           {node_id: TEST_SOURCE_NODE_ID, status: TEST_NODE_STATUS_ACTIVE},
@@ -875,8 +867,8 @@ test(
     const planningSnapshot = buildStalePlanningSnapshot();
     const rebalancer = createPriorityRebalancer({
       planningSnapshot,
-      controlPlaneReadinessService:
-        createBlockedLocalServePlanningReadinessService(planningSnapshot),
+      readinessFixture:
+        blockedLocalServeReadinessFixture(planningSnapshot),
       replicaOperations: [buildStaleInFlightReplaceOperation()],
       nowFn: () => TEST_NOW_MS,
     });
@@ -902,15 +894,15 @@ test(
 );
 
 test(
-  'UnifiedRebalancer live priority operation progress still defers behind local serve readiness',
+  'UnifiedRebalancer live priority operation suppresses duplicate creation without a local serve gate',
   async (t) => {
     initializeTestEnvironment();
 
     const planningSnapshot = buildStalePlanningSnapshot();
     const rebalancer = createPriorityRebalancer({
       planningSnapshot,
-      controlPlaneReadinessService:
-        createBlockedLocalServePlanningReadinessService(planningSnapshot),
+      readinessFixture:
+        blockedLocalServeReadinessFixture(planningSnapshot),
       replicaOperations: [buildInFlightReplaceOperation()],
       nowFn: () => TEST_NOW_MS,
     });
@@ -928,9 +920,9 @@ test(
       'live operation progress should keep duplicate creation suppressed',
     );
     t.equal(
-      localServeDecision?.gate,
-      'local_serve_readiness',
-      'live operation progress should not bypass local serve readiness',
+      localServeDecision,
+      null,
+      'committed planning authority is not gated by the removed local serve projection',
     );
   },
 );

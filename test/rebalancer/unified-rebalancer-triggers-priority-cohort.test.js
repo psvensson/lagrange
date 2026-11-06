@@ -21,7 +21,7 @@ import {
   createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   createNodeEndpoint,
   createPostgresWireEndpoint,
   initializeTestEnvironment,
@@ -71,15 +71,20 @@ function createTestRebalancer(options = {}) {
   const mockCdcService = cdcIntegrationService || createMockCdcService();
   const mockPolicyService = createMockPolicyService({partitions: partitions, tables: tables});
   const mockMessageRouter = messageRouter ||
-    createMockMessageRouter(connectionState);
-  const mockCoordinator = rebalanceCoordinator || createMockCoordinator();
+    createMockMessageRouter(connectionState,
+      nodes.filter((node) => node.status === NodeStatus.ACTIVE).map((node) => node.node_id));
+  const mockCoordinator = rebalanceCoordinator || {
+    ...createMockCoordinator(),
+    // Controlled owner-read boundary over this scenario's operation rows.
+    getOperationsByEntity: async () => replicaOperations,
+  };
   const mockSqlQueryEngine = sqlQueryEngine || {
     async executeQuery() {
       return {success: true, rows: []};
     },
   };
   const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
+    createMockControlPlaneReadinessService({systemTableCache: mockCache});
 
   return new UnifiedRebalancer({
     entityId,
@@ -121,7 +126,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         createPostgresWireEndpoint('node-3'),
       ];
       const readinessService = {
-        ...createMockReadinessService(createMockCache(
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache(
           nodes,
           [],
           [],
@@ -129,7 +134,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           [],
           nodeEndpoints,
           serviceEndpoints,
-        )),
+        )}),
         async getMembershipPublicationPlanningSnapshot() {
           return {
             publishedActiveNodeIdsPresent: true,
@@ -228,7 +233,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
   );
 
   await t.test(
-    'checkRebalance ignores cache-in-flight priority ACTIVE replace rows that satisfy ' +
+    'checkRebalance ignores authoritative in-flight priority ACTIVE replace rows that satisfy ' +
       'spread on the eligible target',
     async (t) => {
       const nodes = [
@@ -247,7 +252,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         createPostgresWireEndpoint('node-3'),
       ];
       const readinessService = {
-        ...createMockReadinessService(createMockCache(
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache(
           nodes,
           [],
           [],
@@ -255,7 +260,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           [],
           nodeEndpoints,
           serviceEndpoints,
-        )),
+        )}),
         getMembershipPublicationPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
@@ -329,7 +334,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
   );
 
   await t.test(
-    'checkRebalance ignores combined cache-in-flight priority ACTIVE replace rows ' +
+    'checkRebalance ignores combined authoritative in-flight priority ACTIVE replace rows ' +
       'that satisfy spread for one partition',
     async (t) => {
       const nodes = [
@@ -348,7 +353,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         createPostgresWireEndpoint('node-3'),
       ];
       const readinessService = {
-        ...createMockReadinessService(createMockCache(
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache(
           nodes,
           [],
           [],
@@ -356,7 +361,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           [],
           nodeEndpoints,
           serviceEndpoints,
-        )),
+        )}),
         getMembershipPublicationPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
@@ -440,7 +445,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
   );
 
   await t.test(
-    'checkRebalance keeps cache-in-flight priority replace rows blocking when ' +
+    'checkRebalance keeps authoritative in-flight priority replace rows blocking when ' +
       'they still do not satisfy spread',
     async (t) => {
       const nodes = [
@@ -459,7 +464,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         createPostgresWireEndpoint('node-3'),
       ];
       const readinessService = {
-        ...createMockReadinessService(createMockCache(
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache(
           nodes,
           [],
           [],
@@ -467,7 +472,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           [],
           nodeEndpoints,
           serviceEndpoints,
-        )),
+        )}),
         getMembershipPublicationPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
@@ -569,7 +574,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         createPostgresWireEndpoint('node-3'),
       ];
       const readinessService = {
-        ...createMockReadinessService(createMockCache(
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache(
           nodes,
           [],
           [],
@@ -577,7 +582,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           [],
           nodeEndpoints,
           serviceEndpoints,
-        )),
+        )}),
         getMembershipPublicationPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,

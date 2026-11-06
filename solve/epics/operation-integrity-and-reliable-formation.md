@@ -159,6 +159,24 @@ measurement has completed. Comparative measurements follow the main merge.
 
 ## Current proof package (6 November)
 
+Current integration status: the takeover history is composed and the three
+bounded prerequisite Quests have terminal land records. `51269c445` preserves
+the lab inventory temporary-file race repair and partition-target fixture
+corrections. `committed-readiness-fixture-custody` now consolidates the affected
+test ports at one construction owner, preserves supplied-port custody, and
+removes stale projection/lease assumptions. Constituent checks pass; its receipt
+remains failing pending a committed caller-cone run and independent verification.
+The real three-process no-admin witness passed on `205b5683f` at Lenovo's measured
+factor 2.3 with zero guarded admin calls. Its predecessor used factor 1.4, so this
+is bounded candidate evidence, not a same-budget causal comparison or E9.
+A separate real-owner probe reproduces loss of deferred required operation-read
+evidence in coordinator/planning consumers; its repair belongs to that existing
+owner, not the fixture Quest. Retained Cell/create-lane and other inherited reds,
+final E8, unchanged E9, publication and main merge remain open. The current
+integration session owns the next committed fixture run and operation-read repair.
+Comparative measurements follow acceptance and main merge. Adam's active stores
+remain under `/mnt/old/lab`; the migration rollback is retained.
+
 - Candidate base: `fffd9addfd600cf58bc0c40b1c7df43d5ba4a899`, clean on takeover;
   rule-set revision 5. The user-provided evening review accepts the bounded
   production repairs in E1, E2, E4, E6 and E7. Their existing adverse schedules

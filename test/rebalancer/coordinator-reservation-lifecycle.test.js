@@ -243,7 +243,7 @@ function createCoordinatorWithStorage(options = {}) {
     sqlQueryEngine: sqlEngine,
     transactionCoordinator: createMockTransactionCoordinator(),
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
-      systemTableCache: cache,
+      systemTableCache: cache, defaultRepairEligible: true,
     }),
     enableTimeouts: false,
     storageAccountingService: accounting,
@@ -406,7 +406,9 @@ test('createOperation - fails fast when accounting service is absent',
       messageRouter: createMockMessageRouter(),
       sqlQueryEngine: sqlEngine,
       transactionCoordinator: createMockTransactionCoordinator(),
-      controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+      controlPlaneReadinessService: createMockControlPlaneReadinessService({
+        defaultRepairEligible: true,
+      }),
       storageAdmissionService: createMockAdmissionService(),
       enableTimeouts: false,
     });
@@ -807,7 +809,9 @@ test('reconcileReservations - works without accounting service',
       messageRouter: createMockMessageRouter(),
       sqlQueryEngine: createTrackingSqlEngine(),
       transactionCoordinator: createMockTransactionCoordinator(),
-      controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+      controlPlaneReadinessService: createMockControlPlaneReadinessService({
+        defaultRepairEligible: true,
+      }),
       storageAdmissionService: createMockAdmissionService(),
       enableTimeouts: false,
     });

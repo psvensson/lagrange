@@ -17,7 +17,7 @@ import {
   createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 
@@ -28,24 +28,6 @@ const NODES = Object.freeze([
   {node_id: 'node-1', status: 'active'},
   {node_id: 'node-2', status: 'active'},
 ]);
-
-// The test-support readiness mock reads the ambient clock for lease expiry;
-// it is a stand-in, not the owner under proof, so it answers on the injected
-// clock here.
-function clockNeutralReadiness(cache, clock) {
-  const mock = createMockReadinessService(cache);
-  const original = mock.getNodeReadinessSync.bind(mock);
-  mock.getNodeReadinessSync = (nodeId, options) => {
-    const saved = Date.now;
-    Date.now = () => clock.nowMs;
-    try {
-      return original(nodeId, options);
-    } finally {
-      Date.now = saved;
-    }
-  };
-  return mock;
-}
 
 function buildRebalancer(clock) {
   const cache = createMockCache([...NODES], [], [], [], [], [], []);
@@ -62,7 +44,9 @@ function buildRebalancer(clock) {
       return {success: true, rows: []};
     }},
     controlPlaneSystemTableGateway: null,
-    controlPlaneReadinessService: clockNeutralReadiness(cache, clock),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      systemTableCache: cache, now: () => clock.nowMs,
+    }),
     nowFn: () => clock.nowMs,
     randomSource: {random: () => 0},
   });

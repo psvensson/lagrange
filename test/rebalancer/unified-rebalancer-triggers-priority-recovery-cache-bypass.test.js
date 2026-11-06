@@ -54,7 +54,7 @@ import {registerPriorityRecoverySerialWaitTestCases} from './unified-rebalancer-
 import {
   createMockCdcService,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
 } from './unified-rebalancer-test-support.js';
 
 const TEST_NUMBER = Object.freeze({
@@ -242,7 +242,7 @@ function createTestRebalancer(options = {}) {
     },
   };
   const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
+    createMockControlPlaneReadinessService({systemTableCache: mockCache});
 
   return new UnifiedRebalancer({
     entityId,
@@ -414,7 +414,7 @@ const TEST_MESSAGE = Object.freeze({
 const PRIORITY_RECOVERY_REBALANCER_TEST_CONTEXT = Object.freeze({
   createMockCache,
   createMockCoordinator,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   createTestRebalancer,
   EntityType,
   MoveType,
@@ -869,7 +869,7 @@ test(TEST_NAME.SUITE, async (t) => {
         {node_id: TEST_NODE_ID_D, status: NodeStatus.ACTIVE},
       ]);
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
@@ -1015,7 +1015,7 @@ test(TEST_NAME.SUITE, async (t) => {
       });
       const cache = createMockCache(nodes);
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
@@ -1154,7 +1154,7 @@ test(TEST_NAME.SUITE, async (t) => {
       });
       const cache = createMockCache([]);
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
@@ -1273,7 +1273,7 @@ test(TEST_NAME.SUITE, async (t) => {
         })],
       );
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },

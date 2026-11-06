@@ -12,7 +12,7 @@
     "distributed-harness": 210,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 274,
+    "placement-rebalance": 275,
     "query-sql": 192,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2597,
-  "digest": "fnv1a32-62481b5a",
+  "censusSize": 2598,
+  "digest": "fnv1a32-a44ddd75",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ab5a9eb1",
+  "observationDigest": "fnv1a32-95f9d290",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1964,6 +1964,7 @@
     "test/rebalancer/promoted-voter-voter-ready-routable-60s-axis.test.js": "placement-rebalance",
     "test/rebalancer/provisioning-admission-policy.test.js": "placement-rebalance",
     "test/rebalancer/quorum-conditioned-remove-safety.test.js": "placement-rebalance",
+    "test/rebalancer/readiness-fixture-custody.test.js": "placement-rebalance",
     "test/rebalancer/readiness-policy-equivalence-characterization.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-ack-constants.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-budget-enforcement.property.test.js": "placement-rebalance",
@@ -9017,6 +9018,7 @@
     },
     "test/integration/cross-node-replica-placement.integration.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
@@ -9060,6 +9062,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
@@ -9495,6 +9498,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
@@ -9531,6 +9535,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/control-plane/replica-dispatch-service.js",
@@ -9769,7 +9774,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
-        "src/control-plane/control-plane-readiness-constants.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/unified-rebalancer.js",
         "src/storage/data-directory-process-owner.js"
       ]
@@ -9778,6 +9783,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/storage/data-directory-process-owner.js"
@@ -15676,6 +15682,7 @@
     },
     "test/rebalancer/cl-036-publications-quorum-escape.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -16145,6 +16152,17 @@
       ]
     },
     "test/rebalancer/quorum-conditioned-remove-safety.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/readiness-fixture-custody.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/rebalancer/readiness-policy-equivalence-characterization.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
       ]
@@ -16729,6 +16747,7 @@
     },
     "test/rebalancer/startup-authority-topology-settling-contract.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -16794,6 +16813,7 @@
     },
     "test/rebalancer/topology-settling-node-ready-lease-wake.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },

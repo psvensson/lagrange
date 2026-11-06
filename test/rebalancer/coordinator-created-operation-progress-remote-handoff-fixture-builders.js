@@ -482,7 +482,7 @@ export function buildRemotePriorityDispatchPendingTimeoutPlanningSnapshot() {
 
 export function createRemotePriorityVisibilityCoordinator() {
   const controlPlaneReadinessService = {
-    ...createMockControlPlaneReadinessService(),
+    ...createMockControlPlaneReadinessService({defaultRepairEligible: true}),
     async getPriorityRecoveryPlanningSnapshotBestEffort() {
       return buildRemotePriorityVisibilityPlanningSnapshot();
     },
@@ -584,7 +584,9 @@ export function createRemoteHandoffCoordinator({
     messageRouter: {
       deliver,
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     setTimeoutFn(fn, delayMs) {
       const handle = {fn, delayMs};
@@ -682,7 +684,9 @@ export function createRecentIntentPolicyCoordinator() {
         return {success: true, rows: [], affectedRows: 0};
       },
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
   });

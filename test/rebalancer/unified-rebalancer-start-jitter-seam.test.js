@@ -15,7 +15,7 @@ import {
   createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 
@@ -39,7 +39,7 @@ function buildRebalancer({nowMs, draw}) {
       return {success: true, rows: []};
     }},
     controlPlaneSystemTableGateway: null,
-    controlPlaneReadinessService: createMockReadinessService(cache),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({systemTableCache: cache}),
     nowFn: () => nowMs,
     randomSource: {random: () => draw},
   });

@@ -24,7 +24,7 @@ import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebala
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 import {
-  createAlwaysReadyControlPlaneReadinessService,
+  createMockControlPlaneReadinessService,
   createMockStorageAccountingService,
   createMockStorageAdmissionService,
   createMockStoragePressureBehavior,
@@ -398,7 +398,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           messageRouter: resources.seedRouter,
           rebalanceCoordinator: createMockRebalanceCoordinator(),
           controlPlaneReadinessService:
-            createAlwaysReadyControlPlaneReadinessService(),
+            createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
           storageAdmissionService: createMockStorageAdmissionService(),
           storageAccountingService: createMockStorageAccountingService(),
           storagePressureBehavior: createMockStoragePressureBehavior(),
@@ -600,7 +600,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         messageRouter: createMockMessageRouter(),
         rebalanceCoordinator: createMockRebalanceCoordinator(),
         controlPlaneReadinessService:
-          createAlwaysReadyControlPlaneReadinessService(),
+          createMockControlPlaneReadinessService({systemTableCache: cache}),
         storageAdmissionService: createMockStorageAdmissionService(),
         storageAccountingService: createMockStorageAccountingService(),
         storagePressureBehavior: createMockStoragePressureBehavior(),

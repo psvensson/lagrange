@@ -1,3 +1,4 @@
+import {createMockControlPlaneReadinessService} from './test-helpers.js';
 /**
  * Deterministic latency witness for the staggered-joiner dead-scheduling gap.
  *
@@ -29,9 +30,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   REBALANCE_COORDINATOR_EVENT,
 } from '../../src/rebalancer/rebalancer-constants.js';
@@ -136,28 +134,6 @@ function createSharedCache() {
   return {cache, tables};
 }
 
-function buildReadinessSnapshot(cache, nodeId) {
-  const nodeRow = cache.get('nodes', nodeId);
-  const eligible = nodeRow?.connection_state === 'ready' &&
-    Number(nodeRow?.ready_lease_expires_at) > 0;
-  return {
-    nodeId,
-    dimensions: {
-      [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-      [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: eligible,
-      [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: eligible,
-      [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: eligible,
-      [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: eligible,
-      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: eligible,
-      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: eligible,
-      [CONTROL_PLANE_READINESS_DIMENSION
-        .CONTROL_PLANE_RECOVERY_ELIGIBLE]: eligible,
-      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: eligible,
-    },
-    reasons: [],
-  };
-}
-
 function createRebalancer(cache, partitionId) {
   const rebalancer = new UnifiedRebalancer({
     entityId: partitionId,
@@ -186,10 +162,9 @@ function createRebalancer(cache, partitionId) {
       },
     },
     sqlQueryEngine: {executeQuery: async () => ({success: true, rows: []})},
-    controlPlaneReadinessService: {
-      getNodeReadinessSync: (nodeId) =>
-        buildReadinessSnapshot(cache, nodeId),
-    },
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      systemTableCache: cache, now: () => 1_800_000_000_000,
+    }),
     nowFn: () => 1_800_000_000_000,
     randomSource: {random: () => 0},
   });

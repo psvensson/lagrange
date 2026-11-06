@@ -250,7 +250,9 @@ function createRecoveryTestCoordinator(options = {}) {
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine,
     transactionCoordinator: createMockTransactionCoordinator(),
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     enableTimeouts: false,
   });
   coordinator.initialize();

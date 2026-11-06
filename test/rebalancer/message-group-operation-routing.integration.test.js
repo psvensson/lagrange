@@ -289,7 +289,9 @@ test('Message-group operation routing integration', async (t) => {
           executeQuery: async () => ({success: true, rows: [], changes: 1}),
         },
         transactionCoordinator: createMockTransactionCoordinator(),
-        controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+        controlPlaneReadinessService: createMockControlPlaneReadinessService({
+          defaultRepairEligible: true,
+        }),
         storageAdmissionService: {
           checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
           checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
@@ -436,7 +438,9 @@ test('Message-group operation routing integration', async (t) => {
         },
         sqlQueryEngine,
         transactionCoordinator: createMockTransactionCoordinator(),
-        controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+        controlPlaneReadinessService: createMockControlPlaneReadinessService({
+          defaultRepairEligible: true,
+        }),
         storageAdmissionService: {
           checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
           checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
@@ -533,7 +537,9 @@ test('Message-group operation routing integration', async (t) => {
           executeQuery: async () => ({success: true, rows: [], changes: 1}),
         },
         transactionCoordinator: createMockTransactionCoordinator(),
-        controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+        controlPlaneReadinessService: createMockControlPlaneReadinessService({
+          defaultRepairEligible: true,
+        }),
         storageAdmissionService: {
           checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
           checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),

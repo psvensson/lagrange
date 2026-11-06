@@ -45,7 +45,7 @@ import {
   createMockMembershipPublicationService,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 
@@ -100,7 +100,7 @@ function createTestRebalancer(options = {}) {
     },
   };
   const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
+    createMockControlPlaneReadinessService({systemTableCache: mockCache});
 
   return new UnifiedRebalancer({
     entityId,
@@ -521,11 +521,11 @@ test('UnifiedRebalancer - Node Management', async (t) => {
   await t.test('uses published membership as steady-state topology truth',
     async (t) => {
       const readinessService = {
-        ...createMockReadinessService(createMockCache([
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache([
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
-        ])),
+        ])}),
         membershipPublicationService: createMockMembershipPublicationService([
           'node-1',
           'node-3',
@@ -557,11 +557,11 @@ test('UnifiedRebalancer - Node Management', async (t) => {
     'allows priority control-plane recovery to use recovery-eligible nodes before publication spread converges',
     async (t) => {
       const readinessService = {
-        ...createMockReadinessService(createMockCache([
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache([
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
-        ])),
+        ])}),
         membershipPublicationService: createMockMembershipPublicationService(
           ['node-1', 'node-2'],
           3,
@@ -606,12 +606,12 @@ test('UnifiedRebalancer - Node Management', async (t) => {
     'retains the latest published membership when a newer publication is still open',
     async (t) => {
       const readinessService = {
-        ...createMockReadinessService(createMockCache([
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache([
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
           {node_id: 'node-4', status: NodeStatus.ACTIVE},
-        ])),
+        ])}),
         membershipPublicationService: {
           getLatestClusterPublicationSync() {
             return {

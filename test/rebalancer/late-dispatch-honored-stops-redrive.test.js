@@ -120,7 +120,9 @@ function buildCoordinator(nodeId) {
     messageRouter: {async deliver() {
       return buildDeliveryEnvelope({acknowledged: true});
     }, on() {}, removeListener() {}},
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     setTimeoutFn() {
       return {};

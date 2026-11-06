@@ -1,3 +1,4 @@
+import {createMockControlPlaneReadinessService} from './test-helpers.js';
 /**
  * Bug Condition Exploration — System Partition Start Delay (Bug F)
  *
@@ -24,9 +25,6 @@ import {SYSTEM_TABLE_NAME} from
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   REBALANCER_DEFAULT,
 } from '../../src/rebalancer/rebalancer-constants.js';
@@ -88,34 +86,12 @@ function createMockCache(nodes = []) {
   };
 }
 
-function createMockReadinessService(mockCache) {
-  return {
-    getNodeReadinessSync: (nodeId) => {
-      const nodeRow = mockCache.get('nodes', nodeId);
-      const now = Date.now();
-      const leaseExpiry = Number(
-        nodeRow?.ready_lease_expires_at,
-      );
-      const leaseValid =
-        Number.isFinite(leaseExpiry) && leaseExpiry > now;
-      const isActive = nodeRow?.status === 'active';
-      const healthy = isActive && leaseValid;
-      return {
-        nodeId,
-        dimensions: {
-          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
-            healthy,
-        },
-      };
-    },
-  };
-}
 
 function createSystemPartitionRebalancer(entityId) {
   const mockCache = createMockCache([
     {node_id: 'node-1', status: 'active'},
   ]);
-  const mockReadiness = createMockReadinessService(mockCache);
+  const mockReadiness = createMockControlPlaneReadinessService({systemTableCache: mockCache});
   return new UnifiedRebalancer({
     entityId,
     entityType: EntityType.PARTITION,

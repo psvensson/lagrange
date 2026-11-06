@@ -274,8 +274,10 @@ const RATCHET_TARGETS = [
     // 646/24270 -> 641/24107 on the checker hint after RF3 fixture reconciliation.
     // 2026-11-06 (partition-placement-declared-target): tightened 24107 -> 24100
     // on the checker hint after consolidating shared table-policy fixtures.
-    baselineCloneGroupCount: 641,
-    baselineDuplicatedLineCount: 24100,
+    // 2026-11-06 (committed-readiness-fixture-custody): tightened 641/24100
+    // to 637/23975 on the checker hint after unifying readiness fixtures.
+    baselineCloneGroupCount: 637,
+    baselineDuplicatedLineCount: 23975,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

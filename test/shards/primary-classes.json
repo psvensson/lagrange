@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2247,
+    "unit": 2248,
     "integration": 124,
     "bootstrap": 219,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2597,
-  "digest": "fnv1a32-760a3782",
+  "censusSize": 2598,
+  "digest": "fnv1a32-a2373fe8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1945,6 +1945,7 @@
     "test/rebalancer/promoted-voter-voter-ready-routable-60s-axis.test.js": "unit",
     "test/rebalancer/provisioning-admission-policy.test.js": "unit",
     "test/rebalancer/quorum-conditioned-remove-safety.test.js": "unit",
+    "test/rebalancer/readiness-fixture-custody.test.js": "unit",
     "test/rebalancer/readiness-policy-equivalence-characterization.test.js": "unit",
     "test/rebalancer/rebalance-ack-constants.test.js": "unit",
     "test/rebalancer/rebalance-budget-enforcement.property.test.js": "unit",

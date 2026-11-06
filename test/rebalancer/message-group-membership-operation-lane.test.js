@@ -150,7 +150,9 @@ function createCoordinator(database, nodeId) {
     tablePolicyService: {
       getPolicyForPartition: async () => ({targetReplicaCount: 3, minReplicaCount: 1}),
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
   });
