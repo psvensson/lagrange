@@ -1,0 +1,33 @@
+{
+  "schema": "solve-quest/2",
+  "id": "published-runtime-dependency-closure",
+  "class": "fix",
+  "statement": "Repair published npm runtime content measurement at its content-enumeration owner so public embedded startup can obtain measured provenance without a package lock, including the actually resolved production dependency closure and preserving lock-present content identity. The plan and historical-premise reconciliation are in plan.md. Package publication and downstream native viewer acceptance remain separate claims.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/published-runtime-dependency-closure/evidence/receipt.json",
+      "requiredReceipts": [
+        "content-closure-red-green-and-falsification",
+        "lock-present-predecessor-parity",
+        "installed-public-embedded-start-stop",
+        "affected-gates-and-independent-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "measured-content-owner",
+      "statement": "No fabricated lock, metadata-only digest, omitted hoisted dependency, consumer private import or relaxed measured-build admission. Only root lock ENOENT selects the installed production closure; present invalid locks and broken required content remain unavailable."
+    },
+    {
+      "id": "bounded-claim",
+      "statement": "Preserve source-lock and bundle/SEA measurement semantics, original-allocation authority and deadlines. Independently review plan and every implementation slice. An installed startup repair is not published artifact or native viewer acceptance."
+    },
+    {
+      "id": "historical-premise",
+      "statement": "Explicitly replace the unmerged cc15416c2 published-package-runtime-build-provenance assumption that consumer-hoisted dependencies should be excluded. Preserve all foreign worktrees and historical Quest records. Use current passive receipt probes, with execution in the attempt harness."
+    }
+  ],
+  "sealedAt": "5c30388e498cb1578dc7ba7199bf2de51266d77b"
+}
