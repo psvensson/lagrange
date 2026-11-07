@@ -1,0 +1,32 @@
+{
+  "schema": "solve-quest/2",
+  "id": "pr198-hosted-seed-release-characterization",
+  "class": "fix",
+  "statement": "Characterize the PR198 fresh-seed release failure once on immutable base5c30388e498cb1578dc7ba7199bf2de51266d77b and headc0d290ca565abf98d5c81ea7034dd75ebaed356d on one hosted runner, retaining the original witness and complete manifest-bound request trace bytes. Report the bounded observation and its attribution limits. No runtime repair, required-CI substitution, release or native acceptance is claimed.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/pr198-hosted-seed-release-characterization/evidence/receipt.json",
+      "requiredReceipts": [
+        "immutable-source-pair-custody",
+        "bounded-attribution",
+        "independent-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "unchanged-witness",
+      "statement": "Preserve test bytes, original3000ms shared budget, cohort sequence, assertions and production entry. Use canonical test:file runner, Node22.23.4, machine factor3, lane cap1, TAP floor120 and no retries. Base then head exactly once, independent installations, no overlapping processes."
+    },
+    {
+      "id": "evidence-custody",
+      "statement": "The diagnostic workflow owns only orchestration and artifact custody. Preserve raw TAP and stderr plus manifest-named trace bytes after process settlement, validating SHA256, size, schema and completeness. Missing/invalid custody or residual descendants is unavailable measurement, never success."
+    },
+    {
+      "id": "bounded-inference",
+      "statement": "Both green is non-reproduction, both red needs request-level analysis, and head-only red is an ordered-pair difference, not causal regression proof. Stop after this pair. Any runtime repair requires a separate sealed reviewed plan. PR198 remains on HOLD until its exact-head required CI is green."
+    }
+  ],
+  "sealedAt": "5c30388e498cb1578dc7ba7199bf2de51266d77b"
+}

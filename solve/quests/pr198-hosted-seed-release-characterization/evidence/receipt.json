@@ -1,0 +1,9 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pending",
+  "receipts": [
+    {"id": "immutable-source-pair-custody", "passed": false},
+    {"id": "bounded-attribution", "passed": false},
+    {"id": "independent-review", "passed": false}
+  ]
+}

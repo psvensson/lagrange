@@ -1,0 +1,10 @@
+PASS valid
+PASS digest
+PASS bytes
+PASS absent
+PASS path
+PASS counts
+PASS incomplete
+PASS ambiguous
+PASS symlink and unavailable exit
+YAML parsed; all shell bodies bash -n clean; 9 collector controls pass

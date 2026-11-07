@@ -1,0 +1,189 @@
+# One predeclared diagnostic pair. This is not the required PR gate or a repair.
+name: pr198-seed-release-characterization
+on:
+  push:
+    branches: [work/pr198-seed-hosted-diagnostic-20261107]
+    paths: [.github/workflows/pr198-seed-release-characterization.yml]
+permissions:
+  contents: read
+concurrency:
+  group: pr198-seed-release-characterization
+  cancel-in-progress: false
+jobs:
+  source-pair-custody:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      BASE_SHA: 5c30388e498cb1578dc7ba7199bf2de51266d77b
+      CANDIDATE_SHA: c0d290ca565abf98d5c81ea7034dd75ebaed356d
+      LAGRANGE_LANE_JOBS_CAP: '1'
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+      LAGRANGE_TEST_MACHINE_FACTOR: '3'
+      TAP_TIMEOUT_FLOOR: '120'
+      LAGRANGE_PLACEMENT: local
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22.23.4'
+          package-manager-cache: false
+      - name: Immutable source identity and isolated installs
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$GITHUB_WORKSPACE/test-output/pr198-hosted-pair"
+          mkdir -p "$OUT/base" "$OUT/head"
+          printf '%s\n' "$GITHUB_SHA" > "$OUT/diagnostic-sha.txt"
+          python3 - <<'PY' > "$OUT/environment.json"
+          import json, os, platform, subprocess
+          names = ['GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_JOB', 'GITHUB_SHA',
+                   'ImageOS', 'ImageVersion', 'RUNNER_OS', 'RUNNER_ARCH',
+                   'LAGRANGE_LANE_JOBS_CAP', 'LAGRANGE_RETRY_FAILED_ONCE',
+                   'LAGRANGE_TEST_MACHINE_FACTOR', 'TAP_TIMEOUT_FLOOR', 'LAGRANGE_PLACEMENT']
+          print(json.dumps({'environment': {n: os.environ.get(n) for n in names},
+                'platform': platform.platform(), 'cpuCount': os.cpu_count(),
+                'node': subprocess.check_output(['node', '--version'], text=True).strip(),
+                'npm': subprocess.check_output(['npm', '--version'], text=True).strip()}, indent=2))
+          PY
+          git diff --exit-code "$BASE_SHA" "$GITHUB_SHA" -- src scripts test package.json package-lock.json
+          git diff --exit-code "$BASE_SHA" "$CANDIDATE_SHA" -- \
+            package-lock.json src/bootstrap src/node src/partition src/transport \
+            src/diagnostics/runtime-build-provenance.js \
+            test/raft/raft-rs-backend/single-path-partition-cutover.test.js \
+            test/test-helpers/participant-release-delivery-trace.js \
+            scripts/run-test-files.js scripts/run-classified-test-files.js
+          git diff --name-status "$BASE_SHA" "$CANDIDATE_SHA" > "$OUT/source-delta.txt"
+          for leg in base head; do
+            sha="$BASE_SHA"
+            if [ "$leg" = head ]; then sha="$CANDIDATE_SHA"; fi
+            tree="$RUNNER_TEMP/pr198-$leg"
+            git worktree add --detach "$tree" "$sha" > "$OUT/$leg/checkout.log" 2>&1
+            test "$(git -C "$tree" rev-parse HEAD)" = "$sha"
+            git -C "$tree" rev-parse HEAD HEAD^{tree} > "$OUT/$leg/source.txt"
+            (cd "$tree" && sha256sum package-lock.json \
+              test/raft/raft-rs-backend/single-path-partition-cutover.test.js \
+              test/test-helpers/participant-release-delivery-trace.js \
+              scripts/run-test-files.js scripts/run-classified-test-files.js) > "$OUT/$leg/input-sha256.txt"
+            set +e
+            (cd "$tree" && npm ci) > "$OUT/$leg/install.log" 2>&1
+            install=$?
+            set -e
+            printf '%s\n' "$install" > "$OUT/$leg/install.status"
+            test "$install" -eq 0
+            git -C "$tree" status --porcelain --untracked-files=no > "$OUT/$leg/post-install-status.txt"
+            test ! -s "$OUT/$leg/post-install-status.txt"
+          done
+          cmp "$OUT/base/input-sha256.txt" "$OUT/head/input-sha256.txt"
+      - name: Prepare trace custody collector
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > test-output/pr198-hosted-pair/collect.py <<'PY'
+          import hashlib, json, pathlib, sys
+
+          def collect(stderr_file, destination):
+              destination = pathlib.Path(destination)
+              manifests = []
+              for line in pathlib.Path(stderr_file).read_text().splitlines():
+                  if not line.startswith('{'): continue
+                  value = json.loads(line)
+                  if value.get('schema') == 'participant-release-trace-file/1':
+                      manifests.append(value)
+              if len(manifests) != 1: raise ValueError('missing or ambiguous trace manifest')
+              manifest = manifests[0]
+              (destination / 'trace-manifest.json').write_text(json.dumps(manifest, indent=2))
+              source = pathlib.Path(manifest['file'])
+              if (source.name != 'trace.json' or source.parent.parent != pathlib.Path('/tmp')
+                  or not source.parent.name.startswith('lagrange-control-trace-')
+                  or source.is_symlink() or source.parent.is_symlink() or not source.is_file()):
+                  raise ValueError('unexpected trace path')
+              payload = source.read_bytes()
+              # Keep bytes even when validation fails, labelled by custody.json.
+              (destination / 'trace.json').write_bytes(payload)
+              if len(payload) != manifest['bytes']: raise ValueError('trace byte count mismatch')
+              if hashlib.sha256(payload).hexdigest() != manifest['sha256']:
+                  raise ValueError('trace digest mismatch')
+              report = json.loads(payload)
+              if report.get('schema') != 'participant-release-delivery-trace/1':
+                  raise ValueError('trace schema mismatch')
+              if report['recordedCount'] != len(report['records']):
+                  raise ValueError('trace record count mismatch')
+              for key in ['recordedCount', 'droppedCount', 'captureErrorCount', 'incompleteCount']:
+                  if report[key] != manifest[key]: raise ValueError('manifest count mismatch: ' + key)
+              if report['recordedCount'] <= 0 or any(report[key] != 0 for key in
+                  ['droppedCount', 'captureErrorCount', 'incompleteCount']):
+                  raise ValueError('trace incomplete')
+              return {'state': 'complete', 'sha256': manifest['sha256'], 'bytes': len(payload)}
+
+          if __name__ == '__main__':
+              try:
+                  result = collect(sys.argv[1], sys.argv[2])
+              except Exception as error:
+                  result = {'state': 'unavailable', 'reason': str(error)}
+              pathlib.Path(sys.argv[2], 'custody.json').write_text(json.dumps(result, indent=2))
+              sys.exit(0 if result['state'] == 'complete' else 1)
+          PY
+      - name: Base then head once each with unchanged witness
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$GITHUB_WORKSPACE/test-output/pr198-hosted-pair"
+          TEST=test/raft/raft-rs-backend/single-path-partition-cutover.test.js
+          pair_status=0
+          for leg in base head; do
+            tree="$RUNNER_TEMP/pr198-$leg"
+            date --iso-8601=ns > "$OUT/$leg/started.txt"
+            set +e
+            (cd "$tree" && exec setsid npm run test:file -- "$TEST") > "$OUT/$leg/runner.log" 2>&1 &
+            test_pid=$!
+            wait "$test_pid"
+            status=$?
+            set -e
+            printf '%s\n' "$status" > "$OUT/$leg/test.status"
+            date --iso-8601=ns > "$OUT/$leg/settled.txt"
+            ps -eo pgid=,pid=,ppid=,args= | awk -v group="$test_pid" '$1 == group' > "$OUT/$leg/residual-processes.txt"
+            # Preserve raw streams even when execution is unavailable. If the
+            # group remains, these are labelled unsettled snapshots only.
+            set +e
+            cp "$tree/.tap/test-results/$TEST.tap" "$OUT/$leg/test.tap"
+            tap_copy=$?
+            cp "$tree/.tap/test-results/$TEST.tap.stderr" "$OUT/$leg/test.stderr"
+            stderr_copy=$?
+            set -e
+            if [ -s "$OUT/$leg/residual-processes.txt" ]; then
+              echo 'unsettled snapshots; trace not consumed' > "$OUT/$leg/stream-state.txt"
+              echo 'unavailable: descendants remain; no further leg runs' > "$OUT/diagnostic-unavailable.txt"
+              exit 1
+            fi
+            echo 'settled streams' > "$OUT/$leg/stream-state.txt"
+            git -C "$tree" status --porcelain --untracked-files=no > "$OUT/$leg/post-test-status.txt"
+            set +e
+            python3 "$OUT/collect.py" "$OUT/$leg/test.stderr" "$OUT/$leg"
+            custody=$?
+            set -e
+            printf 'test=%s tap-copy=%s stderr-copy=%s custody=%s\n' \
+              "$status" "$tap_copy" "$stderr_copy" "$custody" > "$OUT/$leg/outcome.txt"
+            cat "$OUT/$leg/outcome.txt"
+            tail -n 25 "$OUT/$leg/runner.log"
+            if [ -s "$OUT/$leg/post-test-status.txt" ]; then
+              echo 'unavailable: tracked test inputs changed; custody retained' > "$OUT/diagnostic-unavailable.txt"
+              exit 1
+            fi
+            if [ "$status" -ne 0 ] || [ "$tap_copy" -ne 0 ] || [ "$stderr_copy" -ne 0 ] || [ "$custody" -ne 0 ]; then
+              pair_status=1
+            fi
+          done
+          echo 'One ordered pair only. Green means not reproduced; this is not required-CI proof.' > "$OUT/evidence-ceiling.txt"
+          exit "$pair_status"
+      - name: Preserve source identities, raw streams and manifest-bound traces
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr198-hosted-pair-${{ github.sha }}-${{ github.run_attempt }}
+          path: test-output/pr198-hosted-pair/
+          retention-days: 14
+          if-no-files-found: error
