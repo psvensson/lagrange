@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "default-backend-fixture-owner-budget",
+  "class": "fix",
+  "statement": "Complete the bounded default-backend fixture correction already implemented at 44ff129: consume BootstrapService's existing production startup budget instead of this fixture's obsolete 3000 ms override. Explicit successor to default-backend-fixture-startup-budget because its sealed No retries wording is ambiguous against the contemporaneously planned existing CI policy. This record does not claim the predecessor acceptance was met, a clean-first-attempt hosted witness, stable first-write behavior, release or native acceptance.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/default-backend-fixture-owner-budget/evidence/receipt.json",
+      "requiredReceipts": [
+        "owner-default-source",
+        "unretried-focused-proof",
+        "canonical-hosted-ci",
+        "first-failure-preservation",
+        "independent-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "unchanged-bounded-scope",
+      "statement": "Only remove the obsolete fixture startup override and consume the production constructor default. Preserve workload, assertions, the 90-second watchdog, current control fences, shared deadlines/refusals and all product source. No added fixture/runtime retry, skip, readiness shim or deadline policy. No further implementation change is authorized by this record."
+    },
+    {
+      "id": "explicit-proof-policy",
+      "statement": "Five focused witness/deadline/control files must pass with retries disabled on the exact candidate source. Required hosted CI uses its preexisting reported one-standalone-retry policy; no new manual CI rerun or retry policy is introduced. CI success after a reported retry is not clean-first-attempt hosted proof and does not discharge the first failure."
+    },
+    {
+      "id": "preserved-failure-and-history",
+      "statement": "Preserve predecessor sealed record/log and original 3000 ms source-pair evidence; mark predecessor superseded, never solved. Preserve exact 44ff129 hosted initial INSERT PARTITION_EPOCH_EVIDENCE_DEFERRED failure, missing raw trace limitation and linked OE discovery lagrange-object-environment-lis. Its in-flight-transition text does not prove an actual split/merge. No broad first-write reliability or native/release claim."
+    },
+    {
+      "id": "normal-gates-and-applicability",
+      "statement": "Existing evidence is reusable only after independent exact-source applicability review; changed source invalidates dependent proof. Canonical solve land, required guards/proof and exact final PR-head CI before merge remain mandatory. No skipProof, injected proof or manual solved entry. Post-merge corpus, package publication and native acceptance remain separate."
+    }
+  ],
+  "sealedAt": "44ff129dfdff752f400f4b444a77b4197bea917a"
+}
