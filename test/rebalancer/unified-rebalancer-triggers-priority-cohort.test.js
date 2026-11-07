@@ -120,22 +120,18 @@ function createThreeActiveNodesFixture(planningSnapshot) {
     createPostgresWireEndpoint('node-2'),
     createPostgresWireEndpoint('node-3'),
   ];
-  const readinessService = {
-    ...createMockControlPlaneReadinessService({
-      systemTableCache: createMockCache(
-        nodes,
-        [],
-        [],
-        [],
-        [],
-        nodeEndpoints,
-        serviceEndpoints,
-      ),
-    }),
-    async getPriorityRecoveryPlanningSnapshotBestEffort() {
-      return planningSnapshot;
-    },
-  };
+  const readinessService = createMockControlPlaneReadinessService({
+    systemTableCache: createMockCache(
+      nodes,
+      [],
+      [],
+      [],
+      [],
+      nodeEndpoints,
+      serviceEndpoints,
+    ),
+    membershipPublicationPlanningSnapshot: planningSnapshot,
+  });
   return {nodes, nodeEndpoints, serviceEndpoints, readinessService};
 }
 
@@ -341,8 +337,8 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         createPostgresWireEndpoint('node-2'),
         createPostgresWireEndpoint('node-3'),
       ];
-      const readinessService = {
-        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache(
+      const readinessService = createMockControlPlaneReadinessService({
+        systemTableCache: createMockCache(
           nodes,
           [],
           [],
@@ -350,26 +346,24 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           [],
           nodeEndpoints,
           serviceEndpoints,
-        )}),
-        async getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return {
-            publishedActiveNodeIdsPresent: true,
-            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-            projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
-            locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
-            priorityPartitionSummary: {
-              blockedPartitions: [{
-                partitionId: 'sql_transaction_participants-p1',
-                requiredDistinctNodeCount: 3,
-                readyDistinctNodeCount: 1,
-                spreadGap: 2,
-              }],
-              missingPartitionIds: ['sql_transaction_participants-p1'],
+        ),
+        membershipPublicationPlanningSnapshot: {
+          publishedActiveNodeIdsPresent: true,
+          publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+          projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
+          locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
+          priorityPartitionSummary: {
+            blockedPartitions: [{
+              partitionId: 'sql_transaction_participants-p1',
               requiredDistinctNodeCount: 3,
-            },
-          };
+              readyDistinctNodeCount: 1,
+              spreadGap: 2,
+            }],
+            missingPartitionIds: ['sql_transaction_participants-p1'],
+            requiredDistinctNodeCount: 3,
+          },
         },
-      };
+      });
       const rebalancer = createTestRebalancer({
         entityId: 'sql_transaction_participants-p1',
         entityType: EntityType.PARTITION,
@@ -452,8 +446,8 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         createPostgresWireEndpoint('node-2'),
         createPostgresWireEndpoint('node-3'),
       ];
-      const readinessService = {
-        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache(
+      const readinessService = createMockControlPlaneReadinessService({
+        systemTableCache: createMockCache(
           nodes,
           [],
           [],
@@ -461,26 +455,24 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           [],
           nodeEndpoints,
           serviceEndpoints,
-        )}),
-        async getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return {
-            publishedActiveNodeIdsPresent: true,
-            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-            projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
-            locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
-            priorityPartitionSummary: {
-              blockedPartitions: [{
-                partitionId: 'control_plane_publications-p1',
-                requiredDistinctNodeCount: 3,
-                readyDistinctNodeCount: 1,
-                spreadGap: 2,
-              }],
-              missingPartitionIds: ['control_plane_publications-p1'],
+        ),
+        membershipPublicationPlanningSnapshot: {
+          publishedActiveNodeIdsPresent: true,
+          publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+          projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
+          locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
+          priorityPartitionSummary: {
+            blockedPartitions: [{
+              partitionId: 'control_plane_publications-p1',
               requiredDistinctNodeCount: 3,
-            },
-          };
+              readyDistinctNodeCount: 1,
+              spreadGap: 2,
+            }],
+            missingPartitionIds: ['control_plane_publications-p1'],
+            requiredDistinctNodeCount: 3,
+          },
         },
-      };
+      });
       const rebalancer = createTestRebalancer({
         entityId: 'control_plane_publications-p1',
         entityType: EntityType.PARTITION,
@@ -562,8 +554,8 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         createPostgresWireEndpoint('node-2'),
         createPostgresWireEndpoint('node-3'),
       ];
-      const readinessService = {
-        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache(
+      const readinessService = createMockControlPlaneReadinessService({
+        systemTableCache: createMockCache(
           nodes,
           [],
           [],
@@ -571,34 +563,32 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           [],
           nodeEndpoints,
           serviceEndpoints,
-        )}),
-        async getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return {
-            publishedActiveNodeIdsPresent: true,
-            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-            projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
-            locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
-            priorityPartitionSummary: {
-              blockedPartitions: [{
-                partitionId: 'control_plane_publications-p1',
-                requiredDistinctNodeCount: 3,
-                readyDistinctNodeCount: 2,
-                spreadGap: 1,
-              }, {
-                partitionId: 'replica_operations-p1',
-                requiredDistinctNodeCount: 3,
-                readyDistinctNodeCount: 2,
-                spreadGap: 1,
-              }],
-              missingPartitionIds: [
-                'control_plane_publications-p1',
-                'replica_operations-p1',
-              ],
+        ),
+        membershipPublicationPlanningSnapshot: {
+          publishedActiveNodeIdsPresent: true,
+          publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+          projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
+          locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
+          priorityPartitionSummary: {
+            blockedPartitions: [{
+              partitionId: 'control_plane_publications-p1',
               requiredDistinctNodeCount: 3,
-            },
-          };
+              readyDistinctNodeCount: 2,
+              spreadGap: 1,
+            }, {
+              partitionId: 'replica_operations-p1',
+              requiredDistinctNodeCount: 3,
+              readyDistinctNodeCount: 2,
+              spreadGap: 1,
+            }],
+            missingPartitionIds: [
+              'control_plane_publications-p1',
+              'replica_operations-p1',
+            ],
+            requiredDistinctNodeCount: 3,
+          },
         },
-      };
+      });
       const rebalancer = createTestRebalancer({
         entityId: 'control_plane_publications-p1',
         entityType: EntityType.PARTITION,

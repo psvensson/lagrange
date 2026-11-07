@@ -31,6 +31,81 @@ const {
   resolveCanonicalPartitionLeaderObservation,
 } = QUERY_EXECUTOR_SHARED;
 
+function buildUnavailableReadinessRoutability(routingReadinessDimension) {
+  return {
+    routable: false,
+    reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.READINESS_UNAVAILABLE,
+    readinessSummary: {
+      decisionDimension: routingReadinessDimension,
+      observedAt: null,
+      deferred: false,
+      reasonCodes: Object.freeze([
+        QUERY_ROUTING_DIAGNOSTIC_REASON.READINESS_UNAVAILABLE,
+      ]),
+      failedDimensions: Object.freeze(
+        routingReadinessDimension ? [routingReadinessDimension] : [],
+      ),
+    },
+  };
+}
+
+function buildCompactEvaluatedReadinessSummary(
+  routingReadinessDimension,
+  readiness,
+  decision,
+  compactSnapshot,
+) {
+  return {
+    decisionDimension:
+      compactSnapshot.decisionDimension || routingReadinessDimension,
+    observedAt: compactSnapshot.observedAt || null,
+    // Whether the record this verdict rests on is the planning owner's
+    // deferred contract, stated by the owner of that marker. The
+    // denial summary carries it; nothing routes on it.
+    deferred: isDeferredReadinessPlanningSnapshot(readiness),
+    lifecycleState: compactSnapshot.lifecycleState || null,
+    reasonCodes: compactSnapshot.reasonCodes || Object.freeze([]),
+    failedDimensions: decision.failedDimensions || Object.freeze([]),
+    [READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY]:
+      compactSnapshot[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY] || null,
+    [READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT]:
+      compactSnapshot[
+        READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT
+      ] || null,
+  };
+}
+
+function buildEvaluatedReadinessSummary(
+  routingReadinessDimension,
+  evaluation,
+  routable,
+) {
+  const {readiness, decision, compactSnapshot} = evaluation;
+  if (compactSnapshot) {
+    return buildCompactEvaluatedReadinessSummary(
+      routingReadinessDimension,
+      readiness,
+      decision,
+      compactSnapshot,
+    );
+  }
+  if (routable) {
+    return null;
+  }
+  return {
+    decisionDimension: routingReadinessDimension,
+    observedAt: null,
+    deferred: isDeferredReadinessPlanningSnapshot(readiness),
+    reasonCodes: decision.reasonCodes || Object.freeze([]),
+    failedDimensions:
+      decision.failedDimensions?.length > 0 ?
+        decision.failedDimensions :
+        Object.freeze(
+          routingReadinessDimension ? [routingReadinessDimension] : [],
+        ),
+  };
+}
+
 class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationRouting {
   /**
    * Find partition leader address from system cache.
@@ -181,11 +256,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
         typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
           QUERY_EXECUTOR_LITERAL.STRING_FUNCTION)
     ) {
-      return {
-        routable: false,
-        reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.READINESS_UNAVAILABLE,
-        readinessSummary: null,
-      };
+      return buildUnavailableReadinessRoutability(routingReadinessDimension);
     }
     const tableName =
       String(
@@ -241,11 +312,9 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
         },
       );
       if (!readiness || !readiness.dimensions) {
-        routabilityResult = {
-          routable: false,
-          reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.READINESS_UNAVAILABLE,
-          readinessSummary: null,
-        };
+        routabilityResult = buildUnavailableReadinessRoutability(
+          routingReadinessDimension,
+        );
       } else {
         evaluation = {
           readiness,
@@ -263,36 +332,18 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
     if (routabilityResult) {
       return routabilityResult;
     }
-    const readiness = evaluation.readiness;
-    const decision = evaluation.decision;
-    const compactSnapshot = evaluation.compactSnapshot;
-    const routable = decision.eligible === true;
+    const routable = evaluation.decision.eligible === true;
     return {
       routable,
       reasonCode:
         routable ?
           QUERY_ROUTING_DIAGNOSTIC_REASON.OK :
           QUERY_ROUTING_DIAGNOSTIC_REASON.NODE_NOT_ELIGIBLE,
-      readinessSummary: compactSnapshot ?
-        {
-          decisionDimension:
-              compactSnapshot.decisionDimension || routingReadinessDimension,
-          observedAt: compactSnapshot.observedAt || null,
-          // Whether the record this verdict rests on is the planning owner's
-          // deferred contract, stated by the owner of that marker. The
-          // denial summary carries it; nothing routes on it.
-          deferred: isDeferredReadinessPlanningSnapshot(readiness),
-          lifecycleState: compactSnapshot.lifecycleState || null,
-          reasonCodes: compactSnapshot.reasonCodes || Object.freeze([]),
-          failedDimensions: decision.failedDimensions || Object.freeze([]),
-          [READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY]:
-            compactSnapshot[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY] || null,
-          [READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT]:
-            compactSnapshot[
-              READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT
-            ] || null,
-        } :
-        null,
+      readinessSummary: buildEvaluatedReadinessSummary(
+        routingReadinessDimension,
+        evaluation,
+        routable,
+      ),
     };
   }
 

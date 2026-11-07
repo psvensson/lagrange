@@ -1,4 +1,5 @@
 import {readCommittedNodeFloor} from './operation-workflow-committed-node-floor.js';
+import {captureReplaceOwnerLevel} from './operation-workflow-replace-owner-wake.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
@@ -419,6 +420,16 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
   return context.buildSafeRemoveSafetyEvaluation();
 }
 
+function withSafeReadinessEntryLevel(context, operation, evaluation) {
+  if (!evaluation || evaluation.error) {
+    return evaluation;
+  }
+  const readinessEntryLevel = captureReplaceOwnerLevel(context, operation);
+  return readinessEntryLevel ?
+    {...evaluation, readinessEntryLevel} :
+    evaluation;
+}
+
 /**
  * Evaluate safety validation for REMOVE operations.
  * @param {Object} context - Segment/Class context instance.
@@ -593,11 +604,16 @@ async function evaluateRemoveSafety(context, operation) {
     // leader handoff is required: its removal cannot drop the post-removal
     // voter-ready count, spread, or quorum. The universal floor needs no
     // further projection for this operation.
-    return context.buildSafeRemoveSafetyEvaluation();
+    return withSafeReadinessEntryLevel(
+      context,
+      operation,
+      context.buildSafeRemoveSafetyEvaluation(),
+    );
   }
 
   if (!partitionClassification.systemTable) {
-    return evaluateUniversalPartitionRemoveSafety(context, operation, {
+    const universalEntryLevel = captureReplaceOwnerLevel(context, operation);
+    const universalEvaluation = await evaluateUniversalPartitionRemoveSafety(context, operation, {
       isReplaceRemoveInitialDispatch: isReplaceRemoveDispatch,
       removeSafetyReadiness,
       currentVoterReadyRows,
@@ -615,6 +631,9 @@ async function evaluateRemoveSafety(context, operation) {
       projectQuorumAfterRemoval,
       QUORUM_PROJECTION_SCOPE,
     });
+    return !universalEvaluation?.error && universalEntryLevel ?
+      {...universalEvaluation, readinessEntryLevel: universalEntryLevel} :
+      universalEvaluation;
   }
 
   // One remove-safety evaluation, one authoritative planning read. Every
@@ -648,7 +667,11 @@ async function evaluateRemoveSafety(context, operation) {
 
   if (priorityRecoveryCompletionEvaluation) {
     if (!requiresSourceLeaderHandoff || !priorityRecoveryCompletionSafe) {
-      return priorityRecoveryCompletionEvaluation;
+      return withSafeReadinessEntryLevel(
+        context,
+        operation,
+        priorityRecoveryCompletionEvaluation,
+      );
     }
   }
 
@@ -737,6 +760,7 @@ async function evaluateRemoveSafety(context, operation) {
     return priorityPublicationLeaderRemoveSafetyEvaluation;
   }
 
+  const readinessEntryLevel = captureReplaceOwnerLevel(context, operation);
   const peerPingGuard = await evaluateProjectedPeersContactable(
     context,
     operation,
@@ -746,11 +770,11 @@ async function evaluateRemoveSafety(context, operation) {
     return peerPingGuard;
   }
 
-  if (priorityPublicationLeaderRemoveSafetyEvaluation) {
-    return priorityPublicationLeaderRemoveSafetyEvaluation;
-  }
-
-  return context.buildSafeRemoveSafetyEvaluation();
+  const safeEvaluation = priorityPublicationLeaderRemoveSafetyEvaluation ||
+    context.buildSafeRemoveSafetyEvaluation();
+  return readinessEntryLevel ?
+    {...safeEvaluation, readinessEntryLevel} :
+    safeEvaluation;
 }
 
 export {

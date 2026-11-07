@@ -207,6 +207,7 @@ test('readPublicationPlanningSnapshot uses authoritative membership evidence for
     ];
     const readinessRefreshModes = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID,
       controlPlanePublicationsOwner: {
         async listPublications() {
@@ -301,6 +302,7 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
     const persistOptions = [];
     const publicationReadOptions = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
@@ -472,6 +474,7 @@ test('reconcileActiveGateMembershipPublication owns handoff write visibility',
     const persistOptions = [];
     const publicationReadOptions = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: {
         async listPublications() {
@@ -572,6 +575,7 @@ test('reconcileActiveGateMembershipPublication uses handoff baseline under publi
     const persistedRows = [];
     const listPublicationCalls = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: {
         async listPublications() {
@@ -669,6 +673,7 @@ test('reconcileActiveGateMembershipPublication widens seed-only active-gate hand
       }));
     const persistedRows = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: {
         async listPublications() {
@@ -759,6 +764,7 @@ test('reconcileClusterMembership consumes active-gate owner reconcile handoff',
     };
     const persistedRows = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: {
         async listPublications() {
@@ -839,6 +845,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_TEST_NAME, async (t) => {
   });
   const enqueued = [];
   const coordinator = new MembershipPublicationCoordinator({
+    resolveIsControlPlanePublicationsWriteLeader: () => true,
     nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
     reconcileQueue: {
       enqueue(ownerKey, reason, context, options) {
@@ -915,6 +922,7 @@ test('reconcileActiveGateMembershipPublication defers stale durable readback',
     const pending = new Map();
     const enqueued = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
@@ -1018,6 +1026,7 @@ test('MembershipPublicationCoordinator bounds active-gate owner retry policy del
     let capturedRetryPolicy = null;
     const pending = new Map();
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
@@ -1113,6 +1122,7 @@ test('reconcileActiveGateMembershipPublication bounds retryable write failure de
     retryableError.retryAfterMs = PUBLICATION_CONVERGENCE_LONG_RETRY_AFTER_MS;
     retryableError.deferRetry = true;
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
@@ -1208,6 +1218,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
     const pending = new Map();
     const enqueued = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX

@@ -433,10 +433,10 @@ export function registerReplicaOperationRepositoryTailTests({
           executeQuery: async () => ({success: true, changes: 1}),
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() {
-            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
           },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -518,10 +518,10 @@ export function registerReplicaOperationRepositoryTailTests({
           executeQuery: async () => ({success: true, changes: 1}),
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() {
-            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
           },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -603,10 +603,10 @@ export function registerReplicaOperationRepositoryTailTests({
           executeQuery: async () => ({success: true, changes: 1}),
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() {
-            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
           },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {

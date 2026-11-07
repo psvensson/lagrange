@@ -108,7 +108,7 @@ test('ControlPlaneReadinessService returns the AVAILABLE planning answer whateve
     return {publishedPlanningEpoch: 22};
   };
   const snapshot =
-    await readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
+    await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
       'node-available', 1500);
   t.equal(snapshot?.publishedPlanningEpoch, 21,
     'the available answer is returned; a fresher async answer cannot replace it');

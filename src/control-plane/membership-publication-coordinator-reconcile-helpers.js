@@ -5,11 +5,15 @@ import {
 } from '../constants/index.js';
 import {CDC_PROPAGATED_TABLES} from '../cache/cdc-table-policy.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
-import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
+import {
+  normalizeControlPlanePublicationRow,
+  normalizeNodeRow,
+} from './system-row-normalizers.js';
 import {hasPriorityRecoverySpreadGap} from './priority-recovery-planning-intent.js';
 import {buildDerivedPriorityPartitionSummary} from './membership-publication-priority-partition-summary.js';
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
+  MEMBERSHIP_PUBLICATION_KIND,
   MEMBERSHIP_PUBLICATION_STATUS,
 } from './membership-publication-row-contract.js';
 import {
@@ -141,6 +145,34 @@ function hasInProgressServiceRows(serviceRows) {
   );
 }
 
+function extractActiveNodeIds(nodeRows) {
+  return normalizeNodeIdList(
+    nodeRows
+      .map((row) => normalizeNodeRow(row))
+      .filter((row) => row.status === SERVICE_STATUS.ACTIVE)
+      .map((row) => row.nodeId),
+  );
+}
+
+function readLatestCachedPublicationActiveNodeIds(systemTableCache) {
+  const publicationRows =
+    systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [];
+  let latestRow = null;
+  for (const row of publicationRows) {
+    const normalized = normalizeControlPlanePublicationRow(row);
+    if (normalized?.publicationKind !== MEMBERSHIP_PUBLICATION_KIND) {
+      continue;
+    }
+    if (
+      !latestRow ||
+      (normalized.publicationEpoch || 0) > (latestRow.publicationEpoch || 0)
+    ) {
+      latestRow = normalized;
+    }
+  }
+  return normalizeNodeIdList(latestRow?.publishedActiveNodeIds);
+}
+
 function hasLocalServicesConvergenceGap(systemTableCache) {
   if (typeof systemTableCache?.getAll !== 'function') {
     return false;
@@ -149,19 +181,25 @@ function hasLocalServicesConvergenceGap(systemTableCache) {
   if (hasInProgressServiceRows(serviceRows)) {
     return true;
   }
-  const nodeRows = systemTableCache.getAll(TABLES.NODES) || [];
-  const activeNodeCount = nodeRows.filter(
-    (row) => normalizeLowercaseStatus(row) === SERVICE_STATUS.ACTIVE,
-  ).length;
+  const locallyEligibleNodeIds = extractActiveNodeIds(
+    systemTableCache.getAll(TABLES.NODES) || [],
+  );
+  const publishedActiveNodeIds =
+    readLatestCachedPublicationActiveNodeIds(systemTableCache);
+  const eligibleNodeCount = normalizeNodeIdList([
+    ...locallyEligibleNodeIds,
+    ...publishedActiveNodeIds,
+  ]).length;
   const partitionRows = systemTableCache.getAll(TABLES.PARTITIONS) || [];
-  if (activeNodeCount <= 1 || partitionRows.length === 0) {
+  if (eligibleNodeCount <= 1 || partitionRows.length === 0) {
     return false;
   }
   return hasPriorityRecoverySpreadGap(
     buildDerivedPriorityPartitionSummary({
       partitionRows,
       serviceRows,
-      nodeRows,
+      locallyEligibleNodeIds,
+      publishedActiveNodeIds,
     }),
   );
 }
@@ -197,20 +235,21 @@ function reportOwnerMembershipReconcileSpent(coordinator, startedAtMs, observed)
 // Phase 4: defer the membership reconcile when this node is NOT the
 // control_plane_publications write-leader (leader-driven mode, unconditional
 // since 2026-07-02 — validated by the dt4 full-chain and dt6 publication
-// failback/ack-recovery/quorum-failback reproducers). Fail OPEN — never block a
-// reconcile on a missing/throwing predicate, so a coordinator wired without the
-// predicate reconciles as before.
+// failback/ack-recovery/quorum-failback reproducers). Fail CLOSED on a missing
+// or throwing predicate so a coordinator never drives a reconcile without
+// proven write-leader authority.
 function shouldDeferMembershipReconcileToWriteLeader(coordinator) {
   if (
+    !coordinator ||
     typeof coordinator.resolveIsControlPlanePublicationsWriteLeader !==
-    'function'
+      'function'
   ) {
-    return false;
+    return true;
   }
   try {
     return coordinator.resolveIsControlPlanePublicationsWriteLeader() !== true;
   } catch {
-    return false;
+    return true;
   }
 }
 

@@ -11,8 +11,11 @@ import {
   SERVE_ELIGIBILITY_DECISION,
   SERVE_ELIGIBILITY_STATE,
   SERVE_ELIGIBILITY_UNAVAILABLE_REASON,
+  ServeEligibilityOwner,
   isServeEligibilityAnswerEligible,
 } from '../../src/control-plane/serve-eligibility-owner.js';
+
+export {ServeEligibilityOwner};
 
 const FIXTURE_EPOCH = Object.freeze({
   publicationEpoch: 1,

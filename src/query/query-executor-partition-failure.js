@@ -16,6 +16,7 @@ const LOCAL_PLANNING_REFRESH_PENDING_CODES = Object.freeze([
   LOCAL_STR_PLANNING_SNAPSHOT_REFRESH_PENDING,
   'unavailable_stale',
   'committed_read_pending',
+  'committed_read_failed',
   'serve_eligibility_unavailable',
 ]);
 const ADDRESS_NODE_SEPARATOR = '/';

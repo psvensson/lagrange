@@ -353,7 +353,9 @@ function wakeContendedLaneForSliceTurn(delivery, lane) {
   if (!laneIsCurrent(delivery, lane) || delivery.owner.isShutdown) return;
   lane.consecutiveBackpressure = 0;
   lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-  if (!lane.inFlight && lane.retryTimer.state === OBLIGATION_RETRY_STATE.ARMED) {
+  const retryArmed = lane.retryTimer.state === OBLIGATION_RETRY_STATE.ARMED;
+  lane.sliceTurnReady = !retryArmed && Boolean(lane.inFlight);
+  if (retryArmed) {
     scheduleDeliveryRetry(delivery, {retryAfterMs: 1, reason: CDC_COMPLETION.BACKPRESSURE},
       OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
   }

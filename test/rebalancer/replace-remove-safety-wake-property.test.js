@@ -446,4 +446,27 @@ for (const partitionId of WAKE_PARTITIONS) {
       'every profile combination ran',
     );
   });
+
+  test(`W7 (${partitionId}): owner-read cache refresh or leadership handoff ` +
+    'during SAFE evaluation updates readinessEntryLevel so ' +
+    'admitReplaceSourceRemovalEffect does not self-reject with ' +
+    'effect_revalidation_inputs_moved', async (t) => {
+    await withScenario({
+      partitionId,
+      profiles: {[WAKE_NODE.OWNER]: READINESS_PROFILE.SYSTEM_FLOOR},
+    }, async (scenario) => {
+      const originalOwnerRead = scenario.readiness
+        .getPriorityRecoveryPlanningAnswerForOwnerRead.bind(scenario.readiness);
+      scenario.readiness.getPriorityRecoveryPlanningAnswerForOwnerRead =
+        async (...args) => {
+          scenario.readiness.setProfile(WAKE_NODE.OWNER, READINESS_PROFILE.READY);
+          return originalOwnerRead(...args);
+        };
+      const result = await scenario.execute();
+      t.equal(Boolean(result?.skipped), false,
+        'SAFE after owner-read refresh executes without deferral');
+      t.same(await readProgress(scenario), PROGRESSED,
+        'REMOVE_REPLICA is sent immediately without spurious effect_revalidation_inputs_moved');
+    });
+  });
 }

@@ -9,7 +9,6 @@ const {
   QUERY_ROUTING_REPAIR_REASON,
   READINESS_SNAPSHOT_KEY,
   SERVICE_TYPE,
-  SERVICE_STATUS,
   TABLES,
   resolveCanonicalLeaderRoutingGapState,
   resolveReadinessObservedAgeMs,
@@ -545,9 +544,8 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
   },
 
   /**
-   * Collect nodes to refresh when every active service row was filtered. Older
-   * snapshots can lack denial details when readiness is unavailable, so fall
-   * back to active addressed rows instead of skipping repair entirely.
+   * Collect nodes to refresh when every active service row was filtered by
+   * readiness.
    * @param {Object|null} routingSnapshot
    * @return {Array<string>}
    * @private
@@ -560,35 +558,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
     ) {
       return [];
     }
-    const deniedNodeIds = Object.keys(routingSnapshot.deniedByNodeId || {});
-    if (deniedNodeIds.length > 0) {
-      return deniedNodeIds;
-    }
-    const serviceRows =
-      Array.isArray(routingSnapshot.activeAddressedServices) ?
-        routingSnapshot.activeAddressedServices :
-        Array.isArray(routingSnapshot.serviceRows) ?
-          routingSnapshot.serviceRows.filter((service) =>
-            service?.status !== SERVICE_STATUS.INACTIVE &&
-            typeof service?.address === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-            service.address.length > 0,
-          ) :
-          [];
-    const nodeIds = [];
-    const seen = new Set();
-    for (const service of serviceRows) {
-      const nodeId = service?.node_id || service?.nodeId || null;
-      if (
-        typeof nodeId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-        nodeId.length === 0 ||
-        seen.has(nodeId)
-      ) {
-        continue;
-      }
-      seen.add(nodeId);
-      nodeIds.push(nodeId);
-    }
-    return nodeIds;
+    return Object.keys(routingSnapshot.deniedByNodeId || {});
   },
 
   /**

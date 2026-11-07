@@ -554,8 +554,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -699,8 +699,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -797,8 +797,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1043,8 +1043,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1137,8 +1137,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1231,8 +1231,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1307,8 +1307,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1397,8 +1397,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {

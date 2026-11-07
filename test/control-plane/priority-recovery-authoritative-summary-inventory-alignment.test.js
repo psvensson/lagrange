@@ -160,7 +160,7 @@ test('priority planning invalidates every publisher memo when terminal replica r
     });
 
     const stalePlanning =
-      readinessService.getMembershipPublicationPlanningAnswerSync('seed', nowMs);
+      readinessService.getPriorityRecoveryPlanningAnswerSync('seed', nowMs);
     t.match(
       schemaOperationsBlock(stalePlanning.priorityPartitionSummary),
       {
@@ -229,7 +229,7 @@ test('priority planning invalidates every publisher memo when terminal replica r
     cache.applyServiceChange('UPDATE', authoritativeRows[3]);
 
     const terminalPlanning =
-      readinessService.getMembershipPublicationPlanningAnswerSync('seed', nowMs);
+      readinessService.getPriorityRecoveryPlanningAnswerSync('seed', nowMs);
     t.equal(
       terminalPlanning.priorityPartitionSummary.satisfied,
       true,

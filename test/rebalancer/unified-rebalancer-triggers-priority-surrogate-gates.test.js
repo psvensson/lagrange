@@ -546,12 +546,6 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 3', async (t) => {
         async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
-        getMembershipPublicationPlanningAnswerSync() {
-          return planningSnapshot;
-        },
-        async getMembershipPublicationPlanningSnapshotBestEffort() {
-          return planningSnapshot;
-        },
         membershipPublicationService: {
           getLatestClusterPublicationSync() {
             return {priorityPartitionSummary};

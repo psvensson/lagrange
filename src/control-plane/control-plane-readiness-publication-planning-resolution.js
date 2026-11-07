@@ -646,7 +646,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
         nodeId,
         observedAt,
         membershipPublication,
-        this.getMembershipPublicationPlanningAnswerSync(nodeId, observedAt),
+        this.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt),
       ),
     );
   }

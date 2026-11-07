@@ -8,22 +8,14 @@ import * as DISPATCH_WAKE_PREEMPTION
   from './operation-workflow-dispatch-wake-preemption.js';
 import * as DISPATCH_RESPONSE_RECONCILE
   from './operation-workflow-dispatch-response-reconcile.js';
-import {
-  ensureDispatchMembershipEpochOrSkip,
-} from './operation-workflow-dispatch-epoch-gate.js';
-import {
-  ensureDispatchReservationOrSkip,
-} from './operation-workflow-dispatch-reservation-gate.js';
-import {
-  OPERATION_OWNER_TURN_POLICY,
-} from './operation-owner-turn-policy.js';
-import * as LEDGER_SELF_MOVE_GATE
-  from './operation-workflow-dispatch-ledger-self-move-gate.js';
-import {
-  runRebalancerActivity,
-} from '../diagnostics/formation-owner-attribution.js';
+import {ensureDispatchMembershipEpochOrSkip} from './operation-workflow-dispatch-epoch-gate.js';
+import {ensureDispatchReservationOrSkip} from './operation-workflow-dispatch-reservation-gate.js';
+import {OPERATION_OWNER_TURN_POLICY} from './operation-owner-turn-policy.js';
+import * as LEDGER_SELF_MOVE_GATE from './operation-workflow-dispatch-ledger-self-move-gate.js';
+import {runRebalancerActivity} from '../diagnostics/formation-owner-attribution.js';
 
 const {
+  OPERATION_METADATA_KEY,
   OPERATION_OWNER_ACTION,
   OPERATION_TRANSITION_REASON,
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -31,8 +23,10 @@ const {
   REBALANCER_SKIP_REASON,
   REBALANCE_COORDINATOR_LOG_MSG,
   REMOVE_SAFETY_HANDOFF_FAILURE_POLICY,
+  ReplicaOperationField,
   ReplicaOperationResponseStatus,
   WORKFLOW_STEP,
+  getOperationMetadataObject,
   isBootstrapTopologyDispatchDeferred,
   isCoordinatorOwnedOperationType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -338,6 +332,15 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
         sourceReplicaId.length > 0
       ) {
         operation.sourceReplicaId = sourceReplicaId;
+      }
+      const preconditionField =
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION;
+      if (!operation[preconditionField]) {
+        const precondition = getOperationMetadataObject(
+          operation.stepsHistory,
+          OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
+        );
+        if (precondition) operation[preconditionField] = precondition;
       }
       return operation;
     }

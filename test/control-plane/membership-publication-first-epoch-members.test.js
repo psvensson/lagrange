@@ -107,6 +107,7 @@ function startPublicationOwner(cache) {
     systemTableCache: cache,
     logger: QUIET_LOGGER,
     now: () => NOW_MS,
+    resolveIsControlPlanePublicationsWriteLeader: () => true,
     controlPlanePublicationsOwner: {
       async listPublicationsFromCache() {
         return cache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [];

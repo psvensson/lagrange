@@ -3,9 +3,6 @@
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
-import {
-  withOwnerReadPlanningEvidence,
-} from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -807,7 +804,7 @@ test('RebalanceCoordinator - defers critical REPLACE source removal until owner-
     const coordinator = createTestCoordinator({
       nodeId: TARGET_NODE_ID,
       enableTimeouts: false,
-      readinessFixture: {callbacks: withOwnerReadPlanningEvidence({
+      readinessFixture: {callbacks: {
         getNodeReadinessSync(nodeId) {
           return {
             nodeId,
@@ -832,7 +829,7 @@ test('RebalanceCoordinator - defers critical REPLACE source removal until owner-
             eligible: true,
           };
         },
-      })},
+      }},
       tablePolicyService: {
         getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
       },
@@ -958,7 +955,7 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },
-      readinessFixture: {callbacks: withOwnerReadPlanningEvidence({
+      readinessFixture: {callbacks: {
         getNodeReadinessSync(nodeId) {
           return {
             nodeId,
@@ -981,6 +978,9 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
               options?.participationKind === OWNER_READ_PARTICIPATION_KIND &&
               options?.decisionDimension === REMOVE_SAFETY_DECISION_DIMENSION,
           };
+        },
+        async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
+          return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
         },
         async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
           return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
@@ -1019,7 +1019,7 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
             }),
           };
         },
-      })},
+      }},
       tablePolicyService: {
         getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
       },

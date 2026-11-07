@@ -35,10 +35,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() {
-            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
           },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -853,10 +853,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
               },
             };
           },
-          getPriorityRecoveryPlanningAnswerSync() {
-            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
           },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return publishedPriorityRecoverySnapshot;
           },
         },

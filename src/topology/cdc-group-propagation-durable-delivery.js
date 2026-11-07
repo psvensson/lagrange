@@ -178,27 +178,27 @@ function expireYieldedSliceHoldIfElapsed(owner) {
   }
 }
 
-function isYieldedSliceTableDeferred(owner, tableName) {
-  expireYieldedSliceHoldIfElapsed(owner);
-  const holdActive =
+function isYieldHoldWindowActive(owner) {
+  return (
     Number.isFinite(owner.yieldedDurableSliceUntilMs) &&
     owner.yieldedDurableSliceUntilMs > 0 &&
-    owner.now() < owner.yieldedDurableSliceUntilMs;
-  if (!holdActive) {
+    owner.now() < owner.yieldedDurableSliceUntilMs
+  );
+}
+
+function isYieldedSliceTableDeferred(owner, tableName) {
+  expireYieldedSliceHoldIfElapsed(owner);
+  if (!isYieldHoldWindowActive(owner)) return false;
+  const candidateTable = tableName ?? null;
+  if (owner.durableSliceTable !== null && candidateTable === owner.durableSliceTable) {
     return false;
   }
-  const nextWaitingTable =
-    Array.isArray(owner.waitingDurableSliceTables) &&
-    owner.waitingDurableSliceTables.length > 0 ?
-      owner.waitingDurableSliceTables[0] :
-      null;
+  const nextWaitingTable = owner.waitingDurableSliceTables?.[0] ?? null;
   if (nextWaitingTable !== null) {
-    return (tableName ?? null) !== nextWaitingTable;
+    return candidateTable !== nextWaitingTable;
   }
-  return (
-    owner.yieldedDurableSliceTable !== null &&
-    (tableName ?? null) === owner.yieldedDurableSliceTable
-  );
+  return owner.yieldedDurableSliceTable !== null &&
+    candidateTable === owner.yieldedDurableSliceTable;
 }
 
 function decideDurablePropagationAdmission(occupied, sourceMismatch = false) {
@@ -291,6 +291,14 @@ function finishDurablePropagationSliceWave(owner, context) {
       owner.now() + CONTENDED_SLICE_YIELD_HOLD_MS;
     owner.durableSliceWaves = 0;
     owner.durableSliceContended = false;
+    return;
+  }
+  if (
+    Array.isArray(owner.waitingDurableSliceTables) &&
+    owner.waitingDurableSliceTables.length > 0
+  ) {
+    owner.yieldedDurableSliceUntilMs =
+      owner.now() + CONTENDED_SLICE_YIELD_HOLD_MS;
   }
 }
 
@@ -401,10 +409,7 @@ function prepareDurableForegroundWave(owner, wave, events, plan) {
       return {state: retryDelayMs < remainingMs ? CDC_GROUP_FOREGROUND_RETRY_STATE.ADVANCE :
         CDC_GROUP_FOREGROUND_RETRY_STATE.INSUFFICIENT_DURATION, retryDelayMs, remainingMs};
     },
-    wait: (delayMs) => {
-      if (plan.useGrouped) progress.refreshRoutes(plan.safeTargets, {fallback: true});
-      return context.run(() => owner.sleep(delayMs));
-    },
+    wait: (delayMs) => context.run(() => owner.sleep(delayMs)),
     // Unresolved debt returns to the source owner: the original source lane
     // retains the next invocation and this child scope retains actual cleanup.
   };

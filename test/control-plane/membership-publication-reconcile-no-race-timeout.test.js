@@ -33,6 +33,7 @@ test('a membership-publication owner reconcile that runs longer than one ' +
 async (t) => {
   const coordinator = new MembershipPublicationCoordinator({
     nodeId: OWNER_NODE_ID,
+    resolveIsControlPlanePublicationsWriteLeader: () => true,
   });
   let reconcileCalls = 0;
   let reconcileCompleted = false;

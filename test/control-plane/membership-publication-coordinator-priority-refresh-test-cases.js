@@ -125,6 +125,7 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
       const persistedRows = [];
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         controlPlanePublicationsOwner: {
           async listPublications() {
             return {rows: [durableRow]};
@@ -295,6 +296,7 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
       const persistedRows = [];
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         controlPlanePublicationsOwner: {
           async listPublications() {
             return {rows: [durableRow]};
@@ -449,6 +451,7 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
       };
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         controlPlanePublicationsOwner: {
           async listPublications() {
             return {rows: [durableRow]};
@@ -551,6 +554,7 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
       const persistedRows = [];
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         controlPlanePublicationsOwner: {
           async upsertPublication(row) {
             persistedRows.push(row);
@@ -644,6 +648,7 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
       const persistedRows = [];
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         controlPlanePublicationsOwner: {
           async upsertPublication(row) {
             persistedRows.push(row);

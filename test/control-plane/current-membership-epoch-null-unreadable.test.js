@@ -148,7 +148,7 @@ async (t) => {
     buildPublicationRow(PUBLICATION_STATUS_ESTABLISHING, EPOCH_ONE, now),
     now,
   );
-  const answer = owner.getMembershipPublicationPlanningAnswerSync(
+  const answer = owner.getPriorityRecoveryPlanningAnswerSync(
     TEST_NODE_ID,
     now,
   );

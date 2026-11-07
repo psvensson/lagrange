@@ -948,6 +948,7 @@ test('AdminControlSnapshot handoff reconcile defers when publication readback is
       new MembershipPublicationCoordinator({
         nodeId: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,
         controlPlanePublicationsOwner: publicationOwner,
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         systemTableCache: {
           getAll() {
             return [...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_EMPTY_ROWS];

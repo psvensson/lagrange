@@ -48,6 +48,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       };
       const persistedRows = [];
       const coordinator = new MembershipPublicationCoordinator({
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
           async listPublications() {
@@ -201,6 +202,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       };
       const persistedRows = [];
       const coordinator = new MembershipPublicationCoordinator({
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
           async listPublications() {
@@ -343,6 +345,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         closed_at: 1200,
       };
       const coordinator = new MembershipPublicationCoordinator({
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
           async listPublications() {
@@ -524,6 +527,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       let cacheReadCount = 0;
       let authoritativeReadCount = 0;
       const coordinator = new MembershipPublicationCoordinator({
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
           async listPublicationsFromCache() {
@@ -638,6 +642,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         closed_at: 1200,
       };
       const coordinator = new MembershipPublicationCoordinator({
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
           async listPublications(options = {}) {
@@ -709,6 +714,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
     async (t) => {
       const persistedRows = [];
       const coordinator = new MembershipPublicationCoordinator({
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
           async upsertPublication(row) {
@@ -892,6 +898,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
     async (t) => {
       let upsertCallCount = 0;
       const coordinator = new MembershipPublicationCoordinator({
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
           async getPublication(publicationId) {

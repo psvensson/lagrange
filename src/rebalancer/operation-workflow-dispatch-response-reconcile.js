@@ -1,10 +1,7 @@
 import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
-import {
-  captureReplaceOwnerLevel,
-  registerReplaceOwnerWaiter,
-} from './operation-workflow-replace-owner-wake.js';
+import {captureReplaceOwnerLevel, registerReplaceOwnerWaiter} from './operation-workflow-replace-owner-wake.js';
 import {
   REPLACE_EFFECT_ADMISSION,
   admitReplaceSourceRemovalEffect,
@@ -13,19 +10,11 @@ import {
   recordReplaceOwnerWait,
   recordReplaceSourceRemovalEffect,
 } from './operation-workflow-replace-owner.js';
-import {
-  assertCanonicalRebalancerEntityIdentity,
-} from './rebalancer-entity-identity.js';
-import {
-  isBoundMembershipPublicationEpoch,
-} from './replica-operation-membership-epoch-binding.js';
+import {assertCanonicalRebalancerEntityIdentity} from './rebalancer-entity-identity.js';
+import {isBoundMembershipPublicationEpoch} from './replica-operation-membership-epoch-binding.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
-import {
-  buildReplicaCreateAdmissionToken,
-  buildReplicaCreateAttemptToken,
-} from './replica-create-admission-token.js';
-import {bindReplaceCreateTargetReplicaId} from
-  './operation-workflow-replace-target-binding.js';
+import {buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken} from './replica-create-admission-token.js';
+import {bindReplaceCreateTargetReplicaId} from './operation-workflow-replace-target-binding.js';
 import {
   isRetainedCreateDeliveryResolution,
   resolveAmbiguousCreateDeliveryFailure,
@@ -524,7 +513,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       }
     }
     // Captured before the evaluation reads readiness (R-2 lost-wakeup rule).
-    const readinessEntryLevel = captureReplaceOwnerLevel(this, operation);
+    let readinessEntryLevel = captureReplaceOwnerLevel(this, operation);
     let removeSafetyEvaluation = await this.evaluateRemoveSafety(operation);
     if (removeSafetyEvaluation?.error) {
       if (
@@ -547,10 +536,12 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
             handoffResponse,
           )
         ) {
+          const refreshedEntryLevel = captureReplaceOwnerLevel(this, operation);
           const refreshedRemoveSafetyEvaluation =
             await this.evaluateRemoveSafety(operation);
           if (!refreshedRemoveSafetyEvaluation?.error) {
             removeSafetyEvaluation = refreshedRemoveSafetyEvaluation;
+            readinessEntryLevel = refreshedEntryLevel;
           }
         }
         if (
@@ -620,7 +611,8 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     }
     this.clearDeferredSafetyBlockState(operation.operationId);
     const heldEffect = await holdReplaceSourceRemovalEffect(
-      this, operation, replaceRemoveDispatchPhase, readinessEntryLevel);
+      this, operation, replaceRemoveDispatchPhase,
+      removeSafetyEvaluation?.readinessEntryLevel ?? readinessEntryLevel);
     if (heldEffect) {
       return heldEffect;
     }

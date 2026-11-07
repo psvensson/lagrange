@@ -493,17 +493,10 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
    * caller that requires the stronger evidence asks for the authoritative
    * owner-read surface explicitly and accepts that wait as part of its own
    * contract.
-   *
-   * The name is kept so this slice does not rename every call site, but the
-   * contract is AVAILABLE NOW.
    * @param {string} nodeId
    * @param {number} observedAt
    * @return {Promise<Object|null>} the available planning answer
    */
-  async getMembershipPublicationPlanningSnapshotBestEffort(nodeId, observedAt) {
-    return this.getMembershipPublicationPlanningAnswerSync(nodeId, observedAt);
-  }
-
   async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId, observedAt) {
     return this.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt);
   }
@@ -594,7 +587,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
   }
 
   getCurrentPublishedMembershipEpochSync(nodeId, observedAt) {
-    const planningSnapshot = this.getMembershipPublicationPlanningAnswerSync(
+    const planningSnapshot = this.getPriorityRecoveryPlanningAnswerSync(
       nodeId,
       observedAt,
     );

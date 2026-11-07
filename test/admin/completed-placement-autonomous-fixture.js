@@ -156,6 +156,7 @@ async function autonomousHandoffFixture(t) {
   membership = new MembershipPublicationCoordinator({nodeId: NODES[0],
     systemTableCache: cache, cdcIntegrationService: cdc,
     controlPlanePublicationsOwner: owners.controlPlanePublicationsOwner,
+    resolveIsControlPlanePublicationsWriteLeader: () => true,
     now: () => clock.now(), logger});
   // The existing priority cache listener is installed by the real constructor.
   // No planner start/new placement is requested: the placement already completed.

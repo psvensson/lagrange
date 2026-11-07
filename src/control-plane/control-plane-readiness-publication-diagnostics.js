@@ -348,19 +348,6 @@ class ControlPlaneReadinessPublicationDiagnostics
       observedAt,
     );
   }
-
-  /**
-   * Return one synchronous owner answer for membership-publication planning.
-   * This remains distinct from the async/best-effort surface so sync callers
-   * never reconstruct planning state from diagnostics locally.
-   *
-   * @param {string|null} nodeId
-   * @param {number|string|null} observedAt
-   * @return {Object|null}
-   */
-  getMembershipPublicationPlanningAnswerSync(nodeId, observedAt) {
-    return this.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt);
-  }
 }
 
 export {ControlPlaneReadinessPublicationDiagnostics};

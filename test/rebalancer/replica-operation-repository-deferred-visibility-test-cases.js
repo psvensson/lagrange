@@ -185,10 +185,10 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           executeQuery: async () => ({success: true}),
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() {
-            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
           },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -282,10 +282,10 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           executeQuery: async () => ({success: true}),
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() {
-            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
           },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -412,10 +412,10 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           executeQuery: async () => ({success: true}),
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() {
-            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
           },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -584,10 +584,10 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           },
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() {
-            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
           },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PUBLISHED',
               priorityPartitionSummary: {
@@ -667,10 +667,10 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           },
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() {
-            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
           },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PUBLISHED',
               priorityPartitionSummary: {
@@ -981,10 +981,10 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           executeQuery: async () => ({success: true}),
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerSync() {
-            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
           },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {

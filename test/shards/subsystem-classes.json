@@ -28,7 +28,7 @@
   "censusSize": 2605,
   "digest": "fnv1a32-6ddfcebd",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ca86fe10",
+  "observationDigest": "fnv1a32-e07a279d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4788,6 +4788,7 @@
     },
     "test/control-plane/membership-publication-deferred-catchup.test.js": {
       "files": [
+        "src/bootstrap/system-partition-classification.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/cdc/cdc-integration-service-authoritative-catchup.js",
         "src/cdc/cdc-integration-service-cache-visibility-wait.js",
@@ -13464,8 +13465,7 @@
     "test/query/query-executor-routable-services-and-read-delivery.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
-        "src/control-plane/projection-readiness-constants.js",
-        "test/control-plane/serve-eligibility-test-support.js"
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/query/query-executor-session-binding-and-build-sql.test.js": {

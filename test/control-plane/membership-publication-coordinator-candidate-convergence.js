@@ -663,6 +663,7 @@ test(MEMBERSHIP_PUBLICATION_RECONCILE_TEST_NAME, async (t) => {
   const readinessProbeNodeIds = [];
   const coordinator = new MembershipPublicationCoordinator({
     nodeId: MEMBERSHIP_PUBLICATION_TRIM_NODE_ONE_ID,
+    resolveIsControlPlanePublicationsWriteLeader: () => true,
     controlPlanePublicationsOwner: {
       async listPublications() {
         return {rows: [latestPublicationRow]};

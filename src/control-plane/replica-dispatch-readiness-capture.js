@@ -193,6 +193,8 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
         ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA],
       [OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP,
         ReplicaOperationField.BOOTSTRAP_MEMBERSHIP],
+      [OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION],
     ]) {
       const metadata = getOperationMetadataObject(stepsHistory, metadataKey);
       if (metadata) {

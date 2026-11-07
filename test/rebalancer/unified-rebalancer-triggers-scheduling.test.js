@@ -988,8 +988,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         createPostgresWireEndpoint('node-1'),
         createPostgresWireEndpoint('node-2'),
       ];
-      const readinessService = {
-        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache(
+      const readinessService = createMockControlPlaneReadinessService({
+        systemTableCache: createMockCache(
           nodes,
           [],
           [],
@@ -997,30 +997,30 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           [],
           nodeEndpoints,
           serviceEndpoints,
-        )}),
-        async getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return {
-            publishedActiveNodeIdsPresent: true,
-            publishedActiveNodeIds: ['node-1', 'node-2'],
-            projectedServingNodeIds: ['node-1', 'node-2'],
-            locallyEligibleNodeIds: ['node-1', 'node-2'],
-            priorityPartitionSummary: {
-              satisfied: false,
-              blockedPartitions: [{
-                partitionId: 'sql_write_operations-p1',
-                spreadGap: 1,
-              }],
-              missingPartitionIds: ['sql_write_operations-p1'],
-              requiredDistinctNodeCount: 3,
-            },
-          };
+        ),
+        membershipPublicationPlanningSnapshot: {
+          publishedActiveNodeIdsPresent: true,
+          publishedActiveNodeIds: ['node-1', 'node-2'],
+          projectedServingNodeIds: ['node-1', 'node-2'],
+          locallyEligibleNodeIds: ['node-1', 'node-2'],
+          priorityPartitionSummary: {
+            satisfied: false,
+            blockedPartitions: [{
+              partitionId: 'sql_write_operations-p1',
+              spreadGap: 1,
+            }],
+            missingPartitionIds: ['sql_write_operations-p1'],
+            requiredDistinctNodeCount: 3,
+          },
         },
-        async getMembershipPublicationPlanningSnapshot() {
-          t.fail(
-            'checkRebalance should use the canonical best-effort planning answer owner',
-          );
+        callbacks: {
+          async getMembershipPublicationPlanningSnapshot() {
+            t.fail(
+              'checkRebalance should use the canonical best-effort planning answer owner',
+            );
+          },
         },
-      };
+      });
       const rebalancer = createTestRebalancer({
         entityId: 'control_plane_publications-p1',
         entityType: EntityType.PARTITION,

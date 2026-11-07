@@ -18,8 +18,11 @@ import {
   CANONICAL_LEADER_ROUTING_GAP_STATE,
 } from '../../src/query/canonical-leader-routing.js';
 import {createMockMessageRouter} from './query-executor-mock-message-router.js';
-import {createCommittedServeEligibilityOwner} from
-  '../control-plane/serve-eligibility-test-support.js';
+import {
+  ServeEligibilityOwner,
+  committedServeEligibilityView,
+  createCommittedServeEligibilityOwner,
+} from '../control-plane/serve-eligibility-test-support.js';
 
 // Partition rows by id and service/partition rows by predicate, shared by
 // the fixtures that keep their rows on the cache object.
@@ -788,4 +791,104 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       'strict steady-state leader lookup should fail closed when only service-role-derived evidence exists',
     );
   });
+
+  test(
+    'QueryExecutor - executeOnPartition re-awaits real ServeEligibilityOwner ' +
+      'after initial committed_read_failed and recovers within caller budget',
+    async (t) => {
+      const partitionId = 'p-committed-read-failed-retry';
+      const nodeId = 'node-committed-read-recovery';
+      const systemCache = {
+        partitions: [{partition_id: partitionId, leader_node_id: nodeId}],
+        services: [
+          {
+            service_id: `${partitionId}-r1`,
+            service_type: SERVICE_TYPE.PARTITION,
+            partition_id: partitionId,
+            node_id: nodeId,
+            raft_role: 'leader',
+            address: `${nodeId}/partition/${partitionId}`,
+            status: SERVICE_STATUS.ACTIVE,
+          },
+        ],
+        ...PARTITION_CACHE_ACCESSORS,
+      };
+      const committedView = committedServeEligibilityView({
+        servingNodeIds: [nodeId],
+        nowMs: 1000,
+      });
+      let failCommittedRead = true;
+      const owner = new ServeEligibilityOwner({
+        now: () => 1000,
+        readTimeoutMs: 2500,
+        isNodeLoadReady: () => true,
+        setTimeout: (fn, delayMs) => setTimeout(fn, delayMs),
+        clearTimeout: (handle) => clearTimeout(handle),
+        readCommittedRows: async (tableName) => {
+          if (failCommittedRead) {
+            return {success: false, error: 'leader_unavailable', rows: []};
+          }
+          return committedView.readReadinessOwnerRows(tableName);
+        },
+      });
+      t.teardown(() => owner.shutdown());
+
+      const capturedRefreshOptions = [];
+      const observedReasonsAfterRefresh = [];
+      const readinessService = {
+        answerServeEligibility: (id) => owner.answer(id),
+        readServeEligibility: async (options = {}) => {
+          capturedRefreshOptions.push(options);
+          if (capturedRefreshOptions.length >= 2) {
+            failCommittedRead = false;
+          }
+          const outcome = await owner.readServeEligibility(options);
+          observedReasonsAfterRefresh.push(
+            owner.answer(nodeId).reason || owner.answer(nodeId).decision,
+          );
+          return outcome;
+        },
+      };
+      const executor = new QueryExecutor({
+        controlPlaneReadinessService: readinessService,
+        messageRouter: {
+          getConnectionState: () => 'connected',
+          deliver: async () =>
+            buildDeliveryEnvelope(
+              {acknowledged: true},
+              {success: true, rows: [{ok: 1}], changes: 0},
+            ),
+        },
+        systemCache,
+      });
+      executor.readRetryAttempts = 1;
+      executor.leaderRetryDelayMs = 1;
+      const timeoutBudget = Object.freeze({deadlineMs: Date.now() + 1500});
+      const cancellationToken = Object.freeze({
+        isCancelled: () => false,
+        onCancel: () => () => {},
+      });
+
+      t.equal(owner.answer(nodeId).reason, 'committed_read_pending');
+      const result = await executor.executeOnPartition(
+        partitionId,
+        'SELECT * FROM bench_accounts',
+        [],
+        true,
+        false,
+        false,
+        {timeoutMs: 1500, timeoutBudget, cancellationToken},
+      );
+
+      t.equal(result.success, true, 'read recovers after committed_read_failed');
+      t.same(
+        observedReasonsAfterRefresh,
+        ['committed_read_failed', 'eligible'],
+        'owner transitions from committed_read_failed on attempt 1 to eligible on attempt 2',
+      );
+      t.equal(capturedRefreshOptions.length, 2);
+      t.equal(capturedRefreshOptions[1].timeoutBudget, timeoutBudget);
+      t.equal(capturedRefreshOptions[1].cancellationToken, cancellationToken);
+    },
+  );
 }

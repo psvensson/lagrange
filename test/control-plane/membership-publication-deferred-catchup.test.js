@@ -2,6 +2,11 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   MembershipPublicationCoordinatorReconcile,
 } from '../../src/control-plane/membership-publication-coordinator-reconcile.js';
+import {
+  resolveDeferredPropagatedCatchupCooldownMs,
+} from '../../src/control-plane/membership-publication-coordinator-reconcile-helpers.js';
+import {PRIORITY_CONTROL_PLANE_TABLE_IDS} from
+  '../../src/bootstrap/system-partition-classification.js';
 import {buildMembershipPublicationRow} from
   '../../src/control-plane/membership-publication-planning-evidence.js';
 import {MEMBERSHIP_PUBLICATION_STATUS} from
@@ -688,3 +693,111 @@ test('non-services-leader with a syncing service row refreshes propagated caches
     t.equal(calls.length, 2,
       'once service row is active, the 30s cooldown applies again');
   });
+
+test('fast priority-spread propagated catch-up uses 5000ms cooldown when ' +
+  '3 eligible nodes have active priority replicas on only 2 holders, ' +
+  'and 30000ms once spread across all 3',
+async (t) => {
+  const cache = new SystemTableCache();
+  for (const nodeId of MEMBERS) {
+    cache.applySystemTableChange(TABLES.NODES, 'UPSERT', {
+      node_id: nodeId,
+      status: 'active',
+    }, {causeId: `seed-node-${nodeId}`});
+  }
+  const priorityPartitionIds = [...PRIORITY_CONTROL_PLANE_TABLE_IDS].map(
+    (tableId) => `${tableId}-p1`,
+  );
+  for (const partitionId of priorityPartitionIds) {
+    const tableId = partitionId.slice(0, -3);
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'UPSERT', {
+      partition_id: partitionId,
+      table_id: tableId,
+      table_name: tableId,
+      replica_count: 3,
+      leader_node_id: 'N1',
+    }, {causeId: `seed-partition-${partitionId}`});
+    for (const nodeId of ['N1', 'N2']) {
+      cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', {
+        service_id: `${partitionId}-${nodeId}`,
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: nodeId,
+        raft_role: nodeId === 'N1' ? 'leader' : 'follower',
+        status: 'active',
+        address: `${nodeId}/partition/${partitionId}-${nodeId}`,
+      }, {causeId: `seed-service-${partitionId}-${nodeId}`});
+    }
+  }
+  cache.applySystemTableChange(PUBLICATIONS, 'UPSERT', {
+    ...publicationRow(20, 1000),
+  }, {causeId: 'seed-pub-gap'});
+
+  let clock = 1000;
+  const propagatedSweeps = [];
+  const spyService = {
+    canWriteSystemTableLocally: () => false,
+    hydrateCdcPropagatedTablesFromAuthority: async (opts) => {
+      if (Array.isArray(opts?.tables) && !opts.tables.includes(PUBLICATIONS)) {
+        propagatedSweeps.push({at: clock, opts});
+      }
+      return {swept: true};
+    },
+  };
+  const coordinator = makeDeferringCoordinator({
+    cache,
+    cdcIntegrationService: spyService,
+    now: () => clock,
+  });
+
+  t.equal(
+    resolveDeferredPropagatedCatchupCooldownMs(cache, spyService),
+    5000,
+    'effective propagated catch-up cooldown is 5000ms when 3 eligible nodes have active priority replicas on only 2 holders',
+  );
+
+  await coordinator.refreshDeferredPropagatedCachesFromAuthority();
+  t.equal(propagatedSweeps.length, 1, 'initial sweep runs at t=1000');
+
+  clock = 4000;
+  const withinFast =
+    await coordinator.refreshDeferredPropagatedCachesFromAuthority();
+  t.equal(withinFast.reason, 'cooldown_active',
+    'call within 5000ms fast cooldown is rate-limited');
+  t.equal(propagatedSweeps.length, 1);
+
+  clock = 6500;
+  await coordinator.refreshDeferredPropagatedCachesFromAuthority();
+  t.equal(propagatedSweeps.length, 2,
+    'call after 5000ms fast cooldown runs immediately without waiting 30000ms');
+
+  for (const partitionId of priorityPartitionIds) {
+    cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', {
+      service_id: `${partitionId}-N3`,
+      service_type: 'partition',
+      partition_id: partitionId,
+      node_id: 'N3',
+      raft_role: 'follower',
+      status: 'active',
+      address: `N3/partition/${partitionId}-N3`,
+    }, {causeId: `seed-service-${partitionId}-N3`});
+  }
+
+  t.equal(
+    resolveDeferredPropagatedCatchupCooldownMs(cache, spyService),
+    30000,
+    'effective propagated catch-up cooldown returns to 30000ms once all 6 priority partitions are spread across 3 nodes',
+  );
+
+  clock = 15000;
+  const withinSteady =
+    await coordinator.refreshDeferredPropagatedCachesFromAuthority();
+  t.equal(withinSteady.reason, 'cooldown_active',
+    'at t=15000 (+8500ms after t=6500) the 30000ms steady-state cooldown is active');
+  t.equal(propagatedSweeps.length, 2);
+
+  clock = 37000;
+  await coordinator.refreshDeferredPropagatedCachesFromAuthority();
+  t.equal(propagatedSweeps.length, 3,
+    'at t=37000 (+30500ms after t=6500) the steady-state sweep runs again');
+});

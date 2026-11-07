@@ -120,6 +120,7 @@ test('reconcileActiveGateMembershipPublication reports bounded critical queue pr
     ]);
     const enqueued = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       reconcileQueue: {
         pending,
@@ -221,6 +222,7 @@ test('enqueueClusterMembershipReconcile merges pending explicit handoff targets'
       },
     };
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       reconcileQueue,
     });
@@ -326,6 +328,7 @@ test('enqueueClusterMembershipReconcile lets handoff-only owner wake clear stale
       },
     };
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       reconcileQueue,
     });
@@ -449,6 +452,7 @@ test('enqueueClusterMembershipReconcile applies explicit node exclusions to merg
       },
     };
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS[0],
       reconcileQueue,
     });
@@ -580,6 +584,7 @@ test('enqueueClusterMembershipReconcile lets fresh explicit targets clear stale 
       },
     };
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS[0],
       reconcileQueue,
     });
@@ -661,6 +666,7 @@ test('enqueueClusterMembershipReconcile merges retrying explicit handoff targets
       },
     };
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       reconcileQueue,
     });
@@ -764,6 +770,7 @@ test('enqueueClusterMembershipReconcile merges retrying explicit handoff targets
 test('enqueueClusterMembershipReconcile preserves retryable owner drain ' +
   'state after distributed participant failure', async (t) => {
   const coordinator = new MembershipPublicationCoordinator({
+    resolveIsControlPlanePublicationsWriteLeader: () => true,
     nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
   });
   const ownerKey = coordinator.buildOwnerKey();
