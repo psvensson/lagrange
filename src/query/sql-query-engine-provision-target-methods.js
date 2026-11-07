@@ -55,6 +55,31 @@ function _logUnreportedTargetNodeWaitFailure(
   );
 }
 
+function appendAnswerUnavailabilityReasons(reasons, ans) {
+  if (ans?.state === LOCAL_STR_UNAVAILABLE) {
+    reasons.push(ans.reason);
+  } else if (
+    ans?.decision !== LOCAL_STR_ELIGIBLE &&
+    Array.isArray(ans?.reasons)
+  ) {
+    reasons.push(...ans.reasons);
+  }
+}
+
+function collectCohortUnavailabilityReasons(cohort) {
+  const reasons =
+    cohort?.state === LOCAL_STR_UNAVAILABLE && cohort.reason ?
+      [cohort.reason] :
+      [];
+  for (const ans of Object.values(cohort?.answers || {})) {
+    appendAnswerUnavailabilityReasons(reasons, ans);
+  }
+  if (reasons.length === 0) {
+    reasons.push(LOCAL_STR_READY_LEASE_EXPIRED);
+  }
+  return [...new Set(reasons)];
+}
+
 class SQLQueryEngineProvisionTargetMethods {
   /**
    * Resolve the minimum routable replica cohort required before provisioning
@@ -122,8 +147,13 @@ class SQLQueryEngineProvisionTargetMethods {
           timeoutMs: waitBudgetMs,
           timeoutBudget: options.timeoutBudget || null,
           cancellationToken: options.cancellationToken || null,
+          signal: options.signal || null,
         });
       } catch (waitError) {
+        throwIfCancellationRequested(cancellationToken);
+        if (options.signal?.aborted) {
+          throw waitError;
+        }
         this.logger?.debug?.(
           QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
           {error: waitError?.message},
@@ -164,20 +194,7 @@ class SQLQueryEngineProvisionTargetMethods {
     const failOnTimeout = options.failOnTimeout !== false;
 
     if (resolvedNodeIds.length < quorumCount) {
-      const reasons = [];
-      if (cohort?.answers) {
-        for (const ans of Object.values(cohort.answers)) {
-          if (ans?.state === LOCAL_STR_UNAVAILABLE) {
-            reasons.push(ans.reason);
-          } else if (ans?.decision !== LOCAL_STR_ELIGIBLE && Array.isArray(ans?.reasons)) {
-            reasons.push(...ans.reasons);
-          }
-        }
-      }
-      if (reasons.length === 0) {
-        reasons.push(LOCAL_STR_READY_LEASE_EXPIRED);
-      }
-      const uniqueReasons = [...new Set(reasons)];
+      const uniqueReasons = collectCohortUnavailabilityReasons(cohort);
       const retryAfterMs = cohort?.retryAfterMs || this.tablePartitionProvisioningTimeoutMs;
 
       const error = new Error(

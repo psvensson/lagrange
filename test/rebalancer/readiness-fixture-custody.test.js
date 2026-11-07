@@ -83,7 +83,7 @@ test('missing committed reader stays missing in a healthy fixture world', (t) =>
   t.end();
 });
 
-test('helper-owned port reads its live world without borrowing another cache', (t) => {
+test('helper-owned port reads its live world without borrowing another cache', async (t) => {
   initializeTestEnvironment();
   const cache = createMockCache({nodes: [readyNode('first')]});
   const otherCache = createMockCache({nodes: [readyNode('other')]});
@@ -98,12 +98,11 @@ test('helper-owned port reads its live world without borrowing another cache', (
   cache.upsert('nodes', {...readyNode('first'), ready_lease_expires_at: 0});
   t.equal(port.answerCommittedNodes().nodeRows[0].ready_lease_expires_at, 0);
   t.equal(port.getNodeReadinessSync('first').dimensions.repairEligible, false);
-  t.equal(port.getMembershipPublicationPlanningSnapshotSync(), null,
+  t.equal(await port.getPriorityRecoveryPlanningSnapshotBestEffort(), null,
     'nodes alone do not fabricate a successful publication');
   cache.delete('nodes', 'first');
   t.same(port.answerCommittedNodes().nodeRows, [], 'empty world remains empty');
   t.same(other.answerCommittedNodes().nodeRows.map((row) => row.node_id), ['other']);
-  t.end();
 });
 
 test('a supplied coordinator keeps its own selected readiness owner', (t) => {
@@ -183,9 +182,9 @@ test('explicit live callbacks preserve readiness and planning arguments', async 
   });
   const options = {decisionDimension: 'repairEligible', refresh: false};
   t.equal(await port.getNodeReadiness('node-1', options), world);
-  t.equal(port.getMembershipPublicationPlanningSnapshotSync('node-1', 123), world);
+  t.equal(await port.getPriorityRecoveryPlanningSnapshotBestEffort('node-1', 123), world);
   world = {phase: 'recovered'};
-  t.equal(port.getMembershipPublicationPlanningSnapshotSync('node-2', 456), world);
+  t.equal(await port.getPriorityRecoveryPlanningSnapshotBestEffort('node-2', 456), world);
   t.equal(calls[0][1], options, 'options pass through by identity');
   t.same(calls.slice(1), [['node-1', 123], ['node-2', 456]]);
   t.equal(createMockControlPlaneReadinessService().getNodeReadinessSync('absent')

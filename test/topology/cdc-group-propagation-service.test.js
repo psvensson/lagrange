@@ -15,7 +15,10 @@ import {afterEach, test} from 'node:test';
 import {CDC_OPERATION, COLUMN, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {CDC_COMPLETION, unknownCdcAcceptance} from '../../src/cdc/cdc-delivery-outcome.js';
-import {beginCdcDeliveryInvocation} from '../../src/cdc/cdc-delivery-invocation.js';
+import {
+  beginCdcDeliveryInvocation,
+  scopeCdcDeliveryInvocation,
+} from '../../src/cdc/cdc-delivery-invocation.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {
   LATENCY_PROPAGATION_MODE,
@@ -793,4 +796,65 @@ test('contended durable propagation retains live contender credit past 2500ms de
     false,
     'PARTITIONS consumes its scheduling credit upon admission',
   );
+});
+
+test('releasing an active durable slice wave notifies onSliceTurnReady on the head FIFO contender', async (t) => {
+  let activeDeliverResolver = null;
+  const f = compose(t, LATENCY_PROPAGATION_MODE.SAFE, {
+    answer: async (payload) => {
+      if (activeDeliverResolver !== null) {
+        const wait = new Promise((resolve) => {
+          activeDeliverResolver = resolve;
+        });
+        await wait;
+      }
+      return committedTargetAnswer(payload);
+    },
+  });
+
+  activeDeliverResolver = () => {};
+  const svcWave1Req = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: 'svc-wake-1'}),
+  );
+  const svcWave1Promise = f.service.propagateCDCEvent(svcWave1Req);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  let turnReadyNotifications = 0;
+  const contenderDelivery = {
+    owner: {timeSource: new VirtualTimeSource({startMs: 1000}), isShutdown: false},
+  };
+  const baseContext = beginCdcDeliveryInvocation(contenderDelivery, () => true);
+  const lifecycle = () => true;
+  lifecycle.onSliceTurnReady = () => {
+    turnReadyNotifications += 1;
+  };
+  const contenderContext = scopeCdcDeliveryInvocation(
+    baseContext,
+    () => true,
+    () => ({
+      registerContentionOwner: () => lifecycle,
+    }),
+  );
+  const partContendReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.PARTITIONS, eventKey: 'part-wake-1'}),
+    contenderContext,
+  );
+  const busyRes = await f.service.propagateCDCEvent(partContendReq);
+  assert.equal(busyRes.error, CDC_COMPLETION.BACKPRESSURE);
+  assert.equal(turnReadyNotifications, 0);
+
+  const releaseWave1 = activeDeliverResolver;
+  activeDeliverResolver = null;
+  releaseWave1();
+  assert.equal((await svcWave1Promise).success, true);
+  await Promise.resolve();
+  assert.equal(
+    turnReadyNotifications,
+    1,
+    'head contender is notified immediately when active wave releases',
+  );
+  baseContext.finish();
 });

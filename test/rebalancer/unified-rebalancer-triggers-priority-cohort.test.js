@@ -104,55 +104,67 @@ function createTestRebalancer(options = {}) {
   });
 }
 
+function createThreeActiveNodesFixture(planningSnapshot) {
+  const nodes = [
+    {node_id: 'node-1', status: NodeStatus.ACTIVE},
+    {node_id: 'node-2', status: NodeStatus.ACTIVE},
+    {node_id: 'node-3', status: NodeStatus.ACTIVE},
+  ];
+  const nodeEndpoints = [
+    createNodeEndpoint('node-1'),
+    createNodeEndpoint('node-2'),
+    createNodeEndpoint('node-3'),
+  ];
+  const serviceEndpoints = [
+    createPostgresWireEndpoint('node-1'),
+    createPostgresWireEndpoint('node-2'),
+    createPostgresWireEndpoint('node-3'),
+  ];
+  const readinessService = {
+    ...createMockControlPlaneReadinessService({
+      systemTableCache: createMockCache(
+        nodes,
+        [],
+        [],
+        [],
+        [],
+        nodeEndpoints,
+        serviceEndpoints,
+      ),
+    }),
+    async getPriorityRecoveryPlanningSnapshotBestEffort() {
+      return planningSnapshot;
+    },
+  };
+  return {nodes, nodeEndpoints, serviceEndpoints, readinessService};
+}
+
 test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
   initializeTestEnvironment();
   await t.test(
     'checkRebalance ignores authoritative priority rows targeting nodes outside the current eligible cohort',
     async (t) => {
       let authoritativeEntityReadCalls = 0;
-      const nodes = [
-        {node_id: 'node-1', status: NodeStatus.ACTIVE},
-        {node_id: 'node-2', status: NodeStatus.ACTIVE},
-        {node_id: 'node-3', status: NodeStatus.ACTIVE},
-      ];
-      const nodeEndpoints = [
-        createNodeEndpoint('node-1'),
-        createNodeEndpoint('node-2'),
-        createNodeEndpoint('node-3'),
-      ];
-      const serviceEndpoints = [
-        createPostgresWireEndpoint('node-1'),
-        createPostgresWireEndpoint('node-2'),
-        createPostgresWireEndpoint('node-3'),
-      ];
-      const readinessService = {
-        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache(
-          nodes,
-          [],
-          [],
-          [],
-          [],
-          nodeEndpoints,
-          serviceEndpoints,
-        )}),
-        async getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return {
-            publishedActiveNodeIdsPresent: true,
-            publishedActiveNodeIds: ['node-1', 'node-2'],
-            projectedServingNodeIds: ['node-1', 'node-2'],
-            locallyEligibleNodeIds: ['node-1', 'node-2'],
-            priorityPartitionSummary: {
-              satisfied: false,
-              blockedPartitions: [{
-                partitionId: 'sql_write_operations-p1',
-                spreadGap: 1,
-              }],
-              missingPartitionIds: ['sql_write_operations-p1'],
-              requiredDistinctNodeCount: 3,
-            },
-          };
+      const {
+        nodes,
+        nodeEndpoints,
+        serviceEndpoints,
+        readinessService,
+      } = createThreeActiveNodesFixture({
+        publishedActiveNodeIdsPresent: true,
+        publishedActiveNodeIds: ['node-1', 'node-2'],
+        projectedServingNodeIds: ['node-1', 'node-2'],
+        locallyEligibleNodeIds: ['node-1', 'node-2'],
+        priorityPartitionSummary: {
+          satisfied: false,
+          blockedPartitions: [{
+            partitionId: 'sql_write_operations-p1',
+            spreadGap: 1,
+          }],
+          missingPartitionIds: ['sql_write_operations-p1'],
+          requiredDistinctNodeCount: 3,
         },
-      };
+      });
       const rebalancer = createTestRebalancer({
         entityId: 'sql_write_operations-p1',
         entityType: EntityType.PARTITION,
@@ -236,50 +248,27 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
     'checkRebalance ignores authoritative in-flight priority ACTIVE replace rows that satisfy ' +
       'spread on the eligible target',
     async (t) => {
-      const nodes = [
-        {node_id: 'node-1', status: NodeStatus.ACTIVE},
-        {node_id: 'node-2', status: NodeStatus.ACTIVE},
-        {node_id: 'node-3', status: NodeStatus.ACTIVE},
-      ];
-      const nodeEndpoints = [
-        createNodeEndpoint('node-1'),
-        createNodeEndpoint('node-2'),
-        createNodeEndpoint('node-3'),
-      ];
-      const serviceEndpoints = [
-        createPostgresWireEndpoint('node-1'),
-        createPostgresWireEndpoint('node-2'),
-        createPostgresWireEndpoint('node-3'),
-      ];
-      const readinessService = {
-        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache(
-          nodes,
-          [],
-          [],
-          [],
-          [],
-          nodeEndpoints,
-          serviceEndpoints,
-        )}),
-        getPriorityRecoveryPlanningAnswerSync() {
-          return {
-            publishedActiveNodeIdsPresent: true,
-            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-            projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
-            locallyEligibleNodeIds: ['node-1', 'node-2'],
-            priorityPartitionSummary: {
-              blockedPartitions: [{
-                partitionId: 'control_plane_publications-p1',
-                requiredDistinctNodeCount: 3,
-                readyDistinctNodeCount: 2,
-                spreadGap: 1,
-              }],
-              missingPartitionIds: ['control_plane_publications-p1'],
-              requiredDistinctNodeCount: 3,
-            },
-          };
+      const {
+        nodes,
+        nodeEndpoints,
+        serviceEndpoints,
+        readinessService,
+      } = createThreeActiveNodesFixture({
+        publishedActiveNodeIdsPresent: true,
+        publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+        projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
+        locallyEligibleNodeIds: ['node-1', 'node-2'],
+        priorityPartitionSummary: {
+          blockedPartitions: [{
+            partitionId: 'control_plane_publications-p1',
+            requiredDistinctNodeCount: 3,
+            readyDistinctNodeCount: 2,
+            spreadGap: 1,
+          }],
+          missingPartitionIds: ['control_plane_publications-p1'],
+          requiredDistinctNodeCount: 3,
         },
-      };
+      });
       const rebalancer = createTestRebalancer({
         entityId: 'control_plane_publications-p1',
         entityType: EntityType.PARTITION,
@@ -362,7 +351,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           nodeEndpoints,
           serviceEndpoints,
         )}),
-        getPriorityRecoveryPlanningAnswerSync() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
@@ -473,7 +462,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           nodeEndpoints,
           serviceEndpoints,
         )}),
-        getPriorityRecoveryPlanningAnswerSync() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
@@ -583,7 +572,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           nodeEndpoints,
           serviceEndpoints,
         )}),
-        getPriorityRecoveryPlanningAnswerSync() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],

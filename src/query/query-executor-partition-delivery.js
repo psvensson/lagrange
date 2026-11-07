@@ -206,13 +206,14 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
       let {candidates: serviceCandidates, routingSnapshot} =
         resolveAttemptCandidates();
       if (
-        !awaitedRoutingRepair &&
         serviceCandidates.length === 0 &&
+        (!awaitedRoutingRepair || hasPlanningRefreshPendingDenial(routingSnapshot)) &&
         (await this.maybeAwaitDeniedPartitionRoutingRepair(routingSnapshot, {
           allowReadinessAuthoritativeRefresh,
           timeoutMs: getRemainingExecutionBudgetMs(),
           timeoutBudget: executionOptions?.timeoutBudget || null,
           cancellationToken,
+          signal: executionOptions?.signal || null,
         }))
       ) {
         awaitedRoutingRepair = true;

@@ -41,10 +41,13 @@ class CancellationToken {
     }
     this._cancelled = true;
     this._reason = reason ?? ERR.CANCELLED;
-    for (const cb of this._callbacks) {
+    const callbacks = [...this._callbacks];
+    const children = [...this._children];
+    this._callbacks = [];
+    for (const cb of callbacks) {
       cb(this._reason);
     }
-    for (const child of this._children) {
+    for (const child of children) {
       child.cancel(this._reason);
     }
   }

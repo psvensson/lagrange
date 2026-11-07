@@ -624,6 +624,65 @@ test('Unit: NodeHandle.query reuses one Admin API connection', async () => {
   }
 });
 
+test('Unit: NodeHandle.queryWithTimeout single-flights concurrent cold connections and reconnects after close', async () => {
+  let snapshotConnectionCount = 0;
+  let activeSnapshotSocket = null;
+  await withTestAdminWebSocketNode(
+    (socket, request) => {
+      const requestUrl = new URL(
+        request?.url || '',
+        'ws://' + TEST_ADMIN_HOST,
+      );
+      if (requestUrl.searchParams.get('lane') === TEST_SNAPSHOT_LANE) {
+        snapshotConnectionCount += 1;
+        activeSnapshotSocket = socket;
+      }
+      socket.on('message', (data) => {
+        const parsed = JSON.parse(data.toString());
+        socket.send(JSON.stringify({
+          type: TEST_QUERY_RESULT_MESSAGE_TYPE,
+          queryId: parsed.queryId,
+          results: [TEST_RESET_LANE_ROW],
+          count: TEST_QUERY_RESULT_COUNT,
+        }));
+      });
+    },
+    {},
+    async (node) => {
+      const concurrentResults = await Promise.all([
+        node.queryWithTimeout('SELECT 1', [], {lane: TEST_SNAPSHOT_LANE}),
+        node.queryWithTimeout('SELECT 2', [], {lane: TEST_SNAPSHOT_LANE}),
+        node.queryWithTimeout('SELECT 3', [], {lane: TEST_SNAPSHOT_LANE}),
+        node.queryWithTimeout('SELECT 4', [], {lane: TEST_SNAPSHOT_LANE}),
+      ]);
+      assert.strictEqual(concurrentResults.length, 4);
+      assert.strictEqual(
+        snapshotConnectionCount,
+        1,
+        'concurrent cold queries on the same lane must share a single WebSocket connection',
+      );
+      const clientSocket = node._adminSocketByLane.get(TEST_SNAPSHOT_LANE);
+      assert.ok(clientSocket, 'snapshot lane socket should be tracked');
+      const closedOnClient = new Promise((resolve) => {
+        clientSocket.once('close', resolve);
+      });
+      activeSnapshotSocket.close();
+      await closedOnClient;
+      const reconnectedResult = await node.queryWithTimeout(
+        'SELECT 5',
+        [],
+        {lane: TEST_SNAPSHOT_LANE},
+      );
+      assert.deepStrictEqual(reconnectedResult.rows, [TEST_RESET_LANE_ROW]);
+      assert.strictEqual(
+        snapshotConnectionCount,
+        2,
+        'query after remote socket close must open a fresh WebSocket instead of reusing a resolved readyPromise',
+      );
+    },
+  );
+});
+
 test('Unit: NodeHandle.getStatus derives ACTIVE state from local discovery readiness',
   async () => {
     const server = new WebSocketServer({

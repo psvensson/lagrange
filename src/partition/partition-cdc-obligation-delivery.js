@@ -24,8 +24,9 @@ import {CDC_COMPLETION, CDC_COVERAGE_STATE} from '../cdc/cdc-delivery-outcome.js
 import {beginCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
 import {captureCdcEvents} from '../cdc/cdc-event-envelope.js';
 import {cdcObligationCoverage, cdcProgressCurrent, cdcSubscriberInvocation, nextCdcSubscriber,
-  observeCdcSubscriber, prepareCdcObligationProgress,
-  releaseContendedPropagationOwners} from './partition-cdc-obligation-progress.js';
+  observeCdcSubscriber, prepareCdcObligationProgress, recordUncoveredSubscriberHint,
+  releaseContendedPropagationOwners, throwUncoveredObligationError} from
+  './partition-cdc-obligation-progress.js';
 import {PARTITION_CDC_OBLIGATION_BOUND as BOUND, PARTITION_CDC_OBLIGATION_DRIVE_STATE as DRIVE,
   PARTITION_CDC_OBLIGATION_EVENT_FIELD as FIELD, PARTITION_CDC_OBLIGATION_FAILURE_CODE as CODE,
   PARTITION_CDC_OBLIGATION_FLUSH_STATE as FLUSH, PARTITION_CDC_OBLIGATION_LOG_MSG as LOG_MSG,
@@ -348,22 +349,14 @@ function scheduleDeliveryRetry(delivery, error = null, explicitDisposition = nul
   return delayMs;
 }
 
-function recordUncoveredSubscriberHint(state, answer) {
-  const hint = answer?.retryAfterMs;
-  if (Number.isFinite(hint) && hint > 0) {
-    state.retryAfterMs = state.retryAfterMs === null ? hint : Math.min(state.retryAfterMs, hint);
+function wakeContendedLaneForSliceTurn(delivery, lane) {
+  if (!laneIsCurrent(delivery, lane) || delivery.owner.isShutdown) return;
+  lane.consecutiveBackpressure = 0;
+  lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+  if (!lane.inFlight && lane.retryTimer.state === OBLIGATION_RETRY_STATE.ARMED) {
+    scheduleDeliveryRetry(delivery, {retryAfterMs: 1, reason: CDC_COMPLETION.BACKPRESSURE},
+      OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
   }
-  if (answer?.error === CDC_COMPLETION.BACKPRESSURE ||
-      answer?.reason === CDC_COMPLETION.BACKPRESSURE) state.backpressured = true;
-}
-
-function throwUncoveredObligationError(lane, current, state) {
-  if (!current) lane.currentObligation = null;
-  const error = new Error(CDC_COMPLETION.UNKNOWN);
-  error.deferRetry = true;
-  if (state.retryAfterMs !== null) error.retryAfterMs = state.retryAfterMs;
-  if (state.backpressured) error.reason = CDC_COMPLETION.BACKPRESSURE;
-  throw error;
 }
 
 // Deliver one owed obligation to every current subscriber; acknowledged when
@@ -376,7 +369,8 @@ async function deliverObligation(delivery, lane, obligation, subscribers, contex
   const hintState = {retryAfterMs: null, backpressured: false};
   for (let visited = 0; visited < subscribers.length; visited += 1) {
     const branch = nextCdcSubscriber(cell);
-    const scoped = cdcSubscriberInvocation(delivery, lane, cell, branch, context, event);
+    const scoped = cdcSubscriberInvocation(delivery, lane, cell, branch, context, event,
+      () => wakeContendedLaneForSliceTurn(delivery, lane));
     scoped.assertCurrent();
     if (branch.coverage.state !== CDC_COVERAGE_STATE.UNCOVERED) continue;
     const answer = await delivery.deliverCDCEventToSubscriber(branch.wrapper, event, scoped);

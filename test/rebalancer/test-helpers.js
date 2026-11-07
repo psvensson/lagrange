@@ -331,16 +331,8 @@ function createMockControlPlaneReadinessService(options = {}) {
       if (livenessProjectionByNodeId) return livenessProjectionByNodeId[nodeId] ?? null;
       return project(readNodeRows().find((row) => row.node_id === nodeId));
     },
-    getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt) {
-      return buildPlanningSnapshot(nodeId, observedAt);
-    },
-    getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt = Date.now()) {
-      return buildPlanningSnapshot(nodeId, observedAt);
-    },
     async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId, observedAt = Date.now()) {
-      return typeof this?.getPriorityRecoveryPlanningAnswerSync === 'function' ?
-        this.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt) :
-        buildPlanningSnapshot(nodeId, observedAt);
+      return buildPlanningSnapshot(nodeId, observedAt);
     },
     ...callbacks,
   };

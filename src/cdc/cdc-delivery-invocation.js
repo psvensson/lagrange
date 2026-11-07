@@ -53,6 +53,10 @@ function invocationError(code = CDC_COMPLETION.UNKNOWN) {
   return Object.assign(new Error(code), {code, deferRetry: true});
 }
 
+function silenceUnhandledRejection(completion) {
+  Promise.resolve(completion).then(() => {}, () => {});
+}
+
 function configuredInvocationBudget() {
   const config = ConfigurationManager.getInstance();
   return Math.min(
@@ -92,8 +96,13 @@ function scopeCdcDeliveryInvocation(parent, isCurrent, operations) {
       return parent.remainingMs();
     },
     ownChild: (completion) => {
-      assertCurrent();
-      return parent.ownChild(completion);
+      try {
+        assertCurrent();
+        return parent.ownChild(completion);
+      } catch (error) {
+        silenceUnhandledRejection(completion);
+        throw error;
+      }
     },
     run: async (operation) => {
       assertCurrent();
@@ -132,8 +141,13 @@ function openCdcDeliveryChildScope(parent) {
     if (!accepting) throw invocationError();
   };
   const ownChild = (completion) => {
-    assertCurrent();
-    parent.ownChild(completion);
+    try {
+      assertCurrent();
+      parent.ownChild(completion);
+    } catch (error) {
+      silenceUnhandledRejection(completion);
+      throw error;
+    }
     children += 1;
     const settled = () => {
       children -= 1;
@@ -157,7 +171,12 @@ function openCdcDeliveryChildScope(parent) {
         assertCurrent();
         return operation();
       }));
-      return parent.run(() => raw);
+      try {
+        return parent.run(() => raw);
+      } catch (error) {
+        silenceUnhandledRejection(raw);
+        throw error;
+      }
     },
     finish: () => {
       accepting = false;
@@ -213,7 +232,12 @@ function beginCdcDeliveryInvocation(delivery, isCurrent, onClosed = () => {}) {
   const ownChild = (completion) => {
     // Acquisition must happen before a caller races the public response. Both
     // handlers consume settlement; no rejected finally tail is detached.
-    assertCurrent();
+    try {
+      assertCurrent();
+    } catch (error) {
+      silenceUnhandledRejection(completion);
+      throw error;
+    }
     childCount += 1;
     const settled = () => {
       childCount -= 1;

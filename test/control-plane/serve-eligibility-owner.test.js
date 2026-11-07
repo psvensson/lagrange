@@ -845,3 +845,117 @@ test(
     t.equal(owner.record?.epoch?.publicationEpoch, EPOCH_FIVE);
   },
 );
+
+test(
+  'ServeEligibilityOwner cancels all concurrent waiters sharing one CancellationToken without skipping any waiter when callbacks unsubscribe synchronously',
+  async (t) => {
+    const CALLER_TIMEOUT_MS = 900;
+    const CANCEL_REASON = 'QUERY_CANCELLED';
+    const {owner} = createHarness({
+      publications: [buildPublicationRow(EPOCH_FIVE)],
+    });
+    t.teardown(() => owner.shutdown());
+
+    let releaseRead;
+    const readHeld = new Promise((resolve) => {
+      releaseRead = resolve;
+    });
+    const baseRead = owner.readCommittedRows;
+    owner.readCommittedRows = async (tableName) => {
+      const answer = await baseRead(tableName);
+      await readHeld;
+      return answer;
+    };
+
+    const sharedToken = new CancellationToken();
+    const callerOne = owner.readServeEligibility({
+      timeoutMs: CALLER_TIMEOUT_MS,
+      cancellationToken: sharedToken,
+    });
+    const callerTwo = owner.readServeEligibility({
+      timeoutMs: CALLER_TIMEOUT_MS,
+      cancellationToken: sharedToken,
+    });
+    const callerThree = owner.readServeEligibility({
+      timeoutMs: CALLER_TIMEOUT_MS,
+      cancellationToken: sharedToken,
+    });
+
+    t.equal(owner.waiters.size, 3, 'three concurrent callers share one token');
+    sharedToken.cancel(CANCEL_REASON);
+    t.equal(
+      owner.waiters.size,
+      0,
+      'all three waiters detach synchronously when shared token cancels',
+    );
+
+    await t.rejects(callerOne, /QUERY_CANCELLED/, 'first waiter rejects immediately');
+    await t.rejects(callerTwo, /QUERY_CANCELLED/, 'second waiter rejects immediately');
+    await t.rejects(callerThree, /QUERY_CANCELLED/, 'third waiter rejects immediately');
+
+    releaseRead();
+    await owner.inFlight;
+  },
+);
+
+test(
+  'ServeEligibilityOwner does not accumulate per-waiter promise handlers on shared inFlight across repeated timed-out or cancelled callers',
+  async (t) => {
+    const CALLER_TIMEOUT_MS = 150;
+    const {owner, state} = createHarness({
+      publications: [buildPublicationRow(EPOCH_FIVE)],
+    });
+    t.teardown(() => owner.shutdown());
+
+    let releaseRead;
+    const readHeld = new Promise((resolve) => {
+      releaseRead = resolve;
+    });
+    const baseRead = owner.readCommittedRows;
+    owner.readCommittedRows = async (tableName) => {
+      const answer = await baseRead(tableName);
+      await readHeld;
+      return answer;
+    };
+
+    const firstCaller = owner.readServeEligibility({
+      timeoutMs: CALLER_TIMEOUT_MS,
+    });
+    t.ok(owner.inFlight, 'shared inFlight promise is created once');
+
+    let inFlightCatchRegistrations = 0;
+    const originalCatch = owner.inFlight.catch.bind(owner.inFlight);
+    owner.inFlight.catch = (...args) => {
+      inFlightCatchRegistrations += 1;
+      return originalCatch(...args);
+    };
+
+    const firstTimer = state.timers.find(
+      (timer) => !timer.cleared && timer.delayMs === CALLER_TIMEOUT_MS,
+    );
+    firstTimer.fn();
+    await firstCaller;
+    t.equal(owner.waiters.size, 0, 'first timed-out waiter is detached');
+
+    for (let index = 0; index < 4; index += 1) {
+      const token = new CancellationToken();
+      const promise = owner.readServeEligibility({
+        timeoutMs: CALLER_TIMEOUT_MS,
+        cancellationToken: token,
+      });
+      token.cancel('QUERY_CANCELLED');
+      await t.rejects(promise, /QUERY_CANCELLED/);
+      t.equal(owner.waiters.size, 0, `cancelled waiter ${index + 1} is detached`);
+    }
+
+    t.equal(
+      inFlightCatchRegistrations,
+      0,
+      'waiter registration attaches no per-caller .catch handler to shared inFlight',
+    );
+
+    releaseRead();
+    await owner.inFlight;
+    t.equal(owner.record?.epoch?.publicationEpoch, EPOCH_FIVE);
+  },
+);

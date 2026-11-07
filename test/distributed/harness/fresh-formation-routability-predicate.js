@@ -43,9 +43,6 @@ import {
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
 } from '../../../src/bootstrap/system-partition-classification.js';
 import {
-  isPrioritySpreadHolderServiceRow,
-} from '../../../src/control-plane/membership-publication-priority-partition-summary.js';
-import {
   isTerminalReplicaOperationRecord,
 } from '../../../src/rebalancer/replica-operation-progress.js';
 import {
@@ -68,6 +65,8 @@ const ZERO = 0;
 const PROJECTION_PERSISTENCE_BOUND_MS = 1000;
 const ONE = 1;
 const TWO = 2;
+const SERVICE_TYPE_PARTITION = 'partition';
+const SERVICE_STATUS_ACTIVE = 'active';
 const CONTRACT_STATE_PENDING = 'pending';
 const SERVE_LANE_PREFIX = 'serve_lane_';
 const JSON_OPEN_BRACE = '{';
@@ -250,7 +249,8 @@ function priorityPartitionRows(partitionRows) {
 function activePartitionServiceNodeIds(serviceRows, partitionId) {
   return uniqueSorted(arrayMap(arrayFilter(serviceRows, (row) =>
     row?.partition_id === partitionId &&
-    isPrioritySpreadHolderServiceRow(row) &&
+    row?.service_type === SERVICE_TYPE_PARTITION &&
+    row?.status === SERVICE_STATUS_ACTIVE &&
     typeof row?.node_id === TYPEOF_STRING), (row) => row.node_id));
 }
 
@@ -452,6 +452,11 @@ function readAuthorityRows(authority, labels, reasons) {
   return rowsByLabel;
 }
 
+function resolveProjectionRevision(observerRevision) {
+  const rev = observerRevision?.watermark?.tableMutationRevision;
+  return Number.isSafeInteger(rev) ? rev : null;
+}
+
 function compareObserverSpread(context, authoritative, sink) {
   const {
     authorityRevision,
@@ -465,17 +470,20 @@ function compareObserverSpread(context, authoritative, sink) {
   sink.projections.push({blockedPartitions: [...blocked.values()],
     observerNodeId, satisfied});
   if (!satisfied) sink.reasons.push(`projection_not_spread:${observerNodeId}`);
+  const projectionRevision = resolveProjectionRevision(observerRevision);
   for (const entry of authoritative) {
     const projected = blocked.get(entry.partitionId) || null;
     if (entry.satisfied === (projected === null)) continue;
     sink.disagreements.push({
       authority: entry,
       authorityRevision,
+      authorityWatermark: authorityRevision,
       key: `priority_spread:${observerNodeId}:${entry.partitionId}`,
       observerNodeId,
       observerRevision,
       projection: projected === null ? {satisfied: true} :
         {satisfied: false, ...projected},
+      projectionRevision,
       revisionSkew,
     });
   }
@@ -552,10 +560,12 @@ function compareProjectedInFlight(
     disagreements.push({
       authority: {inFlightCount: authorityCount},
       authorityRevision,
+      authorityWatermark: authorityRevision,
       key: `ledger_in_flight:${observerNodeId}`,
       observerNodeId,
       observerRevision,
       projection: {inFlightCount: count},
+      projectionRevision: resolveProjectionRevision(observerRevision),
       revisionSkew,
     });
   }
@@ -619,59 +629,51 @@ function evaluateFormationObservation(observation) {
   };
 }
 
-function didAuthorityRevisionAdvance(prevRev, nextRev) {
-  if (!isRecord(prevRev) || !isRecord(nextRev)) return false;
-  return isSafeIntegerLagging(prevRev.maxAppliedIndex,
-    nextRev.maxAppliedIndex) ||
-    isFiniteTimestampLagging(prevRev.maxRowTimestampMs,
-      nextRev.maxRowTimestampMs) ||
-    isHlcStringLagging(prevRev.maxOriginHlc, nextRev.maxOriginHlc);
-}
-
-function isPreCommitDisagreement(authorityRevision, observerRevision) {
-  return isFiniteTimestampLagging(observerRevision?.capturedAtMs,
-    authorityRevision?.maxRowTimestampMs);
-}
-
 function createDisagreementEpisode(context) {
-  const {authRev, obsRev, postCommitFloorMs, preCommit, skew} = context;
+  const {
+    authRev,
+    capturedAtMs,
+    obsRev,
+    projectionRevision,
+    skew,
+  } = context;
   return {
+    authorityWatermark: authRev,
     firstAuthorityRevision: authRev,
     firstObserverRevision: obsRev,
-    firstSeenAtMs: postCommitFloorMs,
-    lastWasPreCommit: preCommit,
+    firstProjectionRevision: projectionRevision,
+    firstSeenAtMs: capturedAtMs,
     latestAuthorityRevision: authRev,
     latestObserverRevision: obsRev,
-    postCommitPollCount: preCommit ? ZERO : ONE,
+    latestProjectionRevision: projectionRevision,
+    projectionRevision,
     revisionSkewObserved: skew,
   };
 }
 
 function updateDisagreementEpisodeWindow(episode, context) {
-  const {authRev, obsRev, postCommitFloorMs, preCommit} = context;
-  if (didAuthorityRevisionAdvance(episode.latestAuthorityRevision, authRev)) {
-    episode.firstAuthorityRevision = authRev;
-    episode.firstObserverRevision = obsRev;
-    episode.firstSeenAtMs = postCommitFloorMs;
-    episode.postCommitPollCount = preCommit ? ZERO : ONE;
-    return;
-  }
-  if (preCommit || episode.lastWasPreCommit) {
-    episode.firstSeenAtMs = postCommitFloorMs;
-    episode.postCommitPollCount = preCommit ? ZERO : ONE;
-    return;
-  }
-  episode.postCommitPollCount += ONE;
+  const {authRev, obsRev, projectionRevision, skew} = context;
+  episode.authorityWatermark = authRev;
+  episode.latestAuthorityRevision = authRev;
+  episode.latestObserverRevision = obsRev;
+  episode.latestProjectionRevision = projectionRevision;
+  episode.projectionRevision = projectionRevision;
+  episode.revisionSkewObserved = episode.revisionSkewObserved || skew;
 }
 
 function advanceDisagreementEpisode(episodes, previousKeys, evaluation, entry) {
-  const authRev = entry.authorityRevision || null;
+  const authRev = entry.authorityRevision || entry.authorityWatermark || null;
   const obsRev = entry.observerRevision || null;
+  const projectionRevision = entry.projectionRevision ??
+    resolveProjectionRevision(obsRev);
   const skew = entry.revisionSkew === true;
-  const preCommit = isPreCommitDisagreement(authRev, obsRev);
-  const postCommitFloorMs = Math.max(evaluation.capturedAtMs,
-    authRev?.maxRowTimestampMs || ZERO);
-  const context = {authRev, obsRev, postCommitFloorMs, preCommit, skew};
+  const context = {
+    authRev,
+    capturedAtMs: evaluation.capturedAtMs,
+    obsRev,
+    projectionRevision,
+    skew,
+  };
   if (!previousKeys.has(entry.key) || !episodes.has(entry.key)) {
     const created = createDisagreementEpisode(context);
     episodes.set(entry.key, created);
@@ -679,10 +681,6 @@ function advanceDisagreementEpisode(episodes, previousKeys, evaluation, entry) {
   }
   const episode = episodes.get(entry.key);
   updateDisagreementEpisodeWindow(episode, context);
-  episode.lastWasPreCommit = preCommit;
-  episode.latestAuthorityRevision = authRev;
-  episode.latestObserverRevision = obsRev;
-  episode.revisionSkewObserved = episode.revisionSkewObserved || skew;
   return episode;
 }
 
@@ -706,17 +704,21 @@ function evaluateProjectionAgreement(evaluations,
       const episode = advanceDisagreementEpisode(episodes, previousKeys,
         evaluation, entry);
       const spanMs = evaluation.capturedAtMs - episode.firstSeenAtMs;
-      if (episode.postCommitPollCount >= TWO && spanMs > boundMs) {
+      if (previousKeys.has(entry.key) && spanMs > boundMs) {
         const prior = persistent.get(entry.key);
         persistent.set(entry.key, {
+          authorityWatermark: episode.authorityWatermark,
           firstAuthorityRevision: episode.firstAuthorityRevision,
           firstObserverRevision: episode.firstObserverRevision,
+          firstProjectionRevision: episode.firstProjectionRevision,
           firstSeenAtMs: episode.firstSeenAtMs,
           key: entry.key,
           lastEntry: entry,
           latestAuthorityRevision: episode.latestAuthorityRevision,
           latestObserverRevision: episode.latestObserverRevision,
+          latestProjectionRevision: episode.latestProjectionRevision,
           longestSpanMs: Math.max(prior?.longestSpanMs ?? ZERO, spanMs),
+          projectionRevision: episode.projectionRevision,
           revisionSkewObserved: episode.revisionSkewObserved,
         });
       }
@@ -975,11 +977,8 @@ export {
   evaluateLearnerRefusals,
   evaluateObservationIntegrity,
   evaluateProjectionAgreement,
-  evaluateRevisionSkew,
   evaluateUserTableRoutability,
   evaluateWriteReadback,
-  extractAuthorityTableRevision,
-  extractObserverTableRevision,
   firstUnmetPredicate,
   scanFormationLogLines,
 };

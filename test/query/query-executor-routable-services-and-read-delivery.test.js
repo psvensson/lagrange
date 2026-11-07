@@ -1367,4 +1367,58 @@ test(
   },
 );
 
+test(
+  'QueryExecutor - executeOnPartition re-awaits readServeEligibility across ' +
+    'retry attempts when first refresh remains unavailable_stale',
+  async (t) => {
+    const partitionId = 'p-unavailable-stale-retry';
+    const nodeId = 'node-stale-refresh';
+    const systemCache = createSinglePartitionTestSystemCache(
+      partitionId,
+      nodeId,
+    );
+    const readinessService = createCommittedServeEligibilityOwner({
+      defaultAnswer: serveEligibilityAnswer(false, {
+        state: 'unavailable',
+        reason: 'unavailable_stale',
+        reasons: ['unavailable_stale'],
+      }),
+    });
+    let refreshCount = 0;
+    readinessService.readServeEligibility = async () => {
+      refreshCount += 1;
+      if (refreshCount >= 2) {
+        readinessService.setDefault(serveEligibilityAnswer(true));
+      }
+    };
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: readinessService,
+      messageRouter: {
+        getConnectionState: () => 'connected',
+        deliver: async () =>
+          buildDeliveryEnvelope(
+            {acknowledged: true},
+            {success: true, rows: [{ok: 1}], changes: 0},
+          ),
+      },
+      systemCache,
+    });
+    executor.readRetryAttempts = 1;
+    executor.leaderRetryDelayMs = 1;
+
+    const result = await executor.executeOnPartition(
+      partitionId,
+      'SELECT * FROM bench_accounts',
+      [],
+      true,
+      false,
+      false,
+      {timeoutMs: 1000},
+    );
+
+    t.equal(result.success, true, 'read succeeds once second refresh adopts epoch');
+    t.equal(refreshCount, 2, 'second attempt re-awaited readServeEligibility');
+  },
+);
+
 registerQueryExecutorRecoveryRoutingTests();

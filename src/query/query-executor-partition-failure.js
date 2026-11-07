@@ -12,6 +12,12 @@ const {
 
 const LOCAL_STR_PLANNING_SNAPSHOT_REFRESH_PENDING =
   'planning_snapshot_refresh_pending';
+const LOCAL_PLANNING_REFRESH_PENDING_CODES = Object.freeze([
+  LOCAL_STR_PLANNING_SNAPSHOT_REFRESH_PENDING,
+  'unavailable_stale',
+  'committed_read_pending',
+  'serve_eligibility_unavailable',
+]);
 const ADDRESS_NODE_SEPARATOR = '/';
 
 // A candidate failure is a thrown router Error or one delivery reading (the
@@ -179,10 +185,8 @@ function resolveNoCandidateErrorMessage({
 function hasPlanningRefreshPendingDenial(routingSnapshot) {
   return Object.values(routingSnapshot?.deniedByNodeId || {}).some((entry) =>
     Array.isArray(entry?.reasonCodes) &&
-    entry.reasonCodes.some(
-      (code) =>
-        String(code?.code ?? code) ===
-        LOCAL_STR_PLANNING_SNAPSHOT_REFRESH_PENDING,
+    entry.reasonCodes.some((code) =>
+      LOCAL_PLANNING_REFRESH_PENDING_CODES.includes(String(code?.code ?? code)),
     ),
   );
 }

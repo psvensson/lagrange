@@ -70,7 +70,6 @@ import {
   buildPublicationReadinessTraceFields,
   hasCandidateAcknowledgementRefresh,
   hasCandidateStatusRefresh,
-  hasLocalPrioritySpreadCatchupNeed,
   hasPrioritySummaryRefreshClearedGap,
   reportOwnerMembershipReconcileSpent,
   resolveDeferredPropagatedCatchupCooldownMs,
@@ -88,6 +87,9 @@ class MembershipPublicationCoordinatorReconcile extends
   // (a deferring non-leader runs this on every reconcile tick). Never throws; a
   // partitioned node's read fails-soft inside hydrate (recorded, skipped).
   async refreshDeferredPublicationsCacheFromAuthority() {
+    if (this.deferredPublicationsCatchupInFlight) {
+      return this.deferredPublicationsCatchupInFlight;
+    }
     const service = this.cdcIntegrationService;
     if (
       !service ||
@@ -104,32 +106,46 @@ class MembershipPublicationCoordinatorReconcile extends
       return null;
     }
     this._lastDeferredPublicationsCatchupAtMs = nowMs;
-    try {
-      return await service.hydrateCdcPropagatedTablesFromAuthority({
-        tables: [TABLES.CONTROL_PLANE_PUBLICATIONS],
-        readAuthority: buildControlPlaneReadAuthority({
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
-          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
-        }),
-      });
-    } catch (error) {
-      this.logger?.warn?.(MEMBERSHIP_DEFERRED_PUBLICATIONS_CATCHUP_FAILED_MSG, {
-        nodeId: this.nodeId,
-        error: error?.message || String(error),
-      });
-      return null;
-    }
+    const runPromise = (async () => {
+      try {
+        return await service.hydrateCdcPropagatedTablesFromAuthority({
+          tables: [TABLES.CONTROL_PLANE_PUBLICATIONS],
+          readAuthority: buildControlPlaneReadAuthority({
+            authoritativeReadMode:
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+            leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+          }),
+        });
+      } catch (error) {
+        this.logger?.warn?.(
+          MEMBERSHIP_DEFERRED_PUBLICATIONS_CATCHUP_FAILED_MSG,
+          {
+            nodeId: this.nodeId,
+            error: error?.message || String(error),
+          },
+        );
+        return null;
+      } finally {
+        if (this.deferredPublicationsCatchupInFlight === runPromise) {
+          this.deferredPublicationsCatchupInFlight = null;
+        }
+      }
+    })();
+    this.deferredPublicationsCatchupInFlight = runPromise;
+    return runPromise;
   }
 
   // The sibling sweep for the routing-relevant CDC-propagated system tables (the
   // six in DEFERRED_PROPAGATED_CATCHUP_TABLES). Same deferral tick, own cooldown
-  // (fast 5s cooldown while priority spread has a local catch-up need, 30s once
-  // satisfied), one attempt per table, leader-preferred owner read, best-effort:
-  // a row this node missed in the leader's point-in-time fan-out converges within
-  // one cooldown instead of never, and a leader-witnessed complete read may also
-  // sweep a missed DELETE. Never throws; returns a typed outcome.
+  // (30s, vs 5s for the single publications row), one attempt per table,
+  // leader-preferred owner read, best-effort: a row this node missed in the
+  // leader's point-in-time fan-out converges within one cooldown instead of
+  // never, and a leader-witnessed complete read may also sweep a missed DELETE.
+  // Never throws; returns a typed outcome.
   async refreshDeferredPropagatedCachesFromAuthority() {
+    if (this.deferredPropagatedCatchupInFlight) {
+      return this.deferredPropagatedCatchupInFlight;
+    }
     const service = this.cdcIntegrationService;
     if (
       !service ||
@@ -140,7 +156,10 @@ class MembershipPublicationCoordinatorReconcile extends
     }
     const nowMs = typeof this.now === 'function' ? this.now() : Date.now();
     const lastMs = this._lastDeferredPropagatedCatchupAtMs;
-    const cooldownMs = resolveDeferredPropagatedCatchupCooldownMs(this);
+    const cooldownMs = resolveDeferredPropagatedCatchupCooldownMs(
+      this.systemTableCache,
+      service,
+    );
     if (
       Number.isFinite(lastMs) &&
       nowMs - lastMs < cooldownMs
@@ -148,24 +167,32 @@ class MembershipPublicationCoordinatorReconcile extends
       return DEFERRED_PROPAGATED_CATCHUP_OUTCOME.COOLDOWN_ACTIVE;
     }
     this._lastDeferredPropagatedCatchupAtMs = nowMs;
-    try {
-      return await service.hydrateCdcPropagatedTablesFromAuthority({
-        tables: DEFERRED_PROPAGATED_CATCHUP_TABLES,
-        maxAttemptsPerTable:
-          DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
-        readAuthority: buildControlPlaneReadAuthority({
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
-          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
-        }),
-      });
-    } catch (error) {
-      this.logger?.warn?.(MEMBERSHIP_DEFERRED_PROPAGATED_CATCHUP_FAILED_MSG, {
-        nodeId: this.nodeId,
-        error: error?.message || String(error),
-      });
-      return DEFERRED_PROPAGATED_CATCHUP_OUTCOME.READ_FAILED;
-    }
+    const runPromise = (async () => {
+      try {
+        return await service.hydrateCdcPropagatedTablesFromAuthority({
+          tables: DEFERRED_PROPAGATED_CATCHUP_TABLES,
+          maxAttemptsPerTable:
+            DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
+          readAuthority: buildControlPlaneReadAuthority({
+            authoritativeReadMode:
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+            leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+          }),
+        });
+      } catch (error) {
+        this.logger?.warn?.(MEMBERSHIP_DEFERRED_PROPAGATED_CATCHUP_FAILED_MSG, {
+          nodeId: this.nodeId,
+          error: error?.message || String(error),
+        });
+        return DEFERRED_PROPAGATED_CATCHUP_OUTCOME.READ_FAILED;
+      } finally {
+        if (this.deferredPropagatedCatchupInFlight === runPromise) {
+          this.deferredPropagatedCatchupInFlight = null;
+        }
+      }
+    })();
+    this.deferredPropagatedCatchupInFlight = runPromise;
+    return runPromise;
   }
 
   async reconcileClusterMembership(options = {}) {
@@ -617,7 +644,5 @@ export {
   EMPTY_PUBLICATION_CANDIDATE_REASON,
   MembershipPublicationCoordinatorReconcile,
   NOT_PUBLICATIONS_WRITE_LEADER_REASON,
-  hasLocalPrioritySpreadCatchupNeed,
-  resolveDeferredPropagatedCatchupCooldownMs,
   shouldDeferMembershipReconcileToWriteLeader,
 };

@@ -518,6 +518,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         routingReadinessDimension,
       );
     } catch (_error) {
+      throwIfCancellationRequested(options?.cancellationToken);
       return false;
     }
 

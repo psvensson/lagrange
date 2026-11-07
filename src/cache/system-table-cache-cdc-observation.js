@@ -335,6 +335,5 @@ export {
   getAllTableRevisionWatermarkSnapshots,
   getTableRevisionWatermarkSnapshot,
   recordAuthoritativeTableObservation,
-  recordCdcTableObservation,
   updateSystemTableCacheCdcObservation,
 };

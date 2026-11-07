@@ -83,7 +83,9 @@ function topologyProgressOf(lane, branch, owner, source, targets) {
   return branch.topology;
 }
 
-function registerLaneContentionOwner(delivery, lane, tableName, propagationOwner) {
+function registerLaneContentionOwner(
+  delivery, lane, tableName, propagationOwner, onSliceTurnReady = null,
+) {
   if (!propagationOwner || typeof tableName !== 'string' || tableName.length === 0) {
     return null;
   }
@@ -96,16 +98,22 @@ function registerLaneContentionOwner(delivery, lane, tableName, propagationOwner
     lane.contendedPropagationOwners.set(tableName, owners);
   }
   owners.add(propagationOwner);
-  return () =>
+  const isLive = () =>
     delivery.obligationLane === lane &&
     delivery.owner.isLeader &&
     !delivery.owner.isShutdown &&
     delivery.owner.leadershipTenure === lane.tenure &&
     lane.contendedPropagationOwners instanceof Map &&
     lane.contendedPropagationOwners.has(tableName);
+  if (typeof onSliceTurnReady === 'function') {
+    isLive.onSliceTurnReady = onSliceTurnReady;
+  }
+  return isLive;
 }
 
-function cdcSubscriberInvocation(delivery, lane, cell, branch, context, event) {
+function cdcSubscriberInvocation(
+  delivery, lane, cell, branch, context, event, onSliceTurnReady = null,
+) {
   const operations = (scoped) => ({
     bindTopology: (owner, source, targets) => {
       scoped.assertCurrent();
@@ -114,7 +122,9 @@ function cdcSubscriberInvocation(delivery, lane, cell, branch, context, event) {
       return bindCdcPropagationProgress(scoped, progress, [event]);
     },
     registerContentionOwner: (propagationOwner, tableName = event?.tableName) =>
-      registerLaneContentionOwner(delivery, lane, tableName, propagationOwner),
+      registerLaneContentionOwner(
+        delivery, lane, tableName, propagationOwner, onSliceTurnReady,
+      ),
   });
   return scopeCdcDeliveryInvocation(context,
     () => cdcProgressCurrent(delivery, lane, cell), operations);
@@ -126,6 +136,24 @@ function observeCdcSubscriber(branch, answer, event) {
 
 function cdcObligationCoverage(cell) {
   return cdcCoverageState(cell.branches.map((branch) => branch.coverage), cell.binding);
+}
+
+function recordUncoveredSubscriberHint(state, answer) {
+  const hint = answer?.retryAfterMs;
+  if (Number.isFinite(hint) && hint > 0) {
+    state.retryAfterMs = state.retryAfterMs === null ? hint : Math.min(state.retryAfterMs, hint);
+  }
+  if (answer?.error === CDC_COMPLETION.BACKPRESSURE ||
+      answer?.reason === CDC_COMPLETION.BACKPRESSURE) state.backpressured = true;
+}
+
+function throwUncoveredObligationError(lane, current, state) {
+  if (!current) lane.currentObligation = null;
+  const error = new Error(CDC_COMPLETION.UNKNOWN);
+  error.deferRetry = true;
+  if (state.retryAfterMs !== null) error.retryAfterMs = state.retryAfterMs;
+  if (state.backpressured) error.reason = CDC_COMPLETION.BACKPRESSURE;
+  throw error;
 }
 
 function releaseOwnersForTable(contendedTable, owners) {
@@ -150,4 +178,5 @@ function releaseContendedPropagationOwners(lane, tableName = null) {
 }
 
 export {cdcObligationCoverage, cdcProgressCurrent, cdcSubscriberInvocation, nextCdcSubscriber,
-  observeCdcSubscriber, prepareCdcObligationProgress, releaseContendedPropagationOwners};
+  observeCdcSubscriber, prepareCdcObligationProgress, recordUncoveredSubscriberHint,
+  releaseContendedPropagationOwners, throwUncoveredObligationError};

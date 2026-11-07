@@ -383,7 +383,9 @@ class NodeHandle {
 
       const timeout = setTimeout(() => {
         pendingQueries.delete(queryId);
-        this._resetAdminSocket(lane);
+        if (this._adminSocketByLane.get(lane) === ws) {
+          this._resetAdminSocket(lane);
+        }
         rejectWithOutcome(
           new Error(timeoutMessage),
           ADMIN_QUERY_TRACE_OUTCOME_TIMEOUT,
@@ -408,7 +410,9 @@ class NodeHandle {
       } catch (err) {
         pendingQueries.delete(queryId);
         clearTimeout(timeout);
-        this._resetAdminSocket(lane);
+        if (this._adminSocketByLane.get(lane) === ws) {
+          this._resetAdminSocket(lane);
+        }
         try {
           ws.close();
         } catch (_closeErr) {
@@ -583,92 +587,106 @@ class NodeHandle {
     if (pendingReadyPromise) {
       return pendingReadyPromise;
     }
+    if (existingSocket) {
+      this._adminSocketByLane.delete(lane);
+    }
 
-    const {default: WebSocket} = await import('ws');
-    const laneQuery = encodeURIComponent(
-      String(lane || ADMIN_SOCKET_LANE_DEFAULT),
-    );
-    const url =
-      'ws://' +
-      this.ip +
-      ':' +
-      this._adminApiPort +
-      ADMIN_STREAM_PATH +
-      '?lane=' +
-      laneQuery;
-
-    const readyPromise = new Promise((resolve, reject) => {
-      const ws = new WebSocket(url);
-      this._pendingAdminSocketByLane.set(lane, ws);
-      let settled = false;
-      let onOpen = null;
-      let onOpenError = null;
-      const connectTimeout = setTimeout(() => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        ws.off('open', onOpen);
-        ws.off('error', onOpenError);
-        closeWebSocketSafely(ws);
+    let readyPromise = null;
+    const resetIfCurrentReady = () => {
+      if (this._adminSocketReadyByLane.get(lane) === readyPromise) {
         this._resetAdminSocket(lane);
-        reject(
-          new Error(
-            'Admin API query failed for node ' +
-              this.id +
-              ' on lane ' +
-              lane +
-              ': connection timed out',
-          ),
-        );
-      }, ADMIN_QUERY_TIMEOUT_MS);
-      if (typeof connectTimeout.unref === 'function') {
-        connectTimeout.unref();
       }
+    };
+    readyPromise = (async () => {
+      const {default: WebSocket} = await import('ws');
+      const laneQuery = encodeURIComponent(
+        String(lane || ADMIN_SOCKET_LANE_DEFAULT),
+      );
+      const url =
+        'ws://' +
+        this.ip +
+        ':' +
+        this._adminApiPort +
+        ADMIN_STREAM_PATH +
+        '?lane=' +
+        laneQuery;
 
-      onOpen = () => {
-        if (settled) {
-          return;
+      return new Promise((resolve, reject) => {
+        const ws = new WebSocket(url);
+        this._pendingAdminSocketByLane.set(lane, ws);
+        let settled = false;
+        let onOpen = null;
+        let onOpenError = null;
+        const connectTimeout = setTimeout(() => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          ws.off('open', onOpen);
+          ws.off('error', onOpenError);
+          closeWebSocketSafely(ws);
+          resetIfCurrentReady();
+          reject(
+            new Error(
+              'Admin API query failed for node ' +
+                this.id +
+                ' on lane ' +
+                lane +
+                ': connection timed out',
+            ),
+          );
+        }, ADMIN_QUERY_TIMEOUT_MS);
+        if (typeof connectTimeout.unref === 'function') {
+          connectTimeout.unref();
         }
-        settled = true;
-        clearTimeout(connectTimeout);
-        ws.off('error', onOpenError);
-        this._pendingAdminSocketByLane.delete(lane);
-        this._bindAdminSocketHandlers(ws, lane);
-        this._adminSocketByLane.set(lane, ws);
-        resolve(ws);
-      };
 
-      onOpenError = (err) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearTimeout(connectTimeout);
-        ws.off('open', onOpen);
-        this._pendingAdminSocketByLane.delete(lane);
-        this._resetAdminSocket(lane);
-        reject(
-          new Error(
-            'Admin API query failed for node ' +
-              this.id +
-              ' on lane ' +
-              lane +
-              ': ' +
-              err.message,
-          ),
-        );
-      };
+        onOpen = () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(connectTimeout);
+          ws.off('error', onOpenError);
+          this._pendingAdminSocketByLane.delete(lane);
+          if (this._adminSocketReadyByLane.get(lane) === readyPromise) {
+            this._adminSocketReadyByLane.delete(lane);
+          }
+          this._bindAdminSocketHandlers(ws, lane);
+          this._adminSocketByLane.set(lane, ws);
+          resolve(ws);
+        };
 
-      ws.once('open', onOpen);
-      ws.once('error', onOpenError);
-    });
+        onOpenError = (err) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(connectTimeout);
+          ws.off('open', onOpen);
+          this._pendingAdminSocketByLane.delete(lane);
+          resetIfCurrentReady();
+          reject(
+            new Error(
+              'Admin API query failed for node ' +
+                this.id +
+                ' on lane ' +
+                lane +
+                ': ' +
+                err.message,
+            ),
+          );
+        };
+
+        ws.once('open', onOpen);
+        ws.once('error', onOpenError);
+      });
+    })();
     this._adminSocketReadyByLane.set(lane, readyPromise);
 
     try {
       return await readyPromise;
     } catch (err) {
-      this._resetAdminSocket(lane);
+      resetIfCurrentReady();
       throw err;
     }
   }
@@ -684,6 +702,9 @@ class NodeHandle {
     });
 
     ws.on('error', (err) => {
+      if (this._adminSocketByLane.get(lane) !== ws) {
+        return;
+      }
       this._rejectPendingQueries(
         'Admin API query failed for node ' +
           this.id +

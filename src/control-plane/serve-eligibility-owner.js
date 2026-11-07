@@ -55,20 +55,8 @@ function createCancellationError(reason) {
 
 function throwIfCallerCancelled(options) {
   const cancellationToken = options?.cancellationToken || null;
-  if (cancellationToken) {
-    if (typeof cancellationToken.throwIfCancelled === 'function') {
-      cancellationToken.throwIfCancelled();
-    }
-    if (
-      typeof cancellationToken.isCancelled === 'function' &&
-      cancellationToken.isCancelled()
-    ) {
-      const reason =
-        typeof cancellationToken.getReason === 'function' ?
-          cancellationToken.getReason() :
-          null;
-      throw createCancellationError(reason);
-    }
+  if (typeof cancellationToken?.throwIfCancelled === 'function') {
+    cancellationToken.throwIfCancelled();
   }
   const signal = options?.signal || null;
   if (signal?.aborted) {
@@ -86,17 +74,8 @@ function readTimeoutBudgetRemainingMs(timeoutBudget, nowMs) {
       return Math.max(0, remaining);
     }
   }
-  if (typeof timeoutBudget.getRemainingMs === 'function') {
-    const remaining = timeoutBudget.getRemainingMs();
-    if (Number.isFinite(remaining)) {
-      return Math.max(0, remaining);
-    }
-  }
   if (Number.isFinite(timeoutBudget.deadlineMs)) {
     return Math.max(0, timeoutBudget.deadlineMs - nowMs);
-  }
-  if (Number.isFinite(timeoutBudget.remainingMs)) {
-    return Math.max(0, timeoutBudget.remainingMs);
   }
   return null;
 }
@@ -138,11 +117,9 @@ function bindWaiterCancellation(options, onCancel) {
       onCancel(createCancellationError(reason));
     };
     const off = cancellationToken.onCancel(cancelHandler);
-    cleanups.push(
-      typeof off === 'function' ?
-        off :
-        () => cancellationToken.offCancel?.(cancelHandler),
-    );
+    if (typeof off === 'function') {
+      cleanups.push(off);
+    }
   }
   const signal = options?.signal || null;
   if (typeof signal?.addEventListener === 'function') {
@@ -232,6 +209,17 @@ class ServeEligibilityOwner {
     }
   }
 
+  rejectWaiters(error) {
+    if (this.waiters.size === 0) {
+      return;
+    }
+    const pendingWaiters = [...this.waiters];
+    this.waiters.clear();
+    for (const waiter of pendingWaiters) {
+      waiter.reject(error);
+    }
+  }
+
   ensureRefresh() {
     if (this.stopped) {
       return Promise.resolve(this.buildCurrentResult(OUTCOME.SHUTDOWN));
@@ -241,22 +229,27 @@ class ServeEligibilityOwner {
     }
     const runRefresh = async () => {
       let lastOutcome = this.outcome;
-      while (!this.stopped) {
-        const result = await this.performRefresh();
-        lastOutcome = result.outcome;
-        if (
-          result.outcome === OUTCOME.READ_FAILED ||
-          !this.superseded ||
-          !this.refreshRequested
-        ) {
-          const settledResult = this.buildCurrentResult(result.outcome);
-          this.settleWaiters(settledResult);
-          return settledResult;
+      try {
+        while (!this.stopped) {
+          const result = await this.performRefresh();
+          lastOutcome = result.outcome;
+          if (
+            result.outcome === OUTCOME.READ_FAILED ||
+            !this.superseded ||
+            !this.refreshRequested
+          ) {
+            const settledResult = this.buildCurrentResult(result.outcome);
+            this.settleWaiters(settledResult);
+            return settledResult;
+          }
         }
+        return this.buildCurrentResult(
+          this.stopped ? OUTCOME.SHUTDOWN : lastOutcome,
+        );
+      } catch (error) {
+        this.rejectWaiters(error);
+        return this.buildCurrentResult(OUTCOME.READ_FAILED);
       }
-      return this.buildCurrentResult(
-        this.stopped ? OUTCOME.SHUTDOWN : lastOutcome,
-      );
     };
     this.inFlight = runRefresh().finally(() => {
       this.inFlight = null;
@@ -295,7 +288,7 @@ class ServeEligibilityOwner {
     );
     if (waitMs <= 0) {
       if (!this.record || this.superseded) {
-        this.ensureRefresh().catch(() => {});
+        this.ensureRefresh();
       }
       return this.buildCurrentResult(
         this.record ? OUTCOME.STALE_RETAINED : OUTCOME.UNINITIALIZED,
@@ -345,9 +338,7 @@ class ServeEligibilityOwner {
       removeCancelListener = bindWaiterCancellation(options, (error) => {
         waiter.reject(error);
       });
-      this.ensureRefresh().catch((error) => {
-        waiter.reject(error);
-      });
+      this.ensureRefresh();
     });
   }
 
@@ -505,7 +496,7 @@ class ServeEligibilityOwner {
     queueMicrotask(() => {
       this.refreshScheduled = false;
       if (!this.stopped && this.refreshRequested) {
-        this.ensureRefresh().catch(() => {});
+        this.ensureRefresh();
       }
     });
   }

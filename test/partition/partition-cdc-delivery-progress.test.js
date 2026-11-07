@@ -428,6 +428,7 @@ test('handleDeliveryFailure logs at debug level on backpressure and warn on othe
       isShutdown: false,
       leadershipTenure: tenure,
       timeSource: {
+        now: () => 0,
         setTimeout: () => 1,
         clearTimeout: () => {},
       },

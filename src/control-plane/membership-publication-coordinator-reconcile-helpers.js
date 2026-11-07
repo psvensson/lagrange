@@ -1,9 +1,13 @@
-import {TABLES} from '../constants/index.js';
+import {
+  SERVICE_LIFECYCLE_STATE,
+  SERVICE_STATUS,
+  TABLES,
+} from '../constants/index.js';
 import {CDC_PROPAGATED_TABLES} from '../cache/cdc-table-policy.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
-import {buildCurrentPriorityPlacementObservation} from './current-priority-placement-observation.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {hasPriorityRecoverySpreadGap} from './priority-recovery-planning-intent.js';
+import {buildDerivedPriorityPartitionSummary} from './membership-publication-priority-partition-summary.js';
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_STATUS,
@@ -108,14 +112,73 @@ const OWNER_ACK_COMPLETION_REDRIVE_STATUSES = Object.freeze([
   MEMBERSHIP_PUBLICATION_STATUS.OPEN,
   MEMBERSHIP_PUBLICATION_STATUS.ACK_PENDING,
 ]);
-const AVAILABLE_OBSERVATION_STATE = 'available';
-const ACTIVE_NODE_STATUS = 'active';
 
 function hasPrioritySummaryRefreshClearedGap(latestPublicationRow, candidate) {
   return hasPriorityRecoverySpreadGap(
     normalizeControlPlanePublicationRow(latestPublicationRow)
       ?.priorityPartitionSummary,
   ) && !hasPriorityRecoverySpreadGap(candidate?.priorityPartitionSummary);
+}
+
+function normalizeLowercaseStatus(row) {
+  return String(
+    row?.status || MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY,
+  ).toLowerCase();
+}
+
+function isInProgressServiceStatus(status) {
+  return (
+    status.length > 0 &&
+    status !== SERVICE_STATUS.ACTIVE &&
+    status !== SERVICE_STATUS.STOPPED &&
+    status !== SERVICE_LIFECYCLE_STATE.FAILED
+  );
+}
+
+function hasInProgressServiceRows(serviceRows) {
+  return serviceRows.some((row) =>
+    isInProgressServiceStatus(normalizeLowercaseStatus(row)),
+  );
+}
+
+function hasLocalServicesConvergenceGap(systemTableCache) {
+  if (typeof systemTableCache?.getAll !== 'function') {
+    return false;
+  }
+  const serviceRows = systemTableCache.getAll(TABLES.SERVICES) || [];
+  if (hasInProgressServiceRows(serviceRows)) {
+    return true;
+  }
+  const nodeRows = systemTableCache.getAll(TABLES.NODES) || [];
+  const activeNodeCount = nodeRows.filter(
+    (row) => normalizeLowercaseStatus(row) === SERVICE_STATUS.ACTIVE,
+  ).length;
+  const partitionRows = systemTableCache.getAll(TABLES.PARTITIONS) || [];
+  if (activeNodeCount <= 1 || partitionRows.length === 0) {
+    return false;
+  }
+  return hasPriorityRecoverySpreadGap(
+    buildDerivedPriorityPartitionSummary({
+      partitionRows,
+      serviceRows,
+      nodeRows,
+    }),
+  );
+}
+
+function resolveDeferredPropagatedCatchupCooldownMs(
+  systemTableCache,
+  cdcIntegrationService,
+) {
+  if (
+    typeof cdcIntegrationService?.canWriteSystemTableLocally === 'function' &&
+    cdcIntegrationService.canWriteSystemTableLocally(TABLES.SERVICES) === true
+  ) {
+    return DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS;
+  }
+  return hasLocalServicesConvergenceGap(systemTableCache) ?
+    DEFERRED_PUBLICATIONS_CATCHUP_COOLDOWN_MS :
+    DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS;
 }
 
 // The owner drive's bound was spent: the driver carries on unchanged (the
@@ -306,168 +369,12 @@ function buildPublicationReadinessTraceFields(handoffContract, planningSnapshot)
   };
 }
 
-function extractActiveNodeIdsFromCache(nodeRows) {
-  if (!Array.isArray(nodeRows)) {
-    return [];
-  }
-  const activeNodeIds = [];
-  for (const row of nodeRows) {
-    if (String(row?.status || '').toLowerCase() !== ACTIVE_NODE_STATUS) {
-      continue;
-    }
-    const nodeId = row?.node_id ?? row?.nodeId;
-    if (typeof nodeId === 'string' && nodeId.length > 0) {
-      activeNodeIds.push(nodeId);
-    }
-  }
-  return activeNodeIds;
-}
-
-function readCachedTableRows(cache, tableName) {
-  if (typeof cache?.getAll !== 'function') {
-    return [];
-  }
-  const rows = cache.getAll(tableName);
-  return Array.isArray(rows) ? rows : [];
-}
-
-function readLatestNormalizedPublicationRow(coordinator) {
-  const rawRow =
-    typeof coordinator?.getLatestPublicationRowSync === 'function' ?
-      coordinator.getLatestPublicationRowSync() :
-      null;
-  return rawRow ? normalizeControlPlanePublicationRow(rawRow) : null;
-}
-
-function readInjectedPriorityObservation(coordinator) {
-  if (
-    typeof coordinator?.readCurrentPriorityPlacementObservation === 'function'
-  ) {
-    return coordinator.readCurrentPriorityPlacementObservation();
-  }
-  return toNullable(asRecord(coordinator).currentPriorityPlacementObservation);
-}
-
-function collectPriorityCatchupInputs(coordinator) {
-  const cache = toNullable(asRecord(coordinator).systemTableCache);
-  return {
-    injectedObservation: readInjectedPriorityObservation(coordinator),
-    latestPublicationRow: readLatestNormalizedPublicationRow(coordinator),
-    nodeRows: readCachedTableRows(cache, TABLES.NODES),
-    partitionRows: readCachedTableRows(cache, TABLES.PARTITIONS),
-    serviceRows: readCachedTableRows(cache, TABLES.SERVICES),
-  };
-}
-
-function isPriorityCatchupInputUnseeded(inputs) {
-  return (
-    !inputs.injectedObservation &&
-    !inputs.latestPublicationRow &&
-    inputs.partitionRows.length === 0 &&
-    inputs.serviceRows.length === 0 &&
-    inputs.nodeRows.length === 0
-  );
-}
-
-function resolvePriorityPlacementObservation(inputs) {
-  if (inputs.injectedObservation) {
-    return inputs.injectedObservation;
-  }
-  const publishedActiveNodeIds = toNullable(
-    asRecord(inputs.latestPublicationRow).publishedActiveNodeIds,
-  );
-  return buildCurrentPriorityPlacementObservation({
-    partitionRows: inputs.partitionRows,
-    serviceRows: inputs.serviceRows,
-    activeNodeViews: {
-      locallyEligibleNodeIds: extractActiveNodeIdsFromCache(inputs.nodeRows),
-      publishedActiveNodeIds: Array.isArray(publishedActiveNodeIds) ?
-        publishedActiveNodeIds :
-        null,
-    },
-  });
-}
-
-function hasSummaryCountDeficit(currentSummary, publicationSummary) {
-  const cur = asRecord(currentSummary);
-  const pub = asRecord(publicationSummary);
-  if (
-    Number(cur.distinctNodesWithPriorityPartitionCount) <
-    Number(pub.distinctNodesWithPriorityPartitionCount)
-  ) {
-    return true;
-  }
-  if (
-    Number(cur.readyEligibleNodeCount) < Number(pub.readyEligibleNodeCount)
-  ) {
-    return true;
-  }
-  return (
-    Number(cur.requiredDistinctNodeCount) <
-    Number(pub.requiredDistinctNodeCount)
-  );
-}
-
-function hasPrioritySpreadObservationDeficit(
-  currentObservation,
-  latestPublicationRow,
-) {
-  const safeObservation = asRecord(currentObservation);
-  const currentSummary = toNullable(safeObservation.priorityPartitionSummary);
-  const publicationSummary = toNullable(
-    asRecord(latestPublicationRow).priorityPartitionSummary,
-  );
-  if (
-    safeObservation.state !== AVAILABLE_OBSERVATION_STATE ||
-    asRecord(currentSummary).satisfied !== true
-  ) {
-    return true;
-  }
-  if (
-    hasPriorityRecoverySpreadGap(currentSummary) ||
-    hasPriorityRecoverySpreadGap(publicationSummary)
-  ) {
-    return true;
-  }
-  return hasSummaryCountDeficit(currentSummary, publicationSummary);
-}
-
-/**
- * Determine whether the local node's priority-partition placement observation
- * or latest publication row still has a spread gap or convergence deficit that
- * requires fast (5s) propagated cache catch-up instead of the steady-state 30s
- * cooldown.
- * @param {Object} coordinator
- * @return {boolean}
- */
-function hasLocalPrioritySpreadCatchupNeed(coordinator) {
-  if (!coordinator || typeof coordinator !== 'object') {
-    return false;
-  }
-  const inputs = collectPriorityCatchupInputs(coordinator);
-  if (isPriorityCatchupInputUnseeded(inputs)) {
-    return false;
-  }
-  const currentObservation = resolvePriorityPlacementObservation(inputs);
-  return hasPrioritySpreadObservationDeficit(
-    currentObservation,
-    inputs.latestPublicationRow,
-  );
-}
-
-function resolveDeferredPropagatedCatchupCooldownMs(coordinator) {
-  return hasLocalPrioritySpreadCatchupNeed(coordinator) ?
-    DEFERRED_PUBLICATIONS_CATCHUP_COOLDOWN_MS :
-    DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS;
-}
-
 export {
   CONVERGENCE_DECISION,
   CONVERGENCE_DECISION_TRACE_MSG,
   CONVERGENCE_OUTCOME,
   CONVERGENCE_REASON,
   CONVERGENCE_TRACE_LEVEL,
-  DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS,
   DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
   DEFERRED_PROPAGATED_CATCHUP_OUTCOME,
   DEFERRED_PROPAGATED_CATCHUP_TABLES,
@@ -488,7 +395,6 @@ export {
   buildPublicationReadinessTraceFields,
   hasCandidateAcknowledgementRefresh,
   hasCandidateStatusRefresh,
-  hasLocalPrioritySpreadCatchupNeed,
   hasPrioritySummaryRefreshClearedGap,
   reportOwnerMembershipReconcileSpent,
   resolveDeferredPropagatedCatchupCooldownMs,
