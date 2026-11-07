@@ -671,7 +671,7 @@ const ROUTED_READERS = Object.freeze([
   'src/control-plane/replica-dispatch-replay-health-readiness.js',
   // The committed serve-eligibility owner reads the committed rows through
   // the snapshot owner's definitions.
-  'src/control-plane/serve-eligibility-owner.js',
+  'src/control-plane/serve-eligibility-record-decision.js',
   'src/rebalancer/unified-rebalancer-available-nodes.js',
 ]);
 const NOT_READERS = Object.freeze({
@@ -694,6 +694,8 @@ const NOT_READERS = Object.freeze({
   // published row's members in a diagnostic; its driver reads membership
   // through the handoff helper above.
   'src/control-plane/membership-publication-coordinator-reconcile.js':
+    'producer',
+  'src/control-plane/membership-publication-coordinator-reconcile-helpers.js':
     'producer',
   'src/control-plane/membership-publication-lifecycle-summary.js': 'producer',
   'src/control-plane/membership-publication-planning-evidence.js': 'producer',
@@ -747,6 +749,7 @@ const NOT_READERS = Object.freeze({
   'src/control-plane/publication-recovery-observation-evidence-normalizers.js':
     'normalizer',
   'src/control-plane/recovery-protocol-snapshot.js': 'projection of the owner',
+  'src/control-plane/serve-eligibility-owner.js': 'projection of the owner',
   'src/diagnostics/topology-convergence-publication-normalizers.js':
     'diagnostic',
   'src/diagnostics/topology-convergence-replay.js': 'diagnostic',

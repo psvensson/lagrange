@@ -92,6 +92,27 @@ function canMintAuthoritativeObservationReceipt(options) {
     );
 }
 
+function normalizeWitnessSafeInteger(value) {
+  return Number.isSafeInteger(value) ? value : null;
+}
+
+function normalizeWitnessString(value) {
+  return typeof value ===
+    CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.STRING_STRING ?
+    value :
+    null;
+}
+
+function extractReadAuthorityWitnessRevisionFields(witness) {
+  return {
+    term: normalizeWitnessSafeInteger(witness?.term),
+    appliedIndex: normalizeWitnessSafeInteger(witness?.appliedIndex),
+    commitIndex: normalizeWitnessSafeInteger(witness?.commitIndex),
+    servingNodeId: normalizeWitnessString(witness?.servingNodeId),
+    partitionId: normalizeWitnessString(witness?.partitionId),
+  };
+}
+
 const controlPlaneSystemTableGatewayReadStrategyMethods = {
   /**
    * @param {string} tableName
@@ -235,6 +256,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
       readStartedAtMs: Math.floor(options.authoritativeReadStartedAtMs),
       causeId,
       rowSetComplete: true,
+      ...extractReadAuthorityWitnessRevisionFields(result.readAuthorityWitness),
     });
     resolveAuthoritativeObservationReceiptRegistry(this).set(
       authoritativeObservation,

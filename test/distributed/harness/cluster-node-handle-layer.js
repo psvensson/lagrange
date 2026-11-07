@@ -809,6 +809,15 @@ class NodeHandle {
       ) {
         error.runtimeAuthority = parsed.runtimeAuthority;
       }
+      if (Array.isArray(parsed.participantFailures)) {
+        error.participantFailures = [...parsed.participantFailures];
+      }
+      if (
+        parsed.firstFailedParticipant &&
+        typeof parsed.firstFailedParticipant === 'object'
+      ) {
+        error.firstFailedParticipant = parsed.firstFailedParticipant;
+      }
       pending.reject(error);
       return;
     }

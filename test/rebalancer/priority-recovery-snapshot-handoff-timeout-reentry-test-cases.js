@@ -413,12 +413,11 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
             return [];
           },
         },
-        cdcIntegrationService: {
-        },
+        cdcIntegrationService: {},
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
-            return buildDispatchPendingReentryPlanningSnapshot();
-          },
+          getPriorityRecoveryPlanningAnswerSync: buildDispatchPendingReentryPlanningSnapshot,
+          getPriorityRecoveryPlanningSnapshotBestEffort:
+            buildDispatchPendingReentryPlanningSnapshot,
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -590,12 +589,11 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
             return [];
           },
         },
-        cdcIntegrationService: {
-        },
+        cdcIntegrationService: {},
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
-            return buildDispatchPendingReentryPlanningSnapshot();
-          },
+          getPriorityRecoveryPlanningAnswerSync: buildDispatchPendingReentryPlanningSnapshot,
+          getPriorityRecoveryPlanningSnapshotBestEffort:
+            buildDispatchPendingReentryPlanningSnapshot,
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -775,12 +773,11 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
             return [];
           },
         },
-        cdcIntegrationService: {
-        },
+        cdcIntegrationService: {},
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
-            return buildDispatchPendingReentryPlanningSnapshot();
-          },
+          getPriorityRecoveryPlanningAnswerSync: buildDispatchPendingReentryPlanningSnapshot,
+          getPriorityRecoveryPlanningSnapshotBestEffort:
+            buildDispatchPendingReentryPlanningSnapshot,
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -1479,9 +1476,8 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         }},
         cdcIntegrationService: {},
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
-            return planningSnapshot;
-          },
+          getPriorityRecoveryPlanningAnswerSync: () => planningSnapshot,
+          getPriorityRecoveryPlanningSnapshotBestEffort: () => planningSnapshot,
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,

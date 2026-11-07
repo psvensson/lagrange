@@ -334,7 +334,7 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
               },
             };
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publishedActiveNodeIdsPresent: true,
               publishedActiveNodeIds: Object.freeze([...publishedActiveNodeIds]),

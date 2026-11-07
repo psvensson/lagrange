@@ -554,6 +554,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
@@ -698,6 +699,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
@@ -795,6 +797,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
@@ -1040,6 +1043,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
@@ -1133,6 +1137,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
@@ -1226,6 +1231,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
@@ -1301,6 +1307,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
@@ -1390,6 +1397,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() { return this.getPriorityRecoveryPlanningSnapshotBestEffort(); },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',

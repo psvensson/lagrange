@@ -8,7 +8,10 @@ import {
   isAppliedWithUnknownCount,
   pickTypedWriteAnswer,
 } from '../../partition/partition-write-kernel.js';
-import {buildParticipantFailureEntry} from '../query-execution-budget.js';
+import {
+  buildParticipantFailureEntry,
+  pickRoutingDenialFields,
+} from '../query-execution-budget.js';
 import {
   QUERY_AST_TYPE,
   QUERY_ERROR_CODE,
@@ -445,6 +448,7 @@ class DistributedWriteCoordinator {
               error.errorCode :
               null),
         ...pickTypedWriteAnswer(error),
+        ...pickRoutingDenialFields(error),
         retryAfterMs:
           Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0 ?
             Math.floor(error.retryAfterMs) :

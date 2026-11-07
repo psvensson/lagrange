@@ -12,289 +12,156 @@
 // a role witness. A positive answer never outlives the node's committed ready
 // lease (CONTROL_PLANE_READY_LEASE), which bounds how long a deposed leader's
 // answer can grant.
-import {COLUMN, SERVICE_STATUS, TABLES} from '../constants/index.js';
-import {CONTROL_PLANE_READINESS_REASON} from './control-plane-readiness-constants.js';
+import {TABLES} from '../constants/index.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
-import {MEMBERSHIP_PUBLICATION_KIND, MEMBERSHIP_PUBLICATION_STATUS} from './membership-publication-row-contract.js';
+import {MEMBERSHIP_PUBLICATION_STATUS} from './membership-publication-row-contract.js';
 import {
-  resolveLatestPublishedPublicationRow,
-  resolvePublishedActiveNodeIds,
-} from './active-node-publication-snapshots.js';
-import {hasPriorityRecoverySpreadGap} from './priority-recovery-planning-intent.js';
-import {indexCommittedNodeRows} from './committed-node-rows.js';
-import {projectNodeLivenessSemantics, readNodeLivenessRowFacts} from
-  './node-liveness-semantic-projection.js';
-
-const SERVE_ELIGIBILITY_STATE = Object.freeze({
-  READY: 'ready',
-  UNAVAILABLE: 'unavailable',
-});
-
-const SERVE_ELIGIBILITY_DECISION = Object.freeze({
-  ELIGIBLE: 'eligible',
-  NOT_ELIGIBLE: 'not_eligible',
-});
-
-const SERVE_ELIGIBILITY_UNAVAILABLE_REASON = Object.freeze({
-  // A trigger, a newer epoch or an elapsed committed lease made the record
-  // older than the facts; a committed refresh is in flight.
-  STALE: 'unavailable_stale',
-  // The leader-required read did not answer.
-  READ_FAILED: 'committed_read_failed',
-  // The committed read answered and no membership is published.
-  NO_RECORD: 'no_committed_record',
-  // No committed read has completed yet.
-  READ_PENDING: 'committed_read_pending',
-  OWNER_STOPPED: 'owner_stopped',
-});
-
-const SERVE_ELIGIBILITY_REASON = Object.freeze({
-  NODE_ROW_MISSING: 'node_row_missing',
-  NODE_NOT_ACTIVE: 'node_not_active',
-  READY_LEASE_EXPIRED: 'ready_lease_expired',
-  LOAD_NOT_READY: 'load_not_ready',
-  NODE_NOT_PUBLISHED: 'node_not_published',
-  PUBLICATION_NOT_ACKNOWLEDGED: 'publication_not_acknowledged',
-  PRIORITY_SPREAD_PENDING:
-    CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-  PRIORITY_SPREAD_UNSTATED: 'priority_spread_unstated',
-});
+  NO_REASONS,
+  OUTCOME,
+  SERVE_ELIGIBILITY_DECISION,
+  SERVE_ELIGIBILITY_STATE,
+  SERVE_ELIGIBILITY_UNAVAILABLE_REASON,
+  STALE_SIGNATURE,
+  buildCommittedReadResult,
+  checkOwnerUnavailability,
+  decideServeEligibility,
+  evaluateServeEligibilityRecordSignature,
+  hasAdvancedNodeLeaseOrHeartbeat,
+  isMembershipPublication,
+  isOlderNodeHeartbeatProjection,
+  isRegressedCommittedReadResult,
+  isRevokingNodeChange,
+  isServeEligibilityAnswerEligible,
+  readLeaseExpiresAtMs,
+  readNodeId,
+  shouldSupersedeOnPublicationChange,
+  unavailable,
+} from './serve-eligibility-record-decision.js';
 
 const SELECT_ALL_PREFIX = 'SELECT * FROM ';
-const STALE_SIGNATURE = 'stale';
-const REASON_SEPARATOR = ',';
-const SIGNATURE_SEPARATOR = '|';
-const NO_REASONS = Object.freeze([]);
-const OUTCOME = Object.freeze({
-  PENDING: 'pending',
-  RECORD: 'record',
-  NO_RECORD: 'no_record',
-  READ_FAILED: 'read_failed',
-  STALE: 'stale',
-});
+const ABORT_EVENT = 'abort';
+const DEFAULT_CANCELLED_MESSAGE = 'Query cancelled';
 
-function readNodeId(row) {
-  const nodeId = row?.[COLUMN.NODE_ID] ?? row?.nodeId ?? null;
-  return typeof nodeId === 'string' && nodeId.length > 0 ? nodeId : null;
+function createCancellationError(reason) {
+  if (reason instanceof Error) {
+    return reason;
+  }
+  const message =
+    typeof reason === 'string' && reason.length > 0 ?
+      reason :
+      DEFAULT_CANCELLED_MESSAGE;
+  return new Error(message);
 }
 
-function readLeaseExpiresAtMs(row) {
-  return readNodeLivenessRowFacts(row).readyLeaseExpiresAtMs;
+function throwIfCallerCancelled(options) {
+  const cancellationToken = options?.cancellationToken || null;
+  if (cancellationToken) {
+    if (typeof cancellationToken.throwIfCancelled === 'function') {
+      cancellationToken.throwIfCancelled();
+    }
+    if (
+      typeof cancellationToken.isCancelled === 'function' &&
+      cancellationToken.isCancelled()
+    ) {
+      const reason =
+        typeof cancellationToken.getReason === 'function' ?
+          cancellationToken.getReason() :
+          null;
+      throw createCancellationError(reason);
+    }
+  }
+  const signal = options?.signal || null;
+  if (signal?.aborted) {
+    throw createCancellationError(signal.reason);
+  }
 }
 
-function readBootIncarnation(row) {
-  const value = Number(row?.[COLUMN.BOOT_INCARNATION] ?? row?.bootIncarnation);
-  return Number.isFinite(value) ? value : null;
-}
-
-function readStatus(row) {
-  return String(row?.[COLUMN.STATUS] ?? row?.status ?? '').toLowerCase();
-}
-
-function isMembershipPublication(publication) {
-  return publication.publicationKind === MEMBERSHIP_PUBLICATION_KIND;
-}
-
-// The published membership as the publication snapshot owner defines it
-// (active-node-publication-snapshots.js): the latest PUBLISHED
-// cluster_membership row and its member list, read from committed rows.
-function selectLatestPublishedMembership(rows) {
-  const publication = resolveLatestPublishedPublicationRow({
-    publicationRows: rows,
-  });
-  if (!publication || !Number.isFinite(publication.publicationEpoch)) {
+function readTimeoutBudgetRemainingMs(timeoutBudget, nowMs) {
+  if (!timeoutBudget || typeof timeoutBudget !== 'object') {
     return null;
   }
-  return Object.freeze({
-    ...publication,
-    publishedActiveNodeIds: resolvePublishedActiveNodeIds({
-      publicationRows: rows,
-      requirePublishedMembership: true,
-    }),
-  });
-}
-
-function isPublicationAcknowledged(publication) {
-  const acknowledged = new Set(publication.acknowledgedNodeIds);
-  return publication.requiredAckNodeIds.every((nodeId) =>
-    acknowledged.has(nodeId));
-}
-
-function resolvePrioritySpreadReason(publication) {
-  const summary = publication.priorityPartitionSummary;
-  if (!summary || typeof summary !== 'object') {
-    return SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_UNSTATED;
+  if (typeof timeoutBudget.remaining === 'function') {
+    const remaining = timeoutBudget.remaining();
+    if (Number.isFinite(remaining)) {
+      return Math.max(0, remaining);
+    }
   }
-  return hasPriorityRecoverySpreadGap(summary) ?
-    SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_PENDING :
-    null;
-}
-
-/**
- * The serve decision for one node from committed facts at one read instant.
- * Pure: the committed node row (status, load columns, ready lease), the
- * committed published membership, the read time and the readiness owner's
- * load threshold predicate.
- * @param {Object} input
- * @return {{decision: string, reasons: Array<string>}}
- */
-// The committed facts a serve decision checks, each a named reason; a node
-// is eligible when none fails.
-const SERVE_ELIGIBILITY_CHECKS = Object.freeze([
-  Object.freeze({
-    reason: SERVE_ELIGIBILITY_REASON.NODE_ROW_MISSING,
-    fails: ({nodeRow}) => !nodeRow,
-  }),
-  Object.freeze({
-    reason: SERVE_ELIGIBILITY_REASON.NODE_NOT_ACTIVE,
-    fails: ({nodeRow}) =>
-      Boolean(nodeRow) && readStatus(nodeRow) !== SERVICE_STATUS.ACTIVE,
-  }),
-  Object.freeze({
-    reason: SERVE_ELIGIBILITY_REASON.LOAD_NOT_READY,
-    fails: ({nodeRow, isNodeLoadReady}) =>
-      Boolean(nodeRow) && isNodeLoadReady(nodeRow) !== true,
-  }),
-  Object.freeze({
-    reason: SERVE_ELIGIBILITY_REASON.READY_LEASE_EXPIRED,
-    fails: ({nodeRow, readAtMs}) => {
-      const leaseExpiresAtMs = readLeaseExpiresAtMs(nodeRow);
-      return Boolean(nodeRow) &&
-        (leaseExpiresAtMs === null || leaseExpiresAtMs <= readAtMs);
-    },
-  }),
-  Object.freeze({
-    reason: SERVE_ELIGIBILITY_REASON.NODE_NOT_PUBLISHED,
-    fails: ({nodeId, publication}) =>
-      !publication.publishedActiveNodeIds.includes(nodeId),
-  }),
-  Object.freeze({
-    reason: SERVE_ELIGIBILITY_REASON.PUBLICATION_NOT_ACKNOWLEDGED,
-    fails: ({publication}) => !isPublicationAcknowledged(publication),
-  }),
-  Object.freeze({
-    reason: SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_UNSTATED,
-    fails: ({publication}) => resolvePrioritySpreadReason(publication) ===
-      SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_UNSTATED,
-  }),
-  Object.freeze({
-    reason: SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_PENDING,
-    fails: ({publication}) => resolvePrioritySpreadReason(publication) ===
-      SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_PENDING,
-  }),
-]);
-
-/**
- * The serve decision for one node from committed facts at one read instant.
- * Pure: the committed node row (status, load columns, ready lease), the
- * committed published membership, the read time and the readiness owner's
- * load threshold predicate.
- * @param {Object} input
- * @return {{decision: string, reasons: Array<string>}}
- */
-function decideServeEligibility(input) {
-  const failedReasons = Object.freeze(SERVE_ELIGIBILITY_CHECKS
-    .filter((check) => check.fails(input))
-    .map((check) => check.reason));
-  return Object.freeze({
-    decision: failedReasons.length === 0 ?
-      SERVE_ELIGIBILITY_DECISION.ELIGIBLE :
-      SERVE_ELIGIBILITY_DECISION.NOT_ELIGIBLE,
-    reasons: failedReasons,
-  });
-}
-
-function unavailable(reason, epoch, retryAfterMs) {
-  return Object.freeze({state: SERVE_ELIGIBILITY_STATE.UNAVAILABLE, reason, epoch, retryAfterMs});
-}
-
-function isSameNodeList(committedNodes = NO_REASONS, changedNodes = NO_REASONS) {
-  if (committedNodes.length !== changedNodes.length) return false;
-  const committedSet = new Set(committedNodes);
-  return changedNodes.every((nodeId) => committedSet.has(nodeId));
-}
-
-function isSamePublicationFacts(committedPub, changedPub, isPublished) {
-  return Boolean(committedPub && isPublished) &&
-    committedPub.publicationId === changedPub.publicationId &&
-    committedPub.publicationEpoch === changedPub.publicationEpoch &&
-    isPublicationAcknowledged(committedPub) === isPublicationAcknowledged(changedPub) &&
-    resolvePrioritySpreadReason(committedPub) === resolvePrioritySpreadReason(changedPub) &&
-    isSameNodeList(committedPub.publishedActiveNodeIds, changedPub.publishedActiveNodeIds);
-}
-
-function shouldSupersedeOnPublicationChange(record, pub, isPublished) {
-  const heldEpoch = record?.epoch || null;
-  if (heldEpoch && pub.publicationId === heldEpoch.publicationId) {
-    return !isSamePublicationFacts(record?.publication, pub, isPublished);
+  if (typeof timeoutBudget.getRemainingMs === 'function') {
+    const remaining = timeoutBudget.getRemainingMs();
+    if (Number.isFinite(remaining)) {
+      return Math.max(0, remaining);
+    }
   }
-  return isPublished && (!heldEpoch || pub.publicationEpoch > heldEpoch.publicationEpoch);
-}
-
-function isRevokingNodeChange(committedRow, changedRow, isNodeLoadReady) {
-  if (!committedRow) return true;
-  if (readStatus(committedRow) !== readStatus(changedRow)) return true;
-  if (isNodeLoadReady(committedRow) !== isNodeLoadReady(changedRow)) return true;
-  if (readBootIncarnation(committedRow) !== readBootIncarnation(changedRow)) return true;
-  const committedLease = readLeaseExpiresAtMs(committedRow);
-  const changedLease = readLeaseExpiresAtMs(changedRow);
-  // A lease extension leaves the committed answer true until its own expiry;
-  // a cleared or shortened lease does not.
-  if (committedLease === null) return changedLease !== null;
-  return changedLease === null || changedLease < committedLease;
-}
-
-function rowsOf(result) {
-  return Array.isArray(result?.rows) ? result.rows : [];
-}
-
-// The typed outcome of one committed read: failed, no published membership,
-// or a record keyed by the publication epoch.
-function buildCommittedReadResult(reads, readAtMs) {
-  const nodeRowsById = reads === null ? null :
-    indexCommittedNodeRows(reads.nodesResult?.rows);
-  if (nodeRowsById === null) return {outcome: OUTCOME.READ_FAILED};
-  const publication = reads === null ? null :
-    selectLatestPublishedMembership(rowsOf(reads.publicationsResult));
-  const outcome = reads === null ? OUTCOME.READ_FAILED :
-    publication === null ? OUTCOME.NO_RECORD : OUTCOME.RECORD;
-  return outcome !== OUTCOME.RECORD ? {outcome} : {
-    outcome,
-    record: Object.freeze({
-      epoch: Object.freeze({
-        publicationEpoch: publication.publicationEpoch,
-        publicationId: publication.publicationId,
-        readAtMs,
-      }),
-      publication,
-      nodeRowsById,
-      decisionsByNodeId: new Map(),
-    }),
-  };
-}
-
-function checkOwnerUnavailability(owner) {
-  const timeout = owner.readTimeoutMs;
-  if (owner.stopped) {
-    return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.OWNER_STOPPED, null, null);
+  if (Number.isFinite(timeoutBudget.deadlineMs)) {
+    return Math.max(0, timeoutBudget.deadlineMs - nowMs);
   }
-  if (owner.outcome === OUTCOME.PENDING) {
-    return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_PENDING, null, timeout);
-  }
-  if (owner.outcome === OUTCOME.NO_RECORD) {
-    return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.NO_RECORD, null, timeout);
-  }
-  if (owner.outcome === OUTCOME.STALE) {
-    return unavailable(
-      SERVE_ELIGIBILITY_UNAVAILABLE_REASON.STALE, owner.record?.epoch ?? null, timeout);
-  }
-  if (!owner.record) {
-    return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_FAILED, null, timeout);
-  }
-  if (owner.superseded) {
-    return unavailable(SERVE_ELIGIBILITY_UNAVAILABLE_REASON.STALE, owner.record.epoch, timeout);
+  if (Number.isFinite(timeoutBudget.remainingMs)) {
+    return Math.max(0, timeoutBudget.remainingMs);
   }
   return null;
+}
+
+function resolveCallerWaitBudgetMs(options, nowMs, defaultTimeoutMs) {
+  let waitMs =
+    Number.isFinite(defaultTimeoutMs) && defaultTimeoutMs > 0 ?
+      defaultTimeoutMs :
+      0;
+  if (Number.isFinite(options?.timeoutMs)) {
+    waitMs = Math.min(waitMs, Math.max(0, options.timeoutMs));
+  }
+  if (Number.isFinite(options?.deadlineMs)) {
+    waitMs = Math.min(waitMs, Math.max(0, options.deadlineMs - nowMs));
+  }
+  const budgetRemainingMs = readTimeoutBudgetRemainingMs(
+    options?.timeoutBudget,
+    nowMs,
+  );
+  if (budgetRemainingMs !== null) {
+    waitMs = Math.min(waitMs, budgetRemainingMs);
+  }
+  return Math.max(0, waitMs);
+}
+
+function bindWaiterCancellation(options, onCancel) {
+  const cleanups = [];
+  const cancellationToken = options?.cancellationToken || null;
+  if (typeof cancellationToken?.onCancel === 'function') {
+    const cancelHandler = (reason) => {
+      if (typeof cancellationToken.throwIfCancelled === 'function') {
+        try {
+          cancellationToken.throwIfCancelled();
+        } catch (error) {
+          onCancel(error);
+          return;
+        }
+      }
+      onCancel(createCancellationError(reason));
+    };
+    const off = cancellationToken.onCancel(cancelHandler);
+    cleanups.push(
+      typeof off === 'function' ?
+        off :
+        () => cancellationToken.offCancel?.(cancelHandler),
+    );
+  }
+  const signal = options?.signal || null;
+  if (typeof signal?.addEventListener === 'function') {
+    const abortHandler = () => {
+      onCancel(createCancellationError(signal.reason));
+    };
+    signal.addEventListener(ABORT_EVENT, abortHandler, {once: true});
+    cleanups.push(() => {
+      signal.removeEventListener?.(ABORT_EVENT, abortHandler);
+    });
+  }
+  if (cleanups.length === 0) {
+    return null;
+  }
+  return () => {
+    for (const cleanup of cleanups) {
+      cleanup();
+    }
+  };
 }
 
 class ServeEligibilityOwner {
@@ -323,6 +190,7 @@ class ServeEligibilityOwner {
     this.superseded = false;
     this.triggerGeneration = 0;
     this.inFlight = null;
+    this.waiters = new Set();
     this.refreshRequested = false;
     this.refreshScheduled = false;
     this.leaseRefreshHandle = null;
@@ -332,31 +200,155 @@ class ServeEligibilityOwner {
     this.stopped = false;
   }
 
-  /**
-   * Run (or join) one committed refresh and answer for the given nodes.
-   * @return {Promise<void>}
-   */
-  readServeEligibility() {
+  get currentRecord() {
+    return this.record;
+  }
+
+  buildCurrentResult(outcome = this.outcome) {
+    return Object.freeze({
+      outcome,
+      record: this.record,
+      epoch: this.record?.epoch ?? null,
+      superseded: this.superseded,
+    });
+  }
+
+  async performRefresh() {
+    this.refreshRequested = false;
+    const startedGeneration = this.triggerGeneration;
+    const result = await this.readCommittedRecord();
+    this.adoptReadResult(result, startedGeneration);
+    return result;
+  }
+
+  settleWaiters(result) {
+    if (this.waiters.size === 0) {
+      return;
+    }
+    const pendingWaiters = [...this.waiters];
+    this.waiters.clear();
+    for (const waiter of pendingWaiters) {
+      waiter.resolve(result);
+    }
+  }
+
+  ensureRefresh() {
     if (this.stopped) {
-      return Promise.resolve();
+      return Promise.resolve(this.buildCurrentResult(OUTCOME.SHUTDOWN));
     }
     if (this.inFlight) {
       return this.inFlight;
     }
-    this.refreshRequested = false;
-    const startedGeneration = this.triggerGeneration;
-    this.inFlight = this.readCommittedRecord()
-      .then((result) => this.adoptReadResult(result, startedGeneration))
-      .finally(() => {
-        this.inFlight = null;
-        // A source event can postdate either a successful or failed read.
-        // Retain that event once, independently of whether it revoked the
-        // answer. The read result itself never creates another request.
-        if (this.refreshRequested && !this.stopped) {
-          this.scheduleRefresh();
+    const runRefresh = async () => {
+      let lastOutcome = this.outcome;
+      while (!this.stopped) {
+        const result = await this.performRefresh();
+        lastOutcome = result.outcome;
+        if (
+          result.outcome === OUTCOME.READ_FAILED ||
+          !this.superseded ||
+          !this.refreshRequested
+        ) {
+          const settledResult = this.buildCurrentResult(result.outcome);
+          this.settleWaiters(settledResult);
+          return settledResult;
         }
-      });
+      }
+      return this.buildCurrentResult(
+        this.stopped ? OUTCOME.SHUTDOWN : lastOutcome,
+      );
+    };
+    this.inFlight = runRefresh().finally(() => {
+      this.inFlight = null;
+      if (this.waiters.size > 0) {
+        this.settleWaiters(
+          this.buildCurrentResult(
+            this.stopped ? OUTCOME.SHUTDOWN : this.outcome,
+          ),
+        );
+      }
+      // A source event can postdate either a successful or failed read.
+      // Retain that event once, independently of whether it revoked the
+      // answer. The read result itself never creates another request.
+      if (this.refreshRequested && !this.stopped) {
+        this.scheduleRefresh();
+      }
+    });
     return this.inFlight;
+  }
+
+  /**
+   * Run (or join) one committed refresh and answer for the given nodes,
+   * bounded by the caller's own deadline and cancellation token.
+   * @param {Object} [options]
+   * @return {Promise<Object>}
+   */
+  async readServeEligibility(options = {}) {
+    throwIfCallerCancelled(options);
+    if (this.stopped) {
+      return this.buildCurrentResult(OUTCOME.SHUTDOWN);
+    }
+    const waitMs = resolveCallerWaitBudgetMs(
+      options,
+      this.now(),
+      this.readTimeoutMs,
+    );
+    if (waitMs <= 0) {
+      if (!this.record || this.superseded) {
+        this.ensureRefresh().catch(() => {});
+      }
+      return this.buildCurrentResult(
+        this.record ? OUTCOME.STALE_RETAINED : OUTCOME.UNINITIALIZED,
+      );
+    }
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timeoutHandle = null;
+      let removeCancelListener = null;
+      let waiter = null;
+      const cleanup = () => {
+        this.waiters.delete(waiter);
+        if (timeoutHandle !== null) {
+          this.clearTimeoutFn(timeoutHandle);
+          timeoutHandle = null;
+        }
+        if (typeof removeCancelListener === 'function') {
+          const unsubscribe = removeCancelListener;
+          removeCancelListener = null;
+          unsubscribe();
+        }
+      };
+      waiter = {
+        resolve: (result) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve(result);
+        },
+        reject: (error) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(error);
+        },
+      };
+      this.waiters.add(waiter);
+      timeoutHandle = this.setTimeoutFn(() => {
+        timeoutHandle = null;
+        waiter.resolve(
+          this.buildCurrentResult(
+            this.record ? OUTCOME.STALE_RETAINED : OUTCOME.READ_FAILED,
+          ),
+        );
+      }, waitMs);
+      timeoutHandle?.unref?.();
+      removeCancelListener = bindWaiterCancellation(options, (error) => {
+        waiter.reject(error);
+      });
+      this.ensureRefresh().catch((error) => {
+        waiter.reject(error);
+      });
+    });
   }
 
   async readCommittedRecord() {
@@ -394,22 +386,10 @@ class ServeEligibilityOwner {
   }
 
   isRegressedReadResult(result) {
-    if (result.outcome === OUTCOME.NO_RECORD) {
-      return (
-        this.record !== null ||
-        (Number.isSafeInteger(this.minPublicationEpoch) &&
-          this.minPublicationEpoch > 0)
-      );
-    }
-    if (result.outcome !== OUTCOME.RECORD) {
-      return false;
-    }
-    const epoch = result.record.epoch.publicationEpoch;
-    return (
-      (Number.isSafeInteger(this.minPublicationEpoch) &&
-        epoch < this.minPublicationEpoch) ||
-      (Number.isSafeInteger(this.record?.epoch?.publicationEpoch) &&
-        epoch < this.record.epoch.publicationEpoch)
+    return isRegressedCommittedReadResult(
+      result,
+      this.record,
+      this.minPublicationEpoch,
     );
   }
 
@@ -467,35 +447,11 @@ class ServeEligibilityOwner {
   }
 
   buildDecisionSignature() {
-    if (!this.record) {
-      return this.outcome;
-    }
-    const nodeIds = new Set([
-      ...this.record.nodeRowsById.keys(),
-      ...this.record.publication.publishedActiveNodeIds,
-    ]);
-    const parts = [this.outcome, this.record.epoch.publicationEpoch,
-      this.record.epoch.publicationId];
-    for (const nodeId of [...nodeIds].sort()) {
-      const decided = decideServeEligibility({
-        nodeId,
-        nodeRow: this.record.nodeRowsById.get(nodeId) || null,
-        publication: this.record.publication,
-        readAtMs: this.record.epoch.readAtMs,
-        isNodeLoadReady: this.isNodeLoadReady,
-      });
-      this.record.decisionsByNodeId.set(nodeId, decided);
-      const {projection} = projectNodeLivenessSemantics({
-        nodeRow: this.record.nodeRowsById.get(nodeId) || null,
-        nowMs: this.record.epoch.readAtMs,
-      });
-      // Node-floor consumers also wait on known/invalid lease transitions
-      // while serving stays denied. Renewals with identical meaning coalesce.
-      parts.push(JSON.stringify([nodeId, projection.statusSemantics.state,
-        projection.leaseSemantics.state, projection.readyNow]));
-      parts.push(`${nodeId}=${decided.decision}:${decided.reasons.join(REASON_SEPARATOR)}`);
-    }
-    return parts.join(SIGNATURE_SEPARATOR);
+    return evaluateServeEligibilityRecordSignature(
+      this.record,
+      this.outcome,
+      this.isNodeLoadReady,
+    );
   }
 
   armLeaseRefreshAt(targetMs, nowMs) {
@@ -549,7 +505,7 @@ class ServeEligibilityOwner {
     queueMicrotask(() => {
       this.refreshScheduled = false;
       if (!this.stopped && this.refreshRequested) {
-        this.readServeEligibility().catch(() => {});
+        this.ensureRefresh().catch(() => {});
       }
     });
   }
@@ -592,11 +548,17 @@ class ServeEligibilityOwner {
     if (!nodeId) {
       return;
     }
+    const committedRow = this.record.nodeRowsById.get(nodeId) || null;
+    if (isOlderNodeHeartbeatProjection(committedRow, row)) {
+      return;
+    }
     if (
-      isRevokingNodeChange(this.record.nodeRowsById.get(nodeId) || null, row,
-        this.isNodeLoadReady)
+      isRevokingNodeChange(committedRow, row, this.isNodeLoadReady)
     ) {
       this.markSuperseded();
+      return;
+    }
+    if (!hasAdvancedNodeLeaseOrHeartbeat(committedRow, row)) {
       return;
     }
     // A lease extension leaves the committed answer valid until its own
@@ -757,13 +719,9 @@ class ServeEligibilityOwner {
       this.clearTimeoutFn(this.leaseRefreshHandle);
       this.leaseRefreshHandle = null;
     }
+    this.settleWaiters(this.buildCurrentResult(OUTCOME.SHUTDOWN));
     this.listeners.clear();
   }
-}
-
-function isServeEligibilityAnswerEligible(answer) {
-  return answer?.state === SERVE_ELIGIBILITY_STATE.READY &&
-    answer.decision === SERVE_ELIGIBILITY_DECISION.ELIGIBLE;
 }
 
 export {

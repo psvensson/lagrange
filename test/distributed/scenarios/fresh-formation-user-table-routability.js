@@ -139,9 +139,34 @@ function resolveDependencies(cluster) {
   };
 }
 
+function formatParticipantDenialReasons(participant) {
+  const codes = participant.routingDenialReasonCodes;
+  if (!Array.isArray(codes) || codes.length === ZERO) return null;
+  return `denialReasons=${codes.join(',')}`;
+}
+
+function collectParticipantDetailParts(participant) {
+  return [
+    participant.partitionId ? `partition=${participant.partitionId}` : null,
+    participant.error ? `participantError=${participant.error}` : null,
+    participant.routingReasonCode ?
+      `routingReason=${participant.routingReasonCode}` :
+      null,
+    formatParticipantDenialReasons(participant),
+  ].filter(Boolean);
+}
+
 function errorText(error) {
   const code = error?.code ? `${error.code}: ` : '';
-  return code + String(error?.message || error);
+  const base = code + String(error?.message || error);
+  const participant = error?.firstFailedParticipant;
+  if (!participant || typeof participant !== 'object') {
+    return base;
+  }
+  const detailParts = collectParticipantDetailParts(participant);
+  return detailParts.length > ZERO ?
+    `${base} (${detailParts.join('; ')})` :
+    base;
 }
 
 async function readRows(node, sql, timeoutMs) {

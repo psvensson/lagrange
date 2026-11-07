@@ -252,9 +252,15 @@ function satisfiedAuthority() {
   const services = [];
   for (const partitionId of PRIORITY_PARTITION_IDS) {
     for (let index = 0; index < NODE_IDS.length; index += 1) {
-      services.push({node_id: NODE_IDS[index], partition_id: partitionId,
+      services.push({
+        address: `${NODE_IDS[index]}/partition/${partitionId}-r${index + 1}`,
+        node_id: NODE_IDS[index],
+        partition_id: partitionId,
+        raft_role: index === 0 ? 'leader' : 'follower',
         service_id: `${partitionId}-r${index + 1}`,
-        service_type: 'partition', status: 'active'});
+        service_type: 'partition',
+        status: 'active',
+      });
     }
   }
   return {
@@ -284,9 +290,15 @@ test('constructed satisfying state is green on every predicate', (t) => {
   }
   const table = [{partition_id: 'tbl-x-p1', leader_node_id: NODE_IDS[0],
     replica_count: 3, table_name: 'ffr_probe'}];
-  const tableServices = arrayMap(NODE_IDS, (nodeId, index) => ({node_id: nodeId,
-    partition_id: 'tbl-x-p1', service_id: `tbl-x-p1-r${index + 1}`,
-    service_type: 'partition', status: 'active'}));
+  const tableServices = arrayMap(NODE_IDS, (nodeId, index) => ({
+    address: `${nodeId}/partition/tbl-x-p1-r${index + 1}`,
+    node_id: nodeId,
+    partition_id: 'tbl-x-p1',
+    raft_role: index === 0 ? 'leader' : 'follower',
+    service_id: `tbl-x-p1-r${index + 1}`,
+    service_type: 'partition',
+    status: 'active',
+  }));
   const results = [
     ...evaluations[2].predicates,
     evaluateUserTableRoutability({countProbe: {rows: [{cnt: 0}]},
@@ -362,5 +374,165 @@ test('a config that is not three nodes refuses the scenario', (t) => {
   assert.equal(refusal.reason, SCENARIO_REFUSAL.NODE_COUNT_MISMATCH);
   assert.equal(refusal.required, 3);
   assert.equal(refusal.available, 5);
+  t.end();
+});
+
+test('active learner rows in services do not count as voter holders or trigger false priority_spread disagreements', (t) => {
+  const observation = satisfiedObservation(T0);
+  observation.authority.services.rows = arrayMap(
+    observation.authority.services.rows,
+    (row) => row.partition_id === 'replica_operations-p1' &&
+      row.node_id === NODE_IDS[2] ?
+      {...row, raft_role: 'learner'} :
+      row);
+  for (const nodeId of NODE_IDS) {
+    observation.snapshots[nodeId].payload.controlPlaneDiagnostics
+      .publicationConvergence.priorityPartitionSummary = {
+        blockedPartitions: [{
+          partitionId: 'replica_operations-p1',
+          readyDistinctNodeCount: 2,
+          requiredDistinctNodeCount: 3,
+        }],
+        satisfied: false,
+      };
+  }
+  const evaluation = evaluateFormationObservation(observation);
+  const spread = predicateById(evaluation, PREDICATE.PRIORITY_SPREAD);
+  assert.equal(spread.met, false);
+  assert.ok(arrayIncludes(spread.reasonCodes,
+    'authority_not_spread:replica_operations-p1:2/3'));
+  assert.equal(evaluation.disagreements.length, 0);
+  t.end();
+});
+
+test('disagreements carry authorityRevision, observerRevision, and revisionSkew', (t) => {
+  const observation = satisfiedObservation(T0);
+  observation.authority.services.readAuthorityWitnesses = [{
+    appliedIndex: 42,
+    commitIndex: 42,
+    observedAtMs: T0 + 200,
+    term: 3,
+  }];
+  observation.authority.services.rows[0].updated_at = T0 + 100;
+  observation.authority.services.rows[0].updated_at_hlc =
+    '1793563095000-0-services-p1-r1';
+  observation.snapshots[NODE_IDS[0]].payload.capturedAt = T0 - 50;
+  observation.snapshots[NODE_IDS[0]].payload.controlPlaneDiagnostics
+    .tableRevisionWatermarks = {
+      services: {
+        lastAuthoritativeAppliedIndex: 40,
+        lastOriginHlc: '1793563094000-0-services-p1-r1',
+        lastSourceLogIndex: 40,
+      },
+    };
+  observation.snapshots[NODE_IDS[0]].payload.controlPlaneDiagnostics
+    .publicationConvergence.priorityPartitionSummary = {
+      blockedPartitions: [{
+        partitionId: 'replica_operations-p1',
+        readyDistinctNodeCount: 2,
+        requiredDistinctNodeCount: 3,
+      }],
+      satisfied: false,
+    };
+  const evaluation = evaluateFormationObservation(observation);
+  assert.equal(evaluation.disagreements.length, 1);
+  const disagreement = evaluation.disagreements[0];
+  assert.equal(disagreement.authorityRevision.maxAppliedIndex, 42);
+  assert.equal(disagreement.authorityRevision.maxCommitIndex, 42);
+  assert.equal(disagreement.authorityRevision.maxTerm, 3);
+  assert.equal(disagreement.authorityRevision.maxRowTimestampMs, T0 + 100);
+  assert.equal(disagreement.authorityRevision.maxOriginHlc,
+    '1793563095000-0-services-p1-r1');
+  assert.equal(disagreement.observerRevision.capturedAtMs, T0 - 50);
+  assert.equal(disagreement.observerRevision.watermark.lastSourceLogIndex, 40);
+  assert.equal(disagreement.revisionSkew, true);
+  t.end();
+});
+
+test('evaluateProjectionAgreement resets episode window on pre-commit skew and authority revision advance', (t) => {
+  const buildDisagreeingPoll = ({
+    appliedIndex,
+    capturedAtMs,
+    observerCapturedAtMs,
+    rowUpdatedAtMs,
+  }) => {
+    const observation = satisfiedObservation(capturedAtMs);
+    observation.authority.services.readAuthorityWitnesses = [{
+      appliedIndex,
+      commitIndex: appliedIndex,
+      observedAtMs: capturedAtMs,
+      term: 2,
+    }];
+    observation.authority.services.rows[0].updated_at = rowUpdatedAtMs;
+    observation.snapshots[NODE_IDS[0]].payload.capturedAt =
+      observerCapturedAtMs;
+    observation.snapshots[NODE_IDS[0]].payload.controlPlaneDiagnostics
+      .publicationConvergence.priorityPartitionSummary = {
+        blockedPartitions: [{
+          partitionId: 'replica_operations-p1',
+          readyDistinctNodeCount: 2,
+          requiredDistinctNodeCount: 3,
+        }],
+        satisfied: false,
+      };
+    return evaluateFormationObservation(observation);
+  };
+
+  // Pre-commit observer snapshot at T0 (observer captured at T0 - 200 before
+  // row commit at T0 + 100), followed by first post-commit poll at T0 + 1200:
+  // does not fail because T0 + 1200 is the first post-commit observation.
+  const preCommitPoll = buildDisagreeingPoll({
+    appliedIndex: 10,
+    capturedAtMs: T0,
+    observerCapturedAtMs: T0 - 200,
+    rowUpdatedAtMs: T0 + 100,
+  });
+  const firstPostCommitPoll = buildDisagreeingPoll({
+    appliedIndex: 10,
+    capturedAtMs: T0 + 1200,
+    observerCapturedAtMs: T0 + 1200,
+    rowUpdatedAtMs: T0 + 100,
+  });
+  assert.equal(
+    evaluateProjectionAgreement([preCommitPoll, firstPostCommitPoll]).met,
+    true,
+  );
+
+  // Authority revision advances at T0 + 2100 (within 900ms of T0 + 1200):
+  // resets the episode window for the new revision.
+  const advancedRevisionPoll = buildDisagreeingPoll({
+    appliedIndex: 11,
+    capturedAtMs: T0 + 2100,
+    observerCapturedAtMs: T0 + 2100,
+    rowUpdatedAtMs: T0 + 2050,
+  });
+  assert.equal(
+    evaluateProjectionAgreement([
+      preCommitPoll,
+      firstPostCommitPoll,
+      advancedRevisionPoll,
+    ]).met,
+    true,
+  );
+
+  // Static authority revision 11 still disagreeing 1500ms later fails (g).
+  const persistentOnRevision11 = buildDisagreeingPoll({
+    appliedIndex: 11,
+    capturedAtMs: T0 + 3600,
+    observerCapturedAtMs: T0 + 3600,
+    rowUpdatedAtMs: T0 + 2050,
+  });
+  const failed = evaluateProjectionAgreement([
+    preCommitPoll,
+    firstPostCommitPoll,
+    advancedRevisionPoll,
+    persistentOnRevision11,
+  ]);
+  assert.equal(failed.met, false);
+  assert.equal(failed.detail.persistent[0].firstAuthorityRevision
+    .maxAppliedIndex, 11);
+  assert.equal(failed.detail.persistent[0].latestAuthorityRevision
+    .maxAppliedIndex, 11);
+  assert.equal(failed.detail.persistent[0].longestSpanMs, 1500);
   t.end();
 });

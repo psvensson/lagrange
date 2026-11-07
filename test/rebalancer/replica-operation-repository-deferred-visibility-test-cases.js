@@ -185,6 +185,9 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           executeQuery: async () => ({success: true}),
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() {
+            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
@@ -279,6 +282,9 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           executeQuery: async () => ({success: true}),
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() {
+            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
@@ -406,6 +412,9 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           executeQuery: async () => ({success: true}),
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() {
+            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
@@ -575,6 +584,9 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           },
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() {
+            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PUBLISHED',
@@ -655,6 +667,9 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           },
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() {
+            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PUBLISHED',
@@ -966,6 +981,9 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           executeQuery: async () => ({success: true}),
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() {
+            return this.getPriorityRecoveryPlanningSnapshotBestEffort();
+          },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',

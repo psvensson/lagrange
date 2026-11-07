@@ -176,6 +176,7 @@ class SystemTableCache {
     this.lastAuthoritativeObservedAtMsByTableName = new Map();
     this.lastAuthoritativeObservedCauseIdByTableName = new Map();
     this.lastCdcObservationByTableName = new Map();
+    this.tableRevisionWatermarks = new Map();
     // Monotonic per-table apply counter. Unlike lastAppliedAtMs (wall-clock,
     // same-millisecond applies collide) a version can arbitrate "did anything
     // change since capture" exactly, so multi-table snapshot reuse never has
@@ -507,21 +508,25 @@ class SystemTableCache {
     });
 
     // Notify listeners after applying the change
+    const tableMutationRevision = recordForNotification ?
+      this.recordTableMutation(tableName, key) :
+      null;
+    updateSystemTableCacheCdcObservation({
+      cache: this,
+      tableName,
+      key,
+      operation,
+      data,
+      options,
+      recordForNotification,
+      incomingVersionAccepted,
+      observationTable:
+        this.lastCdcObservationByTableName.get(tableName),
+      resultingRow: table.get(key),
+    });
     if (recordForNotification) {
-      updateSystemTableCacheCdcObservation({
-        tableName,
-        key,
-        operation,
-        data,
-        options,
-        incomingVersionAccepted,
-        observationTable:
-          this.lastCdcObservationByTableName.get(tableName),
-        resultingRow: table.get(key),
-      });
       this.lastAppliedAtMsByTableName.set(tableName, this.timeSource.now());
       this.lastAppliedCauseIdByTableName.set(tableName, causeId);
-      const tableMutationRevision = this.recordTableMutation(tableName, key);
       // One immutable per-apply snapshot shared by both channels: the
       // apply-time (synchronous) listeners and the existing deferred change
       // notification observe identical payload without a second clone.
@@ -570,6 +575,7 @@ class SystemTableCache {
       this.mutationVersionByTableKey.get(tableName).clear();
     }
     this.mutationVersionByTableName.clear();
+    this.tableRevisionWatermarks.clear();
     this.logger.debug(CACHE_LOG_MSG.CACHE_CLEARED);
   }
 

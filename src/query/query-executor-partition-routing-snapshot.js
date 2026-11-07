@@ -416,6 +416,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
         await this.awaitServeEligibilityRefreshForDenial(
           deniedNodeIds,
           allowReadinessAuthoritativeRefresh,
+          options,
         ) :
         await this.awaitProjectionRoutingRepair(
           routingSnapshot,
@@ -439,6 +440,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       await this.awaitPostOverlayRoutingRepair(
         routingSnapshot,
         allowReadinessAuthoritativeRefresh,
+        options,
       );
     }
     return attemptedRepair || overlayRepaired;
@@ -447,6 +449,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
   async awaitPostOverlayRoutingRepair(
     routingSnapshot,
     allowReadinessAuthoritativeRefresh,
+    options = {},
   ) {
     const routingReadinessDimension =
       routingSnapshot.routingReadinessDimension ||
@@ -467,6 +470,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       await this.awaitServeEligibilityRefreshForDenial(
         postOverlayDeniedNodeIds,
         allowReadinessAuthoritativeRefresh,
+        options,
       );
       return;
     }
@@ -519,10 +523,15 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
    * re-decides once on the new answer; no per-node projection repair.
    * @param {Array<string>} deniedNodeIds
    * @param {boolean} allowRefresh
+   * @param {Object} [options]
    * @return {Promise<boolean>} whether a refresh was awaited.
    * @private
    */
-  async awaitServeEligibilityRefreshForDenial(deniedNodeIds, allowRefresh) {
+  async awaitServeEligibilityRefreshForDenial(
+    deniedNodeIds,
+    allowRefresh,
+    options = {},
+  ) {
     if (
       !allowRefresh ||
       deniedNodeIds.length === 0 ||
@@ -531,7 +540,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
     ) {
       return false;
     }
-    await this.controlPlaneReadinessService.readServeEligibility();
+    await this.controlPlaneReadinessService.readServeEligibility(options);
     return true;
   },
 

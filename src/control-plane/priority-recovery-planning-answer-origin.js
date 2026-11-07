@@ -52,22 +52,8 @@ const PRIORITY_RECOVERY_PLANNING_ANSWER_ORIGIN_UNSTATED = Object.freeze({
 
 const PLANNING_OWNER_TYPE = 'object';
 const PLANNING_METHOD_TYPE = 'function';
-
-const PRIORITY_RECOVERY_PLANNING_SYNC_METHODS = Object.freeze([
-  'getPriorityRecoveryPlanningAnswerSync',
-  'getMembershipPublicationPlanningAnswerSync',
-  'getPriorityRecoveryPlanningSnapshotSync',
-  'getMembershipPublicationPlanningSnapshotSync',
-]);
-
-function resolvePriorityRecoveryPlanningSyncMethod(readinessService) {
-  if (!isPlanningOwner(readinessService)) {
-    return null;
-  }
-  return PRIORITY_RECOVERY_PLANNING_SYNC_METHODS.find(
-    (method) => typeof readinessService[method] === PLANNING_METHOD_TYPE,
-  ) ?? null;
-}
+const PRIORITY_RECOVERY_PLANNING_SYNC_METHOD =
+  'getPriorityRecoveryPlanningAnswerSync';
 
 /**
  * Whether a readiness owner exposes a synchronous priority-recovery planning
@@ -77,7 +63,11 @@ function resolvePriorityRecoveryPlanningSyncMethod(readinessService) {
  * @return {boolean}
  */
 function hasPriorityRecoveryPlanningAnswerSync(readinessService) {
-  return resolvePriorityRecoveryPlanningSyncMethod(readinessService) !== null;
+  return (
+    isPlanningOwner(readinessService) &&
+    typeof readinessService[PRIORITY_RECOVERY_PLANNING_SYNC_METHOD] ===
+      PLANNING_METHOD_TYPE
+  );
 }
 
 /**
@@ -94,11 +84,11 @@ function readPriorityRecoveryPlanningAnswerSync(
   nodeId,
   observedAt,
 ) {
-  const method = resolvePriorityRecoveryPlanningSyncMethod(readinessService);
-  if (!method) {
+  if (!hasPriorityRecoveryPlanningAnswerSync(readinessService)) {
     return null;
   }
-  const answer = readinessService[method](nodeId, observedAt);
+  const answer =
+    readinessService[PRIORITY_RECOVERY_PLANNING_SYNC_METHOD](nodeId, observedAt);
   return answer && typeof answer === PLANNING_OWNER_TYPE ? answer : null;
 }
 

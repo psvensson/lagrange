@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 216,
+    "storage-partition": 217,
     "storage-raft": 147,
     "test-infrastructure": 156,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2604,
-  "digest": "fnv1a32-4cdf03c6",
+  "censusSize": 2605,
+  "digest": "fnv1a32-6ddfcebd",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-77ad900c",
+  "observationDigest": "fnv1a32-524cb2f8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -341,6 +341,7 @@
     "test/cache/system-table-cache-cdc-provenance.test.js": "storage-partition",
     "test/cache/system-table-cache-consistency.property.test.js": "storage-partition",
     "test/cache/system-table-cache-lifecycle-delete-ordering.test.js": "storage-partition",
+    "test/cache/system-table-cache-observation.test.js": "storage-partition",
     "test/cache/system-table-cache-services-lifecycle-merge.test.js": "storage-partition",
     "test/cache/system-table-cache-time-authority.test.js": "storage-partition",
     "test/cache/system-table-cache-tombstone-time-authority.test.js": "storage-partition",
@@ -4787,13 +4788,13 @@
     },
     "test/control-plane/membership-publication-deferred-catchup.test.js": {
       "files": [
+        "src/bootstrap/system-partition-classification.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/cdc/cdc-integration-service-authoritative-catchup.js",
         "src/cdc/cdc-integration-service-cache-visibility-wait.js",
         "src/cdc/cdc-integration-service-shared-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-        "src/control-plane/membership-publication-coordinator-reconcile.js",
         "src/control-plane/membership-publication-planning-evidence.js",
         "src/control-plane/membership-publication-row-contract.js"
       ]
@@ -4823,6 +4824,7 @@
         "src/control-plane/membership-publication-active-gate-reconcile.js",
         "src/control-plane/membership-publication-candidate-derivation.js",
         "src/control-plane/membership-publication-coordinator-queue.js",
+        "src/control-plane/membership-publication-coordinator-reconcile-helpers.js",
         "src/control-plane/membership-publication-coordinator-reconcile.js",
         "src/control-plane/membership-publication-lifecycle-summary.js",
         "src/control-plane/membership-publication-planning-evidence.js",
@@ -4849,6 +4851,7 @@
         "src/control-plane/replica-dispatch-replay-health-readiness.js",
         "src/control-plane/replica-dispatch-service.js",
         "src/control-plane/serve-eligibility-owner.js",
+        "src/control-plane/serve-eligibility-record-decision.js",
         "src/control-plane/system-row-normalizers.js",
         "src/diagnostics/topology-convergence-publication-normalizers.js",
         "src/diagnostics/topology-convergence-replay.js",
@@ -13262,8 +13265,33 @@
     },
     "test/query/parallel-query-coordinator.test.js": {
       "files": [
+        "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/admin-query-result-message-envelope.js",
+        "src/admin/static/playback-viewer.html",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/priority-recovery-observation-snapshot.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/control-plane/publication-recovery-evidence.js",
         "src/partition/partition-service-remote-query-methods.js",
-        "src/query/query-executor-partition-request-builders.js"
+        "src/query/query-executor-partition-request-builders.js",
+        "src/transport/transport-semantic-outcome.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-gate-closure-classification.js",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/publication-evidence-contract.js",
+        "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
+      "env": [
+        "LAGRANGE_CAPTURE_LOGS",
+        "LAGRANGE_DEBUG_LOGS"
       ]
     },
     "test/query/partition-transaction-seam-falsifiers.test.js": {

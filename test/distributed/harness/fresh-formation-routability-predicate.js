@@ -43,6 +43,9 @@ import {
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
 } from '../../../src/bootstrap/system-partition-classification.js';
 import {
+  isPrioritySpreadHolderServiceRow,
+} from '../../../src/control-plane/membership-publication-priority-partition-summary.js';
+import {
   isTerminalReplicaOperationRecord,
 } from '../../../src/rebalancer/replica-operation-progress.js';
 import {
@@ -65,13 +68,13 @@ const ZERO = 0;
 const PROJECTION_PERSISTENCE_BOUND_MS = 1000;
 const ONE = 1;
 const TWO = 2;
-const SERVICE_TYPE_PARTITION = 'partition';
-const SERVICE_STATUS_ACTIVE = 'active';
 const CONTRACT_STATE_PENDING = 'pending';
 const SERVE_LANE_PREFIX = 'serve_lane_';
 const JSON_OPEN_BRACE = '{';
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
+const TABLE_SERVICES = 'services';
+const TABLE_REPLICA_OPERATIONS = 'replica_operations';
 
 const PREDICATE = Object.freeze({
   SERVE_LANE: 'a-serve-lane-open',
@@ -247,9 +250,143 @@ function priorityPartitionRows(partitionRows) {
 function activePartitionServiceNodeIds(serviceRows, partitionId) {
   return uniqueSorted(arrayMap(arrayFilter(serviceRows, (row) =>
     row?.partition_id === partitionId &&
-    row?.service_type === SERVICE_TYPE_PARTITION &&
-    row?.status === SERVICE_STATUS_ACTIVE &&
+    isPrioritySpreadHolderServiceRow(row) &&
     typeof row?.node_id === TYPEOF_STRING), (row) => row.node_id));
+}
+
+function resolveAuthorityWitnesses(tableObservation) {
+  if (Array.isArray(tableObservation?.readAuthorityWitnesses)) {
+    return tableObservation.readAuthorityWitnesses;
+  }
+  if (isRecord(tableObservation?.readAuthorityWitness)) {
+    return [tableObservation.readAuthorityWitness];
+  }
+  return [];
+}
+
+function updateMaxSafeInteger(current, candidate) {
+  if (!Number.isSafeInteger(candidate)) return current;
+  return current === null ? candidate : Math.max(current, candidate);
+}
+
+function updateMaxPositiveFinite(current, candidate) {
+  const num = Number(candidate);
+  if (!Number.isFinite(num) || num <= ZERO) return current;
+  return current === null ? num : Math.max(current, num);
+}
+
+function summarizeAuthorityWitnesses(witnesses) {
+  let maxAppliedIndex = null;
+  let maxCommitIndex = null;
+  let maxTerm = null;
+  let maxObservedAtMs = null;
+  for (const witness of witnesses) {
+    maxAppliedIndex = updateMaxSafeInteger(maxAppliedIndex,
+      witness?.appliedIndex);
+    maxCommitIndex = updateMaxSafeInteger(maxCommitIndex,
+      witness?.commitIndex);
+    maxTerm = updateMaxSafeInteger(maxTerm, witness?.term);
+    maxObservedAtMs = updateMaxPositiveFinite(maxObservedAtMs,
+      witness?.observedAtMs);
+  }
+  return {maxAppliedIndex, maxCommitIndex, maxObservedAtMs, maxTerm};
+}
+
+function updateMaxHlcString(current, candidate) {
+  if (typeof candidate !== TYPEOF_STRING || candidate.length === ZERO) {
+    return current;
+  }
+  return current === null || candidate > current ? candidate : current;
+}
+
+function collectRowTimestampCandidates(row) {
+  if (!isRecord(row)) return [];
+  return [
+    row.updated_at,
+    row.created_at,
+    row.completed_at,
+    row.started_at,
+    row.state_entered_at,
+  ];
+}
+
+function collectRowHlcCandidates(row) {
+  if (!isRecord(row)) return [];
+  return [
+    row.origin_hlc,
+    row.originHlc,
+    row.updated_at_hlc,
+    row.updatedAtHlc,
+  ];
+}
+
+function summarizeAuthorityRows(rowList) {
+  let maxRowTimestampMs = null;
+  let maxOriginHlc = null;
+  for (const row of rowList) {
+    for (const ts of collectRowTimestampCandidates(row)) {
+      maxRowTimestampMs = updateMaxPositiveFinite(maxRowTimestampMs, ts);
+    }
+    for (const hlc of collectRowHlcCandidates(row)) {
+      maxOriginHlc = updateMaxHlcString(maxOriginHlc, hlc);
+    }
+  }
+  return {maxOriginHlc, maxRowTimestampMs};
+}
+
+function extractAuthorityTableRevision(tableObservation, rows) {
+  const witnesses = resolveAuthorityWitnesses(tableObservation);
+  const rowList = Array.isArray(rows) ? rows :
+    (rowsOfRead(tableObservation) || []);
+  return {
+    ...summarizeAuthorityWitnesses(witnesses),
+    ...summarizeAuthorityRows(rowList),
+    witnesses,
+  };
+}
+
+function extractObserverTableRevision(snapshot, tableName) {
+  const rawCapturedAt = Number(snapshot?.payload?.capturedAt ??
+    snapshot?.payload?.controlPlaneDiagnostics?.capturedAt);
+  const capturedAtMs = Number.isFinite(rawCapturedAt) && rawCapturedAt > ZERO ?
+    rawCapturedAt :
+    null;
+  const watermarks = snapshotDiagnostics(snapshot)?.tableRevisionWatermarks;
+  const watermark = isRecord(watermarks) && isRecord(watermarks[tableName]) ?
+    watermarks[tableName] :
+    null;
+  return {capturedAtMs, watermark};
+}
+
+function isSafeIntegerLagging(observerVal, authorityVal) {
+  return Number.isSafeInteger(observerVal) &&
+    Number.isSafeInteger(authorityVal) &&
+    observerVal < authorityVal;
+}
+
+function isFiniteTimestampLagging(observerVal, authorityVal) {
+  return Number.isFinite(observerVal) &&
+    Number.isFinite(authorityVal) &&
+    observerVal < authorityVal;
+}
+
+function isHlcStringLagging(observerHlc, authorityHlc) {
+  return typeof observerHlc === TYPEOF_STRING &&
+    observerHlc.length > ZERO &&
+    typeof authorityHlc === TYPEOF_STRING &&
+    authorityHlc.length > ZERO &&
+    observerHlc < authorityHlc;
+}
+
+function evaluateRevisionSkew(authorityRevision, observerRevision) {
+  const auth = isRecord(authorityRevision) ? authorityRevision : {};
+  const obs = isRecord(observerRevision) ? observerRevision : {};
+  const wm = isRecord(obs.watermark) ? obs.watermark : {};
+  return isSafeIntegerLagging(wm.lastAuthoritativeAppliedIndex,
+    auth.maxAppliedIndex) ||
+    isSafeIntegerLagging(wm.lastSourceLogIndex, auth.maxAppliedIndex) ||
+    isFiniteTimestampLagging(obs.capturedAtMs, auth.maxRowTimestampMs) ||
+    isHlcStringLagging(wm.lastOriginHlc, auth.maxOriginHlc);
 }
 
 function authoritativePrioritySpread(partitionRows, serviceRows, reasons) {
@@ -315,7 +452,14 @@ function readAuthorityRows(authority, labels, reasons) {
   return rowsByLabel;
 }
 
-function compareObserverSpread(observerNodeId, summary, authoritative, sink) {
+function compareObserverSpread(context, authoritative, sink) {
+  const {
+    authorityRevision,
+    observerNodeId,
+    observerRevision,
+    revisionSkew,
+    summary,
+  } = context;
   const blocked = projectionBlockedById(summary);
   const satisfied = summary.satisfied === true && blocked.size === ZERO;
   sink.projections.push({blockedPartitions: [...blocked.values()],
@@ -326,10 +470,13 @@ function compareObserverSpread(observerNodeId, summary, authoritative, sink) {
     if (entry.satisfied === (projected === null)) continue;
     sink.disagreements.push({
       authority: entry,
+      authorityRevision,
       key: `priority_spread:${observerNodeId}:${entry.partitionId}`,
       observerNodeId,
+      observerRevision,
       projection: projected === null ? {satisfied: true} :
         {satisfied: false, ...projected},
+      revisionSkew,
     });
   }
 }
@@ -348,14 +495,27 @@ function evaluatePrioritySpread(observation) {
     reasons.push(`authority_not_spread:${entry.partitionId}:` +
       `${entry.readyDistinctNodeCount}/${entry.requiredDistinctNodeCount}`);
   }
+  const authorityRevision = extractAuthorityTableRevision(
+    observation.authority?.services, rows.services);
   const sink = {disagreements: [], projections: [], reasons};
   for (const observerNodeId of observation.clusterNodeIds) {
-    const summary = projectionSummaryOf(observation.snapshots?.[observerNodeId]);
+    const snapshot = observation.snapshots?.[observerNodeId];
+    const summary = projectionSummaryOf(snapshot);
     if (summary === null) {
       reasons.push(`projection_priority_summary_absent:${observerNodeId}`);
       continue;
     }
-    compareObserverSpread(observerNodeId, summary, authoritative, sink);
+    const observerRevision = extractObserverTableRevision(snapshot,
+      TABLE_SERVICES);
+    const revisionSkew = evaluateRevisionSkew(authorityRevision,
+      observerRevision);
+    compareObserverSpread({
+      authorityRevision,
+      observerNodeId,
+      observerRevision,
+      revisionSkew,
+      summary,
+    }, authoritative, sink);
   }
   const {disagreements, projections} = sink;
   const detail = {authoritative, projections};
@@ -367,12 +527,17 @@ function evaluatePrioritySpread(observation) {
   };
 }
 
-function compareProjectedInFlight(observation, authorityCount, reasons) {
+function compareProjectedInFlight(
+  observation,
+  authorityCount,
+  authorityRevision,
+  reasons,
+) {
   const disagreements = [];
   const projected = [];
   for (const observerNodeId of observation.clusterNodeIds) {
-    const count = observation.snapshots?.[observerNodeId]?.payload
-      ?.replicaOperations?.inFlightCount;
+    const snapshot = observation.snapshots?.[observerNodeId];
+    const count = snapshot?.payload?.replicaOperations?.inFlightCount;
     if (!Number.isSafeInteger(count) || count < ZERO) {
       reasons.push(`projection_in_flight_count_absent:${observerNodeId}`);
       continue;
@@ -380,11 +545,18 @@ function compareProjectedInFlight(observation, authorityCount, reasons) {
     projected.push({count, observerNodeId});
     if (count > ZERO) reasons.push(`projection_in_flight:${observerNodeId}`);
     if ((count === ZERO) === (authorityCount === ZERO)) continue;
+    const observerRevision = extractObserverTableRevision(snapshot,
+      TABLE_REPLICA_OPERATIONS);
+    const revisionSkew = evaluateRevisionSkew(authorityRevision,
+      observerRevision);
     disagreements.push({
       authority: {inFlightCount: authorityCount},
+      authorityRevision,
       key: `ledger_in_flight:${observerNodeId}`,
       observerNodeId,
+      observerRevision,
       projection: {inFlightCount: count},
+      revisionSkew,
     });
   }
   return {disagreements, projected};
@@ -412,8 +584,9 @@ function evaluateLedgerQuiet(observation) {
   if (read.complete !== true) {
     reasons.push('replica_operations_observation_incomplete');
   }
+  const authorityRevision = extractAuthorityTableRevision(read, rows);
   const {disagreements, projected} = compareProjectedInFlight(observation,
-    inFlight.length, reasons);
+    inFlight.length, authorityRevision, reasons);
   const detail = {authoritativeInFlight: inFlightIds,
     authoritativeInFlightCount: inFlight.length, projected,
     rowsComplete: read.complete === true};
@@ -446,6 +619,73 @@ function evaluateFormationObservation(observation) {
   };
 }
 
+function didAuthorityRevisionAdvance(prevRev, nextRev) {
+  if (!isRecord(prevRev) || !isRecord(nextRev)) return false;
+  return isSafeIntegerLagging(prevRev.maxAppliedIndex,
+    nextRev.maxAppliedIndex) ||
+    isFiniteTimestampLagging(prevRev.maxRowTimestampMs,
+      nextRev.maxRowTimestampMs) ||
+    isHlcStringLagging(prevRev.maxOriginHlc, nextRev.maxOriginHlc);
+}
+
+function isPreCommitDisagreement(authorityRevision, observerRevision) {
+  return isFiniteTimestampLagging(observerRevision?.capturedAtMs,
+    authorityRevision?.maxRowTimestampMs);
+}
+
+function createDisagreementEpisode(context) {
+  const {authRev, obsRev, postCommitFloorMs, preCommit, skew} = context;
+  return {
+    firstAuthorityRevision: authRev,
+    firstObserverRevision: obsRev,
+    firstSeenAtMs: postCommitFloorMs,
+    lastWasPreCommit: preCommit,
+    latestAuthorityRevision: authRev,
+    latestObserverRevision: obsRev,
+    postCommitPollCount: preCommit ? ZERO : ONE,
+    revisionSkewObserved: skew,
+  };
+}
+
+function updateDisagreementEpisodeWindow(episode, context) {
+  const {authRev, obsRev, postCommitFloorMs, preCommit} = context;
+  if (didAuthorityRevisionAdvance(episode.latestAuthorityRevision, authRev)) {
+    episode.firstAuthorityRevision = authRev;
+    episode.firstObserverRevision = obsRev;
+    episode.firstSeenAtMs = postCommitFloorMs;
+    episode.postCommitPollCount = preCommit ? ZERO : ONE;
+    return;
+  }
+  if (preCommit || episode.lastWasPreCommit) {
+    episode.firstSeenAtMs = postCommitFloorMs;
+    episode.postCommitPollCount = preCommit ? ZERO : ONE;
+    return;
+  }
+  episode.postCommitPollCount += ONE;
+}
+
+function advanceDisagreementEpisode(episodes, previousKeys, evaluation, entry) {
+  const authRev = entry.authorityRevision || null;
+  const obsRev = entry.observerRevision || null;
+  const skew = entry.revisionSkew === true;
+  const preCommit = isPreCommitDisagreement(authRev, obsRev);
+  const postCommitFloorMs = Math.max(evaluation.capturedAtMs,
+    authRev?.maxRowTimestampMs || ZERO);
+  const context = {authRev, obsRev, postCommitFloorMs, preCommit, skew};
+  if (!previousKeys.has(entry.key) || !episodes.has(entry.key)) {
+    const created = createDisagreementEpisode(context);
+    episodes.set(entry.key, created);
+    return created;
+  }
+  const episode = episodes.get(entry.key);
+  updateDisagreementEpisodeWindow(episode, context);
+  episode.lastWasPreCommit = preCommit;
+  episode.latestAuthorityRevision = authRev;
+  episode.latestObserverRevision = obsRev;
+  episode.revisionSkewObserved = episode.revisionSkewObserved || skew;
+  return episode;
+}
+
 /**
  * Predicate (g) over the poll history: a disagreement key seen on two
  * consecutive polls spanning more than the cache-visibility bound is a
@@ -456,24 +696,28 @@ function evaluateFormationObservation(observation) {
  */
 function evaluateProjectionAgreement(evaluations,
   boundMs = PROJECTION_PERSISTENCE_BOUND_MS) {
-  const firstSeenAtMs = new Map();
+  const episodes = new Map();
   const persistent = new Map();
   let previousKeys = new Set();
   for (const evaluation of evaluations) {
     const keys = new Set();
     for (const entry of evaluation.disagreements) {
       keys.add(entry.key);
-      if (!previousKeys.has(entry.key)) {
-        firstSeenAtMs.set(entry.key, evaluation.capturedAtMs);
-      }
-      const spanMs = evaluation.capturedAtMs - firstSeenAtMs.get(entry.key);
-      if (previousKeys.has(entry.key) && spanMs > boundMs) {
+      const episode = advanceDisagreementEpisode(episodes, previousKeys,
+        evaluation, entry);
+      const spanMs = evaluation.capturedAtMs - episode.firstSeenAtMs;
+      if (episode.postCommitPollCount >= TWO && spanMs > boundMs) {
         const prior = persistent.get(entry.key);
         persistent.set(entry.key, {
-          firstSeenAtMs: firstSeenAtMs.get(entry.key),
+          firstAuthorityRevision: episode.firstAuthorityRevision,
+          firstObserverRevision: episode.firstObserverRevision,
+          firstSeenAtMs: episode.firstSeenAtMs,
           key: entry.key,
           lastEntry: entry,
+          latestAuthorityRevision: episode.latestAuthorityRevision,
+          latestObserverRevision: episode.latestObserverRevision,
           longestSpanMs: Math.max(prior?.longestSpanMs ?? ZERO, spanMs),
+          revisionSkewObserved: episode.revisionSkewObserved,
         });
       }
     }
@@ -731,8 +975,11 @@ export {
   evaluateLearnerRefusals,
   evaluateObservationIntegrity,
   evaluateProjectionAgreement,
+  evaluateRevisionSkew,
   evaluateUserTableRoutability,
   evaluateWriteReadback,
+  extractAuthorityTableRevision,
+  extractObserverTableRevision,
   firstUnmetPredicate,
   scanFormationLogLines,
 };

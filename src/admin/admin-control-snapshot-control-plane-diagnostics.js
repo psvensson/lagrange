@@ -703,6 +703,10 @@ class AdminControlSnapshotControlPlaneDiagnostics
       controlPlaneOwnerQueueDepth,
       cdcReplay,
       cdcReplayByPartitionId: cdcReplay?.byPartitionId || null,
+      tableRevisionWatermarks:
+        typeof this.systemTableCache?.getTableRevisionWatermarks === 'function' ?
+          this.systemTableCache.getTableRevisionWatermarks() :
+          null,
     });
   }
   /**

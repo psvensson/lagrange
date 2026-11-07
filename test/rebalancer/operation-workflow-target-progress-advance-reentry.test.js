@@ -190,6 +190,9 @@ function createCoordinator(operation, operationRow) {
       },
     },
     controlPlaneReadinessService: {
+      getPriorityRecoveryPlanningAnswerSync() {
+        return buildPlanningSnapshot(operation);
+      },
       getPriorityRecoveryPlanningSnapshotBestEffort() {
         return buildPlanningSnapshot(operation);
       },

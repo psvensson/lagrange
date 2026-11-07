@@ -556,6 +556,10 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         cdcIntegrationService: {
         },
         controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerSync() {
+            planningSnapshotCalls += 1;
+            return planningSnapshot;
+          },
           getPriorityRecoveryPlanningSnapshotBestEffort() {
             planningSnapshotCalls += 1;
             return planningSnapshot;

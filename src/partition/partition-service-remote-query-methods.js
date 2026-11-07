@@ -178,6 +178,12 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
       servingNodeId: this.nodeId,
       servingReplicaId: this.replicaId,
       term: status?.term ?? null,
+      appliedIndex: Number.isSafeInteger(status?.appliedIndex) ?
+        status.appliedIndex :
+        null,
+      commitIndex: Number.isSafeInteger(status?.commitIndex) ?
+        status.commitIndex :
+        null,
       role: this.role,
       // The witness records WHEN THIS REPLICA observed its own authority, so
       // it reads this replica's clock. This is the owner decision the metered

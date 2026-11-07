@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2578,
+    "ordinary": 2579,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2604,
-  "digest": "fnv1a32-a6773dab",
+  "censusSize": 2605,
+  "digest": "fnv1a32-c8b64ce0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -321,6 +321,7 @@
     "test/cache/system-table-cache-cdc-provenance.test.js": "ordinary",
     "test/cache/system-table-cache-consistency.property.test.js": "ordinary",
     "test/cache/system-table-cache-lifecycle-delete-ordering.test.js": "ordinary",
+    "test/cache/system-table-cache-observation.test.js": "ordinary",
     "test/cache/system-table-cache-services-lifecycle-merge.test.js": "ordinary",
     "test/cache/system-table-cache-time-authority.test.js": "ordinary",
     "test/cache/system-table-cache-tombstone-time-authority.test.js": "ordinary",

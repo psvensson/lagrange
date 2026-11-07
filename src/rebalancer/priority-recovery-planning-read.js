@@ -23,50 +23,6 @@
 // one by passing the wrong argument. Each family keeps its own partition
 // classification and clock; only the read policy is owned here.
 
-// Which AVAILABLE surfaces a family accepts, in precedence order. The two
-// families have never accepted the same set, and that difference is real
-// rather than accidental, so each one declares its order explicitly instead
-// of inheriting whichever implementation its mixin chain installed last.
-//
-// getMembershipPublicationPlanningSnapshot is the async CANDIDATE derivation.
-// It is not the owner read - nothing here ever reaches
-// getPriorityRecoveryPlanningAnswerForOwnerRead - but it is the heavier of
-// the AVAILABLE surfaces, so only the family that has always accepted it
-// still does.
-const AVAILABLE_PLANNING_SURFACE_ORDER = Object.freeze({
-  // The operation-workflow family: the best-effort compatibility surfaces.
-  BEST_EFFORT: Object.freeze([
-    'getPriorityRecoveryPlanningSnapshotBestEffort',
-    'getMembershipPublicationPlanningSnapshotBestEffort',
-  ]),
-  // The unified-rebalancer planning family: the same, and the candidate
-  // derivation as a last resort when a deployment exposes no best-effort
-  // surface at all.
-  BEST_EFFORT_THEN_CANDIDATE: Object.freeze([
-    'getPriorityRecoveryPlanningSnapshotBestEffort',
-    'getMembershipPublicationPlanningSnapshotBestEffort',
-    'getMembershipPublicationPlanningSnapshot',
-  ]),
-});
-
-/**
- * The first surface in `surfaces` this service actually implements.
- * @param {Object} readinessService
- * @param {string[]} surfaces
- * @return {string|null}
- */
-function resolveAvailablePlanningSurface(readinessService, surfaces) {
-  if (!readinessService) {
-    return null;
-  }
-  for (const surface of surfaces) {
-    if (typeof readinessService[surface] === 'function') {
-      return surface;
-    }
-  }
-  return null;
-}
-
 /**
  * @param {*} snapshot
  * @return {Object|null}
@@ -80,11 +36,10 @@ function normalizePlanningSnapshot(snapshot) {
  * @param {Object} readinessService
  * @return {boolean}
  */
-function hasAvailablePriorityRecoveryPlanningProvider(
-  readinessService,
-  surfaces = AVAILABLE_PLANNING_SURFACE_ORDER.BEST_EFFORT,
-) {
-  return resolveAvailablePlanningSurface(readinessService, surfaces) !== null;
+function hasAvailablePriorityRecoveryPlanningProvider(readinessService) {
+  return Boolean(readinessService) &&
+    typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
+      'function';
 }
 
 /**
@@ -106,21 +61,21 @@ function hasAuthoritativeRemoveSafetyPlanningProvider(readinessService) {
  * @param {Object} read.readinessService
  * @param {string} read.publicationNodeId
  * @param {number} read.observedAt
- * @param {string[]} [read.surfaces] - this family's accepted surface order
  * @return {Promise<Object|null>}
  */
 async function readAvailablePriorityRecoveryPlanningSnapshot({
   readinessService,
   publicationNodeId,
   observedAt,
-  surfaces = AVAILABLE_PLANNING_SURFACE_ORDER.BEST_EFFORT,
 }) {
-  const surface = resolveAvailablePlanningSurface(readinessService, surfaces);
-  if (surface === null) {
+  if (!hasAvailablePriorityRecoveryPlanningProvider(readinessService)) {
     return null;
   }
   return normalizePlanningSnapshot(
-    await readinessService[surface](publicationNodeId, observedAt),
+    await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
+      publicationNodeId,
+      observedAt,
+    ),
   );
 }
 
@@ -192,7 +147,6 @@ function resolveRemoveSafetyPlanningSnapshotReader(
 }
 
 export {
-  AVAILABLE_PLANNING_SURFACE_ORDER,
   createRemoveSafetyPlanningSnapshotReader,
   resolveRemoveSafetyPlanningSnapshotReader,
   hasAuthoritativeRemoveSafetyPlanningProvider,

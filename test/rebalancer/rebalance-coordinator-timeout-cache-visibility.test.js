@@ -757,7 +757,7 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
             },
           };
         },
-        getMembershipPublicationPlanningSnapshotSync(nodeId) {
+        getPriorityRecoveryPlanningAnswerSync(nodeId) {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: Object.freeze(['node-1', 'node-2']),
@@ -771,6 +771,9 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
               missingPartitionIds: ['control_plane_publications-p1'],
             }),
           };
+        },
+        async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
+          return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
         },
       },
       cdcIntegrationService: {

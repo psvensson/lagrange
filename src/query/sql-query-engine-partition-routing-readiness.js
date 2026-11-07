@@ -432,18 +432,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         partitionId,
         routingReadinessDimension,
       ).length >= requiredCount;
-    const checkRoutableCountWithRepair = async () => {
-      if (hasRequiredRoutableCount()) {
-        return true;
-      }
-      return (
-        (await this.maybeAwaitPartitionRoutingRepair(
-          partitionId,
-          routingReadinessDimension,
-        )) && hasRequiredRoutableCount()
-      );
-    };
-    if (await checkRoutableCountWithRepair()) {
+    if (hasRequiredRoutableCount()) {
       return;
     }
 
@@ -456,6 +445,26 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
       timeoutError:
         QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX + partitionId,
     });
+    const repairOptions = {
+      timeoutBudget: effectiveBudget,
+      cancellationToken: waitOptions.cancellationToken || null,
+    };
+    const checkRoutableCountWithRepair = async () => {
+      if (hasRequiredRoutableCount()) {
+        return true;
+      }
+      return (
+        (await this.maybeAwaitPartitionRoutingRepair(
+          partitionId,
+          routingReadinessDimension,
+          repairOptions,
+        )) && hasRequiredRoutableCount()
+      );
+    };
+    if (await checkRoutableCountWithRepair()) {
+      return;
+    }
+
     await this.waitForCondition(
       checkRoutableCountWithRepair,
       getRemainingBudgetMs(effectiveBudget, {now: this.nowFn}),
@@ -490,6 +499,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
     partitionId,
     routingReadinessDimension = this.queryExecutor
       ?.defaultRoutingReadinessDimension,
+    options = {},
   ) {
     if (
       !partitionId ||
@@ -514,8 +524,10 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
     try {
       return await this.queryExecutor.maybeAwaitDeniedPartitionRoutingRepair(
         routingSnapshot,
+        options,
       );
     } catch (_error) {
+      throwIfCancellationRequested(options?.cancellationToken);
       return false;
     }
   }

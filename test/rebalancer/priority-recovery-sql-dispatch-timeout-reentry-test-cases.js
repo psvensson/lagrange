@@ -859,6 +859,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       cdcIntegrationService: {
       },
       controlPlaneReadinessService: {
+        getPriorityRecoveryPlanningAnswerSync: buildDispatchPendingReentryPlanningSnapshot,
         getPriorityRecoveryPlanningSnapshotBestEffort() {
           return buildDispatchPendingReentryPlanningSnapshot();
         },
@@ -1387,6 +1388,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       cdcIntegrationService: {
       },
       controlPlaneReadinessService: {
+        getPriorityRecoveryPlanningAnswerSync: buildDispatchPendingReentryPlanningSnapshot,
         getPriorityRecoveryPlanningSnapshotBestEffort() {
           return buildDispatchPendingReentryPlanningSnapshot();
         },

@@ -156,8 +156,8 @@ function anchorRowStepEntryOnClock(row, atMs) {
 function injectTargetPlanningView({target, elapsed, extras}) {
   const readinessService = target.controlPlaneReadinessService;
   const shared =
-    readinessService.getMembershipPublicationPlanningSnapshotBestEffort;
-  readinessService.getMembershipPublicationPlanningSnapshotBestEffort =
+    readinessService.getPriorityRecoveryPlanningSnapshotBestEffort;
+  readinessService.getPriorityRecoveryPlanningSnapshotBestEffort =
     async () => {
       const answer = await shared();
       if (

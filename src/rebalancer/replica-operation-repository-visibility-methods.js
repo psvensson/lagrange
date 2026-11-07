@@ -378,33 +378,10 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       if (!readinessService) {
         return null;
       }
-      const observedAt = this.timeSource.now();
-      if (
-        typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
-        'function'
-      ) {
-        return (
-          readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
-            this.nodeId,
-            observedAt,
-          ) || null
-        );
-      }
-      if (
-        typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort ===
-        'function'
-      ) {
-        return (
-          readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
-            this.nodeId,
-            observedAt,
-          ) || null
-        );
-      }
       return readPriorityRecoveryPlanningAnswerSync(
         readinessService,
         this.nodeId,
-        observedAt,
+        this.timeSource.now(),
       );
     }
     isPriorityRecoveryOwnerReadActive(planningSnapshot = null) {

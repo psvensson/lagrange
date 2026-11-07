@@ -500,7 +500,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
             },
           };
         },
-        async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+        async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: Object.freeze(['node-a', 'node-local']),
@@ -776,7 +776,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
             },
           };
         },
-        async getMembershipPublicationPlanningSnapshotBestEffort() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: Object.freeze(['node-a', 'node-b']),

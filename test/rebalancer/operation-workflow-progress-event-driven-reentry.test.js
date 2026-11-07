@@ -486,18 +486,16 @@ function createEventDrivenCoordinator(
       },
     },
     controlPlaneReadinessService: {
-      getPriorityRecoveryPlanningSnapshotBestEffort() {
-        return buildEventDrivenPlanningSnapshot(planningOptions);
-      },
+      getPriorityRecoveryPlanningAnswerSync: () =>
+        buildEventDrivenPlanningSnapshot(planningOptions),
+      getPriorityRecoveryPlanningSnapshotBestEffort: () =>
+        buildEventDrivenPlanningSnapshot(planningOptions),
       getNodeReadinessSync(nodeId) {
-        return {
-          nodeId,
-          dimensions: {
-            controlPlaneRecoveryEligible: true,
-            repairEligible: true,
-            serveEligible: true,
-          },
-        };
+        return {nodeId, dimensions: {
+          controlPlaneRecoveryEligible: true,
+          repairEligible: true,
+          serveEligible: true,
+        }};
       },
     },
     messageRouter: {

@@ -7,7 +7,6 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_UNAVAILABLE = 'unavailable';
-const LOCAL_STR_TIMEOUT = 'timeout';
 const LOCAL_STR_ELIGIBLE = 'eligible';
 const LOCAL_STR_READY_LEASE_EXPIRED = 'ready_lease_expired';
 const LOCAL_STR_PROVISIONING_UNAVAILABLE = 'provisioning_unavailable';
@@ -107,11 +106,6 @@ class SQLQueryEngineProvisionTargetMethods {
       options.explicitTargetNodeIds,
     );
 
-    // Maintain dependency guard compatibility for parent budget forwarding
-    const _parentBudget = {
-      timeoutBudget: options.timeoutBudget || null,
-    };
-
     const readiness = this.controlPlaneReadinessService;
     let cohort = readiness && typeof readiness.answerServeCohort === LOCAL_STR_FUNCTION ?
       readiness.answerServeCohort() :
@@ -124,12 +118,11 @@ class SQLQueryEngineProvisionTargetMethods {
       const waitBudgetMs = Number.isFinite(options.maxWaitMs) && options.maxWaitMs > 0 ?
         options.maxWaitMs : this.tablePartitionProvisioningTimeoutMs;
       try {
-        await Promise.race([
-          readiness.readServeEligibility(),
-          new Promise((_, reject) => {
-            setTimeout(() => reject(new Error(LOCAL_STR_TIMEOUT)), waitBudgetMs);
-          }),
-        ]);
+        await readiness.readServeEligibility({
+          timeoutMs: waitBudgetMs,
+          timeoutBudget: options.timeoutBudget || null,
+          cancellationToken: options.cancellationToken || null,
+        });
       } catch (waitError) {
         this.logger?.debug?.(
           QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,

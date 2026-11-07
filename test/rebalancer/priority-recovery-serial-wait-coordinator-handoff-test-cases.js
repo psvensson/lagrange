@@ -140,15 +140,15 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
           return [];
         },
       },
-      cdcIntegrationService: {
-      },
+      cdcIntegrationService: {},
       controlPlaneReadinessService: {
-        getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return buildSerialWaitReentryPlanningSnapshot();
-        },
-        getNodeReadinessSync(nodeId) {
+        getPriorityRecoveryPlanningAnswerSync:
+          buildSerialWaitReentryPlanningSnapshot,
+        getPriorityRecoveryPlanningSnapshotBestEffort:
+          buildSerialWaitReentryPlanningSnapshot,
+        getNodeReadinessSync(targetNodeId) {
           return {
-            nodeId,
+            nodeId: targetNodeId,
             dimensions: {
               controlPlaneRecoveryEligible: true,
               repairEligible: true,
@@ -158,22 +158,30 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
         },
       },
       messageRouter: {
-        async deliver(target, payload, options) {
-          deliveries.push({target, payload, options});
-          return buildDeliveryEnvelope({acknowledged: true}, {
-            status: TEST_DELIVERY_STATUS_INITIATED,
+        async deliver(destination, messagePayload, deliveryOptions) {
+          deliveries.push({
+            target: destination,
+            payload: messagePayload,
+            options: deliveryOptions,
           });
+          return buildDeliveryEnvelope(
+            {acknowledged: true},
+            {status: TEST_DELIVERY_STATUS_INITIATED},
+          );
         },
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {
+            targetReplicaCount: 3,
+            minReplicaCount: TEST_MIN_REPLICA_COUNT,
+          };
         },
       },
-      setTimeoutFn(fn, delayMs) {
-        const handle = {fn, delayMs};
-        deferredTimers.push(handle);
-        return handle;
+      setTimeoutFn(callbackFn, waitMs) {
+        const queuedTimer = {fn: callbackFn, delayMs: waitMs};
+        deferredTimers.push(queuedTimer);
+        return queuedTimer;
       },
       clearTimeoutFn() {},
       enableTimeouts: false,

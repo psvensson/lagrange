@@ -218,6 +218,27 @@ class ReadOnlySystemTableCache {
   }
 
   /**
+   * Get the revision watermark snapshot for one table.
+   * @param {string} tableName - Name of the system table.
+   * @return {Object|null}
+   */
+  getTableRevisionWatermark(tableName) {
+    return typeof this._cache.getTableRevisionWatermark === 'function' ?
+      this._cache.getTableRevisionWatermark(tableName) :
+      null;
+  }
+
+  /**
+   * Get all tracked table revision watermarks.
+   * @return {Object<string, Object>}
+   */
+  getTableRevisionWatermarks() {
+    return typeof this._cache.getTableRevisionWatermarks === 'function' ?
+      this._cache.getTableRevisionWatermarks() :
+      {};
+  }
+
+  /**
    * Get the list of supported system table names.
    * @return {Array<string>} Array of system table names.
    */

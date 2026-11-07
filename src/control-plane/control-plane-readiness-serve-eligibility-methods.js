@@ -54,10 +54,11 @@ const controlPlaneReadinessServeEligibilityMethods = {
 
   /**
    * Run (or join) one committed refresh of the serve-eligibility record.
-   * @return {Promise<void>}
+   * @param {Object} [options]
+   * @return {Promise<Object>}
    */
-  readServeEligibility() {
-    return this.getServeEligibilityOwner().readServeEligibility();
+  readServeEligibility(options = {}) {
+    return this.getServeEligibilityOwner().readServeEligibility(options);
   },
 
   /**

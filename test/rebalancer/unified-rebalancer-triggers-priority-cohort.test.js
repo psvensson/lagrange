@@ -135,7 +135,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           nodeEndpoints,
           serviceEndpoints,
         )}),
-        async getMembershipPublicationPlanningSnapshot() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2'],
@@ -261,7 +261,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           nodeEndpoints,
           serviceEndpoints,
         )}),
-        getMembershipPublicationPlanningAnswerSync() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
@@ -362,7 +362,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           nodeEndpoints,
           serviceEndpoints,
         )}),
-        getMembershipPublicationPlanningAnswerSync() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
@@ -473,7 +473,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           nodeEndpoints,
           serviceEndpoints,
         )}),
-        getMembershipPublicationPlanningAnswerSync() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
@@ -583,7 +583,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           nodeEndpoints,
           serviceEndpoints,
         )}),
-        getMembershipPublicationPlanningAnswerSync() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],

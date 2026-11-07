@@ -505,10 +505,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
   }
 
   async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId, observedAt) {
-    return this.getMembershipPublicationPlanningSnapshotBestEffort(
-      nodeId,
-      observedAt,
-    );
+    return this.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt);
   }
 
   /**

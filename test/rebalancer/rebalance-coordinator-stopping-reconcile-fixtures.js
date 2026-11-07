@@ -161,10 +161,31 @@ export function buildPriorityDrainSupersededPlanningSnapshot(
   });
 }
 
+function buildPriorityDrainCommittedNodeRows(unavailableNodeId = null) {
+  const nowMs = Date.now();
+  return PRIORITY_DRAIN_TEST_READY_NODE_IDS.map((nodeId) => ({
+    node_id: nodeId,
+    status: nodeId === unavailableNodeId ? 'failed' : 'active',
+    ready_lease_expires_at: nodeId === unavailableNodeId ? 0 : nowMs + 60000,
+  }));
+}
+
 export function buildPriorityDrainReadinessService(partitionId) {
   const planningSnapshot =
     buildPriorityDrainConvergedPlanningSnapshot(partitionId);
   return Object.freeze({
+    async readServeEligibility() {},
+    answerCommittedNodes() {
+      return {
+        state: 'ready',
+        epoch: {
+          publicationEpoch: 1,
+          publicationId: 'cluster_membership-1',
+          readAtMs: Date.now(),
+        },
+        nodeRows: buildPriorityDrainCommittedNodeRows(),
+      };
+    },
     getNodeReadinessSync(nodeId) {
       return {
         nodeId,
@@ -182,6 +203,9 @@ export function buildPriorityDrainReadinessService(partitionId) {
     getPriorityRecoveryPlanningAnswerForOwnerRead() {
       return planningSnapshot;
     },
+    getPriorityRecoveryPlanningAnswerSync() {
+      return planningSnapshot;
+    },
     getPriorityRecoveryPlanningSnapshotBestEffort() {
       return planningSnapshot;
     },
@@ -195,6 +219,18 @@ export function buildPriorityDrainOwnerUnavailableReadinessService(
   const planningSnapshot =
     buildPriorityDrainConvergedPlanningSnapshot(partitionId);
   return Object.freeze({
+    async readServeEligibility() {},
+    answerCommittedNodes() {
+      return {
+        state: 'ready',
+        epoch: {
+          publicationEpoch: 1,
+          publicationId: 'cluster_membership-1',
+          readAtMs: Date.now(),
+        },
+        nodeRows: buildPriorityDrainCommittedNodeRows(unavailableNodeId),
+      };
+    },
     getNodeReadinessSync(nodeId) {
       const unavailable = nodeId === unavailableNodeId;
       return {
@@ -217,6 +253,9 @@ export function buildPriorityDrainOwnerUnavailableReadinessService(
     getPriorityRecoveryPlanningAnswerForOwnerRead() {
       return planningSnapshot;
     },
+    getPriorityRecoveryPlanningAnswerSync() {
+      return planningSnapshot;
+    },
     getPriorityRecoveryPlanningSnapshotBestEffort() {
       return planningSnapshot;
     },
@@ -230,6 +269,18 @@ export function buildPriorityDrainSupersededReadinessService(
   const planningSnapshot =
     buildPriorityDrainSupersededPlanningSnapshot(partitionId, operationId);
   return Object.freeze({
+    async readServeEligibility() {},
+    answerCommittedNodes() {
+      return {
+        state: 'ready',
+        epoch: {
+          publicationEpoch: 1,
+          publicationId: 'cluster_membership-1',
+          readAtMs: Date.now(),
+        },
+        nodeRows: buildPriorityDrainCommittedNodeRows(),
+      };
+    },
     getNodeReadinessSync(nodeId) {
       return {
         nodeId,
@@ -245,6 +296,9 @@ export function buildPriorityDrainSupersededReadinessService(
     // fallback. The best-effort surface stays for the narration and progress
     // consumers that legitimately read AVAILABLE evidence.
     getPriorityRecoveryPlanningAnswerForOwnerRead() {
+      return planningSnapshot;
+    },
+    getPriorityRecoveryPlanningAnswerSync() {
       return planningSnapshot;
     },
     getPriorityRecoveryPlanningSnapshotBestEffort() {

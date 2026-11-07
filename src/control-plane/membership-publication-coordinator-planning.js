@@ -149,9 +149,9 @@ class MembershipPublicationCoordinatorPlanning extends
         null :
         this.controlPlaneReadinessService &&
             typeof this.controlPlaneReadinessService
-              .getMembershipPublicationPlanningSnapshotBestEffort === 'function' ?
+              .getPriorityRecoveryPlanningSnapshotBestEffort === 'function' ?
           await this.controlPlaneReadinessService
-            .getMembershipPublicationPlanningSnapshotBestEffort(
+            .getPriorityRecoveryPlanningSnapshotBestEffort(
               options.publisherNodeId || this.nodeId,
               normalizePositiveInteger(options.nowMs, this.now()),
             ) :

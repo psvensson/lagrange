@@ -452,7 +452,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
         ])}),
-        getMembershipPublicationPlanningAnswerSync() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
             publicationRecoveryGate: {
@@ -771,7 +771,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
       ];
       const readinessService = {
         ...createMockControlPlaneReadinessService({systemTableCache: createMockCache(nodes)}),
-        getMembershipPublicationPlanningAnswerSync() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIds: nodes.map((node) => node.node_id),
             publicationRecoveryGate: {
@@ -870,8 +870,8 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
 
       try {
         const canonicalPlanningAnswer =
-          readinessService.getMembershipPublicationPlanningAnswerSync;
-        readinessService.getMembershipPublicationPlanningAnswerSync =
+          readinessService.getPriorityRecoveryPlanningAnswerSync;
+        readinessService.getPriorityRecoveryPlanningAnswerSync =
           () => ({});
         t.equal(
           priorityEntity.resolvePrioritySpreadPlanningGateDecision(),
@@ -883,7 +883,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
           null,
           'malformed publication evidence must not arm the shared release owner',
         );
-        readinessService.getMembershipPublicationPlanningAnswerSync =
+        readinessService.getPriorityRecoveryPlanningAnswerSync =
           canonicalPlanningAnswer;
         const priorityBlocker =
           priorityEntity.getControlPlanePrioritySpreadBlocker();
@@ -1110,7 +1110,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
           {node_id: REBALANCER_TEST_NODE_ID_B, status: NodeStatus.ACTIVE},
           {node_id: REBALANCER_TEST_NODE_ID_C, status: NodeStatus.ACTIVE},
         ])}),
-        getMembershipPublicationPlanningAnswerSync() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIds: [
               REBALANCER_TEST_NODE_ID_A,

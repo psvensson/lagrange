@@ -17,7 +17,6 @@ import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.
 import {projectNodeLivenessSemantics} from
   '../control-plane/node-liveness-semantic-projection.js';
 import {
-  AVAILABLE_PLANNING_SURFACE_ORDER,
   hasAvailablePriorityRecoveryPlanningProvider as hasAvailablePlanningProvider,
   readAvailablePriorityRecoveryPlanningSnapshot as readAvailablePlanningSnapshot,
 } from './priority-recovery-planning-read.js';
@@ -471,15 +470,11 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       return null;
     }
     const readinessService = this.controlPlaneReadinessService;
-    // This family has always accepted the candidate derivation as its last
-    // AVAILABLE resort; the surface order says so rather than the mixin chain.
-    const surfaces = AVAILABLE_PLANNING_SURFACE_ORDER.BEST_EFFORT_THEN_CANDIDATE;
-    if (!hasAvailablePlanningProvider(readinessService, surfaces)) {
+    if (!hasAvailablePlanningProvider(readinessService)) {
       return null;
     }
     return readAvailablePlanningSnapshot({
       readinessService,
-      surfaces,
       publicationNodeId: this.nodeId,
       observedAt: typeof readinessService.now === 'function' ?
         readinessService.now() : this.nowFn(),

@@ -47,6 +47,48 @@ function participantFailureAnswerOf(result) {
   };
 }
 
+const EMPTY_DENIAL_CODE_LIST = Object.freeze([]);
+
+function normalizeRoutingDenialCodeList(rawCodes) {
+  const list = Array.isArray(rawCodes) ? rawCodes : EMPTY_DENIAL_CODE_LIST;
+  return list
+    .map((code) => normalizeParticipantFailureString(code))
+    .filter(Boolean);
+}
+
+function normalizeNonEmptyObjectMap(value) {
+  return value && typeof value === 'object' && Object.keys(value).length > 0 ?
+    value :
+    null;
+}
+
+export function pickRoutingDenialFields(source = {}) {
+  const routingReasonCode = normalizeParticipantFailureString(
+    source?.routingReasonCode,
+  );
+  const routingReadinessDimension = normalizeParticipantFailureString(
+    source?.routingReadinessDimension,
+  );
+  const routingDenialReasonCodes = normalizeRoutingDenialCodeList(
+    source?.routingDenialReasonCodes,
+  );
+  const deniedByNodeId = normalizeNonEmptyObjectMap(source?.deniedByNodeId);
+  const picked = {};
+  if (routingReasonCode) {
+    picked.routingReasonCode = routingReasonCode;
+  }
+  if (routingReadinessDimension) {
+    picked.routingReadinessDimension = routingReadinessDimension;
+  }
+  if (routingDenialReasonCodes.length > 0) {
+    picked.routingDenialReasonCodes = routingDenialReasonCodes;
+  }
+  if (deniedByNodeId) {
+    picked.deniedByNodeId = deniedByNodeId;
+  }
+  return picked;
+}
+
 /**
  * The one participant failure entry of a write or read fan-out, for every
  * statement kind: what the participant was answered (its code, entryId, log
@@ -71,6 +113,7 @@ export function buildParticipantFailureEntry(result) {
     entryId: normalizeParticipantFailureString(answer.entryId),
     ...(typed.consensus ? {consensus: typed.consensus} : {}),
     ...(typed.spentWait ? {spentWait: typed.spentWait} : {}),
+    ...pickRoutingDenialFields(answer),
     error: answer.error || ERRORS.QUERY_FAILED,
     durationMs:
       Number.isFinite(answer?.durationMs) ?
@@ -108,6 +151,7 @@ export function buildPartitionExecutionFailureResult({
     // The typed fields of the answer the delivery failed on (its code, its
     // entryId): a typed outcome never degrades to its text at this hop.
     ...pickTypedWriteAnswer(details),
+    ...pickRoutingDenialFields(details),
     partitionId,
     success: false,
     error: errorMessage || ERRORS.QUERY_FAILED,
@@ -171,34 +215,29 @@ export function createPartitionExecutionBudget({
     return getRemainingExecutionBudgetMs();
   };
 
+  const copyOptionalRouterString = (target, field) => {
+    const value = executionOptions?.[field];
+    if (typeof value === 'string' && value.length > 0) {
+      target[field] = value;
+    }
+  };
+
   return Object.freeze({
     getRemainingExecutionBudgetMs,
     buildRouterDeliveryOptions() {
       const routerOptions = {};
-      if (
-        typeof executionOptions?.[
-          QUERY_EXECUTION_BUDGET_FIELD.DELIVERY_PRIORITY
-        ] === 'string' &&
-        executionOptions.deliveryPriority.length > 0
-      ) {
-        routerOptions.deliveryPriority = executionOptions.deliveryPriority;
-      }
-      if (
-        typeof executionOptions?.[
-          QUERY_EXECUTION_BUDGET_FIELD.DELIVERY_SOURCE
-        ] === 'string' &&
-        executionOptions.deliverySource.length > 0
-      ) {
-        routerOptions.deliverySource = executionOptions.deliverySource;
-      }
-      if (
-        typeof executionOptions?.[
-          QUERY_EXECUTION_BUDGET_FIELD.REPLACE_PENDING_KEY
-        ] === 'string' &&
-        executionOptions.replacePendingKey.length > 0
-      ) {
-        routerOptions.replacePendingKey = executionOptions.replacePendingKey;
-      }
+      copyOptionalRouterString(
+        routerOptions,
+        QUERY_EXECUTION_BUDGET_FIELD.DELIVERY_PRIORITY,
+      );
+      copyOptionalRouterString(
+        routerOptions,
+        QUERY_EXECUTION_BUDGET_FIELD.DELIVERY_SOURCE,
+      );
+      copyOptionalRouterString(
+        routerOptions,
+        QUERY_EXECUTION_BUDGET_FIELD.REPLACE_PENDING_KEY,
+      );
       const routerDeliveryTimeoutMs = getRouterDeliveryTimeoutMs();
       if (routerDeliveryTimeoutMs !== null) {
         if (routerDeliveryTimeoutMs <= 0) {

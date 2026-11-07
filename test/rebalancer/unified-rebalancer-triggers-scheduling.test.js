@@ -998,7 +998,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           nodeEndpoints,
           serviceEndpoints,
         )}),
-        async getMembershipPublicationPlanningSnapshotBestEffort() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2'],

@@ -193,6 +193,7 @@ function createReadinessAuthority(partitionId, profiles, clock) {
         };
       },
       getPriorityRecoveryPlanningAnswerForOwnerRead: readPlanningAnswer,
+      getPriorityRecoveryPlanningAnswerSync: readPlanningAnswer,
       getPriorityRecoveryPlanningSnapshotBestEffort: readPlanningAnswer,
       subscribeReadinessPlanningSnapshots(listener) {
         listeners.add(listener);

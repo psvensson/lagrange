@@ -348,7 +348,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
         ])}),
-        getMembershipPublicationPlanningAnswerSync() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
@@ -420,7 +420,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
             readinessCalls.push(nodeId);
             return baseReadinessService.getNodeReadinessSync(nodeId, options);
           },
-          getMembershipPublicationPlanningAnswerSync() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publishedActiveNodeIdsPresent: true,
               publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
@@ -521,7 +521,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
             readinessCalls.push(nodeId);
             return baseReadinessService.getNodeReadinessSync(nodeId, options);
           },
-          getMembershipPublicationPlanningAnswerSync() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publishedActiveNodeIdsPresent: true,
               publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
@@ -612,7 +612,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
         ])}),
-        getMembershipPublicationPlanningAnswerSync() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
@@ -675,7 +675,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
         ])}),
-        getMembershipPublicationPlanningAnswerSync() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publicationEpoch: 9,
             publicationStatus: 'PUBLISHED',

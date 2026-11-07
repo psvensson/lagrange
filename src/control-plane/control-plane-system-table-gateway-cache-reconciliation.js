@@ -461,6 +461,21 @@ function buildPostApplyCacheDivergenceReason(context, indexes) {
     CACHE_RECONCILIATION_DIAGNOSTIC.UNCLASSIFIED_POST_APPLY_DIVERGENCE;
 }
 
+function buildPublishedAuthoritativeObservationPayload(
+  requestedObservedAtMs,
+  receipt = {},
+) {
+  return {
+    observedAtMs: requestedObservedAtMs,
+    causeId: receipt.causeId,
+    term: receipt.term ?? null,
+    appliedIndex: receipt.appliedIndex ?? null,
+    commitIndex: receipt.commitIndex ?? null,
+    servingNodeId: receipt.servingNodeId ?? null,
+    partitionId: receipt.partitionId ?? null,
+  };
+}
+
 function publishAuthoritativeObservation(options) {
   if (!options.observationRequested) {
     return {success: true, observedAtMs: null};
@@ -474,10 +489,10 @@ function publishAuthoritativeObservation(options) {
   try {
     observedAtMs = options.writableCache.recordAuthoritativeObservation(
       options.tableName,
-      {
-        observedAtMs: requestedObservedAtMs,
-        causeId: options.receipt.causeId,
-      },
+      buildPublishedAuthoritativeObservationPayload(
+        requestedObservedAtMs,
+        options.receipt,
+      ),
     );
     persistedObservedAtMs =
       options.readableCache.getLastAuthoritativeObservedAtMs(

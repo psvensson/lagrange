@@ -40,6 +40,24 @@ const LOCAL_STR_EVENTERROR = 'eventError';
 const LOCAL_STR_CDC_HANDLER_SHUTDOWN = 'CDC handler shutdown';
 const LOCAL_STR_SHUTDOWN = 'shutdown';
 
+function normalizeOptionalCdcString(value) {
+  return typeof value === 'string' ? value : null;
+}
+
+function normalizeOptionalCdcSafeInteger(value) {
+  return Number.isSafeInteger(value) ? value : null;
+}
+
+function normalizeCdcEventMetadata(metadata) {
+  return {
+    sourceReplica: normalizeOptionalCdcString(metadata?.sourceReplica),
+    sourceLogIndex: normalizeOptionalCdcSafeInteger(metadata?.sourceLogIndex),
+    sourceOrdinal: normalizeOptionalCdcSafeInteger(metadata?.sourceOrdinal),
+    eventKey: normalizeOptionalCdcString(metadata?.eventKey),
+    entryId: normalizeOptionalCdcString(metadata?.entryId),
+  };
+}
+
 /**
  * CDC event structure.
  */
@@ -61,6 +79,7 @@ class CDCEvent {
     sourcePartition = null,
     causeId = null,
     receivedAtMs = undefined,
+    metadata = undefined,
   ) {
     this.tableName = tableName;
     this.operation = operation;
@@ -70,6 +89,29 @@ class CDCEvent {
     this.causeId = causeId;
     this.receivedAt =
       Number.isFinite(receivedAtMs) ? receivedAtMs : Date.now();
+    Object.assign(this, normalizeCdcEventMetadata(metadata));
+  }
+
+  /**
+   * Build a CDCEvent from an incoming CDC message or return an existing CDCEvent.
+   * @param {CDCEvent|Object} event
+   * @param {number} [receivedAtMs]
+   * @return {CDCEvent}
+   */
+  static fromMessage(event, receivedAtMs = undefined) {
+    if (event instanceof CDCEvent) {
+      return event;
+    }
+    return new CDCEvent(
+      event?.tableName,
+      event?.operation,
+      normalizeCDCEventData(event),
+      event?.timestamp,
+      event?.sourcePartition ?? null,
+      event?.causeId ?? null,
+      receivedAtMs,
+      normalizeCdcEventMetadata(event),
+    );
   }
 
   /**
@@ -248,17 +290,7 @@ class CDCHandler extends EventEmitter {
    */
   handleEvent(event) {
     // Convert to CDCEvent if needed
-    const cdcEvent = event instanceof CDCEvent ?
-      event :
-      new CDCEvent(
-        event.tableName,
-        event.operation,
-        normalizeCDCEventData(event),
-        event.timestamp,
-        event.sourcePartition,
-        event.causeId,
-        this.timeSource.now(),
-      );
+    const cdcEvent = CDCEvent.fromMessage(event, this.timeSource.now());
 
     const {tableName} = cdcEvent;
 
@@ -308,17 +340,7 @@ class CDCHandler extends EventEmitter {
    * @return {boolean} True when event was applied.
    */
   applyImmediate(event, options = {}) {
-    const cdcEvent = event instanceof CDCEvent ?
-      event :
-      new CDCEvent(
-        event.tableName,
-        event.operation,
-        normalizeCDCEventData(event),
-        event.timestamp,
-        event.sourcePartition,
-        event.causeId,
-        this.timeSource.now(),
-      );
+    const cdcEvent = CDCEvent.fromMessage(event, this.timeSource.now());
 
     const skipSubscriptionCheck = options.skipSubscriptionCheck === true;
     if (!skipSubscriptionCheck && !this.subscriptions.has(cdcEvent.tableName)) {
@@ -481,6 +503,13 @@ class CDCHandler extends EventEmitter {
       this.cache.applySystemTableChange(tableName, operation, data, {
         causeId,
         cdcObservedAtMs: receivedAt,
+        timestamp,
+        sourcePartition: event.sourcePartition,
+        sourceReplica: event.sourceReplica,
+        sourceLogIndex: event.sourceLogIndex,
+        sourceOrdinal: event.sourceOrdinal,
+        eventKey: event.eventKey,
+        entryId: event.entryId,
       });
 
       // Track successful delivery to cache

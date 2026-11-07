@@ -39,7 +39,7 @@ function createCoordinator({availableAnswer, ownerReadAnswer, calls}) {
       getRecoveryEpochHistoryByNodeId() {
         return {};
       },
-      async getMembershipPublicationPlanningSnapshotBestEffort() {
+      async getPriorityRecoveryPlanningSnapshotBestEffort() {
         calls.push('available');
         return availableAnswer;
       },

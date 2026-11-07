@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {indexCommittedNodeRows} from '../../src/control-plane/committed-node-rows.js';
 import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
+import {CancellationToken} from '../../src/query/cancellation-token.js';
 import {
   SERVE_ELIGIBILITY_DECISION,
   SERVE_ELIGIBILITY_STATE,
@@ -153,7 +154,7 @@ test('ServeEligibilityOwner cold NO_RECORD waits for an actual source change',
     await owner.readServeEligibility();
     t.equal(owner.answer(NODE_A).reason,
       SERVE_ELIGIBILITY_UNAVAILABLE_REASON.NO_RECORD);
-    t.equal(state.timers.length, 0);
+    t.equal(state.timers.filter((timer) => !timer.cleared).length, 0);
     state.publications = [buildPublicationRow(EPOCH_FIVE)];
     owner.noteSourceChange(TABLES.NODES, 'UPDATE', buildNodeRow());
     await new Promise((resolve) => setImmediate(resolve));
@@ -173,9 +174,10 @@ test(
       true,
       'node is initially eligible before lease expiry',
     );
-    t.equal(state.timers.length, 1, 'initial future lease timer is armed');
+    const initialActiveTimers = state.timers.filter((timer) => !timer.cleared);
+    t.equal(initialActiveTimers.length, 1, 'initial future lease timer is armed');
     t.equal(
-      state.timers[0].delayMs,
+      initialActiveTimers[0].delayMs,
       LEASE_EXPIRES_AT_MS - INITIAL_NOW_MS,
       'initial timer is scheduled for leaseExpiresAtMs - nowMs',
     );
@@ -632,3 +634,214 @@ test('committed node admission preserves the validated population under mutable 
   }
   t.end();
 });
+
+test(
+  'ServeEligibilityOwner detaches a caller at its deadline under repeated invalidations while inFlight finishes reconciling in the background',
+  async (t) => {
+    const CALLER_TIMEOUT_MS = 300;
+    const EPOCH_SIX = 6;
+    const {owner, state} = createHarness({
+      publications: [buildPublicationRow(EPOCH_THREE)],
+    });
+    t.teardown(() => owner.shutdown());
+    await owner.readServeEligibility();
+    t.equal(owner.record?.epoch?.publicationEpoch, EPOCH_THREE);
+
+    let round = 0;
+    let releaseRoundTwo;
+    const roundTwoHeld = new Promise((resolve) => {
+      releaseRoundTwo = resolve;
+    });
+    const baseRead = owner.readCommittedRows;
+    owner.readCommittedRows = async (tableName) => {
+      if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+        round += 1;
+        if (round === 1) {
+          state.publications = [buildPublicationRow(EPOCH_FOUR)];
+          owner.noteSourceChange(
+            TABLES.CONTROL_PLANE_PUBLICATIONS,
+            'UPDATE',
+            buildPublicationRow(EPOCH_FIVE),
+          );
+        } else if (round === 2) {
+          await roundTwoHeld;
+          state.publications = [buildPublicationRow(EPOCH_SIX)];
+        }
+      }
+      return baseRead(tableName);
+    };
+
+    const callerPromise = owner.readServeEligibility({
+      timeoutMs: CALLER_TIMEOUT_MS,
+    });
+    t.equal(owner.waiters.size, 1, 'caller attaches one waiter');
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    t.ok(owner.inFlight, 'background reconciliation remains in flight in round 2');
+    const callerTimer = state.timers.find(
+      (timer) => !timer.cleared && timer.delayMs === CALLER_TIMEOUT_MS,
+    );
+    t.ok(callerTimer, 'caller deadline timer is armed for caller timeoutMs');
+
+    callerTimer.fn();
+    const callerResult = await callerPromise;
+    t.equal(
+      owner.waiters.size,
+      0,
+      'caller detaches from owner.waiters at its deadline',
+    );
+    t.equal(
+      callerResult.outcome,
+      'stale_retained',
+      'timed-out caller resolves with stale_retained while prior record exists',
+    );
+    t.ok(
+      owner.inFlight,
+      'owner.inFlight continues reconciling in the background after caller detaches',
+    );
+
+    releaseRoundTwo();
+    await owner.inFlight;
+    t.equal(owner.inFlight, null, 'background reconciliation completes');
+    t.equal(
+      owner.record?.epoch?.publicationEpoch,
+      EPOCH_SIX,
+      'background reconciliation adopts the subsequent committed record',
+    );
+    t.equal(owner.superseded, false, 'owner converges to current after background round');
+    t.equal(isServeEligibilityAnswerEligible(owner.answer(NODE_A)), true);
+  },
+);
+
+test(
+  'ServeEligibilityOwner cancellationToken detaches waiter immediately, clears its timer, and rejects without aborting shared refresh',
+  async (t) => {
+    const CALLER_TIMEOUT_MS = 800;
+    const CANCEL_REASON = 'caller_cancelled_wait';
+    const {owner, state} = createHarness({
+      publications: [buildPublicationRow(EPOCH_THREE)],
+    });
+    t.teardown(() => owner.shutdown());
+
+    let releaseRead;
+    const readHeld = new Promise((resolve) => {
+      releaseRead = resolve;
+    });
+    const baseRead = owner.readCommittedRows;
+    owner.readCommittedRows = async (tableName) => {
+      const answer = await baseRead(tableName);
+      await readHeld;
+      return answer;
+    };
+
+    const token = new CancellationToken();
+    const callerPromise = owner.readServeEligibility({
+      timeoutMs: CALLER_TIMEOUT_MS,
+      cancellationToken: token,
+    });
+    t.equal(owner.waiters.size, 1, 'waiter is attached before cancellation');
+    const waiterTimer = state.timers.find(
+      (timer) => !timer.cleared && timer.delayMs === CALLER_TIMEOUT_MS,
+    );
+    t.ok(waiterTimer, 'waiter deadline timer is active before cancellation');
+
+    token.cancel(CANCEL_REASON);
+    t.equal(
+      owner.waiters.size,
+      0,
+      'cancellation detaches waiter immediately',
+    );
+    t.equal(
+      waiterTimer.cleared,
+      true,
+      'cancellation clears the waiter deadline timer immediately',
+    );
+    t.ok(
+      owner.inFlight,
+      'shared background refresh continues running after caller cancellation',
+    );
+
+    await t.rejects(
+      callerPromise,
+      new RegExp(CANCEL_REASON),
+      'cancelled caller promise rejects with the cancellation reason',
+    );
+
+    state.publications = [buildPublicationRow(EPOCH_FIVE)];
+    releaseRead();
+    await owner.inFlight;
+    t.equal(
+      owner.record?.epoch?.publicationEpoch,
+      EPOCH_THREE,
+      'shared background refresh completes and adopts the committed record',
+    );
+    t.equal(isServeEligibilityAnswerEligible(owner.answer(NODE_A)), true);
+  },
+);
+
+test(
+  'ServeEligibilityOwner detaches multiple concurrent callers independently at their respective timeoutMs deadlines',
+  async (t) => {
+    const SHORT_TIMEOUT_MS = 200;
+    const MEDIUM_TIMEOUT_MS = 600;
+    const LONG_TIMEOUT_MS = 1200;
+    const {owner, state} = createHarness({
+      publications: [buildPublicationRow(EPOCH_FIVE)],
+    });
+    t.teardown(() => owner.shutdown());
+
+    let releaseRead;
+    const readHeld = new Promise((resolve) => {
+      releaseRead = resolve;
+    });
+    const baseRead = owner.readCommittedRows;
+    owner.readCommittedRows = async (tableName) => {
+      const answer = await baseRead(tableName);
+      await readHeld;
+      return answer;
+    };
+
+    const shortCaller = owner.readServeEligibility({timeoutMs: SHORT_TIMEOUT_MS});
+    const mediumCaller = owner.readServeEligibility({timeoutMs: MEDIUM_TIMEOUT_MS});
+    const longCaller = owner.readServeEligibility({timeoutMs: LONG_TIMEOUT_MS});
+
+    t.equal(owner.waiters.size, 3, 'all three concurrent callers attach waiters');
+    t.equal(
+      state.readCount,
+      2,
+      'all three concurrent callers share one in-flight committed read',
+    );
+
+    const shortTimer = state.timers.find(
+      (timer) => !timer.cleared && timer.delayMs === SHORT_TIMEOUT_MS,
+    );
+    const mediumTimer = state.timers.find(
+      (timer) => !timer.cleared && timer.delayMs === MEDIUM_TIMEOUT_MS,
+    );
+    const longTimer = state.timers.find(
+      (timer) => !timer.cleared && timer.delayMs === LONG_TIMEOUT_MS,
+    );
+    t.ok(shortTimer && mediumTimer && longTimer, 'each caller arms its own deadline timer');
+
+    shortTimer.fn();
+    const shortResult = await shortCaller;
+    t.equal(shortResult.outcome, 'read_failed');
+    t.equal(owner.waiters.size, 2, 'only short caller detaches at short deadline');
+    t.equal(mediumTimer.cleared, false, 'medium caller timer remains active');
+    t.equal(longTimer.cleared, false, 'long caller timer remains active');
+
+    mediumTimer.fn();
+    const mediumResult = await mediumCaller;
+    t.equal(mediumResult.outcome, 'read_failed');
+    t.equal(owner.waiters.size, 1, 'medium caller detaches at medium deadline');
+    t.equal(longTimer.cleared, false, 'long caller timer remains active');
+
+    releaseRead();
+    const longResult = await longCaller;
+    t.equal(longResult.outcome, 'record', 'long caller receives the completed refresh');
+    t.equal(owner.waiters.size, 0, 'all waiters are cleared once refresh settles');
+    t.equal(longTimer.cleared, true, 'long caller timer is cleared on resolution');
+    t.equal(owner.record?.epoch?.publicationEpoch, EPOCH_FIVE);
+  },
+);

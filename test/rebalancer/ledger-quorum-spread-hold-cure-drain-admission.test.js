@@ -223,11 +223,9 @@ function createFormationReadinessService(
     // narration and admission consumers that read AVAILABLE evidence.
       getPriorityRecoveryPlanningAnswerForOwnerRead: async (nodeId) =>
         buildPlanningSnapshot(nodeId),
-      getMembershipPublicationPlanningSnapshotBestEffort: async (nodeId) =>
+      getPriorityRecoveryPlanningSnapshotBestEffort: async (nodeId) =>
         buildPlanningSnapshot(nodeId),
-      getMembershipPublicationPlanningSnapshot: async (nodeId) =>
-        buildPlanningSnapshot(nodeId),
-      getMembershipPublicationPlanningSnapshotSync: (nodeId) =>
+      getPriorityRecoveryPlanningAnswerSync: (nodeId) =>
         buildPlanningSnapshot(nodeId),
     },
   });

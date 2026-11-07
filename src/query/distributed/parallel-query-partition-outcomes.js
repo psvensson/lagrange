@@ -1,5 +1,6 @@
 import {pickTypedWriteAnswer} from
   '../../partition/partition-write-kernel.js';
+import {pickRoutingDenialFields} from '../query-execution-budget.js';
 
 
 function normalizeRetryAfterMs(value) {
@@ -43,6 +44,11 @@ function normalizePartitionExecutionFailureSnapshot(
     // The typed fields of the answer the partition failed with (its code,
     // entryId, spent wait): a fan-out never degrades them to the text.
     ...pickTypedWriteAnswer(failure),
+    ...pickRoutingDenialFields(failure),
+    ...(typeof failure?.deliveryDisposition === 'string' &&
+    failure.deliveryDisposition.length > 0 ?
+      {deliveryDisposition: failure.deliveryDisposition} :
+      {}),
     partitionId,
     status: partitionMetrics.status,
     error: normalizeFailureString(failure?.error) ||
@@ -69,9 +75,14 @@ function normalizePartitionExecutionFailureSnapshot(
  * @param {Object} snapshot - Normalized failure snapshot.
  * @return {Object} Failure result.
  */
-function buildPartitionExecutionFailureOutcome(snapshot) {
+function buildPartitionExecutionFailureOutcome(snapshot = {}) {
   return {
     ...pickTypedWriteAnswer(snapshot),
+    ...pickRoutingDenialFields(snapshot),
+    ...(typeof snapshot?.deliveryDisposition === 'string' &&
+    snapshot.deliveryDisposition.length > 0 ?
+      {deliveryDisposition: snapshot.deliveryDisposition} :
+      {}),
     partitionId: snapshot.partitionId,
     success: false,
     status: snapshot.status,

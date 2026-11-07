@@ -236,6 +236,9 @@ function createCoordinator(deliveries, deferredTimers, operationRow) {
       },
     },
     controlPlaneReadinessService: {
+      getPriorityRecoveryPlanningAnswerSync() {
+        return buildPlanningSnapshot();
+      },
       getPriorityRecoveryPlanningSnapshotBestEffort() {
         return buildPlanningSnapshot();
       },

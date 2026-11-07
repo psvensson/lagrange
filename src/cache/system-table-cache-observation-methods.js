@@ -3,6 +3,11 @@ import {assertCritical} from '../utils/assert.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
 import {deepFreeze} from '../utils/deep-freeze.js';
 import {CACHE_ERROR_MSG, CACHE_LOG_MSG} from './cache-constants.js';
+import {
+  getAllTableRevisionWatermarkSnapshots,
+  getTableRevisionWatermarkSnapshot,
+  recordAuthoritativeTableObservation,
+} from './system-table-cache-cdc-observation.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_EMPTY_ENDPOINTS = Object.freeze([]);
@@ -190,6 +195,13 @@ class SystemTableCacheObservationMethods {
     this.validateTableName(tableName);
     const observedAtMs = Number(options.observedAtMs);
     if (!Number.isFinite(observedAtMs) || observedAtMs < 0) {
+      if (
+        Number.isSafeInteger(options?.term) ||
+        Number.isSafeInteger(options?.appliedIndex) ||
+        Number.isSafeInteger(options?.commitIndex)
+      ) {
+        recordAuthoritativeTableObservation(this, tableName, null, options);
+      }
       return this.getLastAuthoritativeObservedAtMs(tableName);
     }
     const normalizedObservedAtMs = Math.floor(observedAtMs);
@@ -209,7 +221,24 @@ class SystemTableCacheObservationMethods {
       tableName,
       normalizeCauseId(options.causeId),
     );
+    recordAuthoritativeTableObservation(
+      this,
+      tableName,
+      normalizedObservedAtMs,
+      options,
+    );
     return normalizedObservedAtMs;
+  }
+
+  /** @return {Object|null} */
+  getTableRevisionWatermark(tableName) {
+    this.validateTableName(tableName);
+    return getTableRevisionWatermarkSnapshot(this, tableName);
+  }
+
+  /** @return {Object<string, Object>} */
+  getTableRevisionWatermarks() {
+    return getAllTableRevisionWatermarkSnapshots(this);
   }
 
   /** @return {number|null} */

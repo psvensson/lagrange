@@ -1110,4 +1110,261 @@ test('QueryExecutor - recovery read bounds connected stale candidate ack ' +
   );
 });
 
+function createSinglePartitionTestSystemCache(partitionId, nodeId) {
+  return {
+    partitions: [{partition_id: partitionId, leader_node_id: nodeId}],
+    services: [
+      {
+        service_id: `${partitionId}-r1`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: nodeId,
+        raft_role: 'leader',
+        address: `${nodeId}/partition/${partitionId}`,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    get(type, key) {
+      return type === TABLES.PARTITIONS ?
+        this.partitions.find((p) => p.partition_id === key) || null :
+        null;
+    },
+    filter(type, predicate) {
+      if (type === TABLES.SERVICES) return this.services.filter(predicate);
+      if (type === TABLES.PARTITIONS) return this.partitions.filter(predicate);
+      return [];
+    },
+  };
+}
+
+test(
+  'QueryExecutor - executeOnPartition forwards timeoutBudget and ' +
+    'cancellationToken to maybeAwaitDeniedPartitionRoutingRepair',
+  async (t) => {
+    const partitionId = 'p-repair-budget-forward';
+    const nodeId = 'node-denied-repair';
+    const systemCache = createSinglePartitionTestSystemCache(partitionId, nodeId);
+    const capturedRefreshCalls = [];
+    const readinessService = createCommittedServeEligibilityOwner({
+      defaultAnswer: serveEligibilityAnswer('unavailable_stale'),
+    });
+    readinessService.readServeEligibility = async (options = {}) => {
+      capturedRefreshCalls.push(options);
+      readinessService.setDefault(serveEligibilityAnswer(true));
+    };
+    const messageRouter = {
+      getConnectionState: () => 'connected',
+      deliver: async () =>
+        buildDeliveryEnvelope(
+          {acknowledged: true},
+          {success: true, rows: [{ok: 1}], changes: 0},
+        ),
+    };
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: readinessService,
+      messageRouter,
+      systemCache,
+    });
+    executor.readRetryAttempts = 1;
+    const timeoutBudget = Object.freeze({deadlineMs: Date.now() + 2500});
+    const cancellationToken = Object.freeze({
+      isCancelled: () => false,
+      onCancel: () => {},
+    });
+
+    const result = await executor.executeOnPartition(
+      partitionId,
+      'SELECT * FROM bench_accounts',
+      [],
+      true,
+      false,
+      false,
+      {timeoutMs: 2500, timeoutBudget, cancellationToken},
+    );
+
+    t.equal(result.success, true, 'read should succeed after serve refresh');
+    t.equal(capturedRefreshCalls.length, 1);
+    t.equal(capturedRefreshCalls[0].timeoutBudget, timeoutBudget);
+    t.equal(capturedRefreshCalls[0].cancellationToken, cancellationToken);
+    t.ok(
+      Number.isFinite(capturedRefreshCalls[0].timeoutMs) &&
+        capturedRefreshCalls[0].timeoutMs > 0,
+      'remaining execution timeoutMs should be forwarded to readServeEligibility',
+    );
+  },
+);
+
+test(
+  'QueryExecutor - changing failure reasons across retry attempts from ' +
+    'readiness denial to no_service_rows replaces lastFailureDetails and ' +
+    'lastError atomically without leaking Attempt 1 denial fields',
+  async (t) => {
+    const partitionId = 'p-denial-to-missing';
+    const staleNodeId = 'node-stale-attempt-1';
+    const systemCache = createSinglePartitionTestSystemCache(
+      partitionId,
+      staleNodeId,
+    );
+    const readinessService = createCommittedServeEligibilityOwner({
+      answers: {
+        [staleNodeId]: serveEligibilityAnswer(false, {
+          reasons: ['ready_lease_expired', 'unavailable_stale'],
+        }),
+      },
+    });
+    let simulatedNowMs = 1000;
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: readinessService,
+      messageRouter: createMockMessageRouter(),
+      systemCache,
+      nowFn: () => simulatedNowMs,
+    });
+    executor.leaderRetryDelayMs = 10;
+    let delayCalls = 0;
+    executor.delay = async (ms) => {
+      delayCalls += 1;
+      if (delayCalls === 1) {
+        systemCache.services = [];
+        simulatedNowMs += ms;
+        return;
+      }
+      simulatedNowMs += 100;
+    };
+
+    const result = await executor.executeOnPartition(
+      partitionId,
+      'UPDATE bench_accounts SET balance = ? WHERE id = ?',
+      [50, 1],
+      false,
+      true,
+      false,
+      {timeoutMs: 30},
+    );
+
+    t.equal(result.success, false);
+    t.equal(
+      result.routingReasonCode,
+      QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS,
+      'Attempt 2 should replace routingReasonCode with no_service_rows',
+    );
+    t.equal(
+      result.routingReadinessDimension,
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      'Attempt 2 should preserve the active routingReadinessDimension',
+    );
+    t.equal(result.routingDenialReasonCodes, undefined);
+    t.equal(result.deniedByNodeId, undefined);
+    t.equal(result.error, 'Partition service not found');
+    t.equal(result.deliveryDisposition, 'pre_submission_route_unavailable');
+  },
+);
+
+test(
+  'QueryExecutor - changing failure reasons across retry attempts from ' +
+    'candidate failure to no_service_rows replaces lastFailureDetails and ' +
+    'lastError atomically while preserving unknownOutcome and candidateDeliveryAttempted',
+  async (t) => {
+    const partitionId = 'p-candidate-to-missing';
+    const candidateNodeId = 'node-candidate-attempt-1';
+    const readSystemCache = createSinglePartitionTestSystemCache(
+      partitionId,
+      candidateNodeId,
+    );
+    const readExecutor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      messageRouter: {
+        getConnectionState: () => 'connected',
+        deliver: async () => {
+          readSystemCache.services = [];
+          return buildDeliveryEnvelope({
+            acknowledged: false,
+            error: `Connection to ${candidateNodeId} reset`,
+            errorCode: 'ROUTER_CONNECTION_CLOSED',
+          });
+        },
+      },
+      systemCache: readSystemCache,
+    });
+    readExecutor.readRetryAttempts = 2;
+    readExecutor.leaderRetryDelayMs = 1;
+
+    const readResult = await readExecutor.executeOnPartition(
+      partitionId,
+      'SELECT * FROM bench_accounts',
+      [],
+      true,
+      false,
+      false,
+      {timeoutMs: 500},
+    );
+
+    t.equal(readResult.success, false);
+    t.equal(
+      readResult.routingReasonCode,
+      QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS,
+    );
+    t.equal(readResult.participantNodeId, null);
+    t.equal(readResult.participantAddress, null);
+    t.equal(readResult.errorCode, null);
+    t.equal(readResult.error, 'Partition service not found');
+    t.equal(readResult.deliveryDisposition, undefined);
+
+    const writeSystemCache = createSinglePartitionTestSystemCache(
+      partitionId,
+      candidateNodeId,
+    );
+    let writeNowMs = 5000;
+    const writeExecutor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      messageRouter: {
+        getConnectionState: () => 'connected',
+        deliver: async () => {
+          writeSystemCache.services = [];
+          return buildDeliveryEnvelope({
+            acknowledged: false,
+            recoverableBeforeSend: false,
+            error: 'Message timeout after send',
+            errorCode: 'ROUTER_MESSAGE_TIMEOUT',
+          });
+        },
+      },
+      systemCache: writeSystemCache,
+      nowFn: () => writeNowMs,
+    });
+    writeExecutor.leaderRetryDelayMs = 10;
+    let writeDelays = 0;
+    writeExecutor.delay = async (ms) => {
+      writeDelays += 1;
+      if (writeDelays === 1) {
+        writeNowMs += ms;
+        return;
+      }
+      writeNowMs += 500;
+    };
+
+    const writeResult = await writeExecutor.executeOnPartition(
+      partitionId,
+      'UPDATE bench_accounts SET balance = ? WHERE id = ?',
+      [200, 1],
+      false,
+      true,
+      false,
+      {entryId: 'entry-atomic-unknown-1', timeoutMs: 100},
+    );
+
+    t.equal(writeResult.success, false);
+    t.equal(
+      writeResult.routingReasonCode,
+      QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS,
+    );
+    t.equal(writeResult.participantNodeId, null);
+    t.equal(writeResult.participantAddress, null);
+    t.equal(writeResult.errorCode, null);
+    t.equal(writeResult.failureCode, 'partition_write_outcome_unknown');
+    t.equal(writeResult.entryId, 'entry-atomic-unknown-1');
+    t.ok(writeResult.spentWait && typeof writeResult.spentWait === 'object');
+    t.equal(writeResult.deliveryDisposition, undefined);
+  },
+);
+
 registerQueryExecutorRecoveryRoutingTests();

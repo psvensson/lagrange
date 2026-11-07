@@ -60,7 +60,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               },
             };
           },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             return {
               publishedActiveNodeIdsPresent: true,
               publishedActiveNodeIds: Object.freeze(['node-a', 'node-b', 'node-c']),
@@ -108,7 +108,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               }),
             };
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publishedActiveNodeIdsPresent: true,
               publishedActiveNodeIds: Object.freeze(['node-a', 'node-b', 'node-c']),
@@ -248,7 +248,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               },
             };
           },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
               publishedActiveNodeIdsPresent: true,
@@ -280,11 +280,11 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
             };
           },
           async getMembershipPublicationPlanningSnapshot(nodeId) {
-            return this.getMembershipPublicationPlanningSnapshotBestEffort(
+            return this.getPriorityRecoveryPlanningSnapshotBestEffort(
               nodeId,
             );
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
               publishedActiveNodeIdsPresent: true,
@@ -465,7 +465,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               },
             };
           },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             return {
               publicationStatus,
               publishedActiveNodeIdsPresent: true,
@@ -491,9 +491,9 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
             };
           },
           async getMembershipPublicationPlanningSnapshot(nodeId) {
-            return this.getMembershipPublicationPlanningSnapshotBestEffort(nodeId);
+            return this.getPriorityRecoveryPlanningSnapshotBestEffort(nodeId);
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publicationStatus,
               publishedActiveNodeIdsPresent: true,
@@ -697,7 +697,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               },
             };
           },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
               publishedActiveNodeIdsPresent: true,
@@ -723,9 +723,9 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
             };
           },
           async getMembershipPublicationPlanningSnapshot(nodeId) {
-            return this.getMembershipPublicationPlanningSnapshotBestEffort(nodeId);
+            return this.getPriorityRecoveryPlanningSnapshotBestEffort(nodeId);
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
               publishedActiveNodeIdsPresent: true,

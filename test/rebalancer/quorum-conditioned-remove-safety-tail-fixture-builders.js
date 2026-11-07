@@ -49,13 +49,10 @@ export function createPublishedPlanningReadinessService({
     async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
-    async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+    async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
-    async getMembershipPublicationPlanningSnapshot(nodeId) {
-      return buildPlanningSnapshot(nodeId);
-    },
-    getMembershipPublicationPlanningSnapshotSync(nodeId) {
+    getPriorityRecoveryPlanningAnswerSync(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
   };
@@ -96,12 +93,11 @@ export function withOwnerReadPlanningEvidence(readinessService) {
           nodeId, observedAt);
       }
       if (
-        typeof readinessService
-          .getMembershipPublicationPlanningSnapshotBestEffort === 'function'
+        typeof readinessService.getPriorityRecoveryPlanningAnswerSync ===
+        'function'
       ) {
-        return readinessService
-          .getMembershipPublicationPlanningSnapshotBestEffort(
-            nodeId, observedAt);
+        return readinessService.getPriorityRecoveryPlanningAnswerSync(
+          nodeId, observedAt);
       }
       return null;
     },

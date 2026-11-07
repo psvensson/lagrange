@@ -297,6 +297,10 @@ function createMockControlPlaneReadinessService(options = {}) {
     callbacks = {},
   } = options;
   const project = (nodeRow) => projectNodeLivenessSemantics({nodeRow, nowMs: now()}).projection;
+  const buildPlanningSnapshot = (nodeId, observedAt) =>
+    typeof membershipPublicationPlanningSnapshot === 'function' ?
+      membershipPublicationPlanningSnapshot(nodeId, observedAt) :
+      membershipPublicationPlanningSnapshot;
   const port = {
     async readServeEligibility() {},
     answerCommittedNodes() {
@@ -328,10 +332,15 @@ function createMockControlPlaneReadinessService(options = {}) {
       return project(readNodeRows().find((row) => row.node_id === nodeId));
     },
     getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt) {
-      if (typeof membershipPublicationPlanningSnapshot === 'function') {
-        return membershipPublicationPlanningSnapshot(nodeId, observedAt);
-      }
-      return membershipPublicationPlanningSnapshot;
+      return buildPlanningSnapshot(nodeId, observedAt);
+    },
+    getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt = Date.now()) {
+      return buildPlanningSnapshot(nodeId, observedAt);
+    },
+    async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId, observedAt = Date.now()) {
+      return typeof this?.getPriorityRecoveryPlanningAnswerSync === 'function' ?
+        this.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt) :
+        buildPlanningSnapshot(nodeId, observedAt);
     },
     ...callbacks,
   };

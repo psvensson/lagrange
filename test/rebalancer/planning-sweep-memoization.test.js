@@ -480,7 +480,7 @@ test('the spread-blocker recovery gate builds once per planning snapshot ' +
     priorityPartitionSummary: Object.freeze({satisfied: false}),
   });
   stack.rebalancer.controlPlaneReadinessService
-    .getMembershipPublicationPlanningAnswerSync = () => planningSnapshot;
+    .getPriorityRecoveryPlanningAnswerSync = () => planningSnapshot;
   const readGateBuilds = () => {
     const site = getSharedSyncSectionRegistry()
       .sites.get('publication_recovery_gate_snapshot_build');
@@ -495,7 +495,7 @@ test('the spread-blocker recovery gate builds once per planning snapshot ' +
       'build');
 
   stack.rebalancer.controlPlaneReadinessService
-    .getMembershipPublicationPlanningAnswerSync =
+    .getPriorityRecoveryPlanningAnswerSync =
       () => Object.freeze({...planningSnapshot});
   stack.rebalancer.getControlPlanePrioritySpreadBlocker();
   t.equal(readGateBuilds() - before, 2,

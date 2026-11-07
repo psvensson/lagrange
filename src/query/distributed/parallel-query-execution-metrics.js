@@ -1,5 +1,7 @@
 import {NUM} from '../../constants/index.js';
+import {pickTypedWriteAnswer} from '../../partition/partition-write-kernel.js';
 import {QUERY_STATUS} from '../query-constants.js';
+import {pickRoutingDenialFields} from '../query-execution-budget.js';
 import {
   normalizeFailureString,
   normalizeRetryAfterMs,
@@ -78,6 +80,17 @@ class PartitionQueryMetrics {
       normalizeFailureString(diagnostics?.participantAddress);
     this.backpressured = resolveFailureBackpressureState(diagnostics);
     this.failedTable = normalizeFailureString(diagnostics?.failedTable);
+    Object.assign(
+      this,
+      pickTypedWriteAnswer(diagnostics),
+      pickRoutingDenialFields(diagnostics),
+    );
+    if (
+      typeof diagnostics?.deliveryDisposition === 'string' &&
+      diagnostics.deliveryDisposition.length > 0
+    ) {
+      this.deliveryDisposition = diagnostics.deliveryDisposition;
+    }
   }
 
   /**
@@ -198,6 +211,12 @@ function formatQueryExecutionMetrics(metrics) {
   const participantFailures = Array.from(metrics.partitionMetrics.values())
     .filter((metric) => metric.status === QUERY_STATUS.FAILED)
     .map((metric) => ({
+      ...pickTypedWriteAnswer(metric),
+      ...pickRoutingDenialFields(metric),
+      ...(typeof metric?.deliveryDisposition === 'string' &&
+      metric.deliveryDisposition.length > 0 ?
+        {deliveryDisposition: metric.deliveryDisposition} :
+        {}),
       partitionId: metric.partitionId,
       participantNodeId: metric.participantNodeId,
       participantAddress: metric.participantAddress,
