@@ -1,0 +1,33 @@
+{
+  "questId": "fresh-formation-user-table-routability",
+  "stage": "implementation-verification",
+  "verdict": "approve",
+  "verifier": "subagent:b53f502d-cb6d-4d3b-b17c-9e51dbbbcf82",
+  "ruleSetRevision": 5,
+  "baseCommit": "a6cd65c37ba7fe3af76a8f068fb9f54188ca9fca",
+  "files": {
+    "scripts/check-complexity.js": "a8c20d3f609e26442fd0931949142427e0e7ae1d011145c9f0487e5f2265da08",
+    "scripts/check-duplication.js": "4c6249d76ff3d2ac65478ca86dcc98e3dfb1eff6ff39ceb9022b9781c0e331ae",
+    "src/control-plane/priority-recovery-planning-answer-origin.js": "7cbc4b95ef5da9c1b2f71266dce876aef732c91f2d65a222db937d7c5ebf5336",
+    "src/partition/partition-replica-admission.js": "f6552ad7aa98aa9645f6ea1e51ae8f19601c618c8f2b710936211b0d87406e66",
+    "src/partition/partition-service-learner-promotion-methods.js": "55213e70244bd2d7e83348de498f5b9a5cb5df81e0bd2973da60c9572365e6d9",
+    "src/partition/partition-service-raft-peer-cache-reconciliation.js": "fab050d0a2b5ea9bd7afa93a54c456a0493cbbf8b6e8bbb4c403bb5d7d94381e",
+    "src/rebalancer/replica-operation-repository-visibility-methods.js": "1c2726029d6337846c96d86af3b7be616476f15eae60628f4565ed59c7da40b6",
+    "src/rebalancer/unified-rebalancer-available-nodes.js": "2d029ae581343c117fa7c3cdc14c15f11debbfc9b513178fccdd81a3f208cd93",
+    "test/distributed/harness/__tests__/failure-bundle-priority-recovery-playback-evidence-test-cases.js": "7938ee91923acaa4b7e246b64ea746fecd1739b047260222101e396849c64484",
+    "test/distributed/harness/__tests__/log-collector.test.js": "d4102c1fe27dff7b351496ee86a43a199f74ac5fa93da765fafd86b1b621d7b4",
+    "test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js": "2ea02910951f6771c18d04b66f09dd1cba67ec6ca78b649e76c18a9feda00e2b",
+    "test/distributed/harness/failure-bundle-formatting.js": "86396bc74221c835b9242da8b694c15edb58b8e6ae3f9d6ea0188d4af83904bc",
+    "test/distributed/harness/failure-bundle-playback-insights.js": "286f85e0333cfe176d4767ff4e079e6a3cc6e434154e84c4a98b59ec8dd08185",
+    "test/distributed/harness/failure-bundle-scenario-log-artifacts.js": "271c0d83f51389a46f4a6f73eb0cb12816a949d7851ccfb68cce0d9fe144cbf9",
+    "test/distributed/harness/failure-bundle-triage-summary.js": "bd4e3a377e7f128e216ba425e73e819be5767122ad78c71349416e5630942f52",
+    "test/distributed/harness/log-collector.js": "bec70a95e6cefa03c4bcf8c6988486ee50b3c33ec415b4896fc7e377e900acba",
+    "test/distributed/scenarios/fresh-formation-user-table-routability.js": "e8fe11be4793c2d78355b143f45277fc04e0c508c510ec88f61aae6c7fca9c28",
+    "test/partition/learner-promotion-count-check-authorization-cases.js": "f966e59d19eb904ed97fe9867e03bfe82c066e581b64cab8488b887110cfd7f0",
+    "test/partition/learner-promotion-count-check-inputs.test.js": "fa0add3ae7df3098bb21aa564536db03e33b3ed726f9711a6aa5c1234178ae4a",
+    "test/partition/replica-admission-from-committed-operation.test.js": "2e0333787e816ac0bb3279d4486dced6c619ef6a430ed128b51fbf2ebe8fc9a8",
+    "test/raft/raft-rs-backend/admission-redrive-chain.test.js": "621e3765520d2c54b4ff6495022bf24f5a5e431e4e8bb4dbd2ed9538fbe69919",
+    "test/raft/raft-rs-backend/admission-stamp-reread-real-port.test.js": "e60465a3d4a2eddef62c6251b536a5032a0b946fa76de1d5932779b9447781e5",
+    "test/shards/subsystem-classes.json": "d80989ca1e637ba63118c1cc0415d2ce159e509a934a875ae51f12358a69c2c1"
+  }
+}

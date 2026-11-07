@@ -665,3 +665,35 @@ test('stopSubscription clears internal state', async (_t) => {
   assert.equal(collector._node, null);
   assert.equal(collector._filter, null);
 });
+
+test('retainContainerLogLines preserves full pre-teardown logs and skips fallback tail truncation',
+  async (_t) => {
+    const collector = new LogCollector(tempDir());
+    let fallbackCalledForNode1 = false;
+    collector.retainContainerLogLines('node-1', [
+      '{"level":30,"time":"2026-11-06T18:48:00.000Z","msg":"first full line"}',
+      '{"level":30,"time":"2026-11-06T18:55:00.000Z","msg":"second full line"}',
+    ]);
+    await collector.collectContainerFallback([
+      {
+        id: 'node-1',
+        getLogs: async () => {
+          fallbackCalledForNode1 = true;
+          return 'truncated tail line\n';
+        },
+      },
+      {
+        id: 'node-2',
+        getLogs: async () => 'node-2 fallback line\n',
+      },
+    ]);
+    const buffer = collector.getBuffer();
+    assert.equal(fallbackCalledForNode1, false);
+    assert.equal(buffer.length, 3);
+    assert.equal(buffer[0].node_id, 'node-1');
+    assert.equal(buffer[0].timestamp, '2026-11-06T18:48:00.000Z');
+    assert.equal(buffer[1].node_id, 'node-1');
+    assert.equal(buffer[1].timestamp, '2026-11-06T18:55:00.000Z');
+    assert.equal(buffer[2].node_id, 'node-2');
+    assert.equal(buffer[2].message, 'node-2 fallback line');
+  });

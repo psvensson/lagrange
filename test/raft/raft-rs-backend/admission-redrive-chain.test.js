@@ -29,11 +29,15 @@ import {TABLES} from '../../../src/constants/index.js';
 import {CDCOperation} from '../../../src/partition/partition-service.js';
 import {retirePartitionRaftPeer} from
   '../../../src/partition/partition-service-raft-membership-administration.js';
+import {retireRaftPeerFromAuthoritativeServiceChange} from
+  '../../../src/partition/partition-service-raft-peer-cache-reconciliation.js';
 import {RAFT_MEMBERSHIP_OPERATION} from
   '../../../src/raft/raft-operation-port-constants.js';
 import {committedAddOperation} from
   '../../partition/committed-operation-gateway-fixture.js';
 import {deriveRaftRsPeerId} from '../../../src/raft/raft-rs-peer-identity.js';
+import {buildFailedCreateCleanupToken} from
+  '../../../src/rebalancer/failed-create-cleanup-token.js';
 import {ReplicaStatus} from '../../../src/rebalancer/replica-status.js';
 
 const ADMISSION_BOUND_MS = 4000;
@@ -67,6 +71,30 @@ const PENDING_KINDS = Object.freeze({
     });
     await new Promise((resolve) => setImmediate(resolve));
     return retiring;
+  },
+  'effective RemoveNode (a claimed failed-create row)': async ({leader, cache}) => {
+    const failedCreate = FOUNDERS.find(([replicaId]) =>
+      replicaId !== leader.replicaId);
+    assert.equal(
+      retireRaftPeerFromAuthoritativeServiceChange(
+        leader,
+        CDCOperation.UPDATE,
+        {
+          ...serviceRow(leader.partitionId, failedCreate),
+          status: ReplicaStatus.FAILED,
+          cleanup_token: null,
+        },
+      ),
+      false,
+      'an unclaimed FAILED row (cleanup_token null) never retires a Raft peer',
+    );
+    cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.UPDATE, {
+      ...serviceRow(leader.partitionId, failedCreate),
+      status: ReplicaStatus.FAILED,
+      cleanup_token: buildFailedCreateCleanupToken('op-failed-create-claim'),
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    return failedCreate;
   },
 });
 

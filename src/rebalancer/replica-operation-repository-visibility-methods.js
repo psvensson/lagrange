@@ -1,3 +1,7 @@
+import {
+  readPriorityRecoveryPlanningAnswerSync,
+} from '../control-plane/priority-recovery-planning-answer-origin.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 function assignReplicaOperationRepositoryVisibilityMethods(
@@ -397,39 +401,11 @@ function assignReplicaOperationRepositoryVisibilityMethods(
           ) || null
         );
       }
-      if (typeof readinessService.getPriorityRecoveryPlanningAnswerSync === 'function') {
-        return (
-          readinessService.getPriorityRecoveryPlanningAnswerSync(this.nodeId, observedAt) || null
-        );
-      }
-      if (
-        typeof readinessService.getMembershipPublicationPlanningAnswerSync ===
-        'function'
-      ) {
-        return (
-          readinessService.getMembershipPublicationPlanningAnswerSync(
-            this.nodeId,
-            observedAt,
-          ) || null
-        );
-      }
-      if (typeof readinessService.getPriorityRecoveryPlanningSnapshotSync === 'function') {
-        return (
-          readinessService.getPriorityRecoveryPlanningSnapshotSync(this.nodeId, observedAt) || null
-        );
-      }
-      if (
-        typeof readinessService.getMembershipPublicationPlanningSnapshotSync ===
-        'function'
-      ) {
-        return (
-          readinessService.getMembershipPublicationPlanningSnapshotSync(
-            this.nodeId,
-            observedAt,
-          ) || null
-        );
-      }
-      return null;
+      return readPriorityRecoveryPlanningAnswerSync(
+        readinessService,
+        this.nodeId,
+        observedAt,
+      );
     }
     isPriorityRecoveryOwnerReadActive(planningSnapshot = null) {
       if (!planningSnapshot || typeof planningSnapshot !== 'object') {

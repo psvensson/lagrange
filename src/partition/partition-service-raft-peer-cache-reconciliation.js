@@ -7,6 +7,8 @@ import {
 import {RAFT_EVENT, RAFT_MEMBERSHIP_OPERATION} from
   '../raft/raft-operation-port-constants.js';
 import {GROUP_RETIREMENT_REASON} from './group-retirement-evidence.js';
+import {isFailedCreateCleanupToken} from
+  '../rebalancer/failed-create-cleanup-token.js';
 import {redriveAcceptedAdmissionRequests} from
   './partition-replica-admission.js';
 
@@ -116,14 +118,26 @@ const EXPLICIT_PEER_RETIREMENT_STATUSES = Object.freeze(new Set([
 // A replica of a group retired as a unit (a verified group-retirement
 // REMOVE marks its REMOVING row so; owner decision 2026-10-04, amending F2)
 // leaves with its whole group: nobody proposes a conf change for it, so no
-// member is removed down to a last voter.
+// member is removed down to a last voter. A claimed failed-create target
+// (status FAILED with an operation-bound failed-create cleanup token) has
+// fenced and closed its runtime after admission input existed, so its dead
+// peer is retired from the group immediately rather than wedging participant
+// cutover while the terminal operation write settles.
+function isClaimedFailedCreateServiceRow(serviceRow) {
+  return (
+    serviceRow?.status === ReplicaStatus.FAILED &&
+    isFailedCreateCleanupToken(serviceRow?.cleanup_token)
+  );
+}
+
 function isExplicitPeerRetirement(operation, serviceRow) {
   if (serviceRow?.trigger_reason === GROUP_RETIREMENT_REASON) {
     return false;
   }
   return (
     operation === PARTITION_SERVICE_LITERAL.DELETE ||
-    EXPLICIT_PEER_RETIREMENT_STATUSES.has(serviceRow?.status)
+    EXPLICIT_PEER_RETIREMENT_STATUSES.has(serviceRow?.status) ||
+    isClaimedFailedCreateServiceRow(serviceRow)
   );
 }
 

@@ -706,6 +706,14 @@ function registerSpreadCureTransitionAuthorizationCases(host) {
           .map((line) => line.message),
         [host.DEFERRED_RECHECK, host.DEFERRED_RECHECK],
         'and each one still schedules its recheck');
+      assert.equal(
+        faulted.context.getReplicaServiceStatusForPromotion({status: null}),
+        null,
+        'malformed service row with missing status does not default to ACTIVE');
+      assert.equal(
+        faulted.context.isLiveReplicaServiceRowForPromotion({status: null}),
+        false,
+        'malformed service row with missing status is never counted as live');
     });
 }
 

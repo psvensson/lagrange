@@ -526,7 +526,8 @@ test('(g) the target asks its leader with exactly the committed operation ' +
   const {partition, sent} = createTarget({answers: [
     {outcome: OUTCOME.NOT_LEADER, leaderId: LEADER_REPLICA},
     {outcome: OUTCOME.AUTHORITY_UNAVAILABLE, retryAfterMs: 100},
-    {outcome: OUTCOME.PROPOSED}]});
+    {outcome: OUTCOME.PROPOSED},
+    {outcome: OUTCOME.ALREADY_MEMBER}]});
   t.equal(typeof partition.requestReplicaAdmission, 'function',
     'the target owns an admission request');
   if (typeof partition.requestReplicaAdmission !== 'function') return;
@@ -541,10 +542,13 @@ test('(g) the target asks its leader with exactly the committed operation ' +
   t.equal(partition.replicaAdmissionRequest?.state, 'pending',
     'AUTHORITY_UNAVAILABLE leaves it pending, never failed');
   await partition.driveReplicaAdmission();
-  t.equal(partition.replicaAdmissionRequest?.state, 'admitted',
-    'an admitting answer settles it');
+  t.equal(partition.replicaAdmissionRequest?.state, 'pending',
+    'an uncommitted PROPOSED answer keeps responsibility pending until committed');
   await partition.driveReplicaAdmission();
-  t.equal(sent.length, 3, 'a settled request is not sent again');
+  t.equal(partition.replicaAdmissionRequest?.state, 'admitted',
+    'committed membership (ALREADY_MEMBER) settles it');
+  await partition.driveReplicaAdmission();
+  t.equal(sent.length, 4, 'a settled request is not sent again');
 });
 
 test('(h) a repeated request is idempotent: ALREADY_MEMBER, no second ' +
@@ -704,7 +708,8 @@ async (t) => {
   const NEW_LEADER = 'sql_transactions-p1-r2';
   const {partition, sent} = createTarget({answers: [
     {outcome: OUTCOME.NOT_LEADER, leaderId: NEW_LEADER},
-    {outcome: OUTCOME.PROPOSED}]});
+    {outcome: OUTCOME.PROPOSED},
+    {outcome: OUTCOME.ALREADY_MEMBER}]});
   await partition.requestReplicaAdmission(OPERATION_ID);
   t.equal(sent[0]?.address, partitionAddress(LEADER_NODE, LEADER_REPLICA),
     'the first send goes to the stamp leader');
@@ -715,6 +720,9 @@ async (t) => {
   await partition.driveReplicaAdmission();
   t.equal(sent[1]?.address, partitionAddress('node-3', NEW_LEADER),
     'the next send reaches the new leader within one cadence step');
+  t.equal(partition.replicaAdmissionRequest?.state, 'pending',
+    'PROPOSED keeps responsibility pending until committed');
+  await partition.driveReplicaAdmission();
   t.equal(partition.replicaAdmissionRequest?.state, 'admitted', 'admitted');
 
   const stranger = createTarget({answers: [
@@ -736,4 +744,36 @@ async (t) => {
     'committed membership');
   t.equal(misrouted.partition.replicaAdmissionRequest?.state, 'pending',
     'and the request stays pending');
+});
+
+test('(p) leadership change after uncommitted PROPOSED or IN_FLIGHT re-drives ' +
+  'to the new leader until ALREADY_MEMBER or local committed ConfState settles it',
+async (t) => {
+  const NEW_LEADER = 'sql_transactions-p1-r2';
+  const {partition, sent} = createTarget({answers: [
+    {outcome: OUTCOME.PROPOSED},
+    {outcome: OUTCOME.IN_FLIGHT},
+    {outcome: OUTCOME.NOT_LEADER, leaderId: NEW_LEADER},
+    {outcome: OUTCOME.PROPOSED},
+    {outcome: OUTCOME.ALREADY_MEMBER}]});
+  await partition.requestReplicaAdmission(OPERATION_ID);
+  t.equal(partition.replicaAdmissionRequest?.state, 'pending',
+    'PROPOSED from old leader does not settle the request before commit');
+  await partition.driveReplicaAdmission();
+  t.equal(partition.replicaAdmissionRequest?.state, 'pending',
+    'IN_FLIGHT from old leader does not settle the request before commit');
+  await partition.driveReplicaAdmission();
+  t.equal(partition.replicaAdmissionRequest?.state, 'pending',
+    'leadership change before commit leaves the request pending with new leader hint');
+  t.same({...partition.replicaAdmissionRequest?.leaderHint},
+    {replicaIdentity: NEW_LEADER, address: partitionAddress('node-3', NEW_LEADER)},
+    'the target follows the new committed leader that was never asked before');
+  await partition.driveReplicaAdmission();
+  t.equal(sent[3]?.address, partitionAddress('node-3', NEW_LEADER),
+    'the re-driven request is sent to the new leader');
+  t.equal(partition.replicaAdmissionRequest?.state, 'pending',
+    'the new leader proposal stays pending until committed');
+  await partition.driveReplicaAdmission();
+  t.equal(partition.replicaAdmissionRequest?.state, 'admitted',
+    'ALREADY_MEMBER from the new leader settles the request');
 });

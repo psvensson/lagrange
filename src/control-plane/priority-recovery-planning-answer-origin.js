@@ -51,6 +51,56 @@ const PRIORITY_RECOVERY_PLANNING_ANSWER_ORIGIN_UNSTATED = Object.freeze({
 });
 
 const PLANNING_OWNER_TYPE = 'object';
+const PLANNING_METHOD_TYPE = 'function';
+
+const PRIORITY_RECOVERY_PLANNING_SYNC_METHODS = Object.freeze([
+  'getPriorityRecoveryPlanningAnswerSync',
+  'getMembershipPublicationPlanningAnswerSync',
+  'getPriorityRecoveryPlanningSnapshotSync',
+  'getMembershipPublicationPlanningSnapshotSync',
+]);
+
+function resolvePriorityRecoveryPlanningSyncMethod(readinessService) {
+  if (!isPlanningOwner(readinessService)) {
+    return null;
+  }
+  return PRIORITY_RECOVERY_PLANNING_SYNC_METHODS.find(
+    (method) => typeof readinessService[method] === PLANNING_METHOD_TYPE,
+  ) ?? null;
+}
+
+/**
+ * Whether a readiness owner exposes a synchronous priority-recovery planning
+ * answer surface.
+ *
+ * @param {Object|null} readinessService - Readiness owner.
+ * @return {boolean}
+ */
+function hasPriorityRecoveryPlanningAnswerSync(readinessService) {
+  return resolvePriorityRecoveryPlanningSyncMethod(readinessService) !== null;
+}
+
+/**
+ * Read the synchronous priority-recovery planning answer from the readiness
+ * owner's canonical surface.
+ *
+ * @param {Object|null} readinessService - Readiness owner.
+ * @param {string|null} nodeId - Node the consumer is asking about.
+ * @param {number|string|null} observedAt - Observation timestamp.
+ * @return {Object|null}
+ */
+function readPriorityRecoveryPlanningAnswerSync(
+  readinessService,
+  nodeId,
+  observedAt,
+) {
+  const method = resolvePriorityRecoveryPlanningSyncMethod(readinessService);
+  if (!method) {
+    return null;
+  }
+  const answer = readinessService[method](nodeId, observedAt);
+  return answer && typeof answer === PLANNING_OWNER_TYPE ? answer : null;
+}
 
 // The facts of the answer in flight, per owner: reset per call, never keyed by
 // anything the answer itself carries.
@@ -201,9 +251,11 @@ function readPriorityRecoveryPlanningAnswerOrigin(owner, nodeId) {
 export {
   PRIORITY_RECOVERY_PLANNING_ANSWER_ORIGIN,
   beginPriorityRecoveryPlanningAnswer,
+  hasPriorityRecoveryPlanningAnswerSync,
   notePriorityRecoveryPlanningAnswerRetention,
   readPriorityRecoveryPlanningAnswerCallRetention,
   readPriorityRecoveryPlanningAnswerOrigin,
+  readPriorityRecoveryPlanningAnswerSync,
   recordPriorityRecoveryPlanningProjectionReuse,
   statePriorityRecoveryPlanningAnswerOrigin,
 };

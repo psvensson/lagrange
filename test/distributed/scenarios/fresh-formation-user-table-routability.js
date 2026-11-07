@@ -359,13 +359,17 @@ async function writeAndReadBack(context) {
     insert, readbacks});
 }
 
-async function scanNodeLogs(nodes, state) {
+async function scanNodeLogs(nodes, state, collector = null) {
   const perNode = {};
   const refusals = [];
   for (const node of nodes) {
     try {
       const raw = await node.getLogs({rawBuffer: true});
-      const scan = scanFormationLogLines(extractContainerLogLines(raw));
+      const lines = extractContainerLogLines(raw);
+      if (typeof collector?.retainContainerLogLines === 'function') {
+        collector.retainContainerLogLines(node.id, lines);
+      }
+      const scan = scanFormationLogLines(lines);
       perNode[node.id] = {lineCount: scan.lineCount,
         observations: scan.observations, role: node.role};
       refusals.push(...scan.learnerRefusals);
@@ -479,8 +483,11 @@ export async function run(cluster) {
   const writeReadback = userTable.result.met ?
     await step('write-readback', () => writeAndReadBack(context)) :
     null;
+  const collector = typeof cluster.getLogCollector === 'function' ?
+    cluster.getLogCollector() :
+    null;
   const logScan = await step('node-log-observations', () =>
-    scanNodeLogs(nodes, state));
+    scanNodeLogs(nodes, state, collector));
   const finalServices = await readRows(seedNode, SQL.SERVICES, timeoutMs);
   if (finalServices.error) {
     state.readFailures.push(`read_failed:services:${finalServices.error}`);

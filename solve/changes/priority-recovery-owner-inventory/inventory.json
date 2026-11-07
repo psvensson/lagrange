@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "38d013f8e4e85db134ec2a2c82e00d6d4097846196a463fc2705ee1b9aba8f95"
+    "sourceSha256": "d4c57b5129df98f5a2772b6ef4f1fa1f8bb2a86fa40916885e2967ed5a5ec3d3"
   },
   "layerDirection": [
     "raw_observation",
@@ -18,7 +18,7 @@
   },
   "metrics": {
     "moduleCount": 67,
-    "publicExportCount": 747,
+    "publicExportCount": 749,
     "importEdgeCount": 312,
     "crossLayerEdgeCount": 96,
     "layerDirectionViolationCount": 48,
@@ -552,18 +552,22 @@
       "exports": [
         "PRIORITY_RECOVERY_PLANNING_ANSWER_ORIGIN",
         "beginPriorityRecoveryPlanningAnswer",
+        "hasPriorityRecoveryPlanningAnswerSync",
         "notePriorityRecoveryPlanningAnswerRetention",
         "readPriorityRecoveryPlanningAnswerCallRetention",
         "readPriorityRecoveryPlanningAnswerOrigin",
+        "readPriorityRecoveryPlanningAnswerSync",
         "recordPriorityRecoveryPlanningProjectionReuse",
         "statePriorityRecoveryPlanningAnswerOrigin"
       ],
       "localExports": [
         "PRIORITY_RECOVERY_PLANNING_ANSWER_ORIGIN",
         "beginPriorityRecoveryPlanningAnswer",
+        "hasPriorityRecoveryPlanningAnswerSync",
         "notePriorityRecoveryPlanningAnswerRetention",
         "readPriorityRecoveryPlanningAnswerCallRetention",
         "readPriorityRecoveryPlanningAnswerOrigin",
+        "readPriorityRecoveryPlanningAnswerSync",
         "recordPriorityRecoveryPlanningProjectionReuse",
         "statePriorityRecoveryPlanningAnswerOrigin"
       ]

@@ -715,6 +715,22 @@ function renderScenarioFailureBundleMarkdown(bundle) {
             formatActiveGateReadinessDelay(
               bundle.publicationConvergence.activeGateReadinessDelay,
             ),
+          ...(bundle.publicationConvergence.activeGateSnapshotHistorical ===
+          true ?
+            [
+              '- Active Gate Snapshot Provenance: historical_startup (stage=' +
+                String(
+                  bundle.publicationConvergence.activeGateSnapshotStage ||
+                    UNKNOWN_VALUE,
+                ) +
+                ', observedAt=' +
+                String(
+                  bundle.publicationConvergence.activeGateObservedAt ||
+                    UNKNOWN_VALUE,
+                ) +
+                ')',
+            ] :
+            []),
         ].join('\n'),
     );
   }

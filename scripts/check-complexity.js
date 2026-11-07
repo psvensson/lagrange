@@ -143,7 +143,9 @@ const TARGET_THRESHOLD = 12;
 // 2026-11-04 (composed-05-comparison-readiness): tightened 1721 -> 1720 on the checker's hint.
 // 2026-11-06 (required-entity-operation-observation): tightened 1720 -> 1719
 // on the checker hint after deleting alternate required-read adaptation.
-const BASELINE_COUNT = 1719;
+// 2026-11-07: tightened 1719 -> 1718 on the checker hint after unifying the
+// priority-recovery planning-answer reader across promotion and rebalancer consumers.
+const BASELINE_COUNT = 1718;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

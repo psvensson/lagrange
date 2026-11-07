@@ -167,9 +167,13 @@ SCENARIO, async () => {
     await target.driveReplicaAdmission();
     assert.equal(admits()[1]?.address, addressOf(newMember),
       'the next request goes to the hinted member at its committed node');
-    assert.equal(request.state, 'admitted', 'admitted by the live leader');
+    assert.equal(request.state, 'pending',
+      'an in-flight proposal stays pending until committed');
     assert.equal(await becomesVoter(harness, target), true,
       'the target becomes a voter of the group');
+    await target.driveReplicaAdmission();
+    assert.equal(request.state, 'admitted',
+      'committed membership settles the admission request');
   } finally {
     await harness.dispose();
   }
@@ -288,13 +292,17 @@ SCENARIO, async () => {
     assert.equal(reads[0], order[0], 'the stamp leader\'s node is asked first');
     assert.equal(reads[1], order[1], 'then the next member in stamp order');
     assert.ok(new Set(reads).size > 1, 'it does not stop at the dead node');
-    assert.equal(request.state, 'admitted', 'a live leader admits the target');
+    assert.equal(request.state, 'pending',
+      'an in-flight proposal stays pending until committed');
     assert.equal(request.stamp.leaderId, newLeader.replicaId,
       'the re-read stamp names the live leader');
     assert.equal(sent.filter((d) => d.type === ADMIT).at(-1).address,
       addressOf(newMember), 'at the live leader committed node');
     assert.equal(await becomesVoter(harness, target), true,
       'the target becomes a voter of the group');
+    await target.driveReplicaAdmission();
+    assert.equal(request.state, 'admitted',
+      'committed membership settles the admission request');
   } finally {
     await harness.dispose();
   }
@@ -347,12 +355,72 @@ test('D: NOT_LEADER naming a non-member on the real port: the hint is ' +
     assert.equal(request.leaderHint, null, 'the non-member hint is ignored');
     assert.equal(request.rereadStamp, true, 'the stamp is re-read next');
     await target.driveReplicaAdmission();
-    assert.equal(request.state, 'admitted', 'admitted after the re-read');
+    assert.equal(request.state, 'pending',
+      'an in-flight proposal stays pending until committed');
     assert.equal(request.stamp.leaderId, newLeader.replicaId, 'fresh stamp');
     assert.equal(sent.filter((d) => d.type === ADMIT).at(-1).address,
       addressOf(newMember), 'at the live leader committed node');
     assert.equal(sent.some((d) => d.address.includes('c4-stranger')), false,
       'nothing is sent to the stranger');
+    assert.equal(await becomesVoter(harness, target), true,
+      'the target becomes a voter of the group');
+    await target.driveReplicaAdmission();
+    assert.equal(request.state, 'admitted', 'admitted after commit');
+  } finally {
+    await harness.dispose();
+  }
+});
+
+test('E: old leader accepts proposal (in_flight) while isolated from quorum ' +
+  'and disappears before commit; a founder that was never asked becomes ' +
+  'leader and the target re-drives admission to become a voter',
+SCENARIO, async () => {
+  configure();
+  const harness = createCommittedMembershipHarness(PARTITION_ID);
+  try {
+    await formGroup(harness, [A, B, C]);
+    const oldLeader = harness.leader();
+    const oldMember = harness.members.get(oldLeader.replicaId);
+    const stamp = await stampOf(oldLeader);
+    registerReplicaHandlers(harness);
+    const target = await buildTarget(harness, stamp);
+    const sent = recordDeliveries(harness);
+    const operation = admitOperationFor(harness, [A, B, C]);
+
+    // Drop outgoing Raft packets from oldLeader so its proposal cannot commit,
+    // while still allowing target's ADMIT_REPLICA RPC to reach oldLeader.
+    harness.network.cut('no-address', statusOf(oldLeader).peerId);
+    const request = await target.requestReplicaAdmission(operation.operation_id);
+    assert.equal(request.lastOutcome, 'in_flight',
+      'old leader accepted the proposal into its uncommitted local log');
+    assert.equal(request.state, 'pending',
+      'uncommitted proposal does not settle the target admission request');
+
+    // Now oldLeader disappears completely and the surviving founders elect a
+    // new leader that was never asked to admit the target.
+    harness.network.cut(addressOf(oldMember), statusOf(oldLeader).peerId);
+    harness.network.cut(`${oldMember[1]}${RH}`, 'no-peer');
+    assert.equal(await waitFor(() => otherLeader(harness, oldLeader) !== null, 40000),
+      true, 'setup: surviving founders elect a new leader');
+    const newLeader = otherLeader(harness, oldLeader);
+    const newMember = harness.members.get(newLeader.replicaId);
+
+    await target.driveReplicaAdmission();
+    assert.equal(request.lastOutcome, 'transport_failed',
+      're-drive to disappeared old leader fails and arms stamp re-read');
+    assert.equal(request.rereadStamp, true);
+
+    await target.driveReplicaAdmission();
+    assert.equal(request.stamp.leaderId, newLeader.replicaId,
+      'stamp re-read discovers the new leader');
+    assert.equal(sent.filter((d) => d.type === ADMIT).at(-1).address,
+      addressOf(newMember),
+      'target sends ADMIT_REPLICA to the new leader that was never asked');
+    assert.equal(await becomesVoter(harness, target), true,
+      'the target is admitted by the new leader and becomes a committed voter');
+    await target.driveReplicaAdmission();
+    assert.equal(request.state, 'admitted',
+      'committed membership settles the admission request');
   } finally {
     await harness.dispose();
   }

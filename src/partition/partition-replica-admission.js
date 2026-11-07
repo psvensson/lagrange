@@ -99,8 +99,6 @@ const PROTOTYPE_CONSTRUCTOR_NAME = 'constructor';
 
 const ADMITTING_ANSWERS = Object.freeze(new Set([
   REPLICA_ADMISSION_OUTCOME.ALREADY_MEMBER,
-  REPLICA_ADMISSION_OUTCOME.IN_FLIGHT,
-  REPLICA_ADMISSION_OUTCOME.PROPOSED,
 ]));
 
 const PORT_OUTCOME_ANSWER = Object.freeze({
@@ -330,6 +328,25 @@ function redriveAcceptedAdmissionRequests(service) {
   }
 }
 
+const UNCOMMITTED_ADMISSION_OUTCOMES = Object.freeze(new Set([
+  REPLICA_ADMISSION_OUTCOME.IN_FLIGHT,
+  REPLICA_ADMISSION_OUTCOME.PROPOSED,
+]));
+
+function isOwnCommittedVoter(service) {
+  const status = service.readOwnRaftStatus?.() ?? null;
+  const peerId = status?.peerId;
+  if (peerId === undefined || peerId === null) {
+    return false;
+  }
+  const voters = Array.isArray(status?.confState?.voters) ?
+    status.confState.voters :
+    [];
+  return voters.some(
+    (voterPeerId) => String(voterPeerId) === String(peerId),
+  );
+}
+
 /**
  * The learner cadence's one step for admission: a pending request, if any,
  * is sent again; a replica without one does nothing.
@@ -489,6 +506,12 @@ class PartitionServiceReplicaAdmissionMethods {
     if (request === null ||
         request.state !== REPLICA_ADMISSION_REQUEST_STATE.PENDING ||
         this.isShutdown === true) {
+      return request;
+    }
+    if (UNCOMMITTED_ADMISSION_OUTCOMES.has(request.lastOutcome) &&
+        isOwnCommittedVoter(this)) {
+      request.lastOutcome = REPLICA_ADMISSION_OUTCOME.ALREADY_MEMBER;
+      request.state = REPLICA_ADMISSION_REQUEST_STATE.ADMITTED;
       return request;
     }
     const admission = (request.rereadStamp ?

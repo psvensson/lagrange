@@ -1657,6 +1657,17 @@ export function buildPublicationConvergenceSummary(controlPlane) {
     activeGateSnapshotCoveragePending,
     activeGateSnapshotCoverageBlocker,
     activeGateReadinessDelay,
+    ...(typeof controlPlane?.activeGateSnapshotStage === 'string' &&
+    controlPlane.activeGateSnapshotStage.length > ZERO ?
+      {activeGateSnapshotStage: controlPlane.activeGateSnapshotStage} :
+      {}),
+    ...(typeof controlPlane?.activeGateObservedAt === 'string' &&
+    controlPlane.activeGateObservedAt.length > ZERO ?
+      {activeGateObservedAt: controlPlane.activeGateObservedAt} :
+      {}),
+    ...(typeof controlPlane?.activeGateSnapshotHistorical === 'boolean' ?
+      {activeGateSnapshotHistorical: controlPlane.activeGateSnapshotHistorical} :
+      {}),
     closureRecordId:
       priorityRecoveryObservation?.closureRecordId ||
       publicationConvergenceGate?.closureRecordId ||

@@ -21,6 +21,10 @@ import {
   hasAvailablePriorityRecoveryPlanningProvider as hasAvailablePlanningProvider,
   readAvailablePriorityRecoveryPlanningSnapshot as readAvailablePlanningSnapshot,
 } from './priority-recovery-planning-read.js';
+import {
+  hasPriorityRecoveryPlanningAnswerSync,
+  readPriorityRecoveryPlanningAnswerSync,
+} from '../control-plane/priority-recovery-planning-answer-origin.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -527,17 +531,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       return null;
     }
     const readinessService = this.controlPlaneReadinessService;
-    if (
-      !readinessService ||
-      (typeof readinessService.getPriorityRecoveryPlanningAnswerSync !==
-        'function' &&
-        typeof readinessService.getMembershipPublicationPlanningAnswerSync !==
-          'function' &&
-        typeof readinessService.getPriorityRecoveryPlanningSnapshotSync !==
-          'function' &&
-        typeof readinessService.getMembershipPublicationPlanningSnapshotSync !==
-          'function')
-    ) {
+    if (!hasPriorityRecoveryPlanningAnswerSync(readinessService)) {
       return null;
     }
     const publicationNodeId = this.nodeId;
@@ -546,46 +540,11 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       typeof readinessService.now === 'function' ?
         readinessService.now() : this.nowFn();
 
-    let planningSnapshot = null;
-    if (
-      typeof readinessService.getPriorityRecoveryPlanningAnswerSync ===
-      'function'
-    ) {
-      planningSnapshot = readinessService.getPriorityRecoveryPlanningAnswerSync(
-        publicationNodeId,
-        observedAt,
-      );
-    } else if (
-      typeof readinessService.getMembershipPublicationPlanningAnswerSync ===
-      'function'
-    ) {
-      planningSnapshot =
-        readinessService.getMembershipPublicationPlanningAnswerSync(
-          publicationNodeId,
-          observedAt,
-        );
-    } else if (
-      typeof readinessService.getPriorityRecoveryPlanningSnapshotSync ===
-      'function'
-    ) {
-      planningSnapshot =
-        readinessService.getPriorityRecoveryPlanningSnapshotSync(
-          publicationNodeId,
-          observedAt,
-        );
-    } else if (
-      typeof readinessService.getMembershipPublicationPlanningSnapshotSync ===
-      'function'
-    ) {
-      planningSnapshot =
-        readinessService.getMembershipPublicationPlanningSnapshotSync(
-          publicationNodeId,
-          observedAt,
-        );
-    }
-    return planningSnapshot && typeof planningSnapshot === 'object' ?
-      planningSnapshot :
-      null;
+    return readPriorityRecoveryPlanningAnswerSync(
+      readinessService,
+      publicationNodeId,
+      observedAt,
+    );
   }
 
   /**

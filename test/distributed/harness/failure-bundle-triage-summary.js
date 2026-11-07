@@ -428,6 +428,17 @@ function renderScenarioTriageSummaryMarkdown(summary) {
         )
       }`,
     );
+    if (publicationConvergence.activeGateSnapshotHistorical === true) {
+      lines.push(
+        `- Active Gate Snapshot Provenance: historical_startup (stage=${
+          String(
+            publicationConvergence.activeGateSnapshotStage || UNKNOWN_VALUE,
+          )
+        }, observedAt=${
+          String(publicationConvergence.activeGateObservedAt || UNKNOWN_VALUE)
+        })`,
+      );
+    }
   }
 
   lines.push(
