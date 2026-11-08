@@ -1,0 +1,35 @@
+{
+  "schema": "solve-quest/2",
+  "id": "system-table-decoded-reads-rebalancer",
+  "epic": "code-navigability-and-mistake-resistance",
+  "statement": "Every reader of a services, nodes or replica_operations row under src/rebalancer reads the decoded object from the table's decoder module (a full-row decode or a named projection declared beside the query), so raw column reads outside the decoders in the rebalancer group reach zero, the readStateField reads the state-read-named-defaults quest left on these tables there become decoded named states, and the row_field_alias_reads cap tightens by the number of alias reads removed; behaviour is unchanged.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/code-navigability-budget.js --metric --rows system_table_raw_column_reads_outside_decoder_rebalancer",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-reader-of-raw-columns",
+      "statement": "Only the table's decoder reads its raw column names. A consumer that still does is a violation the detector reports, not an allowed exception."
+    },
+    {
+      "id": "decoder-is-not-authority",
+      "statement": "The decoder shapes the row it was given. It never fetches, caches or defaults a value the row lacks; an absent column is a typed refusal (R05, R07)."
+    },
+    {
+      "id": "caps-tighten",
+      "statement": "The row_field_alias_reads baseline is lowered in the same change by the number of alias reads removed, starting from the value the stream holds at the seal."
+    },
+    {
+      "id": "behaviour-unchanged",
+      "statement": "Consumers read the same values under their decoded names; every expectation change in an existing test is justified against HEAD behaviour with a production-shaped fixture."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "The src/ changes land only behind an approving verification newer than the last attempt."
+    }
+  ]
+}
