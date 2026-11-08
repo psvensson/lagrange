@@ -11,9 +11,10 @@
  */
 
 import {createCallIterator} from './call-iterator.js';
-import {executeStage} from './call-stage.js';
+import {executeStage, resolveCallMode} from './call-stage.js';
 import {executePlan} from './call-plan.js';
 import {
+  CALL_MODE,
   RUNTIME_ERROR_MSG as ERR,
   PLAN_FIELD,
   PLAN_ERROR_MSG,
@@ -177,8 +178,9 @@ class ExecutionContext {
       throw new Error(ERR.CALL_QUERY_REQUIRED);
     }
 
+    const mode = resolveCallMode(query, params, handler);
     // Plan_Mode: query is a plan object (not a string)
-    if (typeof query === 'object') {
+    if (mode === CALL_MODE.PLAN) {
       if (!query[PLAN_FIELD.KIND]) {
         throw new Error(PLAN_ERROR_MSG.PLAN_MISSING_KIND);
       }
@@ -227,7 +229,7 @@ class ExecutionContext {
     }
 
     // Stage_Mode: handler is a function
-    if (typeof resolvedHandler === 'function') {
+    if (mode === CALL_MODE.STAGE) {
       return executeStage({
         query,
         params: resolvedParams,

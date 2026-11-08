@@ -16,6 +16,7 @@ import {registerMessageGroupTransportHandler} from
   '../../src/bootstrap/shared/message-group-transport-handler.js';
 import {COLUMN, TABLES, SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const NODE_ID = 'mg-custody-native-node';
 const GROUP_ID = 'mg-custody-native';
@@ -121,7 +122,7 @@ async function recipientFixture(t, key, {replicaCount = REPLICAS.length} = {}) {
     await service.subscribeToCDC(TABLES.CONFIG);
   }
   for (let round = 0; round < SETUP_ROUNDS; round += 1) {
-    await f.services[0].raft.tick();
+    await turnChainValue(f.services[0].raft.tick());
     await pump(f);
     const statuses = f.services.map((service) => service.raft.readStatus());
     if (statuses[0].role === 'leader' && statuses.every((status) =>

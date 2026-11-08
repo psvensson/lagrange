@@ -26,6 +26,7 @@ import {
   runSerializedReplicaMutation,
 } from
   './replica-state-machine-serialization.js';
+import {pendingTurn, turnChainValue} from '../raft/raft-rs-turn-answer.js';
 import {isPartitionRegistrationEvidence} from
   '../partition/partition-service-row-owner.js';
 import {REPLICA_ACTIVATION_HANDLER_NOT_REGISTERED} from
@@ -308,11 +309,11 @@ async function activateRegisteredReplicaInLane(stateMachine, options) {
 }
 
 function activateRegisteredReplica(stateMachine, options = {}) {
-  return runSerializedReplicaMutation(
+  return turnChainValue(runSerializedReplicaMutation(
     stateMachine,
     options.replicaId,
-    () => activateRegisteredReplicaInLane(stateMachine, options),
-  );
+    () => pendingTurn(activateRegisteredReplicaInLane(stateMachine, options)),
+  ));
 }
 
 export {

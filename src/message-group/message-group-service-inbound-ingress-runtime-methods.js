@@ -3,6 +3,7 @@ import {
   handleLatencyCdcPropagationBatchMessage as runHandleLatencyBatchMessage,
   handleLatencyCdcPropagationMessage as runHandleLatencyMessage,
 } from './message-group-service-cdc-propagation-runtime-methods.js';
+import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const MESSAGE_GROUP_SERVICE_INBOUND_INGRESS_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
@@ -119,7 +120,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
       const payload = message.payload || message;
       if (isRaftRsTransportEnvelope(payload)) {
         if (this.raft) {
-          await Promise.resolve(this.raft.step(payload));
+          await turnChainValue(this.raft.step(payload));
         }
         return null;
       }

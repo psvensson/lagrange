@@ -47,6 +47,7 @@ import {
 import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork, settleCdcOwedRefusal} from
   './partition-cdc-owed-admission.js';
 import {recordCommittedWriteTraffic} from './partition-write-traffic.js';
+import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
   ROLLBACK: 'afterRollback',
@@ -305,7 +306,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       // it would drop, so the sender never records it as taken (F1).
       assertReplicaHandlerServing(this);
       if (this.raft) {
-        await Promise.resolve(this.raft.step(payload));
+        await turnChainValue(this.raft.step(payload));
       }
       return null;
     }

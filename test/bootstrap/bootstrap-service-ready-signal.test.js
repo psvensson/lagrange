@@ -355,7 +355,7 @@ test('BootstrapService waits for lifecycle metadata publication readiness before
       nodeAddress: 'ws://localhost:19094',
     });
     service.sqlQueryEngine = {
-      activateDistributedTransactionRecovery() {
+      async activateDistributedTransactionRecovery() {
         recoveryStarts += 1;
       },
     };
@@ -495,7 +495,7 @@ test('BootstrapService does not start deferred steady-state writers after shutdo
       nodeAddress: 'ws://localhost:19095',
     });
     service.sqlQueryEngine = {
-      activateDistributedTransactionRecovery() {
+      async activateDistributedTransactionRecovery() {
         recoveryStarts += 1;
       },
     };

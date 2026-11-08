@@ -31,6 +31,7 @@ import {PARTICIPANT_CUTOVER_OUTCOME} from
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from '../partition/partition-release-fixture.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const NODE_ID = 'mg-provisional-route-node';
 const SOURCE_GROUP = 'mg-provisional-source';
@@ -126,7 +127,7 @@ async function pump(f, rounds = DELIVERY_ROUNDS) {
 }
 
 async function tick(f) {
-  for (const service of f.services.values()) await service.raft.tick();
+  for (const service of f.services.values()) await turnChainValue(service.raft.tick());
   await pump(f);
 }
 
@@ -241,7 +242,7 @@ async function prepareRecipients(f) {
   }
   const leader = f.services.get(LEADER);
   for (let round = 0; round < SETUP_ROUNDS; round += 1) {
-    await leader.raft.tick();
+    await turnChainValue(leader.raft.tick());
     await pump(f);
     const statuses = TARGET_REPLICAS.map((id) => f.services.get(id).raft.readStatus());
     if (statuses[0].role === RAFT_ROLE.LEADER && statuses.every((status) =>
@@ -266,7 +267,7 @@ async function prepareRecipients(f) {
     [activeProjection(TARGET_GROUP, FOLLOWER, RAFT_ROLE.LEADER)]);
   // Exercise outgoing election isolation through the real operation port.
   // The cut, not an assigned role or a disabled timer, prevents its quorum.
-  const campaign = await f.first.raft.campaign();
+  const campaign = await turnChainValue(f.first.raft.campaign());
   note(f, 'isolated-native-campaign', {campaign, status: f.first.raft.readStatus()});
   await pump(f);
   f.follower = await reopen(f, FOLLOWER,

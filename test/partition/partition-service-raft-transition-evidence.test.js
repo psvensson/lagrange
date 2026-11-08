@@ -6,6 +6,7 @@ import {
   RAFT_MEMBERSHIP_TRANSITION_REASON,
   RAFT_OPERATION_OUTCOME,
 } from '../../src/raft/raft-operation-port-constants.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {ControllableConsensusPort} from
   './partition-service-test-support.js';
 
@@ -15,7 +16,7 @@ test('controllable consensus refuses semantic membership without an owner',
   () => {
     const consensusPort = new ControllableConsensusPort();
     const raft = consensusPort.createOperationPort({peerId: 'orders-p1-r2'});
-    const refused = raft.proposeMembershipTransition({operationId: 'op-1'});
+    const refused = turnChainValue(raft.proposeMembershipTransition({operationId: 'op-1'}));
     assert.equal(refused.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
     assert.equal(
       refused.reason,
@@ -26,7 +27,7 @@ test('controllable consensus refuses semantic membership without an owner',
       outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
       reason: RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED,
     }));
-    const proposed = raft.proposeMembershipTransition({operationId: 'op-2'});
+    const proposed = turnChainValue(raft.proposeMembershipTransition({operationId: 'op-2'}));
     assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.deepEqual(consensusPort.membershipTransitions, [
       {operationId: 'op-1'},

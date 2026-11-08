@@ -40,6 +40,7 @@ import {
   mostCaughtUp,
   namedSuccessor,
 } from './transfer-leadership-driver.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const {CORE_OK, CORE_REFUSED} = RAFT_OPERATION_OUTCOME;
 const A = 'inputs-replica-a';
@@ -75,7 +76,7 @@ test('a transfer to a peer that messages already delivered to the leader ' +
     driver.isolate(C);
     assert.equal(driver.port(A).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C,
-    }).outcome, CORE_OK);
+    }).result.outcome, CORE_OK);
     driver.deliverOnly([B]);
     assert.equal(driver.status(A).confState.voters.includes(removedId), true,
       'precondition: the leader has not yet processed the acknowledgement');
@@ -84,7 +85,7 @@ test('a transfer to a peer that messages already delivered to the leader ' +
       'precondition: the acknowledgement is delivered, not yet processed');
     const termBefore = driver.status(B).term;
     const {answer, steps} = await stepEntriesDuring(driver, () =>
-      driver.port(A).transferLeadership(namedSuccessor(C)));
+      turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))));
     assertRefused(answer, TRANSFER_REASON.TARGET_NOT_VOTER);
     assert.equal(steps, delivered,
       'the core was stepped with the delivered messages and nothing else');
@@ -95,7 +96,7 @@ test('a transfer to a peer that messages already delivered to the leader ' +
     assert.equal(driver.leads(A), true, 'the leader stays');
     assert.equal(driver.status(B).term, termBefore, 'no term moved');
     const command = {after: 'refused-transfer'};
-    assert.equal(driver.propose(A, command).outcome, CORE_OK,
+    assert.equal(driver.propose(A, command).result.outcome, CORE_OK,
       'no transfer window was opened');
     assert.equal(driver.applied(A, command), true);
   } finally {
@@ -111,7 +112,7 @@ test('most-caught-up never names a learner, even one further ahead than ' +
     const learnerId = driver.raftIdAt(A, LEARNER);
     assert.equal(driver.port(A).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: LEARNER,
-    }).outcome, CORE_OK);
+    }).result.outcome, CORE_OK);
     driver.deliver();
     assert.notEqual(driver.roundsUntil(() =>
       driver.status(A).confState.learners.includes(learnerId),
@@ -128,9 +129,9 @@ test('most-caught-up never names a learner, even one further ahead than ' +
       matchedOf(LEARNER) > matchedOf(voter)),
     'precondition: the learner is further ahead than every voter');
     const termBefore = driver.status(A).term;
-    assertAccepted(await driver.port(A).transferLeadership(mostCaughtUp()),
+    assertAccepted(await turnChainValue(driver.port(A).transferLeadership(mostCaughtUp())),
       TRANSFER_REASON.REQUESTED);
-    assertTransferInProgress(driver.propose(A, {during: 'transfer'}));
+    assertTransferInProgress(turnChainValue(driver.propose(A, {during: 'transfer'})));
     driver.heal(B);
     driver.heal(C);
     const voterLeads = () => [B, C].some((voter) => driver.leads(voter));
@@ -153,14 +154,14 @@ async () => {
     const selfId = driver.raftIdAt(A, A);
     assert.equal(driver.port(A).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A,
-    }).outcome, CORE_OK);
+    }).result.outcome, CORE_OK);
     driver.deliver();
     const status = driver.status(A);
     assert.equal(status.confState.voters.includes(selfId), false,
       'precondition: the removal of the leader is committed');
     assert.equal(status.role, RAFT_ROLE.LEADER,
       'precondition: raft-rs keeps the removed leader leading');
-    const answer = driver.propose(A, {on: 'removed-leader'});
+    const answer = turnChainValue(driver.propose(A, {on: 'removed-leader'}));
     assert.equal(answer.outcome, CORE_REFUSED, JSON.stringify(answer));
     assert.notEqual(answer.reason, IN_PROGRESS_REASON,
       'no transfer runs: the drop is the removal\'s');
@@ -195,7 +196,7 @@ test('a candidate answers its dropped proposal as the core\'s refusal, ' +
     // a proposal there exactly as it does at a candidate (step_candidate).
     assert.equal(driver.status(B).role, PRE_CANDIDATE_ROLE,
       'precondition: B stands for election and cannot win cut off');
-    assertNotTransferDrop(driver.propose(B, {on: 'candidate'}));
+    assertNotTransferDrop(turnChainValue(driver.propose(B, {on: 'candidate'})));
   } finally {
     driver.dispose();
   }
@@ -209,7 +210,7 @@ test('a follower that knows no leader answers its dropped proposal as the ' +
     const status = driver.status(B);
     assert.equal(status.role, RAFT_ROLE.FOLLOWER);
     assert.equal(status.leaderId, null, 'precondition: no leader is known');
-    assertNotTransferDrop(driver.propose(B, {on: 'leaderless'}));
+    assertNotTransferDrop(turnChainValue(driver.propose(B, {on: 'leaderless'})));
   } finally {
     driver.dispose();
   }

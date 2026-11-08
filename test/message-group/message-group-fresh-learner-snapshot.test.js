@@ -30,6 +30,7 @@ import {RAFT_MEMBERSHIP_OPERATION, RAFT_OPERATION_OUTCOME} from
 import {ReplicaCreateAdmissionOwner} from
   '../../src/node/replica-create-admission-owner.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {TEST_BOOT_INCARNATION} from
   '../test-helpers/boot-incarnation-fixture.js';
 
@@ -148,8 +149,8 @@ test('fresh message-group learner installs a transferred raft-rs image and ' +
       service.raft.readStatus().role === 'leader');
     const targetPeer = new RaftRsPeerIdentityRegistry(leader.db)
       .registerReplica(TARGET);
-    const proposed = await leader.raft.proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: TARGET});
+    const proposed = await turnChainValue(leader.raft.proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: TARGET}));
     assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.equal(await waitFor(() => leader.raft.readStatus().confState.learners
       .includes(targetPeer)), true, 'the live leader commits the learner');

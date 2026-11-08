@@ -19,6 +19,7 @@ import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
 import {acknowledgingCdcSubscriber} from '../test-helpers/acknowledging-cdc-subscriber.js';
 import {CDC_TABLE} from '../test-helpers/participant-transaction-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const PARTITION_ID = 'cdc-admission-native';
 const NODE_ID = 'cdc-admission-node';
@@ -96,10 +97,10 @@ test('native RF3 bounds owed admission and commits drain markers on every replic
     service.db.prepare(`SELECT * FROM ${CDC_TABLE} WHERE id = ?`).get('extra') === undefined));
   const successor = group.services.find((service) => service !== leader);
   const termBefore = leader.raft.readStatus().term;
-  const transfer = await leader.raft.transferLeadership({
+  const transfer = await turnChainValue(leader.raft.transferLeadership({
     successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
     replicaIdentity: successor.replicaId,
-  });
+  }));
   assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
   assert.equal(await group.waitFor(() => successor.raft.readStatus().role === RAFT_ROLE.LEADER &&
     successor.raft.readStatus().term > termBefore), true, 'native successor actually leads');

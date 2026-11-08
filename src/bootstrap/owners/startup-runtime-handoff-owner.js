@@ -12,6 +12,9 @@ const TRANSACTION_RECOVERY_STATE = Object.freeze({
   COMPLETED: 'completed',
   FAILED: 'failed',
 });
+// The answer of an activation asked for before any engine can recover: no
+// replay ran, so there is no summary.
+const DORMANT_TRANSACTION_RECOVERY = Promise.resolve(null);
 
 class StartupRuntimeHandoffOwner {
   constructor(options = {}) {
@@ -228,30 +231,33 @@ class StartupRuntimeHandoffOwner {
     this.transactionRecoveryOutcome = null;
   }
 
+  /**
+   * Track one recovery replay. `action` is the engine's activation: it throws
+   * a fatal synchronously or answers the promise of its replay summary
+   * (SqlQueryEngine.activateDistributedTransactionRecovery).
+   * @param {function(): Promise<Object>} action - The activation.
+   * @return {Promise<Object>} The replay summary, recorded on settlement.
+   */
   trackDistributedTransactionRecovery(action) {
     this.transactionRecoveryState = TRANSACTION_RECOVERY_STATE.PENDING;
     this.transactionRecoverySummary = null;
     this.transactionRecoveryErrorCode = null;
     this.transactionRecoveryErrorMessage = null;
     this.transactionRecoveryOutcome = null;
-    let result;
+    let replay;
     try {
-      result = action();
+      replay = action();
     } catch (error) {
       this.recordDistributedTransactionRecoveryFailure(error);
       throw error;
     }
-    if (result && typeof result.then === LOCAL_STR_FUNCTION) {
-      return result.then((summary) => {
-        this.recordDistributedTransactionRecoveryCompletion(summary);
-        return summary;
-      }).catch((error) => {
-        this.recordDistributedTransactionRecoveryFailure(error);
-        throw error;
-      });
-    }
-    this.recordDistributedTransactionRecoveryCompletion(result);
-    return result;
+    return replay.then((summary) => {
+      this.recordDistributedTransactionRecoveryCompletion(summary);
+      return summary;
+    }).catch((error) => {
+      this.recordDistributedTransactionRecoveryFailure(error);
+      throw error;
+    });
   }
 
   getDistributedTransactionRecoverySnapshot() {
@@ -273,6 +279,13 @@ class StartupRuntimeHandoffOwner {
     });
   }
 
+  /**
+   * Activate distributed transaction recovery once. A synchronous fatal of
+   * the activation is rethrown (and again on every later call); otherwise the
+   * answer is a promise on every path: the replay's summary, or null when no
+   * engine can recover yet (the activation stays dormant).
+   * @return {Promise<Object|null>} The replay summary, or null while dormant.
+   */
   activateDistributedTransactionRecovery() {
     if (this.transactionRecoveryActivationStarted) {
       if (this.transactionRecoveryActivationError) {
@@ -283,7 +296,7 @@ class StartupRuntimeHandoffOwner {
     if (
       this.delegates.isDistributedTransactionRecoveryAvailable?.() === false
     ) {
-      return null;
+      return DORMANT_TRANSACTION_RECOVERY;
     }
     const override = this.getCompatibilityOverride(
       'activateDistributedTransactionRecovery',
@@ -291,7 +304,7 @@ class StartupRuntimeHandoffOwner {
     const activate = override ||
       this.delegates.activateDistributedTransactionRecovery;
     if (typeof activate !== LOCAL_STR_FUNCTION) {
-      return null;
+      return DORMANT_TRANSACTION_RECOVERY;
     }
     this.transactionRecoveryActivationStarted = true;
     try {
@@ -299,11 +312,9 @@ class StartupRuntimeHandoffOwner {
         () => activate(),
       );
       this.transactionRecoveryActivationResult = result;
-      if (result && typeof result.catch === LOCAL_STR_FUNCTION) {
-        void result.catch((error) => {
-          this.transactionRecoveryActivationError = error;
-        });
-      }
+      void result.catch((error) => {
+        this.transactionRecoveryActivationError = error;
+      });
       return result;
     } catch (error) {
       this.transactionRecoveryActivationError = error;

@@ -4,6 +4,7 @@ import {setImmediate as nextTurn} from 'node:timers/promises';
 import {ReplicaHandler} from '../../../src/node/replica-handler.js';
 import {SystemTableCache} from '../../../src/cache/system-table-cache.js';
 import {createFixture, buildService} from './startup-cleanup-native-fixture.js';
+import {pendingTurn, turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 function handlerFor(fixture, createPartitionService) {
   return new ReplicaHandler({
@@ -55,10 +56,9 @@ for (const kind of ['partition', 'message-group']) {
     service.createOperationPort = (request) => {
       const port = create(request);
       const campaign = port.campaign;
-      return Object.freeze({...port, campaign: async (...args) => {
+      return Object.freeze({...port, campaign: (...args) => {
         enteredResolve();
-        await gate;
-        return campaign(...args);
+        return pendingTurn(gate.then(() => turnChainValue(campaign(...args))));
       }});
     };
     const initializing = service.initialize();

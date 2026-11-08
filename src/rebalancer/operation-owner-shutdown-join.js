@@ -48,9 +48,9 @@ function snapshotInFlightLaneExecutions(inFlightExecutionsByOwnerKey) {
   if (!(inFlightExecutionsByOwnerKey instanceof Map)) {
     return [];
   }
-  return Array.from(inFlightExecutionsByOwnerKey.values()).filter(
-    (execution) => typeof execution?.then === 'function',
-  );
+  // Every lane entry is the promise its single-flight gate tracks
+  // (DurableWorkflowCoordinator.runExclusive is the map's one writer).
+  return Array.from(inFlightExecutionsByOwnerKey.values());
 }
 
 function buildShutdownJoinDeadline(nowMs, timeoutMs) {

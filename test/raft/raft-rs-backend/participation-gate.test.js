@@ -64,6 +64,7 @@ import {
 import {OperationType} from
   '../../../src/rebalancer/replica-operation-progress.js';
 import {SERVICE_TYPE} from '../../../src/constants/index.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const PARTITION_ID = 'o1-gate-partition';
 const SETTLE_ROUNDS = 600;
@@ -266,12 +267,12 @@ test('T4 (H6, |D|=2): a target below its gate on the silent-skew prefix ' +
     tickIsolatedTarget(cluster);
     assert.deepEqual(termAndVote(targetDurable(cluster)), termAndVote(before),
       'O-d: no term and no vote while below the gate');
-    const campaign = cluster.node(TARGET).campaign();
+    const campaign = turnChainValue(cluster.node(TARGET).campaign());
     assert.equal(campaign.reason, PARTICIPATION_GATE.GATE_CLOSED,
       'an explicit campaign below the gate is refused typed');
     assert.deepEqual(termAndVote(targetDurable(cluster)), termAndVote(before),
       'O-d: the refused campaign raised no term');
-    const write = cluster.node(TARGET).propose('below-the-gate');
+    const write = turnChainValue(cluster.node(TARGET).propose('below-the-gate'));
     assert.equal(write.reason, PARTICIPATION_GATE.GATE_CLOSED,
       'a write below the gate is refused typed, not a generic unavailability');
     assert.notEqual(roleOf(cluster, TARGET), LEADER_ROLE);
@@ -311,7 +312,7 @@ test('T4 (commit lag): a caught-up target between j and its own AddNode ' +
     const opened = [];
     cluster.node(TARGET).subscribe(RAFT_EVENT.GATE_OPENED, (event) =>
       opened.push({event, at: Date.now(), intervalsBefore: intervals.length}));
-    const asked = cluster.node(TARGET).startScheduling();
+    const asked = turnChainValue(cluster.node(TARGET).startScheduling());
 
     // The target holds the whole log, its own AddNode included, but learns
     // commit only up to the entry before it: nothing is pending for the
@@ -380,7 +381,7 @@ function trapCoreThrough(cluster, replicaId) {
   const originalConsoleError = console.error;
   try {
     console.error = () => undefined;
-    return cluster.node(replicaId).tick();
+    return turnChainValue(cluster.node(replicaId).tick());
   } finally {
     console.error = originalConsoleError;
   }

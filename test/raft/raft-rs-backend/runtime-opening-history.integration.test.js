@@ -12,6 +12,7 @@ import {RAFT_RS_TABLE} from '../../../src/raft/raft-rs-durable-store-constants.j
 import {RAFT_OPERATION_OUTCOME as OUTCOME} from '../../../src/raft/raft-operation-port-constants.js';
 import {CORE_REFUSAL_KIND} from '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {prepareReplicaLifecycleForSnapshot} from '../../../src/raft/raft-rs-replica-lifecycle-owner.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'native-opening-history-'));
@@ -113,15 +114,15 @@ for (const failAfterWrite of [false, true]) {
       'the failed unpublished native node is released exactly once');
     assert.equal(f.db.pragma('synchronous', {simple: true}), 1, 'the connection setting is restored');
     failing = false;
-    const port = f.open(); await port.campaign();
-    assert.equal((await port.propose('after-rollback')).outcome, OUTCOME.CORE_OK);
+    const port = f.open(); await turnChainValue(port.campaign());
+    assert.equal((await turnChainValue(port.propose('after-rollback'))).outcome, OUTCOME.CORE_OK);
     assert.deepEqual(applicationRows(f.db), ['after-rollback']);
   });
 }
 
 for (const lose of [false, true]) {
   test(`legacy lifecycle with ${lose ? 'lost' : 'intact'} native record`, async (t) => {
-    const f = fixture(t); const port = f.open(); await port.campaign(); await port.propose('legacy-committed');
+    const f = fixture(t); const port = f.open(); await turnChainValue(port.campaign()); await turnChainValue(port.propose('legacy-committed'));
     const before = lifecycle(f.db); port.close(); makeLegacy(f.db);
     if (lose) {
       loseRows(f.db);
@@ -136,7 +137,7 @@ for (const lose of [false, true]) {
 }
 
 test('established lifecycle with all native tables lost refuses before native entry', async (t) => {
-  const f = fixture(t); const port = f.open(); await port.campaign(); await port.propose('before-table-loss'); port.close();
+  const f = fixture(t); const port = f.open(); await turnChainValue(port.campaign()); await turnChainValue(port.propose('before-table-loss')); port.close();
   for (const table of Object.values(RAFT_RS_TABLE)) f.db.exec(`DROP TABLE ${table}`);
   assertLost(f); assert.deepEqual(applicationRows(f.db), ['before-table-loss']);
 });
@@ -153,11 +154,11 @@ test('identity-record acknowledgement still gates participation after local esta
   const port = f.open({identityRecorded: pending});
   assert.equal(lifecycle(f.db).native_history_state, 'established');
   const before = f.entries.length;
-  const refused = await port.campaign();
+  const refused = await turnChainValue(port.campaign());
   assert.equal(refused.outcome, OUTCOME.CORE_REFUSED);
   assert.equal(f.entries.length, before, 'local durable establishment does not grant missing host permission');
   acknowledge(); await Promise.resolve(); await Promise.resolve();
-  assert.equal((await port.campaign()).outcome, OUTCOME.CORE_OK);
+  assert.equal((await turnChainValue(port.campaign())).outcome, OUTCOME.CORE_OK);
 });
 
 test('unreadable exact lifecycle history is typed and cannot open native genesis', (t) => {

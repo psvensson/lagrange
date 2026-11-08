@@ -1,4 +1,5 @@
 import {deepFreeze} from '../raft/raft-operation-port.js';
+import {settledTurn} from '../raft/raft-rs-turn-answer.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../raft/raft-operation-port-constants.js';
 
@@ -34,11 +35,12 @@ class PartitionServiceLeadershipTransferMethods {
    * leadership.
    * @param {Object} successor - {successor, replicaIdentity?}, the port's
    *   canonical transfer request.
-   * @return {Object|Promise<Object>} The port's frozen outcome record.
+   * @return {Object} The port's turn of its frozen outcome record
+   *   (raft-rs-turn-answer.js); NO_CONSENSUS_PORT_ANSWER settled without one.
    */
   requestLeadershipTransfer(successor) {
     if (!this.raft) {
-      return NO_CONSENSUS_PORT_ANSWER;
+      return settledTurn(NO_CONSENSUS_PORT_ANSWER);
     }
     return this.raft.transferLeadership(successor);
   }

@@ -42,6 +42,7 @@ import {
   runToQuiescenceWithSweeps,
   settleTurns,
 } from './replace-real-group-harness.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const ATTEMPT_ROUNDS = 6;
 
@@ -158,7 +159,7 @@ async function runRf1Replace(t, {sourceHandler, label}) {
     const targetReplica = world.group.cluster.replica(world.targetReplicaId);
     const applied = () => targetReplica.appliedCommands.some((command) =>
       JSON.stringify(command).includes(marker));
-    await world.group.cluster.propose(world.targetReplicaId, marker);
+    await turnChainValue(world.group.cluster.propose(world.targetReplicaId, marker));
     world.group.settle(applied, 200);
     t.equal(applied(), true,
       `${label}: the partition keeps quorum (a write through the target ` +

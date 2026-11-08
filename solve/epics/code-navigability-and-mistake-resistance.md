@@ -228,3 +228,12 @@ They are recorded, not in scope (R17); the readiness chain is the pilot.
   chain was repaired first at c0c2a8ad6 (import-graph producer: a module
   resolving outside the repository root is never a node); the budget-check
   quest landed on it as 86ee709c8.
+- 2026-11-08: always-promise ruling. Two probes by the implementer showed that
+  an always-asynchronous raft turn changes raft timing (status reads see
+  delivered inbound later; the synchronous evidence harnesses break). The
+  pattern is feature detection on the answer, so the replacement is a named
+  settled-or-pending answer produced once at the producer (R07) for
+  synchronous-when-possible turns, always-promise for I/O producers, and a
+  registration-time apply-mode declaration instead of per-entry sniffing.
+  The row definition widens to the variant shapes (`?.then`, `.catch`,
+  truthiness on `.then`, `instanceof Promise`) in a budget-check correction.

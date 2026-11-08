@@ -40,6 +40,7 @@ import {
   readAuthoritativelyFrom,
   turns,
 } from './workflow-record-sqlite-world.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const {RaftRole} = PARTITION_SERVICE_SHARED;
 const QUIET = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
@@ -288,7 +289,7 @@ test('stale split and merge delta replay uses the target registry and ' +
     }));
     await target.initialize();
     try {
-      await target.raft.campaign();
+      await turnChainValue(target.raft.campaign());
       await resumeFixtureParticipantAdmission(target);
       const queryExecutor = {executeOnPartition: async (
         partitionId, sql, params, _forRead, _preferLeader,

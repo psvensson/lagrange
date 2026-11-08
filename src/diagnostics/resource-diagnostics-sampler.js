@@ -384,10 +384,10 @@ class ResourceDiagnosticsSampler {
       if (!componentRef || typeof componentRef.getStats !== LOCAL_STR_FUNCTION) {
         continue;
       }
+      // A component's stats are a synchronous snapshot on every owner that
+      // carries getStats.
       const componentStats = componentRef.getStats();
-      if (!componentStats ||
-        typeof componentStats !== LOCAL_STR_OBJECT ||
-        typeof componentStats.then === LOCAL_STR_FUNCTION) {
+      if (!componentStats || typeof componentStats !== LOCAL_STR_OBJECT) {
         continue;
       }
       stats[component.name] = componentStats;

@@ -20,6 +20,7 @@ import {
   messageGroupCommandRefusalError,
 } from './message-group-committed-command-admission.js';
 import {RetryStatus} from './message-retry-handler.js';
+import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const PROPOSAL_DEADLINE_WAIT = Object.freeze({
   wait: 'proposeTimeoutMs (MESSAGE_GROUP_DELIVERY_TIMEOUT_MS / attempts)',
@@ -117,7 +118,7 @@ function proposalRefusalError(service, answer) {
  */
 async function proposeMessageGroupCommand(service, command) {
   assertMessageGroupCommandAdmitted(command);
-  const answer = await Promise.resolve(service.raft.propose(command));
+  const answer = await turnChainValue(service.raft.propose(command));
   if (answer?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
     throw proposalRefusalError(service, answer);
   }

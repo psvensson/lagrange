@@ -320,7 +320,7 @@ const queryExecutorSqlCommandMethods = {
         this.buildExpressionSQL(cond.when);
       sql +=
         QUERY_EXECUTOR_LITERAL.STRING_THEN +
-        this.buildExpressionSQL(cond.then);
+        this.buildExpressionSQL(cond.thenExpression);
     }
     if (expr.elseExpr) {
       sql +=

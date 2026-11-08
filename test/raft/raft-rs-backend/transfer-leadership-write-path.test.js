@@ -31,6 +31,7 @@ import {RAFT_RS_TRANSPORT_PROTOCOL} from
   '../../../src/raft/raft-rs-ingress-constants.js';
 import {tuningOf} from '../../../src/raft/raft-rs-runtime-tuning.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const {RAFT_OPERATION_OUTCOME} = portConstants;
 const ROOT = path.resolve(
@@ -88,21 +89,21 @@ async function assertBoundedRetryableWindow(cluster, label) {
   const electionTick = electionTickOf(cluster);
   const port = cluster.node(LEADER);
   for (let tick = 0; tick < electionTick - 1; tick += 1) {
-    const write = await port.propose({during: `${label}-${tick}`});
+    const write = await turnChainValue(port.propose({during: `${label}-${tick}`}));
     assert.equal(transferInProgress(write), true,
       `${label}: a proposal during the transfer (tick ${tick}) is the ` +
       `named retryable outcome, got ${JSON.stringify(write)}`);
-    await port.tick();
+    await turnChainValue(port.tick());
   }
-  assert.equal(transferInProgress(await port.proposeConfChange(
-    LEARNER_CHANGE)), true,
+  assert.equal(transferInProgress(await turnChainValue(port.proposeConfChange(
+    LEARNER_CHANGE))), true,
   `${label}: a configuration change during the transfer is retryable too`);
   assert.equal(cluster.coreStatus(LEADER).lead, before.lead,
     `${label}: the leader is unchanged while the transfer runs`);
   assert.equal(cluster.coreStatus(LEADER).term, before.term,
     `${label}: the term is unchanged while the transfer runs`);
-  await port.tick();
-  const after = await port.propose({after: label});
+  await turnChainValue(port.tick());
+  const after = await turnChainValue(port.propose({after: label}));
   assert.equal(after.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     `${label}: one election timeout later the aborted transfer leaves the ` +
     `leader fit to take writes (${JSON.stringify(after)})`);
@@ -126,14 +127,14 @@ test('a proposal the leader drops during a peer-delivered transfer is the ' +
     // transfer request to its leader stamps it with its term (raft.rs
     // send(): every message but MsgPropose, MsgReadIndex and the vote family
     // gets m.term = self.term); the ingress refuses a term-less one.
-    const delivered = cluster.node(LEADER).step({
+    const delivered = turnChainValue(cluster.node(LEADER).step({
       protocol: RAFT_RS_TRANSPORT_PROTOCOL,
       groupId: cluster.partitionId,
       from: transfereeId,
       to: leaderId,
       message: {msgType: transferLeaderMessageType(), from: transfereeId,
         to: leaderId, term: String(cluster.coreStatus(TRANSFEREE).term)},
-    });
+    }));
     assert.equal(delivered.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       'setup: the leader admits the transfer request a peer delivered');
     await assertBoundedRetryableWindow(cluster, 'peer-delivered');
@@ -147,10 +148,10 @@ test('a proposal the leader drops during a transfer it was asked for ' +
   const cluster = formedCluster('transfer-write-path-port-requested');
   try {
     cluster.isolate(TRANSFEREE);
-    const accepted = await cluster.node(LEADER).transferLeadership({
+    const accepted = await turnChainValue(cluster.node(LEADER).transferLeadership({
       successor: portConstants.RAFT_LEADERSHIP_TRANSFER_SUCCESSOR?.NAMED,
       replicaIdentity: TRANSFEREE,
-    });
+    }));
     assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `setup: the leader accepts the transfer (${JSON.stringify(accepted)})`);
     await assertBoundedRetryableWindow(cluster, 'port-requested');
@@ -164,7 +165,7 @@ test('a replica that knows no leader still refuses a proposal terminally',
     const cluster = new PartitionNodeCluster({
       partitionId: 'transfer-write-path-no-leader', replicaIds: REPLICAS});
     try {
-      const refused = await cluster.node(FOLLOWER).propose({orphan: true});
+      const refused = await turnChainValue(cluster.node(FOLLOWER).propose({orphan: true}));
       assert.equal(refused.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED,
         'a follower with no leader drops the proposal as the core refused it');
       assert.equal(refused.retryable, false,

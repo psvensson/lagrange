@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 118,
     "architecture-governance": 21,
-    "bootstrap-membership": 330,
+    "bootstrap-membership": 331,
     "cdc-metadata": 67,
     "cli-tooling": 99,
     "control-plane": 225,
@@ -19,16 +19,16 @@
     "services-runtime": 158,
     "solver-tooling": 7,
     "storage-partition": 208,
-    "storage-raft": 148,
-    "test-infrastructure": 161,
+    "storage-raft": 152,
+    "test-infrastructure": 162,
     "transactions": 17,
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2565,
-  "digest": "fnv1a32-34a9be35",
+  "censusSize": 2571,
+  "digest": "fnv1a32-4052984d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2cf65e4f",
+  "observationDigest": "fnv1a32-3e5dd68e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -263,6 +263,7 @@
     "test/bootstrap/production-scheduling-defaults.test.js": "bootstrap-membership",
     "test/bootstrap/query-state-single-owner.test.js": "bootstrap-membership",
     "test/bootstrap/readiness-handoff-liveness-witness.test.js": "bootstrap-membership",
+    "test/bootstrap/readiness-service-sync-reads.test.js": "bootstrap-membership",
     "test/bootstrap/register-node-in-cluster.test.js": "bootstrap-membership",
     "test/bootstrap/register-service-move-handoff-refused.test.js": "bootstrap-membership",
     "test/bootstrap/rejoin-hints.test.js": "bootstrap-membership",
@@ -1734,6 +1735,7 @@
     "test/raft/raft-rs-backend/operation-port-regression.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-status-observation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-throw-containment.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/operation-port-turn-answers.test.js": "storage-raft",
     "test/raft/raft-rs-backend/original-handoff-lifecycle-claim.test.js": "storage-raft",
     "test/raft/raft-rs-backend/participation-gate.test.js": "storage-raft",
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": "storage-raft",
@@ -1762,6 +1764,7 @@
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "storage-raft",
     "test/raft/raft-rs-backend/stampless-opening-refusal.test.js": "storage-raft",
     "test/raft/raft-rs-backend/startup-cleanup.integration.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/status-read-never-waits.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js": "storage-raft",
@@ -1773,6 +1776,7 @@
     "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": "storage-raft",
     "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js": "storage-raft",
+    "test/raft/raft-rs-lifecycle-turn-admission.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-cold-inspection.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-custody.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-lifecycle-operation.test.js": "storage-raft",
@@ -1782,6 +1786,7 @@
     "test/raft/raft-rs-original-opening-effect-cut.test.js": "storage-raft",
     "test/raft/raft-rs-original-opening.test.js": "storage-raft",
     "test/raft/raft-rs-peer-delivery-transport-outcome.test.js": "storage-raft",
+    "test/raft/raft-rs-turn-answer.test.js": "storage-raft",
     "test/raft/replica-voter-readiness.test.js": "storage-raft",
     "test/raft/snapshot-boundary-observability.test.js": "storage-raft",
     "test/raft/snapshot-cadence.test.js": "storage-raft",
@@ -2247,6 +2252,7 @@
     "test/scripts/distributed-matrix-cli.test.js": "test-infrastructure",
     "test/scripts/dt-prove.test.js": "test-infrastructure",
     "test/scripts/effective-placement-serial-priority-planner-scenario.test.js": "test-infrastructure",
+    "test/scripts/eslint-value-or-promise-selector.test.js": "test-infrastructure",
     "test/scripts/evidence-relocation-acceptance.test.js": "test-infrastructure",
     "test/scripts/evidence-relocation.test.js": "test-infrastructure",
     "test/scripts/exact-election-evidence-same-turn-model-contract.test.js": "test-infrastructure",
@@ -14022,6 +14028,7 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-turn-answer.js",
         "src/transport/transport-semantic-outcome.js"
       ]
     },
@@ -14068,15 +14075,25 @@
     "test/raft/raft-rs-backend/operation-port-throw-containment.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
-        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
         "src/raft/raft-rs-runtime-tuning.js"
       ]
     },
+    "test/raft/raft-rs-backend/operation-port-turn-answers.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
     "test/raft/raft-rs-backend/original-handoff-lifecycle-claim.test.js": {
       "files": [
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-lifecycle-administration.js"
       ]
     },
@@ -14103,7 +14120,6 @@
         "src/partition/partition-service-core-base.js",
         "src/partition/partition-service.js",
         "src/raft/raft-committed-membership-stamp.js",
-        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-operation-port.js"
       ],
       "directories": [
@@ -14328,6 +14344,7 @@
     },
     "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js": {
       "files": [
+        "src/raft/raft-operation-port-request.js",
         "test/raft/raft-rs-backend/opening-history-process-child.js"
       ]
     },
@@ -14460,6 +14477,20 @@
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/status-read-never-waits.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/transport/transport-semantic-outcome.js"
       ]
@@ -14690,6 +14721,7 @@
     "test/raft/raft-rs-original-opening-authority.test.js": {
       "files": [
         "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-original-allocation-preparation.js",
@@ -14701,6 +14733,7 @@
     "test/raft/raft-rs-original-opening-effect-cut.test.js": {
       "files": [
         "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-original-allocation-preparation.js",
@@ -14711,6 +14744,7 @@
     "test/raft/raft-rs-original-opening.test.js": {
       "files": [
         "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-original-allocation-preparation.js",
@@ -17047,7 +17081,9 @@
       "files": [
         "scripts/check-guideline-navigability.js",
         "scripts/checks/code-navigability-detectors.js",
-        "scripts/guideline-check-shared.js"
+        "scripts/checks/code-navigability-eslint-promotion.js",
+        "scripts/guideline-check-shared.js",
+        "src/index.js"
       ],
       "directories": [
         "scripts",
@@ -17244,6 +17280,7 @@
         "src/INDEX.md",
         "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-rs-group-membership-admission.js",
+        "src/raft/raft-rs-turn-answer.js",
         "test/distributed/harness/failure-bundle-artifact-foundation.js"
       ],
       "directories": [
@@ -17252,6 +17289,9 @@
       ]
     },
     "test/scripts/code-navigability-detectors.test.js": {
+      "files": [
+        "src/raft/raft-rs-turn-answer.js"
+      ],
       "directories": [
         "src"
       ]
@@ -17353,6 +17393,11 @@
       ],
       "directories": [
         "src"
+      ]
+    },
+    "test/scripts/eslint-value-or-promise-selector.test.js": {
+      "files": [
+        "src/raft/raft-rs-turn-answer.js"
       ]
     },
     "test/scripts/evidence-relocation-acceptance.test.js": {

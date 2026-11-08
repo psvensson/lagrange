@@ -26,6 +26,7 @@ import {
 } from './application-database-result.js';
 import {COMMIT_POINT_REACHED_FIELD} from
   './distributed/distributed-transaction-commit-point.js';
+import {turnFromForeignAnswer} from '../raft/raft-rs-turn-answer.js';
 
 const LOCAL_STR_BEGIN = 'BEGIN';
 const LOCAL_STR_COMMIT = 'COMMIT';
@@ -69,7 +70,7 @@ const queueMicrotaskFunction = queueMicrotask;
 const reflectApply = Reflect.apply;
 const weakSetAdd = WeakSet.prototype.add;
 const weakSetHas = WeakSet.prototype.has;
-const {isPromise, isProxy} = utilTypes;
+const {isProxy} = utilTypes;
 const CALLBACK_SETTLEMENT_STATE = objectFreeze({
   INACTIVE: 'inactive',
   PENDING: 'pending',
@@ -263,31 +264,6 @@ async function rollbackAndThrow(sqlCore, record, controlOptions, error) {
   throw primaryError;
 }
 
-function classifyCallbackResult(value) {
-  if (isPromise(value)) {
-    return {pending: reflectApply(promiseResolve, PromiseConstructor, [value])};
-  }
-  if (
-    value === null ||
-    (typeof value !== 'object' && typeof value !== 'function')
-  ) {
-    return {value};
-  }
-  const then = value.then;
-  if (typeof then !== 'function') return {value};
-  return {
-    pending: new PromiseConstructor((resolve, reject) => {
-      queueMicrotaskFunction(() => {
-        try {
-          reflectApply(then, value, [resolve, reject]);
-        } catch (error) {
-          reject(error);
-        }
-      });
-    }),
-  };
-}
-
 function closeCallbackAdmission(record) {
   if (record.state === APPLICATION_DATABASE_TRANSACTION_STATE.OPEN) {
     record.state = APPLICATION_DATABASE_TRANSACTION_STATE.DRAINING;
@@ -364,8 +340,10 @@ function createCallbackSettlementOwner(record) {
 
   function observe(invoke) {
     try {
-      const settlement = classifyCallbackResult(invoke());
-      if (!objectHasOwn(settlement, FAILURE_METADATA_PROPERTY.PENDING)) {
+      // A user callback's result has an unknown shape: the foreign-answer
+      // adapter names it once, as a settled or pending turn.
+      const settlement = turnFromForeignAnswer(invoke());
+      if (settlement.settled) {
         close();
         return settlement;
       }
@@ -550,11 +528,8 @@ function createApplicationDatabaseFacade(options) {
                   queryInTransaction(record, sql, params),
               })]),
             ));
-          if (objectHasOwn(settlement, FAILURE_METADATA_PROPERTY.PENDING)) {
-            callbackResult = await settlement.pending;
-          } else {
-            callbackResult = settlement.value;
-          }
+          callbackResult = settlement.settled ? settlement.result :
+            await settlement.pending;
           settlementOwner.close();
         } catch (error) {
           record.failedError ||= normalizeCallbackFailure(error);

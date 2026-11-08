@@ -16,6 +16,7 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 /**
  * Attach the production release recipient/recovery owners to a fixture group.
@@ -92,7 +93,7 @@ async function attachPartitionReleaseOwners(services, {directory, budgetMs}) {
   try {
     await control.initialize();
     host(control);
-    await control.raft.campaign();
+    await turnChainValue(control.raft.campaign());
     assert.equal(control.raft.readStatus().role, RAFT_ROLE.LEADER);
   } catch (error) {
     try {

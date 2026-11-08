@@ -51,6 +51,7 @@ import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {PARTICIPATION_GATE} from
   '../../../src/raft/raft-committed-membership-constants.js';
 
@@ -104,14 +105,14 @@ function assertGatedAtCut(cluster, target, leader, members, cut, j) {
     }
   }
   assert.equal(leaderOf(cluster), leader, 'the leader is unchanged');
-  const campaign = cluster.node(target).campaign();
+  const campaign = turnChainValue(cluster.node(target).campaign());
   assert.equal(campaign.reason, PARTICIPATION_GATE.GATE_CLOSED,
     `an explicit campaign is refused typed at cut ${cut}`);
-  const tick = cluster.node(target).tick();
+  const tick = turnChainValue(cluster.node(target).tick());
   assert.equal(tick.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     'a tick of the gated learner core enters the core (its time runs)');
   assert.notEqual(roleOf(cluster, target), LEADER_ROLE);
-  const write = cluster.node(target).propose('below-the-gate');
+  const write = turnChainValue(cluster.node(target).propose('below-the-gate'));
   assert.equal(write.reason, PARTICIPATION_GATE.GATE_CLOSED,
     'a write is refused typed, not as a generic unavailability');
   assert.deepEqual(termAndVote(durableOf(cluster, target).hard),

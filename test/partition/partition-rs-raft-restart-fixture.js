@@ -32,6 +32,7 @@ import {
 import {enableParticipantTransactionAdmission} from
   '../../src/partition/partition-participant-transaction-request.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 
 const TEMP_PREFIX = 'partition-rs-raft-restart-';
@@ -104,7 +105,7 @@ const isGenerationOrigin = (entry) =>
 async function leadAlone(service) {
   const status = await service.raft.readStatus();
   if (status.role !== RAFT_ROLE.LEADER) {
-    assertRaftOperationSucceeded(await service.raft.campaign());
+    assertRaftOperationSucceeded(await turnChainValue(service.raft.campaign()));
   }
   assert.equal((await service.raft.readStatus()).role, RAFT_ROLE.LEADER,
     'a lone voter leads its own group');
@@ -142,7 +143,7 @@ async function restartOverCommittedCommands(options, commands) {
       await leadAlone(first);
       await enableTransactionsWhenCarried(first, commands);
       for (const command of commands) {
-        assertRaftOperationSucceeded(await first.raft.propose(command));
+        assertRaftOperationSucceeded(await turnChainValue(first.raft.propose(command)));
       }
     } finally {
       await first.shutdown();

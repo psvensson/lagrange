@@ -33,6 +33,7 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
 import {durableRecordBootstrap} from '../../src/raft/raft-committed-membership-stamp.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {createLoopbackTransport, waitForCondition} from
   '../partition/partition-service-test-support.js';
 import {NODE_ID, originalDeclaration, memberOf, foundationMutation} from
@@ -128,7 +129,7 @@ for (const tableName of FOUNDATION_TABLES) {
     const first = new PartitionService(withFoundingStamp(options));
     services.push(first);
     await first.initialize();
-    await first.raft.campaign();
+    await turnChainValue(first.raft.campaign());
     assert.equal(first.raft.readStatus().role, RAFT_ROLE.LEADER);
     const enabled = await enableParticipantTransactionAdmission(first);
     assert.equal(enabled.success, true, 'actual ENABLE applies before the held statement');
@@ -152,7 +153,7 @@ for (const tableName of FOUNDATION_TABLES) {
       proposedAt: first.timeSource.now()});
     const fault = holdStatementApplication(first, entryId);
     let proposalOutcome = null;
-    const writing = Promise.resolve().then(() => first.raft.propose(command)).then(
+    const writing = Promise.resolve().then(() => turnChainValue(first.raft.propose(command))).then(
       (answer) => (proposalOutcome = {status: 'fulfilled', answer}),
       (error) => (proposalOutcome = {status: 'rejected', error}));
     pending.push(writing);
@@ -220,7 +221,9 @@ for (const tableName of FOUNDATION_TABLES) {
       },
     };
     reopened.subscribeToCDC(subscriber);
-    if (reopened.raft.readStatus().role !== RAFT_ROLE.LEADER) await reopened.raft.campaign();
+    if (reopened.raft.readStatus().role !== RAFT_ROLE.LEADER) {
+      await turnChainValue(reopened.raft.campaign());
+    }
     const key = getSystemCachePrimaryKeyField(tableName);
     assert.equal(await waitForCondition(() => cache.getAll(tableName).some((row) =>
       row[key] === mutation.data[key]), GROUP_BUDGET_MS), true,

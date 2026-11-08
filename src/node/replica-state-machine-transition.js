@@ -31,6 +31,7 @@ import {
   runPersistedTransitionEffect,
   runSerializedReplicaMutation,
 } from './replica-state-machine-serialization.js';
+import {pendingTurn, settledTurn} from '../raft/raft-rs-turn-answer.js';
 import {clearLeaderOrRecordDebt} from
   './replica-state-machine-leader-clear.js';
 import {createReplicaRowInCdc} from
@@ -325,13 +326,8 @@ function runTransitionAttempt(
         newState === ReplicaState.REMOVED &&
         !isCanonicalLeaderClearSettled(stateMachine, replicaId) ||
       validate && !stateMachine.isValidTransition(currentState, newState)) {
-    return refuseTransition(
-      stateMachine,
-      replicaId,
-      currentState,
-      newState,
-      context,
-    );
+    return settledTurn(refuseTransition(stateMachine, replicaId, currentState,
+      newState, context));
   }
 
   const transitionState = buildTransitionState(
@@ -354,13 +350,13 @@ function runTransitionAttempt(
 
   if (!persist) {
     commit();
-    return true;
+    return settledTurn(true);
   }
-
+  // A persisted transition awaits its durable write on every path.
   const uncertainRemoval = newState === ReplicaState.REMOVING ?
     stateMachine.uncertainRemovingIntentByReplicaId.get(replicaId) : null;
   if (uncertainRemoval) {
-    return resolveUncertainRemovingTransition({
+    return pendingTurn(resolveUncertainRemovingTransition({
       stateMachine,
       replicaId,
       existingState,
@@ -376,10 +372,10 @@ function runTransitionAttempt(
         transitionState,
         context,
         commit,
-      }));
+      })));
   }
-  return runPersistedTransitionEffect(stateMachine, replicaId, newState,
-    context, () => persistTransitionAttempt({
+  return pendingTurn(runPersistedTransitionEffect(stateMachine, replicaId,
+    newState, context, () => persistTransitionAttempt({
       stateMachine,
       replicaId,
       newState,
@@ -388,7 +384,7 @@ function runTransitionAttempt(
       transitionState,
       context,
       commit,
-    }));
+    })));
 }
 
 async function resolveUncertainRemovingTransition({
@@ -495,7 +491,8 @@ function persistTransitionAttempt({
  * @param {string} newState - Target state.
  * @param {Object} context - Additional context.
  * @param {Object} options - Transition options.
- * @return {boolean|Promise<boolean>} True if transition succeeded.
+ * @return {Object} The transition's turn (raft-rs-turn-answer.js): settled
+ *   when it completed within the call, pending while it awaits.
  */
 function applyTransition(stateMachine, replicaId, newState, context = {}, options = {}) {
   const admission = captureReplicaAdmission(stateMachine, replicaId);
@@ -507,25 +504,15 @@ function applyTransition(stateMachine, replicaId, newState, context = {}, option
     currentState,
     context,
     options.expectedSourceEvidence,
-  )) return false;
+  )) return settledTurn(false);
   if (stateMachine.uncertainRemovingIntentByReplicaId.has(replicaId) &&
       newState !== ReplicaState.REMOVING) {
-    return refuseTransition(
-      stateMachine,
-      replicaId,
-      currentState,
-      newState,
-      context,
-    );
+    return settledTurn(refuseTransition(stateMachine, replicaId, currentState,
+      newState, context));
   }
   if (validate && !stateMachine.isValidTransition(currentState, newState)) {
-    return refuseTransition(
-      stateMachine,
-      replicaId,
-      currentState,
-      newState,
-      context,
-    );
+    return settledTurn(refuseTransition(stateMachine, replicaId, currentState,
+      newState, context));
   }
 
   // CL-021: serialize this row's durable writes against the local-only

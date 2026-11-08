@@ -2,6 +2,7 @@ import t from 'tap';
 import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 import {connectRaftRsNetwork} from '../test-helpers/raft-rs-network-host.js';
 import {RAFT_RS_MESSAGE_TYPE} from '../../src/raft/raft-rs-ingress-constants.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 // CL-042 — the election restriction against an empty-log higher-term candidate, on real raft-rs
 // operation ports (solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-042.md).
@@ -62,7 +63,7 @@ t.test('replicas holding a committed entry refuse an empty-log higher-term candi
     host.campaign('L');
     await host.runUntil(100);
     t.ok(host.isLeader('L'), 'L leads');
-    Promise.resolve(host.propose('L', {tag: 'X'})).catch(() => undefined);
+    Promise.resolve(turnChainValue(host.propose('L', {tag: 'X'}))).catch(() => undefined);
     await host.runUntil(ISOLATED_UNTIL_MS);
     t.ok(committedTags(host, 'L').includes('X') && committedTags(host, 'V').includes('X'),
       'the leader and its voter committed X');
@@ -73,11 +74,11 @@ t.test('replicas holding a committed entry refuse an empty-log higher-term candi
     // isolated empty-log node a real candidate at the next term.
     for (let forced = 0; forced < FORCED_ELECTIONS; forced += 1) {
       const c = host.status('C');
-      await host.cluster.node('C').step({groupId: PARTITION_ID,
+      await turnChainValue(host.cluster.node('C').step({groupId: PARTITION_ID,
         from: host.status('L').peerId, to: c.peerId,
         message: {msgType: RAFT_RS_MESSAGE_TYPE.TIMEOUT_NOW,
           from: host.status('L').peerId, to: c.peerId,
-          term: String(Math.max(c.term, host.term('L')))}});
+          term: String(Math.max(c.term, host.term('L')))}}));
       await host.runUntil(net.now() + SAMPLE_MS);
     }
     t.ok(host.term('C') > host.term('L'),

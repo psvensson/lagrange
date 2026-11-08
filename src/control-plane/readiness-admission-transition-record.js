@@ -60,6 +60,8 @@
  * generation or any equality that decides reuse.
  */
 
+import {turnFromForeignAnswer} from '../raft/raft-rs-turn-answer.js';
+
 const arrayPush = Function.call.bind(Array.prototype.push);
 const mapDelete = Function.call.bind(Map.prototype.delete);
 const mapGet = Function.call.bind(Map.prototype.get);
@@ -311,8 +313,11 @@ function emit(owner, record, message, payload) {
     }
     const emitted = logger.info(message, payload);
     record.droppedLineCount = NO_DROPPED_LINES;
-    if (typeof emitted?.then === 'function') {
-      emitted.then(undefined, () => {
+    // An installed sink's answer is foreign: the foreign-answer adapter names
+    // it, and a pending one that rejects is a dropped line.
+    const answered = turnFromForeignAnswer(emitted);
+    if (!answered.settled) {
+      answered.pending.then(undefined, () => {
         record.droppedLineCount += 1;
       });
     }

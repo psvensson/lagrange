@@ -78,6 +78,7 @@ documentClass: generated
 - [raft-rs-runtime-tuning.js](raft-rs-runtime-tuning.js) - Derives the tick-based tuning a raft-rs core is given from a group's millisecond timing: the tick length, the... (importers: many)
 - [raft-rs-snapshot-witness.js](raft-rs-snapshot-witness.js) - Durable snapshot witness and proof-gated committed-prefix compaction for `RaftRsDurableStore` (SN1 / F5). (importers: one)
 - [raft-rs-status-observation.js](raft-rs-status-observation.js) - The semantic parts of an rs-raft status observation that need no core entry: the peers of a configuration and the... (importers: few)
+- [raft-rs-turn-answer.js](raft-rs-turn-answer.js) - The answer of one runtime turn, named once where the turn produced it (R07): SETTLED when the work completed within... (importers: hub)
 - [replica-election-timeouts.js](replica-election-timeouts.js) - Election-timeout jitter for a replica group: each replica's election window is offset by its position in the group,... (importers: many)
 - [replica-leadership-state.js](replica-leadership-state.js) - Mint a new leadership tenure: a NEW frozen object per tenure, so a reader that kept the previous token sees a... (importers: many)
 - [replica-raft-timing.js](replica-raft-timing.js) - A replica's raft timing at initialization: the configured heartbeat and election window, with this replica's... (importers: few)

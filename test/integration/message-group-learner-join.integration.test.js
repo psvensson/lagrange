@@ -40,6 +40,7 @@ import {durableRecordBootstrap} from '../../src/raft/raft-committed-membership-s
 import {FOUNDERS, GROUP, O, TARGET} from '../test-helpers/learner-operation-fixture.js';
 import {createFixture, createHandler, createPayload, replaceBoot, selectAbortLearner,
   settle, settleFailed} from '../test-helpers/message-group-create-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {LEARNER_ADDRESS, learnerJoinWorld, produceOn, transferImage} from
   '../test-helpers/message-group-learner-join-fixture.js';
 
@@ -79,8 +80,8 @@ function recordedOrigin(f) {
 /** Real leadership transfer on the founders' own ports. */
 function transferLeadership(f, successor) {
   const from = leaderOf(f);
-  const transfer = f.cluster.node(from).transferLeadership({successor: 'named',
-    replicaIdentity: successor});
+  const transfer = turnChainValue(f.cluster.node(from).transferLeadership({successor: 'named',
+    replicaIdentity: successor}));
   assert.equal(transfer.outcome, 'CORE_OK', JSON.stringify(transfer));
   f.cluster.tickers = [successor];
   assert.ok(f.cluster.settle(() => leaderOf(f) === successor, {rounds: 400}),
@@ -195,7 +196,7 @@ test('a recorded learner CREATE joins the real group as a non-voting learner, in
     durable.close();
   }
 
-  const proposed = f.cluster.propose(leaderOf(f), {type: 'MESSAGE', messageId: 'b2-after-install'});
+  const proposed = turnChainValue(f.cluster.propose(leaderOf(f), {type: 'MESSAGE', messageId: 'b2-after-install'}));
   assert.equal(proposed.outcome, 'CORE_OK', JSON.stringify(proposed));
   const commitIndex = () => leaderStatus(f).commitIndex;
   assert.equal(await world.until(() => commitIndex() > answer.commitIndex &&
@@ -260,8 +261,8 @@ test('a descriptor from a demoted leader is refused not-leader: nothing is insta
  * learner. Answers the removed founder. */
 function removeFollowerVoter(f) {
   const voter = FOUNDERS.find((id) => id !== leaderOf(f));
-  const removed = f.cluster.node(leaderOf(f)).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: voter});
+  const removed = turnChainValue(f.cluster.node(leaderOf(f)).proposeConfChange({
+    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: voter}));
   assert.equal(removed.outcome, 'CORE_OK', JSON.stringify(removed));
   assert.ok(f.cluster.settle(() => !leaderStatus(f).confState.voters
     .includes(deriveRaftRsPeerId(voter))), `the group committed the removal of ${voter}`);
@@ -318,8 +319,8 @@ test('a REMOVE selection recorded after MATERIALIZED defeats the install at its 
 
 test('a later native REMOVE of the learner leaves the leader no descriptor for it', async (t) => {
   const f = await createFixture(t);
-  const removed = await f.cluster.node(leaderOf(f)).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: TARGET});
+  const removed = await turnChainValue(f.cluster.node(leaderOf(f)).proposeConfChange({
+    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: TARGET}));
   assert.equal(removed.outcome, 'CORE_OK', JSON.stringify(removed));
   assert.ok(f.cluster.settle(() => FOUNDERS.every((id) =>
     !f.cluster.node(id).readStatus().confState.learners.includes(TARGET_PEER))),
@@ -342,8 +343,8 @@ test('a native REMOVE while the learner awaits the acknowledgement closes it: ne
     assert.equal(await world.until(() =>
       world.bridge.router.getRegisteredHandler(LEARNER_ADDRESS) !== null), true,
     'the learner opened and awaits the leader');
-    const removed = await f.cluster.node(leaderOf(f)).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: TARGET});
+    const removed = await turnChainValue(f.cluster.node(leaderOf(f)).proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: TARGET}));
     assert.equal(removed.outcome, 'CORE_OK', JSON.stringify(removed));
     await assertRefusedJoin(world, outcomes, REFUSAL.NOT_IN_CONFIGURATION, 'removed while waiting');
     assert.equal(world.bridge.router.getRegisteredHandler(LEARNER_ADDRESS), null,
@@ -740,8 +741,8 @@ test('a configuration that moves between the leader\'s committed read and its im
     const answer = port[RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP](query);
     if (!moved) {
       moved = true;
-      const removed = port.proposeConfChange({type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
-        replicaIdentity: TARGET});
+      const removed = turnChainValue(port.proposeConfChange({
+        type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: TARGET}));
       assert.equal(removed.outcome, 'CORE_OK', JSON.stringify(removed));
       assert.ok(f.cluster.settle(() => !leaderStatus(f).confState.learners.includes(TARGET_PEER)));
     }
@@ -771,7 +772,7 @@ test('a learner that acked its installed boundary but is held below the leader\'
     'the opened learner acked its installed boundary');
   world.bridge.hold.inbound = true;
   for (const messageId of ['b2-held-1', 'b2-held-2', 'b2-held-3']) {
-    const proposed = f.cluster.propose(leaderOf(f), {type: 'MESSAGE', messageId});
+    const proposed = turnChainValue(f.cluster.propose(leaderOf(f), {type: 'MESSAGE', messageId}));
     assert.equal(proposed.outcome, 'CORE_OK', JSON.stringify(proposed));
   }
   assert.equal(await world.until(() => leaderStatus(f).commitIndex > learnerProgress(f)), true,
@@ -796,8 +797,8 @@ test('a learner applying its own native REMOVE while no leader is observable is 
   const {outcomes} = await sendCreate(t, f, world);
   assert.equal(await world.until(() => learnerProgress(f) >= installed), true,
     'the opened learner acked its installed boundary');
-  const removed = f.cluster.node(leaderOf(f)).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: TARGET});
+  const removed = turnChainValue(f.cluster.node(leaderOf(f)).proposeConfChange({
+    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: TARGET}));
   assert.equal(removed.outcome, 'CORE_OK', JSON.stringify(removed));
   await assertRefusedJoin(world, outcomes, REFUSAL.OPEN_NOT_LEARNER,
     'own REMOVE applied while no leader is observable');

@@ -39,6 +39,7 @@ import {
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
   RAFT_MEMBERSHIP_OPERATION,
 } from '../../../src/raft/raft-operation-port-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {COMMITTED_MEMBERSHIP_STAMP_KIND} from
   '../../../src/raft/raft-committed-membership-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
@@ -526,7 +527,7 @@ function trapSharedCore(cluster, replicaId) {
   const consoleError = console.error;
   try {
     console.error = () => undefined;
-    return cluster.node(replicaId).tick();
+    return turnChainValue(cluster.node(replicaId).tick());
   } finally {
     console.error = consoleError;
   }

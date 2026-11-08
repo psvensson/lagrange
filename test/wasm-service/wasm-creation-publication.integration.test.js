@@ -19,6 +19,7 @@ import {WASM_SERVICE_COMMAND_TYPE} from '../../src/wasm-service/wasm-service-con
 import {RAFT_LEADERSHIP_TRANSFER_SUCCESSOR} from
   '../../src/raft/raft-operation-port-constants.js';
 import {SERVICE_INSTANCE_LIMIT} from '../../src/constants/service-instance.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const SERVICE_ID_KEY = 'serviceDefinitionId';
 const PREFIX = {type: 'WASM_WRITER_V1', profile: 'wasm-writer-v1/1'};
@@ -230,13 +231,13 @@ async function enteredBefore(gate, operation, label) {
 // A real native election change: the leader hands leadership to a named
 // voter (the port's own transfer request), delivered on the fixed schedule.
 async function transferLeadership(f, from, to) {
-  const answer = await from.raft.transferLeadership({
-    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED, replicaIdentity: to.replicaId});
+  const answer = await turnChainValue(from.raft.transferLeadership({
+    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED, replicaIdentity: to.replicaId}));
   assert.equal(answer.outcome, 'CORE_OK', JSON.stringify(answer));
   for (let round = 0; round < ELECTION_ROUNDS; round += 1) {
     await deliverScheduled(f);
     if (to.isLeader && !from.isLeader) return;
-    await from.raft.tick();
+    await turnChainValue(from.raft.tick());
   }
   assert.fail(`${to.replicaId} did not take leadership within the fixed schedule`);
 }

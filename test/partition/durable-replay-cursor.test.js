@@ -60,6 +60,7 @@ import {
 } from './partition-rs-raft-restart-fixture.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {encodeProposal} from '../../src/raft/raft-rs-proposal-codec.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {RAFT_RS_ENTRY_TYPE} from
   '../../src/raft/raft-rs-ready-loop-constants.js';
 
@@ -363,7 +364,7 @@ test('accepted recovery refreshes writes committed while START waits and ' +
   ]) {
     const source = await restartedSource([insertCommand('barrier')]);
     try {
-      await source.restarted.raft.campaign();
+      await turnChainValue(source.restarted.raft.campaign());
       source.restarted.role = RAFT_ROLE.LEADER;
       const watermark = source.committed[0].index;
       const authorizationEntered = deferred();
@@ -431,7 +432,7 @@ test('accepted recovery refreshes writes committed while START waits and ' +
       await authorizationEntered.promise;
       const duringAuthorization = insertCommand(
         `${scenario.family}-${scenario.phase}`);
-      await source.restarted.raft.propose(duringAuthorization);
+      await turnChainValue(source.restarted.raft.propose(duringAuthorization));
       assert.equal(handle.pendingEntries.length, 0,
         `${scenario.family} ${scenario.phase}: unauthorized after-write ` +
         'cannot enter the volatile queue');

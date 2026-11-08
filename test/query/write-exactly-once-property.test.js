@@ -34,6 +34,7 @@ import {
   withGroupSurface,
   withMutedConsoleError,
 } from './unknown-outcome-surface-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const TEST_TIMEOUT_MS = 300000;
 const TEMP_PREFIX = 'write-exactly-once-property-';
@@ -153,8 +154,9 @@ async function armFault(fault, {random, services, peers, blocked,
   }
   if (fault === 'leader-change') {
     const next = (leader + 1 + Math.floor(random() * 2)) % services.length;
-    const change = setTimeout(() => services[next].raft.campaign()
-      .catch(() => undefined), Math.floor(random() * 50));
+    const change = setTimeout(() => Promise.resolve(
+      turnChainValue(services[next].raft.campaign())).catch(() => undefined),
+    Math.floor(random() * 50));
     return () => clearTimeout(change);
   }
   if (fault === 'duplicate' || fault === 'lost') {

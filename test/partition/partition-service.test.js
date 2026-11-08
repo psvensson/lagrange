@@ -65,6 +65,7 @@ import {PARTITION_CDC_OBLIGATION_REASON} from
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {buildPartitionWriteEntry} from '../../src/partition/partition-write-kernel.js';
 import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const TEST_PARTITION_ID = 'partition-1';
 const TEST_OWNER_NODE_ID = 'node-owner';
@@ -1462,11 +1463,11 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
   // The committed entry reaches the application through the port; the
   // application decides CDC on this replica's own leadership state. The
   // entry is built by the write-entry owner, as every proposer builds it.
-  const proposed = await partition.raft.propose(buildPartitionWriteEntry({
+  const proposed = await turnChainValue(partition.raft.propose(buildPartitionWriteEntry({
     type: PARTITION_SERVICE_OPERATION.INSERT,
     sql: `INSERT INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`,
     params: ['f1', 42],
-  }, {timestamp: Date.now(), proposedBy: 'other-replica'}));
+  }, {timestamp: Date.now(), proposedBy: 'other-replica'})));
 
   // Allow any async CDC generation to complete
   await Promise.resolve();

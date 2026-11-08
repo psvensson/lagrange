@@ -16,7 +16,8 @@ import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
 import {createRaftRsOperationPort} from '../../src/raft/raft-rs-operation-port.js';
 import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.js';
-import {RAFT_OPERATION_PORT_REQUEST as FIELD} from '../../src/raft/raft-operation-port-request.js';
+import {RAFT_COMMITTED_ENTRY_APPLY_MODE, RAFT_OPERATION_PORT_REQUEST as FIELD} from
+  '../../src/raft/raft-operation-port-request.js';
 import {BOOTSTRAP_MEMBERSHIP_SOURCE, COMMITTED_MEMBERSHIP_READ_PURPOSE} from
   '../../src/raft/raft-committed-membership-constants.js';
 import {RAFT_MEMBERSHIP_TRANSITION_REASON} from '../../src/raft/raft-operation-port-constants.js';
@@ -137,6 +138,7 @@ function openNative(saved) {
     [FIELD.DEFER_ELECTION]: true, [FIELD.SEND_TO_PEER]: () => {},
     [FIELD.RESOLVE_PEER_ADDRESS]: (id) => `raft-rs://replica-${id}`,
     [FIELD.APPLY_COMMITTED_ENTRY]: () => assert.fail('read-only recovery must not apply new work'),
+    [FIELD.APPLY_COMMITTED_ENTRY_MODE]: RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
     [FIELD.SNAPSHOT_CATCHUP_NEEDED]: () => assert.fail('intact history needs no fabricated snapshot')});
   life.after(() => {
     port.close(); db.close();

@@ -66,7 +66,7 @@ const votersEverywhere = (f, ids = FOUNDERS) => f.cluster.settle(() => ids.every
 function transferLeadership(f, successor) {
   const from = leaderOf(f);
   assert.equal(f.cluster.node(from).transferLeadership({successor: 'named',
-    replicaIdentity: successor}).outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+    replicaIdentity: successor}).result.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
   f.cluster.tickers = [successor];
   assert.ok(f.cluster.settle(() => leaderOf(f) === successor &&
     f.cluster.node(successor).readStatus().currentTermApplied === true, {rounds: 400}),

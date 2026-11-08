@@ -12,6 +12,7 @@ import {routeMessageGroupCommand} from
   '../../src/message-group/message-group-proposal-routing.js';
 import {RetryStatus} from '../../src/message-group/message-retry-handler.js';
 import {captureLogger} from '../test-helpers/wait-bound-spent-capture.js';
+import {pendingTurn} from '../../src/raft/raft-rs-turn-answer.js';
 
 const PROPOSE_TIMEOUT_MS = 25;
 const SETTLE_BOUND_MS = 200;
@@ -57,7 +58,7 @@ function leaderWithFailingLeadershipRead(logger, timers) {
     logger,
     providedTimeSource: timers,
     commandRetryHandler: singleAttemptRetryHandler,
-    raft: {propose: () => new Promise(() => {})},
+    raft: {propose: () => pendingTurn(new Promise(() => {}))},
     isCurrentRaftLeader() {
       leadershipReads += 1;
       if (leadershipReads > 1) {

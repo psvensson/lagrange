@@ -15,6 +15,7 @@ import {RAFT_EVENT, RAFT_OPERATION_OUTCOME as OUTCOME} from
 import {CORE_REFUSAL_KIND} from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {RAFT_RS_WASM_FILE} from '../../../src/raft/raft-rs-core-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const scenario = process.argv[2];
@@ -69,8 +70,8 @@ try {
   const pa = portOf(a); const pb = portOf(b); const pc = portOf(c);
   setActualCoreEntryObserver((entry) => receipt.entries.push(entry));
   for (const group of clusters) {
-    assert.equal((await portOf(group).campaign()).outcome, OUTCOME.CORE_OK);
-    assert.equal((await portOf(group).propose(`before:${group.partitionId}`)).outcome, OUTCOME.CORE_OK);
+    assert.equal((await turnChainValue(portOf(group).campaign())).outcome, OUTCOME.CORE_OK);
+    assert.equal((await turnChainValue(portOf(group).propose(`before:${group.partitionId}`))).outcome, OUTCOME.CORE_OK);
     assert.deepEqual(readRows(group), [`before:${group.partitionId}`]);
   }
   receipt.initial = await pa.readStatus();
@@ -81,7 +82,7 @@ try {
     }
   });
   receipt.phase = 'trap';
-  assert.equal((await pa.propose('must-not-commit')).outcome, OUTCOME.CORE_FATAL);
+  assert.equal((await turnChainValue(pa.propose('must-not-commit'))).outcome, OUTCOME.CORE_FATAL);
   assert.equal(receipt.traps, 1);
   if (scenario === 'partial-restore') {
     receipt.phase = 'partial-restore:other-group';
@@ -151,8 +152,8 @@ try {
         closedGroups.add(group);
       }
       const d = makeGroup('d');
-      assert.equal((await portOf(d).campaign()).outcome, OUTCOME.CORE_OK);
-      assert.equal((await portOf(d).propose(`before:${d.partitionId}`)).outcome, OUTCOME.CORE_OK);
+      assert.equal((await turnChainValue(portOf(d).campaign())).outcome, OUTCOME.CORE_OK);
+      assert.equal((await turnChainValue(portOf(d).propose(`before:${d.partitionId}`))).outcome, OUTCOME.CORE_OK);
       assert.deepEqual(readRows(d), [`before:${d.partitionId}`]);
       receipt.openedAfterFinalClose = true;
     } else {
@@ -226,7 +227,7 @@ try {
       clock.advance(status.retryAfterMs); status = await portOf(group).readStatus();
     }
     assert.equal(status.outcome, OUTCOME.CORE_OK);
-    assert.equal((await portOf(group).propose(`after:${group.partitionId}`)).outcome, OUTCOME.CORE_OK);
+    assert.equal((await turnChainValue(portOf(group).propose(`after:${group.partitionId}`))).outcome, OUTCOME.CORE_OK);
     assert.deepEqual(readRows(group), [`before:${group.partitionId}`, `after:${group.partitionId}`]);
   }
   receipt.phase = 'complete';

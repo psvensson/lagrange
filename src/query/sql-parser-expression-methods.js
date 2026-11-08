@@ -206,7 +206,7 @@ const sqlParserExpressionMethods = {
       if (arg.type === PG_CASE_ARG_TYPE.WHEN) {
         conditions.push({
           when: this.convertExpression(arg.cond),
-          then: this.convertExpression(arg.result),
+          thenExpression: this.convertExpression(arg.result),
         });
       } else if (arg.type === PG_CASE_ARG_TYPE.ELSE) {
         elseExpr = this.convertExpression(arg.result);

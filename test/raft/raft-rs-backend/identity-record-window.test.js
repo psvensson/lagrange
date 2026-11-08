@@ -52,6 +52,7 @@ import {
   COMMITTED_MEMBERSHIP_READ_PURPOSE,
   COMMITTED_MEMBERSHIP_REFUSAL,
 } from '../../../src/raft/raft-committed-membership-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   '../../../src/raft/raft-operation-port-request.js';
 import {RAFT_RS_MESSAGE_TYPE} from
@@ -285,7 +286,7 @@ test('W3: a COMMITTED joiner whose identity is unrecorded steps nothing ' +
     assert.equal(closed.gateOpen, false);
     assert.equal(closed.appliedIndex, applied, 'j applied while unrecorded');
     assert.deepEqual(voteOf(cluster, 'j'), EMPTY_HARD_STATE);
-    const tick = cluster.node('j').tick();
+    const tick = turnChainValue(cluster.node('j').tick());
     assert.equal(tick.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
     // The retry's record, acknowledged: the same port is reopened by the
     // create's retry; here the joiner is rebuilt on its file.
@@ -373,11 +374,11 @@ test('W5: an unrecorded founder is reconstructed unrecorded by a runtime ' +
     assert.equal(before.gateOpen, false);
     const victim = other.node('x1').readStatus();
     await capturingErrors(async () => {
-      await other.node('x1').step(coreTrappingAppend({
+      await turnChainValue(other.node('x1').step(coreTrappingAppend({
         dbFile: other.dbFileOf('x1'), groupId: other.partitionId,
         status: victim, from: other.raftPeerIdOf('x0'),
-        term: String(victim.term)}));
-      await other.node('x1').tick();
+        term: String(victim.term)})));
+      await turnChainValue(other.node('x1').tick());
     });
     lone.tickers = ['s0'];
     lone.settle(() => false, {rounds: CLOSED_ROUNDS});

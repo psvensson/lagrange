@@ -92,6 +92,7 @@ import {createRemovalSourceHandler} from
 import {
   createPublishedPlanningReadinessService,
 } from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 // A priority control-plane partition: the named-target handoff (BR11) is
 // part of the owner's path there. An ordinary partition has no handoff.
@@ -507,10 +508,10 @@ class RealGroup {
     if (leader === null) {
       return null;
     }
-    const answer = this.cluster.node(leader).proposeConfChange({
+    const answer = turnChainValue(this.cluster.node(leader).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
       replicaIdentity: sourceReplicaId,
-    });
+    }));
     this.rowDrivenProposals.push({leader, answer});
     return answer;
   }
@@ -725,7 +726,7 @@ function answerStepDown(world, payload) {
       handoffBranch: roleNoOpBranchOf(reason),
       handoffTrackedRole: trackedRole};
   }
-  const answer = world.group.cluster.node(replicaId).transferLeadership(request);
+  const answer = turnChainValue(world.group.cluster.node(replicaId).transferLeadership(request));
   const accepted = answer?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
     Object.hasOwn(ACCEPTED_TRANSFER_BRANCH, answer.reason);
   return accepted ? {

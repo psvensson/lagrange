@@ -109,7 +109,7 @@ test('Q01: QueryExecutor buildExpressionSQL safely escapes single quotes and sup
 
   const caseExpr = {
     type: 'case',
-    conditions: [{when: {type: 'literal', value: 1}, then: {type: 'literal', value: 'yes'}}],
+    conditions: [{when: {type: 'literal', value: 1}, thenExpression: {type: 'literal', value: 'yes'}}],
     elseExpr: {type: 'literal', value: 'no'},
   };
   assert.equal(executor.buildExpressionSQL(caseExpr), 'CASE WHEN 1 THEN \'yes\' ELSE \'no\' END');

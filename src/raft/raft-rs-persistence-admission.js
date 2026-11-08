@@ -17,6 +17,7 @@ import {
 import {
   PERSISTENCE_ADMISSION_WAIT,
 } from './raft-rs-runtime-owner-constants.js';
+import {pendingTurn, turnChainValue} from './raft-rs-turn-answer.js';
 
 /**
  * Whether the group's store admits durable writes now.
@@ -33,23 +34,25 @@ function persistenceAdmitted(group) {
  * does, otherwise on the group's own timers until it does, the group closes,
  * or the bound passes.
  * @param {Object} group - A runtime group (its store, timers, closed flag).
- * @param {Function} continuation - The rest of the Ready.
+ * @param {function(): Object} continuation - The rest of the Ready; answers
+ *   a turn.
  * @param {Object} outcomes - {closed(), exceeded()}: the owner's outcomes for
  *   a group closed while waiting and for a wait past its bound.
- * @return {*} The continuation's result, or a Promise of it.
+ * @return {Object} The continuation's turn when the store admits now, a
+ *   pending turn while the wait lasts.
  */
 function whenPersistenceAdmitted(group, continuation, outcomes) {
   if (persistenceAdmitted(group)) {
     return continuation();
   }
   const deadline = group.timers.now() + PERSISTENCE_ADMISSION_WAIT.BOUND_MS;
-  return new Promise((resolve, reject) => {
+  return pendingTurn(new Promise((resolve, reject) => {
     const poll = () => {
       try {
         if (group.closed) {
           resolve(outcomes.closed());
         } else if (persistenceAdmitted(group)) {
-          resolve(continuation());
+          resolve(turnChainValue(continuation()));
         } else if (group.timers.now() >= deadline) {
           resolve(outcomes.exceeded());
         } else {
@@ -65,7 +68,7 @@ function whenPersistenceAdmitted(group, continuation, outcomes) {
       }
     };
     poll();
-  });
+  }));
 }
 
 export {persistenceAdmitted, whenPersistenceAdmitted};

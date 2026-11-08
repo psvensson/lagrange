@@ -28,6 +28,7 @@ import {recordedVoterFactIsValid} from
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {FOUNDERS, NOW, O} from '../test-helpers/learner-operation-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {OWNER_CLAIM, PERMIT_COLUMN, VOTER_RECEIPT, caughtUp, configurationOf, countWrites,
   leaderOf, learnerQuery, otherFounder, promotionWorld, recordingRequest, refusedOnForgedRow,
   setColumns, settled, transferLeadership, votersEverywhere} from
@@ -475,8 +476,8 @@ test('V2 (real schedule, F1): an unrelated learner joins before the ordered succ
     f.cluster.replica(id).db.prepare('INSERT INTO raft_rs_peer_identity ' +
       '(replica_identity, raft_peer_id) VALUES (?, ?)').run(other, deriveRaftRsPeerId(other));
   }
-  const added = await f.cluster.node(leader).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: other});
+  const added = await turnChainValue(f.cluster.node(leader).proposeConfChange({
+    type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: other}));
   assert.equal(added.outcome, RAFT_OPERATION_OUTCOME.CORE_OK, JSON.stringify(added));
   assert.ok(f.cluster.settle(() => FOUNDERS.every((id) => f.cluster.node(id).readStatus()
     .confState.learners.map(String).includes(deriveRaftRsPeerId(other)))),

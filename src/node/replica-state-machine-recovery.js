@@ -23,6 +23,7 @@ import {
   isReplicaAdmissionCurrent,
   runSerializedReplicaMutation,
 } from './replica-state-machine-serialization.js';
+import {pendingTurn, settledTurn, turnChainValue} from '../raft/raft-rs-turn-answer.js';
 import {
   REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE,
   REPLICA_STATE_MACHINE_ERROR_MSG,
@@ -154,9 +155,9 @@ async function bindAuthoritativeRemovalAuthority(
   const result = runSerializedReplicaMutation(
     stateMachine,
     replicaId,
-    bind,
+    () => pendingTurn(bind()),
   );
-  return Promise.resolve(result).then((authority) => authority ||
+  return Promise.resolve(turnChainValue(result)).then((authority) => authority ||
     removalAuthority(REMOVAL_AUTHORITY_KIND.UNAVAILABLE));
 }
 function authorityMatchesRow(authority, row) {
@@ -287,11 +288,11 @@ async function completeDurableRemovalWithAuthority(
     onComplete?.();
     return true;
   };
-  return Promise.resolve(runSerializedReplicaMutation(
+  return Promise.resolve(turnChainValue(runSerializedReplicaMutation(
     stateMachine,
     replicaId,
-    run,
-  ));
+    () => pendingTurn(run()),
+  )));
 }
 
 function refuseRecoverySnapshot(stateMachine, replicaId, currentState, state,
@@ -725,14 +726,10 @@ function registerReplicaSnapshot(stateMachine, replicaId, context = {}) {
   }
 
   const admission = captureReplicaAdmission(stateMachine, replicaId);
-  const register = () => registerSnapshotInLane(
-    stateMachine,
-    replicaId,
-    context,
-    state,
-    admission,
-  );
-  return runSerializedReplicaMutation(stateMachine, replicaId, register);
+  // Synchronous on the idle lane (refused above otherwise): settles here.
+  const register = () => settledTurn(registerSnapshotInLane(stateMachine,
+    replicaId, context, state, admission));
+  return turnChainValue(runSerializedReplicaMutation(stateMachine, replicaId, register));
 }
 
 function registerReplicaForRecovery(stateMachine, replicaId, context) {

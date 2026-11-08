@@ -11,6 +11,7 @@ import {OracleRun, bindingEnumerations} from
   './transfer-leadership-drain-oracle-harness.js';
 import {allCells} from './transfer-leadership-drain-oracle-cells.js';
 import {hash, observe} from './runtime-captured-inbound-companion-fixture.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const PASSIVE_TURNS = 256;
 const ORDER = Object.freeze({
@@ -163,7 +164,7 @@ async function prepare(f, cell) {
 function deliver(f, label, packet) {
   const packetHash = hash(packet);
   record(f, 'delivery-call', {label, packet, packetHash});
-  const result = f.run.driver.port(f.cell.requester).step(packet);
+  const result = turnChainValue(f.run.driver.port(f.cell.requester).step(packet));
   record(f, 'delivery-answer', {label, result, packetHash,
     unchanged: hash(packet) === packetHash});
   f.deliveries.push({label, result, packetHash});

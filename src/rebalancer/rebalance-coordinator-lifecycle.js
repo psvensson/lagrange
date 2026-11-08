@@ -34,12 +34,12 @@ function startFailedCreateCleanupReleaseRecovery(coordinator) {
         });
       },
     });
-  // The authoritative query error is logged while the joined/fenced recovery
-  // lane is still held. This catch only consumes that already-owned rejection;
-  // it must never perform teardown-visible logging or schedule another owner.
-  if (recovery && typeof recovery.catch === LOCAL_STR_FUNCTION) {
-    void recovery.catch(() => {});
-  }
+  // The recovery is the operation lane's promise (OperationLane.run), absent
+  // only when no workflow owner carries it. The authoritative query error is
+  // logged while the joined/fenced recovery lane is still held. This catch
+  // only consumes that already-owned rejection; it must never perform
+  // teardown-visible logging or schedule another owner.
+  void recovery?.catch(() => {});
 }
 
 // Option keys whose sync is a plain same-named property assignment, split

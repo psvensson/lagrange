@@ -169,7 +169,7 @@ function collectMutationChildNodes(expr) {
   }
   for (const cond of expr.conditions || []) {
     if (cond?.when) children.push(cond.when);
-    if (cond?.then) children.push(cond.then);
+    if (cond?.thenExpression) children.push(cond.thenExpression);
   }
   return children;
 }

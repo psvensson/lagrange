@@ -19,6 +19,7 @@ import {runtimeServiceConsensusIdentity} from
 import {RAFT_LEADERSHIP_TRANSFER_SUCCESSOR} from
   '../../src/raft/raft-operation-port-constants.js';
 import {WASM_SERVICE_PROTOCOL} from '../../src/wasm-service/wasm-service-constants.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 // The DERIVED endpoint hosts of the fixture's node address owners (cell e):
 // never the raw host:port NODE_ADDRESS, and the advertised WS host wins.
@@ -86,13 +87,13 @@ async function publishedGroup(t) {
 }
 
 async function transferLeadership(e, from, to) {
-  const answer = await from.raft.transferLeadership({
-    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED, replicaIdentity: to.replicaId});
+  const answer = await turnChainValue(from.raft.transferLeadership({
+    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED, replicaIdentity: to.replicaId}));
   assert.equal(answer.outcome, 'CORE_OK', JSON.stringify(answer));
   for (let round = 0; round < ELECTION_ROUNDS; round += 1) {
     await deliverScheduled(e);
     if (to.isLeader && !from.isLeader) return;
-    await from.raft.tick();
+    await turnChainValue(from.raft.tick());
   }
   assert.fail(`${to.replicaId} did not take leadership within the fixed schedule`);
 }

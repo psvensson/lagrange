@@ -1,6 +1,8 @@
 // Original opening is a process-local continuation of complete preparation,
 // never permission reconstructed from a serialized original declaration.
 import test from 'node:test';
+import {RAFT_COMMITTED_ENTRY_APPLY_MODE, RAFT_OPERATION_PORT_REQUEST as REQUEST} from
+  '../../src/raft/raft-operation-port-request.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -63,7 +65,9 @@ function requestFor(f, member, extra = {}) {
     bootstrapMembership: member.membership, identityExisted: false,
     timing: TIMING, deferElection: true,
     resolvePeerAddress: (id) => `raft-rs://replica-${id}`,
-    sendToPeer: () => {}, applyCommittedEntry: () => {}, ...extra};
+    sendToPeer: () => {}, applyCommittedEntry: () => {},
+    [REQUEST.APPLY_COMMITTED_ENTRY_MODE]: RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
+    ...extra};
   return {request, resource};
 }
 

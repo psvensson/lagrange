@@ -20,6 +20,7 @@ import {REPLICA_ACTIVATION_HANDLER_NOT_REGISTERED} from
   '../../src/node/replica-state-machine-constants.js';
 import {runSerializedReplicaMutation} from
   '../../src/node/replica-state-machine-serialization.js';
+import {pendingTurn} from '../../src/raft/raft-rs-turn-answer.js';
 import {
   REPLICA_HANDLER_RETIREMENT_OUTCOME,
   retireReplicaTransportHandler,
@@ -170,7 +171,7 @@ test('S-F2 (3b): retirement before the in-lane check: the activation is ' +
     release = resolve;
   });
   const occupant = runSerializedReplicaMutation(world.stateMachine,
-    REPLICA_ID, () => held.then(() => true));
+    REPLICA_ID, () => pendingTurn(held.then(() => true))).pending;
   const activation = world.activate(g1);
   await settleMicrotasks();
   t.equal(await world.retire(g1),

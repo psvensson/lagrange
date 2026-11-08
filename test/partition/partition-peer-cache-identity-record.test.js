@@ -21,6 +21,7 @@ import {
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
+import {settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
 
 const PARTITION_ID = 'identity-record-admission';
 const QUIET = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
@@ -31,7 +32,7 @@ function leaderPartition(rows) {
     readStatus: () => ({role: RAFT_ROLE.LEADER, peers: []}),
     proposeConfChange: (change) => {
       proposed.push(change);
-      return {outcome: RAFT_OPERATION_OUTCOME.CORE_OK};
+      return settledTurn({outcome: RAFT_OPERATION_OUTCOME.CORE_OK});
     },
   };
   return {

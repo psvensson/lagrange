@@ -31,6 +31,7 @@ import {
   proposalEntry,
 } from './transfer-leadership-drain-oracle-harness.js';
 import {mostCaughtUp, namedSuccessor} from './transfer-leadership-driver.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const A = 'oracle-a';
 const B = 'oracle-b';
@@ -61,28 +62,28 @@ const DECISIONS = Object.freeze({
   D1: {name: 'named transfer',
     inputs: [INPUT.ROLE, INPUT.CONF, INPUT.TRANSFER, INPUT.CATCHUP],
     request: (requester, target = C) => (driver) =>
-      driver.port(requester).transferLeadership(namedSuccessor(target))},
+      turnChainValue(driver.port(requester).transferLeadership(namedSuccessor(target)))},
   D2: {name: 'most-caught-up transfer',
     inputs: [INPUT.ROLE, INPUT.CONF, INPUT.PROGRESS, INPUT.TRANSFER],
     request: (requester) => (driver) =>
-      driver.port(requester).transferLeadership(mostCaughtUp())},
+      turnChainValue(driver.port(requester).transferLeadership(mostCaughtUp()))},
   D3: {name: 'dropped-propose classification',
     inputs: [INPUT.ROLE, INPUT.SELF, INPUT.TRANSFER],
     request: (requester) => (driver) =>
-      driver.port(requester).propose({decision: 'propose', at: requester})},
+      turnChainValue(driver.port(requester).propose({decision: 'propose', at: requester}))},
   D4: {name: 'dropped-conf-change classification',
     inputs: [INPUT.ROLE, INPUT.SELF, INPUT.TRANSFER],
     request: (requester) => (driver) =>
-      driver.port(requester).proposeConfChange({
-        type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D})},
+      turnChainValue(driver.port(requester).proposeConfChange({
+        type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D}))},
   D5: {name: 'campaign eligibility',
     inputs: [INPUT.SELF],
-    request: (requester) => (driver) => driver.port(requester).campaign()},
+    request: (requester) => (driver) => turnChainValue(driver.port(requester).campaign())},
   D6: {name: 'progress probe',
     inputs: [INPUT.ROLE, INPUT.CONF, INPUT.PROGRESS],
     request: (requester, target = C) => (driver) =>
-      driver.port(requester).probePeerProgress(
-        driver.cluster.addressOf(target))},
+      turnChainValue(driver.port(requester).probePeerProgress(
+        driver.cluster.addressOf(target)))},
 });
 
 // ------------------------------------------------------------ build helpers
@@ -102,7 +103,7 @@ function byRaftId(driver, replicaIds) {
 // requests are pending at A and C, and A still leads its term.
 async function transferCampaignOfB(run) {
   await run.act(() =>
-    run.driver.port(A).transferLeadership(namedSuccessor(B)));
+    turnChainValue(run.driver.port(A).transferLeadership(namedSuccessor(B))));
   await run.deliverOnly([B]);
 }
 
@@ -134,30 +135,30 @@ async function higherTermVoteAtA(run) {
 // Only the higher-id follower acknowledges the last write.
 async function unequalProgressAtA(run) {
   const [, ahead] = byRaftId(run.driver, [B, C]);
-  await run.act(() => run.driver.port(A).propose({acknowledgedBy: ahead}));
+  await run.act(() => turnChainValue(run.driver.port(A).propose({acknowledgedBy: ahead})));
   await run.deliverOnly([ahead]);
 }
 
 // B's acknowledgement commits C's removal (C is cut off).
 async function removalOfCAtA(run) {
   run.driver.isolate(C);
-  await run.act(() => run.driver.port(A).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C}));
+  await run.act(() => turnChainValue(run.driver.port(A).proposeConfChange({
+    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C})));
   await run.deliverOnly([B]);
 }
 
 // B's and C's acknowledgements commit A's own removal.
 async function selfRemovalAtA(run) {
-  await run.act(() => run.driver.port(A).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A}));
+  await run.act(() => turnChainValue(run.driver.port(A).proposeConfChange({
+    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A})));
   await run.deliverOnly([B, C]);
 }
 
 // A removes C; the commit that includes it reaches C, which is still a
 // voter in its own view until it processes that commit.
 async function ownRemovalAtFollowerC(run) {
-  await run.act(() => run.driver.port(A).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C}));
+  await run.act(() => turnChainValue(run.driver.port(A).proposeConfChange({
+    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C})));
   await run.deliverOnly([B, C]);
   await run.deliverOnly([A]);
 }
@@ -165,7 +166,7 @@ async function ownRemovalAtFollowerC(run) {
 // B asks for leadership; its MsgTransferLeader is forwarded to A.
 async function forwardedTransferToBAtA(run) {
   await run.act(() =>
-    run.driver.port(B).transferLeadership(namedSuccessor(B)));
+    turnChainValue(run.driver.port(B).transferLeadership(namedSuccessor(B))));
 }
 
 // A runs a transfer to a cut-off C.
@@ -173,13 +174,13 @@ async function leaderInTransfer(run) {
   run.driver.isolate(C);
   await run.propose(A, {lag: C});
   await run.act(() =>
-    run.driver.port(A).transferLeadership(namedSuccessor(C)));
+    turnChainValue(run.driver.port(A).transferLeadership(namedSuccessor(C))));
 }
 
 // A's own removal is committed and applied; raft-rs keeps it leading.
 async function leaderSelfRemoved(run) {
-  await run.act(() => run.driver.port(A).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A}));
+  await run.act(() => turnChainValue(run.driver.port(A).proposeConfChange({
+    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A})));
   await run.deliver();
   assert.equal(run.leads(A), true, 'setup: the removed leader leads');
 }
@@ -247,18 +248,18 @@ const CATALOGUE = Object.freeze({
     {predicate: 'leader', requester: A, decisions: ['D1'],
       moves: [INPUT.CATCHUP],
       build: (run) => run.act(() =>
-        run.driver.port(B).propose({forwardedBy: B}))},
+        turnChainValue(run.driver.port(B).propose({forwardedBy: B})))},
     {predicate: 'leader with a transfer in progress', requester: A,
       decisions: ['D3'], refusedFrom: B,
       build: async (run) => {
         await leaderInTransfer(run);
-        await run.act(() => run.driver.port(B).propose({forwardedBy: B}));
+        await run.act(() => turnChainValue(run.driver.port(B).propose({forwardedBy: B})));
       }},
     {predicate: 'leader removed from its configuration', requester: A,
       decisions: ['D3'], refusedFrom: B,
       build: async (run) => {
         await leaderSelfRemoved(run);
-        await run.act(() => run.driver.port(B).propose({forwardedBy: B}));
+        await run.act(() => turnChainValue(run.driver.port(B).propose({forwardedBy: B})));
       }},
     {predicate: 'candidate', requester: B, decisions: ['D3'],
       refusedFrom: C, timeoutDriven: true,
@@ -324,7 +325,7 @@ const CATALOGUE = Object.freeze({
     {predicate: 'the transferee, a follower', requester: C,
       decisions: ['D1'], target: B, moves: [INPUT.ROLE],
       build: (run) => run.act(() =>
-        run.driver.port(A).transferLeadership(namedSuccessor(C)))},
+        turnChainValue(run.driver.port(A).transferLeadership(namedSuccessor(C))))},
   ],
   MsgRequestPreVote: [
     // A higher-term pre-vote at a leader is ignored inside its check-quorum
@@ -415,20 +416,20 @@ const PAIR_BUILDS = Object.freeze({
     requester: A, decision: 'D3', refusedFrom: C,
     build: async (run) => {
       await forwardedTransferToBAtA(run);
-      await run.act(() => run.driver.port(C).propose({forwardedBy: C}));
+      await run.act(() => turnChainValue(run.driver.port(C).propose({forwardedBy: C})));
     }},
   'MsgAppendResponse>MsgAppendResponse@sender has progress': {
     requester: A, decision: 'D1', target: B, refusedFrom: C,
     build: async (run) => {
-      await run.act(() => run.driver.port(A).proposeConfChange({
-        type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C}));
+      await run.act(() => turnChainValue(run.driver.port(A).proposeConfChange({
+        type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C})));
       await run.deliverOnly([B, C]);
     }},
   'MsgAppendResponse>MsgHeartbeatResponse@sender has progress': {
     requester: A, decision: 'D3', refusedFrom: C,
     build: async (run) => {
-      await run.act(() => run.driver.port(A).proposeConfChange({
-        type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C}));
+      await run.act(() => turnChainValue(run.driver.port(A).proposeConfChange({
+        type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C})));
       await run.deliverOnly([B]);
       await run.tickUntilHeartbeat(A, C);
       await run.deliverOnly([C]);
@@ -437,20 +438,20 @@ const PAIR_BUILDS = Object.freeze({
     requester: A, decision: 'D3', refusedFrom: C,
     build: async (run) => {
       await transferCampaignOfB(run);
-      await run.act(() => run.driver.port(C).propose({forwardedBy: C}));
+      await run.act(() => turnChainValue(run.driver.port(C).propose({forwardedBy: C})));
     }},
   'MsgRequestVote>MsgTransferLeader@follower without a leader': {
     requester: A, decision: 'D1', moves: [INPUT.ROLE],
     build: async (run) => {
       await transferCampaignOfB(run);
       await run.act(() =>
-        run.driver.port(C).transferLeadership(namedSuccessor(C)));
+        turnChainValue(run.driver.port(C).transferLeadership(namedSuccessor(C))));
     }},
   'MsgTimeoutNow>MsgPropose@candidate': {
     requester: C, decision: 'D3', refusedFrom: B,
     build: async (run) => {
       await run.act(() =>
-        run.driver.port(A).transferLeadership(namedSuccessor(C)));
+        turnChainValue(run.driver.port(A).transferLeadership(namedSuccessor(C))));
       craft(run, {to: C, from: B, msgType: 2,
         term: 0, entries: [proposalEntry({forwardedBy: B})]});
     }},
@@ -458,7 +459,7 @@ const PAIR_BUILDS = Object.freeze({
     requester: C, decision: 'D1', target: B, moves: [INPUT.ROLE],
     build: async (run) => {
       await run.act(() =>
-        run.driver.port(A).transferLeadership(namedSuccessor(C)));
+        turnChainValue(run.driver.port(A).transferLeadership(namedSuccessor(C))));
       craft(run, {to: C, from: B, msgType: 13});
     }},
   'MsgRequestVote>MsgAppend@leader identity (announcement)': {
@@ -480,8 +481,8 @@ const PAIR_BUILDS = Object.freeze({
       await run.propose(A, {lag: B});
       run.driver.heal(B);
       await run.act(() =>
-        run.driver.port(B).transferLeadership(namedSuccessor(B)));
-      await run.act(() => run.driver.port(A).propose({catchUp: B}));
+        turnChainValue(run.driver.port(B).transferLeadership(namedSuccessor(B))));
+      await run.act(() => turnChainValue(run.driver.port(A).propose({catchUp: B})));
       await run.deliverOnly([B, C]);
     }},
 });
@@ -619,8 +620,8 @@ function uncommittedConfCells() {
       'uncommitted configuration entry', decision: 'D1', requester: A,
     moves: [INPUT.CONF],
     build: async (run) => {
-      await run.act(() => run.driver.port(A).proposeConfChange({
-        type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D}));
+      await run.act(() => turnChainValue(run.driver.port(A).proposeConfChange({
+        type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D})));
       await run.deliverOnly([B, C]);
     }})];
 }
@@ -649,7 +650,7 @@ function midTurnCells() {
     decision, requester: A, hold: true, moves: [INPUT.ROLE],
     build: async (run) => {
       await run.act(() =>
-        run.driver.port(A).propose({acknowledged: 'mid-turn'}));
+        turnChainValue(run.driver.port(A).propose({acknowledged: 'mid-turn'})));
       await run.deliverOnly([B, C]);
     },
     // A leader in its check-quorum lease steps only a transfer election's

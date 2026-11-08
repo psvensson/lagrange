@@ -239,7 +239,7 @@ describe(STARTUP_SQL_RUNTIME_HANDOFF_SUITE, () => {
         setCDCIntegrationService(service) {
           attachedCdcService = service;
         },
-        activateDistributedTransactionRecovery() {
+        async activateDistributedTransactionRecovery() {
           recovered += 1;
         },
       };
@@ -294,7 +294,7 @@ describe(STARTUP_SQL_RUNTIME_HANDOFF_SUITE, () => {
       let recovered = 0;
       const sqlQueryEngine = {
         setCDCIntegrationService() {},
-        activateDistributedTransactionRecovery() {
+        async activateDistributedTransactionRecovery() {
           recovered += 1;
         },
       };

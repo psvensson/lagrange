@@ -12,6 +12,7 @@
  */
 
 import {
+  CALL_MODE,
   DEFAULT_BATCH_SIZE,
   DEFAULT_EXCHANGE_MODE,
   EXCHANGE_ERROR_MSG,
@@ -22,6 +23,25 @@ import {
 } from './runtime-constants.js';
 import {classifyNestedCall} from './nested-call-classifier.js';
 
+/**
+ * The one decision of which mode a `ctx.call(query, params, handler, opts)`
+ * runs in. Plan_Mode and Stage_Mode answer a promise on every path (their
+ * executors are async); Iterator_Mode answers an async iterator. A consumer
+ * that needs the answer's shape reads it from this mode, never from the
+ * answer.
+ * @param {string|Object} query - SQL string or plan object.
+ * @param {unknown[]|Function} [params] - Bind parameters, or the handler
+ *   when the call has no parameters.
+ * @param {Function} [handler] - Stage handler function.
+ * @return {string} A CALL_MODE.
+ */
+function resolveCallMode(query, params, handler) {
+  if (query !== null && typeof query === 'object') return CALL_MODE.PLAN;
+  // The handler is the second argument when the call has no parameters.
+  if (typeof params === 'function') return CALL_MODE.STAGE;
+  if (typeof handler === 'function') return CALL_MODE.STAGE;
+  return CALL_MODE.ITERATOR;
+}
 
 /**
  * Build a stage context that exposes the execution context's
@@ -60,23 +80,24 @@ function buildStageContext(execCtx, planDiagnostics) {
       }
       budgetEnforcer.recordNestedCall();
       budgetEnforcer.incrementInflight();
-      let callResult;
+      let answer;
       try {
-        callResult = execCtx.call(
+        answer = execCtx.call(
           query, params, handler, opts,
         );
       } catch (error) {
         budgetEnforcer.decrementInflight();
         throw error;
       }
-      if (callResult &&
-          typeof callResult.then === 'function') {
-        return Promise.resolve(callResult).finally(() => {
-          budgetEnforcer.decrementInflight();
-        });
+      // An iterator call holds no inflight slot past its creation; a plan or
+      // stage call answers a promise and holds it until that settles.
+      if (resolveCallMode(query, params, handler) === CALL_MODE.ITERATOR) {
+        budgetEnforcer.decrementInflight();
+        return answer;
       }
-      budgetEnforcer.decrementInflight();
-      return callResult;
+      return answer.finally(() => {
+        budgetEnforcer.decrementInflight();
+      });
     },
     isCancelled: () => execCtx.isCancelled(),
     throwIfCancelled: () => execCtx.throwIfCancelled(),
@@ -174,4 +195,4 @@ async function executeStage(deps) {
   return results;
 }
 
-export {executeStage, buildStageContext, batchRows};
+export {executeStage, buildStageContext, batchRows, resolveCallMode};

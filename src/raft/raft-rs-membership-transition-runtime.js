@@ -9,6 +9,7 @@ import {
   transitionFenceKey,
 } from './raft-rs-membership-transition.js';
 import {deepFreeze} from './raft-operation-port.js';
+import {continueTurn, settledTurn} from './raft-rs-turn-answer.js';
 import {
   RAFT_MEMBERSHIP_AUTHORIZATION_REASON,
   RAFT_MEMBERSHIP_TRANSITION_REASON,
@@ -273,17 +274,18 @@ function executionDeliveryRefusal(command) {
 
 function anchoredProposal(context, admitted) {
   const {group, expectedGeneration, command, invokeCoreAt,
-    answerRefusedProposal, drainReady, thenMaybe} = context;
+    answerRefusedProposal, drainReady} = context;
   const preApplied = BigInt(admitted.status.applied ?? group.appliedIndex);
   const prePending = BigInt(admitted.status.pendingConfIndex ?? 0);
   // No await between this check and the native call. A context may have
   // expired while waiting for the group turn, inbound drain or recovery.
   const deliveryRefusal = executionDeliveryRefusal(command);
-  if (deliveryRefusal !== null) return deliveryRefusal;
+  if (deliveryRefusal !== null) return settledTurn(deliveryRefusal);
   const invoked = invokeCoreAt(group, expectedGeneration,
     'propose_conf_change_v2', command.change);
   if (!invoked.ok) {
-    return answerRefusedProposal(group, expectedGeneration, invoked.result);
+    return settledTurn(
+      answerRefusedProposal(group, expectedGeneration, invoked.result));
   }
   const after = invokeCoreAt(group, expectedGeneration, 'status');
   const proposalIndex = after.ok ? BigInt(after.value.pendingConfIndex ?? 0) :
@@ -291,29 +293,33 @@ function anchoredProposal(context, admitted) {
   const proposalNumber = Number(proposalIndex);
   if (!after.ok || proposalIndex <= preApplied ||
       proposalIndex <= prePending || !Number.isSafeInteger(proposalNumber)) {
-    return membershipTransitionRefusal(
-      RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSAL_ANCHOR_UNAVAILABLE);
+    return settledTurn(membershipTransitionRefusal(
+      RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSAL_ANCHOR_UNAVAILABLE));
   }
-  return thenMaybe(drainReady(group, expectedGeneration), (drained) =>
-    drained.outcome === RAFT_OPERATION_OUTCOME.CORE_OK ? transitionOk(
-      RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED,
-      {proposalIndex: proposalNumber}) : drained);
+  return continueTurn(drainReady(group, expectedGeneration), (drained) =>
+    settledTurn(drained.outcome === RAFT_OPERATION_OUTCOME.CORE_OK ?
+      transitionOk(RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED,
+        {proposalIndex: proposalNumber}) : drained));
 }
 
+// Answers the runtime's turn (raft-rs-turn-answer.js): settled for every
+// refusal and immediate outcome, and for a drained proposal that completed
+// at once; pending while the proposal's Ready waits on I/O.
 function proposeMembershipTransition(context) {
   const ownerRefusal = transitionOwnerRefusal(context) ??
     executionDeliveryRefusal(context.command);
   if (ownerRefusal !== null) {
-    return ownerRefusal;
+    return settledTurn(ownerRefusal);
   }
   const admitted = transitionState(context);
   if (admitted.refusal) {
-    return admitted.refusal;
+    return settledTurn(admitted.refusal);
   }
   const immediate = staleTransitionFence(context.group, context.command) ??
     admittedTransitionOutcome(admitted) ?? admitted.refusal ??
     admitted.roleOutcome ?? admitted.nativeRefusal;
-  return immediate ?? anchoredProposal(context, admitted);
+  return immediate ? settledTurn(immediate) :
+    anchoredProposal(context, admitted);
 }
 
 export {proposeMembershipTransition};

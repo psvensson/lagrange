@@ -19,6 +19,7 @@ import {
   buildDeliveryEnvelope,
 } from '../../src/transport/transport-semantic-outcome.js';
 import {sendMessages} from '../../src/raft/raft-rs-peer-delivery.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {
   PEER_DELIVERY_OUTCOME,
   RUNTIME_PHASE,
@@ -60,9 +61,25 @@ async function settle(outcome) {
     sent.push(envelope.message.index);
     return Promise.resolve(outcome);
   });
-  await sendMessages(group, [{to: 2, from: 1, index: 1}, {to: 2, from: 1, index: 2}]);
+  await turnChainValue(sendMessages(group,
+    [{to: 2, from: 1, index: 1}, {to: 2, from: 1, index: 2}]));
   return {sent, observation: group.peerDelivery.get('2')};
 }
+
+test('rs-raft peer delivery names its answer: settled for a synchronous ' +
+  'transport answer, pending for an asynchronous one', async (t) => {
+  const delivered = buildDeliveryEnvelope({acknowledged: true});
+  const messages = [{to: 2, from: 1, index: 1}];
+  const synchronous = sendMessages(groupWith(() => delivered), messages);
+  t.equal(synchronous?.settled, true, 'a synchronous delivery settles the batch');
+  t.equal(sendMessages(groupWith(() => delivered), []).settled, true,
+    'an empty batch settles');
+  const asynchronous = sendMessages(
+    groupWith(() => Promise.resolve(delivered)), messages);
+  t.equal(asynchronous?.settled, false, 'an asynchronous delivery is pending');
+  t.ok(asynchronous?.pending instanceof Promise, 'a pending batch carries its promise');
+  await asynchronous?.pending;
+});
 
 test('rs-raft peer delivery accepts queued custody only through the delivery envelope owner',
   async (t) => {
@@ -75,7 +92,7 @@ test('rs-raft peer delivery accepts queued custody only through the delivery env
       return Promise.resolve(outcome);
     });
     const messages = [{to: 2, from: 1, index: 1}, {to: 2, from: 1, index: 2}];
-    await sendMessages(group, messages);
+    await turnChainValue(sendMessages(group, messages));
     t.same(queued, [1], 'invalid queue result suppresses the second message in the batch');
     t.equal(group.peerDelivery.get('2').outcome, PEER_DELIVERY_OUTCOME.FAILED,
       'the real peer-delivery owner records the invalid result as failed');
@@ -84,7 +101,7 @@ test('rs-raft peer delivery accepts queued custody only through the delivery env
 
     outcome = buildDeliveryEnvelope({acknowledged: true});
     t.equal(outcome.answer, null, 'transport custody does not fabricate an application answer');
-    await sendMessages(group, messages);
+    await turnChainValue(sendMessages(group, messages));
     t.same(queued, [1, 1, 2], 'canonical queue custody admits both messages on the next batch');
     t.same(group.peerDelivery.get('2'), {
       outcome: PEER_DELIVERY_OUTCOME.DELIVERED, consecutiveFailures: 0,

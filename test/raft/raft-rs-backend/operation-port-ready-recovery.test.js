@@ -12,6 +12,7 @@ import {RAFT_RS_ENTRY_TYPE} from
   '../../../src/raft/raft-rs-ready-loop-constants.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {coreTrappingAppend} from './core-trap-envelope.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const HOST_FAILURE = 'HOST_FAILURE';
 const CORE_FATAL = 'CORE_FATAL';
@@ -143,10 +144,10 @@ test('every Ready delivery failure is a per-peer outcome and never reconstructs 
         const before = cluster.node(leader).readStatus();
         transportFault.phase = phase;
         transportFault.armed = true;
-        const outcomes = [await cluster.propose(leader,
-          `force-${phase}-delivery`)];
+        const outcomes = [await turnChainValue(cluster.propose(leader,
+          `force-${phase}-delivery`))];
         for (let index = 0; index < 12 && transportFault.armed; index += 1) {
-          outcomes.push(await cluster.tick(leader));
+          outcomes.push(await turnChainValue(cluster.tick(leader)));
         }
         assert.equal(transportFault.armed, false,
           `the ${phase} fault was reached by a real Ready delivery`);
@@ -217,22 +218,22 @@ test('application effects and durable applied progress commit atomically',
       },
     });
     try {
-      assert.equal(cluster.node('application-replica').campaign().outcome,
+      assert.equal(cluster.node('application-replica').campaign().result.outcome,
         CORE_OK);
       const replica = cluster.replica('application-replica');
       const beforeApplied = appliedIndex(replica);
       const generationBefore = cluster.node('application-replica')
         .readStatus().runtimeGeneration;
       applicationFault.armed = true;
-      const failed = await cluster.propose(
-        'application-replica', 'apply-exactly-once');
+      const failed = await turnChainValue(cluster.propose(
+        'application-replica', 'apply-exactly-once'));
       assert.equal(failed.outcome, HOST_FAILURE);
       assert.equal(failed.phase, 'application');
       assert.equal(replica.appliedCommands.length, 0,
         'the failed transaction exposes no application effect');
       assert.equal(appliedIndex(replica), beforeApplied,
         'the durable applied watermark rolled back with the effect');
-      const resumed = await cluster.tick('application-replica');
+      const resumed = await turnChainValue(cluster.tick('application-replica'));
       assert.equal(resumed.outcome, CORE_OK);
       assert.equal(replica.appliedCommands.length, 1,
         'reconstruction replays the unapplied command once');
@@ -270,6 +271,28 @@ test('an async committed membership applier cannot advance durable progress',
     }
   });
 
+test('a committed membership applier answers nothing, synchronously',
+  () => {
+    for (const answer of [true, null, 0]) {
+      const db = new Database(':memory:');
+      try {
+        const store = new RaftRsDurableStore(db);
+        assert.throws(() => applyCommittedEntryTransaction({store,
+          groupId: 'answering-membership-applier', entry: {index: '1', term: '1',
+            entryType: RAFT_RS_ENTRY_TYPE.CONF_CHANGE, data: ''},
+          confState: {voters: ['1'], learners: [], votersOutgoing: [],
+            learnersNext: [], autoLeave: false}, membershipGenerationIndex: '1',
+          committedMembershipContext: {replicaIdentity: 'learner', peerId: '2'},
+          applyCommittedMembershipContext: () => answer,
+        }), /must complete inside its SQLite transaction/u);
+        assert.equal(store.readDurableRecord('answering-membership-applier')
+          .appliedIndex, '0');
+      } finally {
+        db.close();
+      }
+    }
+  });
+
 test('runtime replacement cannot re-enter a Ready generation suspended in host delivery',
   async () => {
     let releaseDelivery = null;
@@ -292,11 +315,11 @@ test('runtime replacement cannot re-enter a Ready generation suspended in host d
       const victim = ['epoch-a', 'epoch-b', 'epoch-c']
         .find((replicaId) => replicaId !== leader);
       const leaderPeerId = cluster.raftPeerIdOf(leader);
-      await cluster.propose(leader, 'suspend-ready');
+      await turnChainValue(cluster.propose(leader, 'suspend-ready'));
       suspendDelivery = true;
       let pendingReady = null;
       for (let index = 0; index < 12 && releaseDelivery === null; index += 1) {
-        const result = cluster.tick(leader);
+        const result = turnChainValue(cluster.tick(leader));
         if (result && typeof result.then === 'function') {
           pendingReady = result;
         }
@@ -308,15 +331,15 @@ test('runtime replacement cannot re-enter a Ready generation suspended in host d
       let fatal;
       try {
         console.error = () => undefined;
-        const accepted = await cluster.node(victim).step(coreTrappingAppend({
+        const accepted = await turnChainValue(cluster.node(victim).step(coreTrappingAppend({
           dbFile: cluster.replica(victim).dbFile,
           groupId: cluster.partitionId,
           status: victimStatus,
           from: leaderPeerId,
           term: String(victimStatus.term),
-        }));
+        })));
         assert.equal(accepted.reason, 'inbound-enqueued');
-        fatal = await cluster.node(victim).tick();
+        fatal = await turnChainValue(cluster.node(victim).tick());
       } finally {
         console.error = originalConsoleError;
       }
@@ -348,7 +371,7 @@ test('runtime traps and temporary host unavailability preserve logical identity'
       const port = cluster.node('identity-replica');
       const initial = port.readStatus();
       databaseFault.failNextTransaction = true;
-      const unavailable = await port.campaign();
+      const unavailable = await turnChainValue(port.campaign());
       assert.equal(unavailable.outcome, HOST_FAILURE);
       assert.equal(unavailable.phase, 'ready-persistence');
       assert.equal(lifecycleState(cluster.replica('identity-replica')), 'active');
@@ -375,16 +398,16 @@ test('runtime traps and temporary host unavailability preserve logical identity'
       let trapped;
       try {
         console.error = () => undefined;
-        const accepted = await trappedCluster.node(victim).step(
+        const accepted = await turnChainValue(trappedCluster.node(victim).step(
           coreTrappingAppend({
             dbFile: trappedCluster.replica(victim).dbFile,
             groupId: trappedCluster.partitionId,
             status: before,
             from: trappedCluster.raftPeerIdOf(leader),
             term: String(before.term),
-          }));
+          })));
         assert.equal(accepted.reason, 'inbound-enqueued');
-        trapped = await trappedCluster.node(victim).tick();
+        trapped = await turnChainValue(trappedCluster.node(victim).tick());
       } finally {
         console.error = originalConsoleError;
       }
@@ -416,7 +439,7 @@ test('closing a recovery-required group frees its node exactly once',
     try {
       const port = cluster.node('close-replica');
       databaseFault.failNextTransaction = true;
-      const failed = await port.campaign();
+      const failed = await turnChainValue(port.campaign());
       assert.equal(failed.outcome, HOST_FAILURE);
       assert.equal(failed.recoveryRequired, true);
       const entriesBeforeClose = cluster.coreEntryCount();

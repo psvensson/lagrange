@@ -60,6 +60,7 @@ import {
 import {ascendingPeerIdOrder} from
   '../../../src/raft/raft-rs-committed-membership-read.js';
 import {deriveRaftRsPeerId} from '../../../src/raft/raft-rs-peer-identity.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {ReplicaOperationField} from
   '../../../src/rebalancer/replica-operation-constants.js';
 import {reservePartitionRaftPeerIdentity} from
@@ -120,7 +121,7 @@ async function commitOnLeader(harness, type, replicaId) {
   const peerId = deriveRaftRsPeerId(replicaId);
   const shows = () => leaderDurable(harness).applied.voters.includes(peerId) ===
     (type === RAFT_MEMBERSHIP_OPERATION.ADD_PEER);
-  await leader.raft.proposeConfChange({type, replicaIdentity: replicaId});
+  await turnChainValue(leader.raft.proposeConfChange({type, replicaIdentity: replicaId}));
   assert.equal(await waitFor(shows), true, `setup: ${type} ${replicaId}`);
 }
 

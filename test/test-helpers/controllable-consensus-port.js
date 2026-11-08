@@ -39,6 +39,7 @@ import {
   PEER_ADDRESS_STATUS,
   USABLE,
 } from '../../src/raft/raft-rs-runtime-owner-constants.js';
+import {pendingTurn, settledTurn, turnFromForeignAnswer} from '../../src/raft/raft-rs-turn-answer.js';
 
 function testCoreOk(fields = {}) {
   return deepFreeze({
@@ -208,19 +209,22 @@ export class ControllableConsensusPort {
       this.listeners.set(eventName, listeners);
       return Object.freeze(() => listeners.delete(listener));
     };
+    // Every protocol operation answers the port's named turn
+    // (raft-rs-turn-answer.js); a handler's answer is foreign to the double,
+    // so it is named once, where the double receives it.
     return createRaftOperationPort({
       subscribe,
       step: (envelope) => {
         this.steps.push(envelope);
         const result = this.stepHandler ? this.stepHandler(envelope) : null;
-        return result?.outcome ? result : testCoreOk();
+        return settledTurn(result?.outcome ? result : testCoreOk());
       },
-      propose: async (entry) => {
+      propose: (entry) => pendingTurn((async () => {
         const result = this.proposeHandler ?
           await this.proposeHandler(entry) :
           null;
         return result?.outcome ? result : testCoreOk();
-      },
+      })()),
       proposeConfChange: (change) => {
         this.confChanges.push({...change});
         // A handler answers for the port (a refusal, a deferral, a queued
@@ -229,7 +233,7 @@ export class ControllableConsensusPort {
           this.confChangeHandler(change) : null;
         if (answered) {
           this.confChangeOutcomes.push(answered);
-          return answered;
+          return turnFromForeignAnswer(answered);
         }
         if (change?.type === 'remove-peer') {
           this.peers = this.peers.filter(
@@ -246,7 +250,7 @@ export class ControllableConsensusPort {
         }
         const proposed = testCoreOk();
         this.confChangeOutcomes.push(proposed);
-        return proposed;
+        return settledTurn(proposed);
       },
       proposeMembershipTransition: (transition) => {
         this.membershipTransitions.push(transition);
@@ -259,23 +263,23 @@ export class ControllableConsensusPort {
               .CONFIGURATION_GENERATION_UNAVAILABLE,
           );
         this.membershipTransitionOutcomes.push(outcome);
-        return outcome;
+        return settledTurn(outcome);
       },
       transferLeadership: (request) => {
         this.transferRequests.push(request);
         const answered = this.transferHandler ?
           this.transferHandler(request) : null;
-        return answered?.outcome ? answered : testCoreOk();
+        return settledTurn(answered?.outcome ? answered : testCoreOk());
       },
-      probePeerProgress: () => testCoreOk(),
-      tick: () => testCoreOk(),
+      probePeerProgress: () => settledTurn(testCoreOk()),
+      tick: () => settledTurn(testCoreOk()),
       campaign: () => {
         const answered = this.campaignHandler ? this.campaignHandler() : null;
         if (answered?.outcome) {
-          return answered;
+          return settledTurn(answered);
         }
         this.setRole(RAFT_ROLE.LEADER);
-        return testCoreOk();
+        return settledTurn(testCoreOk());
       },
       readStatus: () => {
         const peers = this.peers.map(freezePeerStatus);
@@ -329,10 +333,10 @@ export class ControllableConsensusPort {
         this.committedMembershipHandler(request) : deepFreeze({
           kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED,
           reason: COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE}),
-      configureTick: () => testCoreOk(),
+      configureTick: () => settledTurn(testCoreOk()),
       startScheduling: () => {
         this.schedulingCalls.push('start');
-        return testCoreOk();
+        return settledTurn(testCoreOk());
       },
       stopScheduling: () => {
         this.schedulingCalls.push('stop');

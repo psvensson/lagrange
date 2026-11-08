@@ -216,7 +216,7 @@ async function ensureLeaderWithAppliedTerm(liveReplicas, preferredReplicaId = nu
       leader.raft.transferLeadership({
         successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
         replicaIdentity: preferredReplicaId,
-      }).outcome,
+      }).result.outcome,
       RAFT_OPERATION_OUTCOME.CORE_OK,
     );
     assert.equal(

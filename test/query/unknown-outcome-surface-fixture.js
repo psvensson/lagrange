@@ -39,6 +39,7 @@ import {CONTROL_PLANE_PHASE_SCOPE} from
 import {getSchemaByTableName} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 
@@ -588,8 +589,8 @@ async function driveNativeR2Election(services) {
       tickIntervalMs: service.raftTimingConfig.tickIntervalMs,
     }).electionTick)) + 1;
   for (let round = 0; round < rounds; round += 1) {
-    await services[1].raft.tick();
-    await services[2].raft.tick();
+    await turnChainValue(services[1].raft.tick());
+    await turnChainValue(services[2].raft.tick());
     if (services[1].raft.readStatus().role === RAFT_ROLE.LEADER) {
       for (const service of services.slice(1)) {
         service.raft.startScheduling();

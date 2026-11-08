@@ -24,7 +24,8 @@ import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
   '../../src/raft/raft-rs-original-allocation-constants.js';
 import {REPLICA_LIFECYCLE_TABLE as TABLE} from
   '../../src/raft/raft-rs-replica-lifecycle-constants.js';
-import {RAFT_OPERATION_PORT_REQUEST as REQUEST} from '../../src/raft/raft-operation-port-request.js';
+import {RAFT_COMMITTED_ENTRY_APPLY_MODE, RAFT_OPERATION_PORT_REQUEST as REQUEST} from
+  '../../src/raft/raft-operation-port-request.js';
 import {RAFT_RS_OPENING_HISTORY as HISTORY} from
   '../../src/raft/raft-rs-opening-history-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
@@ -67,6 +68,7 @@ function fixture(t) {
       identityExisted: false, timing: TIMING, deferElection: true,
       resolvePeerAddress: (id) => `raft-rs://replica-${id}`,
       sendToPeer: () => {}, applyCommittedEntry: () => {},
+      [REQUEST.APPLY_COMMITTED_ENTRY_MODE]: RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
       [REQUEST.ORIGINAL_ALLOCATION_OPENING]: opening, ...extra};
     return {db, request, open: () => {
       resource.port = createRaftRsOperationPort(request);

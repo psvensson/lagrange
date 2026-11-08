@@ -13,6 +13,7 @@ import {
   createControllablePartitionService,
 } from './partition-service-test-support.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -108,7 +109,7 @@ test('raft-rs runtime emits a semantic envelope instead of a native packet',
     });
     try {
       for (let turn = 0; turn < 40 && sent.length === 0; turn += 1) {
-        await Promise.resolve(cluster.tick(replicaIds[0]));
+        await Promise.resolve(turnChainValue(cluster.tick(replicaIds[0])));
       }
       t.ok(sent.length > 0, 'a real raft-rs participant emits traffic');
       const first = sent[0];

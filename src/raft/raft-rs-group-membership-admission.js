@@ -34,6 +34,7 @@ import {
   RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
+import {settledTurn, turnChainValue} from './raft-rs-turn-answer.js';
 
 const RAFT_GROUP_MEMBERSHIP_ADMISSION_LOG_MSG = Object.freeze({
   PEER_ADMISSION: 'Raft peer admission',
@@ -124,9 +125,9 @@ function proposeAdmission(port, group, {replicaIdentity, peerAddress}) {
     replicaIdentity,
     peerAddress,
   });
-  if (!proposal || typeof proposal.then !== 'function') {
-    return {replicaIdentity, proposal,
-      ...admissionOfPortAnswer(proposal)};
+  if (proposal.settled) {
+    return {replicaIdentity, proposal: proposal.result,
+      ...admissionOfPortAnswer(proposal.result)};
   }
   const settle = (answered) => {
     const admission = Object.freeze({replicaIdentity, proposal: answered,
@@ -136,7 +137,7 @@ function proposeAdmission(port, group, {replicaIdentity, peerAddress}) {
   };
   // A queued operation that rejects instead of answering is refused, with
   // the rejection as its reason; it never escapes as an unhandled rejection.
-  const settled = Promise.resolve(proposal).then(settle, (error) =>
+  const settled = proposal.pending.then(settle, (error) =>
     settle({reason: error?.message}));
   return {replicaIdentity, settled,
     outcome: RAFT_MEMBERSHIP_ADMISSION_OUTCOME.QUEUED};
@@ -293,13 +294,16 @@ function recipientMatches(status, receiver, transition, stage) {
     status.replicaIdentity === receiver.localReplicaIdentity && transition?.stage === stage;
 }
 
+// The native turn's answer (raft-rs-turn-answer.js), or a typed refusal
+// settled without one.
 function reserveAndProposeAuthorizedLearner(port, receiver, transition, admitExecution) {
   if (!liveDelivery(admitExecution)) {
-    return deliveryRefusal();
+    return settledTurn(deliveryRefusal());
   }
   const reserved = reserveGroupPeerIdentity(receiver, transition.replicaIdentity);
   if (reserved.outcome !== RAFT_MEMBERSHIP_RESERVATION_OUTCOME.RESERVED) {
-    return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.WRONG_RECIPIENT);
+    return settledTurn(
+      membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.WRONG_RECIPIENT));
   }
   // Same-turn native fences remain authoritative. Do not refresh an issued
   // transition from status here: that would turn stale permission into a grant.
@@ -380,8 +384,8 @@ async function proposeAuthorizedGroupLearner(port, group, request, observeAuthor
   const observed = await observedAuthorization(port, group, request, observeAuthorization,
     delivery, RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER);
   if (observed.refusal) return observed.refusal;
-  return reserveAndProposeAuthorizedLearner(port, observed.receiver, observed.transition,
-    observed.admitExecution);
+  return turnChainValue(reserveAndProposeAuthorizedLearner(port, observed.receiver,
+    observed.transition, observed.admitExecution));
 }
 
 // A target whose own port did not answer: retryable unavailability, never
@@ -435,9 +439,9 @@ async function proposeAuthorizedGroupPromotion(port, group, request, observeAuth
   const target = await observedTarget(observeTarget, observed.transition);
   if (target.refusal) return target.refusal;
   if (!liveDelivery(observed.admitExecution)) return deliveryRefusal();
-  return port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
+  return turnChainValue(port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
     {...observed.transition, targetStatusObservation: target.observation},
-    observed.admitExecution);
+    observed.admitExecution));
 }
 
 function removalPeerAddress(port, group, transition) {
@@ -457,8 +461,8 @@ async function proposeAuthorizedGroupRemoval(port, group, request, observeAuthor
   if (observed.refusal) return observed.refusal;
   if (!liveDelivery(observed.admitExecution)) return deliveryRefusal();
   const peerAddress = removalPeerAddress(port, group, observed.transition);
-  return port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
-    {...observed.transition, peerAddress}, observed.admitExecution);
+  return turnChainValue(port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
+    {...observed.transition, peerAddress}, observed.admitExecution));
 }
 
 export {

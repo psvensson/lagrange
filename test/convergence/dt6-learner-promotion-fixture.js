@@ -59,6 +59,7 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {forwardHandlerRegistry} from
   '../test-helpers/replica-handler-identity-fixture.js';
 
@@ -296,12 +297,12 @@ function createPartitionableTransport(inner) {
 }
 
 async function proposePrefixWrite(leader, seq) {
-  assertRaftOperationSucceeded(await leader.raft.propose({
+  assertRaftOperationSucceeded(await turnChainValue(leader.raft.propose({
     type: PARTITION_SERVICE_OPERATION.INSERT,
     sql: PREFIX_INSERT_SQL,
     params: [seq],
     entryId: `progress-proof-prefix-${seq}`,
-  }));
+  })));
 }
 
 function assertLeaderCommitIndex(leader, expected, stage) {

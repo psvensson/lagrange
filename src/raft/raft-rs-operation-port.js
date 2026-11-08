@@ -5,6 +5,12 @@ import {
 } from '../diagnostics/raft-formation-attribution.js';
 import {createRaftOperationPort, deepFreeze} from './raft-operation-port.js';
 import {
+  continueTurn,
+  pendingTurn,
+  settledTurn,
+  turnChainValue,
+} from './raft-rs-turn-answer.js';
+import {
   RAFT_EVENT,
   RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_MEMBERSHIP_OPERATION,
@@ -24,8 +30,10 @@ import {committedMembershipRefusal, normalizeCommittedLearnerRead,
   './raft-rs-committed-membership-read.js';
 import {encodeCommittedLearnerAdmission} from './raft-rs-committed-membership-context.js';
 import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
-import {RAFT_OPERATION_PORT_REQUEST} from
-  './raft-operation-port-request.js';
+import {
+  RAFT_COMMITTED_ENTRY_APPLY_MODE,
+  RAFT_OPERATION_PORT_REQUEST,
+} from './raft-operation-port-request.js';
 import {RaftRsPeerIdentityRegistry} from './raft-rs-peer-identity.js';
 import {
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
@@ -33,6 +41,7 @@ import {
 } from './raft-rs-peer-identity-constants.js';
 import {
   RUNTIME_COMMAND,
+  RUNTIME_PHASE,
   RUNTIME_REASON,
 } from './raft-rs-runtime-owner-constants.js';
 import {
@@ -101,6 +110,27 @@ function committedEntryApplication(applyCommittedEntry) {
   }));
 }
 
+// The group's committed-entry application runs inside the SQLite
+// transaction that advances the applied state: the group declares it
+// synchronous once, here where it registers it, and a missing or other
+// declaration refuses the port before anything opens. The refusal runs
+// before the original-allocation capability is consumed
+// (resolveOriginalNativeEntry), so a refused registration spends no opening.
+function requireSynchronousApplication(request) {
+  if (request[RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY_MODE] ===
+      RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS) {
+    return;
+  }
+  const refused = deepFreeze({
+    outcome: CORE_REFUSED,
+    reason: RUNTIME_REASON.COMMITTED_ENTRY_APPLY_MODE_NOT_SYNCHRONOUS,
+    phase: RUNTIME_PHASE.PORT_REGISTRATION,
+    retryable: false,
+    recoveryRequired: false,
+  });
+  throw Object.assign(new Error(refused.reason), {consensus: refused});
+}
+
 function tickIntervalOf(timing) {
   if (Number.isFinite(timing.tickIntervalMs) && timing.tickIntervalMs > 0) {
     return timing.tickIntervalMs;
@@ -114,15 +144,17 @@ function tickIntervalOf(timing) {
 // did not type (synchronously, or as the rejection of the work it returned)
 // becomes that group's typed host failure, recorded by the runtime owner, so
 // nothing is rethrown into a caller or a timer.
+// `work` answers the runtime's turn (raft-rs-turn-answer.js); so does the
+// containment.
 function containRuntimeThrow(dispatcher, work) {
-  let result;
+  let turn;
   try {
-    result = work();
+    turn = work();
   } catch (error) {
-    return dispatcher.containUnexpectedThrow(error);
+    return settledTurn(dispatcher.containUnexpectedThrow(error));
   }
-  return result && typeof result.then === 'function' ?
-    result.then(undefined, dispatcher.containUnexpectedThrow) : result;
+  return turn.settled ? turn : pendingTurn(
+    turn.pending.then(undefined, dispatcher.containUnexpectedThrow));
 }
 
 // {change} in the core's ConfChangeV2 shape, or {refusal} naming how the
@@ -172,8 +204,11 @@ function closeDispatcher(dispatcher, lifecycle) {
   if (dispatcher === null) {
     return coreOk(CLOSED_WITHOUT_RUNTIME);
   }
+  // The close is synchronous work: its admitted turn, or the admission's
+  // refusal, settles in this run.
   return lifecycle.active ?
-    lifecycle.execute(() => dispatcher.close({enterCore: true})) :
+    lifecycle.execute(() =>
+      settledTurn(dispatcher.close({enterCore: true}))).result :
     dispatcher.close({enterCore: false});
 }
 
@@ -193,7 +228,7 @@ function finalizePortOpen({
   // nothing is released and the host closes the port.
   if (identityRecordPending && dispatcher !== null) {
     Promise.resolve(identityRecorded).then(
-      () => dispatch(() => dispatcher.recordIdentity()),
+      () => turnChainValue(dispatch(() => dispatcher.recordIdentity())),
       () => undefined).catch(() => undefined);
   }
   if (deferElection !== true && lifecycle.active) {
@@ -211,6 +246,8 @@ function createRaftRsOperationPort(request) {
   const suppliedTiming = required(request, RAFT_OPERATION_PORT_REQUEST.TIMING);
   const resolvePeerAddress = required(
     request, RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS);
+  required(request, RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY);
+  requireSynchronousApplication(request);
   // Capture the actual native inputs once: original admission validates what
   // construction will use, not a later read of a callback-bearing request.
   const bootstrapPeerIds = required(
@@ -260,7 +297,9 @@ function createRaftRsOperationPort(request) {
   };
   const identityRecorded =
     request[RAFT_OPERATION_PORT_REQUEST.IDENTITY_RECORDED];
-  const identityRecordPending = typeof identityRecorded?.then === 'function';
+  // The host's acknowledgement of the opening's prior-existence fact: absent,
+  // or the promise of that write (RAFT_OPERATION_PORT_REQUEST).
+  const identityRecordPending = identityRecorded !== undefined;
   const timers = resolveTimeSource(
     request[RAFT_OPERATION_PORT_REQUEST.SUBSTRATE] || {});
   let tickIntervalMs = tickIntervalOf(timing);
@@ -327,12 +366,15 @@ function createRaftRsOperationPort(request) {
     createRuntimeDispatcher(dispatcherOptions);
 
   // Every entry into the runtime: admitted by the lifecycle owner, refused
-  // once the port is closed, and contained (containRuntimeThrow).
+  // once the port is closed, and contained (containRuntimeThrow). It answers
+  // the runtime's turn, and each port operation hands its caller that turn
+  // as is (raft-rs-turn-answer.js): {settled: true, result} when the work
+  // completed within the call, {settled: false, pending} when it waits.
   function dispatch(work) {
     return lifecycle.execute(() => {
       if (closed || dispatcher === null) {
-        return deepFreeze({
-          outcome: CORE_REFUSED, reason: RUNTIME_REASON.CLOSED});
+        return settledTurn(deepFreeze({
+          outcome: CORE_REFUSED, reason: RUNTIME_REASON.CLOSED}));
       }
       return containRuntimeThrow(dispatcher, work);
     });
@@ -347,7 +389,7 @@ function createRaftRsOperationPort(request) {
   const executeTurn = (command) =>
     protocolTurn(() => dispatcher.execute(command));
   const enqueueStep = (envelope) =>
-    protocolTurn(() => dispatcher.enqueueStep(envelope));
+    protocolTurn(() => settledTurn(dispatcher.enqueueStep(envelope)));
   function clearTickTimer() {
     if (timer !== null) {
       timers.clearInterval(timer);
@@ -381,7 +423,7 @@ function createRaftRsOperationPort(request) {
   // check-quorum lease it bounds, keeps running instead of freezing.
   const startScheduling = () => dispatch(() => {
     scheduleTicks();
-    return coreOk('scheduling-started');
+    return settledTurn(coreOk('scheduling-started'));
   });
   const subscribe = (eventName, listener) => {
     const normalizedEventName = EVENT_ALIAS[eventName] || eventName;
@@ -406,13 +448,13 @@ function createRaftRsOperationPort(request) {
       const normalized = normalizedConfChange(change, registry);
       return normalized.refusal === undefined ? dispatcher.execute({
         type: 'propose-conf-change', change: normalized.change,
-      }) : deepFreeze({
+      }) : settledTurn(deepFreeze({
         outcome: CORE_REFUSED,
         reason: normalized.refusal,
         phase: 'membership-admission',
         retryable: false,
         recoveryRequired: false,
-      });
+      }));
     }),
     // One named request shape ({successor, replicaIdentity?}); the target
     // is resolved through this replica's own registry, and a request that
@@ -422,14 +464,16 @@ function createRaftRsOperationPort(request) {
       return normalized.refusal === undefined ? dispatcher.execute({
         type: RUNTIME_COMMAND.TRANSFER_LEADERSHIP,
         transfer: normalized.command,
-      }) : normalized.refusal;
+      }) : settledTurn(normalized.refusal);
     }),
     probePeerProgress: (peerAddress) => executeTurn({
       type: RUNTIME_COMMAND.PROBE_PEER_PROGRESS, peerAddress,
     }),
     tick: () => executeTurn({type: 'tick'}),
     campaign: () => executeTurn({type: 'campaign'}),
-    readStatus: () => execute({type: 'read-status'}),
+    // A status read never waits (the runtime's readStatusNow): its turn
+    // settles in this run, and the status is answered as is.
+    readStatus: () => execute({type: 'read-status'}).result,
     // The committed configuration as frozen data ({purpose} is a
     // COMMITTED_MEMBERSHIP_READ_PURPOSE; a bootstrap read by default).
     [RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP]: (readRequest) => {
@@ -439,25 +483,30 @@ function createRaftRsOperationPort(request) {
         const answered = execute({type: RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP,
           purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION, query: normalized.query});
         const bounded = (result) => result?.kind ? result : unavailableLearnerAction();
-        return answered?.then ? answered.then(bounded) : bounded(answered);
+        return turnChainValue(continueTurn(answered,
+          (result) => settledTurn(bounded(result))));
       }
+      // A bootstrap read answers at once: a read still waiting on the group
+      // is the group held.
       const answered = execute({
         type: RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP,
         purpose: readRequest?.purpose ??
           COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP,
       });
-      return answered?.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED ||
-        answered?.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED ?
-        answered :
+      const committed = answered.settled ? answered.result : null;
+      return committed?.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED ||
+        committed?.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED ?
+        committed :
         committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD);
     },
     [RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION]: (request, admitExecution) =>
       protocolTurn(() => {
         const normalized = normalizeMembershipTransition(request, registry, admitExecution);
-        return normalized.refusal ?? dispatcher.execute({
-          type: RUNTIME_COMMAND.PROPOSE_MEMBERSHIP_TRANSITION,
-          transition: normalized.command,
-        });
+        return normalized.refusal ? settledTurn(normalized.refusal) :
+          dispatcher.execute({
+            type: RUNTIME_COMMAND.PROPOSE_MEMBERSHIP_TRANSITION,
+            transition: normalized.command,
+          });
       }),
     configureTick: (nextTiming) => dispatch(() => {
       const command = typeof nextTiming === 'number' ?
@@ -471,7 +520,7 @@ function createRaftRsOperationPort(request) {
       if (wasScheduling) {
         scheduleTicks();
       }
-      return coreOk('timing-configured');
+      return settledTurn(coreOk('timing-configured'));
     }),
     startScheduling,
     stopScheduling,

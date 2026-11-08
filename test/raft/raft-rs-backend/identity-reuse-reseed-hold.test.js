@@ -55,6 +55,7 @@ import {
   RAFT_RS_LOCAL_LOG_REFUSAL,
   RUNTIME_FAULT_REPORT,
 } from '../../../src/raft/raft-rs-runtime-owner-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {RAFT_RS_MESSAGE_TYPE} from
   '../../../src/raft/raft-rs-ingress-constants.js';
 
@@ -169,15 +170,15 @@ test('W2 (S3): held identities neither campaign nor grant a vote; one ' +
     });
     assertHeld(cluster, 'w2-b');
     assertHeld(cluster, 'w2-c');
-    const campaign = await cluster.node('w2-b').campaign();
+    const campaign = await turnChainValue(cluster.node('w2-b').campaign());
     assert.equal(campaign.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
     assert.equal(campaign.reason, RESEED_REQUIRED);
     const voteBefore = hardStateOf(cluster, 'w2-c');
     const vote = emptyCandidateVote(ids, 'w2-b', 'w2-c');
-    const delivered = await cluster.node('w2-c').step(
-      {...vote, groupId: cluster.partitionId});
+    const delivered = await turnChainValue(cluster.node('w2-c').step(
+      {...vote, groupId: cluster.partitionId}));
     assert.equal(delivered.reason, RESEED_REQUIRED);
-    await cluster.node('w2-c').tick();
+    await turnChainValue(cluster.node('w2-c').tick());
     assert.deepEqual(hardStateOf(cluster, 'w2-c'), voteBefore,
       'a held replica granted a vote');
     cluster.tickers = ['w2-a', 'w2-b', 'w2-c'];
@@ -278,10 +279,10 @@ test('W6: the hold survives a restart - the held replica re-opened from ' +
     assertHeld(cluster, 'w6-c');
     const before = hardStateOf(cluster, 'w6-c');
     const vote = emptyCandidateVote(ids, 'w6-b', 'w6-c');
-    const delivered = await cluster.node('w6-c').step(
-      {...vote, groupId: cluster.partitionId});
+    const delivered = await turnChainValue(cluster.node('w6-c').step(
+      {...vote, groupId: cluster.partitionId}));
     assert.equal(delivered.reason, RESEED_REQUIRED);
-    const campaign = await cluster.node('w6-c').campaign();
+    const campaign = await turnChainValue(cluster.node('w6-c').campaign());
     assert.equal(campaign.reason, RESEED_REQUIRED);
     assert.deepEqual(hardStateOf(cluster, 'w6-c'), before);
     cluster.tickers = ['w6-a', 'w6-b', 'w6-c'];
@@ -306,12 +307,12 @@ test('W2: the turn that proves the history lost ends there - a vote ' +
     reopenEmpty(cluster, 'w2t-c');
     const before = hardStateOf(cluster, 'w2t-c');
     const node = cluster.node('w2t-c');
-    await node.step(envelopeTo(cluster.partitionId, ids['w2t-c'], {
+    await turnChainValue(node.step(envelopeTo(cluster.partitionId, ids['w2t-c'], {
       msgType: RAFT_RS_MESSAGE_TYPE.HEARTBEAT, from: ids['w2t-a'],
-      term: String(leader.term), commit: String(leader.commitIndex)}));
-    await node.step(emptyCandidateVote(ids, 'w2t-b', 'w2t-c'));
+      term: String(leader.term), commit: String(leader.commitIndex)})));
+    await turnChainValue(node.step(emptyCandidateVote(ids, 'w2t-b', 'w2t-c')));
     const from = cluster.coreEntries.length;
-    await capturingErrors(() => node.tick());
+    await capturingErrors(() => turnChainValue(node.tick()));
     assert.equal(cluster.coreEntries.length, from,
       'the turn that proved the history lost entered the core');
     assertHeld(cluster, 'w2t-c');
@@ -339,10 +340,10 @@ test('W1: a runtime replacement after the hold does not reopen the held ' +
     const victim = other.node('w1t-y').readStatus();
     const from = other.coreEntries.length;
     await capturingErrors(async () => {
-      await other.node('w1t-y').step(coreTrappingAppend({
+      await turnChainValue(other.node('w1t-y').step(coreTrappingAppend({
         dbFile: other.dbFileOf('w1t-y'), groupId: other.partitionId,
-        status: victim, from: ids['w1t-x'], term: String(victim.term)}));
-      await other.node('w1t-y').tick();
+        status: victim, from: ids['w1t-x'], term: String(victim.term)})));
+      await turnChainValue(other.node('w1t-y').tick());
       cluster.node('w1r-a').readStatus();
     });
     const reopened = other.coreEntries.slice(from).filter((entry) =>

@@ -21,6 +21,7 @@ import {
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {inspectLifecycleRetirements} from
   '../../../scripts/checks/raft-rs-lifecycle-retirement-census.js';
+import {pendingTurn} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const GROUP_ID = 'registry-generation-group';
 const REPLICA_ID = 'registry-generation-replica';
@@ -64,15 +65,16 @@ test('a delayed G1 retirement callback lands on G1 only; G2 stays running',
     const g1 = openGeneration('g1');
     // G1 retirement starts while G1 still runs work: it waits for the drain.
     let releaseWork;
-    const work = g1.owner.execute(() => new Promise((resolve) => {
+    // The admitted work answers a pending turn (raft-rs-turn-answer.js).
+    const work = g1.owner.execute(() => pendingTurn(new Promise((resolve) => {
       releaseWork = resolve;
-    }));
+    })));
     const pendingRetire = retire(g1);
     // G1 teardown completes and the logical name is reused by G2.
     unregisterRuntimeLifecycle(g1.runtime, g1.owner);
     const g2 = openGeneration('g2');
     releaseWork();
-    await work;
+    await work.pending;
     const result = await pendingRetire;
     assert.equal(result.outcome, 'CORE_OK', 'G1 retires its own runtime');
     assert.deepEqual(g1.retired, ['g1']);

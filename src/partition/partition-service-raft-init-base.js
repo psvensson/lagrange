@@ -30,6 +30,7 @@ import {
 } from '../raft/snapshot-install.js';
 import {RAFT_EVENT} from '../raft/constants.js';
 import {
+  RAFT_COMMITTED_ENTRY_APPLY_MODE,
   RAFT_OPERATION_PORT_REQUEST,
   hostedConsensusSubstrate,
 } from '../raft/raft-operation-port-request.js';
@@ -54,6 +55,7 @@ import {createCommittedStatementOutcomeTable} from
 import {openParticipantTransactionStore} from
   './partition-participant-transaction-store.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
+import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const {
   AddressManager,
@@ -469,6 +471,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       // that also advances the rs-raft applied state.
       [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: (committed) =>
         this.applyCommittedEntry(committed),
+      [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY_MODE]:
+        RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
       [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: (decision) => {
         if (typeof this.onSnapshotCatchupNeeded ===
             PARTITION_SERVICE_TYPE.FUNCTION) {
@@ -596,7 +600,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       // lead its own group": a refusal is a partition that can never serve a
       // write, so initialization fails closed with a typed outcome and
       // releases what it acquired (R11) instead of reporting a leader.
-      const campaign = await this.raft.campaign();
+      const campaign = await turnChainValue(this.raft.campaign());
       if (campaign?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
         await refusePartitionConsensusStartup(this, campaign);
       }
@@ -770,9 +774,10 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     ) {
       return false;
     }
-    const result = this.raft.configureTick({tickIntervalMs});
-    return result === true ||
-      result?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK;
+    // Reconfiguring the tick is synchronous work: its turn settles here.
+    const configured = this.raft.configureTick({tickIntervalMs});
+    return configured.settled &&
+      configured.result.outcome === RAFT_OPERATION_OUTCOME.CORE_OK;
   }
   /**
    * Create the table based on schema (DDL owner:

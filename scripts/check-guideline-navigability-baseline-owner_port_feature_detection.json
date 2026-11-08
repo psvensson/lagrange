@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-08T12:15:36.609Z",
-  "rawViolationCount": 2130,
+  "generatedAt": "2026-11-08T13:54:46.375Z",
+  "rawViolationCount": 2124,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -527,7 +527,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-stale-watermark-record.js",
-      "line": 147,
+      "line": 149,
       "column": 11,
       "functionName": "resolveLogger",
       "kind": "owner_port_feature_detection",
@@ -1040,17 +1040,8 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api-readiness-methods.js",
-      "line": 128,
-      "column": 10,
-      "functionName": "getStartupAuthoritySnapshotForBootstrapResponse",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/bootstrap-api-readiness-methods.js",
-      "line": 134,
-      "column": 10,
+      "line": 130,
+      "column": 8,
       "functionName": "getStartupAuthoritySnapshotForBootstrapResponse",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
@@ -1241,15 +1232,6 @@
       "line": 504,
       "column": 10,
       "functionName": "isDistributedTransactionRecoveryAvailable",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/bootstrap-service.js",
-      "line": 508,
-      "column": 14,
-      "functionName": "activateDistributedTransactionRecovery",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -1841,16 +1823,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 320,
-      "column": 12,
-      "functionName": "activateDistributedTransactionRecovery",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 329,
+      "line": 323,
       "column": 12,
       "functionName": "flushDeferredCreateSelfHostedMetadata",
       "kind": "owner_port_feature_detection",
@@ -2138,17 +2111,8 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
-      "line": 570,
-      "column": 10,
-      "functionName": "getControlPlanePublicationStory",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
-      "line": 599,
-      "column": 8,
+      "line": 588,
+      "column": 6,
       "functionName": "getMembershipPublicationDiagnostics",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
@@ -2157,15 +2121,6 @@
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
       "line": 608,
-      "column": 8,
-      "functionName": "getMembershipPublicationDiagnostics",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
-      "line": 631,
       "column": 6,
       "functionName": "buildMembershipPublicationPlanningSnapshot",
       "kind": "owner_port_feature_detection",
@@ -2174,7 +2129,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
-      "line": 651,
+      "line": 628,
       "column": 19,
       "functionName": "logBootstrapJoinReadinessProjection",
       "kind": "owner_port_feature_detection",
@@ -2237,16 +2192,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-startup-authority-evidence.js",
-      "line": 37,
-      "column": 8,
-      "functionName": "resolveLocalStartupAuthoritySnapshot",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/bootstrap-startup-authority-evidence.js",
-      "line": 43,
+      "line": 39,
       "column": 8,
       "functionName": "resolveLocalStartupAuthoritySnapshot",
       "kind": "owner_port_feature_detection",
@@ -2462,7 +2408,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/startup-runtime-handoff-owner.js",
-      "line": 108,
+      "line": 111,
       "column": 8,
       "functionName": "scheduleControlPlaneBackgroundWriterActivationRetry",
       "kind": "owner_port_feature_detection",
@@ -7898,7 +7844,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-admission-transition-record.js",
-      "line": 308,
+      "line": 310,
       "column": 8,
       "functionName": "emit",
       "kind": "owner_port_feature_detection",
@@ -10526,7 +10472,7 @@
     },
     {
       "filePath": "src/node/replica-handler-leader-handoff-methods.js",
-      "line": 135,
+      "line": 136,
       "column": 10,
       "functionName": "requestTrackedPartitionLeaderHandoff",
       "kind": "owner_port_feature_detection",
@@ -10787,7 +10733,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-recovery.js",
-      "line": 393,
+      "line": 394,
       "column": 24,
       "functionName": "resolveSnapshotDurableVersion",
       "kind": "owner_port_feature_detection",
@@ -10796,7 +10742,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-registered-activation.js",
-      "line": 272,
+      "line": 273,
       "column": 6,
       "functionName": "requireEffectHandler",
       "kind": "owner_port_feature_detection",
@@ -10805,7 +10751,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-serialization.js",
-      "line": 221,
+      "line": 227,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -10814,7 +10760,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-transition.js",
-      "line": 616,
+      "line": 603,
       "column": 6,
       "functionName": "hasOtherActivePartitionReplicaOnLeaderNode",
       "kind": "owner_port_feature_detection",
@@ -10823,7 +10769,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-transition.js",
-      "line": 723,
+      "line": 710,
       "column": 4,
       "functionName": "buildCreateCdcData",
       "kind": "owner_port_feature_detection",
@@ -10832,7 +10778,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine.js",
-      "line": 172,
+      "line": 178,
       "column": 15,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -10841,7 +10787,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine.js",
-      "line": 591,
+      "line": 605,
       "column": 8,
       "functionName": "markServiceRowLocalOnly",
       "kind": "owner_port_feature_detection",
@@ -11534,7 +11480,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-proof-methods.js",
-      "line": 164,
+      "line": 165,
       "column": 8,
       "functionName": "probeLearnerReplicationProgress",
       "kind": "owner_port_feature_detection",
@@ -11732,7 +11678,7 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 129,
+      "line": 131,
       "column": 8,
       "functionName": "getCachedSystemTableRow",
       "kind": "owner_port_feature_detection",
@@ -11741,7 +11687,7 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 133,
+      "line": 135,
       "column": 8,
       "functionName": "getCachedSystemTableRow",
       "kind": "owner_port_feature_detection",
@@ -11750,7 +11696,7 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 150,
+      "line": 152,
       "column": 8,
       "functionName": "getCachedSystemTableRows",
       "kind": "owner_port_feature_detection",
@@ -11759,7 +11705,7 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 153,
+      "line": 155,
       "column": 8,
       "functionName": "getCachedSystemTableRows",
       "kind": "owner_port_feature_detection",
@@ -11768,7 +11714,7 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 473,
+      "line": 477,
       "column": 12,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -11777,7 +11723,7 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 591,
+      "line": 595,
       "column": 10,
       "functionName": "initializeUnserialized",
       "kind": "owner_port_feature_detection",
@@ -12209,7 +12155,7 @@
     },
     {
       "filePath": "src/query/application-database.js",
-      "line": 603,
+      "line": 578,
       "column": 18,
       "functionName": "createBoundApplicationDatabaseRuntime",
       "kind": "owner_port_feature_detection",
@@ -12434,7 +12380,7 @@
     },
     {
       "filePath": "src/query/execution-context.js",
-      "line": 512,
+      "line": 514,
       "column": 32,
       "functionName": "_defaultLookupFetch",
       "kind": "owner_port_feature_detection",
@@ -14045,7 +13991,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-group-membership-admission.js",
-      "line": 280,
+      "line": 281,
       "column": 9,
       "functionName": "learnerPortAvailable",
       "kind": "owner_port_feature_detection",
@@ -14054,7 +14000,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-group-membership-admission.js",
-      "line": 281,
+      "line": 282,
       "column": 4,
       "functionName": "learnerPortAvailable",
       "kind": "owner_port_feature_detection",
@@ -14063,7 +14009,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-membership-transition-runtime.js",
-      "line": 264,
+      "line": 265,
       "column": 8,
       "functionName": "executionDeliveryRefusal",
       "kind": "owner_port_feature_detection",
@@ -14072,7 +14018,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-peer-delivery.js",
-      "line": 125,
+      "line": 127,
       "column": 6,
       "functionName": "notifySnapshotCatchupNeeded",
       "kind": "owner_port_feature_detection",
@@ -18932,7 +18878,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-replica.js",
-      "line": 636,
+      "line": 637,
       "column": 6,
       "functionName": "writeRoleUpdate",
       "kind": "owner_port_feature_detection",
@@ -18941,7 +18887,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-replica.js",
-      "line": 682,
+      "line": 683,
       "column": 6,
       "functionName": "writeLeaderNodeUpdate",
       "kind": "owner_port_feature_detection",

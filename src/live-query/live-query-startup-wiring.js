@@ -159,14 +159,13 @@ function dispatchTopologyChange(operation, record, onPartitionTopologyChange, lo
   if (!topologyChange) {
     return;
   }
-  const maybePromise = onPartitionTopologyChange(topologyChange);
-  if (maybePromise && typeof maybePromise.catch === 'function') {
-    maybePromise.catch((error) => {
-      logger.warn(LOG_MSG_PARTITION_HANDLER_FAILED, {
-        error: error.message,
-      });
+  // The manager's topology handler is asynchronous and answers a promise
+  // (LiveQueryManager.handlePartitionTopologyChange).
+  onPartitionTopologyChange(topologyChange).catch((error) => {
+    logger.warn(LOG_MSG_PARTITION_HANDLER_FAILED, {
+      error: error.message,
     });
-  }
+  });
 }
 
 function findMatchingSubscription(subscriptions, tableName, tableResolver) {
@@ -216,7 +215,8 @@ function dispatchChangeToSubscriptions(
  * Create adapter that bridges cache CDC notifications to live query handlers.
  * @param {Object} [options]
  * @param {Object|null} [options.systemTableCache]
- * @param {Function|null} [options.onPartitionTopologyChange]
+ * @param {?function(Object): Promise<void>} [options.onPartitionTopologyChange] -
+ *   The asynchronous topology handler.
  * @return {{
  *   subscribeToPartition: Function,
  *   unsubscribeFromPartition: Function,

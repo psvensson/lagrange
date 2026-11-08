@@ -66,6 +66,7 @@ import {
   createWasmServiceLeaderNodeMutationHelper,
   createWasmServiceRoleMutationHelper,
 } from './wasm-service-metadata-mutation-helpers.js';
+import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 /**
  * Entry type constants for committed Raft log entries.
@@ -362,7 +363,7 @@ class WasmServiceReplica extends EventEmitter {
     const payload = message.payload || message;
     if (isRaftRsTransportEnvelope(payload)) {
       if (this.raft) {
-        await Promise.resolve(this.raft.step(payload));
+        await turnChainValue(this.raft.step(payload));
       }
       return null;
     }
@@ -488,7 +489,7 @@ class WasmServiceReplica extends EventEmitter {
     if (!this.raft) {
       throw new Error(WASM_SERVICE_ERROR_MSG.SERVICE_NOT_READY);
     }
-    const answer = await Promise.resolve(
+    const answer = await turnChainValue(
       this.raft.propose(encodeCommittedCommand(entry)));
     if (answer?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
       throw proposalRefusedError(answer);

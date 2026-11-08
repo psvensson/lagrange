@@ -23,12 +23,12 @@ function activateOwnerTrackedTransactionRecovery(owner) {
     // can keep the fail-closed readiness surface alive for observation.
     recovery = Promise.reject(error);
   }
-  if (recovery && typeof recovery.catch === LOCAL_STR_FUNCTION) {
-    // Seed and join entrypoints intentionally do not await this attachment.
-    // Mark the rejection handled without changing the returned promise so an
-    // explicit caller can still await the canonical failure.
-    void recovery.catch(() => undefined);
-  }
+  // The owner's activation answers a promise on every path
+  // (StartupRuntimeHandoffOwner.activateDistributedTransactionRecovery).
+  // Seed and join entrypoints intentionally do not await this attachment.
+  // Mark the rejection handled without changing the returned promise so an
+  // explicit caller can still await the canonical failure.
+  void recovery.catch(() => undefined);
   return recovery;
 }
 

@@ -20,6 +20,7 @@ import {
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const REPLICAS = Object.freeze(['drop-a', 'drop-b', 'drop-c']);
 const [A, , C] = REPLICAS;
@@ -30,8 +31,8 @@ function clusterAfterSelfChange(partitionId, type) {
   const cluster = new PartitionNodeCluster({partitionId, replicaIds: REPLICAS});
   assert.equal(cluster.settle(() => cluster.leaderReplicaId() === A), true,
     'setup: A leads');
-  const proposed = cluster.node(A).proposeConfChange({type,
-    replicaIdentity: A});
+  const proposed = turnChainValue(cluster.node(A).proposeConfChange({type,
+    replicaIdentity: A}));
   assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     `setup: the change about A is proposed (${JSON.stringify(proposed)})`);
   const aId = cluster.raftPeerIdOf(A);
@@ -51,13 +52,13 @@ test('CA9: a leader demoted to a learner that drops a proposal during its ' +
     assert.ok(cluster.coreConfState(A).learners.includes(
       cluster.raftPeerIdOf(A)), 'setup: A is a learner');
     cluster.isolate(C);
-    const accepted = await cluster.node(A).transferLeadership({
+    const accepted = await turnChainValue(cluster.node(A).transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
       replicaIdentity: C,
-    });
+    }));
     assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `setup: A runs a transfer to C (${JSON.stringify(accepted)})`);
-    const dropped = await cluster.node(A).propose({duringTransfer: true});
+    const dropped = await turnChainValue(cluster.node(A).propose({duringTransfer: true}));
     assert.equal(dropped.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE,
       `the drop is the transfer's (${JSON.stringify(dropped)})`);
     assert.equal(dropped.retryable, true);
@@ -72,7 +73,7 @@ test('a leader removed from its own configuration still refuses a proposal ' +
   const cluster = clusterAfterSelfChange('ca9-removed-leader',
     RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER);
   try {
-    const refused = await cluster.node(A).propose({afterRemoval: true});
+    const refused = await turnChainValue(cluster.node(A).propose({afterRemoval: true}));
     assert.equal(refused.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED,
       `a leader without progress for itself drops it (${JSON.stringify(
         refused)})`);

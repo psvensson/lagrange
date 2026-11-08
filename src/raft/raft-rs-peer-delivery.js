@@ -24,13 +24,15 @@ import {deliveryTransportOf,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   isDeliveredTransportDeliveryOutcome,
 } from '../transport/transport-semantic-outcome.js';
+import {
+  continueTurn,
+  pendingTurn,
+  settledTurn,
+  turnFromForeignAnswer,
+} from './raft-rs-turn-answer.js';
 
 const DEFAULT_SNAPSHOT_INDEX = '0';
-
-function thenMaybe(value, continuation) {
-  return value && typeof value.then === 'function' ?
-    value.then(continuation) : continuation(value);
-}
+const DELIVERY_RECORDED = settledTurn(null);
 
 // A delivery to one peer is that peer's transport outcome. Raft re-sends
 // what a peer did not receive (the next append or heartbeat), so a failed
@@ -126,7 +128,10 @@ function notifySnapshotCatchupNeeded(group, address, message) {
       leaderBoundary <= 0) {
     return null;
   }
-  const dispatched = group.snapshotCatchupNeeded(
+  // A notification: the host schedules the catch-up on its own and answers
+  // nothing (every registered notifier is block-bodied); nothing is read
+  // from it.
+  group.snapshotCatchupNeeded(
     buildSnapshotCatchupDecision({
       outcome: RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
       followerAddress: address,
@@ -135,9 +140,6 @@ function notifySnapshotCatchupNeeded(group, address, message) {
       leaderBoundary,
     }),
   );
-  if (dispatched && typeof dispatched.catch === 'function') {
-    dispatched.catch(() => undefined);
-  }
   return null;
 }
 
@@ -146,11 +148,13 @@ function deliverToPeer(group, message, failedPeers) {
   try {
     address = group.resolvePeerAddress(message.to);
   } catch (error) {
-    return peerDeliveryFailed(group, message.to,
+    peerDeliveryFailed(group, message.to,
       RUNTIME_PHASE.ADDRESS_RESOLUTION, error, failedPeers);
+    return DELIVERY_RECORDED;
   }
   if (message.msgType === RAFT_RS_MESSAGE_TYPE.SNAPSHOT) {
-    return notifySnapshotCatchupNeeded(group, address, message);
+    notifySnapshotCatchupNeeded(group, address, message);
+    return DELIVERY_RECORDED;
   }
   let delivered;
   try {
@@ -162,27 +166,43 @@ function deliverToPeer(group, message, failedPeers) {
       message,
     });
   } catch (error) {
-    return peerDeliveryFailed(group, message.to, RUNTIME_PHASE.SEND, error,
+    peerDeliveryFailed(group, message.to, RUNTIME_PHASE.SEND, error,
       failedPeers);
+    return DELIVERY_RECORDED;
   }
-  if (delivered && typeof delivered.then === 'function') {
-    return Promise.resolve(delivered).then(
+  // The transport is foreign I/O whose answer may be immediate or awaited:
+  // the foreign-answer adapter names it, once, as a settled or pending turn.
+  const answered = turnFromForeignAnswer(delivered);
+  if (!answered.settled) {
+    return pendingTurn(answered.pending.then(
       (delivery) => settlePeerDelivery(group, message.to, delivery,
         failedPeers),
       (error) => peerDeliveryFailed(group, message.to, RUNTIME_PHASE.SEND,
-        error, failedPeers));
+        error, failedPeers)));
   }
-  return settlePeerDelivery(group, message.to, delivered, failedPeers);
+  settlePeerDelivery(group, message.to, answered.result, failedPeers);
+  return DELIVERY_RECORDED;
 }
 
+/**
+ * Deliver a Ready's messages in order, each peer's outcome recorded against
+ * it.
+ * @param {Object} group - The runtime group.
+ * @param {Array<Object>} messages - The messages to deliver.
+ * @param {number} [index] - The first message to deliver.
+ * @param {Set<string>} [failedPeers] - Peers whose delivery failed in this
+ *   batch; their later messages are dropped.
+ * @return {Object} A settled turn when every delivery answered at once, a
+ *   pending turn while one is awaited.
+ */
 function sendMessages(group, messages, index = 0, failedPeers = new Set()) {
   if (index >= messages.length) {
-    return null;
+    return DELIVERY_RECORDED;
   }
   const message = messages[index];
-  const delivered = failedPeers.has(String(message.to)) ? null :
+  const delivered = failedPeers.has(String(message.to)) ? DELIVERY_RECORDED :
     deliverToPeer(group, message, failedPeers);
-  return thenMaybe(delivered, () =>
+  return continueTurn(delivered, () =>
     sendMessages(group, messages, index + 1, failedPeers));
 }
 

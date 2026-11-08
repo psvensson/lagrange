@@ -44,6 +44,7 @@ import {ReplicaCreateAdmissionOwner} from '../../src/node/replica-create-admissi
 import {buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken} from
   '../../src/rebalancer/replica-create-admission-token.js';
 import {RAFT_OPERATION_PORT_REQUEST} from '../../src/raft/raft-operation-port-request.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 
 const {RAFT_OPERATION_OUTCOME, RAFT_MEMBERSHIP_TRANSITION_REASON} = portContract;
@@ -402,8 +403,9 @@ test('durable learner intent is consumed only through the bound repository and r
         assert.equal(reserved.outcome, portContract.RAFT_MEMBERSHIP_RESERVATION_OUTCOME.RESERVED);
         // This fixture acts through the native owner, not through a fabricated
         // status response. It does not stand for another admitted workflow.
-        const proposal = await f.port[portContract.RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
-          transition);
+        const {PROPOSE_MEMBERSHIP_TRANSITION} = portContract.RAFT_OPERATION;
+        const proposal = await turnChainValue(
+          f.port[PROPOSE_MEMBERSHIP_TRANSITION](transition));
         assert.equal(proposal.reason, RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED);
         const peer = deriveRaftRsPeerId(other);
         assert.ok(f.cluster.settle(() => FOUNDERS.every((id) =>
@@ -483,10 +485,12 @@ test('durable learner intent is consumed only through the bound repository and r
         heldSend = true;
         return release.promise.then(() => f.cluster.queue(from, address, packet));
       };
-      let occupied = f.port.propose({queueBarrier: true});
+      let occupied = turnChainValue(f.port.propose({queueBarrier: true}));
       // As in the existing status-observation witness, a proposal may not
       // emit until the leader's next heartbeat. Drive only that native clock.
-      for (let tick = 0; tick < 12 && !heldSend; tick += 1) occupied = f.port.tick();
+      for (let tick = 0; tick < 12 && !heldSend; tick += 1) {
+        occupied = turnChainValue(f.port.tick());
+      }
       assert.equal(heldSend, true, 'setup: a real Ready send must be suspended');
       assert.equal(typeof occupied?.then, 'function', 'setup: native queue must be occupied');
       const observed = Promise.withResolvers();
@@ -580,8 +584,8 @@ test('durable learner intent is consumed only through the bound repository and r
         assertExactLearnerOrigin(f, await readLearnerAction(f, successor), proposed.proposalIndex);
         assert.equal(f.proposalCount(), before);
         const observed = await f.observe(f.request, f.receiver);
-        const stale = await f.cluster.node(successor)
-          .proposeMembershipTransition(observed.transition);
+        const stale = await turnChainValue(f.cluster.node(successor)
+          .proposeMembershipTransition(observed.transition));
         assert.notEqual(stale.reason, RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED,
           'the old execution fences are not permission in the new native context');
         assert.equal(f.proposalCount(), before);
@@ -719,12 +723,13 @@ test('durable learner intent is consumed only through the bound repository and r
         assert.equal(JSON.parse(committedState.learners).includes(deriveRaftRsPeerId(TARGET)),
           false, 'rolled-back ConfState cannot expose the failed learner origin');
         db.exec('DROP TRIGGER fail_origin_apply');
-        const resumed = await f.port.tick();
+        const resumed = await turnChainValue(f.port.tick());
         if (resumed.recoveryRequired === true) {
           assert.ok(Number.isSafeInteger(resumed.retryAfterMs) && resumed.retryAfterMs > 0,
             'the recovery owner must name the remaining retry delay');
           nativeTimeSource.advance(resumed.retryAfterMs);
-          assert.equal((await f.port.tick()).outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+          const replayed = await turnChainValue(f.port.tick());
+          assert.equal(replayed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
             'replay must recover after the unchanged owner deadline');
         } else {
           assert.equal(resumed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
@@ -1133,7 +1138,7 @@ test('recovered learner outcome advances only the exact operation membership fie
       const f = await issuedAndCommitted(t); const before = f.row();
       const transition = {...interveningLearnerTransition(f, TARGET),
         stage: portContract.RAFT_MEMBERSHIP_TRANSITION_STAGE.REMOVE, permitSequence: 2};
-      const removed = await f.port.proposeMembershipTransition(transition);
+      const removed = await turnChainValue(f.port.proposeMembershipTransition(transition));
       assert.equal(removed.reason, RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED);
       assert.ok(f.cluster.settle(() => FOUNDERS.every((id) =>
         !f.cluster.node(id).readStatus().confState.learners.includes(deriveRaftRsPeerId(TARGET)))));

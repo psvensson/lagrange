@@ -1,12 +1,10 @@
 import {RAFT_RS_ENTRY_TYPE} from './raft-rs-ready-loop-constants.js';
 
-const ASYNC_APPLICATION_CALLBACK_ERROR =
-  'a committed-entry callback must complete inside its SQLite transaction';
 const MEMBERSHIP_CONTEXT_APPLIER_REQUIRED =
   'committed membership context requires a registry applier';
-const ASYNC_MEMBERSHIP_CONTEXT_APPLIER_ERROR =
+const ANSWERING_MEMBERSHIP_CONTEXT_APPLIER_ERROR =
   'a committed membership context applier must complete inside its SQLite ' +
-  'transaction';
+  'transaction and answer nothing';
 
 // Only a NORMAL entry that carries a payload is a proposed command. A
 // configuration change stays with the runtime, and the empty entry a new
@@ -35,7 +33,10 @@ function runIsolatedEffects(effects) {
 /**
  * Apply one committed entry and advance the durable applied state in one
  * SQLite transaction. The application receives the entry's bytes and its
- * position `{index, term, effects}`; `effects.afterCommit` runs after the
+ * position `{index, term, effects}`. It answers synchronously - every group
+ * declares it so once, where it registers it (the port request's
+ * APPLY_COMMITTED_ENTRY_MODE, refused at construction otherwise) - and its
+ * answer is discarded. `effects.afterCommit` runs after the
  * transaction commits and `effects.afterRollback` runs when it rolls back,
  * before the failure is rethrown. The whole transaction (begin, application,
  * applied-state write, commit) runs inside `runApplySlice` when one is
@@ -60,19 +61,16 @@ function applyCommittedEntryTransaction({store, groupId, entry, confState,
   const transact = () => store.transaction(() => {
     if (carriesProposedCommand(entry) &&
         typeof applyCommittedEntry === 'function') {
-      const applied = applyCommittedEntry(Buffer.from(entry.data, 'base64'),
+      applyCommittedEntry(Buffer.from(entry.data, 'base64'),
         {index: entry.index, term: entry.term, effects});
-      if (applied && typeof applied.then === 'function') {
-        throw new TypeError(ASYNC_APPLICATION_CALLBACK_ERROR);
-      }
     }
-    if (committedMembershipContext !== null) {
-      const appliedMembership =
+    // The membership applier records its registry facts and answers nothing
+    // (undefined on every path); any answer - a promise above all - would be
+    // work this transaction cannot contain.
+    if (committedMembershipContext !== null &&
         applyCommittedMembershipContext(committedMembershipContext,
-          Object.freeze({index: entry.index, term: entry.term}));
-      if (appliedMembership && typeof appliedMembership.then === 'function') {
-        throw new TypeError(ASYNC_MEMBERSHIP_CONTEXT_APPLIER_ERROR);
-      }
+          Object.freeze({index: entry.index, term: entry.term})) !== undefined) {
+      throw new TypeError(ANSWERING_MEMBERSHIP_CONTEXT_APPLIER_ERROR);
     }
     store.putAppliedState(groupId, entry.index, confState, undefined,
       membershipGenerationIndex);
