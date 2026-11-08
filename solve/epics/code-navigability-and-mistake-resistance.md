@@ -84,7 +84,7 @@ Change a number here and in the budget script together, never in one place.
 | `catch_returns_default` | catch whose last statement returns a literal, null, or nothing | 387 | cap 387 |
 | `reexport_only_modules` | modules whose body is only imports and re-exports | 35 | cap 35 |
 | `alias_exports` | `export {x as y}` | 40 | 0 |
-| `legacy_term_identifiers` | identifiers containing legacy, compat, fallback, deprecated, shim, interim, transitional, backward, retired, obsolete or workaround | 4284 | cap 4284 |
+| `legacy_term_identifiers` | identifiers containing legacy, compat, fallback, deprecat, shim, interim, transitional, backward, retired, obsolete, polyfill, workaround, temporar, or the prefixes old and v1 before a capital or underscore | 4284 | cap 4284 |
 | `fallback_sites_uncensused` | two-source, typeof-dual-path and catch-default sites with no census record matching their content hash | 2887 | 0 |
 | `fallback_branches_never_taken` | census class `never`: the file was loaded, neither side executed | census | 0 |
 | `fallback_branches_only_fallback_taken` | census class `fallback-only`: only the fallback side executed | census | 0 |
