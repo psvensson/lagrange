@@ -776,12 +776,12 @@ function acknowledgeHydratedObligationsThrough(delivery, appliedIndex) {
     return Object.freeze({acknowledged: 0});
   }
   lane.hydratedThroughLogIndex = Math.max(lane.hydratedThroughLogIndex || 0, throughLogIndex);
+  retireHydratedInvocationAndResetIdleScan(delivery, lane, throughLogIndex);
+  const acknowledged = drainPendingHydratedObligations(delivery, lane);
   const remainingAfterHydration = readOwedCdcObligations(owner.db, {
     after: {logIndex: throughLogIndex, ordinal: Number.MAX_SAFE_INTEGER}, limit: 1,
   });
   if (remainingAfterHydration.length === 0) releaseContendedPropagationOwners(lane);
-  retireHydratedInvocationAndResetIdleScan(delivery, lane, throughLogIndex);
-  const acknowledged = drainPendingHydratedObligations(delivery, lane);
   return Object.freeze({acknowledged});
 }
 

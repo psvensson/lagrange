@@ -269,7 +269,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
    * @param {number|null} [delayMs]
    */
   schedulePriorityAwareCheck(delayMs = null) {
-    if (this.isControlPlanePriorityPartition()) {
+    if (this.usesPriorityRebalanceCadence()) {
       this.scheduleNextCheck(this.getPriorityRetryDelayMs());
       return;
     }

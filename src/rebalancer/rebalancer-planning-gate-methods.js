@@ -136,7 +136,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    * @private
    */
   getPriorityAwareDelayMs(scheduleDelayMs) {
-    if (this.isControlPlanePriorityPartition()) {
+    if (this.usesPriorityRebalanceCadence()) {
       return this.getPriorityRetryDelayMs();
     }
     return scheduleDelayMs;
@@ -152,7 +152,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    */
   getRetryableFailureRetryDelayMs(error) {
     const retryAfterMs = getControlPlaneRetryAfterMs(error);
-    if (this.isControlPlanePriorityPartition()) {
+    if (this.usesPriorityRebalanceCadence()) {
       return Math.max(
         this.getPriorityRetryDelayMs(),
         Number.isFinite(retryAfterMs) &&
@@ -639,10 +639,10 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       const executedMoveCount = this.countExecutedMoves(rebalanceResult);
 
       if (executedMoveCount > UNIFIED_REBALANCER_LITERAL.ZERO) {
-        this.currentInterval = this.isControlPlanePriorityPartition() ?
+        this.currentInterval = this.usesPriorityRebalanceCadence() ?
           this.getPriorityRetryDelayMs() :
           this.periodicCheckIntervalMs;
-      } else if (this.isControlPlanePriorityPartition()) {
+      } else if (this.usesPriorityRebalanceCadence()) {
         this.currentInterval = this.getPriorityRetryDelayMs();
         forcePriorityRetry = true;
       } else {
@@ -658,7 +658,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     // place the user-table leader-placement cure may act.
     const cureDecision = await applyUserTableLeaderPlacementCure(this);
 
-    if (this.isControlPlanePriorityPartition()) {
+    if (this.usesPriorityRebalanceCadence()) {
       this.currentInterval = this.getPriorityRetryDelayMs();
     } else if (isUserTableLeaderCureGapActionable(cureDecision)) {
       // An open actionable leader-placement gap holds the cadence flat:
@@ -682,7 +682,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     }
 
     const now = ownerNowMs(this);
-    const minInterval = this.isControlPlanePriorityPartition() ?
+    const minInterval = this.usesPriorityRebalanceCadence() ?
       UNIFIED_REBALANCER_LITERAL.THOUSAND :
       NUM.FIVE * UNIFIED_REBALANCER_LITERAL.THOUSAND;
 

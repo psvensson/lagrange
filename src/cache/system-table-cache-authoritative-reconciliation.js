@@ -281,6 +281,28 @@ function applyPreservedNonLeaderVoterRaftRole(
   return replacement;
 }
 
+const HLC_LOCAL_FIELD_NAMES = new Set([
+  'updated_at_hlc',
+  'updatedAtHlc',
+]);
+
+function shouldPreserveLocalFieldAcrossAuthoritativeReplacement(
+  fieldName,
+  existing,
+  authoritative,
+) {
+  if (!HLC_LOCAL_FIELD_NAMES.has(fieldName)) {
+    return true;
+  }
+  const existingUpdatedAt = Number(existing?.updated_at);
+  const authoritativeUpdatedAt = Number(authoritative?.updated_at);
+  return !(
+    Number.isFinite(existingUpdatedAt) &&
+    Number.isFinite(authoritativeUpdatedAt) &&
+    authoritativeUpdatedAt > existingUpdatedAt
+  );
+}
+
 function buildAuthoritativeSystemTableCacheReplacement(
   firstArg,
   secondArg,
@@ -295,7 +317,12 @@ function buildAuthoritativeSystemTableCacheReplacement(
   for (const fieldName of SYSTEM_TABLE_CACHE_LOCAL_FIELD_NAMES) {
     if (
       !Object.prototype.hasOwnProperty.call(authoritative, fieldName) &&
-      Object.prototype.hasOwnProperty.call(existing, fieldName)
+      Object.prototype.hasOwnProperty.call(existing, fieldName) &&
+      shouldPreserveLocalFieldAcrossAuthoritativeReplacement(
+        fieldName,
+        existing,
+        authoritative,
+      )
     ) {
       replacement[fieldName] = fastJsonClone(existing[fieldName]);
     }
@@ -320,6 +347,18 @@ function buildAuthoritativeServiceLifecycleCacheReplacement(
     );
   }
   const replacement = fastJsonClone(existing);
+  for (const fieldName of HLC_LOCAL_FIELD_NAMES) {
+    if (
+      !Object.prototype.hasOwnProperty.call(authoritative || {}, fieldName) &&
+      !shouldPreserveLocalFieldAcrossAuthoritativeReplacement(
+        fieldName,
+        existing,
+        authoritative,
+      )
+    ) {
+      delete replacement[fieldName];
+    }
+  }
   for (const [fieldName, fieldValue] of Object.entries(authoritative)) {
     if (!Object.prototype.hasOwnProperty.call(replacement, fieldName)) {
       replacement[fieldName] = fastJsonClone(fieldValue);

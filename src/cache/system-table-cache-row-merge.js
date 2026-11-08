@@ -35,6 +35,19 @@ function getRecordHlc(record) {
   return tryParseHLCTimestamp(record?.[COLUMN.UPDATED_AT_HLC]);
 }
 
+function isServiceLifecycleRegressionOnEqualTimestamp(existing, incoming) {
+  const existingStateEnteredAt = Number(existing?.state_entered_at);
+  const incomingStateEnteredAt = Number(incoming?.state_entered_at);
+  if (
+    Number.isFinite(existingStateEnteredAt) &&
+    Number.isFinite(incomingStateEnteredAt) &&
+    incomingStateEnteredAt !== existingStateEnteredAt
+  ) {
+    return incomingStateEnteredAt < existingStateEnteredAt;
+  }
+  return false;
+}
+
 function isStaleForExistingRecord(tableName, existing, incoming) {
   // Prefer the origin HLC when both rows carry one: it is a total causal order, so
   // equal-`updated_at` ties resolve deterministically and identically on every replica.
@@ -53,6 +66,13 @@ function isStaleForExistingRecord(tableName, existing, incoming) {
       Number.isFinite(incomingTimestamp) &&
       incomingTimestamp !== existingTimestamp) {
     return incomingTimestamp < existingTimestamp;
+  }
+
+  if (
+    tableName === TABLES.SERVICES &&
+    isServiceLifecycleRegressionOnEqualTimestamp(existing, incoming)
+  ) {
+    return true;
   }
 
   return tableName === TABLES.NODES &&
@@ -251,7 +271,20 @@ function mergeRecords(tableName, existing, incoming) {
   if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
     return mergeControlPlanePublicationRows(incoming, existing);
   }
-  return {...existing, ...deepClone(incoming)};
+  const merged = {...existing, ...deepClone(incoming)};
+  if (
+    tableName === TABLES.SERVICES &&
+    canAdvanceServiceLifecycle(tableName, incoming, existing) &&
+    existing?.create_attempt_token === incoming?.create_attempt_token &&
+    existing?.cleanup_token === incoming?.cleanup_token
+  ) {
+    for (const fieldName of SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES) {
+      if (Object.prototype.hasOwnProperty.call(existing, fieldName)) {
+        merged[fieldName] = cloneFieldValue(existing[fieldName]);
+      }
+    }
+  }
+  return merged;
 }
 
 function tryParseHLCTimestamp(value) {

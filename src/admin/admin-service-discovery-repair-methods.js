@@ -220,6 +220,30 @@ function assignAdminServiceDiscoveryRepairMethods(
       }
     }
 
+    consumeSupersededAuthoritativeDiscoveryTableInput(tableInput, cacheOwner) {
+      const incomingObservedAtMs = Math.floor(
+        Number(tableInput.authoritativeObservation?.observedAtMs),
+      );
+      const currentObservedAtMs =
+        cacheOwner?.systemTableCache?.getLastAuthoritativeObservedAtMs?.(
+          tableInput.targetTableName,
+        );
+      if (
+        !Number.isFinite(incomingObservedAtMs) ||
+        !Number.isFinite(currentObservedAtMs) ||
+        currentObservedAtMs < incomingObservedAtMs
+      ) {
+        return false;
+      }
+      this.controlPlaneSystemTableGateway
+        ?.consumeAuthoritativeObservationReceipt?.(
+          tableInput.authoritativeObservation,
+          tableInput.targetTableName,
+          tableInput.rows,
+        );
+      return true;
+    }
+
     async applyAuthoritativeDiscoveryRepairRowsIntoState(
       repairState,
       repairTableNames,
@@ -232,15 +256,29 @@ function assignAdminServiceDiscoveryRepairMethods(
           return;
         }
         const result = repairState.authoritativeRowsByTable.get(tableName);
+        const tableInput = {
+          targetTableName: result?.tableName || tableName,
+          rows: result?.rows || ADMIN_CACHE_DUMP.EMPTY,
+          authoritativeObservation: result?.authoritativeObservation || null,
+        };
+        if (
+          this.consumeSupersededAuthoritativeDiscoveryTableInput(
+            tableInput,
+            cacheOwner,
+          )
+        ) {
+          repairState.repairedTableCount += 1;
+          repairState.repairedTableNames.push(tableName);
+          continue;
+        }
         try {
           repairState.repairedRowCount +=
             await this.applyAuthoritativeSystemTableRows(
-              result?.tableName || tableName,
-              result?.rows || ADMIN_CACHE_DUMP.EMPTY,
+              tableInput.targetTableName,
+              tableInput.rows,
               causeId,
               {
-                authoritativeObservation:
-                  result?.authoritativeObservation || null,
+                authoritativeObservation: tableInput.authoritativeObservation,
                 cacheOwner,
               },
             );

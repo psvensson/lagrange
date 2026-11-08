@@ -507,6 +507,47 @@ test('(m\') a local-mutation-readiness deferral is ended by the readiness ' +
   }
 });
 
+test('(l2) local mutation readiness wake also fires on readiness planning snapshot refresh completion', async (t) => {
+  initializeTestEnvironment();
+  const planningListeners = new Set();
+  const readinessOwner = {
+    subscribeReadinessPlanningSnapshots(listener) {
+      planningListeners.add(listener);
+      return () => planningListeners.delete(listener);
+    },
+  };
+  const rebalancer = createFenceTestRebalancer({
+    entityId: PARKED_BACKGROUND_ENTITY_ID,
+    readinessOwner,
+    nowFn: () => 1_000,
+  });
+  rebalancer.isLeader = true;
+  let blocker = {
+    failedDimensions: ['controlPlaneWritable', 'metadataPublicationHealthy'],
+    reasonCodes: ['planning_snapshot_refresh_pending'],
+  };
+  rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => blocker;
+  const wakeReasons = [];
+  rebalancer.enqueueRebalanceCheck = (reason) => {
+    wakeReasons.push(reason);
+    return true;
+  };
+  try {
+    const decision = rebalancer.resolveLocalMutationPlanningGateDecision();
+    t.equal(decision?.gate, REBALANCE_PLANNING_GATE.LOCAL_MUTATION_READINESS);
+    t.equal(planningListeners.size, 1, 'planning snapshot listener is armed');
+    blocker = null;
+    for (const listener of [...planningListeners]) {
+      listener({nodeId: rebalancer.nodeId});
+    }
+    await Promise.resolve();
+    t.same(wakeReasons, [RECONCILE_REASON.LOCAL_MUTATION_READINESS_WAKE]);
+    t.equal(planningListeners.size, 0, 'planning snapshot listener disarms once fired');
+  } finally {
+    rebalancer.shutdown();
+  }
+});
+
 test('(m) a priority partition\'s terminal ADD enqueues the next check by ' +
   'event', async (t) => {
   initializeTestEnvironment();

@@ -759,5 +759,41 @@ test('shared incarnation rule governs both durable role persistence and local pr
     null,
     'buildAuthoritativeSystemTableCacheReplacement never preserves leader raft_role when authoritative row clears raft_role',
   );
+  const olderCachedRowWithHlc = {
+    ...seededFromLiveRole,
+    status: ReplicaStatus.CREATING,
+    state_entered_at: 4000,
+    updated_at: 4000,
+    updated_at_hlc: '4000-0-services-p1-r1',
+  };
+  const newerAuthoritativeRowWithoutHlc = {
+    ...seededFromLiveRole,
+    status: ReplicaStatus.ACTIVE,
+    state_entered_at: 4300,
+    updated_at: 4300,
+  };
+  delete newerAuthoritativeRowWithoutHlc.updated_at_hlc;
+  const repairedRow = buildAuthoritativeSystemTableCacheReplacement(
+    olderCachedRowWithHlc,
+    newerAuthoritativeRowWithoutHlc,
+  );
+  t.equal(
+    repairedRow.updated_at_hlc,
+    undefined,
+    'buildAuthoritativeSystemTableCacheReplacement drops superseded updated_at_hlc when authoritative updated_at advances',
+  );
+  handler.systemTableCache.applySystemTableChange('services', 'UPSERT', repairedRow);
+  handler.systemTableCache.applySystemTableChange('services', 'UPDATE', {
+    ...seededFromLiveRole,
+    status: ReplicaStatus.SYNCING,
+    state_entered_at: 4200,
+    updated_at: 4200,
+    updated_at_hlc: '4200-0-services-p1-r1',
+  });
+  t.equal(
+    handler.systemTableCache.get('services', REPLICA_ID)?.status,
+    ReplicaStatus.ACTIVE,
+    'delayed intermediate CDC event with older updated_at/state_entered_at cannot regress an authoritatively repaired ACTIVE row',
+  );
   stateMachine.shutdown?.();
 });

@@ -137,6 +137,9 @@ function clearActiveDurableSliceIfMatching(owner, tableName) {
   if (owner.durableSliceTable !== tableName) return false;
   owner.durableSliceTable = null;
   owner.durableSliceWaves = 0;
+  if (owner.yieldedDurableSliceTable === null) {
+    owner.yieldedDurableSliceUntilMs = 0;
+  }
   return true;
 }
 
@@ -232,6 +235,7 @@ function computeBusyRetryAfterMs(owner, incomingTable, deliveryContext = null) {
   if (incomingTable !== owner.yieldedDurableSliceTable) {
     enqueueWaitingDurableSliceTable(owner, incomingTable, deliveryContext);
   }
+  notifyNextWaitingDurableSliceTable(owner);
   return Math.max(
     MIN_YIELD_HOLD_RETRY_AFTER_MS,
     Math.min(

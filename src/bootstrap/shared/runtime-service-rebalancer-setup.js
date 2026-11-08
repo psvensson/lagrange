@@ -383,6 +383,12 @@ class RuntimeServiceRebalancerOwner {
    * @private
    */
   _wakeRebalancer(rebalancer) {
+    if (Number.isFinite(rebalancer.periodicCheckIntervalMs)) {
+      rebalancer.currentInterval = rebalancer.periodicCheckIntervalMs;
+    }
+    if (typeof rebalancer.lastCheckAtMs === 'number') {
+      rebalancer.lastCheckAtMs = 0;
+    }
     rebalancer.enqueueRebalanceCheck(
       RECONCILE_REASON.RUNTIME_SERVICE_DESIRED_STATE,
     );

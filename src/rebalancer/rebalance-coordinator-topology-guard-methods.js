@@ -460,6 +460,10 @@ class RebalanceCoordinatorTopologyGuardMethods {
       entityType,
       entityId,
     });
+    const cacheOperationRowsBefore = this.getEntityInFlightOperationRows({
+      entityType,
+      entityId,
+    });
     const authoritativeObservation =
       await this.getAuthoritativeEntityServiceRowsObservation({
         partitionId,
@@ -475,10 +479,32 @@ class RebalanceCoordinatorTopologyGuardMethods {
         entityType,
         entityId,
       );
-    const cacheStateAfter = captureInventoryCacheState(
+    const cacheStateAfterRaw = captureInventoryCacheState(
       this.systemTableCache,
       this.nowFn(),
     );
+    const cacheServiceRowsAfter = this.getEntityServiceRows({
+      partitionId,
+      entityType,
+      entityId,
+    });
+    const cacheOperationRowsAfter = this.getEntityInFlightOperationRows({
+      entityType,
+      entityId,
+    });
+    const cacheStateAfter = {
+      capturedAtMs: cacheStateAfterRaw.capturedAtMs,
+      committedRows:
+        JSON.stringify(cacheServiceRows) ===
+        JSON.stringify(cacheServiceRowsAfter) ?
+          cacheStateBefore.committedRows :
+          cacheStateAfterRaw.committedRows,
+      inFlightOperations:
+        JSON.stringify(cacheOperationRowsBefore) ===
+        JSON.stringify(cacheOperationRowsAfter) ?
+          cacheStateBefore.inFlightOperations :
+          cacheStateAfterRaw.inFlightOperations,
+    };
     const inventory = this.replicaInventoryBuilder({
       entityType,
       entityId,
