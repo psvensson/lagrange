@@ -3,6 +3,35 @@
   "id": "impact-contracts",
   "description": "Semantic contract edges for the impact proof-cone selector (developer-velocity epic V4a). Production paths declare the contracts they own; tests declare the contracts they exercise. Changing a contract-owning path selects every test claiming that contract. Unknown or undeclared contracts fail closed. This manifest is EXPLICIT and hand-curated; static dependency and coverage relationships are generated and live elsewhere. Every owner/test path must exist in the tree (directory prefix or file); dead edges are a contract defect.",
   "contracts": {
+    "npm-package-stage-observation": {
+      "description": "scripts/release-npm-package.js alone owns packaging and installed-verification sequencing, command arguments, errors, assertions and cleanup precedence. Its optional observer delegates detached bounded record mechanics to npm-package-observation.js and bounded file retention to npm-package-diagnostic-sink.js; diagnostic constants describe this contract and grant no execution authority. The installed-package witness owns its opt-in sink and outer lifecycle. Observation failures cannot replace operation results or errors, add asynchronous turns to synchronous commands, or change deadlines.",
+      "owners": [
+        "scripts/release-npm-package.js",
+        "scripts/npm-package-observation.js",
+        "scripts/npm-package-diagnostic-sink.js",
+        "scripts/npm-package-diagnostic-constants.js"
+      ],
+      "tests": [
+        "test/scripts/npm-package-observation.test.js",
+        "test/scripts/npm-package-observation-records.test.js",
+        "test/integration/lagrange-server-npm-package.integration.test.js"
+      ]
+    },
+    "placement-declared-artifact-custody": {
+      "description": "scripts/lab/probe.js is the sole placement-lifetime and test-artifact-to-controller interaction owner. Optional exact relative declarations reach its existing remote EXIT path after runner settlement and before worktree deletion. placement-artifact-custody.js is its delegated bounded collection, framing and retention mechanism, never a test-verdict owner. At most four regular non-symlink files, one MiB each and four MiB total, travel with per-file hashes and candidate/base/run/host-bound terminal custody into a fresh controller destination. Incomplete custody remains sideband and cannot change runner status; default placement has no collector.",
+      "owners": [
+        "scripts/lab/probe.js",
+        "scripts/lab/placement-artifact-custody.js",
+        "scripts/npm-package-diagnostic-sink.js",
+        "scripts/npm-package-diagnostic-constants.js"
+      ],
+      "tests": [
+        "test/scripts/test-placement-artifacts.test.js",
+        "test/scripts/test-placement.test.js",
+        "test/scripts/test-placement-lab-split.test.js",
+        "test/scripts/lab-test-base.test.js"
+      ]
+    },
     "distributed-transaction-coordinator-participant-protocol": {
       "description": "The query coordinator and partition participant share one TX1 revision-10 identity, manifest, prepare evidence, immutable decision and typed-answer protocol. Every coordinator-managed transaction prepares before one decision; a recorded COMMIT only moves forward, and recovery re-drives the exact recorded decision.",
       "owners": [
@@ -1901,6 +1930,55 @@
     }
   },
   "coupledPairs": {
+    "npm-package-stage-observation": {
+      "description": "The packaging owner determines stage boundaries and preserves original synchronous command and cleanup behavior; observation and sink modules perform bounded record and snapshot mechanics only. scripts/release-npm-package.js owns this observation interaction, including installed-file capture before its cleanup. The existing witness separately observes its own outer test lifecycle.",
+      "endpoints": [
+        {
+          "id": "packaging-sequence-and-cleanup",
+          "owners": ["scripts/release-npm-package.js"]
+        },
+        {
+          "id": "bounded-observation-mechanics",
+          "owners": [
+            "scripts/npm-package-observation.js",
+            "scripts/npm-package-diagnostic-sink.js",
+            "scripts/npm-package-diagnostic-constants.js"
+          ]
+        }
+      ],
+      "contract": "npm-package-stage-observation",
+      "witnessTests": [
+        "test/scripts/npm-package-observation.test.js",
+        "test/scripts/npm-package-observation-records.test.js",
+        "test/integration/lagrange-server-npm-package.integration.test.js"
+      ]
+    },
+    "placement-declared-artifact-custody": {
+      "description": "scripts/lab/probe.js owns the entire declared-file collection interaction and its EXIT ordering, binding and outcome-preservation contract. The sink owns source file bytes and limits; placement-artifact-custody.js implements the placement owner's finite collector and controller receiver. Framing never enters the result ledger and cannot confer acceptance or trigger retries or controller fallback.",
+      "endpoints": [
+        {
+          "id": "test-owned-artifact-files",
+          "owners": [
+            "scripts/npm-package-diagnostic-sink.js",
+            "scripts/npm-package-diagnostic-constants.js"
+          ]
+        },
+        {
+          "id": "placement-lifetime-and-delegated-custody",
+          "owners": [
+            "scripts/lab/probe.js",
+            "scripts/lab/placement-artifact-custody.js"
+          ]
+        }
+      ],
+      "contract": "placement-declared-artifact-custody",
+      "witnessTests": [
+        "test/scripts/test-placement-artifacts.test.js",
+        "test/scripts/test-placement.test.js",
+        "test/scripts/test-placement-lab-split.test.js",
+        "test/scripts/lab-test-base.test.js"
+      ]
+    },
     "distributed-transaction-coordinator-participant-protocol": {
       "description": "Coordinator decisions are bound to the PREPARE evidence participants answer, and participants apply only that bound decision and return exact durable outcomes.",
       "endpoints": [

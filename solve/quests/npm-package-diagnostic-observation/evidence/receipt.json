@@ -1,0 +1,27 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pending",
+  "sourceBase": "4260e562b8ae9fafdb51d504c3532dede9f75bbf",
+  "receipts": [
+    {
+      "id": "stage-transparency",
+      "passed": true,
+      "proof": "Slice A: package-slice-static-reviewed.log reports 29/29 targeted tests. Seven source hashes in package-slice-static-reviewed-source.sha256; independent bj0_package_review approval recorded in log.ndjson. Actual build/verify command sequence, arguments, environment, original errors/results and cleanup precedence exercised with isolated command seams. Historical installed-package timeout remains unclassified."
+    },
+    {
+      "id": "bounded-snapshot-custody",
+      "passed": true,
+      "proof": "Same Slice A source and proof: bounded trace/snapshot writes, optional missing lock, FIFO refusal, corrupt/truncated records and terminal descriptor closure negatives pass. This proves local observation custody only; placement transfer is pending. Raw evidence remains under test-output/bj0 pending immutable archive retention."
+    },
+    {
+      "id": "placement-custody",
+      "passed": true,
+      "proof": "custody-slice-group.log: 25/25 passing. custody-placement-isolated-regression.log: 38/38 unchanged default-path regressions passing. custody-order-mutant.json/log: collection after deletion fails the intended custody assertion; exact source restored. Source manifest custody-slice-group-source.sha256. Includes startup, early worker exit, resistant descendants, no inherited locks, blocked output, malformed/truncated relay and unchanged original status."
+    },
+    {
+      "id": "independent-review",
+      "passed": true,
+      "proof": "Independent bj0_package_review and bj0_custody_review approvals bind the retained seven-file and five-file source manifests; see append-only log.ndjson. Approval is for one bounded diagnostic invocation. Overall receipt remains pending: normal landing/full corpus/exact-head gates have not run and historical timeout remains unclassified."
+    }
+  ]
+}

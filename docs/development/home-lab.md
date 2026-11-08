@@ -436,6 +436,62 @@ walk measured from it (closed-quest shape, quest-log append-only) would cover
 a range nobody named; with no base on the controller the lab exports none.
 The `placement-env=` line shows the base each host was handed.
 
+### Retain explicitly declared diagnostic files
+
+The programmatic `runLabTest` entrypoint accepts an optional `artifacts` array
+of `{path, required, maxBytes}` declarations. Paths are exact, relative to the
+placed worktree; collection never enumerates a directory or forwards arbitrary
+environment variables. Supply an exact `checkBase` commit along with the
+candidate. A request supports at most four files, each at most one MiB and at
+most four MiB in total. A caller can declare a smaller per-file bound. For the
+package diagnostic, declare `trace.ndjson` at 256 KiB and `packed.json`,
+`installed-package.json`, and optional `installed-lock.json` at one MiB each,
+under `test-output/npm-package-diagnostic/`; the package sink exports these
+names and limits. Missing required files make custody incomplete. Missing
+optional files remain explicitly recorded and do not make custody incomplete.
+
+Placement (`scripts/lab/probe.js`) owns this interaction. Its delegated
+`placement-artifact-custody.js` helper collects after the runner's wait/stop has
+settled, inside EXIT and before the existing cleanup removes the worktree. The
+collector worker has a two-second bound, including flushing frames; its
+supervisor has a three-second bound on final output. The shell also requires
+the host's `timeout` utility around the entire added collection body: group
+KILL after three seconds, including startup,
+preload, descendants, the initial separator and any unavailable-frame writes.
+Nothing prints outside that bound. Without `timeout`, collection is skipped;
+its missing terminal records incomplete custody on the controller. These bounds
+fit inside the existing five-second abort and ten-second stop grace. Collection
+also runs in its own process group with the machine and checkout lock file
+descriptors closed. After waiting for its leader, placement unconditionally
+terminates that group, including descendants left by an early worker or
+supervisor exit. The parent retains the locks until ordinary cleanup. Collection
+failures preserve the original runner exit status. Paths containing traversal,
+symlinks in any component, non-regular files such as FIFOs, and files past their
+declared bound are refused before reading or encoding. The default shell path
+has no collector.
+
+Each file and the terminal custody envelope bind candidate, base, run and host.
+The controller validates declaration order, counts, byte bounds, base64 and
+SHA-256 before retaining bytes in a fresh
+`test-output/placement-artifacts/<run>-<host>/` directory, with a `custody.json`
+envelope. An existing destination is refused; it is never overwritten. Missing,
+duplicate, altered, oversized or truncated frames, a missing terminal envelope,
+collector timeout, or controller storage/read failure make custody incomplete. An
+explicit source-missing record is distinct from a lost relay. Raw
+`test-output/placement/*.log` files retain the `placement-artifact=` frames;
+these frames never enter the test result ledger or streamed verdict UI. A
+separator before collection prevents a runner's partial final stdout line from
+swallowing the first frame.
+
+`startRemoteShard().done` includes the sideband `artifacts` envelope for an
+opted-in shard. `runLabTest` still returns the test status and prints the custody
+state and retained path separately. A controller share cannot provide this
+remote worktree lifetime contract, so an artifact request with any controller
+share is refused before starting work. Named-host diagnostic runs use the
+existing `on` selection, explicit retry policy and canonical lock. Custody does
+not authorize a retry, fallback, extra measurement, or a causal conclusion from
+an incomplete trace.
+
 ### Split a run over the lab: the controller is a reserve
 
 Test work is parallelized on the lab machines as much as possible (owner,

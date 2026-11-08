@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
 import {spawnSync} from 'node:child_process';
+import {observePackageAsync, observePackageSync, snapshotPackageObservation}
+  from './npm-package-observation.js';
+import {OBSERVATION_KIND, OBSERVATION_STAGE as STAGE, PACKAGE_ARTIFACT}
+  from './npm-package-diagnostic-constants.js';
 
 import {ACTION, authorizeAction, isAuthorized} from './action-authority.js';
 import {spawnGit} from './checks/git-invocation.js';
@@ -52,6 +56,8 @@ const COMPONENTIZE_DEPENDENCY = '@bytecodealliance/componentize-js';
 const DISTRIBUTED_SQL_KEYWORD = 'distributed-sql';
 const PUBLIC_ACCESS = 'public';
 const PACKAGE_JSON_FILENAME = 'package.json';
+const INSTALLED_MODULES_DIRECTORY = 'node_modules';
+const INSTALLED_LOCK_FILENAME = '.package-lock.json';
 const CONSUMER_PACKAGE_NAME = 'lagrange-server-install-smoke';
 const MODULE_PACKAGE_TYPE = 'module';
 const TAR_COMMAND = 'tar';
@@ -186,13 +192,13 @@ function commandLineFailureMessage(commandLine, result) {
 }
 
 function run(command, args, options = {}) {
-  return spawnSync(command, args, {
+  return observePackageSync(options.observer, STAGE.COMMAND, () => spawnSync(command, args, {
     cwd: options.cwd || REPOSITORY_ROOT,
     encoding: TEXT_ENCODING,
     env: options.env || process.env,
     maxBuffer: COMMAND_OUTPUT_MAX_BYTES,
     timeout: options.timeout || COMMAND_TIMEOUT_MS,
-  });
+  }), OBSERVATION_KIND.COMMAND);
 }
 
 function runChecked(command, args, options = {}, errorCode = RELEASE_OUTCOME.PACK_FAILED) {
@@ -294,8 +300,8 @@ function parsePackOutput(output) {
   }
 }
 
-function resolveGitHead(explicitGitHead) {
-  const gitHead = explicitGitHead || headCommit();
+function resolveGitHead(explicitGitHead, observer) {
+  const gitHead = explicitGitHead || headCommit(observer);
   if (!/^[0-9a-f]{40}$/u.test(gitHead)) {
     throw new NpmReleaseError(
       RELEASE_OUTCOME.PACKAGE_MANIFEST_INVALID,
@@ -306,14 +312,14 @@ function resolveGitHead(explicitGitHead) {
 }
 
 // Git is started by the git invocation owner, never through `run`.
-function headCommit() {
+function headCommit(observer) {
   const args = ['rev-parse', 'HEAD'];
-  const result = spawnGit(args, {
+  const result = observePackageSync(observer, STAGE.GIT_HEAD_COMMAND, () => spawnGit(args, {
     cwd: REPOSITORY_ROOT,
     encoding: TEXT_ENCODING,
     env: process.env,
     timeout: COMMAND_TIMEOUT_MS,
-  });
+  }), OBSERVATION_KIND.COMMAND);
   if (result.status !== 0) {
     throw new NpmReleaseError(RELEASE_OUTCOME.PACK_FAILED,
       commandLineFailureMessage(`git ${args.join(ARGUMENT_SEPARATOR)}`, result));
@@ -321,64 +327,70 @@ function headCommit() {
   return result.stdout.trim();
 }
 
-async function buildNpmPackage(options = {}) {
-  const packageJson = await validateWorkspaceManifest();
-  const gitHead = resolveGitHead(options.gitHead);
-  const outputDirectory = resolve(
-    options.outputDirectory || join(REPOSITORY_ROOT, 'dist/npm'),
-  );
-  const temporaryRoot = await mkdtemp(join(tmpdir(), 'lagrange-npm-pack-'));
-  const preliminaryDirectory = join(temporaryRoot, 'preliminary');
-  const stagingDirectory = join(temporaryRoot, 'staging');
-  await Promise.all([
-    mkdir(outputDirectory, {recursive: true}),
-    mkdir(preliminaryDirectory),
-    mkdir(stagingDirectory),
-  ]);
-  try {
-    const preliminary = parsePackOutput(runChecked(NPM_COMMAND, [
-      'pack',
-      '--json',
-      '--ignore-scripts',
-      '--pack-destination',
-      preliminaryDirectory,
+function buildNpmPackage(options = {}) {
+  const {observer} = options;
+  return observePackageAsync(observer, STAGE.BUILD_PACKAGE, async () => {
+    const packageJson = await observePackageAsync(observer, STAGE.WORKSPACE_MANIFEST,
+      () => validateWorkspaceManifest());
+    const gitHead = observePackageSync(observer, STAGE.RESOLVE_HEAD,
+      () => resolveGitHead(options.gitHead, observer));
+    const outputDirectory = observePackageSync(observer, STAGE.OUTPUT_PATH, () => resolve(
+      options.outputDirectory || join(REPOSITORY_ROOT, 'dist/npm'),
+    ));
+    const temporaryRoot = await observePackageAsync(observer, STAGE.PACK_TEMPORARY_ROOT,
+      () => mkdtemp(join(tmpdir(), 'lagrange-npm-pack-')));
+    const preliminaryDirectory = join(temporaryRoot, 'preliminary');
+    const stagingDirectory = join(temporaryRoot, 'staging');
+    await observePackageAsync(observer, STAGE.PACK_DIRECTORIES, () => Promise.all([
+      mkdir(outputDirectory, {recursive: true}),
+      mkdir(preliminaryDirectory),
+      mkdir(stagingDirectory),
     ]));
-    const preliminaryTarball = join(preliminaryDirectory, preliminary.filename);
-    const extractArguments = [
-      COMMAND_ARGUMENT.TAR_EXTRACT_GZIP,
-      preliminaryTarball,
-      COMMAND_ARGUMENT.TAR_DIRECTORY,
-      stagingDirectory,
-    ];
-    runChecked(TAR_COMMAND, extractArguments);
-    const stagedPackageRoot = join(stagingDirectory, 'package');
-    const stagedManifestPath = join(stagedPackageRoot, 'package.json');
-    const stagedManifest = await readJson(stagedManifestPath);
-    stagedManifest.gitHead = gitHead;
-    await writeFile(
-      stagedManifestPath,
-      `${JSON.stringify(stagedManifest, null, 2)}\n`,
-      TEXT_ENCODING,
-    );
-    const packed = parsePackOutput(runChecked(NPM_COMMAND, [
-      'pack',
-      '--json',
-      '--ignore-scripts',
-      '--pack-destination',
-      outputDirectory,
-    ], {cwd: stagedPackageRoot}));
-    assertManifestCondition(packed.name === PACKAGE_NAME,
-      `packed artifact name must be ${PACKAGE_NAME}`);
-    assertManifestCondition(packed.version === packageJson.version,
-      MANIFEST_ERROR.PACKED_VERSION);
-    return {
-      ...packed,
-      gitHead,
-      tarballPath: join(outputDirectory, packed.filename),
-    };
-  } finally {
-    await rm(temporaryRoot, {recursive: true, force: true});
-  }
+    try {
+      const preliminary = observePackageSync(observer, STAGE.PRELIMINARY_PACK, () =>
+        parsePackOutput(runChecked(NPM_COMMAND, [
+          'pack', '--json', '--ignore-scripts', '--pack-destination', preliminaryDirectory,
+        ], {observer})));
+      const preliminaryTarball = join(preliminaryDirectory, preliminary.filename);
+      const extractArguments = [
+        COMMAND_ARGUMENT.TAR_EXTRACT_GZIP,
+        preliminaryTarball,
+        COMMAND_ARGUMENT.TAR_DIRECTORY,
+        stagingDirectory,
+      ];
+      observePackageSync(observer, STAGE.EXTRACT_PACKAGE, () =>
+        runChecked(TAR_COMMAND, extractArguments, {observer}));
+      const stagedPackageRoot = join(stagingDirectory, 'package');
+      const stagedManifestPath = join(stagedPackageRoot, 'package.json');
+      await observePackageAsync(observer, STAGE.STAGED_MANIFEST, async () => {
+        const stagedManifest = await readJson(stagedManifestPath);
+        stagedManifest.gitHead = gitHead;
+        await writeFile(
+          stagedManifestPath,
+          `${JSON.stringify(stagedManifest, null, 2)}\n`,
+          TEXT_ENCODING,
+        );
+      });
+      const packed = observePackageSync(observer, STAGE.FINAL_PACK, () => {
+        const artifact = parsePackOutput(runChecked(NPM_COMMAND, [
+          'pack', '--json', '--ignore-scripts', '--pack-destination', outputDirectory,
+        ], {cwd: stagedPackageRoot, observer}));
+        assertManifestCondition(artifact.name === PACKAGE_NAME,
+          `packed artifact name must be ${PACKAGE_NAME}`);
+        assertManifestCondition(artifact.version === packageJson.version,
+          MANIFEST_ERROR.PACKED_VERSION);
+        return {...artifact, gitHead, tarballPath: join(outputDirectory, artifact.filename)};
+      });
+      snapshotPackageObservation(observer, PACKAGE_ARTIFACT.PACKED, {
+        name: packed.name, version: packed.version, filename: packed.filename,
+        gitHead: packed.gitHead, integrity: packed.integrity,
+      });
+      return packed;
+    } finally {
+      await observePackageAsync(observer, STAGE.PACK_CLEANUP,
+        () => rm(temporaryRoot, {recursive: true, force: true}));
+    }
+  });
 }
 
 function assertInstalledPath(actualPath, installedPackageRoot, label) {
@@ -391,20 +403,29 @@ function assertInstalledPath(actualPath, installedPackageRoot, label) {
   }
 }
 
-async function verifyInstalledPackage(packed) {
-  const temporaryRoot = await mkdtemp(join(tmpdir(), 'lagrange-npm-install-'));
+function verifyInstalledPackage(packed, options = {}) {
+  const {observer} = options;
+  return observePackageAsync(observer, STAGE.VERIFY_INSTALLED, async () => {
+    return verifyInstalledPackageBody(packed, observer);
+  });
+}
+
+async function verifyInstalledPackageBody(packed, observer) {
+  const temporaryRoot = await observePackageAsync(observer, STAGE.INSTALL_TEMPORARY_ROOT,
+    () => mkdtemp(join(tmpdir(), 'lagrange-npm-install-')));
   const installDirectory = join(temporaryRoot, 'consumer');
   const cacheDirectory = join(temporaryRoot, 'npm-cache');
-  await Promise.all([
+  await observePackageAsync(observer, STAGE.INSTALL_DIRECTORIES, () => Promise.all([
     mkdir(installDirectory),
     mkdir(cacheDirectory),
-  ]);
+  ]));
   try {
-    await writeFile(join(installDirectory, PACKAGE_JSON_FILENAME), `${JSON.stringify({
-      name: CONSUMER_PACKAGE_NAME,
-      private: true,
-      type: MODULE_PACKAGE_TYPE,
-    }, null, 2)}\n`, TEXT_ENCODING);
+    await observePackageAsync(observer, STAGE.CONSUMER_MANIFEST, () =>
+      writeFile(join(installDirectory, PACKAGE_JSON_FILENAME), `${JSON.stringify({
+        name: CONSUMER_PACKAGE_NAME,
+        private: true,
+        type: MODULE_PACKAGE_TYPE,
+      }, null, 2)}\n`, TEXT_ENCODING));
     const installArguments = [
       COMMAND_ARGUMENT.NPM_INSTALL,
       COMMAND_ARGUMENT.NPM_NO_AUDIT,
@@ -414,15 +435,14 @@ async function verifyInstalledPackage(packed) {
       cacheDirectory,
       packed.tarballPath,
     ];
-    runChecked(
+    observePackageSync(observer, STAGE.INSTALL, () => runChecked(
       NPM_COMMAND,
       installArguments,
-      {cwd: installDirectory},
+      {cwd: installDirectory, observer},
       RELEASE_OUTCOME.INSTALL_FAILED,
-    );
-    const installedPackageRoot = await realpath(join(
-      installDirectory, 'node_modules', PACKAGE_NAME,
     ));
+    const installedPackageRoot = await observePackageAsync(observer, STAGE.INSTALLED_ROOT,
+      () => realpath(join(installDirectory, INSTALLED_MODULES_DIRECTORY, PACKAGE_NAME)));
     const resolutionScript = [
       'import {realpathSync} from \'node:fs\';',
       'import {sep} from \'node:path\';',
@@ -443,101 +463,119 @@ async function verifyInstalledPackage(packed) {
       COMMAND_ARGUMENT.NODE_EVAL,
       resolutionScript,
     ];
-    runChecked(
+    observePackageSync(observer, STAGE.API_IMPORT, () => runChecked(
       process.execPath,
       resolutionArguments,
-      {cwd: installDirectory},
+      {cwd: installDirectory, observer},
       RELEASE_OUTCOME.IMPORT_FAILED,
-    );
-    const binDirectory = join(installDirectory, 'node_modules', '.bin');
+    ));
+    const binDirectory = join(installDirectory, INSTALLED_MODULES_DIRECTORY, '.bin');
     const lagrangeBin = join(binDirectory, 'lagrange');
     const adminBin = join(binDirectory, 'lagrange-admin');
-    await Promise.all([access(lagrangeBin), access(adminBin)]);
-    const [lagrangeTarget, adminTarget] = await Promise.all([
-      realpath(lagrangeBin),
-      realpath(adminBin),
-    ]);
-    assertInstalledPath(
-      lagrangeTarget,
-      installedPackageRoot,
-      INSTALL_PATH_LABEL.LAGRANGE,
-    );
-    assertInstalledPath(
-      adminTarget,
-      installedPackageRoot,
-      INSTALL_PATH_LABEL.ADMIN,
-    );
-    const versionOutput = runChecked(
-      lagrangeBin,
-      ['--version'],
-      {cwd: installDirectory},
-      RELEASE_OUTCOME.BIN_FAILED,
-    ).trim();
-    if (versionOutput !== `${PRODUCT_NAME} v${packed.version}`) {
-      throw new NpmReleaseError(
+    await observePackageAsync(observer, STAGE.BIN_PATHS, async () => {
+      await Promise.all([access(lagrangeBin), access(adminBin)]);
+      const [lagrangeTarget, adminTarget] = await Promise.all([
+        realpath(lagrangeBin),
+        realpath(adminBin),
+      ]);
+      assertInstalledPath(
+        lagrangeTarget,
+        installedPackageRoot,
+        INSTALL_PATH_LABEL.LAGRANGE,
+      );
+      assertInstalledPath(
+        adminTarget,
+        installedPackageRoot,
+        INSTALL_PATH_LABEL.ADMIN,
+      );
+    });
+    observePackageSync(observer, STAGE.LAGRANGE_VERSION, () => {
+      const versionOutput = runChecked(
+        lagrangeBin,
+        ['--version'],
+        {cwd: installDirectory, observer},
         RELEASE_OUTCOME.BIN_FAILED,
-        `unexpected lagrange --version output: ${versionOutput}`,
-      );
-    }
-    const adminVersionOutput = runChecked(
-      adminBin,
-      ['--version'],
-      {cwd: installDirectory},
-      RELEASE_OUTCOME.BIN_FAILED,
-    ).trim();
-    if (adminVersionOutput !== `lagrange-admin version ${packed.version}`) {
-      throw new NpmReleaseError(
+      ).trim();
+      if (versionOutput !== `${PRODUCT_NAME} v${packed.version}`) {
+        throw new NpmReleaseError(
+          RELEASE_OUTCOME.BIN_FAILED,
+          `unexpected lagrange --version output: ${versionOutput}`,
+        );
+      }
+    });
+    observePackageSync(observer, STAGE.ADMIN_VERSION, () => {
+      const adminVersionOutput = runChecked(
+        adminBin,
+        ['--version'],
+        {cwd: installDirectory, observer},
         RELEASE_OUTCOME.BIN_FAILED,
-        `unexpected lagrange-admin --version output: ${adminVersionOutput}`,
-      );
-    }
-    const dryRunOutput = runChecked(lagrangeBin, [
-      '--dry-run',
-      '--data-dir',
-      join(temporaryRoot, 'data'),
-    ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
-    if (!/Dry run completed/u.test(dryRunOutput)) {
-      throw new NpmReleaseError(
-        RELEASE_OUTCOME.CLI_FAILED,
-        DRY_RUN_ERROR,
-      );
-    }
+      ).trim();
+      if (adminVersionOutput !== `lagrange-admin version ${packed.version}`) {
+        throw new NpmReleaseError(
+          RELEASE_OUTCOME.BIN_FAILED,
+          `unexpected lagrange-admin --version output: ${adminVersionOutput}`,
+        );
+      }
+    });
+    observePackageSync(observer, STAGE.DRY_RUN, () => {
+      const dryRunOutput = runChecked(lagrangeBin, [
+        '--dry-run',
+        '--data-dir',
+        join(temporaryRoot, 'data'),
+      ], {cwd: installDirectory, observer}, RELEASE_OUTCOME.CLI_FAILED);
+      if (!/Dry run completed/u.test(dryRunOutput)) {
+        throw new NpmReleaseError(
+          RELEASE_OUTCOME.CLI_FAILED,
+          DRY_RUN_ERROR,
+        );
+      }
+    });
     const serviceDirectory = join(
       temporaryRoot,
       COMMAND_ARGUMENT.SERVICE_SMOKE_DIR,
     );
-    runChecked(lagrangeBin, [
+    observePackageSync(observer, STAGE.SERVICE_INIT, () => runChecked(lagrangeBin, [
       COMMAND_ARGUMENT.SERVICE_SUBCOMMAND,
       COMMAND_ARGUMENT.SERVICE_INIT,
       serviceDirectory,
-    ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
-    runChecked(lagrangeBin, [
+    ], {cwd: installDirectory, observer}, RELEASE_OUTCOME.CLI_FAILED));
+    observePackageSync(observer, STAGE.SERVICE_GENERATE, () => runChecked(lagrangeBin, [
       COMMAND_ARGUMENT.SERVICE_SUBCOMMAND,
       COMMAND_ARGUMENT.SERVICE_GENERATE,
       serviceDirectory,
-    ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
-    runChecked(lagrangeBin, [
+    ], {cwd: installDirectory, observer}, RELEASE_OUTCOME.CLI_FAILED));
+    observePackageSync(observer, STAGE.SERVICE_BUILD, () => runChecked(lagrangeBin, [
       COMMAND_ARGUMENT.SERVICE_SUBCOMMAND,
       COMMAND_ARGUMENT.SERVICE_BUILD,
       serviceDirectory,
-    ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
+    ], {cwd: installDirectory, observer}, RELEASE_OUTCOME.CLI_FAILED));
     return packed;
   } finally {
-    await rm(temporaryRoot, {recursive: true, force: true});
+    snapshotPackageObservation(observer, PACKAGE_ARTIFACT.INSTALLED_PACKAGE,
+      join(installDirectory, INSTALLED_MODULES_DIRECTORY, PACKAGE_NAME, PACKAGE_JSON_FILENAME));
+    snapshotPackageObservation(observer, PACKAGE_ARTIFACT.INSTALLED_LOCK,
+      join(installDirectory, INSTALLED_MODULES_DIRECTORY, INSTALLED_LOCK_FILENAME));
+    await observePackageAsync(observer, STAGE.INSTALLED_CLEANUP,
+      () => rm(temporaryRoot, {recursive: true, force: true}));
   }
 }
 
 async function buildAndVerifyNpmPackage(options = {}) {
   const packed = await buildNpmPackage(options);
-  await verifyInstalledPackage(packed);
+  await verifyInstalledPackage(packed, options);
   return packed;
 }
 
-async function inspectTarball(tarballPath) {
+function inspectTarball(tarballPath, options = {}) {
+  return observePackageAsync(options.observer, STAGE.INSPECT_TARBALL,
+    () => inspectTarballBody(tarballPath, options));
+}
+
+async function inspectTarballBody(tarballPath, options) {
   const manifestText = runChecked(
     'tar',
     ['-xOf', resolve(tarballPath), 'package/package.json'],
-    {},
+    {observer: options.observer},
     RELEASE_OUTCOME.PACK_FAILED,
   );
   const manifest = JSON.parse(manifestText);

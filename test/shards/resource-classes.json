@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2530,
+    "ordinary": 2533,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2556,
-  "digest": "fnv1a32-665969f6",
+  "censusSize": 2559,
+  "digest": "fnv1a32-6838a3ee",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2255,6 +2255,8 @@
     "test/scripts/no-external-llm-guards.test.js": "ordinary",
     "test/scripts/no-legacy-consensus-reference-audit.test.js": "ordinary",
     "test/scripts/no-legacy-consensus-reference-ratchet.test.js": "ordinary",
+    "test/scripts/npm-package-observation-records.test.js": "ordinary",
+    "test/scripts/npm-package-observation.test.js": "ordinary",
     "test/scripts/observation-census.test.js": "ordinary",
     "test/scripts/participant-release-completion-owner.test.js": "ordinary",
     "test/scripts/pre-push-hook-control-flow.test.js": "ordinary",
@@ -2302,6 +2304,7 @@
     "test/scripts/stop-distributed-harness-containers.test.js": "ordinary",
     "test/scripts/summarize-distributed-failure-report.test.js": "ordinary",
     "test/scripts/summarize-representative-evidence.test.js": "ordinary",
+    "test/scripts/test-placement-artifacts.test.js": "ordinary",
     "test/scripts/test-placement-lab-split.test.js": "ordinary",
     "test/scripts/test-placement.test.js": "ordinary",
     "test/scripts/test-primary-classification.test.js": "ordinary",

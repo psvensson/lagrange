@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "npm-package-diagnostic-observation",
+  "class": "fix",
+  "statement": "Provide bounded optional package-stage observation and explicit lab artifact custody without changing package command behavior, deadlines, assertions or placement outcomes. This diagnostic substrate enables investigation of OE bj0's retained 4260e562 installed-package timeout; it does not repair or explain that timeout, accept PR199/PR198/PR200, or establish release/native acceptance.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/npm-package-diagnostic-observation/evidence/receipt.json",
+      "requiredReceipts": [
+        "stage-transparency",
+        "bounded-snapshot-custody",
+        "placement-custody",
+        "independent-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "diagnostic-only",
+      "statement": "No src changes, runtime repair, deadline extension, retry, assertion weakening, proof bypass or reinterpretation of predecessor acceptance. Keep command arguments, environment, ordering, synchronous execution and original errors/results/cleanup precedence unchanged. Observer failures remain explicit and cannot replace the original outcome."
+    },
+    {
+      "id": "owned-bounded-custody",
+      "statement": "Release packaging owns stage boundaries, the integration witness owns its diagnostic sink and outer lifecycle, and lab placement owns explicit bounded artifact collection before cleanup. No arbitrary environment/argument dumps, filesystem crawl, substantial timed tree hashing, network observation or trace records in the results ledger. Incomplete observation/custody is never causal evidence."
+    },
+    {
+      "id": "single-measured-diagnostic",
+      "statement": "After independent plan and actual-diff reviews and narrow proofs, permit exactly one invocation of the unchanged package witness on a frozen diagnostic candidate using canonical runLabTest, named locked tv-dator, retries disabled and no controller fallback. Stop after that invocation to assess. A pass does not explain or erase the historical timeout; no automatic base comparison or second invocation."
+    },
+    {
+      "id": "review-and-gates",
+      "statement": "Each semantic slice requires independent review and distinguishing tests. Required landing/exact-head gates remain separate. No completed repair, release, corpus or native claim follows from diagnostic evidence."
+    }
+  ],
+  "sealedAt": "4260e562b8ae9fafdb51d504c3532dede9f75bbf"
+}

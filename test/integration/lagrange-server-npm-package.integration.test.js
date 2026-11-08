@@ -10,6 +10,12 @@ import {
   inspectTarball,
 } from '../../scripts/release-npm-package.js';
 
+import {finishPackageObservation, observePackageAsync, observePackageSync}
+  from '../../scripts/npm-package-observation.js';
+import {OBSERVATION_STAGE as STAGE} from '../../scripts/npm-package-diagnostic-constants.js';
+import {PACKAGE_DIAGNOSTIC_DIRECTORY, createPackageDiagnosticSink}
+  from '../../scripts/npm-package-diagnostic-sink.js';
+
 const PACKAGE_TEST_TIMEOUT_MS = 180000;
 const MAX_PACKAGE_BYTES = 8 * 1024 * 1024;
 const MAX_UNPACKED_BYTES = 25 * 1024 * 1024;
@@ -42,36 +48,58 @@ describe('lagrange-server npm distribution', () => {
   it('packs one commit-bound artifact and proves its installed API and CLIs', {
     timeout: PACKAGE_TEST_TIMEOUT_MS,
   }, async (t) => {
-    const temporaryRoot = await mkdtemp(join(tmpdir(), 'lagrange-server-npm-'));
-    t.after(async () => rm(temporaryRoot, {recursive: true, force: true}));
+    const observer = createPackageDiagnosticSink(join(
+      import.meta.dirname, '../..', PACKAGE_DIAGNOSTIC_DIRECTORY,
+    ));
+    // Register the terminal hook before setup so setup failures remain explicit.
+    let cleanupRegistered = false;
+    t.after(() => {
+      if (!cleanupRegistered) finishPackageObservation(observer);
+    });
+    const temporaryRoot = await observePackageAsync(observer, STAGE.TEST_SETUP,
+      () => mkdtemp(join(tmpdir(), 'lagrange-server-npm-')));
+    t.after(async () => {
+      try {
+        await observePackageAsync(observer, STAGE.TEST_CLEANUP,
+          () => rm(temporaryRoot, {recursive: true, force: true}));
+      } finally {
+        finishPackageObservation(observer);
+      }
+    });
+    cleanupRegistered = true;
 
     const packed = await buildAndVerifyNpmPackage({
       outputDirectory: temporaryRoot,
+      observer,
     });
-    assert.equal(packed.name, PACKAGE_NAME);
-    assert.ok(packed.size <= MAX_PACKAGE_BYTES);
-    assert.ok(packed.unpackedSize <= MAX_UNPACKED_BYTES);
-    assert.ok(packed.entryCount <= MAX_PACKAGE_ENTRIES);
+    observePackageSync(observer, STAGE.PACKAGE_ASSERTIONS, () => {
+      assert.equal(packed.name, PACKAGE_NAME);
+      assert.ok(packed.size <= MAX_PACKAGE_BYTES);
+      assert.ok(packed.unpackedSize <= MAX_UNPACKED_BYTES);
+      assert.ok(packed.entryCount <= MAX_PACKAGE_ENTRIES);
 
-    const packedPaths = new Set(packed.files.map(({path}) => path));
-    for (const requiredPath of REQUIRED_PACKAGE_PATHS) {
-      assert.ok(packedPaths.has(requiredPath), `missing ${requiredPath}`);
-    }
-    for (const packedPath of packedPaths) {
-      assert.equal(
-        FORBIDDEN_PACKAGE_PREFIXES.some(
-          (prefix) => packedPath.startsWith(prefix),
-        ),
-        false,
-        `development-only path leaked into npm package: ${packedPath}`,
-      );
-    }
+      const packedPaths = new Set(packed.files.map(({path}) => path));
+      for (const requiredPath of REQUIRED_PACKAGE_PATHS) {
+        assert.ok(packedPaths.has(requiredPath), `missing ${requiredPath}`);
+      }
+      for (const packedPath of packedPaths) {
+        assert.equal(
+          FORBIDDEN_PACKAGE_PREFIXES.some(
+            (prefix) => packedPath.startsWith(prefix),
+          ),
+          false,
+          `development-only path leaked into npm package: ${packedPath}`,
+        );
+      }
+    });
 
-    const candidate = await inspectTarball(packed.tarballPath);
-    assert.equal(candidate.manifest.name, PACKAGE_NAME);
-    assert.equal(candidate.manifest.version, packed.version);
-    assert.equal(candidate.manifest.gitHead, packed.gitHead);
-    assert.equal(candidate.integrity, packed.integrity);
+    const candidate = await inspectTarball(packed.tarballPath, {observer});
+    observePackageSync(observer, STAGE.TARBALL_ASSERTIONS, () => {
+      assert.equal(candidate.manifest.name, PACKAGE_NAME);
+      assert.equal(candidate.manifest.version, packed.version);
+      assert.equal(candidate.manifest.gitHead, packed.gitHead);
+      assert.equal(candidate.integrity, packed.integrity);
+    });
   });
 
   it('resolves the harness playback-viewer copy source to the packaged ' +

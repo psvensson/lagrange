@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 208,
     "storage-raft": 148,
-    "test-infrastructure": 156,
+    "test-infrastructure": 159,
     "transactions": 17,
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2556,
-  "digest": "fnv1a32-713ef5b6",
+  "censusSize": 2559,
+  "digest": "fnv1a32-7e5fe416",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b9d19216",
+  "observationDigest": "fnv1a32-3f3874b0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2275,6 +2275,8 @@
     "test/scripts/no-external-llm-guards.test.js": "test-infrastructure",
     "test/scripts/no-legacy-consensus-reference-audit.test.js": "test-infrastructure",
     "test/scripts/no-legacy-consensus-reference-ratchet.test.js": "test-infrastructure",
+    "test/scripts/npm-package-observation-records.test.js": "test-infrastructure",
+    "test/scripts/npm-package-observation.test.js": "test-infrastructure",
     "test/scripts/observation-census.test.js": "test-infrastructure",
     "test/scripts/participant-release-completion-owner.test.js": "test-infrastructure",
     "test/scripts/pre-push-hook-control-flow.test.js": "test-infrastructure",
@@ -2322,6 +2324,7 @@
     "test/scripts/stop-distributed-harness-containers.test.js": "test-infrastructure",
     "test/scripts/summarize-distributed-failure-report.test.js": "test-infrastructure",
     "test/scripts/summarize-representative-evidence.test.js": "test-infrastructure",
+    "test/scripts/test-placement-artifacts.test.js": "test-infrastructure",
     "test/scripts/test-placement-lab-split.test.js": "test-infrastructure",
     "test/scripts/test-placement.test.js": "test-infrastructure",
     "test/scripts/test-primary-classification.test.js": "test-infrastructure",
@@ -6750,6 +6753,7 @@
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/test-machine-factor.js",
@@ -8890,6 +8894,9 @@
         "README.md",
         "package-lock.json",
         "package.json",
+        "scripts/npm-package-diagnostic-constants.js",
+        "scripts/npm-package-diagnostic-sink.js",
+        "scripts/npm-package-observation.js",
         "src/admin/static/playback-viewer.html",
         "src/admin/static/test-run-dashboard.html",
         "src/cli/bin/lagrange-admin.js",
@@ -16438,6 +16445,8 @@
         "package.json",
         "scripts/action-authority.js",
         "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/npm-package-diagnostic-constants.js",
+        "scripts/npm-package-observation.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
         "scripts/publish-head.js",
@@ -16577,6 +16586,7 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -16606,6 +16616,7 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -16649,6 +16660,7 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -17449,6 +17461,7 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/lab.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/participant-release-completion-audit.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
@@ -17636,6 +17649,7 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -17678,6 +17692,7 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -17705,6 +17720,7 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/lab.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/test-machine-factor.js"
@@ -17734,6 +17750,7 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
         "scripts/run-classified-test-files.js",
@@ -17986,6 +18003,23 @@
         "test/distributed"
       ]
     },
+    "test/scripts/npm-package-observation-records.test.js": {
+      "files": [
+        "package.json",
+        "scripts/npm-package-diagnostic-constants.js",
+        "scripts/npm-package-diagnostic-sink.js",
+        "scripts/npm-package-observation.js"
+      ]
+    },
+    "test/scripts/npm-package-observation.test.js": {
+      "files": [
+        "package.json",
+        "scripts/npm-package-diagnostic-constants.js"
+      ],
+      "directories": [
+        "data"
+      ]
+    },
     "test/scripts/observation-census.test.js": {
       "files": [
         "package.json",
@@ -18226,6 +18260,7 @@
         "scripts/generate-test-primary-classes.js",
         "scripts/generate-test-resource-classes.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/lab/probe.js",
         "scripts/lab/process.js",
         "scripts/lab/state.js",
@@ -18300,6 +18335,8 @@
         "Dockerfile",
         "package-lock.json",
         "package.json",
+        "scripts/npm-package-diagnostic-constants.js",
+        "scripts/npm-package-observation.js",
         "src/public-api.js"
       ],
       "directories": [
@@ -18407,6 +18444,7 @@
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
@@ -18572,6 +18610,7 @@
         "scripts/checks/run-formation-release-handoff-gcp-streak.js",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-distributed-matrix.js",
         "scripts/select-change-tests.js",
@@ -18610,6 +18649,7 @@
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/rerun-failed-distributed-scenarios.sh",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
@@ -18656,6 +18696,7 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -18689,6 +18730,7 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -18835,12 +18877,34 @@
         "test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-partial-residual.fixture.json"
       ]
     },
+    "test/scripts/test-placement-artifacts.test.js": {
+      "files": [
+        ".gitignore",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/placement-artifact-custody.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js"
+      ],
+      "directories": [
+        "scripts/lab"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
     "test/scripts/test-placement-lab-split.test.js": {
       "files": [
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/test-machine-factor.js"
@@ -18863,6 +18927,7 @@
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/lab/probe.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -19406,6 +19471,7 @@
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-priority-recovery-owner-inventory.js",
         "scripts/inventory-ordinal-segments.js",
+        "scripts/lab/placement-artifact-custody.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/solve.js",

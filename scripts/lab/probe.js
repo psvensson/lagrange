@@ -18,6 +18,9 @@ import {HEADROOM, THERMAL_REFUSAL_LINE, waitForThermalHeadroom}
 import {TEST_FILE_LINE, formatTestFilesSummary, relayedLine} from '../run-test-files.js';
 import {capture, killGroup, run} from './process.js';
 import {loadState, saveState} from './state.js';
+import {ARTIFACT_COLLECTOR_PATH, ARTIFACT_LIMITS, RELAY_KIND, MODE as ARTIFACT_COLLECTOR_MODE,
+  REASON as ARTIFACT_CUSTODY_REASON, createPlacementArtifactCustody,
+  followPlacementArtifactRelay} from './placement-artifact-custody.js';
 
 const OS = Object.freeze({LINUX: 'linux', MACOS: 'macos', WINDOWS: 'windows', UNKNOWN: 'unknown'});
 const OS_REPORT = Object.freeze({LINUX: 'linux', DARWIN: 'darwin', WINDOWS: 'windows'});
@@ -1843,6 +1846,9 @@ async function settleRemoteShards(settled, {deps, fleet, statuses, write, runHer
 // next ready host, or runs it itself. The runner leads its own process group,
 // so the controller's deadline can stop everything it started.
 const PLACEMENT_RESULTS_PREFIX = 'placement-results=';
+const PLACEMENT_CLEANUP_TRAP = 'trap cleanup EXIT';
+const PLACEMENT_ARTIFACT_UNSUPPORTED =
+  'placement artifacts require remote shares; controller artifact custody is unsupported';
 // The generated material every proof checkout needs, from its one owner
 // (scripts/checks/proof-checkout-preparation.js), which the push-gate
 // materializer prepares locally from the same list.
@@ -1872,7 +1878,7 @@ const PLACEMENT_SCRIPT_HEAD = [
     'rm -rf "$wt"; git worktree prune >/dev/null 2>&1; git update-ref -d "$ref" >/dev/null 2>&1; ' +
     'rm -f "$list"; if [ -n "$bundle" ]; then rm -f "$bundle"; fi; fi; ' +
     'if [ -n "$holding" ]; then rm -f "$lab_holder"; fi; }',
-  'trap cleanup EXIT',
+  PLACEMENT_CLEANUP_TRAP,
   // Stop the runner's whole group and wait for the runner, so cleanup never
   // races a dying test writing into the worktree. The runner and its tests
   // install no TERM handler, so the wait ends with them.
@@ -1995,8 +2001,54 @@ const PLACEMENT_SCRIPT_TAIL = [
   'exit "$status"',
 ];
 
-function placementScript(files) {
-  return [...PLACEMENT_SCRIPT_HEAD, ...files, ...PLACEMENT_SCRIPT_TAIL]
+function artifactCollectionBody(custody) {
+  const request = shellQuote(JSON.stringify(custody.request));
+  const unavailable = shellQuote(custody.unavailableLine);
+  const lines = [
+    'wt="$1"; artifact_status="$2"',
+    // Every added write is inside the external bound, including this first
+    // separator: the runner may have left both a partial line and a full pipe.
+    'printf \'\\n\'',
+    `if [ -f "$wt/${ARTIFACT_COLLECTOR_PATH}" ]; then`,
+    `  node "$wt/${ARTIFACT_COLLECTOR_PATH}" ${ARTIFACT_COLLECTOR_MODE.SUPERVISE} ` +
+      `"$wt" ${request} "$artifact_status" || printf '\\n%s\\n' ${unavailable}`,
+    `else printf '%s\\n' ${unavailable}; fi`,
+  ];
+  return lines.join(PLACEMENT_NEWLINE);
+}
+
+function artifactCleanupTrap(custody) {
+  const collect = shellQuote(artifactCollectionBody(custody));
+  const lines = [
+    'artifact_cleanup() {',
+    '  artifact_status=$?',
+    // The runner has settled before EXIT. A repeated interrupt cannot race
+    // the bounded collector with removal of its source worktree.
+    '  trap \'\' HUP INT TERM',
+    // Without the external bound, even printing an unavailable frame could
+    // hang cleanup. Missing terminal custody is the controller's refusal.
+    '  if command -v timeout >/dev/null 2>&1; then',
+    '    setsid timeout --signal=KILL ' +
+      `${ARTIFACT_LIMITS.ENTRY_SECONDS}s sh -c ${collect} sh "$wt" "$artifact_status" ` +
+      '</dev/null 2>/dev/null 8>&- 9>&- &',
+    '    collector_pid=$!',
+    '    wait "$collector_pid" 2>/dev/null',
+    // A worker or supervisor can end before its descendants. This shell
+    // retains group custody until every possible exit has discharged them.
+    '    kill -KILL "-$collector_pid" 2>/dev/null || :',
+    '  fi',
+    '  cleanup',
+    '  exit "$artifact_status"',
+    '}',
+    'trap artifact_cleanup EXIT',
+  ];
+  return lines.join(PLACEMENT_NEWLINE);
+}
+
+function placementScript(files, custody = null) {
+  const head = custody?.request ? PLACEMENT_SCRIPT_HEAD.map((line) =>
+    line === PLACEMENT_CLEANUP_TRAP ? artifactCleanupTrap(custody) : line) : PLACEMENT_SCRIPT_HEAD;
+  return [...head, ...files, ...PLACEMENT_SCRIPT_TAIL]
     .join(PLACEMENT_NEWLINE) + PLACEMENT_NEWLINE;
 }
 
@@ -2189,11 +2241,13 @@ function tailLines(file, stream, onLine) {
  *   holder: {purpose: string, expectedMs: number},
  *   runId?: string, env?: Object,
  *   forward?: {retry?: string, tapTimeout?: string, checkBase?: string},
- *   onLine?: Function, results?: string, gitRoot?: string}} options
+ *   onLine?: Function, results?: string, gitRoot?: string,
+ *   artifacts?: Array<{path: string, required: boolean, maxBytes: number}>}} options
  * @return {{done: Promise<Object>, stop: Function}}
  */
 export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
   env = gitProcessEnvironment(), forward = {}, onLine = null, results = EMPTY, gitRoot = root,
+  artifacts = null,
   runId = `${sha.slice(0, PLACEMENT_RUN_SHA_CHARACTERS)}-` +
     `${Date.now().toString(PLACEMENT_RUN_RADIX)}-${process.pid}`}) {
   const {machine} = shard;
@@ -2203,16 +2257,20 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
   const logFile = `${local}.log`;
   const errorFile = `${local}.err`;
   const scriptFile = `${local}.sh`;
+  const custody = artifacts === null ? null : createPlacementArtifactCustody({root, artifacts,
+    binding: {candidate: sha, base: forward.checkBase, run: runId, host: machine.name}});
   let bundleFile;
   try {
     bundleFile = bundleFor(machine, {root: gitRoot, sha, local});
   } catch (error) {
     return {done: Promise.resolve({status: PLACEMENT_EXIT.SETUP, log: EMPTY,
-      reason: error.message}), stop: () => {}, interrupt: () => null, abort: () => {}};
+      reason: error.message, ...(custody ?
+        {artifacts: custody.finish(ARTIFACT_CUSTODY_REASON.SETUP)} : {})}),
+    stop: () => {}, interrupt: () => null, abort: () => {}};
   }
   const remoteBundle = bundleFile ?
     `${machine.repoPath}/${PLACEMENT_PARENT}/${runId}.bundle` : EMPTY;
-  fs.writeFileSync(scriptFile, placementScript(shard.files));
+  fs.writeFileSync(scriptFile, placementScript(shard.files, custody));
   const wrapper = shardWrapper({
     upload: bundleFile ?
       commandLine(remoteCommand(machine, PLACEMENT_UPLOAD_SCRIPT, [remoteBundle])) : null,
@@ -2230,8 +2288,14 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
     {env, stdio: [PLACEMENT_STDIO_IGNORE, output, errors], detached: true});
   fs.closeSync(output);
   fs.closeSync(errors);
-  const tails = onLine ? [tailLines(logFile, PLACEMENT_STREAM.OUT, onLine),
-    tailLines(errorFile, PLACEMENT_STREAM.ERR, onLine)] : [];
+  const tails = custody ? [followPlacementArtifactRelay(logFile,
+    (line) => onLine?.(line, PLACEMENT_STREAM.OUT), custody, PLACEMENT_TAIL_POLL_MS)] :
+    (onLine ? [tailLines(logFile, PLACEMENT_STREAM.OUT, onLine)] : []);
+  if (onLine) {
+    tails.push(custody ? followPlacementArtifactRelay(errorFile,
+      (line) => onLine(line, PLACEMENT_STREAM.ERR), custody, PLACEMENT_TAIL_POLL_MS,
+      RELAY_KIND.DIAGNOSTICS) : tailLines(errorFile, PLACEMENT_STREAM.ERR, onLine));
+  }
   let stopped = null;
   const stop = (reason) => {
     if (stopped || hasExited(child)) return;
@@ -2251,8 +2315,9 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
     if (bundleFile) fs.rmSync(bundleFile, {force: true});
     const outcome = {
       status: stopped ? null : status,
-      log: fs.readFileSync(logFile, TEXT_UTF8),
-      errors: fs.readFileSync(errorFile, TEXT_UTF8),
+      log: custody ? custody.readLog(logFile) : fs.readFileSync(logFile, TEXT_UTF8),
+      errors: custody ? custody.readLog(errorFile) : fs.readFileSync(errorFile, TEXT_UTF8),
+      ...(custody ? {artifacts: custody.finish()} : {}),
     };
     return stopped ? {...outcome, reason: stopped} : outcome;
   });
@@ -2883,7 +2948,8 @@ function controllerMachine(fleet) {
 // the run to wait for. The controller's share runs as the placed run's own
 // child does; a lab machine's through the shard path, with the commit bundled
 // from the planning checkout.
-function startLabShare({machine, lanes}, {commit, deps, forward, results, costOf, write}) {
+function startLabShare({machine, lanes},
+  {commit, deps, forward, results, costOf, write, artifacts}) {
   const files = lanes.flatMap((lane) => lane.files);
   const lines = [];
   const onLine = (line, stream) => {
@@ -2897,6 +2963,7 @@ function startLabShare({machine, lanes}, {commit, deps, forward, results, costOf
   const loadMs = labShareEstimateMs(machine, files, costOf);
   const run = deps.runRemote({machine, files}, {sha: commit.sha, gitRoot: commit.gitRoot,
     deadlineMs: deadlineFor({loadMs}), forward, results, onLine,
+    ...(artifacts === null ? {} : {artifacts}),
     holder: {purpose: labTestPurpose(lanes.map((lane) => lane.resourceClass)),
       expectedMs: loadMs}});
   return {machine, files, lines, run};
@@ -2938,6 +3005,10 @@ async function settleLabShares(shares, {root, write}) {
         `${LAB_TEST_TEXT.UNREPORTED}${outcome?.reason || `exit ${exit}`}`);
     }
     copyLabResults(share, root, write);
+    if (outcome?.artifacts) {
+      write(`${LAB_TEST_TEXT.PREFIX}${share.machine.name}: artifacts ${outcome.artifacts.state} ` +
+        `${outcome.artifacts.directory ?? EMPTY}`);
+    }
     for (const key of Object.keys(totals)) totals[key] += summary[key];
     if (exit !== 0 || summary.failed > 0) status = LAB_TEST_FAILED;
   }
@@ -2954,13 +3025,14 @@ async function settleLabShares(shares, {root, write}) {
  * operator's --base-sha or the controller's own base, resolved), or null.
  * @param {{plan: Array<Object>, costs?: Array<Object>, commit: Object,
  *   checkBase?: string|null, on?: string|null, split?: boolean, root: string,
- *   results?: string, env?: Object, write?: Function}} request
+ *   results?: string, env?: Object, write?: Function,
+ *   artifacts?: Array<{path: string, required: boolean, maxBytes: number}>}} request
  * @param {Object} deps labTestDeps' collaborators (discover, runRemote,
  *   runLocalChild, commitAt; signals and exit optional)
  * @return {Promise<number>} exit status
  */
 export async function runLabTest({plan, costs = [], commit, checkBase, on = null,
-  split = false, root, results = LAB_TEST_RESULTS_FILE, env = process.env,
+  split = false, root, results = LAB_TEST_RESULTS_FILE, env = process.env, artifacts = null,
   write = (line) => process.stdout.write(`${line}${PLACEMENT_NEWLINE}`)}, deps) {
   let shares = [];
   try {
@@ -2969,6 +3041,9 @@ export async function runLabTest({plan, costs = [], commit, checkBase, on = null
       controller: controllerMachine(fleet), controllerHeadroom: splitHeadroom(deps, commit.sha)}) :
       {assignments: placeLabLanes(plan, machines, {on, fleet})};
     const {assignments} = placed;
+    if (artifacts !== null && assignments.some(({machine}) => machine.controller)) {
+      throw new Error(PLACEMENT_ARTIFACT_UNSUPPORTED);
+    }
     for (const line of [...formatLabDecision(assignments), ...(split ? [formatLabController(placed),
       ...formatLabSkipped(fleet, assignments, placed.controller)] : [])]) write(line);
     if (assignments.some(({machine}) => machine.controller) && deps.commitAt() !== commit.sha) {
@@ -2976,7 +3051,7 @@ export async function runLabTest({plan, costs = [], commit, checkBase, on = null
     }
     const costOf = new Map(costs.map((cost) => [cost.file, cost.ms / cost.jobs]));
     const context = {commit, deps, forward: forwardedPolicy(env, checkBase), results, costOf,
-      write};
+      artifacts, write};
     shares = assignments.map((assignment) => startLabShare(assignment, context));
   } finally {
     commit.release();
