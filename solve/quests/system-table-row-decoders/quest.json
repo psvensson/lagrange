@@ -31,5 +31,6 @@
       "id": "behaviour-unchanged",
       "statement": "Decoding preserves every value consumers read today under its named field; every expectation change in an existing test is justified against HEAD behaviour with a production-shaped fixture."
     }
-  ]
+  ],
+  "sealedAt": "95877e60b5ad3fb42fa7e11ed22f9c4556e45f51"
 }
