@@ -5,13 +5,32 @@
   "statement": "Every fallback site the detector module reports (two-source reads, typeof dual paths, catch-and-default) has a census record in data/fallback-census/census.json: the site's file, range and content hash, the class derived from V8 block coverage collected with NODE_V8_COVERAGE over the unit, packaging, integration and bootstrap corpus and one fresh-formation scenario (never, primary-only, fallback-only, both, or unloaded when no run loaded the file), and the identity of every run that contributed; the census is produced by one script under scripts/checks that merges the per-process coverage files and joins them to the detector sites, so that the budget row fallback_sites_uncensused reads zero at the head the census was taken on.",
   "doneWhen": {
     "probe": "script",
-    "args": {"command": "node scripts/checks/code-navigability-budget.js --metric --rows fallback_sites_uncensused", "target": 0}
+    "args": {
+      "command": "node scripts/checks/code-navigability-budget.js --metric --rows fallback_sites_uncensused",
+      "target": 0
+    }
   },
   "constraints": [
-    {"id": "no-src-change", "statement": "Instrumentation is environment-based (NODE_V8_COVERAGE through the existing runners and the harness's NODE_OPTIONS composition). No file under src/ changes for the census."},
-    {"id": "unloaded-is-not-never", "statement": "A site in a file no run loaded is recorded as unloaded and stays uncensused for the retirement rows. An incomplete lane fails its sites; it never acquits them."},
-    {"id": "hash-bound-records", "statement": "A record binds to the site's content hash. A site whose hash no longer matches is uncensused again; nothing is inferred from a line number or a filename."},
-    {"id": "runs-are-named", "statement": "Each record lists the runs (lane, host, commit, timestamp, coverage directory digest) whose coverage it joined, so a consumer can ask whether a side executed under a formation and not only under unit tests."},
-    {"id": "lab-first", "statement": "The corpus and the formation run go to the lab through node scripts/lab.js; the controller runs only the merge and the join."}
-  ]
+    {
+      "id": "no-src-change",
+      "statement": "Instrumentation is environment-based (NODE_V8_COVERAGE through the existing runners and the harness's NODE_OPTIONS composition). No file under src/ changes for the census."
+    },
+    {
+      "id": "unloaded-is-not-never",
+      "statement": "A site in a file no run loaded is recorded as unloaded and stays uncensused for the retirement rows. An incomplete lane fails its sites; it never acquits them."
+    },
+    {
+      "id": "hash-bound-records",
+      "statement": "A record binds to the site's content hash. A site whose hash no longer matches is uncensused again; nothing is inferred from a line number or a filename."
+    },
+    {
+      "id": "runs-are-named",
+      "statement": "Each record lists the runs (lane, host, commit, timestamp, coverage directory digest) whose coverage it joined, so a consumer can ask whether a side executed under a formation and not only under unit tests."
+    },
+    {
+      "id": "lab-first",
+      "statement": "The corpus and the formation run go to the lab through node scripts/lab.js; the controller runs only the merge and the join."
+    }
+  ],
+  "sealedAt": "6521d50275960f9cd1a3def373c4637f708094fd"
 }
