@@ -27,5 +27,6 @@
       "id": "gate-not-advice",
       "statement": "The audit exits non-zero on growth and prints the tighten hint when a count falls below its baseline; a mode that cannot fail is not a check."
     }
-  ]
+  ],
+  "sealedAt": "0e4deb6943354fc692040e7339df0980f6f8f382"
 }
