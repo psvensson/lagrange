@@ -2,7 +2,7 @@
  * Runtime config, delay, and group-id helpers for LatencyGroupManager.
  */
 
-import {COLUMN, TABLES} from '../constants/index.js';
+import {COLUMN, SERVICE_TYPE, TABLES} from '../constants/index.js';
 import {
   INITIAL_MESSAGE_GROUP_ID,
 } from '../bootstrap/system-table-schemas-constants.js';
@@ -82,21 +82,60 @@ function computeNextLatencyGroupCycleDelayMs(options) {
   );
 }
 
-function resolveLocalHostedMessageGroupId(options) {
-  const filterFn = options.systemTableCache?.filter;
-  if (typeof filterFn !== 'function' || !options.nodeId) {
+function isLocalHostedMessageGroupServiceRow(row, options) {
+  if (row?.[COLUMN.NODE_ID] !== options.nodeId) {
+    return false;
+  }
+  const groupId = row?.[COLUMN.GROUP_ID];
+  if (typeof groupId !== 'string' || groupId.length === 0) {
+    return false;
+  }
+  const isMessageGroup =
+    groupId === INITIAL_MESSAGE_GROUP_ID ||
+    row?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP;
+  return isMessageGroup && !hasLatencyGroup(options.systemTableCache, groupId);
+}
+
+function resolveHostedGroupFromMessageGroupsTable(options) {
+  const getAllFn = options.systemTableCache?.getAll;
+  if (typeof getAllFn !== 'function') {
     return null;
   }
-  const rows = filterFn.call(
-    options.systemTableCache,
-    TABLES.SERVICES,
-    (row) => row?.[COLUMN.NODE_ID] === options.nodeId &&
-      row?.[COLUMN.GROUP_ID] === INITIAL_MESSAGE_GROUP_ID &&
-      !hasLatencyGroup(options.systemTableCache, row[COLUMN.GROUP_ID]),
-  );
-  return Array.isArray(rows) && rows.length > 0 ?
-    rows[0][COLUMN.GROUP_ID] :
-    null;
+  const rows = getAllFn.call(options.systemTableCache, TABLES.MESSAGE_GROUPS);
+  if (!Array.isArray(rows)) {
+    return null;
+  }
+  const match = rows.find((row) => {
+    const groupId = row?.[COLUMN.GROUP_ID];
+    return (
+      row?.leader_node_id === options.nodeId &&
+      typeof groupId === 'string' &&
+      groupId.length > 0 &&
+      !hasLatencyGroup(options.systemTableCache, groupId)
+    );
+  });
+  return match ? match[COLUMN.GROUP_ID] : null;
+}
+
+function resolveLocalHostedMessageGroupId(options) {
+  if (!options.nodeId) {
+    return null;
+  }
+  const filterFn = options.systemTableCache?.filter;
+  if (typeof filterFn === 'function') {
+    const rows = filterFn.call(
+      options.systemTableCache,
+      TABLES.SERVICES,
+      (row) => isLocalHostedMessageGroupServiceRow(row, options),
+    );
+    if (Array.isArray(rows) && rows.length > 0) {
+      const initialRow = rows.find(
+        (row) => row?.[COLUMN.GROUP_ID] === INITIAL_MESSAGE_GROUP_ID,
+      );
+      return (initialRow || rows[0])[COLUMN.GROUP_ID];
+    }
+  }
+  return resolveHostedGroupFromMessageGroupsTable(options);
 }
 
 function buildLatencyGroupId(options) {

@@ -239,19 +239,67 @@ function collectActiveServiceRows(systemTableCache) {
   return systemTableCache.filter(TABLES.SERVICES, isActiveMessageGroupServiceRow) || [];
 }
 
-function collectCacheTargetGroupIds(options = {}, sourceGroupId = null) {
-  const groupIds = new Set();
-  for (const row of collectActiveLatencyGroups(options.systemTableCache)) {
-    addTargetGroupId(groupIds, row[COLUMN.GROUP_ID], sourceGroupId);
-  }
+function collectKnownMessageGroupDomain(options = {}) {
+  const knownGroupIds = new Set();
+  const groupIdsByNodeId = new Map();
+  const recordNodeGroup = (nodeId, groupId) => {
+    if (typeof groupId !== 'string' || groupId.length === 0) {
+      return;
+    }
+    knownGroupIds.add(groupId);
+    if (typeof nodeId === 'string' && nodeId.length > 0) {
+      if (!groupIdsByNodeId.has(nodeId)) {
+        groupIdsByNodeId.set(nodeId, new Set());
+      }
+      groupIdsByNodeId.get(nodeId).add(groupId);
+    }
+  };
   for (const row of collectActiveMessageGroups(options.systemTableCache)) {
-    addTargetGroupId(groupIds, row[COLUMN.GROUP_ID], sourceGroupId);
+    recordNodeGroup(row?.leader_node_id || null, row[COLUMN.GROUP_ID]);
   }
   for (const serviceRow of collectActiveServiceRows(options.systemTableCache)) {
     const groupId = resolveMessageGroupId(serviceRow, {
       messageGroupReplicaSuffix: options.messageGroupReplicaSuffix,
     });
+    recordNodeGroup(serviceRow?.[COLUMN.NODE_ID] || null, groupId);
+  }
+  return {knownGroupIds, groupIdsByNodeId};
+}
+
+function resolveLatencyGroupTargetCandidates(row, options, domain) {
+  const latencyGroupId = row[COLUMN.GROUP_ID];
+  if (domain.knownGroupIds.has(latencyGroupId)) {
+    return [latencyGroupId];
+  }
+  const coordinatorNodeId =
+    row[COLUMN.COORDINATOR_NODE_ID] ||
+    row[COLUMN.REPRESENTATIVE_NODE_ID] ||
+    null;
+  if (coordinatorNodeId && coordinatorNodeId === options.nodeId) {
+    return [];
+  }
+  const coordinatorHostedGroups =
+    coordinatorNodeId ? domain.groupIdsByNodeId.get(coordinatorNodeId) : null;
+  if (coordinatorHostedGroups && coordinatorHostedGroups.size > 0) {
+    return [...coordinatorHostedGroups];
+  }
+  return [latencyGroupId];
+}
+
+function collectCacheTargetGroupIds(options = {}, sourceGroupId = null) {
+  const groupIds = new Set();
+  const domain = collectKnownMessageGroupDomain(options);
+  for (const groupId of domain.knownGroupIds) {
     addTargetGroupId(groupIds, groupId, sourceGroupId);
+  }
+  for (const row of collectActiveLatencyGroups(options.systemTableCache)) {
+    for (const candidateGroupId of resolveLatencyGroupTargetCandidates(
+      row,
+      options,
+      domain,
+    )) {
+      addTargetGroupId(groupIds, candidateGroupId, sourceGroupId);
+    }
   }
   return groupIds;
 }

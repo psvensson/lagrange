@@ -201,6 +201,26 @@ test('grouped mode: a newly known group in latency_groups is captured and delive
   );
 });
 
+test('safe mode: a synthetic latency_groups row for a coordinator that already ' +
+  'hosts an active message_group service resolves to the hosted message group without a phantom unroutable target', async (t) => {
+  const f = compose(t, LATENCY_PROPAGATION_MODE.SAFE, {
+    groups: [SOURCE_GROUP, 'lg-joiner-2-1794136292573'],
+    services: [
+      leaderRow('mg-joiner-1', 'node-joiner-1'),
+      leaderRow('mg-joiner-2', 'node-lg-joiner-2-1794136292573'),
+    ],
+    routingOrder: [],
+  });
+  const result = await f.propagate();
+  assert.equal(result.success, true);
+  assert.equal(result.targetGroupCount, 2);
+  assert.deepEqual(
+    f.calls.map((call) => call.payload.targetGroupId).sort(),
+    ['mg-joiner-1', 'mg-joiner-2'],
+    'coordinator with hosted message_group service is targeted once via its canonical message group id',
+  );
+});
+
 test('a thrown target delivery is an unknown answer, never a throw: the wave ' +
   'returns the debt with its cause', async (t) => {
   const f = compose(t, LATENCY_PROPAGATION_MODE.SAFE, {options: {deliveryRetryMaxAttempts: 1},
