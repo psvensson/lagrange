@@ -572,3 +572,59 @@ test(
     }
   },
 );
+
+test(
+  'scheduled completed-placement handoff repair bypasses the 5000ms reuse window for subsequent priority partition completions',
+  async (t) => {
+    const scheduledRepairOptions = [];
+    const controlSnapshot = {
+      canRunAuthoritativeControlSnapshotRepair: () => true,
+      evaluateAuthoritativeControlSnapshotRepair: () => ({
+        shouldRepair: true,
+        triggerCodes: [
+          AUTHORITATIVE_REPAIR_TRIGGER
+            .PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP,
+        ],
+      }),
+    };
+    const serviceDiscovery = {
+      buildAuthoritativeDiscoveryRepairScheduleDecision: () => ({
+        state: 'scheduled',
+        repair: null,
+      }),
+      scheduleAuthoritativeDiscoveryCacheRepair: (options) => {
+        scheduledRepairOptions.push(options);
+        return {state: 'scheduled', repair: null};
+      },
+    };
+    const owner = new ControlPlaneSnapshotOwner({
+      controlSnapshot,
+      serviceDiscovery,
+    });
+
+    await owner.resolveControlSnapshot(
+      {capturedAt: TEST_NOW_MS},
+      {allowAuthoritativeRepair: false},
+    );
+    await owner.resolveControlSnapshot(
+      {capturedAt: TEST_NOW_MS + 1000},
+      {allowAuthoritativeRepair: true},
+    );
+
+    t.equal(
+      scheduledRepairOptions.length,
+      2,
+      'both non-blocking and allowed control-snapshot paths schedule handoff repair',
+    );
+    t.equal(
+      scheduledRepairOptions[0]?.bypassReuse,
+      true,
+      'handoff-gap background schedule bypasses the 5s reuse window',
+    );
+    t.equal(
+      scheduledRepairOptions[1]?.bypassReuse,
+      true,
+      'allowed control-snapshot schedule bypasses the 5s reuse window on handoff gap',
+    );
+  },
+);

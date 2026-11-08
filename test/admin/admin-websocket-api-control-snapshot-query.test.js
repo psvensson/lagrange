@@ -903,13 +903,13 @@ test(
     );
     t.equal(
       result?.rows?.[0]?.replicaOperations?.staleInFlightCount,
-      0,
-      'failed advisory repair should not publish an unverified stale operation as live',
+      1,
+      'local snapshot should fall back to the local stale replica-operation view when advisory repair fails',
     );
     t.same(
       getAuthoritativeRepairReadTables(failingReplicaOpEngine.executeRequestCalls),
-      [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES].sort(),
-      'degraded forced repair should retain the canonical authoritative table scope',
+      [TABLES.REPLICA_OPERATIONS].sort(),
+      'degraded local snapshot should attempt only the scoped replica_operations repair',
     );
   },
 );

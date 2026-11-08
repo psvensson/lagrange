@@ -137,7 +137,14 @@ function clearActiveDurableSliceIfMatching(owner, tableName) {
   if (owner.durableSliceTable !== tableName) return false;
   owner.durableSliceTable = null;
   owner.durableSliceWaves = 0;
-  if (owner.yieldedDurableSliceTable === null) {
+  if (
+    Array.isArray(owner.waitingDurableSliceTables) &&
+    owner.waitingDurableSliceTables.length > 0
+  ) {
+    owner.yieldedDurableSliceTable = tableName;
+    owner.yieldedDurableSliceUntilMs =
+      owner.now() + CONTENDED_SLICE_YIELD_HOLD_MS;
+  } else if (owner.yieldedDurableSliceTable === null) {
     owner.yieldedDurableSliceUntilMs = 0;
   }
   return true;
@@ -232,7 +239,11 @@ function computeBusyRetryAfterMs(owner, incomingTable, deliveryContext = null) {
     }
     return Math.min(owner.deliveryRetryDelayMs, BUSY_CONTENDED_RETRY_AFTER_MS);
   }
-  if (incomingTable !== owner.yieldedDurableSliceTable) {
+  if (
+    incomingTable !== owner.yieldedDurableSliceTable ||
+    (Array.isArray(owner.waitingDurableSliceTables) &&
+      owner.waitingDurableSliceTables.length > 0)
+  ) {
     enqueueWaitingDurableSliceTable(owner, incomingTable, deliveryContext);
   }
   notifyNextWaitingDurableSliceTable(owner);

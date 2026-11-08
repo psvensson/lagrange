@@ -905,3 +905,77 @@ test('releasing an active durable slice wave notifies onSliceTurnReady on the he
   assert.equal(f.service.durableSliceWaves, 0);
   baseContext.finish();
 });
+
+test('a yielded slice table that re-attempts while activeDurablePropagation is null is re-queued behind waiting contenders and releasing a drained active slice preserves the yield hold window', async (t) => {
+  const nowMs = 1000;
+  let activeDeliverResolver = null;
+  const f = compose(t, LATENCY_PROPAGATION_MODE.SAFE, {
+    options: {nowFn: () => nowMs},
+    answer: async (payload) => {
+      if (activeDeliverResolver !== null) {
+        const wait = new Promise((resolve) => {
+          activeDeliverResolver = resolve;
+        });
+        await wait;
+      }
+      return committedTargetAnswer(payload);
+    },
+  });
+
+  // Wave 1 of SERVICES while PARTITIONS contends.
+  activeDeliverResolver = () => {};
+  const svcWave1Req = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: 'svc-requeue-1'}),
+  );
+  const svcWave1Promise = f.service.propagateCDCEvent(svcWave1Req);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  const partContendReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.PARTITIONS, eventKey: 'part-requeue-1'}),
+  );
+  const partContendRes = await f.service.propagateCDCEvent(partContendReq);
+  assert.equal(partContendRes.error, CDC_COMPLETION.BACKPRESSURE);
+
+  const releaseWave1 = activeDeliverResolver;
+  activeDeliverResolver = null;
+  releaseWave1();
+  assert.equal((await svcWave1Promise).success, true);
+
+  for (let w = 2; w <= 4; w += 1) {
+    const req = createDurablePropagationRequest(
+      f.source,
+      createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: `svc-requeue-${w}`}),
+    );
+    assert.equal((await f.service.propagateCDCEvent(req)).success, true);
+  }
+
+  // SERVICES yielded after wave 4; activeDurablePropagation is null while PARTITIONS is head of waitingDurableSliceTables.
+  // When SERVICES immediately attempts wave 5, it is refused with BACKPRESSURE AND enqueued behind PARTITIONS.
+  const svcWave5Req = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.SERVICES, eventKey: 'svc-requeue-5'}),
+  );
+  assert.equal((await f.service.propagateCDCEvent(svcWave5Req)).error, CDC_COMPLETION.BACKPRESSURE);
+  assert.deepEqual(
+    f.service.waitingDurableSliceTables,
+    [TABLES.PARTITIONS, TABLES.SERVICES],
+    'yielding table is re-queued behind the head waiter even when activeDurablePropagation is null',
+  );
+
+  // PARTITIONS runs 1 wave and then drains (releases its contender slot while SERVICES is waiting).
+  const partAdmittedReq = createDurablePropagationRequest(
+    f.source,
+    createDurableCdcEvent({tableName: TABLES.PARTITIONS, eventKey: 'part-requeue-1'}),
+  );
+  assert.equal((await f.service.propagateCDCEvent(partAdmittedReq)).success, true);
+  assert.equal(f.service.releaseDurableSliceContender(TABLES.PARTITIONS), true);
+  assert.equal(f.service.yieldedDurableSliceTable, TABLES.PARTITIONS);
+  assert.equal(
+    f.service.yieldedDurableSliceUntilMs > nowMs,
+    true,
+    'releasing a drained active slice preserves the yield hold window for the remaining waiting table',
+  );
+});

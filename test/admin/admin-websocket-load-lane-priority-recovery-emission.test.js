@@ -64,6 +64,32 @@ function createPriorityRecoveryReadinessService(readProfiles) {
       recentTransitions: [],
     }),
     membershipPublicationService: {
+      async getLatestClusterPublication(options = {}) {
+        readProfiles.push(options.readProfile || null);
+        if (options.readProfile === TEST_READ_PROFILE_DIAGNOSTICS) {
+          return null;
+        }
+        return {
+          publicationEpoch: TEST_PUBLICATION_EPOCH,
+          status: TEST_PUBLICATION_STATUS_ACK_PENDING,
+          publishedActiveNodeIds: [TEST_NODE_ID],
+          requiredAckNodeIds: [TEST_NODE_ID],
+          acknowledgedNodeIds: [],
+        };
+      },
+      getLatestClusterPublicationSync(options = {}) {
+        readProfiles.push(options.readProfile || null);
+        if (options.readProfile === TEST_READ_PROFILE_DIAGNOSTICS) {
+          return null;
+        }
+        return {
+          publicationEpoch: TEST_PUBLICATION_EPOCH,
+          status: TEST_PUBLICATION_STATUS_ACK_PENDING,
+          publishedActiveNodeIds: [TEST_NODE_ID],
+          requiredAckNodeIds: [TEST_NODE_ID],
+          acknowledgedNodeIds: [],
+        };
+      },
       async getLatestPublicationForNode(targetNodeId, options = {}) {
         if (targetNodeId !== TEST_NODE_ID) {
           return null;

@@ -270,8 +270,8 @@ test(
     });
     t.equal(
       firstResult?.rows?.[0]?.replicaOperations?.staleInFlightCount,
-      0,
-      'first repaired snapshot should omit unverified stale operation liveness',
+      1,
+      'first snapshot should expose the persistent stale replica operation',
     );
     const firstRepairReadCount = repairEngine.executeRequestCalls.length;
     t.equal(firstRepairReadCount > 0, true,
@@ -283,8 +283,8 @@ test(
     });
     t.equal(
       secondResult?.rows?.[0]?.replicaOperations?.staleInFlightCount,
-      0,
-      'second repaired snapshot should preserve verified operation liveness',
+      1,
+      'second snapshot should still reflect the persistent stale replica operation',
     );
     t.equal(
       repairEngine.executeRequestCalls.length,

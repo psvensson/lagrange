@@ -417,6 +417,7 @@ export function seedServiceDiscoveryRows(cache) {
   cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
     service_id: 'sys-postgres-wire',
     service_name: 'sys-postgres-wire',
+    status: 'active',
     replica_count: 3,
     runtime_kind: 'native_js',
   });

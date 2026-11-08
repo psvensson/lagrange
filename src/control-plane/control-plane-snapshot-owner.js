@@ -57,6 +57,7 @@ function maybeScheduleHandoffGapDiscoveryRepair(owner, reasonCodes) {
   }
   const handoffRepairOptions = {
     reason: CONTROL_PLANE_SNAPSHOT_REPAIR_REASON.CONTROL_SNAPSHOT,
+    bypassReuse: true,
     triggerCodes: reasonCodes,
   };
   const handoffRepairDecision = owner.resolveRepairDecision(handoffRepairOptions);
@@ -451,6 +452,9 @@ class ControlPlaneSnapshotOwner {
     }
     const repairOptions = {
       reason: CONTROL_PLANE_SNAPSHOT_REPAIR_REASON.CONTROL_SNAPSHOT,
+      bypassReuse: reasonCodes.includes(
+        CONTROL_PLANE_SNAPSHOT_REASON_CODE.PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP,
+      ),
       triggerCodes: reasonCodes,
     };
     const repairDecision = this.resolveRepairDecision(repairOptions);
