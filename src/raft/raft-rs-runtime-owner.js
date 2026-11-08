@@ -105,6 +105,12 @@ import {
   whenPersistenceAdmitted,
 } from './raft-rs-persistence-admission.js';
 import {deepFreeze} from './raft-operation-port.js';
+import {
+  continueTurn,
+  pendingTurn,
+  settledTurn,
+  turnChainValue,
+} from './raft-rs-turn-answer.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {PARTICIPATION_GATE} from './raft-committed-membership-constants.js';
 import {proposeMembershipTransition} from
@@ -586,7 +592,7 @@ function resumeAfterReconstruction(group, expectedGeneration) {
   const conf = invokeCoreAt(
     group, expectedGeneration, CORE_OPERATION.CONF_STATE);
   if (!conf.ok) {
-    return conf.result;
+    return settledTurn(conf.result);
   }
   // The gate from the durable record decides before the configuration does:
   // a reconstruction below it never campaigns, even as a transient sole
@@ -595,7 +601,8 @@ function resumeAfterReconstruction(group, expectedGeneration) {
     return campaignGroup(group, expectedGeneration);
   }
   announce(group, expectedGeneration);
-  return outcome(CORE_OK, {reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED});
+  return settledTurn(
+    outcome(CORE_OK, {reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED}));
 }
 
 // The shared attempt's typed answer is also the reentrant admission fence.
@@ -669,8 +676,8 @@ function resumeRuntimeGroup(group) {
   cancelRuntimeResumption(group);
   const expectedGeneration = group.pendingRuntimeResume;
   if (expectedGeneration !== runtimeGeneration || group.closed) {
-    return hostFailure(RUNTIME_PHASE.GENERATION_CHANGED,
-      RUNTIME_REASON.GENERATION_CHANGED, true);
+    return settledTurn(hostFailure(RUNTIME_PHASE.GENERATION_CHANGED,
+      RUNTIME_REASON.GENERATION_CHANGED, true));
   }
   group.pendingRuntimeResume = null;
   group.health = USABLE;
@@ -693,12 +700,13 @@ function resumeRuntimeGroup(group) {
     return result;
   };
   try {
-    const resumed = thenMaybe(drainReady(group, expectedGeneration), (drained) =>
-      drained.outcome === CORE_OK ?
-        resumeAfterReconstruction(group, expectedGeneration) : drained);
-    return thenMaybe(resumed, finish);
+    const resumed = continueTurn(drainReady(group, expectedGeneration),
+      (drained) => drained.outcome === CORE_OK ?
+        resumeAfterReconstruction(group, expectedGeneration) :
+        settledTurn(drained));
+    return continueTurn(resumed, (result) => settledTurn(finish(result)));
   } catch (error) {
-    return containUnexpectedThrow(group, error);
+    return settledTurn(containUnexpectedThrow(group, error));
   }
 }
 
@@ -739,8 +747,8 @@ function scheduleRuntimeResumption(group, generation) {
     if (!current()) return;
     const resumed = group.admitScheduledEntry(() =>
       enqueue(group, () => ensureExecution(group)));
-    if (resumed && typeof resumed.catch === 'function') {
-      resumed.catch((error) => containUnexpectedThrow(group, error));
+    if (!resumed.settled) {
+      resumed.pending.catch((error) => containUnexpectedThrow(group, error));
     }
   };
   if (group.tail === null) return run();
@@ -812,7 +820,7 @@ function scheduleRestoredResumptions(trigger, restoredGroups, generation) {
 function replaceRuntime(trigger) {
   if (runtimeHealth === REPLACING || (runtimeRecovery !== null &&
       runtimeRecovery.clock.now() < runtimeRecovery.retryNotBefore)) {
-    return runtimeRecoveryOutcome(trigger);
+    return settledTurn(runtimeRecoveryOutcome(trigger));
   }
   runtimeRecovery ??= {clock: trigger.timers,
     windowMs: recoveryRetryWindowMsOf(trigger.timing),
@@ -826,10 +834,10 @@ function replaceRuntime(trigger) {
   try {
     ensureCore();
     const restoreFailure = restoreGroupsIntoNewCore(trigger, restoredGroups);
-    if (restoreFailure !== null) return restoreFailure;
+    if (restoreFailure !== null) return settledTurn(restoreFailure);
     const released = releaseClosedReplacementGroups();
     if (released.outcome !== CORE_OK) {
-      return failedRuntimeReplacement(trigger, released);
+      return settledTurn(failedRuntimeReplacement(trigger, released));
     }
     reportRuntimeReplaced(trigger, {runtimeGeneration,
       groupsRestored: restoredGroups.filter((group) => !group.closed).length,
@@ -837,13 +845,13 @@ function replaceRuntime(trigger) {
     // Reporters are callbacks too: account for their closes before reopening.
     const finalRelease = releaseClosedReplacementGroups();
     if (finalRelease.outcome !== CORE_OK) {
-      return failedRuntimeReplacement(trigger, finalRelease);
+      return settledTurn(failedRuntimeReplacement(trigger, finalRelease));
     }
     runtimeHealth = HEALTHY;
     runtimeRecovery = null;
   } catch (error) {
-    return failedRuntimeReplacement(trigger,
-      hostFailure(RUNTIME_PHASE.RUNTIME_REPLACEMENT, error, true));
+    return settledTurn(failedRuntimeReplacement(trigger,
+      hostFailure(RUNTIME_PHASE.RUNTIME_REPLACEMENT, error, true)));
   } finally {
     settleAbandonedReplacement();
   }
@@ -856,14 +864,14 @@ function replaceRuntime(trigger) {
 // A callback may already have resumed the trigger or trapped the new core.
 function triggerAnswerAfterReplacement(trigger, generation) {
   if (runtimeHealth !== HEALTHY || generation !== runtimeGeneration) {
-    return hostFailure(RUNTIME_PHASE.GENERATION_CHANGED,
-      RUNTIME_REASON.GENERATION_CHANGED, true);
+    return settledTurn(hostFailure(RUNTIME_PHASE.GENERATION_CHANGED,
+      RUNTIME_REASON.GENERATION_CHANGED, true));
   }
   if (trigger.pendingRuntimeResume !== null) return resumeRuntimeGroup(trigger);
-  return trigger.health === RECOVERY_REQUIRED ?
+  return settledTurn(trigger.health === RECOVERY_REQUIRED ?
     recoveryOutcome(trigger, trigger.recovery?.failure?.reason ??
       RUNTIME_REASON.RECOVERY_DEFERRED) :
-    outcome(CORE_OK, {reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED});
+    outcome(CORE_OK, {reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED}));
 }
 
 function retryAfterMsOf(group) {
@@ -939,11 +947,13 @@ function settleReconstruction(group, attemptedAt, result) {
 // with the store's admission poll as the time to retry on.
 function reconstructGroup(group) {
   if (insideRetryWindow(group)) {
-    return recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED);
+    return settledTurn(
+      recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED));
   }
   if (!persistenceAdmitted(group)) {
-    return recoveryOutcome(group, RUNTIME_REASON.USER_TRANSACTION_OPEN,
-      PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS);
+    return settledTurn(
+      recoveryOutcome(group, RUNTIME_REASON.USER_TRANSACTION_OPEN,
+        PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS));
   }
   // The failure held the group until this attempt began.
   const attemptedAt = group.timers.now();
@@ -951,22 +961,23 @@ function reconstructGroup(group) {
     retryNotBefore: attemptedAt, attempts: group.recovery.attempts + 1};
   const freed = group.handle === null ? null : invokeCore(group, 'free');
   if (freed !== null && !freed.ok && freed.result.outcome === CORE_FATAL) {
-    return freed.result;
+    return settledTurn(freed.result);
   }
   group.handle = null;
   const opening = readOpeningRecord(group);
   const restored = opening.ok ? openGroupInCurrentRuntime(group, opening) :
     opening.result;
   const expectedGeneration = runtimeGeneration;
-  const resumed = restored.outcome !== CORE_OK ? restored :
-    thenMaybe(drainReady(group, expectedGeneration), (drained) =>
+  const resumed = restored.outcome !== CORE_OK ? settledTurn(restored) :
+    continueTurn(drainReady(group, expectedGeneration), (drained) =>
       drained.outcome === CORE_OK ?
-        resumeAfterReconstruction(group, expectedGeneration) : drained);
-  return thenMaybe(resumed, (result) =>
+        resumeAfterReconstruction(group, expectedGeneration) :
+        settledTurn(drained));
+  return continueTurn(resumed, (result) => settledTurn(
     expectedGeneration !== runtimeGeneration || group.closed ?
       hostFailure(RUNTIME_PHASE.GENERATION_CHANGED,
         RUNTIME_REASON.GENERATION_CHANGED, true) :
-      settleReconstruction(group, attemptedAt, result));
+      settleReconstruction(group, attemptedAt, result)));
 }
 
 // A usable group whose record no failure renewed for a whole window forgets
@@ -1017,7 +1028,7 @@ function syncCompactedStorage(group) {
 // runtime; a host failure reconstructs its own group.
 function ensureExecution(group) {
   if (group.reseedHold !== null) {
-    return recordReseedHold(group);
+    return settledTurn(recordReseedHold(group));
   }
   if (runtimeHealth !== HEALTHY) {
     return replaceRuntime(group);
@@ -1032,9 +1043,9 @@ function ensureExecution(group) {
   forgetExpiredRecovery(group);
   const synced = syncCompactedStorage(group);
   if (synced !== null) {
-    return synced;
+    return settledTurn(synced);
   }
-  return outcome(CORE_OK, {reason: RUNTIME_REASON.EXECUTION_USABLE});
+  return settledTurn(outcome(CORE_OK, {reason: RUNTIME_REASON.EXECUTION_USABLE}));
 }
 
 // The group's synchronous work runs entered: an announcement it makes may
@@ -1060,13 +1071,15 @@ function releaseTurn(group, turn) {
 // role listener inside its announcement reading status, or asking for a
 // command - queues behind it and runs on the state the turn leaves; it never
 // nests inside it. Only work asked for while no turn runs starts at once.
+// `work` answers a turn; so does enqueue: settled when the turn ran and
+// completed at once, pending when it was queued or waits on I/O.
 function enqueue(group, work) {
-  const run = () => withinGroup(group, work);
+  const run = () => turnChainValue(withinGroup(group, work));
   if (group.tail !== null) {
     const queued = group.tail.then(run, run);
     const token = queued.finally(() => releaseTurn(group, token));
     group.tail = token;
-    return token;
+    return pendingTurn(token);
   }
   const {promise: turn, resolve: endTurn} = Promise.withResolvers();
   const finishTurn = () => {
@@ -1074,23 +1087,18 @@ function enqueue(group, work) {
     releaseTurn(group, turn);
   };
   group.tail = turn;
-  let result;
+  let answered;
   try {
-    result = run();
+    answered = withinGroup(group, work);
   } catch (error) {
     finishTurn();
     throw error;
   }
-  if (result && typeof result.then === 'function') {
-    return Promise.resolve(result).finally(finishTurn);
+  if (!answered.settled) {
+    return pendingTurn(answered.pending.finally(finishTurn));
   }
   finishTurn();
-  return result;
-}
-
-function thenMaybe(value, continuation) {
-  return value && typeof value.then === 'function' ?
-    value.then(continuation) : continuation(value);
+  return answered;
 }
 
 // The configuration a committed entry leaves the core holding, in the core
@@ -1218,15 +1226,11 @@ function applyOneEntry(group, expectedGeneration, entry) {
   return {ok: true};
 }
 
-function applyEntries(group, expectedGeneration, entries, startIndex = 0) {
-  for (let index = startIndex; index < entries.length; index += 1) {
-    const applied = applyOneEntry(group, expectedGeneration, entries[index]);
-    if (applied && typeof applied.then === 'function') {
-      return applied.then((res) => {
-        if (!res.ok) return res.result;
-        return applyEntries(group, expectedGeneration, entries, index + 1);
-      });
-    }
+// Each committed entry applies synchronously inside its own SQLite
+// transaction (applyOneEntry answers {ok} on every path).
+function applyEntries(group, expectedGeneration, entries) {
+  for (const entry of entries) {
+    const applied = applyOneEntry(group, expectedGeneration, entry);
     if (!applied.ok) {
       return applied.result;
     }
@@ -1250,52 +1254,53 @@ function finishReady(group, expectedGeneration, ready) {
   const persisted = invokeCoreAt(
     group, expectedGeneration, 'persist_ready');
   if (!persisted.ok) {
-    return persisted.result;
+    return settledTurn(persisted.result);
   }
   // Sends never fail the Ready: each peer's delivery is its own outcome.
   const sent = sendMessages(group, [
     ...(ready.messages || []),
     ...(ready.persistedMessages || []),
   ]);
-  const continuation = thenMaybe(sent, () => whenPersistenceAdmitted(group, () => {
+  const continuation = continueTurn(sent, () => whenPersistenceAdmitted(group, () => {
     const applied = applyEntries(
       group, expectedGeneration, ready.committedEntries || []);
     if (applied.outcome !== CORE_OK) {
-      return applied;
+      return settledTurn(applied);
     }
     const light = invokeCoreAt(group, expectedGeneration, 'advance_append');
     if (!light.ok) {
-      return light.result;
+      return settledTurn(light.result);
     }
     try {
       if (light.value.commitIndex !== undefined) {
         group.store.putCommitIndex(group.groupId, light.value.commitIndex);
       }
     } catch (error) {
-      return groupHostFailure(group, 'light-ready-persistence', error);
+      return settledTurn(
+        groupHostFailure(group, 'light-ready-persistence', error));
     }
     const memCommitted = persistMemCommitIndex(
       group, expectedGeneration, ready, light.value);
     if (!memCommitted.ok) {
-      return memCommitted.result;
+      return settledTurn(memCommitted.result);
     }
     const lightSent = sendMessages(group, light.value.messages || []);
-    return thenMaybe(lightSent, () => whenPersistenceAdmitted(group, () => {
+    return continueTurn(lightSent, () => whenPersistenceAdmitted(group, () => {
       const lightApplied = applyEntries(
         group, expectedGeneration, light.value.committedEntries || []);
       if (lightApplied.outcome !== CORE_OK) {
-        return lightApplied;
+        return settledTurn(lightApplied);
       }
       const advanced = invokeCoreAt(
         group, expectedGeneration, 'advance_apply');
-      return advanced.ok ? outcome(CORE_OK, {reason: 'ready-advanced'}) :
-        advanced.result;
+      return settledTurn(advanced.ok ?
+        outcome(CORE_OK, {reason: 'ready-advanced'}) : advanced.result);
     }, admissionWaitOutcomes(group)));
   }, admissionWaitOutcomes(group)));
-  if (continuation && typeof continuation.then === 'function') {
+  if (!continuation.settled) {
     // Persistence and application failures remain host failures.
-    return continuation.catch((error) =>
-      groupHostFailure(group, RUNTIME_PHASE.READY_DRAIN, error));
+    return pendingTurn(continuation.pending.catch((error) =>
+      groupHostFailure(group, RUNTIME_PHASE.READY_DRAIN, error)));
   }
   return continuation;
 }
@@ -1341,37 +1346,38 @@ function drainReady(group, expectedGeneration, startCycles = 0) {
   ) {
     const hasReady = invokeCoreAt(group, expectedGeneration, 'has_ready');
     if (!hasReady.ok) {
-      return hasReady.result;
+      return settledTurn(hasReady.result);
     }
     if (!hasReady.value) {
       announce(group, expectedGeneration);
-      return outcome(CORE_OK, {reason: RUNTIME_REASON.DRAINED});
+      return settledTurn(outcome(CORE_OK, {reason: RUNTIME_REASON.DRAINED}));
     }
 
     const cycle = processReadyCycle(group, expectedGeneration);
     if (cycle.done) {
-      return cycle.result;
+      return settledTurn(cycle.result);
     }
     const nextCycles = cycles + 1;
-    if (cycle.finished && typeof cycle.finished.then === 'function') {
-      return cycle.finished.then((result) => {
+    if (!cycle.finished.settled) {
+      return pendingTurn(cycle.finished.pending.then((result) => {
         if (result.outcome !== CORE_OK) {
           return result;
         }
-        return drainReady(group, expectedGeneration, nextCycles);
-      });
+        return turnChainValue(
+          drainReady(group, expectedGeneration, nextCycles));
+      }));
     }
-    if (cycle.finished.outcome !== CORE_OK) {
+    if (cycle.finished.result.outcome !== CORE_OK) {
       return cycle.finished;
     }
   }
   reportWaitBoundExceeded(group,
     RUNTIME_FAULT_REPORT.READY_DRAIN_BOUND_EXCEEDED,
     {cycles: RAFT_RS_READY_DRAIN_MAX_CYCLES, maxCycles: RAFT_RS_READY_DRAIN_MAX_CYCLES});
-  return hostFailure(
+  return settledTurn(hostFailure(
     RUNTIME_PHASE.READY_DRAIN,
     new Error(RUNTIME_REASON.READY_DRAIN_BOUND_EXCEEDED),
-  );
+  ));
 }
 
 // The leader a role change announces. A leader this replica's registry never
@@ -1533,9 +1539,9 @@ function recordStatusObservation(group, expectedGeneration, rawStatus = null) {
 // core read; otherwise (a read still drives delivered inbound, as before) the
 // status of the last completed core entry.
 function readStatusUndrained(group) {
-  return thenMaybe(ensureExecution(group), (ready) =>
+  return continueTurn(ensureExecution(group), (ready) => settledTurn(
     ready.outcome === CORE_OK ?
-      readGroupStatus(group, runtimeGeneration) : ready);
+      readGroupStatus(group, runtimeGeneration) : ready));
 }
 
 // A group held by its host failure answers from its own state while it is
@@ -1544,20 +1550,35 @@ function readStatusUndrained(group) {
 // a reconstruction is single-flight. Synchronous either way.
 function readStatusInRecovery(group) {
   if (group.tail !== null || group.entered > 0) {
-    return recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED);
+    return settledTurn(
+      recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED));
   }
-  const read = enqueue(group, () => readStatusUndrained(group));
-  if (read && typeof read.then === 'function') {
-    read.catch(() => undefined);
-    return recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED);
+  return answeredRead(group,
+    enqueue(group, () => readStatusUndrained(group)));
+}
+
+// A status read's answer settles in the call: a read whose recovery work is
+// still pending answers the group's named recovery hold, and that work runs
+// on as its own operation.
+function answeredRead(group, read) {
+  if (read.settled) {
+    return read;
   }
-  return read;
+  read.pending.catch(() => undefined);
+  return settledTurn(recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED));
 }
 
 function readStatusNow(group) {
-  if (runtimeHealth === REPLACING) return runtimeRecoveryOutcome(group);
+  if (runtimeHealth === REPLACING) {
+    return settledTurn(runtimeRecoveryOutcome(group));
+  }
   if (runtimeHealth !== HEALTHY) {
-    return withinGroup(group, () => readStatusUndrained(group));
+    // The read drives the shared runtime's replacement; the replacement's
+    // resumption of this group may wait on a peer delivery. The read never
+    // waits on it: a resumption still pending is the group's recovery hold,
+    // and the resumption runs on as its own operation.
+    return answeredRead(group,
+      withinGroup(group, () => readStatusUndrained(group)));
   }
   if (runtimeHealth === HEALTHY && group.health === RECOVERY_REQUIRED) {
     return readStatusInRecovery(group);
@@ -1573,43 +1594,43 @@ function readStatusObserved(group) {
   if (group.inbound.length > 0) {
     const read = enqueue(group, () =>
       perform(group, {type: RUNTIME_COMMAND.READ_STATUS}));
-    if (!read || typeof read.then !== 'function') {
+    if (read.settled) {
       return read;
     }
-    read.catch(() => undefined);
+    read.pending.catch(() => undefined);
   }
   const observation = group.statusObservation;
   if (!SHAPED_STATUS.has(observation)) {
     SHAPED_STATUS.set(observation, shapeGroupStatus(group, observation));
   }
-  return SHAPED_STATUS.get(observation);
+  return settledTurn(SHAPED_STATUS.get(observation));
 }
 
 function campaignGroup(group, expectedGeneration) {
   if (!group.gateOpen) {
-    return participationGateClosed();
+    return settledTurn(participationGateClosed());
   }
   const status = invokeCoreAt(group, expectedGeneration, 'status');
   if (!status.ok) {
-    return status.result;
+    return settledTurn(status.result);
   }
   const conf = invokeCoreAt(
     group, expectedGeneration, CORE_OPERATION.CONF_STATE);
   if (!conf.ok) {
-    return conf.result;
+    return settledTurn(conf.result);
   }
   if (!conf.value.voters.includes(group.peerId) ||
       conf.value.learners.includes(group.peerId) ||
       status.value.promotable !== true) {
-    return outcome(CORE_REFUSED, {
+    return settledTurn(outcome(CORE_REFUSED, {
       reason: RUNTIME_REASON.NOT_ACTIVE_VOTER,
       phase: RUNTIME_PHASE.CAMPAIGN_ELIGIBILITY,
       retryable: false, recoveryRequired: false,
-    });
+    }));
   }
   const campaigned = invokeCoreAt(group, expectedGeneration, 'campaign');
   return campaigned.ok ? drainReady(group, expectedGeneration) :
-    campaigned.result;
+    settledTurn(campaigned.result);
 }
 
 function probeRefusal(reason) {
@@ -1642,11 +1663,11 @@ function driveOneHeartbeat(group, expectedGeneration) {
   for (let tick = 0; tick < RAFT_RS_GROUP_TUNING.HEARTBEAT_TICK; tick += 1) {
     const ticked = invokeCoreAt(group, expectedGeneration, 'tick');
     if (!ticked.ok) {
-      return ticked.result;
+      return settledTurn(ticked.result);
     }
     const hasReady = invokeCoreAt(group, expectedGeneration, 'has_ready');
     if (!hasReady.ok) {
-      return hasReady.result;
+      return settledTurn(hasReady.result);
     }
     if (hasReady.value) {
       break;
@@ -1662,29 +1683,29 @@ function driveOneHeartbeat(group, expectedGeneration) {
 function probePeerProgress(group, expectedGeneration, peerAddress) {
   const observed = readGroupObservation(group, expectedGeneration);
   if (!observed.ok) {
-    return observed.result;
+    return settledTurn(observed.result);
   }
   const {status, confState} = observed.value;
   const peerId = configuredPeerAt(group, confState, peerAddress);
   if (peerId === undefined) {
-    return probeRefusal(RUNTIME_REASON.NOT_A_PEER);
+    return settledTurn(probeRefusal(RUNTIME_REASON.NOT_A_PEER));
   }
   if (ROLE[status.raftState] !== ROLE_LEADER) {
-    return probeRefusal(RUNTIME_REASON.NOT_LEADER);
+    return settledTurn(probeRefusal(RUNTIME_REASON.NOT_LEADER));
   }
   const progress = (status.progress || []).find((item) =>
     String(item?.id) === String(peerId));
   const matched = BigInt(progress?.matched ?? RAFT_RS_INITIAL_APPLIED);
   const matchIndex = Number(matched);
   if (matched >= BigInt(status.commit)) {
-    return outcome(CORE_OK, {
+    return settledTurn(outcome(CORE_OK, {
       reason: RUNTIME_REASON.PROGRESS_OBSERVED, matchIndex,
-    });
+    }));
   }
-  return thenMaybe(driveOneHeartbeat(group, expectedGeneration), (result) =>
-    result.outcome === CORE_OK ? outcome(CORE_OK, {
+  return continueTurn(driveOneHeartbeat(group, expectedGeneration),
+    (result) => settledTurn(result.outcome === CORE_OK ? outcome(CORE_OK, {
       reason: RUNTIME_REASON.PROGRESS_PROBE_SENT, matchIndex,
-    }) : result);
+    }) : result));
 }
 
 // The leadership transfer: the core's status and configuration are read,
@@ -1697,12 +1718,12 @@ function probePeerProgress(group, expectedGeneration, peerAddress) {
 function transferLeadership(group, expectedGeneration, command) {
   const observed = readGroupObservation(group, expectedGeneration);
   if (!observed.ok) {
-    return observed.result;
+    return settledTurn(observed.result);
   }
   const decision = decideLeadershipTransfer(
     group.peerId, observed.value, command);
   if (decision.answer !== undefined) {
-    return decision.answer;
+    return settledTurn(decision.answer);
   }
   const stepped = invokeCoreAt(group, expectedGeneration, 'step', {
     msgType: RAFT_RS_MESSAGE_TYPE.TRANSFER_LEADER,
@@ -1710,10 +1731,10 @@ function transferLeadership(group, expectedGeneration, command) {
     to: group.peerId,
   });
   if (!stepped.ok) {
-    return stepped.result;
+    return settledTurn(stepped.result);
   }
-  return thenMaybe(drainReady(group, expectedGeneration), (drained) =>
-    drained.outcome === CORE_OK ? decision.accepted : drained);
+  return continueTurn(drainReady(group, expectedGeneration), (drained) =>
+    settledTurn(drained.outcome === CORE_OK ? decision.accepted : drained));
 }
 
 // A proposal the core refused: dropped by a running leadership transfer (read
@@ -1731,13 +1752,14 @@ function answerRefusedProposal(group, expectedGeneration, refused) {
 
 const COMMAND_OPERATION = Object.freeze({
   [RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP]: (group, command, generation) =>
-    answerCommittedLearnerAction(group, readGroupStatus(group, generation), command.query),
+    settledTurn(answerCommittedLearnerAction(group,
+      readGroupStatus(group, generation), command.query)),
   [RUNTIME_COMMAND.READ_STATUS]: (group, command, generation) =>
-    readGroupStatus(group, generation),
+    settledTurn(readGroupStatus(group, generation)),
   [RUNTIME_COMMAND.CAMPAIGN]: (group, command, generation) =>
     campaignGroup(group, generation),
   [RUNTIME_COMMAND.DRAIN_INBOUND]: () =>
-    outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_DRAINED}),
+    settledTurn(outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_DRAINED})),
   [RUNTIME_COMMAND.PROBE_PEER_PROGRESS]: (group, command, generation) =>
     probePeerProgress(group, generation, command.peerAddress),
   [RUNTIME_COMMAND.TRANSFER_LEADERSHIP]: (group, command, generation) =>
@@ -1748,7 +1770,7 @@ const COMMAND_OPERATION = Object.freeze({
         group, expectedGeneration: generation, command: command.transition,
         runtimeGeneration, invokeCoreAt,
         leaderReplicaIdOf: semanticLeaderIdentity, answerRefusedProposal,
-        drainReady, thenMaybe,
+        drainReady,
       }),
 });
 const PROPOSE_CONF_CHANGE = 'propose-conf-change';
@@ -1790,15 +1812,15 @@ function settlePrimitiveInvocation(group, command, expectedGeneration, invoked) 
   if (invoked.ok) {
     return drainReady(group, expectedGeneration);
   }
-  return PROPOSAL_COMMANDS.has(command.type) ?
+  return settledTurn(PROPOSAL_COMMANDS.has(command.type) ?
     answerRefusedProposal(group, expectedGeneration, invoked.result) :
-    invoked.result;
+    invoked.result);
 }
 
 function performCommand(group, command, expectedGeneration) {
   if (!group.identityRecorded &&
       !COMMANDS_BEFORE_IDENTITY_RECORD.has(command.type)) {
-    return identityUnrecorded();
+    return settledTurn(identityUnrecorded());
   }
   if (Object.hasOwn(COMMAND_OPERATION, command.type)) {
     return COMMAND_OPERATION[command.type](group, command, expectedGeneration);
@@ -1811,20 +1833,20 @@ function performCommand(group, command, expectedGeneration) {
   if (primitive && !group.gateOpen) {
     const refused = gatedCommandRefusal(group, command, expectedGeneration);
     if (refused !== null) {
-      return refused;
+      return settledTurn(refused);
     }
   }
   if (!primitive) {
-    return outcome(CORE_REFUSED, {
+    return settledTurn(outcome(CORE_REFUSED, {
       reason: RUNTIME_REASON.UNKNOWN_OPERATION,
       phase: RUNTIME_PHASE.DISPATCH, retryable: false,
       recoveryRequired: false,
-    });
+    }));
   }
   const refused = command.type === PROPOSE_CONF_CHANGE ?
     refusedConfChange(group, expectedGeneration, command.change) : null;
   if (refused !== null) {
-    return refused;
+    return settledTurn(refused);
   }
   const invoked = invokeCoreAt(
     group, expectedGeneration, primitive[0], ...primitive[1]);
@@ -1848,8 +1870,9 @@ function finishBatchedPropose(group, expectedGeneration, firstInvoked, extraBatc
       answerRefusedProposal(group, expectedGeneration, firstInvoked.result);
   };
   return anyAccepted ?
-    thenMaybe(drainReady(group, expectedGeneration), settleExtras) :
-    settleExtras(null);
+    continueTurn(drainReady(group, expectedGeneration),
+      (readyOutcome) => settledTurn(settleExtras(readyOutcome))) :
+    settledTurn(settleExtras(null));
 }
 
 function acknowledgePendingSnapshot(group, expectedGeneration, message) {
@@ -1936,7 +1959,7 @@ function drainInbound(group, expectedGeneration, remaining, continuation) {
       const refused = refusedExecution(group, expectedGeneration);
       if (refused !== null) {
         group.draining = false;
-        return refused;
+        return settledTurn(refused);
       }
       if (!group.identityRecorded) {
         group.inbound.length = 0;
@@ -1947,23 +1970,25 @@ function drainInbound(group, expectedGeneration, remaining, continuation) {
       const stepResult = stepOneInbound(group, expectedGeneration, envelope);
       if (stepResult.done) {
         group.draining = false;
-        return stepResult.result;
+        return settledTurn(stepResult.result);
       }
+      // A guarded envelope was never stepped and drained no Ready.
       const ready = stepResult.ready;
-      if (ready && typeof ready.then === 'function') {
+      if (ready !== undefined && !ready.settled) {
         const nextCount = count - 1;
-        return ready.then((readyResult) => {
+        return pendingTurn(ready.pending.then((readyResult) => {
           if (readyResult.outcome !== CORE_OK) {
             group.draining = false;
             return readyResult;
           }
-          return drainInbound(group, expectedGeneration, nextCount, continuation);
+          return turnChainValue(drainInbound(
+            group, expectedGeneration, nextCount, continuation));
         }, (error) => {
           group.draining = false;
           throw error;
-        });
+        }));
       }
-      if (ready !== undefined && ready.outcome !== CORE_OK) {
+      if (ready !== undefined && ready.result.outcome !== CORE_OK) {
         group.draining = false;
         return ready;
       }
@@ -1982,12 +2007,12 @@ function perform(group, command) {
   // retryable deferral that leaves the group usable.
   if (!persistenceAdmitted(group)) {
     return command.type === RUNTIME_COMMAND.READ_STATUS ?
-      readStatusUndrained(group) : hostFailure(
-        RUNTIME_PHASE.READY_PERSISTENCE, RUNTIME_REASON.USER_TRANSACTION_OPEN);
+      readStatusUndrained(group) : settledTurn(hostFailure(
+        RUNTIME_PHASE.READY_PERSISTENCE, RUNTIME_REASON.USER_TRANSACTION_OPEN));
   }
-  return thenMaybe(ensureExecution(group), (ready) => {
+  return continueTurn(ensureExecution(group), (ready) => {
     if (ready.outcome !== CORE_OK) {
-      return ready;
+      return settledTurn(ready);
     }
     const expectedGeneration = runtimeGeneration;
     // Capture only after reconstruction admits execution. Later arrivals keep
@@ -2074,36 +2099,36 @@ function runScheduledInboundDrain(group) {
   reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.TURN_REQUEST);
   const drained = group.admitScheduledEntry(() => enqueue(group, () =>
     perform(group, {type: RUNTIME_COMMAND.DRAIN_INBOUND})));
-  if (drained && typeof drained.catch === 'function') {
-    drained.catch(() => undefined);
+  if (!drained.settled) {
+    drained.pending.catch(() => undefined);
   }
 }
 
-function settleBatchTurn(batch, firstDeferred, outcomeOrPromise) {
+function settleBatchTurn(batch, firstDeferred, turn) {
   const resolveAll = (val) => {
     firstDeferred.resolve(val);
     for (const item of batch) item.deferred.resolve(val);
     return val;
   };
-  if (outcomeOrPromise && typeof outcomeOrPromise.then === 'function') {
-    return outcomeOrPromise.then(resolveAll, (err) => {
+  if (!turn.settled) {
+    return pendingTurn(turn.pending.then(resolveAll, (err) => {
       firstDeferred.reject(err);
       for (const item of batch) item.deferred.reject(err);
-    });
+    }));
   }
-  return resolveAll(outcomeOrPromise);
+  return settledTurn(resolveAll(turn.result));
 }
 
 function drainQueuedProposalBatch(group) {
   const batch = group.queuedProposals.splice(0, group.queuedProposals.length);
-  if (batch.length === 0) return null;
+  if (batch.length === 0) return settledTurn(null);
   const [first, ...rest] = batch;
   if (!persistenceAdmitted(group) || group.closed) {
     const res = perform(group, {type: PROPOSE_COMMAND, bytes: first.bytes});
-    return thenMaybe(res, (val) => {
+    return continueTurn(res, (val) => {
       first.deferred.resolve(val);
       for (const item of rest) item.deferred.resolve(val);
-      return val;
+      return settledTurn(val);
     });
   }
   return settleBatchTurn(rest, first.deferred,
@@ -2113,14 +2138,16 @@ function drainQueuedProposalBatch(group) {
 // A status read and the committed-membership read answer from the recorded
 // observation without queueing; every other command takes the group's turn.
 function executeCommand(group, command) {
-  if (runtimeHealth === REPLACING) return runtimeRecoveryOutcome(group);
+  if (runtimeHealth === REPLACING) {
+    return settledTurn(runtimeRecoveryOutcome(group));
+  }
   if (command?.type === RUNTIME_COMMAND.READ_STATUS) {
     return readStatusNow(group);
   }
   if (command?.type === RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP &&
       command.purpose !== COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION) {
-    return thenMaybe(readStatusNow(group), (status) =>
-      answerCommittedMembership(group, status, command.purpose));
+    return continueTurn(readStatusNow(group), (status) => settledTurn(
+      answerCommittedMembership(group, status, command.purpose)));
   }
   if (command?.type === PROPOSE_COMMAND && group.tail !== null) {
     const deferred = Promise.withResolvers();
@@ -2128,7 +2155,7 @@ function executeCommand(group, command) {
     if (group.queuedProposals.length === 1) {
       enqueue(group, () => drainQueuedProposalBatch(group));
     }
-    return deferred.promise;
+    return pendingTurn(deferred.promise);
   }
   return enqueue(group, () => perform(group, command));
 }
@@ -2299,11 +2326,12 @@ function createRuntimeDispatcher(request) {
       group.inboundBytes = 0;
       group.draining = false;
     }),
+    // Answers the command's turn (raft-rs-turn-answer.js).
     execute: Object.freeze((command) => executeCommand(group, command)),
     // The acknowledgement that the opening's prior-existence fact is
     // durable: taken in the group's turn, so no turn sees it change.
     recordIdentity: Object.freeze(() =>
-      enqueue(group, () => recordIdentity(group))),
+      enqueue(group, () => settledTurn(recordIdentity(group)))),
     participationGateOpen: Object.freeze(() => runtimeHealth === HEALTHY &&
       group.health === USABLE && group.gateOpen === true),
     configureTiming: Object.freeze((timing) => {

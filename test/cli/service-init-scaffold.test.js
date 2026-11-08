@@ -137,7 +137,8 @@ function runServiceRouter(args) {
     return true;
   };
   try {
-    return {exitCode: runServiceCommand(args), stdout, stderr};
+    const pending = runServiceCommand(args);
+    return {pending, stdout, stderr};
   } finally {
     process.stdout.write = stdoutWrite;
     process.stderr.write = stderrWrite;
@@ -275,6 +276,16 @@ test('init never clobbers an existing directory or symlink target', async (t) =>
   t.same(listProjectFiles(victim), ['victim.txt']);
 });
 
+test('service router answers a promise on every path', async (t) => {
+  const answers = [['--help'], ['unknown'], ['--output'], ['init']].map(
+    (args) => runServiceRouter(args));
+  for (const answer of answers) {
+    t.ok(answer.pending instanceof Promise, 'the router answer is a promise');
+  }
+  t.same((await Promise.all(answers.map((answer) => answer.pending))),
+    [0, 2, 2, 2]);
+});
+
 test('service router rejects ambiguous commands and invalid project names', async (t) => {
   const root = makeTempRoot(t);
   const cases = [
@@ -289,7 +300,7 @@ test('service router rejects ambiguous commands and invalid project names', asyn
   const results = cases.map((attack) => runServiceRouter(attack.args.slice(1)));
   for (const [index, attack] of cases.entries()) {
     const result = results[index];
-    t.equal(result.exitCode, 2, attack.args.join(' '));
+    t.equal(await result.pending, 2, attack.args.join(' '));
     t.match(result.stderr, attack.error);
   }
   t.same(fs.readdirSync(root), []);

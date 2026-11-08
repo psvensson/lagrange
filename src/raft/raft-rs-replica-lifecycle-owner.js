@@ -8,6 +8,7 @@ import {
   COMMITTED_MEMBERSHIP_REFUSAL,
 } from './raft-committed-membership-constants.js';
 import {commitDurably, RaftRsDurableStore} from './raft-rs-durable-store.js';
+import {pendingTurn, settledTurn, turnChainValue} from './raft-rs-turn-answer.js';
 import {RAFT_RS_TABLE} from './raft-rs-durable-store-constants.js';
 import {RAFT_RS_OPENING_HISTORY, RAFT_RS_OPENING_HISTORY_ERROR} from
   './raft-rs-opening-history-constants.js';
@@ -273,22 +274,32 @@ class RaftRsReplicaLifecycleOwner {
         this.#refusalReason || LIFECYCLE_REASON.RETIRED);
   }
 
+  /**
+   * Admit one turn against retirement. `work` answers a named turn
+   * (raft-rs-turn-answer.js); the replica stays held for exactly as long as
+   * that turn: released at once when it settled, after its promise when it
+   * is pending. A refused admission is a settled turn naming the refusal.
+   * @param {function(): Object} work - The admitted work; answers a turn.
+   * @return {Object} The work's turn, or the settled refusal.
+   */
   execute(work) {
     const admission = this.admission();
-    if (admission.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return admission;
+    if (admission.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+      return settledTurn(admission);
+    }
     this.#activeCount += 1;
-    let result;
+    let answered;
     try {
-      result = work();
+      answered = work();
     } catch (error) {
       this.#release();
       throw error;
     }
-    if (result && typeof result.then === 'function') {
-      return result.finally(() => this.#release());
+    if (!answered.settled) {
+      return pendingTurn(answered.pending.finally(() => this.#release()));
     }
     this.#release();
-    return result;
+    return answered;
   }
 
   /**
@@ -399,18 +410,19 @@ function prepareReplicaLifecycleForSnapshot(request) {
     openLifecycleRecord(db, {groupId, peerId, replicaIdentity}, String(retained));
   }
   const owner = new RaftRsReplicaLifecycleOwner({db, groupId, peerId, replicaIdentity});
-  return owner.execute(() => {
+  // Synchronous work: the admitted turn settles in this run.
+  return turnChainValue(owner.execute(() => {
     const incarnation = owner.incarnation;
     if (retained !== null && retained !== incarnation) {
-      return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
-        LIFECYCLE_REASON.IDENTITY_MISMATCH);
+      return settledTurn(frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+        LIFECYCLE_REASON.IDENTITY_MISMATCH));
     }
     // A snapshot is imported history. Never publish a staged lifecycle row
     // that could later authorize fresh genesis if the installed log is lost.
     commitDurably(request.db, () => owner.recordOpeningHistory(incarnation));
-    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK,
-      LIFECYCLE_REASON.STAGING_PREPARED, Object.freeze({incarnation}));
-  });
+    return settledTurn(frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK,
+      LIFECYCLE_REASON.STAGING_PREPARED, Object.freeze({incarnation})));
+  }));
 }
 
 /**
@@ -871,9 +883,7 @@ async function withReplicaLifecycleClaim(request, work) {
   const captured = Object.freeze({runtime: request?.runtime, groupId: request?.groupId,
     replicaIdentity: request?.replicaIdentity, incarnation: request?.incarnation});
   const owner = requireClaimGeneration(captured);
-  let entered = false;
-  const result = owner.execute(() => {
-    entered = true;
+  const claimed = owner.execute(() => {
     let settled = false;
     const assertCurrent = Object.freeze(() => {
       if (settled) {
@@ -884,16 +894,18 @@ async function withReplicaLifecycleClaim(request, work) {
     });
     try {
       assertCurrent();
-      return Promise.resolve(work(assertCurrent)).finally(() => {
+      return pendingTurn(Promise.resolve(work(assertCurrent)).finally(() => {
         settled = true;
-      });
+      }));
     } catch (error) {
       settled = true;
       throw error;
     }
   });
-  if (!entered) throw lifecycleClaimError(result);
-  return result;
+  // An admitted claim is pending until its work settles; a refused admission
+  // never entered and is settled with the refusal.
+  if (claimed.settled) throw lifecycleClaimError(claimed.result);
+  return claimed.pending;
 }
 
 // What a read of a replica database's lifecycle row found when it holds no

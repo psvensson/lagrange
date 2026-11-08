@@ -58,6 +58,7 @@ import {
   REPLICA_CONSENSUS_EXIT_REASON,
   awaitReplicaConsensusExit,
 } from '../../../src/node/replica-removal-consensus-exit.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {readPartitionReplicaMembership} from
   '../../../src/partition/partition-service-raft-membership-administration.js';
 import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
@@ -111,7 +112,7 @@ test('M3: between j and a_self under a commit lag the gated learner core is ' +
         intervalsAtEvent = intervals.length;
         opened.push({event, at: Date.now()});
       });
-    const asked = cluster.node(TARGET).startScheduling();
+    const asked = turnChainValue(cluster.node(TARGET).startScheduling());
     assert.equal(asked.reason, 'scheduling-started',
       'scheduling asked for below the gate arms the timer at once');
     assert.equal(intervals.length, 1, 'one timer was armed while gated');
@@ -142,7 +143,7 @@ test('M3: between j and a_self under a commit lag the gated learner core is ' +
     const samples = electionStorm(cluster, TARGET, members, () => {
       assert.notEqual(roleOf(cluster, TARGET), LEADER_ROLE,
         'the caught-up unadmitted target never leads');
-      assert.equal(cluster.node(TARGET).tick().outcome,
+      assert.equal(cluster.node(TARGET).tick().result.outcome,
         RAFT_OPERATION_OUTCOME.CORE_OK,
         'every tick enters the gated learner core (its time runs)');
     });
@@ -174,9 +175,9 @@ test('M3: between j and a_self under a commit lag the gated learner core is ' +
 
     // A transferred leadership: every member hears from the new leader
     // within HEARTBEAT_TICK of its ticks.
-    const transfer = cluster.node(leader).transferLeadership({
+    const transfer = turnChainValue(cluster.node(leader).transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: TARGET});
+      replicaIdentity: TARGET}));
     assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `the transfer is stepped (${JSON.stringify(transfer)})`);
     assert.ok(settle(cluster, () => roleOf(cluster, TARGET) === LEADER_ROLE,
@@ -268,7 +269,7 @@ test('F-2 (REMOVING target below its gate): removed before it applied its ' +
       return reason;
     });
     assert.equal(cluster.node(leader).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: target})
+      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: target}).result
       .outcome, RAFT_OPERATION_OUTCOME.CORE_OK, 'setup: RemoveNode(t)');
     await new Promise((resolve) => setImmediate(resolve));
     const below = await readPartitionReplicaMembership(

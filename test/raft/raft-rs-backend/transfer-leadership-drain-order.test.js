@@ -48,6 +48,7 @@ import {
   mostCaughtUp,
   namedSuccessor,
 } from './transfer-leadership-driver.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const {CORE_OK, CORE_REFUSED} = RAFT_OPERATION_OUTCOME;
 const A = 'order-replica-a';
@@ -147,7 +148,7 @@ function pendingAcknowledgements(driver) {
 async function pendingInTransferWindow(driver) {
   driver.isolate(C);
   driver.propose(A, {lag: 'transferee'});
-  assertAccepted(await driver.port(A).transferLeadership(namedSuccessor(C)),
+  assertAccepted(await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))),
     TRANSFER_REASON.REQUESTED);
   let delivered = 0;
   for (let tick = 0; delivered === 0 && tick < driver.electionTick();
@@ -166,7 +167,7 @@ test('drain order: a named transfer is decided and stepped after the ' +
   try {
     const delivered = pendingAcknowledgements(driver);
     const {answer, entries} = await turn(driver, () =>
-      driver.port(A).transferLeadership(namedSuccessor(C)));
+      turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))));
     assertAccepted(answer, TRANSFER_REASON.REQUESTED);
     assertDecidedAfterDrain(entries, delivered,
       {effect: EFFECT.TRANSFER_STEP});
@@ -181,7 +182,7 @@ test('drain order: most-caught-up ranks the progress the delivered ' +
   try {
     const delivered = pendingAcknowledgements(driver);
     const {answer, entries} = await turn(driver, () =>
-      driver.port(A).transferLeadership(mostCaughtUp()));
+      turnChainValue(driver.port(A).transferLeadership(mostCaughtUp())));
     assertAccepted(answer, TRANSFER_REASON.REQUESTED);
     assertDecidedAfterDrain(entries, delivered,
       {effect: EFFECT.TRANSFER_STEP});
@@ -197,7 +198,7 @@ test('drain order: a refused transfer is refused on the state after the ' +
     driver.reserveEverywhere(D);
     const delivered = pendingAcknowledgements(driver);
     const {answer, entries} = await turn(driver, () =>
-      driver.port(A).transferLeadership(namedSuccessor(D)));
+      turnChainValue(driver.port(A).transferLeadership(namedSuccessor(D))));
     assertRefused(answer, TRANSFER_REASON.TARGET_NOT_VOTER);
     assertDecidedAfterDrain(entries, delivered, {effect: EFFECT.NONE});
   } finally {
@@ -217,12 +218,12 @@ test('drain order: a higher-term message pending at the request demotes the ' +
     const termBefore = driver.status(A).term;
     // Read before the hand-over: a status read drains delivered messages.
     assert.equal(driver.leads(A), true, 'precondition: A leads');
-    await driver.port(A).transferLeadership(namedSuccessor(B));
+    await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(B)));
     driver.deliverOnly([B]);
     const delivered = driver.stepUndrained(A);
     assert.ok(delivered > 0, 'precondition: the vote request is pending');
     const {answer, entries} = await turn(driver, () =>
-      driver.port(A).transferLeadership(namedSuccessor(C)));
+      turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))));
     assert.notEqual(answer.outcome, CORE_OK, JSON.stringify(answer));
     assertRefused(answer, TRANSFER_REASON.NO_KNOWN_LEADER);
     assert.equal(answer.retryable, true);
@@ -241,7 +242,7 @@ test('drain order: a proposal dropped in a transfer window is classified ' +
   try {
     const delivered = await pendingInTransferWindow(driver);
     const {answer, entries} = await turn(driver, () =>
-      driver.port(A).propose({during: 'window'}));
+      turnChainValue(driver.port(A).propose({during: 'window'})));
     assertTransferInProgress(answer);
     assertDecidedAfterDrain(entries, delivered,
       {effect: EFFECT.REFUSED_PROPOSAL, operation: CORE.PROPOSE});
@@ -257,8 +258,8 @@ test('drain order: a configuration change dropped in a transfer window is ' +
     driver.reserveEverywhere(D);
     const delivered = await pendingInTransferWindow(driver);
     const {answer, entries} = await turn(driver, () =>
-      driver.port(A).proposeConfChange({
-        type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D}));
+      turnChainValue(driver.port(A).proposeConfChange({
+        type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D})));
     assertTransferInProgress(answer);
     assertDecidedAfterDrain(entries, delivered,
       {effect: EFFECT.REFUSED_PROPOSAL, operation: CORE.PROPOSE_CONF_CHANGE});
@@ -277,7 +278,7 @@ test('drain order: acknowledgements pending at a proposal commit the ' +
     const selfId = driver.raftIdAt(A, A);
     assert.equal(driver.port(A).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A,
-    }).outcome, CORE_OK);
+    }).result.outcome, CORE_OK);
     // Read before the hand-over: a status read drains delivered messages.
     assert.equal(driver.status(A).confState.voters.includes(selfId), true,
       'precondition: the removal is not yet committed at A');
@@ -285,7 +286,7 @@ test('drain order: acknowledgements pending at a proposal commit the ' +
     const delivered = driver.stepUndrained(A);
     assert.ok(delivered > 0, 'precondition: acknowledgements are pending');
     const {answer, entries} = await turn(driver, () =>
-      driver.port(A).propose({after: 'self-removal'}));
+      turnChainValue(driver.port(A).propose({after: 'self-removal'})));
     assert.equal(answer.outcome, CORE_REFUSED, JSON.stringify(answer));
     assert.notEqual(answer.reason, IN_PROGRESS_REASON,
       'no transfer runs: the drop is the removal\'s');

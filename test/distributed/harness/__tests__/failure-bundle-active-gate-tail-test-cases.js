@@ -1,6 +1,6 @@
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
-import {writeFailureBundlesForReport} from '../failure-bundle.js';
+import {writeFailureBundlesForCompleteRun} from './failure-bundle-full-log-fixture.js';
 import {
   registerFailureBundlePublicationClosureTailTests,
 } from './failure-bundle-publication-closure-tail-test-cases.js';
@@ -343,7 +343,7 @@ export function registerFailureBundleActiveGateTailTests({
         },
       }];
 
-      const {scenarioBundles} = await writeFailureBundlesForReport({
+      const {scenarioBundles} = await writeFailureBundlesForCompleteRun({
         scenarios,
         reportOutputPath: state.reportPath,
         outputDir: state.tempDir,
@@ -576,7 +576,7 @@ export function registerFailureBundleActiveGateTailTests({
         },
       }];
 
-      const {scenarioBundles} = await writeFailureBundlesForReport({
+      const {scenarioBundles} = await writeFailureBundlesForCompleteRun({
         scenarios,
         reportOutputPath: state.reportPath,
         outputDir: state.tempDir,
@@ -1112,7 +1112,7 @@ export function registerFailureBundleActiveGateTailTests({
         },
       }];
 
-      const {scenarioBundles} = await writeFailureBundlesForReport({
+      const {scenarioBundles} = await writeFailureBundlesForCompleteRun({
         scenarios,
         reportOutputPath: state.reportPath,
         outputDir: state.tempDir,

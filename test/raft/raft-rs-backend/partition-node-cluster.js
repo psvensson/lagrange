@@ -23,6 +23,7 @@ import {RAFT_RS_SYNCHRONOUS_PRAGMA} from
   '../../../src/raft/raft-rs-durable-store-constants.js';
 
 import {
+  RAFT_COMMITTED_ENTRY_APPLY_MODE,
   RAFT_OPERATION_PORT_REQUEST,
 } from '../../../src/raft/raft-operation-port-request.js';
 import {genesisStamp} from
@@ -197,6 +198,8 @@ class PartitionNodeCluster {
         effects.afterCommit.push(() =>
           replicaOf().appliedCommands.push(command));
       },
+      [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY_MODE]:
+        RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
       [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
     };
   }
@@ -260,7 +263,7 @@ class PartitionNodeCluster {
   /**
    * Tick through whichever semantic boundary the selected tree supplies.
    * @param {string} replicaId - The replica.
-   * @return {*} The operation result.
+   * @return {Object} The port's turn (raft-rs-turn-answer.js).
    */
   tick(replicaId) {
     return this.node(replicaId).tick();
@@ -425,7 +428,7 @@ class PartitionNodeCluster {
    * Propose one command through the node the operation port.
    * @param {string} replicaId - The proposing replica.
    * @param {*} command - The command (a JSON value).
-   * @return {Object} The node's named outcome.
+   * @return {Object} The port's turn (raft-rs-turn-answer.js).
    */
   propose(replicaId, command) {
     return this.node(replicaId).propose(command);

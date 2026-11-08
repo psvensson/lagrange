@@ -1,0 +1,20 @@
+{
+  "schema": "solve-quest/2",
+  "id": "priority-recovery-owner-read-snapshot-await",
+  "class": "fix",
+  "statement": "resolvePriorityRecoveryPlanningSnapshotForOwnerRead in src/rebalancer/replica-operation-repository-visibility-methods.js calls the async getPriorityRecoveryPlanningSnapshotBestEffort without awaiting it, so its three callers read a Promise as the planning snapshot and priority-recovery owner-read deferral never reads as active; the owner read consumes a settled snapshot (the synchronous planning answer, or the awaited best-effort read where the caller is asynchronous), the BestEffort alias family collapses onto the one planning answer, and a witness shows owner-read deferral active when the settled snapshot says so. Found 2026-11-08 by the readiness-service-constructor-injection quest and routed here (R17) because it changes rebalancer behaviour.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/priority-recovery-owner-read-snapshot-await/evidence/receipt.json",
+      "requiredReceipts": [
+        "owner-read-deferral-reads-a-settled-snapshot",
+        "best-effort-alias-family-collapsed"
+      ]
+    }
+  },
+  "constraints": [
+    {"id": "behaviour-change-named", "statement": "The attempt names every rebalancer decision that changes when deferral starts reading as active, with the witness that covers it."},
+    {"id": "independent-verification", "statement": "The src/ change lands only behind an approving verification newer than the last attempt."}
+  ]
+}

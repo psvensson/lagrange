@@ -9,7 +9,11 @@ import {
   isOperationWorkflowTerminalForPersistence,
   persistOperationWorkflowTransitionToDurableRow,
 } from './operation-workflow-persistence.js';
+import {
+  requireControlPlaneReadinessService,
+} from '../control-plane/control-plane-readiness-collaborators.js';
 
+const REBALANCE_COORDINATOR_OWNER_NAME = 'RebalanceCoordinator';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_SYSTEMTABLECACHE = 'systemTableCache';
 const LOCAL_STR_CDCINTEGRATIONSERVICE = 'cdcIntegrationService';
@@ -34,12 +38,12 @@ function startFailedCreateCleanupReleaseRecovery(coordinator) {
         });
       },
     });
-  // The authoritative query error is logged while the joined/fenced recovery
-  // lane is still held. This catch only consumes that already-owned rejection;
-  // it must never perform teardown-visible logging or schedule another owner.
-  if (recovery && typeof recovery.catch === LOCAL_STR_FUNCTION) {
-    void recovery.catch(() => {});
-  }
+  // The recovery is the operation lane's promise (OperationLane.run), absent
+  // only when no workflow owner carries it. The authoritative query error is
+  // logged while the joined/fenced recovery lane is still held. This catch
+  // only consumes that already-owned rejection; it must never perform
+  // teardown-visible logging or schedule another owner.
+  void recovery?.catch(() => {});
 }
 
 // Option keys whose sync is a plain same-named property assignment, split
@@ -64,7 +68,6 @@ const SYNCABLE_OWNER_DEPENDENCY_KEYS_AFTER_READINESS = Object.freeze([
 
 const {
   ConfigurationManager,
-  ControlPlaneReadinessService,
   DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
   DurableWorkflowCoordinator,
   ExecutorOutcomeEmitter,
@@ -183,18 +186,10 @@ class RebalanceCoordinatorLifecycle {
         readinessState: this.bootstrapReadinessState,
         now: () => this.timeSource.now(),
       });
-    this.controlPlaneReadinessService =
-      options.controlPlaneReadinessService ||
-      new ControlPlaneReadinessService({
-        nodeId: this.nodeId,
-        systemTableCache: this.systemTableCache,
-        cacheMutationTarget: this.systemTableCache,
-        messageRouter: this.messageRouter,
-        storageAccountingService: this.storageAccountingService,
-        cdcIntegrationService: this.cdcIntegrationService,
-        cdcGroupPropagationService: this.cdcGroupPropagationService,
-        controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
-      });
+    // The node's one readiness service is a named collaborator: the
+    // coordinator never builds a second instance of that authority.
+    this.controlPlaneReadinessService = requireControlPlaneReadinessService(
+      options, REBALANCE_COORDINATOR_OWNER_NAME);
 
     // Configuration (centralized) - Requirements 6.1, 6.4
     const configManager = ConfigurationManager.getInstance();

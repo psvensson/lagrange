@@ -21,8 +21,8 @@ import {join, relative} from 'node:path';
 import {
   OUTPUT,
   LOG_SUBSCRIPTION_CAPABILITY,
-  CONTAINER_LOG_TAIL_LINES,
 } from './constants.js';
+import {LOG_WINDOW_COVERAGE} from './failure-bundle-artifact-foundation.js';
 
 // Module-load captures (the harness tree's ambient-intrinsics rule).
 const arrayFilter = Function.call.bind(Array.prototype.filter);
@@ -112,8 +112,6 @@ const DOCKER_LOG_FRAME_PADDING_OFFSET = 1;
 const DOCKER_LOG_FRAME_PADDING_LENGTH = 3;
 const DOCKER_LOG_STREAM_STDOUT = 1;
 const DOCKER_LOG_STREAM_STDERR = 2;
-const DOCKER_LOG_OPTION_RAW_BUFFER = 'rawBuffer';
-const DOCKER_LOG_OPTION_TAIL = 'tail';
 const LIVE_SELECT_UNSUPPORTED_TOKEN_SYNTAX = 'syntax';
 const LIVE_SELECT_UNSUPPORTED_TOKEN_PARSE = 'parse';
 const DEFAULT_LOG_SUBSCRIPTION_CAPABILITIES = Object.freeze({
@@ -498,23 +496,25 @@ class LogCollector {
    * Fall back to Docker container stdout/stderr collection.
    * Used when cluster is unreachable for live queries.
    * Each node's logs are read through the node's OWN provider
-   * (NodeHandle.getLogs), so multi-host runs collect every host's
+   * (NodeHandle.getLogWindow), so multi-host runs collect every host's
    * containers instead of querying one daemon for all container ids
    * (which silently returned nothing for non-primary hosts).
+   * The node's output is streamed (no Docker line tail) and the last
+   * maxRetainedBytes of it are appended: bounded in bytes, never lines, and
+   * memory holds the window, never the whole log (container-log-window.js).
+   * This curated sample is not coverage evidence; the failure bundle
+   * measures coverage against the full log under .full-logs.
    * Req 7.6
    * @param {Array<Object>} nodes - NodeHandle instances
+   * @param {{maxRetainedBytes?: number}} [options]
    */
-  async collectContainerFallback(nodes) {
+  async collectContainerFallback(nodes, {
+    maxRetainedBytes = LOG_WINDOW_COVERAGE.MAX_RETAINED_BYTES,
+  } = {}) {
     for (const node of nodes) {
       try {
-        const logs = await node.getLogs(
-          {
-            [DOCKER_LOG_OPTION_RAW_BUFFER]: true,
-            [DOCKER_LOG_OPTION_TAIL]: CONTAINER_LOG_TAIL_LINES,
-          },
-        );
-        const lines = extractContainerLogLines(logs);
-        for (const line of lines) {
+        const window = await node.getLogWindow({maxRetainedBytes});
+        for (const line of window.lines) {
           this._appendEntry({
             [FIELD_NODE_ID]: node.id,
             [FIELD_MESSAGE]: line,
@@ -524,7 +524,8 @@ class LogCollector {
           });
         }
       } catch (_err) {
-        // Node container may already be removed; skip.
+        // Node container may already be removed; the full capture under
+        // .full-logs is the record.
       }
     }
   }

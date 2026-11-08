@@ -7,6 +7,7 @@ import {
   RAFT_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../src/raft/raft-operation-port-constants.js';
+import {settledTurn, turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {PartitionNodeCluster} from
   '../raft/raft-rs-backend/partition-node-cluster.js';
 import {proposeMembershipTransition} from
@@ -39,7 +40,7 @@ function nativePromotionAttempt({progress, commit = 12, term = 7}) {
     resolvePeerAddress: () => 'target-address'};
   let statusReads = 0;
   let proposals = 0;
-  const result = proposeMembershipTransition({group, expectedGeneration: 3,
+  const turn = proposeMembershipTransition({group, expectedGeneration: 3,
     runtimeGeneration: 3, command, leaderReplicaIdOf: () => 'leader',
     invokeCoreAt: (_group, _generation, operation) => {
       if (operation === 'status') {
@@ -52,10 +53,10 @@ function nativePromotionAttempt({progress, commit = 12, term = 7}) {
       proposals += 1;
       return {ok: true};
     },
-    drainReady: () => ({outcome: RAFT_OPERATION_OUTCOME.CORE_OK}),
-    thenMaybe: (value, callback) => callback(value),
+    drainReady: () => settledTurn({outcome: RAFT_OPERATION_OUTCOME.CORE_OK}),
   });
-  return {result, proposals};
+  assert.equal(turn.settled, true, 'a drained proposal settles within the call');
+  return {result: turn.result, proposals};
 }
 
 function nativeProgressRefusal(progress, commit = 12) {
@@ -83,8 +84,8 @@ function request(cluster, leader, stage, permitSequence, overrides = {}) {
 }
 
 function propose(cluster, leader, transition) {
-  return cluster.node(leader)[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
-    transition);
+  return turnChainValue(cluster.node(leader)[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
+    transition));
 }
 
 function targetObservation(status) {
@@ -234,7 +235,7 @@ test('a real target observation cannot override leader-owned native progress',
   (t) => {
     const {cluster, leader, observation} = formLearner(t);
     cluster.isolate(TARGET);
-    const proposed = cluster.node(leader).propose({id: 'after-isolation'});
+    const proposed = turnChainValue(cluster.node(leader).propose({id: 'after-isolation'}));
     assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.equal(cluster.settle(() => cluster.node(leader).readStatus()
       .commitIndex > observation.membershipGenerationIndex), true);

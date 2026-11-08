@@ -32,6 +32,7 @@ import {
 } from '../../src/runtime/endpoint-sync-constants.js';
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 // Initialize test environment
 export function initializeTestEnvironment() {
@@ -198,8 +199,9 @@ export function createMockCoordinator() {
   };
 }
 
-// Create mock readiness service backed by the same cache
-export function createMockReadinessService(mockCache) {
+// Create mock readiness service backed by the same cache; `clock` is the
+// owner's clock (the rebalancer's nowFn) when the test has one.
+export function createMockReadinessService(mockCache, clock = null) {
   const getNodeReadinessSync = (nodeId) => {
     const nodeRow = mockCache.get('nodes', nodeId);
     if (!nodeRow) {
@@ -254,7 +256,7 @@ export function createMockReadinessService(mockCache) {
       reasons: [],
     };
   };
-  return {
+  return partialReadinessFake({
     getNodeReadinessSync,
     getNodeReadiness: async (nodeId) => getNodeReadinessSync(nodeId),
     projectNodeLiveness(nodeId) {
@@ -266,7 +268,7 @@ export function createMockReadinessService(mockCache) {
           ] === true,
       });
     },
-  };
+  }, clock);
 }
 
 export function createMockMembershipPublicationService(

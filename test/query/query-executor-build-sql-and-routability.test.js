@@ -28,9 +28,7 @@ import {
   RUNTIME_AUTHORITY_STATE,
   RUNTIME_AUTHORITY_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   QUERY_ROUTING_DIAGNOSTIC_REASON,
 } from '../../src/query/query-constants.js';
@@ -43,6 +41,7 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -154,7 +153,7 @@ test('QueryExecutor - buildExpressionSQL emits searched CASE WHEN',
             left: {type: 'column_ref', table: null, column: 'age'},
             right: {type: 'literal', value: 18},
           },
-          then: {type: 'literal', value: 'adult'},
+          thenExpression: {type: 'literal', value: 'adult'},
         },
       ],
       elseExpr: {type: 'literal', value: 'minor'},
@@ -181,7 +180,7 @@ test('QueryExecutor - buildExpressionSQL emits CASE with multiple WHEN',
             left: {type: 'column_ref', table: null, column: 'status'},
             right: {type: 'literal', value: 'active'},
           },
-          then: {type: 'literal', value: 1},
+          thenExpression: {type: 'literal', value: 1},
         },
         {
           when: {
@@ -190,7 +189,7 @@ test('QueryExecutor - buildExpressionSQL emits CASE with multiple WHEN',
             left: {type: 'column_ref', table: null, column: 'status'},
             right: {type: 'literal', value: 'pending'},
           },
-          then: {type: 'literal', value: 2},
+          thenExpression: {type: 'literal', value: 2},
         },
       ],
       elseExpr: {type: 'literal', value: 0},
@@ -215,7 +214,7 @@ test('QueryExecutor - buildExpressionSQL emits simple CASE with operand',
       conditions: [
         {
           when: {type: 'literal', value: 'active'},
-          then: {type: 'literal', value: 1},
+          thenExpression: {type: 'literal', value: 1},
         },
       ],
       elseExpr: null,
@@ -631,7 +630,6 @@ test('QueryExecutor - buildSelectSQL omits set operation when absent',
     t.notMatch(sql, /UNION|INTERSECT|EXCEPT/);
   });
 
-
 // --- Service routability contract tests (Requirements: 1.4, 4.1, 4.3) ---
 // Routing paths use serveEligible dimension via isRoutablePartitionService.
 
@@ -677,7 +675,7 @@ test('QueryExecutor - isRoutablePartitionService rejects active service ' +
 test('QueryExecutor - isRoutablePartitionService accepts active service ' +
   'when sync readiness has no capacity snapshot but node is serve-ready',
 (t) => {
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: createReadinessCache({
       nodes: [{
@@ -753,7 +751,7 @@ test('QueryExecutor - filters self routed-read candidates when canonical ' +
       raft_role: 'leader',
     }],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: cache,
     messageRouter: {
@@ -947,7 +945,7 @@ test('QueryExecutor - isRoutablePartitionService reuses fresher stored ' +
       [COLUMN.ADDRESS]: `${nodeId}/partition/p1`,
     }],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cdcGroupPropagationService: createReadinessPublicationService({
@@ -1093,7 +1091,7 @@ test('QueryExecutor - sync-only readiness checks retain fresher remote-node ' +
       [COLUMN.ADDRESS]: `${nodeId}/partition/p1`,
     }],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cdcGroupPropagationService: createReadinessPublicationService({

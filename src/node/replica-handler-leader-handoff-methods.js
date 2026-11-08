@@ -25,6 +25,7 @@ import {
 } from '../raft/raft-operation-port-constants.js';
 import {ReplicaOperationReason} from '../rebalancer/replica-operation-constants.js';
 import {REPLICA_HANDLER_TYPEOF} from './replica-handler-constants.js';
+import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_HANDLER_LEADER_HANDOFF_STATE = Object.freeze({
@@ -141,7 +142,7 @@ function assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler) {
         );
       }
       return handoffOfTransferAnswer(
-        await service.requestLeadershipTransfer(transferRequest),
+        await turnChainValue(service.requestLeadershipTransfer(transferRequest)),
         trackedRole,
       );
     }

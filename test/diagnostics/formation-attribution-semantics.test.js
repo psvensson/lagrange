@@ -361,7 +361,7 @@ test('a raft-rs group charges its protocol turns and committed applies to ' +
     attribution.start();
     runBootstrapActivity(() => {
       for (let tick = 0; tick < TICKS; tick += 1) {
-        t.equal(typeof cluster.tick('r1')?.then, 'undefined',
+        t.equal(cluster.tick('r1').settled, true,
           'a single-voter tick turn completes synchronously');
       }
       t.ok(cluster.settle(() => cluster.leaderReplicaId() === 'r1'),

@@ -60,6 +60,7 @@ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {createLoopbackTransport} from '../partition/partition-service-test-support.js';
 import {createOriginFixture} from '../service/service-consensus-creation-fixture.js';
 import {deliverScheduled} from './wasm-strong-write-native-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const SETUP_ROUNDS = 200;
 const SETTLE_ROUNDS = 120;
@@ -340,7 +341,7 @@ async function embedding(t) {
     const replicas = e.hosts.map((host) => e.replicaOf(host));
     e.replicas = replicas;
     for (let round = 0; round < SETUP_ROUNDS; round += 1) {
-      await replicas[0].raft.tick();
+      await turnChainValue(replicas[0].raft.tick());
       await deliverScheduled(e);
       const statuses = replicas.map((replica) => replica.raft.readStatus());
       if (statuses[0].role === 'leader' &&

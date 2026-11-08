@@ -27,8 +27,10 @@ import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
-import {RAFT_OPERATION_PORT_REQUEST} from
-  '../../../src/raft/raft-operation-port-request.js';
+import {
+  RAFT_COMMITTED_ENTRY_APPLY_MODE,
+  RAFT_OPERATION_PORT_REQUEST,
+} from '../../../src/raft/raft-operation-port-request.js';
 import {createRaftRsOperationPort} from '../../../src/raft/raft-rs-operation-port.js';
 import * as runtimeConstants from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
@@ -42,6 +44,7 @@ import {RAFT_RS_CONF_CHANGE_TYPE} from
 
 import {answerOf, countEscapes} from './process-escape-counter.js';
 import {loadRaftRsCore, restoreRaftRsGroup} from './raw-raft-rs-test-core.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {genesisStamp} from
   '../../../src/raft/raft-committed-membership-stamp.js';
 
@@ -92,6 +95,8 @@ function lonePort(groupId, {deferElection, db = new Database(IN_MEMORY), timeSou
     [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]: (peer) =>
       `containment://${peer}`,
     [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
+    [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY_MODE]:
+      RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
     [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
   });
   return {
@@ -176,13 +181,13 @@ test('F-ah (b): a throw inside a port operation the caller asked for is ' +
     {deferElection: true});
   try {
     const unsubscribe = throwingLeaderListener(port);
-    assertContained(answerOf(() => port.campaign()), 'the campaign');
+    assertContained(answerOf(() => turnChainValue(port.campaign())), 'the campaign');
     const held = assertContained(answerOf(() => port.readStatus()),
       'the status after it');
     assert.equal(held.role, null, 'the held group has no role');
     unsubscribe();
     await sleep(recoveryRetryWindowMsOf(TIMING) + WINDOW_MARGIN_MS);
-    const campaigned = await port.campaign();
+    const campaigned = await turnChainValue(port.campaign());
     assert.equal(campaigned.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `after its window the group campaigns again (${
         JSON.stringify(campaigned)})`);
@@ -211,12 +216,12 @@ test('a sole voter\'s own RemoveNode is refused typed at the leader\'s ' +
   const {port, replicaId, dispose} = lonePort('last-voter-admission',
     {deferElection: true});
   try {
-    assert.equal((await port.campaign()).outcome,
+    assert.equal((await turnChainValue(port.campaign())).outcome,
       RAFT_OPERATION_OUTCOME.CORE_OK, 'setup: the lone replica leads');
     const before = port.readStatus();
-    const answer = await port.proposeConfChange({
+    const answer = await turnChainValue(port.proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: replicaId,
-    });
+    }));
     assert.deepEqual({...answer}, {
       outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
       reason: RAFT_MEMBERSHIP_CHANGE_REFUSAL.REMOVES_LAST_VOTER,
@@ -232,7 +237,7 @@ test('a sole voter\'s own RemoveNode is refused typed at the leader\'s ' +
       'nothing was handed to the core');
     assert.deepEqual([...after.confState.voters], [...before.confState.voters],
       'its configuration is unchanged');
-    const proposed = await port.propose({kind: 'after-refusal'});
+    const proposed = await turnChainValue(port.propose({kind: 'after-refusal'}));
     assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `a later write commits (${JSON.stringify(proposed)})`);
     assert.ok(port.readStatus().commitIndex > before.commitIndex,
@@ -281,7 +286,7 @@ test('a committed configuration change the core refuses to apply holds ' +
   const escapes = countEscapes();
   const groupId = 'last-voter-committed';
   const first = lonePort(groupId, {deferElection: true});
-  assert.equal((await first.port.campaign()).outcome,
+  assert.equal((await turnChainValue(first.port.campaign())).outcome,
     RAFT_OPERATION_OUTCOME.CORE_OK, 'setup: the lone replica leads');
   first.port.close();
   const progress = commitSelfRemovalBelowThePort(first.db, groupId,
@@ -292,9 +297,9 @@ test('a committed configuration change the core refuses to apply holds ' +
   const {port, dispose} = lonePort(groupId,
     {deferElection: true, db: first.db});
   try {
-    const answers = [answerOf(() => port.tick())];
+    const answers = [answerOf(() => turnChainValue(port.tick()))];
     await sleep(recoveryRetryWindowMsOf(TIMING) + WINDOW_MARGIN_MS);
-    answers.push(answerOf(() => port.tick()));
+    answers.push(answerOf(() => turnChainValue(port.tick())));
     for (const [index, answer] of answers.entries()) {
       assert.equal(answer.threw, null, `turn ${index} answers, never throws`);
       const held = await answer.value;

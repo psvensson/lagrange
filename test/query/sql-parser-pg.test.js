@@ -288,7 +288,9 @@ test('PG mode - searched CASE WHEN produces case node', async (t) => {
   t.equal(col.operand, null);
   t.equal(col.conditions.length, 1);
   t.ok(col.conditions[0].when);
-  t.ok(col.conditions[0].then);
+  t.ok(col.conditions[0].thenExpression);
+  t.notOk(Object.hasOwn(col.conditions[0], 'then'),
+    'a CASE branch is no thenable: its result is thenExpression');
   t.ok(col.elseExpr);
 });
 

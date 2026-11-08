@@ -17,6 +17,7 @@ import {createInProcessMockTransport} from './replica-handler-identity-fixture.j
 import {cleanOwnedParticipantFixture as cleanOwnedFixture} from
   './participant-transaction-fixture.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const NODE = 'test-node';
 const CONTROL_NODE = 'control-node';
@@ -83,12 +84,12 @@ async function withParticipantReleaseProtocol(measure, table = {tableId: TABLE, 
       } else {
         handler.localServices.set(CONTROL_REPLICA, controlService);
       }
-      await controlService.raft.campaign();
+      await turnChainValue(controlService.raft.campaign());
       assert.equal(controlService.raft.readStatus().role, 'leader');
     }
     await service.initialize();
     handler.localServices.set(REPLICA, service);
-    await service.raft.campaign();
+    await turnChainValue(service.raft.campaign());
     assert.equal(service.raft.readStatus().role, 'leader');
     const build = await runtimeBuildProvenance();
     assert.equal(build.state, 'measured', build.reason);

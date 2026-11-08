@@ -11,13 +11,13 @@ import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.
 import {
   AuthoritativeNodeEvidenceReconciler,
 } from '../../src/control-plane/authoritative-node-evidence-reconciler.js';
-import {ControlPlaneReadinessService} from
-  '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
   ControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const TEST_CONNECTION_STATE_READY = 'ready';
 const TEST_LAST_HEARTBEAT = 1000;
 const TEST_READY_LEASE_EXPIRES_AT = 2000;
@@ -471,7 +471,7 @@ test('ControlPlaneReadinessService resolves writable cacheMutationTarget from ' 
     executeAuthoritativeSystemTableRead: async () => ({success: true, rows: []}),
   };
 
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: writableCache,
     cdcIntegrationService,

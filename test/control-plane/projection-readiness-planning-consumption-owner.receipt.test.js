@@ -23,9 +23,7 @@ import {
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   buildProjectionReadinessState,
   resolveProjectionReadinessStateForEntry,
@@ -40,6 +38,7 @@ import {
   buildDeferredSnapshot,
 } from '../../src/control-plane/readiness-planning-publication-contract.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const CLOCK_START_MS = 350000;
 const ENTRY_MEMO_MISS_SECTION = 'projection_readiness_entry_memo_miss_build';
 const OWNER_BUILD_SECTION = 'projection_readiness_owner_build';
@@ -72,7 +71,7 @@ function buildFixture(nodeId, {connected = true} = {}) {
     services: [createMessageGroupService(nodeId)],
   }));
   const clock = {nowMs: CLOCK_START_MS};
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId,
     systemTableCache: cache,
     cacheMutationTarget: cache,

@@ -86,13 +86,13 @@ test(DURABLE_REJOIN_FINAL_HANDOFF_TEST.name, async (t) => {
   const cdcIntegrationService = service.createCdcIntegrationService();
   const provisionalEngine = cdcIntegrationService.sqlQueryEngine;
   let provisionalActivationCount = 0;
-  provisionalEngine.activateDistributedTransactionRecovery = () => {
+  provisionalEngine.activateDistributedTransactionRecovery = async () => {
     provisionalActivationCount += 1;
     return EMPTY_TRANSACTION_RECOVERY_SUMMARY;
   };
 
   const earlyActivation =
-    service.runtimeHandoffOwner.activateDistributedTransactionRecovery();
+    await service.runtimeHandoffOwner.activateDistributedTransactionRecovery();
   t.equal(
     earlyActivation,
     null,

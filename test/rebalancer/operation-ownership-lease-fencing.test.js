@@ -89,6 +89,7 @@ import {
   createMockPolicyService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const {
   PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE,
@@ -209,7 +210,7 @@ function createLeaseCoordinatorHarness({
     },
   };
   const cache = createMockCache();
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId,
     systemTableCache: cache,
     cdcIntegrationService: createMockCdcService(),
@@ -220,7 +221,7 @@ function createLeaseCoordinatorHarness({
     sqlQueryEngine,
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
-  });
+  }));
   coordinator.initialize();
   return {
     coordinator,

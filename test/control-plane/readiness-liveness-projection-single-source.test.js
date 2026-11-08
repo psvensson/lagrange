@@ -41,14 +41,14 @@ import {
 import {NodeLivenessSemanticProjectionOwner} from
   '../../src/control-plane/node-liveness-semantic-projection-owner.js';
 import {NodesOwner} from '../../src/control-plane/owners/nodes-owner.js';
-import {ControlPlaneReadinessService} from
-  '../../src/control-plane/control-plane-readiness-service.js';
+
 import {isEvidenceAbsentReadinessDenialSnapshot} from
   '../../src/control-plane/readiness-denial-classification.js';
 import {isDeferredReadinessPlanningSnapshot} from
   '../../src/control-plane/readiness-planning-version-contract.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 ConfigurationManager.getInstance().initialize();
 
 const SELF_NODE_ID = 'node-owner-self';
@@ -124,7 +124,7 @@ async function createRig(authoritativeRead) {
     });
   }
   await macrotask();
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: SELF_NODE_ID,
     systemTableCache: cache,
     now: () => clock.now,

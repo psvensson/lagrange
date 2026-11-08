@@ -37,6 +37,7 @@ import {
   createPublicationService,
 } from './control-plane-readiness-service-test-support.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {readinessCollaboratorFake} from '../helpers/readiness-service-fixture.js';
 
 const SEED = 'node-0';
 const JOINER = 'node-1';
@@ -108,13 +109,15 @@ function buildRuntimeStubs() {
     },
     on: noop, off: noop, subscribe: () => noop,
   };
-  const messageRouter = {
+  // ControlPlaneSetup wires the router into the node's readiness service,
+  // which validates its interface: the fixture completes the stub.
+  const messageRouter = readinessCollaboratorFake('messageRouter', {
     getConnectionState: () => STATE.CONNECTED,
     getConnectedNodes: () => new Set(),
     on: noop, off: noop, registerHandler: noop,
     send: async () => ({}),
     getNodeId: () => SEED,
-  };
+  });
   const tablePolicyService = {getPolicy: () => null, resolveTablePolicy: () => null};
   const cdcGroupPropagationService = createPublicationService({
     currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
@@ -186,6 +189,7 @@ function attachPartitionRebalancer(index, cache, stubs, coordinator) {
     replicaId: `replica-${index}`,
     messageRouter: stubs.messageRouter,
     rebalanceCoordinator: coordinator,
+    controlPlaneReadinessService: coordinator.controlPlaneReadinessService,
   });
   rebalancer.initialize();
   return rebalancer;
@@ -252,8 +256,6 @@ test('O1/O2: on the real composition path a process hosting many partitions ' +
   for (const rebalancer of rebalancers) {
     t.equal(rebalancer.controlPlaneReadinessService, service,
       `${rebalancer.entityId}: r.controlPlaneReadinessService === container's`);
-    t.equal(rebalancer.ownsControlPlaneReadinessService, false,
-      `${rebalancer.entityId}: consumes, does not own`);
   }
   const owners = new Set(rebalancers.map((r) =>
     r.controlPlaneReadinessService.readinessPlanningSnapshotOwner));

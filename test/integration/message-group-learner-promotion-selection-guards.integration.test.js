@@ -30,7 +30,7 @@ import {BRANCH_CAS, OWNER_CLAIM, TARGET_PEER, catchUpRoute, caughtUp, configurat
 function isolatedNewerTermLeader(f, successor, others) {
   const from = leaderOf(f);
   assert.equal(f.cluster.node(from).transferLeadership({successor: 'named',
-    replicaIdentity: successor}).outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+    replicaIdentity: successor}).result.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
   f.cluster.tickers = [successor];
   let isolated = false;
   for (let round = 0; round < 400 && !isolated; round += 1) {

@@ -184,6 +184,51 @@ const READINESS_SNAPSHOT_KEY = Object.freeze({
   PROJECTION_READINESS_CONTRACT: 'projectionReadinessContract',
 });
 
+/**
+ * Named constructor collaborators of the readiness service; each value is the
+ * construction option that carries it and the `collaborator` of a refusal.
+ * @enum {string}
+ */
+const CONTROL_PLANE_READINESS_COLLABORATOR = Object.freeze({
+  NODE_ID: 'nodeId',
+  SYSTEM_TABLE_CACHE: 'systemTableCache',
+  CLOCK: 'now',
+  TIME_SOURCE: 'timeSource',
+  INCARNATION_FENCE: 'getLocalClusterIncarnationFence',
+  SET_TIMEOUT: 'setTimeoutFn',
+  CLEAR_TIMEOUT: 'clearTimeoutFn',
+  SERVICE: 'controlPlaneReadinessService',
+  MEMBERSHIP_PUBLICATION: 'membershipPublicationService',
+  NODES_OWNER: 'nodesOwner',
+  SERVICES_OWNER: 'servicesOwner',
+  MESSAGE_ROUTER: 'messageRouter',
+  HEARTBEAT: 'heartbeatService',
+  CDC_GROUP_PROPAGATION: 'cdcGroupPropagationService',
+  STORAGE_ACCOUNTING: 'storageAccountingService',
+  NODE_LIFECYCLE: 'nodeLifecycleStateMachine',
+  AUTHORITATIVE_VIEW: 'authoritativeControlPlaneView',
+  EVIDENCE_RECONCILER: 'authoritativeNodeEvidenceReconciler',
+});
+
+/**
+ * The named state a read of a late-bound collaborator answers before that
+ * collaborator is wired (or after it was unwired): never null, never a
+ * member probe at the use site.
+ */
+const CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED = Object.freeze({
+  state: 'control-plane-readiness-collaborator-unwired',
+});
+
+/**
+ * Codes of the readiness service's construction refusals.
+ * @enum {string}
+ */
+const CONTROL_PLANE_READINESS_ERROR_CODE = Object.freeze({
+  COLLABORATOR_MISSING: 'CONTROL_PLANE_READINESS_COLLABORATOR_MISSING',
+  COLLABORATOR_INVALID: 'CONTROL_PLANE_READINESS_COLLABORATOR_INVALID',
+  SERVICE_MISSING: 'CONTROL_PLANE_READINESS_SERVICE_MISSING',
+});
+
 export {
   AUTHORITY_DESCRIPTOR_STATE,
   AUTHORITY_PUBLICATION_OBSERVATION_STATE,
@@ -191,8 +236,11 @@ export {
   CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_PUBLICATION_MODE,
+  CONTROL_PLANE_READINESS_COLLABORATOR,
+  CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED,
   CONTROL_PLANE_READINESS_DEFAULT,
   CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_READINESS_ERROR_CODE,
   CONTROL_PLANE_READINESS_OWNER,
   CONTROL_PLANE_READ_PURPOSE,
   CONTROL_PLANE_READ_RECOVERY_ROUTING,

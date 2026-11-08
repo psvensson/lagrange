@@ -232,6 +232,8 @@ class PartitionServiceRebalancerMethods {
       replicaStateMachine: this.replicaStateMachine,
       messageRouter,
       rebalanceCoordinator,
+      controlPlaneReadinessService:
+        rebalanceCoordinator.controlPlaneReadinessService,
     });
     this.rebalancer.initialize();
     this.rebalancer.setLeader(this.resolveRebalancerLeadership());

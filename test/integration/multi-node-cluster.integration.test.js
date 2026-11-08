@@ -30,6 +30,7 @@ import {
 } from './helpers/cluster-test-helpers.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function createAlwaysReadyControlPlaneReadinessService() {
   const dimensions = {
@@ -441,7 +442,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
         });
       }
 
-      const rebalancer = new UnifiedRebalancer({
+      const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
         entityId: 'partition-odd',
         entityType: EntityType.PARTITION,
         systemTableCache,
@@ -450,7 +451,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
         messageRouter: bootstrapService.messageRouter,
         rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
         nodeId: seedNodeId,
-      });
+      }));
 
       rebalancer.initialize();
 

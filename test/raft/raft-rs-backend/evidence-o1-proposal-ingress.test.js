@@ -63,6 +63,7 @@ import {CDCOperation} from '../../../src/partition/partition-service.js';
 import {TABLES} from '../../../src/constants/index.js';
 import {deriveRaftRsPeerId} from '../../../src/raft/raft-rs-peer-identity.js';
 import {ReplicaStatus} from '../../../src/rebalancer/replica-status.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const PARTITION_ID = 'evidence-o1-ingress';
 const A = 'in-a';
@@ -102,25 +103,25 @@ function reserveEverywhere(cluster, identity) {
 const PENDING_KINDS = Object.freeze({
   'effective AddNode': ({cluster, leader}) => {
     reserveEverywhere(cluster, EXTRA);
-    assert.equal(cluster.node(leader).proposeConfChange(addPeer(EXTRA))
+    assert.equal(cluster.node(leader).proposeConfChange(addPeer(EXTRA)).result
       .outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     return leader;
   },
   'effective RemoveNode': ({cluster, leader}) => {
     const removed = liveReplicas(cluster).find((id) => id !== leader);
-    assert.equal(cluster.node(leader).proposeConfChange(removePeer(removed))
+    assert.equal(cluster.node(leader).proposeConfChange(removePeer(removed)).result
       .outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     return leader;
   },
   'no-op RemoveNode (a non-member)': ({cluster, leader}) => {
     reserveEverywhere(cluster, ABSENT);
-    assert.equal(cluster.node(leader).proposeConfChange(removePeer(ABSENT))
+    assert.equal(cluster.node(leader).proposeConfChange(removePeer(ABSENT)).result
       .outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     return leader;
   },
   'no-op AddNode (a member)': ({cluster, leader}) => {
     const member = liveReplicas(cluster).find((id) => id !== leader);
-    assert.equal(cluster.node(leader).proposeConfChange(addPeer(member))
+    assert.equal(cluster.node(leader).proposeConfChange(addPeer(member)).result
       .outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     return leader;
   },
@@ -131,7 +132,7 @@ const PENDING_KINDS = Object.freeze({
   // it applied.
   'post-election conservative index': ({cluster, leader, cap}) => {
     cap.value = durableOf(cluster, B).applied.appliedIndex;
-    assert.equal(cluster.node(leader).propose('before-the-election').outcome,
+    assert.equal(cluster.node(leader).propose('before-the-election').result.outcome,
       RAFT_OPERATION_OUTCOME.CORE_OK);
     const lastOf = (id) => durableLog(cluster.replica(id).dbFile,
       PARTITION_ID).at(-1).index;
@@ -139,7 +140,7 @@ const PENDING_KINDS = Object.freeze({
       60), 'setup: B holds the leader\'s last entry');
     assert.equal(cluster.node(leader).transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: B}).outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+      replicaIdentity: B}).result.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.ok(settle(cluster, () => roleOf(cluster, B) === LEADER_ROLE, [],
       40), 'setup: B is elected');
     cluster.isolate(leader);
@@ -176,14 +177,14 @@ for (const [kind, pend] of Object.entries(PENDING_KINDS)) {
       const lastBefore = durableLog(cluster.replica(leader).dbFile,
         PARTITION_ID).at(-1).index;
 
-      const atLeader = cluster.node(leader).proposeConfChange(addPeer(TARGET));
+      const atLeader = turnChainValue(cluster.node(leader).proposeConfChange(addPeer(TARGET)));
       assert.equal(atLeader.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE,
         `the leader defers (${JSON.stringify(atLeader)})`);
       assert.equal(atLeader.reason, RUNTIME_REASON.CONF_CHANGE_PENDING);
       assert.equal(atLeader.retryable, true);
 
-      const atFollower = cluster.node(follower).proposeConfChange(
-        addPeer(TARGET));
+      const atFollower = turnChainValue(cluster.node(follower).proposeConfChange(
+        addPeer(TARGET)));
       assert.equal(atFollower.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED,
         `the follower refuses (${JSON.stringify(atFollower)})`);
       assert.equal(atFollower.reason,
@@ -208,7 +209,7 @@ for (const [kind, pend] of Object.entries(PENDING_KINDS)) {
       // The pending change settles; proposed again at the leader the
       // AddNode is taken and commits.
       assert.ok(settle(cluster, () => cluster.node(leader).proposeConfChange(
-        addPeer(TARGET)).outcome === RAFT_OPERATION_OUTCOME.CORE_OK,
+        addPeer(TARGET)).result.outcome === RAFT_OPERATION_OUTCOME.CORE_OK,
       [leader], SETTLE), 'the AddNode is taken at the leader after settling');
       assert.ok(settle(cluster, () => durableOf(cluster, leader).applied
         .voters.includes(targetPeerId), [leader], SETTLE),
@@ -250,9 +251,9 @@ async () => {
       votersOf(harness.leaderMember()).includes(targetPeerId), 600), false,
     'a follower admits nothing: the leader never saw the row');
 
-    const transfer = await leader.raft.transferLeadership({
+    const transfer = await turnChainValue(leader.raft.transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: followerMember[0]});
+      replicaIdentity: followerMember[0]}));
     assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `setup: leadership transferred (${JSON.stringify(transfer)})`);
     assert.equal(await waitFor(() => statusOf(follower).role === LEADER_ROLE),

@@ -49,6 +49,7 @@ import {
   COMMITTED_MEMBERSHIP_READ_PURPOSE,
   COMMITTED_MEMBERSHIP_REFUSAL,
 } from '../../../src/raft/raft-committed-membership-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   '../../../src/raft/raft-operation-port-request.js';
 import {RAFT_RS_CONF_CHANGE_TYPE} from
@@ -118,9 +119,9 @@ async function assertStillHeld(cluster, replicaId, founders, extraRequest) {
   const status = cluster.node(replicaId).readStatus();
   assert.equal(status.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
   assert.equal(status.reason, RESEED_REQUIRED);
-  const campaign = await cluster.node(replicaId).campaign();
+  const campaign = await turnChainValue(cluster.node(replicaId).campaign());
   assert.equal(campaign.reason, RESEED_REQUIRED);
-  const tick = await cluster.node(replicaId).tick();
+  const tick = await turnChainValue(cluster.node(replicaId).tick());
   assert.equal(tick.reason, RESEED_REQUIRED);
 }
 
@@ -206,9 +207,9 @@ test('A4 (S2, leader outside the opening configuration): {a,b,c}, d added, ' +
   try {
     join(cluster, 'a4s-a', founders, 'a4s-d');
     addVoter(cluster, 'a4s-a', 'a4s-d', ['a4s-b', 'a4s-c']);
-    const transfer = cluster.node('a4s-a').transferLeadership({
+    const transfer = turnChainValue(cluster.node('a4s-a').transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: 'a4s-d'});
+      replicaIdentity: 'a4s-d'}));
     assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     cluster.tickers = ['a4s-d'];
     assert.ok(cluster.settle(() =>
@@ -233,9 +234,9 @@ test('A4 (S2, five voters, leader change after the wipe): c is refused at ' +
     const entriesBefore = cluster.coreEntries.length;
     const refused = wipeAndReopen(cluster, 'a45-c', founders, EXISTED);
     assertRefusedAtOpen(cluster, 'a45-c', refused, entriesBefore);
-    const transfer = cluster.node('a45-a').transferLeadership({
+    const transfer = turnChainValue(cluster.node('a45-a').transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: 'a45-b'});
+      replicaIdentity: 'a45-b'}));
     assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     const live = ['a45-a', 'a45-b', 'a45-d', 'a45-e'];
     cluster.tickers = live;
@@ -276,7 +277,7 @@ async () => {
     lone.replica('a6-l').node.close();
     lone.replica('a6-l').db.close();
     assert.equal(reopen(lone, 'a6-l', ['a6-l'], EXISTED), null);
-    const campaign = await lone.node('a6-l').campaign();
+    const campaign = await turnChainValue(lone.node('a6-l').campaign());
     assert.equal(campaign.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       JSON.stringify(campaign));
     assert.equal(lone.node('a6-l').readStatus().role, LEADER);

@@ -24,6 +24,7 @@ import {
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 /**
  * Initialize test singletons.
@@ -150,7 +151,7 @@ test('Property 1: Safety check delegation', async (t) => {
     'UnifiedRebalancer does NOT have its own getMoveSafetyError method',
     async (t) => {
       const coordinator = createRecordingCoordinator(null);
-      const rebalancer = new UnifiedRebalancer({
+      const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
         entityId: 'partition-test',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
@@ -159,7 +160,7 @@ test('Property 1: Safety check delegation', async (t) => {
         tablePolicyService: createMockPolicyService(),
         messageRouter: createMockRouter(),
         rebalanceCoordinator: coordinator,
-      });
+      }));
 
       t.equal(
         Object.prototype.hasOwnProperty.call(rebalancer, 'getMoveSafetyError'),
@@ -187,7 +188,7 @@ test('Property 1: Safety check delegation', async (t) => {
             const entityType = EntityType.PARTITION;
             const coordinator = createRecordingCoordinator(safetyError);
 
-            const rebalancer = new UnifiedRebalancer({
+            const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
               entityId,
               entityType,
               nodeId: 'node-1',
@@ -196,7 +197,7 @@ test('Property 1: Safety check delegation', async (t) => {
               tablePolicyService: createMockPolicyService(),
               messageRouter: createMockRouter(),
               rebalanceCoordinator: coordinator,
-            });
+            }));
 
             const result = await rebalancer.executeMoveViaCoordinator(move);
 

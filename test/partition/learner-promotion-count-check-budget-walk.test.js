@@ -101,7 +101,7 @@ function walkOperationRow(record) {
 }
 
 // The summary the joiner's guard reads is its LOCAL candidate derivation
-// (getMembershipPublicationPlanningSnapshotSync ->
+// (deriveMembershipPublicationPlanningSnapshotSync ->
 // deriveClusterMembershipCandidateSync), not the bare census: that is where
 // the closure's synthesized summary used to win.
 function deriveGuardPlanningSummary({replicaRows, eligibleNodeIds, operationRecords}) {

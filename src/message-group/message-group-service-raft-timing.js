@@ -180,9 +180,10 @@ function assignRaftTiming(serviceClass) {
       ) {
         return false;
       }
-      const result = this.raft.configureTick({tickIntervalMs});
-      return result === true ||
-        result?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK;
+      // Reconfiguring the tick is synchronous work: its turn settles here.
+      const configured = this.raft.configureTick({tickIntervalMs});
+      return configured.settled &&
+        configured.result.outcome === RAFT_OPERATION_OUTCOME.CORE_OK;
     },
     /**
      * Apply one committed entry to the state machine, inside the

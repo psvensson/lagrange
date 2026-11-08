@@ -19,7 +19,7 @@ const PUBLICATION_COORDINATOR_FILE_PATH =
 const PUBLICATION_PRIORITY_SPREAD_FILE_PATH =
   'src/control-plane/publication-recovery-priority-spread.js';
 const READINESS_SERVICE_SEGMENT_4_FILE_PATH =
-  'src/control-plane/control-plane-readiness-publication-aware.js';
+  'src/control-plane/control-plane-readiness-priority-recovery-planning.js';
 const ADMIN_WEBSOCKET_API_SEGMENT_2_FILE_PATH =
   'src/admin/admin-websocket-load-lane-admission.js';
 const NON_HOTSPOT_FILE_PATH = 'src/runtime/plain-helper.js';
@@ -39,7 +39,7 @@ const RESOLVE_PRIORITY_PUBLICATION_SOURCE_ROLE_STATE_FUNCTION =
 const BUILD_PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_SNAPSHOT_FUNCTION =
   'buildPriorityPublicationLeaderRemoveSafetySnapshot';
 const BUILD_PRIORITY_RECOVERY_PLANNING_PROJECTION_FUNCTION =
-  'buildPriorityRecoveryPlanningProjection';
+  'buildPriorityRecoveryPlanningProjectionUntracked';
 const RESOLVE_LOAD_LANE_READINESS_SNAPSHOT_FUNCTION =
   'resolveLoadLaneReadinessSnapshot';
 const EVALUATE_LOAD_PUBLISHED_CONVERGENCE_FUNCTION =
@@ -331,15 +331,14 @@ test('detects readiness planning code that reintroduces stale priority-spread re
   async (t) => {
     const violations = collectRuntimeGrammarContractViolationsFromSource(
       [
-        'class ControlPlaneReadinessService {',
-        '  buildPriorityRecoveryPlanningProjection(planningSnapshot) {',
-        '    const publicationRecoveryGate = planningSnapshot.publicationRecoveryGate;',
-        '    const priorityRecoveryReasonCodes = Object.freeze([',
-        '      ...publicationRecoveryGate.reasonCodes,',
-        '      ...planningSnapshot.priorityRecoveryReasonCodes,',
-        '    ]);',
-        '    return {priorityRecoveryReasonCodes};',
-        '  }',
+        'function buildPriorityRecoveryPlanningProjectionUntracked(',
+        '  service, planningSnapshot) {',
+        '  const publicationRecoveryGate = planningSnapshot.publicationRecoveryGate;',
+        '  const priorityRecoveryReasonCodes = Object.freeze([',
+        '    ...publicationRecoveryGate.reasonCodes,',
+        '    ...planningSnapshot.priorityRecoveryReasonCodes,',
+        '  ]);',
+        '  return {priorityRecoveryReasonCodes};',
         '}',
       ].join('\n'),
       READINESS_SERVICE_SEGMENT_4_FILE_PATH,
@@ -493,7 +492,7 @@ test('tracks the bounded runtime grammar hotspot set explicitly', async (t) => {
     Object.keys(RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS).sort(),
     [
       'src/admin/admin-websocket-load-lane-admission.js',
-      'src/control-plane/control-plane-readiness-publication-aware.js',
+      'src/control-plane/control-plane-readiness-priority-recovery-planning.js',
       'src/control-plane/membership-publication-coordinator-planning.js',
       'src/control-plane/membership-publication-coordinator-reads.js',
       'src/control-plane/publication-recovery-gate.js',

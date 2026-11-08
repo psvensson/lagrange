@@ -1,4 +1,5 @@
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function isolateTimeoutVisibilityReads(coordinator) {
   // These tests count the read owned by the method under test. The independent
@@ -37,15 +38,15 @@ export function createCoordinator(overrides = {}) {
       ?.executeAuthoritativeSystemTableRead === 'function';
 
   if (hasExplicitGateway || hasLocalAuthoritativeRead) {
-    return isolateTimeoutVisibilityReads(new RebalanceCoordinator({
+    return isolateTimeoutVisibilityReads(new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       authoritativeVisibilityTimeoutMs: 0,
       authoritativeVisibilityRetryDelayMs: 0,
       ...overrides,
       sqlQueryEngine,
-    }));
+    })));
   }
 
-  return isolateTimeoutVisibilityReads(new RebalanceCoordinator({
+  return isolateTimeoutVisibilityReads(new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     authoritativeVisibilityTimeoutMs: 0,
     authoritativeVisibilityRetryDelayMs: 0,
     ...overrides,
@@ -61,5 +62,5 @@ export function createCoordinator(overrides = {}) {
         return sqlQueryEngine.executeQuery(sql, params, options);
       },
     },
-  }));
+  })));
 }

@@ -37,6 +37,7 @@ import {
   mostCaughtUp,
   namedSuccessor,
 } from './transfer-leadership-driver.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const {CORE_OK} = portVocabulary.RAFT_OPERATION_OUTCOME;
 const A = 'transfer-replica-a';
@@ -82,7 +83,7 @@ function byRaftId(driver, replicaIds) {
 // the successor's and a follower's application apply it.
 function assertWriteCommits(driver, leader, follower) {
   const command = {after: 'transfer', on: leader};
-  const answer = driver.propose(leader, command);
+  const answer = turnChainValue(driver.propose(leader, command));
   assert.equal(answer.outcome, CORE_OK, JSON.stringify(answer));
   driver.round();
   assert.equal(driver.applied(leader, command), true, 'the leader applied it');
@@ -108,7 +109,7 @@ test('W1 a named transfer on the leader moves leadership to the target ' +
   try {
     driver.watchLeaderEvents(A);
     const termBefore = driver.status(A).term;
-    assertAccepted(await driver.port(A).transferLeadership(namedSuccessor(C)),
+    assertAccepted(await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))),
       TRANSFER_REASON.REQUESTED);
     driver.deliver();
     assertHandedOver(driver, {from: A, to: C, termBefore});
@@ -127,7 +128,7 @@ test('W1 a named transfer to a lagging target catches it up and hands over ' +
     driver.heal(C);
     driver.watchLeaderEvents(A);
     const termBefore = driver.status(A).term;
-    assertAccepted(await driver.port(A).transferLeadership(namedSuccessor(C)),
+    assertAccepted(await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))),
       TRANSFER_REASON.REQUESTED);
     driver.deliver();
     assertHandedOver(driver, {from: A, to: C, termBefore});
@@ -148,7 +149,7 @@ test('W1 most-caught-up hands leadership to the voter whose log is most ' +
     driver.lagBehind(A, laggard);
     driver.watchLeaderEvents(A);
     const termBefore = driver.status(A).term;
-    assertAccepted(await driver.port(A).transferLeadership(mostCaughtUp()),
+    assertAccepted(await turnChainValue(driver.port(A).transferLeadership(mostCaughtUp())),
       TRANSFER_REASON.REQUESTED);
     driver.deliver();
     assertHandedOver(driver, {from: A, to: expected, termBefore});
@@ -168,7 +169,7 @@ test('W1 most-caught-up with equally caught-up voters picks the lowest raft ' +
     driver.round();
     const [expected] = byRaftId(driver, [B, C]);
     const termBefore = driver.status(A).term;
-    assertAccepted(await driver.port(A).transferLeadership(mostCaughtUp()),
+    assertAccepted(await turnChainValue(driver.port(A).transferLeadership(mostCaughtUp())),
       TRANSFER_REASON.REQUESTED);
     driver.deliver();
     assertHandedOver(driver, {from: A, to: expected, termBefore});
@@ -190,13 +191,13 @@ async () => {
     driver.heal(B);
     driver.watchLeaderEvents(A);
     const termBefore = driver.status(A).term;
-    assertAccepted(await driver.port(B).transferLeadership(namedSuccessor(B)),
+    assertAccepted(await turnChainValue(driver.port(B).transferLeadership(namedSuccessor(B))),
       TRANSFER_REASON.FORWARDED);
     driver.deliver();
     const successor = assertHandedOver(driver, {from: A, to: B, termBefore});
     assert.equal(successor.term, termBefore + 1,
       'one leader-mediated election, not a disruptive campaign');
-    assertAccepted(await driver.port(B).transferLeadership(namedSuccessor(B)),
+    assertAccepted(await turnChainValue(driver.port(B).transferLeadership(namedSuccessor(B))),
       TRANSFER_REASON.ALREADY_LEADER);
     driver.deliver();
     driver.round();

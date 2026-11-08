@@ -22,6 +22,7 @@ import {RAFT_OPERATION_OUTCOME as OUTCOME} from '../../../src/raft/raft-operatio
 import {isConsensusInitRefusal} from '../../../src/raft/raft-operation-port.js';
 import {ENTITY_TYPE} from '../../../src/constants/addresses.js';
 import {TEST_BOOT_INCARNATION} from '../../test-helpers/boot-incarnation-fixture.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const NODE_ID = 'opening-refusal-node';
 const EXISTING_GROUP = 'opening-refusal-survivor';
@@ -87,8 +88,8 @@ async function createFixture(t) {
     if (cleanupErrors.length) t.diagnostic(JSON.stringify({cleanupErrors}));
     assert.deepEqual(cleanupErrors, [], 'fixture teardown must finish without hidden cleanup errors');
   });
-  assert.equal((await port.campaign()).outcome, OUTCOME.CORE_OK);
-  assert.equal((await port.propose('before-opening-refusal')).outcome, OUTCOME.CORE_OK);
+  assert.equal((await turnChainValue(port.campaign())).outcome, OUTCOME.CORE_OK);
+  assert.equal((await turnChainValue(port.propose('before-opening-refusal'))).outcome, OUTCOME.CORE_OK);
   const initial = port.readStatus();
   let traps = 0;
   const trap = async () => {
@@ -98,7 +99,7 @@ async function createFixture(t) {
         throw new globalThis.WebAssembly.RuntimeError('opening-refusal core-boundary trap');
       }
     });
-    assert.equal((await port.propose('must-not-commit')).outcome, OUTCOME.CORE_FATAL);
+    assert.equal((await turnChainValue(port.propose('must-not-commit'))).outcome, OUTCOME.CORE_FATAL);
     assert.equal(traps, 1, 'a real contained native fault must engage');
   };
   return {directory, clock, router, survivor, port, services, databases, entries, initial, trap};

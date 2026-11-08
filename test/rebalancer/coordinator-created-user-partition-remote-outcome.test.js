@@ -24,6 +24,7 @@ import {REBALANCE_COORDINATOR_LOG_MSG} from
 import {COORDINATOR_CREATED_REMOTE_HANDOFF_MODE} from
   '../../src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js';
 import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 
 const TARGET_NODE_ID = 'target-node';
 const SOURCE_NODE_ID = 'source-node';
@@ -163,9 +164,9 @@ function createTargetOutcomeHarness(operation, options = {}) {
     storageAdmissionService: {async checkAdd() {
       return {allowed: true, decision: 'allow'};
     }},
-    controlPlaneReadinessService: {getNodeReadinessSync() {
+    controlPlaneReadinessService: readinessServiceFake({getNodeReadinessSync() {
       return null;
-    }},
+    }}),
     operationWorkflowCoordinator: new DurableWorkflowCoordinator(),
     executorOutcomeEmitter: emitter,
     setTimeoutFn(callback, delayMs) {

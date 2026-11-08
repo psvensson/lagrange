@@ -1,5 +1,5 @@
 import {readdir, readFile} from 'node:fs/promises';
-import {join} from 'node:path';
+import {basename, dirname, join} from 'node:path';
 import {
   buildPriorityRecoveryObservationFromDecisionArtifactsByNodeId,
   collectPlaybackEventInsights,
@@ -7,6 +7,15 @@ import {
   mergePlaybackPriorityRecoveryObservation,
 } from './failure-bundle-playback-insights.js';
 import {FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION} from './failure-bundle-playback-classification.js';
+import {
+  LOG_WINDOW_COVERAGE,
+  summarizeLogWindowCoverage,
+} from './failure-bundle-artifact-foundation.js';
+import {retainNodeLogWindowFromGzip} from './failure-bundle-log-window.js';
+import {
+  CAPTURE_COMPLETENESS_NOT_RECORDED,
+  fullLogDestPath,
+} from './full-node-log-capture.js';
 const {
   TIMELINE_FILENAME,
   ANALYSIS_FILENAME,
@@ -15,11 +24,12 @@ const {
   LOG_FILE_EXTENSION,
   toWorkspaceRelative,
   sanitizePathSegment,
-  sliceLogTail,
   extractDecisionArtifactsFromLogContent,
   isRecord,
   mergePriorityRecoveryDecisionSnapshots,
 } = FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION;
+
+const arrayMap = Function.call.bind(Array.prototype.map);
 
 // The scenario directory is shared by every run of the scenario under one
 // output root, so a directory listing is not this run's evidence. Only the
@@ -41,11 +51,83 @@ function selectRunNodeLogIds(relevantNodeIds, nodeLogCandidates,
   return listed;
 }
 
+// First divergence is the scenario step log's fact (the failed step's start,
+// failure-bundle-playback-classification.js resolveScenarioRunFacts); without
+// it the window falls back to the log's last bytes and says so.
+function resolveFirstDivergenceAtMs(playbackInsights) {
+  const startedAtMs =
+    playbackInsights?.playbackEventSummary?.failedScenarioStep?.startedAtMs;
+  return Number.isFinite(startedAtMs) ? startedAtMs : null;
+}
+
+// The capture owner's verdict on one node's full log, as the runner carried
+// it from cluster teardown into the report entry (report-writer.js
+// captureCompletenessByNodeId). A node with no verdict is NOT_RECORDED, which
+// is never complete: the bundle does not re-derive it from the file.
+function resolveCaptureCompleteness(entry, nodeId) {
+  const recorded = entry?.captureCompletenessByNodeId?.[nodeId];
+  return isRecord(recorded) ? recorded : CAPTURE_COMPLETENESS_NOT_RECORDED;
+}
+
+// The window comes from the node's FULL log, the complete source the cluster
+// captured for the node's whole life (full-node-log-capture.js), never from
+// the curated {scenario}/{nodeId}.log, which is a sample. The scenario dir is
+// {outputDir}/{scenario}, so the full log is
+// {outputDir}/.full-logs/{scenario}/{nodeId}.log.gz.
+async function retainNodeFullLogWindow(scenarioDir, nodeId, workspaceRoot,
+  windowOptions) {
+  const gzPath = fullLogDestPath(
+    dirname(scenarioDir), basename(scenarioDir), nodeId);
+  return retainNodeLogWindowFromGzip(gzPath, {
+    ...windowOptions,
+    source: toWorkspaceRelative(gzPath, workspaceRoot),
+  });
+}
+
+async function retainRunLogWindows(result, {
+  scenarioDir, nodeIds, workspaceRoot, entry, playbackInsights,
+  maxRetainedBytes,
+}) {
+  const firstDivergenceAtMs = resolveFirstDivergenceAtMs(playbackInsights);
+  await Promise.all(arrayMap(nodeIds, async (nodeId) => {
+    const logWindow = await retainNodeFullLogWindow(
+      scenarioDir, nodeId, workspaceRoot, {
+        firstDivergenceAtMs,
+        maxRetainedBytes,
+        captureCompleteness: resolveCaptureCompleteness(entry, nodeId),
+      });
+    result.excerptsByNodeId[nodeId] = logWindow.lines;
+    result.logWindowCoverageByNodeId[nodeId] = logWindow.coverage;
+  }));
+  // The run's own event stream, when read, names every node it created: an
+  // empty set then means no node, not unknown nodes.
+  result.logWindowCoverage = summarizeLogWindowCoverage(
+    result.logWindowCoverageByNodeId, {
+      nodeIdsKnown:
+        Array.isArray(playbackInsights?.playbackEventSummary?.runNodeIds),
+    });
+}
+
+/**
+ * Collect one scenario's log artifacts for its failure bundle.
+ * @param {string} scenarioDir
+ * @param {Array<string>} relevantNodeIds
+ * @param {string} workspaceRoot
+ * @param {Object} entry The scenario report entry.
+ * @param {{retainLogWindows?: boolean, maxRetainedBytes?: number}} [options]
+ *   retainLogWindows false skips the full-log windows (a passing scenario
+ *   needs only its convergence evidence).
+ * @return {Promise<Object>}
+ */
 async function collectScenarioLogArtifacts(
   scenarioDir,
   relevantNodeIds,
   workspaceRoot,
   entry,
+  {
+    retainLogWindows = true,
+    maxRetainedBytes = LOG_WINDOW_COVERAGE.MAX_RETAINED_BYTES,
+  } = {},
 ) {
   const result = {
     scenarioDirPath: toWorkspaceRelative(scenarioDir, workspaceRoot),
@@ -60,12 +142,20 @@ async function collectScenarioLogArtifacts(
     playbackControlSnapshotByNodeId: null,
     nodeLogPaths: {},
     excerptsByNodeId: {},
+    logWindowCoverageByNodeId: {},
+    logWindowCoverage: null,
     decisionArtifactsByNodeId: {},
   };
   let entries = [];
   try {
     entries = await readdir(scenarioDir, {withFileTypes: true});
   } catch (_error) {
+    // No scenario dir: no event stream and no curated logs. The full logs
+    // live outside it, so the nodes the entry names still get windows.
+    if (retainLogWindows) {
+      await retainRunLogWindows(result, {scenarioDir, workspaceRoot, entry,
+        nodeIds: relevantNodeIds, playbackInsights: null, maxRetainedBytes});
+    }
     return result;
   }
 
@@ -103,6 +193,10 @@ async function collectScenarioLogArtifacts(
     playbackInsights,
   );
 
+  if (retainLogWindows) {
+    await retainRunLogWindows(result, {scenarioDir, workspaceRoot, entry,
+      nodeIds: preferredNodeIds, playbackInsights, maxRetainedBytes});
+  }
   await Promise.all(
     preferredNodeIds.map(async (nodeId) => {
       const filename = sanitizePathSegment(nodeId) + LOG_FILE_EXTENSION;
@@ -113,14 +207,14 @@ async function collectScenarioLogArtifacts(
           absolutePath,
           workspaceRoot,
         );
-        result.excerptsByNodeId[nodeId] = sliceLogTail(content);
         const decisionArtifacts =
           extractDecisionArtifactsFromLogContent(content);
         if (decisionArtifacts) {
           result.decisionArtifactsByNodeId[nodeId] = decisionArtifacts;
         }
       } catch (_error) {
-        // Best effort: missing per-node logs are allowed.
+        // The curated log is a sample used for paths and decision artifacts
+        // only; its absence is recorded by the full-log coverage above.
       }
     }),
   );

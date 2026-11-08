@@ -53,6 +53,7 @@ import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {PARTICIPATION_GATE} from
   '../../../src/raft/raft-committed-membership-constants.js';
 import {OperationType} from
@@ -190,11 +191,11 @@ async () => {
       replicaIdentity: source[0],
       peerAddress: addressOf(source),
     };
-    const refused = await restarted.raft.proposeConfChange(change);
+    const refused = await turnChainValue(restarted.raft.proposeConfChange(change));
     assert.equal(refused?.leaderReplicaId, harness.leader().replicaId,
       `the follower target refuses it typed, naming the leader (${
         JSON.stringify(refused)})`);
-    const proposal = await harness.leader().raft.proposeConfChange(change);
+    const proposal = await turnChainValue(harness.leader().raft.proposeConfChange(change));
     assert.equal(proposal?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       'REMOVE_PEER for the source is admissible on the leader ' +
       `(${JSON.stringify(proposal)})`);
@@ -245,7 +246,7 @@ async () => {
     for (const [replicaId] of [source, founderB]) {
       await harness.services.get(replicaId).shutdown();
     }
-    const campaign = await replaceTarget.raft.campaign();
+    const campaign = await turnChainValue(replaceTarget.raft.campaign());
     assert.equal(campaign?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `the target campaigned (${JSON.stringify(campaign)})`);
     const ledWithMinority = await waitFor(() =>
@@ -309,7 +310,7 @@ async () => {
         'sole voter');
     // Before its admission the target is below its participation gate: an
     // explicit campaign is refused typed and nothing is stepped (O1).
-    const campaign = await replaceTarget.raft.campaign();
+    const campaign = await turnChainValue(replaceTarget.raft.campaign());
     assert.equal(campaign?.reason, PARTICIPATION_GATE.GATE_CLOSED,
       `the unadmitted target's campaign is refused (${
         JSON.stringify(campaign)})`);
@@ -323,20 +324,20 @@ async () => {
 
     assert.equal(await admit(harness, target, [source]), true,
       'the sole voter admits the target');
-    const transfer = await sourceService.raft.transferLeadership({
+    const transfer = await turnChainValue(sourceService.raft.transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
       replicaIdentity: target[0],
-    });
+    }));
     assert.equal(transfer?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `leadership transfer to the target (${JSON.stringify(transfer)})`);
     assert.equal(await waitFor(() =>
       statusOf(replaceTarget).role === LEADER_ROLE), true,
     'the target leads the two-voter group');
-    const proposal = await replaceTarget.raft.proposeConfChange({
+    const proposal = await turnChainValue(replaceTarget.raft.proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
       replicaIdentity: source[0],
       peerAddress: addressOf(source),
-    });
+    }));
     assert.equal(proposal?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `REMOVE_PEER for the source (${JSON.stringify(proposal)})`);
     assert.equal(await waitFor(() => {

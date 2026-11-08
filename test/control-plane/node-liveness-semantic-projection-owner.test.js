@@ -1,8 +1,7 @@
 import {readFileSync} from 'node:fs';
 import {test} from '../../src/test-helpers/tap.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
-import {ControlPlaneReadinessService} from
-  '../../src/control-plane/control-plane-readiness-service.js';
+
 import {TABLES} from '../../src/constants/index.js';
 import {
   NODE_LIVENESS_SEMANTIC_STATE,
@@ -10,6 +9,7 @@ import {
 } from
   '../../src/control-plane/node-liveness-semantic-projection-owner.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const NOW_MS = 10_000;
 
 function buildOwnerFixture(options = {}) {
@@ -440,7 +440,7 @@ test('the real readiness service owns write-driven and time-only liveness ' +
       routerListenersByEvent.set(eventName, listeners);
     },
   };
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: 'node-local',
     systemTableCache: cache,
     timeSource,
@@ -733,7 +733,7 @@ test('readiness and planning callers contain no former local liveness clocks',
         /hasLeaseExpired|now\s*-\s*lastHeartbeat/u,
         /captureNodeLivenessSemanticIdentity/u],
       ['src/control-plane/control-plane-readiness-diagnostics-eligibility.js',
-        /normalizeDiagnosticTimestampMs|this\.now\(\)\s*-\s*lastSuccessAtMs/u,
+        /normalizeDiagnosticTimestampMs|(?:this|service)\.now\(\)\s*-\s*lastSuccessAtMs/u,
         /localReporterSemantics/u],
       ['src/control-plane/control-plane-readiness-evidence-reasons.js',
         /const graceMs\s*=\s*15000/u,

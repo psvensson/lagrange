@@ -1,5 +1,10 @@
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from
   './control-plane-readiness-planning-shared.js';
+import {readWiredCollaborator} from './control-plane-readiness-collaborators.js';
+import {
+  CONTROL_PLANE_READINESS_COLLABORATOR as COLLABORATOR,
+  CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED as UNWIRED,
+} from './control-plane-readiness-constants.js';
 import {
   attachFormationReleaseHandoffToStartupAuthority,
   validateFormationReleaseHandoffConsumerContract,
@@ -64,9 +69,6 @@ function formationReleaseLogSignature(handoff) {
 }
 
 function localConnectionIdentity(router) {
-  if (typeof router.getLocalBootIncarnationIdentity !== 'function') {
-    return null;
-  }
   return router.getLocalBootIncarnationIdentity();
 }
 
@@ -94,11 +96,8 @@ const formationReleaseMethods = {
   getFormationReleaseConnectionEvidence() {
     const evidence = [];
     const rows = this.getNodeRows();
-    const router = this.messageRouter;
-    if (
-      !arrayIsArray(rows) ||
-      typeof router?.getCurrentPrimaryConnectionBootIncarnation !== 'function'
-    ) {
+    const router = readWiredCollaborator(this, COLLABORATOR.MESSAGE_ROUTER);
+    if (!arrayIsArray(rows) || router === UNWIRED) {
       return evidence;
     }
     const localIdentity = localConnectionIdentity(router);

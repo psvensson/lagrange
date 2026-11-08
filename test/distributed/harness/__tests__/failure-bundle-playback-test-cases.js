@@ -1,3 +1,4 @@
+import {writeRunFullNodeLogs} from './failure-bundle-full-log-fixture.js';
 import {registerFailureBundlePlaybackStartupTests} from './failure-bundle-playback-startup-test-cases.js';
 
 export function registerFailureBundlePlaybackTests({
@@ -147,6 +148,7 @@ export function registerFailureBundlePlaybackTests({
     );
     const scenarioEntry = writer.scenarios[0];
 
+    await writeRunFullNodeLogs(scenarioDir, scenarioEntry, ['node-1', 'seed-1']);
     const {scenarioBundles, runBundle} = await writeFailureBundlesForReport({
       scenarios: writer.scenarios,
       reportOutputPath: state.reportPath,
@@ -498,6 +500,7 @@ export function registerFailureBundlePlaybackTests({
       buildPlaybackDerivedFailureResult(),
     );
 
+    await writeRunFullNodeLogs(scenarioDir, writer.scenarios[0], ['node-1']);
     const {scenarioBundles, runBundle} = await writeFailureBundlesForReport({
       scenarios: writer.scenarios,
       reportOutputPath: state.reportPath,

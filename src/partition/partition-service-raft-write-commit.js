@@ -24,6 +24,7 @@ import {PARTICIPANT_TRANSACTION_LOG_MSG} from
 import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork, cdcDrainAdmissionClass} from
   './partition-cdc-owed-admission.js';
 import {pausedWriteAnswerOf} from './partition-participant-transaction-pause.js';
+import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -84,7 +85,7 @@ async function proposeUnlessDeferred(service, entry) {
     PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED)) {
     return PROPOSAL_NOT_MADE;
   }
-  const proposed = await service.raft.propose(entry);
+  const proposed = await turnChainValue(service.raft.propose(entry));
   const admission = portDeferralOf(proposed);
   if (admission === null) {
     return proposed;

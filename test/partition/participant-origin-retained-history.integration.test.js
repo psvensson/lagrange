@@ -28,6 +28,7 @@ import {durableRecordBootstrap} from '../../src/raft/raft-committed-membership-s
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {createLoopbackTransport, waitForCondition} from './partition-service-test-support.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const NODE_ID = 'retained-origin-node';
 const TABLE_NAME = 'retained_origin_rows';
@@ -166,7 +167,7 @@ test('a real committed ENABLE remains pending through cold inspection and replay
     const first = new PartitionService(withFoundingStamp(options));
     services.push(first);
     await first.initialize();
-    await first.raft.campaign();
+    await turnChainValue(first.raft.campaign());
     assert.equal(first.raft.readStatus().role, RAFT_ROLE.LEADER);
     assert.equal(readPartitionWriteOrigin(first.db), null);
     const firstResources = {db: first.db, port: first.raft, handler: first.transportHandler};

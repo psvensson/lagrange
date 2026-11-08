@@ -9,9 +9,7 @@ import {
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   deriveMembershipPublicationCandidate,
 } from '../../src/control-plane/membership-publication-coordinator.js';
@@ -26,6 +24,10 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 
+import {
+  createReadinessServiceForTest,
+  readinessCollaboratorFake,
+} from '../helpers/readiness-service-fixture.js';
 const NOW_MS = 1000;
 const READY_LEASE_EXPIRES_AT_MS = 5000;
 
@@ -270,7 +272,7 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
       formationPlacementNodeIds: [],
     },
   };
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter,
@@ -345,11 +347,14 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
     readinessEntries,
   });
   readinessService.syncOwnerDependencies({
-    membershipPublicationService: {
-      deriveClusterMembershipCandidateSync() {
-        return planningCandidate;
+    membershipPublicationService: readinessCollaboratorFake(
+      'membershipPublicationService',
+      {
+        deriveClusterMembershipCandidateSync() {
+          return planningCandidate;
+        },
       },
-    },
+    ),
   });
   await drainReadinessPlanning(readinessService);
   t.same(
@@ -442,11 +447,14 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
   });
   readinessNowMs += 1;
   readinessService.syncOwnerDependencies({
-    membershipPublicationService: {
-      deriveClusterMembershipCandidateSync() {
-        return planningCandidate;
+    membershipPublicationService: readinessCollaboratorFake(
+      'membershipPublicationService',
+      {
+        deriveClusterMembershipCandidateSync() {
+          return planningCandidate;
+        },
       },
-    },
+    ),
   });
   await drainReadinessPlanning(readinessService);
   t.same(

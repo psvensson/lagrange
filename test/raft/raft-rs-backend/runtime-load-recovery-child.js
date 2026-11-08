@@ -11,6 +11,7 @@ import {setActualCoreEntryObserver, setCoreFaultInjector} from
   '../../../src/raft/raft-rs-runtime-owner.js';
 import {verifyRaftRsBinding} from '../../../src/raft/raft-rs-operation-port.js';
 import {RAFT_OPERATION_OUTCOME as OUTCOME} from '../../../src/raft/raft-operation-port-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {RAFT_RS_WASM_FILE, RAFT_RS_DIGEST_KEY, RAFT_RS_BINDING_STATE} from
   '../../../src/raft/raft-rs-core-constants.js';
 
@@ -56,8 +57,8 @@ try {
   const portB = b.node(b.replicaIds[0]);
   setActualCoreEntryObserver((entry) => receipt.entries.push(entry));
   for (const [group, port] of [[a, portA], [b, portB]]) {
-    assert.equal((await port.campaign()).outcome, OUTCOME.CORE_OK);
-    assert.equal((await port.propose(`before:${group.partitionId}`)).outcome, OUTCOME.CORE_OK);
+    assert.equal((await turnChainValue(port.campaign())).outcome, OUTCOME.CORE_OK);
+    assert.equal((await turnChainValue(port.propose(`before:${group.partitionId}`))).outcome, OUTCOME.CORE_OK);
     assert.equal(rows(group).length, 1, 'pre-fault data must be committed to a real SQLite file');
   }
   const initialA = await portA.readStatus();
@@ -84,7 +85,7 @@ try {
       throw new globalThis.WebAssembly.RuntimeError('injected native load-recovery witness');
     }
   });
-  assert.equal((await portA.propose('uncommitted-trap-command')).outcome, OUTCOME.CORE_FATAL);
+  assert.equal((await turnChainValue(portA.propose('uncommitted-trap-command'))).outcome, OUTCOME.CORE_FATAL);
   assert.equal(receipt.traps, 1);
   const entriesAtTrap = receipt.entries.length;
   if (scenario !== 'control') {
@@ -135,7 +136,7 @@ try {
     assert.equal(status.runtimeGeneration, before.runtimeGeneration + 1);
     assert.equal(status.peerId, before.peerId);
     assert.equal(status.replicaIdentity, before.replicaIdentity);
-    assert.equal((await port.propose(`after:${group.partitionId}`)).outcome, OUTCOME.CORE_OK);
+    assert.equal((await turnChainValue(port.propose(`after:${group.partitionId}`))).outcome, OUTCOME.CORE_OK);
     const committed = rows(group);
     assert.deepEqual(committed.map((row) => row.marker),
       [`before:${group.partitionId}`, `after:${group.partitionId}`],

@@ -232,7 +232,39 @@ const DEFAULT_CLUSTER_SIZE = 5;
 const DEFAULT_OUTPUT_DIR = 'test-output';
 const TIMELINE_FILENAME = '_timeline.log';
 const ANALYSIS_FILENAME = '_analysis.json';
-const CONTAINER_LOG_TAIL_LINES = 50;
+// A failure's container output echoed to stderr (a failed container start,
+// a cluster that never formed) is the last bytes of it: bytes, never lines,
+// so one huge line cannot flood stderr. The complete output is the full-log
+// capture under .full-logs (full-node-log-capture.js).
+const FAILURE_STDERR_LOG_TAIL_BYTES = 16384;
+// The cluster lifecycle's node actions (cluster-class-lifecycle-base.js). A
+// node the harness took down with one of HARNESS_STOP_ACTIONS falls silent
+// from that moment: the mark is a quiet bound for its log capture
+// (capture-quiet-bound.js).
+const NODE_LIFECYCLE_ACTION = Object.freeze({
+  KILL: 'killNode',
+  STOP: 'stopNode',
+  PAUSE: 'pauseNode',
+  UNPAUSE: 'unpauseNode',
+  RESTART: 'restartNode',
+  START: 'startNode',
+});
+const HARNESS_STOP_ACTIONS = Object.freeze([
+  NODE_LIFECYCLE_ACTION.KILL,
+  NODE_LIFECYCLE_ACTION.STOP,
+  NODE_LIFECYCLE_ACTION.PAUSE,
+]);
+// Where a node's capture quiet bound came from (capture-quiet-bound.js): the
+// earliest observed moment after which the node could produce no output.
+// HARNESS_STOP: the lifecycle's stop mark (the bound names the action);
+// CONTAINER_EXIT: Docker's observed State.FinishedAt for the container;
+// TEARDOWN: nothing earlier was observed, so the node was expected to log
+// until the harness finalized its capture.
+const CAPTURE_QUIET_BOUND_SOURCE = Object.freeze({
+  HARNESS_STOP: 'harness-stop',
+  CONTAINER_EXIT: 'container-exit',
+  TEARDOWN: 'teardown',
+});
 const PLAYBACK_EVENTS_FILENAME = 'events.ndjson';
 const PLAYBACK_SAMPLES_FILENAME = 'samples.ndjson';
 const PLAYBACK_SNAPSHOTS_FILENAME = 'snapshots.ndjson';
@@ -249,7 +281,6 @@ const OUTPUT = Object.freeze({
   DEFAULT_DIR: DEFAULT_OUTPUT_DIR,
   TIMELINE_FILENAME: TIMELINE_FILENAME,
   ANALYSIS_FILENAME: ANALYSIS_FILENAME,
-  CONTAINER_LOG_TAIL_LINES,
   PLAYBACK_EVENTS_FILENAME,
   PLAYBACK_SAMPLES_FILENAME,
   PLAYBACK_SNAPSHOTS_FILENAME,
@@ -870,6 +901,10 @@ const EXIT_CODES = Object.freeze({
 });
 
 export {
+  FAILURE_STDERR_LOG_TAIL_BYTES,
+  HARNESS_STOP_ACTIONS,
+  CAPTURE_QUIET_BOUND_SOURCE,
+  NODE_LIFECYCLE_ACTION,
   PORTS,
   REQUEST_CELL_AUTH,
   SCENARIO_ARTIFACTS,
@@ -888,7 +923,6 @@ export {
   NODE_ROLES,
   DEFAULT_CLUSTER_SIZE,
   OUTPUT,
-  CONTAINER_LOG_TAIL_LINES,
   DEBUG_TRACE_DEFAULTS,
   LEAK_DEFAULTS,
   BENCHMARK_DEFAULTS,

@@ -32,6 +32,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {withRegisteredIncarnations} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 const FAKE_NOW_MS = 1_800_000_000_000;
 const READY_LEASE_EXPIRES_AT_MS = FAKE_NOW_MS + 600_000;
@@ -145,7 +146,7 @@ function buildReadiness(nodeId) {
   };
 }
 
-function createReadinessService() {
+function createReadinessService(clock) {
   const publicationRow = {
     status: 'PUBLISHED',
     priorityPartitionSummary: {
@@ -153,7 +154,7 @@ function createReadinessService() {
       blockedPartitions: buildOpenSpreadBlocker().blockedPartitions,
     },
   };
-  return {
+  return partialReadinessFake({
     getNodeReadinessSync: buildReadiness,
     membershipPublicationService: {
       getLatestClusterPublicationSync: () => publicationRow,
@@ -169,7 +170,7 @@ function createReadinessService() {
         canonicalStartupNodeIds: [...STARTUP_AUTHORITY_NODE_IDS],
       };
     },
-  };
+  }, clock);
 }
 
 function createCoordinator() {
@@ -202,6 +203,7 @@ function createRebalancer(
   entityId = PRIORITY_PARTITION_ID,
   options = {},
 ) {
+  const ownerClock = () => FAKE_NOW_MS;
   const rebalancer = new UnifiedRebalancer({
     entityId,
     entityType: EntityType.PARTITION,
@@ -228,8 +230,8 @@ function createRebalancer(
         return {success: true, rows: []};
       },
     },
-    controlPlaneReadinessService: createReadinessService(),
-    nowFn: () => FAKE_NOW_MS,
+    controlPlaneReadinessService: createReadinessService(ownerClock),
+    nowFn: ownerClock,
     randomSource: {random: () => 0},
   });
   rebalancer.getControlPlanePrioritySpreadBlocker = buildOpenSpreadBlocker;

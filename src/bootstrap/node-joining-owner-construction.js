@@ -314,16 +314,10 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         isDistributedTransactionRecoveryAvailable: () =>
           typeof this.sqlQueryEngine
             ?.activateDistributedTransactionRecovery === 'function',
-        activateDistributedTransactionRecovery: () => {
-          const sqlQueryEngine = this.sqlQueryEngine;
-          if (
-            typeof sqlQueryEngine?.activateDistributedTransactionRecovery !==
-            'function'
-          ) {
-            return;
-          }
-          return sqlQueryEngine.activateDistributedTransactionRecovery();
-        },
+        // Asked only once isDistributedTransactionRecoveryAvailable answered
+        // in the same call: the engine's replay promise.
+        activateDistributedTransactionRecovery: () =>
+          this.sqlQueryEngine.activateDistributedTransactionRecovery(),
         flushDeferredCreateSelfHostedMetadata: () => {
           if (
             typeof this.createMessageGroupPhase

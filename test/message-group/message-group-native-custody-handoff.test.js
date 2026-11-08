@@ -36,6 +36,7 @@ import {LatencyTreeService} from '../../src/topology/latency-tree-service.js';
 import {LATENCY_TREE_STATE} from '../../src/topology/latency-tree-constants.js';
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from '../partition/partition-release-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {emit, pump, recipientFixture, view, NODE_ID, GROUP_ID} from
   './message-group-native-custody-fixture.js';
 
@@ -302,7 +303,7 @@ function observeSurvivorTiming(t, survivors) {
 
 async function tickSurvivors(survivors, round, answers) {
   for (const survivor of survivors) {
-    const answer = await survivor.raft.tick();
+    const answer = await turnChainValue(survivor.raft.tick());
     answers.push({round, replicaId: survivor.replicaId, answer});
   }
 }

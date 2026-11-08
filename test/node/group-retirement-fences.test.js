@@ -71,6 +71,7 @@ import {
   nextTurns,
   openGroupWorld,
 } from './group-retirement-as-a-unit-fixture.js';
+import {settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
 
 const GROUP_RETIRED = 'group-retired';
 const WORKFLOW_ID = 'wf-fence-1';
@@ -222,7 +223,7 @@ function serviceOf(partitionId, tablesRow) {
       },
       proposeConfChange: (change) => {
         portCalls.push(change.type);
-        return {outcome: 'CORE_OK'};
+        return settledTurn({outcome: 'CORE_OK'});
       },
     },
   }};
@@ -239,7 +240,8 @@ test('G2b-A the partition\'s conf-change admission refuses every membership ' +
     'typed: the group is retiring');
   const removed = proposePeerRetirement(retiring.service, {
     type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: 'm2'});
-  t.equal(removed.reason, RAFT_MEMBERSHIP_CHANGE_REFUSAL.GROUP_RETIRING,
+  t.equal(removed.settled, true, 'the refusal is settled within the call');
+  t.equal(removed.result.reason, RAFT_MEMBERSHIP_CHANGE_REFUSAL.GROUP_RETIRING,
     'a row-driven REMOVE_PEER is refused');
   const retired = await retirePartitionRaftPeer(retiring.service, 'm3');
   t.equal(retired.reason, RAFT_MEMBERSHIP_CHANGE_REFUSAL.GROUP_RETIRING,

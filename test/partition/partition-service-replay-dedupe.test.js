@@ -7,12 +7,13 @@ import {readCommittedStatementOutcome} from
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 // A committed entry reaches the application through the partition's own
 // port: a lone rs-raft leader commits and applies its proposal before
 // propose() returns, and an application failure is a non-OK outcome.
 async function commitThroughPort(partition, command) {
-  return (await partition.raft.propose(command)).outcome;
+  return (await turnChainValue(partition.raft.propose(command))).outcome;
 }
 
 test('PartitionService skips replayed committed entries when entryId is stable',

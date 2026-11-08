@@ -73,6 +73,7 @@ import {
   resumeFixtureParticipantAdmission,
   resumeFixtureParticipantGroupAdmission,
 } from '../test-helpers/participant-transaction-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const TEMP_PREFIX = 'committed-statement-outcome-';
 const DB_FILE = 'partition.sqlite';
@@ -656,8 +657,8 @@ test('B5: a committed entry with an unknown type (proposed straight through ' +
       const partition = await open();
       assert.equal((await insert(partition, 'row-0', 'setup', 'e-setup'))
         .success, true, 'setup: the partition serves a write');
-      await partition.raft.propose({
-        type: 'BOGUS', sql: INADMISSIBLE_SQL, entryId: 'e-direct'});
+      await turnChainValue(partition.raft.propose({
+        type: 'BOGUS', sql: INADMISSIBLE_SQL, entryId: 'e-direct'}));
       const status = partition.raft.readStatus();
       assert.equal(status.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE,
         `readStatus is the group's host failure (${JSON.stringify(status)})`);
@@ -756,7 +757,7 @@ test('U1: a committed SQL command without an entryId (proposed straight ' +
         setupApplied)), true, 'setup: every replica applied the setup write');
     const before = services.map((service, index) => stateOf(index));
 
-    await services[0].raft.propose(unkeyedInsert());
+    await turnChainValue(services[0].raft.propose(unkeyedInsert()));
     const failed = await waitFor(() => services.every((service) =>
       service.raft.readStatus().outcome ===
         RAFT_OPERATION_OUTCOME.HOST_FAILURE));
@@ -787,7 +788,7 @@ test('U2: the unkeyed committed command refuses the restart with the same ' +
       assert.equal((await insert(partition, 'row-0', 'setup', 'u2-setup'))
         .success, true, 'setup: the partition serves a keyed write');
       const before = unkeyedStateOf(partition, dbPath, 'u2-unkeyed');
-      await partition.raft.propose(unkeyedInsert());
+      await turnChainValue(partition.raft.propose(unkeyedInsert()));
       assertEntryIdMissingFailure(partition.raft.readStatus(), 'u2-unkeyed');
       assert.deepEqual(unkeyedStateOf(partition, dbPath, 'u2-unkeyed'), before,
         'no row, no outcome row, no CDC obligation, the applied index ' +

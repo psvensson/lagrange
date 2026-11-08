@@ -16,6 +16,7 @@ import {RUNTIME_PHASE} from '../../../src/raft/raft-rs-runtime-owner-constants.j
 import {setActualCoreEntryObserver, setCoreFaultInjector,
   setNativeInboundStageObserver} from '../../../src/raft/raft-rs-runtime-owner.js';
 import {PARTITION_TIMING, PartitionNodeCluster} from './partition-node-cluster.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const REPLICAS = ['w07-a', 'w07-b', 'w07-c'];
 const [A, B, C] = REPLICAS;
@@ -152,7 +153,7 @@ function installObservers(f, fault = () => undefined) {
 
 function deliver(f, ordinal) {
   const envelopeHash = hash(f.heartbeat);
-  const result = f.cluster.node(B).step(f.heartbeat);
+  const result = turnChainValue(f.cluster.node(B).step(f.heartbeat));
   f.events.push({kind: 'delivery', ordinal,
     provenance: ordinal === 1 ? 'captured-native-heartbeat' :
       'deliberate-exact-duplicate', envelopeHash, result});
@@ -225,12 +226,12 @@ async function serviceCase(t, arrivals) {
     f.control.hold = (packet) => (f.gates.length === 0 &&
       packet.message.msgType === RAFT_RS_MESSAGE_TYPE.PROPOSE) ||
       packet.message.msgType === RAFT_RS_MESSAGE_TYPE.HEARTBEAT_RESPONSE;
-    const first = own(f, f.cluster.node(B).propose(predecessor));
+    const first = own(f, turnChainValue(f.cluster.node(B).propose(predecessor)));
     await observe(() => f.gates.length === 1, 'predecessor native forwarding is held');
     assert.ok(proposalEntry(f, predecessor));
     f.events.push({kind: 'measurement-cut', arrivals, serviceBound: SERVICE_BOUND,
       predecessor: 'core-entered, Ready awaits its native forwarded send'});
-    const queued = own(f, f.cluster.node(B).propose(selected));
+    const queued = own(f, turnChainValue(f.cluster.node(B).propose(selected)));
     if (arrivals > 0) deliver(f, 1);
     f.gates[0].resolve();
     const predecessorResult = await first;
@@ -309,7 +310,7 @@ test('W07 replacement: suspended invocation cannot enter the replacement generat
     f.control.hold = (packet) => f.gates.length === 0 &&
       packet.message.msgType === RAFT_RS_MESSAGE_TYPE.HEARTBEAT_RESPONSE;
     deliver(f, 1);
-    const pending = own(f, f.cluster.node(B).propose(selected));
+    const pending = own(f, turnChainValue(f.cluster.node(B).propose(selected)));
     await observe(() => f.gates.length === 1, 'old generation native response held');
     const originalGeneration = steps(f)[0].runtimeGeneration;
     deliver(f, 2);
@@ -373,7 +374,7 @@ test('W07 refusal: a native per-message refusal preserves the preaccepted tail',
     f.cluster.node(A).step(accepted);
     f.cluster.node(A).readStatus();
     const tail = {w07: 'preaccepted-tail'};
-    await f.cluster.node(B).propose(tail);
+    await turnChainValue(f.cluster.node(B).propose(tail));
     const forwarded = f.cluster.replica(A).inbox.splice(0).find((envelope) =>
       envelope.message.msgType === RAFT_RS_MESSAGE_TYPE.PROPOSE);
     assert.ok(forwarded, 'setup: actual follower proposal');
@@ -381,9 +382,9 @@ test('W07 refusal: a native per-message refusal preserves the preaccepted tail',
     const selected = {w07: 'after-refused-and-valid-preaccepted'};
     f.events.push({kind: 'measurement-cut', nativeOrigin: [refused, forwarded]});
     for (const envelope of [refused, forwarded]) {
-      assert.equal(f.cluster.node(A).step(envelope).outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+      assert.equal(f.cluster.node(A).step(envelope).result.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     }
-    const result = await own(f, f.cluster.node(A).propose(selected));
+    const result = await own(f, turnChainValue(f.cluster.node(A).propose(selected)));
     f.events.push({kind: 'measurement-end', result});
     assert.equal(result.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     const entered = f.events.filter((event) => event.kind === 'core-step');

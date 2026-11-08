@@ -130,7 +130,7 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
-  'src/control-plane/control-plane-readiness-publication-aware.js': Object.freeze({
+  'src/control-plane/control-plane-readiness-priority-recovery-planning.js': Object.freeze({
     requiredFragments: Object.freeze([
       'filterPriorityRecoveryReasonCodesForPublicationGate',
     ]),
@@ -143,7 +143,7 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
         ]),
       }),
       Object.freeze({
-        functionName: 'buildPriorityRecoveryPlanningProjection',
+        functionName: 'buildPriorityRecoveryPlanningProjectionUntracked',
         requiredFragments: Object.freeze([
           'filterPriorityRecoveryReasonCodesForPublicationGate',
           'publicationRecoveryGate',

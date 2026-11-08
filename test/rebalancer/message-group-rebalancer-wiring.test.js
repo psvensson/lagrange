@@ -14,6 +14,10 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {
+  createReadinessServiceForTest,
+  withNodeReadinessService,
+} from '../helpers/readiness-service-fixture.js';
 
 function createMockCache({
   nodes = [],
@@ -40,6 +44,10 @@ function createMockCache({
 
 function createMockCoordinator() {
   return {
+    // The node coordinator carries the node's one readiness service.
+    controlPlaneReadinessService: createReadinessServiceForTest({
+      nodeId: 'node-1',
+    }),
     getMoveSafetyError: () => null,
     createOperation: async (move) => ({
       operationId: 'op-' + Date.now(),
@@ -91,7 +99,7 @@ test('Task 6 - message-group rebalancer wiring', async (t) => {
   });
 
   await t.test('message-group replica discovery reads services rows', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
       entityId: 'mg-1',
       entityType: EntityType.MESSAGE_GROUP,
       nodeId: 'node-1',
@@ -140,7 +148,7 @@ test('Task 6 - message-group rebalancer wiring', async (t) => {
         isOutboundQueueAvailable: () => true,
       },
       rebalanceCoordinator: createMockCoordinator(),
-    });
+    }));
 
     const replicas = rebalancer.getCurrentReplicas();
     t.equal(replicas.length, 2, 'should discover replicas from services rows');
@@ -153,7 +161,7 @@ test('Task 6 - message-group rebalancer wiring', async (t) => {
   });
 
   await t.test('message-group in-flight operations use canonical entity identity', async (t) => {
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
       entityId: 'mg-1',
       entityType: EntityType.MESSAGE_GROUP,
       nodeId: 'node-1',
@@ -201,7 +209,7 @@ test('Task 6 - message-group rebalancer wiring', async (t) => {
         isOutboundQueueAvailable: () => true,
       },
       rebalanceCoordinator: createMockCoordinator(),
-    });
+    }));
 
     const inFlight = rebalancer.getInFlightOperations();
     t.equal(inFlight.length, 1, 'should include in-flight op for this message group');

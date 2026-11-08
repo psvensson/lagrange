@@ -51,19 +51,13 @@ const entrypointArgs = process.argv.slice(2);
 const isServiceCommand = entrypointArgs[0] === 'service';
 
 if (isServiceCommand) {
-  const serviceCommandResult = runServiceCommand(entrypointArgs.slice(1));
-  if (serviceCommandResult &&
-      typeof serviceCommandResult.then === 'function') {
-    serviceCommandResult.then(
-      (exitCode) => process.exit(exitCode),
-      (error) => {
-        console.error(`${ENTRYPOINT_TEXT.FATAL_ERROR_PREFIX}`, error);
-        process.exit(1);
-      },
-    );
-  } else {
-    process.exit(serviceCommandResult);
-  }
+  runServiceCommand(entrypointArgs.slice(1)).then(
+    (exitCode) => process.exit(exitCode),
+    (error) => {
+      console.error(`${ENTRYPOINT_TEXT.FATAL_ERROR_PREFIX}`, error);
+      process.exit(1);
+    },
+  );
 } else if (checkVersionFlag(entrypointArgs)) {
   process.exit(0);
 } else {

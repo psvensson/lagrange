@@ -17,6 +17,7 @@ import {ReplicaOperationField} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {
   createMockCache,
   createMockControlPlaneSystemTableGateway,
@@ -110,7 +111,7 @@ function createEpochCoordinator({
     transactionCoordinator: createMockTransactionCoordinator(),
     systemTableCache,
     cdcIntegrationService: {async waitForCacheUpdate() {}},
-    controlPlaneReadinessService: {
+    controlPlaneReadinessService: readinessServiceFake({
       getCurrentPublishedMembershipEpochSync(nodeId, observedAt) {
         return readCurrentPublishedEpoch ?
           readCurrentPublishedEpoch(nodeId, observedAt) :
@@ -119,7 +120,7 @@ function createEpochCoordinator({
       getNodeReadinessSync(nodeId) {
         return {nodeId, dimensions: {repairEligible: true}};
       },
-    },
+    }),
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine: engine,

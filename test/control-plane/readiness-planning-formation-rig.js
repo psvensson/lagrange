@@ -15,11 +15,11 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
-import {ControlPlaneReadinessService} from
-  '../../src/control-plane/control-plane-readiness-service.js';
+
 import {MembershipPublicationCoordinator} from
   '../../src/control-plane/membership-publication-coordinator.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const NODE_COUNT = 5;
 const PARTITION_ID = 'priority-partition';
 const RATE_CALL_COUNT = 1000;
@@ -145,7 +145,7 @@ function createFormationShapedCache(nowMs) {
 function driveFormationShapedChurn() {
   let clock = T0;
   const cache = createFormationShapedCache(T0);
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: 'node-0',
     systemTableCache: cache,
     now: () => clock,
@@ -240,7 +240,6 @@ function driveFormationShapedChurn() {
   }
   return {heavyBuilds, publicationWinnerReads};
 }
-
 
 export {
   MS_PER_SECOND,

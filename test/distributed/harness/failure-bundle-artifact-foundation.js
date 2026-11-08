@@ -25,7 +25,81 @@ export const ANALYSIS_FILENAME = '_analysis.json';
 export const UTF8_ENCODING = 'utf8';
 export const ZERO = 0;
 export const ARRAY_LAST_INDEX_OFFSET = 1;
-export const LOG_TAIL_LINE_COUNT = 20;
+// The coverage record every retained node-log window carries. A bundle keeps,
+// per node, a window of the node's FULL log (.full-logs/<scenario>/<nodeId>
+// .log.gz, the complete source; failure-bundle-log-window.js retains it)
+// bounded in BYTES (never lines: a newline-free log cannot defeat a byte
+// bound). The window starts just past the last line stamped before the run's
+// first divergence when the scenario knows it (bytes of unknown placement are
+// kept, never excluded), else it is the last MAX_RETAINED_BYTES of the log.
+// The record states which source bytes it kept (windowStartByte..
+// windowEndByte), how much of the failure window it withheld, the capture
+// owner's verdict on the source (captureCompleteness, from
+// full-node-log-capture.js assessCaptureCompleteness, carried through the
+// report entry's captureCompletenessByNodeId, never re-derived here), and
+// names its source; `complete` is true only when the capture is complete AND
+// nothing of the failure window was withheld. A node whose full log is
+// missing, unreadable or empty gets a record with retainedBytes 0,
+// withheldBytes null (unknown) and a missingReason: absent evidence never
+// acquits. Any incomplete record makes the bundle non-measuring
+// (validation-matrix.js SCENARIO_VERDICT_REASON.LOG_WINDOW_COVERAGE_INCOMPLETE)
+// and the bundle publishes WITHHELD in place of every verdict field
+// (failure-bundle-scenario-assembly.js withholdVerdictForIncompleteCoverage).
+// A scenario's config entry (config.scenarios[<name>][SCENARIO_CONFIG_KEY])
+// overrides the per-node byte bound.
+//
+// Size constants, side by side:
+// - MAX_RETAINED_BYTES (4 MiB/node): the evidence kept in failure-bundle.json,
+//   once (logs.excerptsByNodeId); large enough for minutes of pino output
+//   after divergence, small enough that a 5-node bundle stays ~20 MB.
+// - MARKDOWN_EXCERPT_BYTES (64 KiB/node, head and tail halves): what the
+//   human-read markdown shows of each window; the record and the JSON path
+//   point at the whole window, so the markdown never repeats megabytes.
+export const LOG_WINDOW_COVERAGE = Object.freeze({
+  MAX_RETAINED_BYTES: 4 * 1024 * 1024,
+  MARKDOWN_EXCERPT_BYTES: 64 * 1024,
+  SCENARIO_CONFIG_KEY: 'logWindowMaxRetainedBytes',
+  RECORD_FIELDS: Object.freeze([
+    'firstDivergenceAt',
+    'windowStartAt',
+    'windowEndAt',
+    'windowStartByte',
+    'windowEndByte',
+    'retainedBytes',
+    'withheldBytes',
+    'complete',
+    'captureCompleteness',
+    'source',
+    'missingReason',
+  ]),
+  MISSING_REASON: Object.freeze({
+    FULL_LOG_MISSING: 'full_node_log_missing',
+    FULL_LOG_UNREADABLE: 'full_node_log_unreadable',
+    FULL_LOG_EMPTY: 'full_node_log_empty',
+  }),
+  // A bundle that names no node log to examine. RUN_CREATED_NO_NODE: the
+  // run's own event stream was read and created no node, so there is nothing
+  // to examine and nothing withheld (complete). NODE_IDS_UNKNOWN: no event
+  // stream and nothing else names a node; absence proves nothing
+  // (non-measuring).
+  NO_NODES_NAMED: Object.freeze({
+    RUN_CREATED_NO_NODE: 'run_created_no_node',
+    NODE_IDS_UNKNOWN: 'node_ids_unknown',
+  }),
+  // The value a non-measuring bundle publishes in place of every verdict
+  // field derived from what it saw (dominant reason, root cause class,
+  // failure class, first-fault reason).
+  WITHHELD: 'withheld_log_window_coverage_incomplete',
+  INCOMPLETE_GUIDANCE: Object.freeze({
+    failureAction:
+      'Non-measuring: the retained node-log windows do not cover first ' +
+      'divergence to the end of the run, so no dominant reason is derived ' +
+      'from the part the bundle saw.',
+    operatorRecommendation:
+      'Read the withheld span in the full per-node logs ' +
+      '(.full-logs/<scenario>/) before attributing this failure.',
+  }),
+});
 export const MARKDOWN_SECTION_BREAK = '\n\n';
 export const UNKNOWN_VALUE = 'unknown';
 export const NO_PROGRESS_REASON_CODE = 'stalled_no_progress';
@@ -343,11 +417,117 @@ export function sanitizePathSegment(value, fallback = UNKNOWN_VALUE) {
   return normalized.length > ZERO ? normalized : fallback;
 }
 
-export function sliceLogTail(logContent, maxLines = LOG_TAIL_LINE_COUNT) {
-  const lines = String(logContent || '')
-    .split('\n')
-    .filter((line) => line.length > ZERO);
-  return lines.slice(-Math.max(1, maxLines));
+/**
+ * One line naming a bundle's coverage verdict and, when incomplete, the
+ * withheld byte count and the nodes that withheld it.
+ * @param {Object} logWindowCoverage summarizeLogWindowCoverage's result.
+ * @return {string}
+ */
+export function formatLogWindowCoverageVerdict(logWindowCoverage) {
+  if (!isRecord(logWindowCoverage)) {
+    return 'no coverage recorded';
+  }
+  if (logWindowCoverage.noNodesNamed !== null) {
+    return logWindowCoverage.complete === true ?
+      `complete: no node log to examine (${logWindowCoverage.noNodesNamed})` :
+      'INCOMPLETE, non-measuring: no node log examined ' +
+      `(${logWindowCoverage.noNodesNamed})`;
+  }
+  if (logWindowCoverage.complete === true) {
+    return `complete (${logWindowCoverage.retainedBytes} bytes retained)`;
+  }
+  const parts = [];
+  if (logWindowCoverage.withheldNodeIds.length > ZERO) {
+    parts.push(`${logWindowCoverage.withheldBytes} bytes withheld ` +
+      `(nodes: ${logWindowCoverage.withheldNodeIds.join(', ')})`);
+  }
+  if (logWindowCoverage.missingNodeIds.length > ZERO) {
+    parts.push('full log missing, empty or unreadable, withheld bytes ' +
+      `unknown (nodes: ${logWindowCoverage.missingNodeIds.join(', ')})`);
+  }
+  if (logWindowCoverage.captureIncompleteNodeIds.length > ZERO) {
+    parts.push('capture incomplete per the capture owner (nodes: ' +
+      `${logWindowCoverage.captureIncompleteNodeIds.join(', ')})`);
+  }
+  return `INCOMPLETE, non-measuring: ${parts.join('; ')}`;
+}
+
+/**
+ * The per-node byte bound for one scenario: its config override when it is
+ * a non-negative integer, else LOG_WINDOW_COVERAGE.MAX_RETAINED_BYTES.
+ * @param {?Object} scenarioConfig config.scenarios[<scenario name>].
+ * @return {number}
+ */
+export function resolveLogWindowMaxRetainedBytes(scenarioConfig) {
+  const override = isRecord(scenarioConfig) ?
+    scenarioConfig[LOG_WINDOW_COVERAGE.SCENARIO_CONFIG_KEY] :
+    undefined;
+  return Number.isInteger(override) && override >= ZERO ?
+    override :
+    LOG_WINDOW_COVERAGE.MAX_RETAINED_BYTES;
+}
+
+function foldCoverageRecord(totals, nodeId, record, nodeIdLists) {
+  totals.retainedBytes += record.retainedBytes;
+  if (record.missingReason !== null) {
+    nodeIdLists.missingNodeIds.push(nodeId);
+  } else if (record.withheldBytes > ZERO) {
+    totals.withheldBytes += record.withheldBytes;
+    nodeIdLists.withheldNodeIds.push(nodeId);
+  }
+  if (record.captureCompleteness?.complete !== true) {
+    nodeIdLists.captureIncompleteNodeIds.push(nodeId);
+  }
+  if (record.complete !== true) {
+    nodeIdLists.incompleteNodeIds.push(nodeId);
+  }
+}
+
+/**
+ * Fold per-node coverage records into the bundle's coverage verdict input.
+ * withheldBytes sums the known withheld bytes; nodes whose full log is
+ * missing, unreadable or empty are named in missingNodeIds (their withheld
+ * amount is unknown); nodes whose capture the capture owner judged
+ * incomplete are named in captureIncompleteNodeIds.
+ * @param {Object<string, Object>} coverageByNodeId
+ * @param {{nodeIdsKnown?: boolean}} [options] nodeIdsKnown: the run's own
+ *   event stream was read, so an empty record set means it created no node.
+ * @return {{complete: boolean, noNodesNamed: ?string, withheldBytes: number,
+ *   retainedBytes: number, incompleteNodeIds: Array<string>,
+ *   withheldNodeIds: Array<string>, missingNodeIds: Array<string>,
+ *   captureIncompleteNodeIds: Array<string>}}
+ */
+export function summarizeLogWindowCoverage(coverageByNodeId,
+  {nodeIdsKnown = false} = {}) {
+  const records = isRecord(coverageByNodeId) ?
+    Object.entries(coverageByNodeId) :
+    [];
+  const totals = {withheldBytes: ZERO, retainedBytes: ZERO};
+  const incompleteNodeIds = [];
+  const withheldNodeIds = [];
+  const missingNodeIds = [];
+  const captureIncompleteNodeIds = [];
+  for (const [nodeId, record] of records) {
+    foldCoverageRecord(totals, nodeId, record, {
+      incompleteNodeIds, withheldNodeIds, missingNodeIds,
+      captureIncompleteNodeIds,
+    });
+  }
+  const {withheldBytes, retainedBytes} = totals;
+  const noNodesNamed = records.length > ZERO ? null : nodeIdsKnown ?
+    LOG_WINDOW_COVERAGE.NO_NODES_NAMED.RUN_CREATED_NO_NODE :
+    LOG_WINDOW_COVERAGE.NO_NODES_NAMED.NODE_IDS_UNKNOWN;
+  return {
+    complete: incompleteNodeIds.length === ZERO &&
+      noNodesNamed !== LOG_WINDOW_COVERAGE.NO_NODES_NAMED.NODE_IDS_UNKNOWN,
+    noNodesNamed,
+    withheldBytes,
+    retainedBytes,
+    incompleteNodeIds: incompleteNodeIds.sort(),
+    withheldNodeIds: withheldNodeIds.sort(),
+    missingNodeIds: missingNodeIds.sort(),
+    captureIncompleteNodeIds: captureIncompleteNodeIds.sort(),
+  };
 }
 
 export function parseStructuredLogLine(line) {

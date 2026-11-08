@@ -16,6 +16,12 @@ quests:
   - readiness-service-constructor-injection
   - partition-service-constructor-injection
   - system-table-row-decoders
+  - system-table-decoded-reads-rebalancer
+  - system-table-decoded-reads-control-plane
+  - system-table-decoded-reads-node
+  - system-table-decoded-reads-admin
+  - system-table-decoded-reads-query
+  - system-table-decoded-reads-partition
   - source-directory-owner-index
   - source-directory-file-cap
   - failure-bundle-evidence-completeness
@@ -79,6 +85,13 @@ Change a number here and in the budget script together, never in one place.
 | `inheritance_depth_over_two_readiness` | the same, among the control-plane readiness classes (nine `extends` today) | 7 | 0 |
 | `row_field_alias_reads` | in a flattened `\|\|` or `??` chain, an adjacent pair reading the same object (structural identity, optionally chained) under two spellings of one field name that differ but normalise equal (plain, string-literal key, or any constants object's member such as `COLUMN.NODE_ID`); one count per such pair | 745 | cap 745 |
 | `formation_system_tables_without_decoder` | of `services`, `nodes`, `replica_operations`, tables with no module `<table>-row-decoder.js` exporting `decode<Table>Row` | 3 | 0 |
+| `system_table_raw_column_reads_outside_decoder` | reads of a `services`, `nodes` or `replica_operations` own column (raw name or `COLUMN` constant) outside that table's decoder module and its write builders, every src directory group counted once | measured at the land of `system-table-row-decoders` (one-way cap) | at cap |
+| `system_table_raw_column_reads_outside_decoder_rebalancer` | the same, in src/rebalancer | measured at the land of `system-table-row-decoders` | 0 |
+| `system_table_raw_column_reads_outside_decoder_control-plane` | the same, in src/control-plane and src/bootstrap | measured at the land of `system-table-row-decoders` | 0 |
+| `system_table_raw_column_reads_outside_decoder_node` | the same, in src/node | measured at the land of `system-table-row-decoders` | 0 |
+| `system_table_raw_column_reads_outside_decoder_admin` | the same, in src/admin, src/cli, src/cdc and src/cache | measured at the land of `system-table-row-decoders` | 0 |
+| `system_table_raw_column_reads_outside_decoder_query` | the same, in src/query, src/topology, src/message-group, src/wasm-service and src/runtime | measured at the land of `system-table-row-decoders` | 0 |
+| `system_table_raw_column_reads_outside_decoder_partition` | the same, in src/partition | measured at the land of `system-table-row-decoders` | 0 |
 | `state_read_defaults` | in a flattened `\|\|` or `??` chain, a read of `status`, `role`, `raft_role`/`raftRole`, `workflow_step`/`workflowStep`, `phase` or `step` (plain, string-literal key, or any constants object's member named STATUS, ROLE, RAFT_ROLE, WORKFLOW_STEP, PHASE or STEP, optionally chained) that has a term after it; one count per such read | 413 | 0 |
 | `value_or_promise_then_checks` | a promise-shape probe at a call site: `typeof x.then` or `x.catch` (optionally chained) compared with `===`/`!==`, a truthiness test on `.then`/`.catch` as the test of a conditional or if, or `instanceof Promise`; excluded are only the sites inside a function named `turnFromForeignAnswer` in the file `src/raft/raft-rs-turn-answer.js` (the designated foreign-answer adapter; path and function both, never a basename) | 45 | 0 |
 | `source_directories_over_cap` | `src` directories with more than 120 `.js` files directly inside | 4 | 0 |
@@ -142,8 +155,11 @@ They are recorded, not in scope (R17); the readiness chain is the pilot.
    promote to ESLint.
 4. `readiness-service-constructor-injection`, then
    `partition-service-constructor-injection`.
-5. `system-table-row-decoders`, `source-directory-owner-index`,
-   `failure-bundle-evidence-completeness` in any order.
+5. `system-table-row-decoders` (the three decoders, the folded normalisers and
+   the measuring rows), `source-directory-owner-index`,
+   `failure-bundle-evidence-completeness` in any order; then the six
+   `system-table-decoded-reads-*` quests in parallel, one directory group
+   each, `-partition` after `partition-service-constructor-injection`.
 6. `fallback-branch-coverage-census` after step 2, then
    `dead-fallback-retirement` and `live-dual-path-classification` in parallel,
    owner by owner (readiness, partition, raft first).
@@ -228,3 +244,59 @@ They are recorded, not in scope (R17); the readiness chain is the pilot.
   chain was repaired first at c0c2a8ad6 (import-graph producer: a module
   resolving outside the repository root is never a node); the budget-check
   quest landed on it as 86ee709c8.
+- 2026-11-08: always-promise ruling. Two probes by the implementer showed that
+  an always-asynchronous raft turn changes raft timing (status reads see
+  delivered inbound later; the synchronous evidence harnesses break). The
+  pattern is feature detection on the answer, so the replacement is a named
+  settled-or-pending answer produced once at the producer (R07) for
+  synchronous-when-possible turns, always-promise for I/O producers, and a
+  registration-time apply-mode declaration instead of per-entry sniffing.
+  The row definition widens to the variant shapes (`?.then`, `.catch`,
+  truthiness on `.then`, `instanceof Promise`) in a budget-check correction.
+- 2026-11-08: readiness injection rulings. Four owners (RebalanceCoordinator,
+  UnifiedRebalancer, ReplicaDispatchService, StorageAdmissionService) built a
+  private readiness service when none was injected: a hidden second authority
+  (R01, R03) that the quest removes by injecting the node's service and
+  sweeping the test construction sites through one fixture helper. Late-bound
+  collaborators are wired at one validated point; a read before wiring is a
+  named unavailable state. Routed finding (R17): the unawaited best-effort
+  planning read consumed as a snapshot, quest
+  `priority-recovery-owner-read-snapshot-await` (class fix).
+- 2026-11-08 (lead decision, supersedes one clause of the readiness injection
+  ruling above, R09 recorded): re-wiring a late-bound collaborator through
+  `syncOwnerDependencies` IS a production path (control-plane-setup, the
+  heartbeat service, the coordinator lifecycle and the SQL-runtime handoff each
+  wire different fields at different times, and the storage-accounting
+  replacement already has a named semantic-owner replacement step). A second
+  wiring is therefore not refused: every wiring validates the collaborator's
+  interface once at that point (a malformed one is a typed refusal), a
+  replacement is the named transition that clears the owner's derived memos,
+  and a read before wiring answers a named unavailable state. The sealed
+  constraint behaviour-unchanged outranks the earlier wording.
+- 2026-11-08 (lead decision, 21:40 CET): `system-table-row-decoders` split.
+  The implementer's census found the sealed quest to be a migration of about
+  200 files through the join, readiness and rebalance core, and that its probe
+  `formation_system_tables_without_decoder` measures only the presence of a
+  `<table>-row-decoder.js` module: three decoders with no consumer would read
+  0 (probe defect F1, owner: this epic and the budget script). The quest is
+  re-sealed as the decoders quest: the three decoder modules with exhaustive
+  tests, the existing per-table normalisers (`normalizeServiceRow`,
+  `normalizeReplicaRow`, `normalizeCensusServiceRow`,
+  `normalizeCurrentVoterServiceRow`, `normalizeNodeRow`, the column decoding
+  of `ReplicaOperationRepository#rowToOperation`,
+  `normalizeReplicaOperationRecord`, `normalizeOperationProgressRecord`,
+  `readOperationWorkflowRecord`, `normalizePublicationOperationWorkflowRecord`
+  and the routed display normalisers) folded into them so one version of each
+  decoding exists, and the measuring rows above (overall row capped one-way at
+  the measured count; one row per directory group with target 0). Six
+  `system-table-decoded-reads-*` quests then drive each group row to 0.
+  Projections: an absent column stays a typed refusal; a partial `SELECT`
+  decodes through a named projection declared once beside the query, which
+  yields a frozen object with exactly the projection's named fields and a
+  projection marker; a consumer that needs a field outside the projection
+  widens the projection at the query and never reads a raw column. Overlap
+  with `state-read-named-defaults` (F2): that quest zeroes
+  `state_read_defaults` on these tables by measurement; the consumer quests
+  replace its `readStateField` reads on these tables with decoded named
+  states, and the `row_field_alias_reads` cap arithmetic starts from the
+  post-merge value, not 745.

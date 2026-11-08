@@ -493,6 +493,23 @@ describe('ReplicaCreateAdmissionOwner', () => {
       'async callback shape is rejected before any filesystem effect');
   });
 
+  it('refuses an install mutation that does not answer a boolean',
+    async () => {
+      for (const answer of [undefined, 1, Promise.resolve(true)]) {
+        const f = fixture();
+        const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+          nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+        const evidence = await owner.claim(f.request);
+        const physicalClaim = await owner.claimPhysicalWorker(evidence);
+        assert.ok(physicalClaim);
+        await assert.rejects(
+          owner.commitSnapshotInstall(physicalClaim, () => answer),
+          /snapshot install mutation must answer a boolean synchronously/u);
+        assert.equal(owner.releasePhysicalWorker(physicalClaim), true,
+          'a refused effect releases its exact claim');
+      }
+    });
+
   it('holds the exact claim through the synchronous install effect',
     async () => {
       const f = fixture();

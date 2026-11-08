@@ -23,6 +23,7 @@ import {consensusBootstrapDescriptor, CONSENSUS_BOOTSTRAP} from
   '../../src/service/service-consensus-bootstrap.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {deliverScheduled} from './wasm-strong-write-native-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {resolveEndpointAddress} from
   '../../src/bootstrap/shared/meta-service-definition-registration.js';
 
@@ -254,7 +255,7 @@ async function fixture(t, {automaticReconciliation = false, creationWake = null,
 // durable record has applied progress. No status-as-progress drive.
 async function formGroup(f) {
   for (let round = 0; round < SETUP_ROUNDS; round += 1) {
-    await f.replicas[0].raft.tick();
+    await turnChainValue(f.replicas[0].raft.tick());
     await deliverScheduled(f);
     const statuses = f.replicas.map((replica) => replica.raft.readStatus());
     if (statuses[0].role === 'leader' &&

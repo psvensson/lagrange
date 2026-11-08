@@ -8,6 +8,8 @@ import {RaftRsPeerIdentityRegistry} from
 import {createRuntimeDispatcher} from
   '../../../src/raft/raft-rs-runtime-owner.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {turnChainValue} from
+  '../../../src/raft/raft-rs-turn-answer.js';
 
 const ACTIVE_OPERATIONS = Object.freeze([
   'tick', 'step', 'propose', 'proposeConfChange', 'transferLeadership',
@@ -45,7 +47,7 @@ test('step is local admission and retirement prevents queued core entry',
       const port = cluster.node('queued-replica');
       const status = await port.readStatus();
       const beforeAdmission = cluster.coreEntryCount();
-      const accepted = await port.step({
+      const accepted = await turnChainValue(port.step({
         groupId: cluster.partitionId,
         to: status.peerId,
         message: {
@@ -57,14 +59,14 @@ test('step is local admission and retirement prevents queued core entry',
           index: '0',
           commit: '0',
         },
-      });
+      }));
       assert.equal(accepted.outcome, 'CORE_OK');
       assert.equal(accepted.reason, 'inbound-enqueued');
       assert.equal(cluster.coreEntryCount(), beforeAdmission,
         'transport admission acknowledges without entering the core');
 
       await cluster.retireReplica('queued-replica', 'retire-after-admission');
-      const refused = await port.tick();
+      const refused = await turnChainValue(port.tick());
       assert.equal(refused.outcome, 'CORE_REFUSED');
       assert.equal(refused.reason, 'retired');
       assert.equal(cluster.coreEntryCount(), beforeAdmission,
@@ -81,11 +83,11 @@ test('malformed ingress is refused locally without core entry', async () => {
   });
   try {
     const before = cluster.coreEntryCount();
-    const refused = await cluster.node('ingress-replica').step({
+    const refused = await turnChainValue(cluster.node('ingress-replica').step({
       groupId: 'wrong-group',
       to: 'not-a-decimal-peer',
       message: {},
-    });
+    }));
     assert.equal(refused.outcome, 'CORE_REFUSED');
     assert.equal(refused.phase, 'admission');
     assert.equal(cluster.coreEntryCount(), before);
@@ -102,7 +104,7 @@ test('durable retirement refuses every active operation before core entry after 
     });
     try {
       const active = cluster.node('retired-replica');
-      await active.campaign();
+      await turnChainValue(active.campaign());
       const activeStatus = await active.readStatus();
       assert.equal(activeStatus.confState.voters.includes(
         activeStatus.peerId), true,
@@ -116,16 +118,16 @@ test('durable retirement refuses every active operation before core entry after 
         'retirement is exercised through the complete semantic port');
       const before = cluster.coreEntryCount();
       const calls = [
-        port.tick(),
-        port.step({}),
-        port.propose('after-retirement'),
-        port.proposeConfChange({}),
-        port.transferLeadership({successor: 'most-caught-up'}),
-        port.probePeerProgress('retired-peer'),
-        port.campaign(),
+        turnChainValue(port.tick()),
+        turnChainValue(port.step({})),
+        turnChainValue(port.propose('after-retirement')),
+        turnChainValue(port.proposeConfChange({})),
+        turnChainValue(port.transferLeadership({successor: 'most-caught-up'})),
+        turnChainValue(port.probePeerProgress('retired-peer')),
+        turnChainValue(port.campaign()),
         port.readStatus(),
-        port.configureTick(10),
-        port.startScheduling(),
+        turnChainValue(port.configureTick(10)),
+        turnChainValue(port.startScheduling()),
       ];
       const results = await Promise.all(calls);
       assert.equal(results.every((result) =>
@@ -178,11 +180,12 @@ test('durable retirement refuses every active operation before core entry after 
         emit: () => undefined,
       });
       const mutantBefore = cluster.coreEntryCount();
-      const bypassed = await mutant.execute({type: 'campaign'});
+      const bypassed = await turnChainValue(mutant.execute({type: 'campaign'}));
       assert.equal(bypassed.outcome, 'CORE_OK');
       assert.ok(cluster.coreEntryCount() > mutantBefore,
         'deliberately bypassing the lifecycle owner restores core entry');
-      const disturbed = await mutant.execute({type: 'read-status'});
+      const disturbed = await turnChainValue(
+        mutant.execute({type: 'read-status'}));
       assert.ok(disturbed.term > activeStatus.term,
         'the bypass restores the retired replica\'s disruptive term change');
       mutant.close({enterCore: true});
@@ -205,7 +208,7 @@ test('a durable Raft record without a matching lifecycle record fails closed',
       ).run(cluster.partitionId);
       const before = cluster.coreEntryCount();
       const restarted = cluster.restart('missing-lifecycle-replica').node;
-      const refused = await restarted.tick();
+      const refused = await turnChainValue(restarted.tick());
       assert.equal(refused.outcome, 'CORE_REFUSED');
       assert.equal(refused.reason, 'lifecycle-record-missing');
       assert.equal(cluster.coreEntryCount(), before,

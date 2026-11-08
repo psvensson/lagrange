@@ -198,6 +198,9 @@ function buildScenarioEntry(scenarioName, result) {
       buildPriorityRecoveryProgressSummary(priorityRecoveryObservation),
     stabilityGates: result.stabilityGates || null,
     decisionArtifactsByNodeId: result.decisionArtifactsByNodeId || null,
+    // The full-log capture owner's per-node verdict (assessCaptureCompleteness,
+    // naming its quietBound), carried for the failure bundle's coverage.
+    captureCompletenessByNodeId: result.captureCompletenessByNodeId || null,
   };
 
   if (result.exampleResults) {
@@ -210,11 +213,8 @@ function buildScenarioEntry(scenarioName, result) {
     entry.exampleResults = null;
   }
 
-  if (result.loadMetrics) {
-    entry.loadMetrics = buildLoadMetricsEntry(result.loadMetrics);
-  } else {
-    entry.loadMetrics = null;
-  }
+  entry.loadMetrics = result.loadMetrics ?
+    buildLoadMetricsEntry(result.loadMetrics) : null;
 
   entry.performanceMeasurement = buildPerformanceMeasurementEntry(
     result,

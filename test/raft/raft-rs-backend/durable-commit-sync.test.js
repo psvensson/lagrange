@@ -185,7 +185,7 @@ async () => {
       {rounds: SETTLE_ROUNDS}), 'the partition elects a leader');
     const leader = cluster.leaderReplicaId();
     for (let index = 0; index < COMMANDS; index += 1) {
-      assert.equal(cluster.propose(leader, `command-${index}`).outcome,
+      assert.equal(cluster.propose(leader, `command-${index}`).result.outcome,
         'CORE_OK');
     }
     assert.ok(cluster.settle(() => FOUNDING.every((replicaId) =>

@@ -22,6 +22,8 @@ import {RAFT_RS_TABLE} from '../../../src/raft/raft-rs-durable-store-constants.j
 import {COMMITTED_MEMBERSHIP_REFUSAL} from '../../../src/raft/raft-committed-membership-constants.js';
 import {createFixture, buildService, assertInitializationRefusal, KINDS, EXISTING_GROUP,
   EXISTING_REPLICA} from './startup-cleanup-native-fixture.js';
+import {settledTurn} from '../../../src/raft/raft-rs-turn-answer.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const JOINER = 'opening-refusal-joining-identity';
 
@@ -69,7 +71,7 @@ for (const kind of KINDS) {
       await successor.initialize();
       assert.equal((await successor.raft.readStatus()).outcome, OUTCOME.CORE_OK,
         'a legitimate new instance opens on the same durable file after shared recovery');
-      assert.equal((await fixture.port.propose('after-opening-refusal')).outcome, OUTCOME.CORE_OK);
+      assert.equal((await turnChainValue(fixture.port.propose('after-opening-refusal'))).outcome, OUTCOME.CORE_OK);
       assert.deepEqual(fixture.survivor.replica(EXISTING_REPLICA).appliedCommands,
         ['before-opening-refusal', 'after-opening-refusal'], 'the original group keeps its committed operation sequence');
     });
@@ -139,7 +141,7 @@ for (const loseHistory of [false, true]) {
     const fixture = await createFixture(t);
     const first = buildService(fixture, 'wasm-service');
     await first.initialize();
-    assert.equal((await first.raft.campaign()).outcome, OUTCOME.CORE_OK);
+    assert.equal((await turnChainValue(first.raft.campaign())).outcome, OUTCOME.CORE_OK);
     await first.proposeEntry({type: WASM_SERVICE_COMMAND_TYPE.KV_SET,
       sessionId: 'history-session', key: 'marker', value: 'committed-before-restart'});
     assert.deepEqual(first.kvStore.get('history-session', 'marker'),
@@ -458,7 +460,7 @@ for (const edge of ['status', 'campaign']) {
         };
       } else {
         operations.campaign = () => {
-          engaged += 1; return answer;
+          engaged += 1; return settledTurn(answer);
         };
       }
       return createRaftOperationPort(operations);

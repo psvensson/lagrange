@@ -41,6 +41,7 @@ import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.j
 import {CDC_TABLE} from './participant-transaction-fixture.js';
 import {attachPartitionReleaseOwners} from '../partition/partition-release-fixture.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {createTransactionPersistenceGateway} from
   './transaction-persistence-gateway.js';
 
@@ -292,10 +293,10 @@ async function withTransactionGroup(name, body) {
       if (from === to) {
         return true;
       }
-      await from.raft.transferLeadership({
+      await turnChainValue(from.raft.transferLeadership({
         successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
         replicaIdentity: to.replicaId,
-      });
+      }));
       return group.waitFor(() =>
         to.raft.readStatus().role === RAFT_ROLE.LEADER);
     },

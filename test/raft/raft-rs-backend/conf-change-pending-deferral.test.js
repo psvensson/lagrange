@@ -34,6 +34,7 @@ import {
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_ROLE} from '../../../src/raft/constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {RUNTIME_REASON} from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {RaftRsPeerIdentityRegistry} from
@@ -115,22 +116,22 @@ function peerIdOf(cluster, leader, identity) {
 // leader it returns, without settling.
 const PENDING_KINDS = Object.freeze({
   'effective AddNode': ({cluster}) => {
-    assert.equal(cluster.node(A).proposeConfChange(addPeer(EXTRA)).outcome,
+    assert.equal(cluster.node(A).proposeConfChange(addPeer(EXTRA)).result.outcome,
       RAFT_OPERATION_OUTCOME.CORE_OK);
     return A;
   },
   'effective RemoveNode': ({cluster}) => {
-    assert.equal(cluster.node(A).proposeConfChange(removePeer(C)).outcome,
+    assert.equal(cluster.node(A).proposeConfChange(removePeer(C)).result.outcome,
       RAFT_OPERATION_OUTCOME.CORE_OK);
     return A;
   },
   'no-op RemoveNode (a non-member)': ({cluster}) => {
-    assert.equal(cluster.node(A).proposeConfChange(removePeer(ABSENT))
+    assert.equal(cluster.node(A).proposeConfChange(removePeer(ABSENT)).result
       .outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     return A;
   },
   'no-op AddNode (a member)': ({cluster}) => {
-    assert.equal(cluster.node(A).proposeConfChange(addPeer(B)).outcome,
+    assert.equal(cluster.node(A).proposeConfChange(addPeer(B)).result.outcome,
       RAFT_OPERATION_OUTCOME.CORE_OK);
     return A;
   },
@@ -143,14 +144,14 @@ const PENDING_KINDS = Object.freeze({
     cap.value = Number(cluster.coreStatus(B).commit ??
       durableAppliedState(cluster.replica(B).dbFile, cluster.partitionId)
         .appliedIndex);
-    assert.equal(cluster.node(A).propose('before-the-election').outcome,
+    assert.equal(cluster.node(A).propose('before-the-election').result.outcome,
       RAFT_OPERATION_OUTCOME.CORE_OK);
     const lastOf = (replicaId) => durableLog(cluster.replica(replicaId).dbFile,
       cluster.partitionId).at(-1).index;
     cluster.settle(() => lastOf(B) === lastOf(A), {rounds: 60});
     assert.equal(cluster.node(A).transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: B}).outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+      replicaIdentity: B}).result.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     cluster.tickers = [];
     const elected = cluster.settle(() =>
       cluster.node(B).readStatus().role === RAFT_ROLE.LEADER, {rounds: 20});
@@ -175,7 +176,7 @@ for (const [kind, setup] of Object.entries(PENDING_KINDS)) {
     // configuration index is at most its last one).
     const lastAtProposal = durableLog(cluster.replica(leader).dbFile,
       cluster.partitionId).at(-1).index;
-    const answer = cluster.node(leader).proposeConfChange(addPeer(TARGET));
+    const answer = turnChainValue(cluster.node(leader).proposeConfChange(addPeer(TARGET)));
     assert.deepEqual(deferralOf(answer), DEFERRAL,
       `the AddNode is deferred typed, never answered Ok (${
         JSON.stringify(answer)})`);
@@ -195,7 +196,7 @@ for (const [kind, setup] of Object.entries(PENDING_KINDS)) {
       entry.entryType === WIRE.entryType.EntryNormal && entry.data === null);
     assert.deepEqual(emptyAfter, [],
       'the crate replaced no proposal of this port with an empty entry');
-    const again = cluster.node(leader).proposeConfChange(addPeer(TARGET));
+    const again = turnChainValue(cluster.node(leader).proposeConfChange(addPeer(TARGET)));
     assert.equal(again.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     const targetPeer = peerIdOf(cluster, leader, TARGET);
     assert.ok(cluster.settle(() => durableAppliedState(

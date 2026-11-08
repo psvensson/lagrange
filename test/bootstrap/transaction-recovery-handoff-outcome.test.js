@@ -39,10 +39,13 @@ function buildTrackingOwner({recoveryError, routeSource}) {
       isShuttingDown: () => false,
       isDistributedTransactionRecoveryAvailable: () => true,
       activateDistributedTransactionRecovery: () => {
+        // The engine's activation: a fatal throws at once, a replay answers
+        // the promise of its summary.
         if (recoveryError) {
           throw recoveryError;
         }
-        return {totalRecovered: 0, resumed: 0, failed: 0, results: []};
+        return Promise.resolve(
+          {totalRecovered: 0, resumed: 0, failed: 0, results: []});
       },
       getRouteSource: () => routeSource,
     },
@@ -168,13 +171,13 @@ test(
 test(
   'a completed replay publishes a ready witness without an incomplete ' +
     'outcome (no false positive on the typed contract)',
-  (t) => {
+  async (t) => {
     const owner = buildTrackingOwner({
       recoveryError: null,
       routeSource: SEED_AUTHORITY_SOURCE,
     });
 
-    owner.activateDistributedTransactionRecovery();
+    await owner.activateDistributedTransactionRecovery();
 
     const snapshot = owner.getDistributedTransactionRecoverySnapshot();
     t.equal(

@@ -20,6 +20,7 @@ import {test} from 'node:test';
 import Database from 'better-sqlite3';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {RaftRsDurableStore} from
   '../../../src/raft/raft-rs-durable-store.js';
 import * as storeVocabulary from
@@ -172,20 +173,20 @@ async () => {
   try {
     electLoneLeader(cluster, 'solo');
     const replica = cluster.replica('solo');
-    const baseline = await cluster.propose('solo', 'before-the-session');
+    const baseline = await turnChainValue(cluster.propose('solo', 'before-the-session'));
     assert.equal(baseline.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     const statusBefore = cluster.node('solo').readStatus();
     const recordBefore = durableRecordOf(replica.dbFile,
       cluster.partitionId);
 
     replica.db.exec(BEGIN);
-    const refused = await cluster.propose('solo', 'during-the-session');
+    const refused = await turnChainValue(cluster.propose('solo', 'during-the-session'));
     const statusDuring = cluster.node('solo').readStatus();
     replica.db.exec(ROLLBACK);
     const recordAfterSession = durableRecordOf(replica.dbFile,
       cluster.partitionId);
 
-    const accepted = await cluster.propose('solo', 'after-the-session');
+    const accepted = await turnChainValue(cluster.propose('solo', 'after-the-session'));
     const statusAfter = cluster.node('solo').readStatus();
     const recordAfter = durableRecordOf(replica.dbFile, cluster.partitionId);
 
@@ -244,7 +245,7 @@ test('W5 a three-replica leader persists no Ready while a user transaction ' +
     const leaderReplica = cluster.replica(leader);
     // The leader appends and sends; the followers answer into the leader's
     // inbox, so the leader has consensus work waiting when the session opens.
-    const proposed = await cluster.propose(leader, 'replicated-command');
+    const proposed = await turnChainValue(cluster.propose(leader, 'replicated-command'));
     assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     for (const follower of followers) {
       const pending = cluster.replica(follower).inbox.splice(0);
@@ -323,7 +324,7 @@ async () => {
     const followers = [...cluster.replicas.keys()]
       .filter((replicaId) => replicaId !== leader);
     const leaderReplica = cluster.replica(leader);
-    const proposed = await cluster.propose(leader, 'committed-across-send');
+    const proposed = await turnChainValue(cluster.propose(leader, 'committed-across-send'));
     assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     for (const follower of followers) {
       for (const envelope of cluster.replica(follower).inbox.splice(0)) {
@@ -343,7 +344,7 @@ async () => {
     // opens on the leader's connection.
     holdSends = true;
     let settled = null;
-    const ticked = Promise.resolve(cluster.node(leader).tick())
+    const ticked = Promise.resolve(turnChainValue(cluster.node(leader).tick()))
       .then((result) => {
         settled = result;
         return result;

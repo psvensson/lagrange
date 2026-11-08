@@ -1,7 +1,7 @@
 import {EventEmitter} from 'events';
 import {CDCHandler} from '../../src/message-group/cdc-handler.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
-import {ControlPlaneReadinessService} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {ControlPlaneSystemTableGateway} from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {TablePolicyService} from '../../src/policy/table-policy-service.js';
@@ -33,6 +33,7 @@ import {
 import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 async function shutdownOrFail(t, promise, label) {
   try {
     await promise;
@@ -64,7 +65,6 @@ const REFERENCE_TEST_TIMEOUTS = {
 const TEST_TIMEOUTS = Object.fromEntries(
   Object.entries(REFERENCE_TEST_TIMEOUTS).map(([name, referenceMs]) =>
     [name, scaleByMachineFactor(referenceMs)]));
-
 
 function initializeTestEnvironment() {
   initTestEnv({nodeId: 'test-node'});
@@ -112,7 +112,6 @@ class _LatencySimulatingCDCHandler extends CDCHandler {
   }
 }
 
-
 class MockMessageGroupService extends EventEmitter {
   constructor(options = {}) {
     super();
@@ -158,7 +157,6 @@ class MockMessageGroupService extends EventEmitter {
   }
 }
 
-
 // A pure row builder: it receives the observation time as DATA rather than
 // reading a clock, so a deterministic host can seed rows on its node's time.
 // The ambient default keeps every existing caller byte-identical.
@@ -182,7 +180,6 @@ function createNodeEntry(nodeId, overrides = {}, nowMs = Date.now()) {
     ...overrides,
   };
 }
-
 
 async function waitForCondition(
   condition,
@@ -287,7 +284,7 @@ function createNodeHosts(cache, options = {}) {
     messageRouter,
     getControlPlaneReadinessService: () => controlPlaneReadinessService,
   });
-  controlPlaneReadinessService = new ControlPlaneReadinessService({
+  controlPlaneReadinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -337,7 +334,6 @@ function createNodeHosts(cache, options = {}) {
     tablePolicyService, storageAccountingService, storageAdmissionService,
   };
 }
-
 
 /**
  * The real RebalanceCoordinator over the node's real owners.

@@ -10,6 +10,7 @@ import {
 } from './committed-membership-fixture.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
@@ -304,9 +305,10 @@ function createMockControlPlaneReadinessService(options = {}) {
     readinessByNodeId = {},
     livenessProjectionByNodeId = null,
     membershipPublicationPlanningSnapshot = null,
+    clock = null,
   } = options;
 
-  return {
+  return partialReadinessFake({
     ...(livenessProjectionByNodeId &&
       typeof livenessProjectionByNodeId === 'object' ? {
         projectNodeLiveness(nodeId) {
@@ -344,7 +346,7 @@ function createMockControlPlaneReadinessService(options = {}) {
         dimensions,
       };
     },
-    getMembershipPublicationPlanningSnapshotSync(nodeId) {
+    getPriorityRecoveryPlanningAnswerSync(nodeId) {
       if (typeof membershipPublicationPlanningSnapshot === 'function') {
         return membershipPublicationPlanningSnapshot(nodeId);
       }
@@ -373,7 +375,7 @@ function createMockControlPlaneReadinessService(options = {}) {
         },
       };
     },
-  };
+  }, clock);
 }
 
 /**

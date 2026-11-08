@@ -184,7 +184,10 @@ function isHelpRequestFor(command, args) {
       SERVICE_PIPELINE_COMMANDS.has(command));
 }
 
-function runServiceCommand(args) {
+// Answers the exit code as a promise on every path: a lifecycle or pipeline
+// command loads its owner asynchronously, so the synchronous commands answer
+// the same shape.
+async function runServiceCommand(args) {
   if (args.length === 0 ||
       (args.length === 1 && SERVICE_HELP_FLAGS.has(args[0]))) {
     printHelp();

@@ -8,9 +8,7 @@ import {
   READINESS_SNAPSHOT_KEY,
   RUNTIME_AUTHORITY_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   connectAndReceive,
   createPopulatedCache,
@@ -24,6 +22,7 @@ import {
   createPublicationService,
 } from '../control-plane/control-plane-readiness-service-test-support.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const TEST_NODE_ID = 'admin-load-lane-priority-node';
 const TEST_NOW_MS = 1500;
 const TEST_BUDGET_BYTES = 1000;
@@ -44,7 +43,7 @@ const TEST_RECOVERY_REASON_CODE =
 const TEST_SERVE_NOT_READY_PATTERN = /serve not ready/;
 
 function createPriorityRecoveryReadinessService(readProfiles) {
-  return new ControlPlaneReadinessService({
+  return createReadinessServiceForTest({
     nodeId: TEST_NODE_ID,
     systemTableCache: createCache({
       nodes: [createActiveNode(TEST_NODE_ID)],
@@ -63,11 +62,10 @@ function createPriorityRecoveryReadinessService(readProfiles) {
       enteredAt: TEST_PUBLICATION_ENTERED_AT,
       recentTransitions: [],
     }),
+    // Readiness reads the cluster's latest publication row (the production
+    // coordinator's cluster read); the fixture derives the per-node read.
     membershipPublicationService: {
-      async getLatestPublicationForNode(targetNodeId, options = {}) {
-        if (targetNodeId !== TEST_NODE_ID) {
-          return null;
-        }
+      async getLatestClusterPublication(options = {}) {
         readProfiles.push(options.readProfile || null);
         if (options.readProfile === TEST_READ_PROFILE_DIAGNOSTICS) {
           return null;
@@ -80,10 +78,7 @@ function createPriorityRecoveryReadinessService(readProfiles) {
           acknowledgedNodeIds: [],
         };
       },
-      getLatestPublicationForNodeSync(targetNodeId, options = {}) {
-        if (targetNodeId !== TEST_NODE_ID) {
-          return null;
-        }
+      getLatestClusterPublicationSync(options = {}) {
         readProfiles.push(options.readProfile || null);
         if (options.readProfile === TEST_READ_PROFILE_DIAGNOSTICS) {
           return null;

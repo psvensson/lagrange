@@ -97,7 +97,7 @@ test('a REMOVING row retires its peer by one REMOVE_PEER while the row still ' +
   });
   await partition.initialize();
   await settleCacheChange();
-  t.equal(partition.raft.campaign().outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+  t.equal(partition.raft.campaign().result.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     'setup: the local replica campaigns');
 
   const mark = provider.confChanges.length;

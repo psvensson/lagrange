@@ -41,6 +41,7 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {createTestCoordinator} from './test-helpers.js';
 import {createReplaceWitness} from './replace-witness-fixture.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 
 const {
   OPERATION_OWNER_ACTION,
@@ -129,7 +130,7 @@ function buildReadinessSnapshot(nodeId, level) {
 function createReadinessFake(initialLevels) {
   const levelByNodeId = new Map(Object.entries(initialLevels));
   const listeners = new Set();
-  return {
+  return readinessServiceFake({
     listeners,
     setLevel(nodeId, level) {
       levelByNodeId.set(nodeId, level);
@@ -165,7 +166,7 @@ function createReadinessFake(initialLevels) {
         reasonCodes: REASON_CODES_BY_LEVEL[level],
       });
     },
-  };
+  });
 }
 
 function createReadyNode(nodeId) {

@@ -48,6 +48,7 @@ import {
   createMockReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 // Initialize test environment
 // Create a mock system table cache
@@ -945,7 +946,7 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
             address: 'node-2/partition/control_plane_publications-p1-r3',
           },
         ],
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: partialReadinessFake({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -971,7 +972,7 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
           getCurrentPublishedMembershipEpochSync() {
             return 2;
           },
-        },
+        }),
         rebalanceCoordinator: {
           ...createMockCoordinator(),
           async createOperation(move) {

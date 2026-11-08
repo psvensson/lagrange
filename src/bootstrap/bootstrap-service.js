@@ -503,14 +503,10 @@ class BootstrapService extends EventEmitter {
         isDistributedTransactionRecoveryAvailable: () =>
           typeof this.sqlQueryEngine?.activateDistributedTransactionRecovery ===
             LOCAL_STR_FUNCTION,
-        activateDistributedTransactionRecovery: () => {
-          const sqlQueryEngine = this.sqlQueryEngine;
-          if (typeof sqlQueryEngine?.activateDistributedTransactionRecovery !==
-            LOCAL_STR_FUNCTION) {
-            return;
-          }
-          return sqlQueryEngine.activateDistributedTransactionRecovery();
-        },
+        // Asked only once isDistributedTransactionRecoveryAvailable answered
+        // in the same call: the engine's replay promise.
+        activateDistributedTransactionRecovery: () =>
+          this.sqlQueryEngine.activateDistributedTransactionRecovery(),
         startLatencyTopologyLifecycle: () =>
           this.seedRuntimeBridgeOwner?.startLatencyTopologyLifecycle?.(),
         onControlPlaneBackgroundWritersActivated: () => {

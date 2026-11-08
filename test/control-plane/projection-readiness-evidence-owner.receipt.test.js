@@ -19,9 +19,7 @@ import {
 import {
   CONTROL_PLANE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   ProjectionReadinessEvidenceOwner,
 } from '../../src/control-plane/projection-readiness-evidence-owner.js';
@@ -32,6 +30,7 @@ import {
   buildProjectionReadinessGenerationKey,
 } from '../../src/control-plane/projection-readiness-evidence-generation.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 // A version-tracking cache wrapper: production's systemTableCache exposes
 // getTableMutationVersion, which the simplified test cache does not. This bumps
 // a per-table monotonic version on every applied change so the generation key
@@ -53,7 +52,7 @@ function withMutationVersions(cache) {
 }
 
 function buildService(nodeId, cache) {
-  return new ControlPlaneReadinessService({
+  return createReadinessServiceForTest({
     nodeId,
     systemTableCache: cache,
     cacheMutationTarget: cache,

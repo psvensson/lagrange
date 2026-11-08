@@ -621,7 +621,9 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         // CL-030: sweep container states while they are still alive — a
         // non-expected-down node whose container EXITED reattributes the
         // scenario failure to that node with its exit evidence, instead of
-        // letting it surface as a downstream timeout elsewhere.
+        // letting it surface as a downstream timeout elsewhere. The sweep
+        // also retains every exited container's exit time as that node's
+        // capture quiet bound, which cluster.stop() in `finally` consumes.
         let unexpectedNodeExits = [];
         if (
           cluster &&
@@ -712,6 +714,7 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         let playback = null;
         let playbackWarning = null;
         let trace = null;
+        let captureCompletenessByNodeId = null;
         const certificationNodes = certification !== null && cluster ?
           captureCertificationNodes(cluster) :
           [];
@@ -728,6 +731,12 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           } catch (_manifestErr) {
             playbackWarning = 'Unable to read playback manifest';
           }
+          // The capture owner's per-node verdict, final after stop(): the
+          // failure bundle's log-window coverage consumes it, never re-derives.
+          captureCompletenessByNodeId =
+            typeof cluster.getCaptureCompletenessByNodeId === 'function' ?
+              cluster.getCaptureCompletenessByNodeId() :
+              null;
           try {
             if (typeof cluster.getTraceManifest === 'function') {
               trace = cluster.getTraceManifest();
@@ -758,6 +767,7 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           scenarioResult.playback = playback;
         }
         scenarioResult.trace = trace;
+        scenarioResult.captureCompletenessByNodeId = captureCompletenessByNodeId;
 
         if (scenarioResult?.details?.diagnostics?.rootCauseBundle &&
             playback && typeof playback === 'object') {

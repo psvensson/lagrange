@@ -15,6 +15,7 @@ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {RAFT_RS_MESSAGE_TYPE} from '../../src/raft/raft-rs-ingress-constants.js';
 import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.js';
 import {WasmServiceReplica} from '../../src/wasm-service/wasm-service-replica.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {WRITE_CONSISTENCY_MODE} from
   '../../src/wasm-service/wasm-service-constants.js';
 import {createLoopbackTransport} from
@@ -70,7 +71,7 @@ async function deliverScheduled(f) {
 
 async function form(f) {
   for (let round = 0; round < SETUP_ROUNDS; round += 1) {
-    await f.replicas[0].raft.tick();
+    await turnChainValue(f.replicas[0].raft.tick());
     await deliverScheduled(f);
     const statuses = f.replicas.map((replica) => replica.raft.readStatus());
     if (statuses.every((status) => status.leaderId === REPLICAS[0]) &&

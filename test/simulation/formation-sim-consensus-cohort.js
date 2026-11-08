@@ -30,12 +30,16 @@ import {
   committedStampOfAnswer, genesisStamp,
 } from '../../src/raft/raft-committed-membership-stamp.js';
 import {RAFT_EVENT, RAFT_OPERATION} from '../../src/raft/raft-operation-port-constants.js';
-import {RAFT_OPERATION_PORT_REQUEST} from '../../src/raft/raft-operation-port-request.js';
+import {
+  RAFT_COMMITTED_ENTRY_APPLY_MODE,
+  RAFT_OPERATION_PORT_REQUEST,
+} from '../../src/raft/raft-operation-port-request.js';
 import {createRaftRsOperationPort} from '../../src/raft/raft-rs-operation-port.js';
 import {
   reserveAndAdmitGroupPeer, takeGroupAdmissionsInFlight,
 } from '../../src/raft/raft-rs-group-membership-admission.js';
 import {guardedDispatch} from './formation-sim-guard.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const ENVELOPE_MESSAGE = 'raftRsEnvelope';
 const IN_MEMORY_DATABASE = ':memory:';
@@ -84,7 +88,7 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, char
     }
     charges.segment(nodeId, FORMATION_OWNER.RAFT_PROTOCOL);
     guardedDispatch(FORMATION_OWNER.RAFT_PROTOCOL, () =>
-      port.step(message.payload.envelope));
+      turnChainValue(port.step(message.payload.envelope)));
     return true;
   }
 
@@ -161,6 +165,8 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, char
       },
       [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]: (replicaIdentity) => replicaIdentity,
       [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
+      [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY_MODE]:
+        RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
       [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
     }));
     ports.set(nodeId, port);
@@ -197,7 +203,7 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, char
   const seedPort = open(seedId, {
     bootstrapMembership: genesisStamp([seedId]), bootstrapPeerIds: [seedId],
   });
-  runOnExecutionNode(seedId, () => seedPort.campaign());
+  runOnExecutionNode(seedId, () => turnChainValue(seedPort.campaign()));
 
   // Every port this cohort opened is closed, then the database it ran over,
   // before the scenario seals.

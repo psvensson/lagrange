@@ -5,9 +5,7 @@ import {
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from '../../src/control-plane/control-plane-publication-merge.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   RECOVERY_PROTOCOL_STATE,
 } from '../../src/control-plane/membership-lifecycle-constants.js';
@@ -19,6 +17,7 @@ import {
   createCache,
 } from './control-plane-readiness-service-planning-snapshot-support.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const TEST_OWNER_READ_COUNT_ONLY_ACK_UPGRADE_NAME_ASYNC =
   'ControlPlaneReadinessService owner-read planning answer upgrades direct count-only ACK debt to provided required-ACK evidence';
 const TEST_OWNER_READ_COUNT_ONLY_ACK_UPGRADE_NAME_SYNC =
@@ -175,7 +174,7 @@ function createOwnerReadCountOnlyAckUpgradeService(mode) {
         };
       },
     };
-  return new ControlPlaneReadinessService({
+  return createReadinessServiceForTest({
     nodeId,
     systemTableCache: createCache(),
     membershipPublicationService,

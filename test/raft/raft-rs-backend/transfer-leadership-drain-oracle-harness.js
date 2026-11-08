@@ -62,6 +62,7 @@ import {encodeProposal} from '../../../src/raft/raft-rs-proposal-codec.js';
 import {computeReplicaElectionTimeouts} from
   '../../../src/raft/replica-election-timeouts.js';
 import {TransferLeadershipDriver} from './transfer-leadership-driver.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -290,13 +291,13 @@ class OracleRun {
 
   async propose(replicaId, command) {
     const answer = await this.act(() =>
-      this.driver.port(replicaId).propose(command));
+      turnChainValue(this.driver.port(replicaId).propose(command)));
     await this.deliver();
     return answer;
   }
 
   async elect(replicaId) {
-    await this.act(() => this.driver.port(replicaId).campaign());
+    await this.act(() => turnChainValue(this.driver.port(replicaId).campaign()));
     await this.deliver();
     return this.inputsOf(replicaId).role === RAFT_ROLE.LEADER;
   }
@@ -321,7 +322,7 @@ class OracleRun {
       envelope.message.msgType === heartbeat);
     for (let tick = 0; !held() &&
       tick < this.driver.electionTickOf(ticking); tick += 1) {
-      await this.act(() => this.driver.port(ticking).tick());
+      await this.act(() => turnChainValue(this.driver.port(ticking).tick()));
     }
     assert.ok(held(), `setup: ${ticking}'s heartbeat reached ${recipient}`);
   }

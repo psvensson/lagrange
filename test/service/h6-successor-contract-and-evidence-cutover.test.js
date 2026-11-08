@@ -75,7 +75,7 @@ describe('H6 successor contract and evidence cutover (Section 7.2)', () => {
     const root = await mkdtemp(path.join(tmpdir(), TEMP_DIR_PREFIX));
     try {
       const projectDir = path.join(root, HONO_SERVICE_NAME);
-      const exitCode = runServiceCommand([
+      const exitCode = await runServiceCommand([
         INIT_SUBCOMMAND,
         projectDir,
         HONO_FLAG,

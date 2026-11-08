@@ -23,6 +23,7 @@ import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {
   RAFT_OPERATION_PORT_REQUEST,
 } from '../../../src/raft/raft-operation-port-request.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {decodeCommittedProposal} from
   '../../../src/raft/raft-rs-proposal-codec.js';
 import {RAFT_RS_ENTRY_TYPE} from
@@ -368,8 +369,8 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
       Number.isFinite(leaderStatus.followerProgress?.[learnerAddress]),
       'semantic status projects raft-rs progress for the learner address',
     );
-    const progressProbe = await cluster.node(leader)
-      .probePeerProgress(learnerAddress);
+    const progressProbe = await turnChainValue(cluster.node(leader)
+      .probePeerProgress(learnerAddress));
     assert.equal(progressProbe.outcome, 'CORE_OK',
       'the semantic progress probe stays behind the operation port');
     // Catching up did not make it a voter: that is ConfState's decision.

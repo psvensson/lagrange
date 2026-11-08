@@ -5,7 +5,7 @@ import {
 } from './replica-create-admission-evidence.js';
 
 const SNAPSHOT_INSTALL_MUTATION_SYNC_ERROR =
-  'snapshot install mutation must be synchronous';
+  'snapshot install mutation must answer a boolean synchronously';
 const ASYNC_FUNCTION_NAME = 'AsyncFunction';
 const CLOSED_ADMISSION_STATE = 'CLOSED';
 const CREATE_ADMISSION_DEFERRED = 'REPLICA_CREATE_ADMISSION_DEFERRED';
@@ -211,11 +211,12 @@ async function commitReplicaCreateSnapshotInstall(owner, claim, mutation,
   // No await is permitted after the authoritative read. Cleanup consults the
   // active claim, and rotation requires the exact row to have advanced.
   return runReplicaCreatePhysicalCommit(owner, claim, evidence, () => {
-    const result = mutation(authority);
-    if (result && typeof result.then === 'function') {
+    // The effect answers whether it installed, synchronously: one boolean.
+    const installed = mutation(authority);
+    if (typeof installed !== 'boolean') {
       throw new TypeError(SNAPSHOT_INSTALL_MUTATION_SYNC_ERROR);
     }
-    return result === true;
+    return installed;
   });
 }
 

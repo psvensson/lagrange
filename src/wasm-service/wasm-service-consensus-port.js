@@ -22,6 +22,7 @@ import {SERVICE_TYPE, isPartitionCleanupServiceRow} from
 import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
 import {genesisStamp} from '../raft/raft-committed-membership-stamp.js';
 import {
+  RAFT_COMMITTED_ENTRY_APPLY_MODE,
   RAFT_OPERATION_PORT_REQUEST,
   hostedConsensusSubstrate,
 } from '../raft/raft-operation-port-request.js';
@@ -177,6 +178,8 @@ function wasmServiceConsensusRequest(replica) {
     // Runs inside the transaction that also advances the applied state.
     [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: (committed) =>
       replica.applyCommittedEntry(committed),
+    [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY_MODE]:
+      RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
   };
 }
 

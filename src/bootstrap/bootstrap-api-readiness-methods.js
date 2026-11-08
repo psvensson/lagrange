@@ -124,29 +124,17 @@ const bootstrapApiReadinessMethods = {
     if (!service || typeof service !== 'object') {
       return null;
     }
+    // The bootstrap response is built synchronously: only the service's
+    // synchronous read can answer it (its async read always answers a
+    // promise, which this response cannot wait for).
+    if (typeof service.getStartupAuthoritySnapshotSync !== 'function') {
+      return null;
+    }
     try {
-      if (typeof service.getStartupAuthoritySnapshotSync === 'function') {
-        return service.getStartupAuthoritySnapshotSync(
-          this.seedNodeId,
-          observedAt,
-        );
-      }
-      if (typeof service.getStartupAuthoritySnapshot !== 'function') {
-        return null;
-      }
-      const startupAuthority = service.getStartupAuthoritySnapshot(
+      return service.getStartupAuthoritySnapshotSync(
         this.seedNodeId,
         observedAt,
       );
-      if (
-        startupAuthority &&
-        typeof startupAuthority.then === 'function'
-      ) {
-        return null;
-      }
-      return startupAuthority && typeof startupAuthority === 'object' ?
-        startupAuthority :
-        null;
     } catch (_error) {
       return null;
     }

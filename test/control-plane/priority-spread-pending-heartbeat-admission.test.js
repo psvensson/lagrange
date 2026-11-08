@@ -28,9 +28,7 @@ import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   getLocalControlPlaneMutationReadinessBlocker,
 } from '../../src/control-plane/control-plane-mutation-readiness.js';
@@ -44,6 +42,7 @@ import {
   buildProjectionReadinessContract,
 } from '../../src/control-plane/projection-readiness-state.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const JOINER_NODE_ID = 'node-joiner';
 const JOINER_ADDRESS = '10.0.0.4:8080';
 const BOOT_INCARNATION = 3;
@@ -97,7 +96,7 @@ function buildSpreadPendingReadiness() {
     priorityPartitionSummary: summary,
   });
   const dimensions = readyDimensions();
-  const priorityControlPlaneRecovery = new ControlPlaneReadinessService({
+  const priorityControlPlaneRecovery = createReadinessServiceForTest({
     nodeId: JOINER_NODE_ID,
     systemTableCache: {
       get: () => null,

@@ -2,7 +2,10 @@ import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {acquireReusableClusterLease, isReusableClusterLeaseTimeoutError, registerClusterCleanup} from './cluster-runtime-helpers.js';
 import {waitForState} from './wait-for-state.js';
 import {observeConvergenceWait} from './scenario-certification.js';
-import {PARTITION_CONFIG_ENV_FIELDS} from './constants.js';
+import {
+  NODE_LIFECYCLE_ACTION,
+  PARTITION_CONFIG_ENV_FIELDS,
+} from './constants.js';
 import {SOURCE_FINGERPRINT_ENV_VAR} from '../../../src/diagnostics/source-fingerprint.js';
 import {
   createNodeLogStreamer,
@@ -22,6 +25,7 @@ import {appendFile} from 'node:fs/promises';
 import {createGunzip} from 'node:zlib';
 import {createInterface} from 'node:readline';
 import {sweepUnexpectedNodeExits} from './unexpected-node-exit.js';
+import {parseObservedExitMs, resolveCaptureQuietBound} from './capture-quiet-bound.js';
 
 // Container target of the fast-local live-src bind mount (run.js
 // FAST_LOCAL_SOURCE_CONTAINER_PATH). Used only to detect, defensively, that a
@@ -305,6 +309,7 @@ class ClusterLifecycleBase {
     this._networkName = null;
     this._nodes = new Map();
     this._nodeLogStreamers = new Map();
+    this._captureCompletenessByNodeId = {};
     // Per-node boot generation, 1 at first start, incremented on each observed
     // restart. Stamps the synthetic incarnation-boundary marker so a restarted
     // node's post-restart log lines are filterable (see _markNodeIncarnationBoundary).
@@ -1321,12 +1326,9 @@ class ClusterLifecycleBase {
     }
   }
 
-  // Stop all per-node log streamers and assess whether each capture is complete.
-  // Replaces the old one-shot `docker logs` at teardown (which could only return
-  // what the stalled daemon retained). Surfaces TWO loud warnings: stale source
-  // (node booted code != working tree) and incomplete capture (node went quiet
-  // long before teardown — the streaming reader stopped draining). A measurement
-  // run that drew on incomplete logs is exactly the trap this guards.
+  // Stop all per-node log streamers and assess each capture against its quiet
+  // bound (_captureJudgement). Warns loudly on stale source (booted code !=
+  // working tree) and on an incomplete capture (the reader stopped draining).
   async _finalizeFullNodeLogStreams(nodes, errors) {
     const outputDir = this._config?.outputDir;
     const fileLogging = this._isFileLoggingEnabled();
@@ -1339,80 +1341,76 @@ class ClusterLifecycleBase {
     await Promise.all(
       nodes.map(async ([nodeId]) => {
         try {
+          const judged = this._captureJudgement(nodeId, teardownWallMs);
           const finalized = fileLogging ?
-            await this._finalizeFileLoggedNode(nodeId, outputDir, teardownWallMs) :
-            await this._finalizeStreamedNode(nodeId, outputDir, teardownWallMs);
+            await this._finalizeFileLoggedNode(nodeId, outputDir, judged) :
+            await this._finalizeStreamedNode(nodeId, outputDir, judged);
           if (!finalized) {
             return;
           }
+          this._captureCompletenessByNodeId[nodeId] = finalized.completeness;
           if (!finalized.completeness.complete) {
-            incompleteNodes.push(
-              nodeId + ' (' + finalized.completeness.reason + ')',
-            );
+            incompleteNodes.push(`${nodeId} (${finalized.completeness.reason})`);
           }
           if (finalized.provenance?.srcFingerprintMatches === false) {
             staleNodeIds.push(nodeId);
           }
         } catch (err) {
-          errors.push(
-            'Failed to finalize full log for ' +
-              nodeId +
-              ': ' +
-              String(err?.message || err),
-          );
+          errors.push(`Failed to finalize full log for ${nodeId}: ` +
+            String(err?.message || err));
         }
       }),
     );
     this._nodeLogStreamers.clear();
     if (staleNodeIds.length > ZERO) {
-      this._staleSourceWarning =
-        'Stale source detected: node(s) ' +
-        staleNodeIds.join(', ') +
+      this._staleSourceWarning = `Stale source detected: node(s) ${staleNodeIds.join(', ')}` +
         ' booted a source fingerprint that does not match the harness ' +
         'working tree. This run executed STALE CODE — do not trust its results.';
       process.stderr.write('[harness] WARNING: ' + this._staleSourceWarning + '\n');
     }
     if (incompleteNodes.length > ZERO) {
-      this._incompleteCaptureWarning =
-        'Incomplete log capture for node(s) ' +
-        incompleteNodes.join(', ') +
-        '. The capture stopped draining before teardown — DO NOT trust ' +
+      this._incompleteCaptureWarning = 'Incomplete log capture for node(s) ' +
+        `${incompleteNodes.join(', ')}. The capture stopped draining before the node's quiet bound — DO NOT trust ` +
         'attribution from these logs (they may be silently truncated).';
-      process.stderr.write(
-        '[harness] WARNING: ' + this._incompleteCaptureWarning + '\n',
-      );
+      process.stderr.write(`[harness] WARNING: ${this._incompleteCaptureWarning}\n`);
     }
   }
 
-  // File-logging mode: the node wrote NDJSON directly to the bind-mounted host
-  // file; gzip it to the standard dest and assess completeness against the app's
+  // Each node's capture verdict from teardown, carried into the report entry.
+  getCaptureCompletenessByNodeId() {
+    return {...this._captureCompletenessByNodeId};
+  }
+
+  // The node's capture quiet bound (capture-quiet-bound.js) from what the
+  // harness observed: its stop mark and its container exit, else teardown.
+  _captureJudgement(nodeId, teardownWallMs) {
+    return {quietBound: resolveCaptureQuietBound({teardownWallMs,
+      expectedDown: this._expectedDownNodesById?.get(String(nodeId)),
+      observedExitMs: this._observedNodeExitMsById?.get(String(nodeId))})};
+  }
+
+  // File-logging mode: gzip the bind-mounted NDJSON and judge it by the app's
   // own timestamps (no docker-receipt lag blind spot).
-  async _finalizeFileLoggedNode(nodeId, outputDir, teardownWallMs) {
+  async _finalizeFileLoggedNode(nodeId, outputDir, judged) {
     const result = await finalizeFileBasedCapture({
       hostFilePath: nodeLogHostFile(outputDir, this._scenarioName, nodeId),
       destGzPath: fullLogDestPath(outputDir, this._scenarioName, nodeId),
-      teardownWallMs,
+      ...judged,
     });
-    return {
-      completeness: result.completeness,
-      provenance: result.bootSourceProvenance,
-    };
+    return {completeness: result.completeness, provenance: result.bootSourceProvenance};
   }
 
   // Streaming mode: stop the per-node follow streamer, assess completeness from
   // its status, and scan the gz it wrote for boot provenance.
-  async _finalizeStreamedNode(nodeId, outputDir, teardownWallMs) {
+  async _finalizeStreamedNode(nodeId, outputDir, judged) {
     const streamer = this._nodeLogStreamers.get(nodeId);
     if (!streamer) {
       return null;
     }
     const status = await streamer.stop();
     return {
-      completeness: assessCaptureCompleteness({
-        lastLineWallMs: status.lastLineWallMs,
-        teardownWallMs,
-        lineCount: status.lineCount,
-      }),
+      completeness: assessCaptureCompleteness({...judged,
+        lastLineWallMs: status.lastLineWallMs, lineCount: status.lineCount}),
       provenance: await this._scanBootProvenance(
         fullLogDestPath(outputDir, this._scenarioName, nodeId),
       ),
@@ -1764,11 +1762,15 @@ class ClusterLifecycleBase {
    * container has exited, with exit evidence (stdout tail + fatal lines).
    * Best-effort — never throws.
    */
+  // Each exited container's FinishedAt is kept as a capture quiet bound for
+  // teardown (the runner sweeps before stop(); restart/start drop it).
   async sweepUnexpectedNodeExits() {
     try {
       return await sweepUnexpectedNodeExits(
         this._nodes.values(),
         (id) => this._isNodeExpectedDown(id),
+        (id, finishedAt) => (this._observedNodeExitMsById ||= new Map())
+          .set(String(id), parseObservedExitMs(finishedAt)),
       );
     } catch (_error) {
       return [];
@@ -1776,28 +1778,28 @@ class ClusterLifecycleBase {
   }
 
   async killNode(id) {
-    this._markNodeExpectedDown(id, 'killNode');
-    return this._runChaosAction('killNode', id, null, () =>
+    this._markNodeExpectedDown(id, NODE_LIFECYCLE_ACTION.KILL);
+    return this._runChaosAction(NODE_LIFECYCLE_ACTION.KILL, id, null, () =>
       this._chaos.killNode(id),
     );
   }
 
   async stopNode(id) {
-    this._markNodeExpectedDown(id, 'stopNode');
-    return this._runChaosAction('stopNode', id, null, () =>
+    this._markNodeExpectedDown(id, NODE_LIFECYCLE_ACTION.STOP);
+    return this._runChaosAction(NODE_LIFECYCLE_ACTION.STOP, id, null, () =>
       this._chaos.stopNode(id),
     );
   }
 
   async pauseNode(id) {
-    this._markNodeExpectedDown(id, 'pauseNode');
-    return this._runChaosAction('pauseNode', id, null, () =>
+    this._markNodeExpectedDown(id, NODE_LIFECYCLE_ACTION.PAUSE);
+    return this._runChaosAction(NODE_LIFECYCLE_ACTION.PAUSE, id, null, () =>
       this._chaos.pauseNode(id),
     );
   }
 
   async unpauseNode(id) {
-    const result = await this._runChaosAction('unpauseNode', id, null, () =>
+    const result = await this._runChaosAction(NODE_LIFECYCLE_ACTION.UNPAUSE, id, null, () =>
       this._chaos.unpauseNode(id),
     );
     this._clearNodeExpectedDown(id);
@@ -1808,8 +1810,9 @@ class ClusterLifecycleBase {
     // Marked for the whole stop->start->ready window; cleared only on a
     // SUCCESSFUL restart — a failed restart leaves the node expected-down
     // (its death is already attributed to the restart action by CL-025).
-    this._markNodeExpectedDown(id, 'restartNode');
-    const result = await this._runChaosAction('restartNode', id, options, () =>
+    this._markNodeExpectedDown(id, NODE_LIFECYCLE_ACTION.RESTART);
+    this._observedNodeExitMsById?.delete(String(id));
+    const result = await this._runChaosAction(NODE_LIFECYCLE_ACTION.RESTART, id, options, () =>
       this._restartNodeWithObservation(id, options),
     );
     this._clearNodeExpectedDown(id);
@@ -1822,8 +1825,11 @@ class ClusterLifecycleBase {
   // network identity (via chaos.startNode), marks the incarnation boundary so
   // the new incarnation's logs are filterable, waits for admin readiness, then
   // clears the expected-down mark so a later genuine crash is still detected.
+  // Its mark replaces the stop mark: a failed start is not judged to the stop.
   async startNode(id, options = {}) {
-    const result = await this._runChaosAction('startNode', id, options, () =>
+    this._markNodeExpectedDown(id, NODE_LIFECYCLE_ACTION.START);
+    this._observedNodeExitMsById?.delete(String(id));
+    const result = await this._runChaosAction(NODE_LIFECYCLE_ACTION.START, id, options, () =>
       this._startStoppedNodeWithObservation(id, options),
     );
     this._clearNodeExpectedDown(id);

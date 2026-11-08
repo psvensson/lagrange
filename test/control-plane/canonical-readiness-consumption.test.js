@@ -12,6 +12,7 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {test} from '../../src/test-helpers/tap.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_READINESS_ERROR_CODE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -243,19 +244,19 @@ test('ReplicaDispatchService.isNodeReady consumes canonical readiness',
         );
       });
 
-    await t.test('returns false without readiness service',
+    await t.test('refuses construction without readiness service',
       async (t) => {
-        const noReadiness = new ReplicaDispatchService({
-          nodeId: FIXTURE_NODE_ID,
-          systemTableCache: cache,
-          cdcGroupPropagationService: createPublicationOwner(),
-        });
-        // Default readiness service is created from cache;
-        // node with valid lease is ready via default service.
-        t.equal(
-          noReadiness.isNodeReady(FIXTURE_NODE_ID),
-          true,
-          'default readiness service should use cache',
+        t.throws(
+          () => new ReplicaDispatchService({
+            nodeId: FIXTURE_NODE_ID,
+            systemTableCache: cache,
+            cdcGroupPropagationService: createPublicationOwner(),
+          }),
+          {
+            code: CONTROL_PLANE_READINESS_ERROR_CODE.SERVICE_MISSING,
+            collaborator: 'controlPlaneReadinessService',
+          },
+          'dispatch never builds a private readiness service',
         );
       });
   });
@@ -344,40 +345,42 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
         );
       });
 
-    await t.test('default service uses cache when none injected',
+    await t.test('refuses construction without readiness service',
       async (t) => {
-        const noReadiness = new UnifiedRebalancer({
-          entityId: FIXTURE_PARTITION_ID,
-          entityType: EntityType.PARTITION,
-          nodeId: readyNodeId,
-          systemTableCache: cache,
-          cdcIntegrationService: {
-            insertSystemTableRow: async () => ({success: true}),
-            updateSystemTableRow: async () => ({success: true}),
+        t.throws(
+          () => new UnifiedRebalancer({
+            entityId: FIXTURE_PARTITION_ID,
+            entityType: EntityType.PARTITION,
+            nodeId: readyNodeId,
+            systemTableCache: cache,
+            cdcIntegrationService: {
+              insertSystemTableRow: async () => ({success: true}),
+              updateSystemTableRow: async () => ({success: true}),
+            },
+            tablePolicyService: {
+              getPolicyForPartition: () => ({}),
+            },
+            messageRouter: {
+              getConnectionState: () => 'connected',
+              deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
+              pingNode: async () => true,
+              isOutboundQueueAvailable: () => true,
+            },
+            rebalanceCoordinator: {
+              getMoveSafetyError: () => null,
+              createOperation: async () => ({operationId: 'op-1'}),
+              executeOperation: async () => ({success: true}),
+              canStartAddOperation: async () => true,
+              canStartRemoveOperation: async () => true,
+              getStats: () => ({}),
+            },
+            cdcGroupPropagationService: createPublicationOwner(),
+          }),
+          {
+            code: CONTROL_PLANE_READINESS_ERROR_CODE.SERVICE_MISSING,
+            collaborator: 'controlPlaneReadinessService',
           },
-          tablePolicyService: {
-            getPolicyForPartition: () => ({}),
-          },
-          messageRouter: {
-            getConnectionState: () => 'connected',
-            deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
-            pingNode: async () => true,
-            isOutboundQueueAvailable: () => true,
-          },
-          rebalanceCoordinator: {
-            getMoveSafetyError: () => null,
-            createOperation: async () => ({operationId: 'op-1'}),
-            executeOperation: async () => ({success: true}),
-            canStartAddOperation: async () => true,
-            canStartRemoveOperation: async () => true,
-            getStats: () => ({}),
-          },
-          cdcGroupPropagationService: createPublicationOwner(),
-        });
-        const available = noReadiness.getAvailableNodes();
-        t.ok(
-          available.length > 0,
-          'default readiness service should use cache',
+          'the rebalancer never builds a private readiness service',
         );
       });
   });
@@ -450,37 +453,39 @@ test('RebalanceCoordinator.isNodeReadyForRouting consumes canonical',
         );
       });
 
-    await t.test('default service uses cache when none injected',
+    await t.test('refuses construction without readiness service',
       async (t) => {
-        const noReadiness = new RebalanceCoordinator({
-          nodeId: FIXTURE_NODE_ID,
-          systemTableCache: cache,
-          cdcIntegrationService: {
-            insertSystemTableRow: async () => ({success: true}),
-            updateSystemTableRow: async () => ({success: true}),
-            waitForCacheUpdate: async () => true,
+        t.throws(
+          () => new RebalanceCoordinator({
+            nodeId: FIXTURE_NODE_ID,
+            systemTableCache: cache,
+            cdcIntegrationService: {
+              insertSystemTableRow: async () => ({success: true}),
+              updateSystemTableRow: async () => ({success: true}),
+              waitForCacheUpdate: async () => true,
+            },
+            messageRouter: {
+              getConnectionState: () => 'connected',
+              deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
+            },
+            tablePolicyService: {
+              getPolicyForPartition: () => ({}),
+            },
+            sqlQueryEngine: {
+              executeQuery: async () => ({success: true, rows: []}),
+            },
+            cdcGroupPropagationService: {
+              getPublicationModeDiagnostics:
+                createPublicationOwner().getPublicationModeDiagnostics,
+            },
+            operationWorkflowCoordinator:
+              new DurableWorkflowCoordinator(),
+          }),
+          {
+            code: CONTROL_PLANE_READINESS_ERROR_CODE.SERVICE_MISSING,
+            collaborator: 'controlPlaneReadinessService',
           },
-          messageRouter: {
-            getConnectionState: () => 'connected',
-            deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
-          },
-          tablePolicyService: {
-            getPolicyForPartition: () => ({}),
-          },
-          sqlQueryEngine: {
-            executeQuery: async () => ({success: true, rows: []}),
-          },
-          cdcGroupPropagationService: {
-            getPublicationModeDiagnostics:
-              createPublicationOwner().getPublicationModeDiagnostics,
-          },
-          operationWorkflowCoordinator:
-            new DurableWorkflowCoordinator(),
-        });
-        t.equal(
-          noReadiness.isNodeReadyForRouting(FIXTURE_NODE_ID),
-          true,
-          'default readiness service should use cache',
+          'the coordinator never builds a private readiness service',
         );
       });
   });

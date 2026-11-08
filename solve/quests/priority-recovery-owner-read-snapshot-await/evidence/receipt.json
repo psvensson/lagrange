@@ -1,0 +1,20 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "priority-recovery-owner-read-snapshot-await",
+  "status": "fail",
+  "generatedAt": "2026-11-08T20:04:34.000Z",
+  "receipts": [
+    {
+      "id": "owner-read-deferral-reads-a-settled-snapshot",
+      "passed": false,
+      "command": null,
+      "detail": "not yet witnessed: resolvePriorityRecoveryPlanningSnapshotForOwnerRead hands its callers a Promise where a settled planning snapshot is required, so owner-read deferral never reads as active"
+    },
+    {
+      "id": "best-effort-alias-family-collapsed",
+      "passed": false,
+      "command": null,
+      "detail": "not yet witnessed: the getPriorityRecoveryPlanningSnapshotBestEffort alias family still exists beside the one planning answer"
+    }
+  ]
+}

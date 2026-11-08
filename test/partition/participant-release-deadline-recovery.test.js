@@ -28,6 +28,7 @@ import {CONTROL_PARTITION, CONTROL_REPLICA, PARTITION, REPLICA, SQL,
   withParticipantReleaseProtocol as fixture} from
   '../test-helpers/participant-release-protocol-fixture.js';
 import {waitForCondition} from './partition-service-test-support.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
@@ -212,7 +213,7 @@ async function restartDependentWithLostNotifications(context, restore) {
     if (replicaId === REPLICA) forwarded += 1;
   }));
   await replacement.initialize();
-  await replacement.raft.campaign();
+  await turnChainValue(replacement.raft.campaign());
   assert.equal(replacement.raft.readStatus().role, RAFT_ROLE.LEADER,
     'native current leader must exist before the missing-control recovery attempt');
   assert.ok(suppression.dropped.length > 0,
@@ -228,7 +229,7 @@ async function restoreCurrentControl(context) {
   const replacement = createControl({bootstrapMembership: durableRecordBootstrap()});
   replaceControl(replacement);
   await replacement.initialize();
-  await replacement.raft.campaign();
+  await turnChainValue(replacement.raft.campaign());
   assert.equal(replacement.raft.readStatus().role, RAFT_ROLE.LEADER);
   assert.strictEqual(handler.localServices.get(CONTROL_REPLICA), replacement);
   return replacement;

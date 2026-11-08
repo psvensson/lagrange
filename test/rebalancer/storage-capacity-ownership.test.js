@@ -42,6 +42,7 @@ import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {PartitionSplitMergeManager} from
   '../../src/partition/partition-split-merge-manager.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -117,9 +118,9 @@ test('Req 11.1 — StorageCapacityAccountingService is the ' +
   await t.test('StorageAdmissionService does not implement its ' +
     'own snapshot computation', (t) => {
     const accounting = new StorageCapacityAccountingService();
-    const admission = new StorageAdmissionService({
+    const admission = new StorageAdmissionService(withNodeReadinessService('StorageAdmissionService', {
       accountingService: accounting,
-    });
+    }));
     t.equal(admission.getCapacitySnapshots, undefined);
     t.equal(admission.getCapacitySnapshotForNode, undefined);
     t.equal(admission.buildSnapshot, undefined);
@@ -168,9 +169,9 @@ test('Req 11.2 — StorageAdmissionService is the single ' +
 
   await t.test('exports checkAdd, checkReplace, checkSplit', (t) => {
     const accounting = new StorageCapacityAccountingService();
-    const admission = new StorageAdmissionService({
+    const admission = new StorageAdmissionService(withNodeReadinessService('StorageAdmissionService', {
       accountingService: accounting,
-    });
+    }));
     t.equal(typeof admission.checkAdd, 'function');
     t.equal(typeof admission.checkReplace, 'function');
     t.equal(typeof admission.checkSplit, 'function');
@@ -380,7 +381,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
 
   await t.test('accepts storageAdmissionService dependency', (t) => {
     const mockAdmission = {checkAdd: async () => ({})};
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-1',
       systemTableCache: createMinimalCache(),
       cdcIntegrationService: {
@@ -397,7 +398,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
         executeQuery: async () => ({rows: []}),
       },
       storageAdmissionService: mockAdmission,
-    });
+    }));
     t.equal(coordinator.storageAdmissionService, mockAdmission);
     coordinator.shutdown();
     t.end();
@@ -405,7 +406,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
 
   await t.test('accepts storageAccountingService dependency', (t) => {
     const mockAccounting = {estimateReplicaBytes: () => 0};
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-1',
       systemTableCache: createMinimalCache(),
       cdcIntegrationService: {
@@ -422,7 +423,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
         executeQuery: async () => ({rows: []}),
       },
       storageAccountingService: mockAccounting,
-    });
+    }));
     t.equal(coordinator.storageAccountingService, mockAccounting);
     coordinator.shutdown();
     t.end();
@@ -430,7 +431,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
 
   await t.test('exposes createReservationForOperation as a ' +
     'method', (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-1',
       systemTableCache: createMinimalCache(),
       cdcIntegrationService: {
@@ -446,7 +447,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
       sqlQueryEngine: {
         executeQuery: async () => ({rows: []}),
       },
-    });
+    }));
     t.equal(
       typeof coordinator.createReservationForOperation, 'function',
     );
@@ -456,7 +457,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
 
   await t.test('exposes releaseReservationForOperation as a ' +
     'method', (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-1',
       systemTableCache: createMinimalCache(),
       cdcIntegrationService: {
@@ -472,7 +473,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
       sqlQueryEngine: {
         executeQuery: async () => ({rows: []}),
       },
-    });
+    }));
     t.equal(
       typeof coordinator.releaseReservationForOperation, 'function',
     );
@@ -481,7 +482,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
   });
 
   await t.test('exposes reconcileReservations as a method', (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-1',
       systemTableCache: createMinimalCache(),
       cdcIntegrationService: {
@@ -497,7 +498,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
       sqlQueryEngine: {
         executeQuery: async () => ({rows: []}),
       },
-    });
+    }));
     t.equal(typeof coordinator.reconcileReservations, 'function');
     coordinator.shutdown();
     t.end();
@@ -505,7 +506,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
 
   await t.test('does not maintain its own reservation state ' +
     'map', (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-1',
       systemTableCache: createMinimalCache(),
       cdcIntegrationService: {
@@ -521,7 +522,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
       sqlQueryEngine: {
         executeQuery: async () => ({rows: []}),
       },
-    });
+    }));
     // The coordinator must not have a local reservations Map/Set.
     // It persists reservations via SQL and reads via SQL/cache.
     t.equal(coordinator.reservations, undefined);
@@ -567,9 +568,9 @@ test('Req 11.5 — No duplicate in-memory capacity cache outside ' +
   await t.test('StorageAdmissionService does not maintain a ' +
     'local capacity Map', (t) => {
     const accounting = new StorageCapacityAccountingService();
-    const admission = new StorageAdmissionService({
+    const admission = new StorageAdmissionService(withNodeReadinessService('StorageAdmissionService', {
       accountingService: accounting,
-    });
+    }));
     t.equal(admission.capacityCache, undefined);
     t.equal(admission.snapshotCache, undefined);
     t.equal(admission.nodeCapacityMap, undefined);
@@ -633,7 +634,7 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
     t.equal(planner.evaluate, undefined);
 
     // Verify RebalanceCoordinator has no admission methods
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-1',
       systemTableCache: createMinimalCache(),
       cdcIntegrationService: {
@@ -649,7 +650,7 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
       sqlQueryEngine: {
         executeQuery: async () => ({rows: []}),
       },
-    });
+    }));
     t.equal(coordinator.checkAdd, undefined);
     t.equal(coordinator.checkReplace, undefined);
     t.equal(coordinator.checkSplit, undefined);
@@ -724,7 +725,7 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
 
   await t.test('RebalanceCoordinator add/replace admission fails closed ' +
     'when storageAdmissionService is missing', async (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-1',
       systemTableCache: createMinimalCache(),
       cdcIntegrationService: {
@@ -743,7 +744,7 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
       storageAccountingService: {
         estimateReplicaBytes: () => NUM.THOUSAND,
       },
-    });
+    }));
 
     await t.rejects(
       coordinator.ensureProvisioningAdmissionAllowed({
@@ -759,7 +760,7 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
 
   await t.test('RebalanceCoordinator add/replace admission fails closed ' +
     'when storageAccountingService is missing', async (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-1',
       systemTableCache: createMinimalCache(),
       cdcIntegrationService: {
@@ -782,7 +783,7 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
           allowed: true,
         }),
       },
-    });
+    }));
 
     await t.rejects(
       coordinator.ensureProvisioningAdmissionAllowed({
@@ -800,9 +801,9 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
     'methods exist on any storage-capacity component', (t) => {
     const components = [
       new StorageCapacityAccountingService(),
-      new StorageAdmissionService({
+      new StorageAdmissionService(withNodeReadinessService('StorageAdmissionService', {
         accountingService: new StorageCapacityAccountingService(),
-      }),
+      })),
       new StoragePressureBehavior({}),
       new StorageCapacityMetrics({}),
       new StorageCapacityMigration({}),
@@ -824,7 +825,7 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
 
   await t.test('RebalanceCoordinator reservation methods use ' +
     'SQL persistence, not local state', (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-1',
       systemTableCache: createMinimalCache(),
       cdcIntegrationService: {
@@ -840,7 +841,7 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
       sqlQueryEngine: {
         executeQuery: async () => ({rows: []}),
       },
-    });
+    }));
 
     // Coordinator must use SQL for reservation persistence.
     // Verify it has the SQL execution method but no local

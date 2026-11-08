@@ -9,6 +9,7 @@ import {test} from 'node:test';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {buildDeliveryEnvelope} from '../../../src/transport/transport-semantic-outcome.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const REPLICAS = Object.freeze(['status-a', 'status-b', 'status-c']);
 const RS_ONLY_STATUS_FIELDS = Object.freeze(['confState', 'runtimeGeneration']);
@@ -55,10 +56,10 @@ test('readStatus answers a frozen rs-raft status while a delivery is in flight',
         'an idle group answers its status synchronously');
 
       suspendDelivery = true;
-      let pending = port.propose('observed-while-busy');
+      let pending = turnChainValue(port.propose('observed-while-busy'));
       for (let index = 0; index < SUSPEND_ATTEMPTS && releaseDelivery === null;
         index += 1) {
-        pending = port.tick();
+        pending = turnChainValue(port.tick());
       }
       assert.equal(typeof releaseDelivery, 'function',
         'the leader is suspended in a real Ready delivery');

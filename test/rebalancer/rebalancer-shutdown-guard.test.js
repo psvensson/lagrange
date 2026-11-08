@@ -6,6 +6,7 @@ import {
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -44,7 +45,7 @@ function createMockCoordinator() {
 test('UnifiedRebalancer shutdown guard skips rebalance checks after shutdown', async (t) => {
   initializeTestEnvironment();
 
-  const rebalancer = new UnifiedRebalancer({
+  const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
     entityId: 'tables-p1',
     entityType: EntityType.PARTITION,
     nodeId: 'test-node',
@@ -65,7 +66,7 @@ test('UnifiedRebalancer shutdown guard skips rebalance checks after shutdown', a
       isOutboundQueueAvailable: () => true,
     },
     rebalanceCoordinator: createMockCoordinator(),
-  });
+  }));
 
   rebalancer.initialize();
   rebalancer.setLeader(true);

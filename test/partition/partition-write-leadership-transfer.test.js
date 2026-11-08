@@ -42,6 +42,7 @@ import {
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
   RAFT_OPERATION_OUTCOME,
 } from '../../src/raft/raft-operation-port-constants.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {RAFT_RS_TRANSPORT_PROTOCOL} from
   '../../src/raft/raft-rs-ingress-constants.js';
 import {recoveryRetryWindowMsOf} from
@@ -125,7 +126,7 @@ async function withTransferRunning(partitionId, body) {
     const status = leader.raft.readStatus();
     const transfereeId = status.peers.find((peer) =>
       peer.replicaIdentity === transferee.replicaId).peerId;
-    const delivered = leader.raft.step({
+    const delivered = turnChainValue(leader.raft.step({
       protocol: RAFT_RS_TRANSPORT_PROTOCOL,
       groupId: partitionId,
       from: transfereeId,
@@ -135,7 +136,7 @@ async function withTransferRunning(partitionId, body) {
       // ingress refuses a term-less one.
       message: {msgType: transferLeaderMessageType(), from: transfereeId,
         to: status.peerId, term: String(status.term)},
-    });
+    }));
     assert.equal(delivered?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       'setup: the leader admits the transfer request a peer delivered ' +
       `(${JSON.stringify(delivered)})`);

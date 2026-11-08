@@ -6,6 +6,7 @@ import {SERVICE_STATUS, SERVICE_TYPE, STATE, TABLES} from '../../src/constants/i
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 /**
  * Build a mock readiness service backed by a cache.
@@ -193,13 +194,13 @@ test('dispatch readiness is lease-based while rebalancer keeps transport checks'
 });
 
 test('dispatch initialization requires full cache read APIs', async (t) => {
-  const service = new ReplicaDispatchService({
+  const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
     nodeId: 'seed-node',
     messageRouter: {},
     systemTableCache: {},
     cdcIntegrationService: {},
     rebalanceCoordinator: {},
-  });
+  }));
   t.throws(
     () => service.initialize(),
     /systemTableCache.get/,

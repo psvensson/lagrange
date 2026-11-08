@@ -558,26 +558,16 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
     if (!service || typeof service !== 'object') {
       return null;
     }
+    // A synchronous read: only the service's synchronous reader answers it
+    // (its async reader always answers a promise).
+    if (typeof service.getControlPlanePublicationStorySync !== 'function') {
+      return null;
+    }
     try {
-      if (
-        typeof service.getControlPlanePublicationStorySync === 'function'
-      ) {
-        return service.getControlPlanePublicationStorySync(
-          this.getSeedNodeId(),
-          observedAt,
-        );
-      }
-      if (typeof service.getControlPlanePublicationStory !== 'function') {
-        return null;
-      }
-      const story = service.getControlPlanePublicationStory(
+      return service.getControlPlanePublicationStorySync(
         this.getSeedNodeId(),
         observedAt,
       );
-      if (story && typeof story.then === 'function') {
-        return null;
-      }
-      return story;
     } catch (_error) {
       return null;
     }
@@ -594,29 +584,16 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
     if (!service || typeof service !== 'object') {
       return null;
     }
+    if (
+      typeof service.getMembershipPublicationDiagnosticsSync !== 'function'
+    ) {
+      return null;
+    }
     try {
-      if (
-        typeof service.getMembershipPublicationDiagnosticsSync ===
-        'function'
-      ) {
-        return service.getMembershipPublicationDiagnosticsSync(
-          this.getSeedNodeId(),
-          observedAt,
-        );
-      }
-      if (
-        typeof service.getMembershipPublicationDiagnostics !== 'function'
-      ) {
-        return null;
-      }
-      const diagnostics = service.getMembershipPublicationDiagnostics(
+      return service.getMembershipPublicationDiagnosticsSync(
         this.getSeedNodeId(),
         observedAt,
       );
-      if (diagnostics && typeof diagnostics.then === 'function') {
-        return null;
-      }
-      return diagnostics;
     } catch (_error) {
       return null;
     }

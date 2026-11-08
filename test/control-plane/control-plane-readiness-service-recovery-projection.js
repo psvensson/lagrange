@@ -14,9 +14,7 @@ import {
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from '../../src/control-plane/control-plane-publication-merge.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   RECOVERY_PROTOCOL_STATE,
 } from '../../src/control-plane/membership-lifecycle-constants.js';
@@ -28,9 +26,10 @@ import {
 } from '../../src/control-plane/publication-recovery-gate.js';
 import {TEST_COUNT_ONLY_ACK_DEBT_COUNT, TEST_COUNT_ONLY_ACK_NODE_ID, TEST_COUNT_ONLY_ACK_OBSERVED_AT, TEST_COUNT_ONLY_ACK_PUBLICATION_CREATED_AT, TEST_COUNT_ONLY_ACK_PUBLICATION_EPOCH, TEST_COUNT_ONLY_ACK_READY_PARTITION_SUMMARY, TEST_PRIORITY_SERVE_BUDGET_BYTES, TEST_PRIORITY_SERVE_LAST_HEARTBEAT, TEST_PRIORITY_SERVE_PARTITION_ID, TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT, TEST_PRIORITY_SERVE_READY_LEASE_EXPIRES_AT, createActiveNode, createCache, createMessageGroupService} from './control-plane-readiness-service-planning-snapshot-support.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 test('ControlPlaneReadinessService projects recovery eligibility blockers without overriding publication-gate blockers',
   (t) => {
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'seed-node',
       systemTableCache: createCache(),
       now: () => 1500,
@@ -106,7 +105,7 @@ test('ControlPlaneReadinessService clears stale priority-spread reasons once the
     const TEST_STALE_PRIORITY_RECOVERY_REASONS = Object.freeze([
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
     ]);
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       now: () => TEST_OBSERVED_AT,
@@ -182,7 +181,7 @@ test('ControlPlaneReadinessService rebuilds stale embedded publication gates fro
       publicationPending: false,
       ackPending: false,
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       now: () => TEST_OBSERVED_AT,
@@ -232,7 +231,7 @@ test('ControlPlaneReadinessService rebuilds stale embedded publication gates fro
 
 test('ControlPlaneReadinessService preserves count-only ACK debt in rebuilt publication gates',
   (t) => {
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_COUNT_ONLY_ACK_NODE_ID,
       systemTableCache: createCache(),
       now: () => TEST_COUNT_ONLY_ACK_OBSERVED_AT,
@@ -289,7 +288,7 @@ test('ControlPlaneReadinessService preserves count-only ACK debt in rebuilt publ
 
 test('ControlPlaneReadinessService preserves provided count-only ACK debt when direct publication has an empty ACK list',
   (t) => {
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_COUNT_ONLY_ACK_NODE_ID,
       systemTableCache: createCache(),
       now: () => TEST_COUNT_ONLY_ACK_OBSERVED_AT,
@@ -346,7 +345,7 @@ test('ControlPlaneReadinessService preserves provided count-only ACK debt when d
 
 test('ControlPlaneReadinessService infers count-only ACK debt when a provided snapshot has an empty ACK list',
   (t) => {
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_COUNT_ONLY_ACK_NODE_ID,
       systemTableCache: createCache(),
       now: () => TEST_COUNT_ONLY_ACK_OBSERVED_AT,
@@ -401,7 +400,7 @@ test('ControlPlaneReadinessService infers count-only ACK debt when a provided sn
 
 test('ControlPlaneReadinessService preserves direct count-only ACK debt over provided empty ACK list',
   (t) => {
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_COUNT_ONLY_ACK_NODE_ID,
       systemTableCache: createCache(),
       now: () => TEST_COUNT_ONLY_ACK_OBSERVED_AT,
@@ -493,7 +492,7 @@ test('ControlPlaneReadinessService reopens serve readiness when the current plan
       publicationPending: false,
       ackPending: false,
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       now: () => TEST_PRIORITY_SERVE_LAST_HEARTBEAT,
@@ -605,7 +604,7 @@ test('ControlPlaneReadinessService prefers the direct membership publication row
       publicationPending: false,
       ackPending: false,
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       now: () => TEST_PRIORITY_SERVE_LAST_HEARTBEAT,
@@ -736,14 +735,14 @@ test('ControlPlaneReadinessService priority recovery health uses the direct read
       publicationPending: false,
       ackPending: false,
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
+      // Readiness reads the cluster's latest publication row (the
+      // production coordinator's cluster read); the fixture derives the
+      // per-node read from it.
       membershipPublicationService: {
-        getLatestPublicationForNodeSync(targetNodeId) {
-          if (targetNodeId !== TEST_NODE_ID) {
-            return null;
-          }
+        getLatestClusterPublicationSync() {
           return {
             publicationEpoch: TEST_PUBLICATION_EPOCH,
             status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,

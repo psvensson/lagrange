@@ -48,6 +48,7 @@ import {
 } from '../../src/service/index.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 // The host primitives, captured before any recorder replaces them, so a
 // supplied clock's own delegation is never counted as production reaching
@@ -332,7 +333,7 @@ async function consensusScheduling(open, label, authorities,
   const beforeStart = countClockArms();
   let started = null;
   const armed = primitivesArmedBy(() => {
-    started = partition.raft.startScheduling();
+    started = turnChainValue(partition.raft.startScheduling());
   });
   assert.equal(started?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     'the port starts its scheduling before it returns');

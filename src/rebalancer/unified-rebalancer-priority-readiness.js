@@ -203,11 +203,8 @@ function buildPlanningPublicationRecoveryGateUncached(planningSnapshot) {
   });
 }
 function readMembershipPlanningSnapshot(readinessService, nodeId, observedAt) {
-  const getterName = [
-    'getMembershipPublicationPlanningAnswerSync',
-    'getMembershipPublicationPlanningSnapshotSync',
-  ].find((name) => typeof readinessService?.[name] === 'function');
-  return getterName ? readinessService[getterName](nodeId, observedAt) : null;
+  return readinessService.getPriorityRecoveryPlanningAnswerSync(
+    nodeId, observedAt);
 }
 function normalizeNodeIdSet(nodeIds) {
   return new Set(

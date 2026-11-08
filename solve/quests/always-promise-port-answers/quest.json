@@ -2,15 +2,35 @@
   "schema": "solve-quest/2",
   "id": "always-promise-port-answers",
   "epic": "code-navigability-and-mistake-resistance",
-  "statement": "Every producer whose answer a consumer tests with typeof x.then === 'function' returns a promise unconditionally (the raft operation port's propose calls among them), the 26 consumer-side checks are deleted, and the pattern becomes an ESLint no-restricted-syntax selector so a value-or-promise return cannot reappear; src/raft/raft-rs-runtime-owner.js with nine sites is the first producer.",
+  "statement": "Every producer whose answer a consumer probes for a promise shape (typeof x.then, typeof x.catch, optional-chained or truthiness forms, instanceof Promise) answers one shape on every path: an I/O producer (transport sends, service command routing) returns a promise unconditionally, a synchronous-when-possible turn (the raft runtime's internal turn and the operation port's protocol answers, the serialized replica-mutation lane) returns a named settled-or-pending answer produced once at the producer so that no timing changes, and a service's apply mode is declared and validated once at registration instead of sniffed per entry; the consumer-side probes are deleted, and the pattern becomes an ESLint no-restricted-syntax selector so a value-or-promise return cannot reappear.",
   "doneWhen": {
     "probe": "script",
-    "args": {"command": "node scripts/checks/code-navigability-budget.js --metric --rows value_or_promise_then_checks", "target": 0}
+    "args": {
+      "command": "node scripts/checks/code-navigability-budget.js --metric --rows value_or_promise_then_checks",
+      "target": 0
+    }
   },
   "constraints": [
-    {"id": "fix-the-producer", "statement": "A check is deleted only when its producer's return has one shape. Wrapping the consumer side in Promise.resolve keeps the ambiguity and is not a fix."},
-    {"id": "ordering-named", "statement": "A producer that answered synchronously on some path and now answers asynchronously names in the attempt every consumer whose ordering assumption changed and the witness that covers it."},
-    {"id": "eslint-after-zero", "statement": "The selector lands with the last deletion, never earlier."},
-    {"id": "independent-verification", "statement": "The src/ changes land only behind an approving verification newer than the last attempt."}
-  ]
+    {
+      "id": "ordering-named",
+      "statement": "A producer that answered synchronously on some path and now answers asynchronously names in the attempt every consumer whose ordering assumption changed and the witness that covers it."
+    },
+    {
+      "id": "eslint-after-zero",
+      "statement": "The selector lands with the last deletion, never earlier."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "The src/ changes land only behind an approving verification newer than the last attempt."
+    },
+    {
+      "id": "fix-the-producer",
+      "statement": "A probe is deleted only when its producer's answer has one shape (a promise, or a named settled-or-pending answer). Wrapping the consumer side in Promise.resolve keeps the ambiguity and is not a fix."
+    },
+    {
+      "id": "no-raft-timing-change",
+      "statement": "The raft runtime's internal turn stays synchronous when it can complete synchronously; a consumer that read a synchronous result keeps reading it on the settled branch. Making an internal turn always asynchronous is a raft semantics change outside this quest; a site where the named answer cannot hold without one is reported, not changed."
+    }
+  ],
+  "sealedAt": "1fd4e9ef33763685c527e835f9bc2d29d75302dc"
 }

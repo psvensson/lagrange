@@ -17,6 +17,9 @@ import {
 import {
   NOT_CERTIFICATION_EVIDENCE,
 } from '../../test/distributed/harness/certification-evidence-statement.js';
+import {
+  SCENARIO_VERDICT_REASON,
+} from '../../test/distributed/harness/validation-matrix.js';
 
 const TEXT_ENCODING = 'utf8';
 const REPORT_DIR = 'test-output/reports';
@@ -42,11 +45,14 @@ const PROBE_ENV = 'LAGRANGE_PROBE';
 const PROBE_ENV_VALUE = '1';
 
 // A live report whose harness, not the system under test, failed is a
-// non-measuring sample: it counts neither for nor against a streak.
+// non-measuring sample: it counts neither for nor against a streak. So is a
+// report whose failure bundle could not examine the whole failure window
+// (incomplete analysis fails the subject; validation-matrix.js owns the reason).
 const NON_MEASURING_VERDICT_REASONS = Object.freeze([
   'execution_incomplete',
   'harness_connectivity',
   'host_scheduling_gap_budget_exceeded',
+  SCENARIO_VERDICT_REASON.LOG_WINDOW_COVERAGE_INCOMPLETE,
 ]);
 
 const REASON = Object.freeze({

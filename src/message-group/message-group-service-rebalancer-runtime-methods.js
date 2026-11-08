@@ -123,6 +123,8 @@ function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
         messageRouter: this.transport,
         sqlQueryEngine: this.cdcIntegrationService.sqlQueryEngine,
         rebalanceCoordinator: this.rebalanceCoordinator,
+        controlPlaneReadinessService:
+          this.rebalanceCoordinator.controlPlaneReadinessService,
       });
       this.rebalancer.initialize();
       this.rebalancer.setLeader(this.resolveRebalancerLeadership());

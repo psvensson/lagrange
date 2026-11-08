@@ -1,8 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function createCoordinator() {
-  return new RebalanceCoordinator({
+  return new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: 'coordinator-node',
     systemTableCache: {
       getAll: () => [],
@@ -13,7 +14,7 @@ function createCoordinator() {
     sqlQueryEngine: {
       executeQuery: async () => ({success: true, rows: []}),
     },
-  });
+  }));
 }
 
 test('RebalanceCoordinator does not overlap periodic timeout checks', async (t) => {
@@ -77,14 +78,14 @@ test('the periodic check sweeps membership debt after the orphan reconcile', asy
 });
 
 test('the repository is bound to the issued boot incarnation the router carries', (t) => {
-  const bound = new RebalanceCoordinator({
+  const bound = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: 'coordinator-node',
     systemTableCache: {getAll: () => []},
     cdcIntegrationService: {},
     messageRouter: {bootIncarnation: 7},
     tablePolicyService: {},
     sqlQueryEngine: {executeQuery: async () => ({success: true, rows: []})},
-  });
+  }));
   t.equal(bound.repository.membershipOwnerBootIncarnation, 7,
     'the membership owner claim is bound to this process\'s issued boot incarnation');
   const unbound = createCoordinator();

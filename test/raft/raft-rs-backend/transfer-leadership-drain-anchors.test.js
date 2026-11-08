@@ -44,6 +44,7 @@ import {
   craft,
 } from './transfer-leadership-drain-oracle-harness.js';
 import {namedSuccessor} from './transfer-leadership-driver.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const {CORE_OK} = RAFT_OPERATION_OUTCOME;
 const A = 'anchor-a';
@@ -67,7 +68,7 @@ for (const name of ENUMERATIONS.local) {
       craft(run, {to: A, from: B, msgType: ENUMERATIONS.types.get(name)});
       assert.equal(run.driver.stepUndrained(A), 1);
       const command = {behind: name};
-      const answer = await run.act(() => run.driver.port(A).propose(command));
+      const answer = await run.act(() => turnChainValue(run.driver.port(A).propose(command)));
       assert.equal(answer.outcome, CORE_OK, JSON.stringify(answer));
       await run.deliver();
       assert.equal(run.driver.applied(A, command), true,
@@ -89,14 +90,14 @@ for (const reentry of [true, false]) {
       // B's transfer election: the one a leader in its check-quorum lease
       // does not ignore; its vote request to A stays pending.
       await run.act(() =>
-        run.driver.port(A).transferLeadership(namedSuccessor(B)));
+        turnChainValue(run.driver.port(A).transferLeadership(namedSuccessor(B))));
       await run.deliverOnly([B]);
       await run.deliverOnly([C]);
       await run.deliverOnly([B]);
       assert.ok(run.driver.stepUndrained(A) >= 2,
         'precondition: the vote request and the append are pending');
       await run.act(() =>
-        run.driver.port(A).transferLeadership(namedSuccessor(C)));
+        turnChainValue(run.driver.port(A).transferLeadership(namedSuccessor(C))));
       assert.deepEqual(run.projectionMismatches(), [],
         'the subscriber projection equals the core after the turn');
       assert.equal(run.driver.status(A).leaderId, B,
@@ -121,7 +122,8 @@ async function refuseFrom(run, senders) {
       msgType: heartbeatResponse});
   }
   run.driver.stepUndrained(A);
-  await run.act(() => run.driver.port(A).readStatus());
+  run.driver.port(A).readStatus();
+  await run.settle();
 }
 
 test('R13: the record of refused inbound steps holds at most its bound of ' +
@@ -152,13 +154,13 @@ test('B1/F9b: a turn that awaited a send enters the core again only once ' +
   'the store admits persistence', async () => {
   const run = await formed('anchor-admission-recheck');
   try {
-    await run.act(() => run.driver.port(A).propose({acknowledged: 'held'}));
+    await run.act(() => turnChainValue(run.driver.port(A).propose({acknowledged: 'held'})));
     await run.deliverOnly([B, C]);
     run.asyncSends = true;
     run.holdSends = true;
     run.driver.stepUndrained(A);
     let settledAnswer = null;
-    const answer = Promise.resolve(run.driver.port(A).propose({x: 1}))
+    const answer = Promise.resolve(turnChainValue(run.driver.port(A).propose({x: 1})))
       .then((value) => {
         settledAnswer = value;
         return value;
@@ -189,7 +191,7 @@ test('F6: an accepted transfer is stepped in the turn that answers it',
     const run = await formed('anchor-one-turn', {reentry: false});
     try {
       const mark = run.coreOperations().length;
-      const answer = run.driver.port(A).transferLeadership(namedSuccessor(C));
+      const answer = turnChainValue(run.driver.port(A).transferLeadership(namedSuccessor(C)));
       const byAnswer = run.coreOperations().slice(mark);
       assert.equal((await answer).reason,
         RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_REQUESTED);
@@ -212,7 +214,7 @@ test('per-index timing: a transfer the core cannot complete holds ' +
     driver.isolate(C);
     await run.propose(A, {lag: C});
     assert.equal((await run.act(() =>
-      driver.port(A).transferLeadership(namedSuccessor(C)))).reason,
+      turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))))).reason,
     RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_REQUESTED);
     let rounds = 0;
     let answer = await run.propose(A, {round: rounds});
@@ -239,9 +241,9 @@ test('CA9: a leader demoted to learner answers its transfer\'s dropped ' +
   const run = await formed('anchor-ca9');
   try {
     const {driver} = run;
-    assert.equal((await run.act(() => driver.port(A).proposeConfChange({
+    assert.equal((await run.act(() => turnChainValue(driver.port(A).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: A,
-    }))).outcome, CORE_OK);
+    })))).outcome, CORE_OK);
     await run.deliver();
     await run.round();
     const status = driver.status(A);
@@ -249,10 +251,10 @@ test('CA9: a leader demoted to learner answers its transfer\'s dropped ' +
     assert.ok(status.confState.learners.includes(status.peerId),
       'precondition: A is a learner of its own configuration');
     assert.equal((await run.act(() =>
-      driver.port(A).transferLeadership(namedSuccessor(C)))).reason,
+      turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))))).reason,
     RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_REQUESTED);
     const dropped = await run.act(() =>
-      driver.port(A).propose({during: 'transfer'}));
+      turnChainValue(driver.port(A).propose({during: 'transfer'})));
     assert.equal(dropped.reason,
       RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_IN_PROGRESS,
       JSON.stringify(dropped));

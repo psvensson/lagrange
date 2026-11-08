@@ -17,6 +17,7 @@ import {
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const TEST_NODE_ID = 'node-1';
 const TEST_SOURCE_NODE_ID = 'node-2';
@@ -97,7 +98,7 @@ test(TEST_NAME_STARTUP_REPLAYS_CACHED_PENDING,
     };
     const dispatchedOperations = [];
     const coordinatorListeners = [];
-    const service = new ReplicaDispatchService({
+    const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
       nodeId: TEST_NODE_ID,
       messageRouter: {},
       cdcIntegrationService: {
@@ -153,7 +154,7 @@ test(TEST_NAME_STARTUP_REPLAYS_CACHED_PENDING,
           return {success: true};
         },
       },
-    });
+    }));
 
     service.initialize();
     await waitForQueueDrain();

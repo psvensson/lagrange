@@ -13,6 +13,7 @@ import {
   REPLICA_HANDLER_LEADER_HANDOFF_STATE,
   assignReplicaHandlerLeaderHandoffMethods,
 } from '../../src/node/replica-handler-leader-handoff-methods.js';
+import {settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
 
 // Quest formation-ledger-self-move-blocks-cluster-ops: a
 // `replace_target_leader_election` STEP_DOWN names the replica that SHOULD
@@ -42,9 +43,9 @@ function portAnswer(outcome, reason) {
 function buildHandlerHost(trackedRole, answer, service = null) {
   const transfers = [];
   const tracked = service || {
-    requestLeadershipTransfer: async (request) => {
+    requestLeadershipTransfer: (request) => {
       transfers.push(request);
-      return answer;
+      return settledTurn(answer);
     },
   };
   class HandlerHost {

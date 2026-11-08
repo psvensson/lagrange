@@ -5,8 +5,9 @@
 // worth investigating (a control-plane/publication stall stalls the very write
 // path the logs table rides on) — and the curated playback bundle samples most
 // lines out. Raw container stdout is the only channel that contains every pino
-// line a node ever wrote, regardless of cluster health. We capture it before the
-// container is destroyed so it survives the run.
+// line that reached the node's stdout, regardless of cluster health (what can
+// be lost before stdout: see CAPTURE_COMPLETENESS_REASON). We capture it
+// before the container is destroyed so it survives the run.
 //
 // The raw `docker logs` stream is Docker's multiplexed 8-byte-header frame
 // format, so we decode it with the harness's existing frame decoder
@@ -40,6 +41,26 @@ const INCARNATION_BOUNDARY_EVENT = 'incarnation-boundary';
 // frequently than this in the convergence scenarios, so a gap this large is a
 // reliable "incomplete capture" signal rather than a quiet node.
 const STALE_CAPTURE_GAP_MS = 60000;
+// The capture's own completeness verdict (assessCaptureCompleteness) is the
+// single authority on whether a node's .full-logs capture holds everything
+// the node's output channel delivered up to its quiet bound
+// (capture-quiet-bound.js); consumers (the failure bundle's log-window
+// coverage) carry it, never re-derive it from the file. The bound of the
+// claim: streamed mode is complete relative to what reached the container's
+// stdout. The node's default pino destination is asynchronous (sonic-boom),
+// so lines still queued in-process at a SIGKILL never reach stdout and no
+// observer can count them; file-logging mode writes synchronously and has no
+// such queue. NOT_RECORDED names the consumer's state when no verdict reached
+// it (absence never acquits).
+const CAPTURE_COMPLETENESS_REASON = Object.freeze({
+  NO_LINES_CAPTURED: 'no-lines-captured',
+  STALE_TAIL: 'stale-tail',
+  NOT_RECORDED: 'capture-completeness-not-recorded',
+});
+const CAPTURE_COMPLETENESS_NOT_RECORDED = Object.freeze({
+  complete: false,
+  reason: CAPTURE_COMPLETENESS_REASON.NOT_RECORDED,
+});
 
 // Run-scoped subtree of the output dir holding the uncurated per-node logs,
 // kept distinct from the curated {scenario}/{nodeId}.log the LogCollector writes.
@@ -366,23 +387,34 @@ function createNodeLogStreamer({
   };
 }
 
-// Decide whether a streamed capture looks complete: it is suspect if the node
-// went quiet well before teardown (the streaming reader stopped draining). Pure
-// function for testability.
+// Decide whether a capture looks complete: it is suspect if the node's last
+// captured line predates its quiet bound (capture-quiet-bound.js
+// resolveCaptureQuietBound: the earliest observed moment after which the node
+// could produce no output, else teardown) by more than the stale gap, i.e. the
+// reader stopped draining while the node could still log. Every verdict names
+// the bound it was judged against ({atMs, source, action}). gapMs is clamped
+// at zero: lines after the bound (shutdown lines after a stop mark) are not a
+// gap. Pure function for testability.
 function assessCaptureCompleteness({
   lastLineWallMs,
-  teardownWallMs,
   lineCount,
+  quietBound,
   gapThresholdMs = STALE_CAPTURE_GAP_MS,
 }) {
+  if (!Number.isFinite(quietBound?.atMs)) {
+    throw new TypeError('assessCaptureCompleteness requires a quietBound ' +
+      '(capture-quiet-bound.js resolveCaptureQuietBound)');
+  }
   if (!lineCount || lineCount <= 0) {
-    return {complete: false, reason: 'no-lines-captured'};
+    return {complete: false,
+      reason: CAPTURE_COMPLETENESS_REASON.NO_LINES_CAPTURED, quietBound};
   }
-  const gapMs = teardownWallMs - lastLineWallMs;
+  const gapMs = Math.max(0, quietBound.atMs - lastLineWallMs);
   if (gapMs > gapThresholdMs) {
-    return {complete: false, reason: 'stale-tail', gapMs};
+    return {complete: false,
+      reason: CAPTURE_COMPLETENESS_REASON.STALE_TAIL, gapMs, quietBound};
   }
-  return {complete: true, gapMs};
+  return {complete: true, gapMs, quietBound};
 }
 
 // Finalize a file-based capture: the node wrote pino NDJSON directly to a
@@ -394,7 +426,7 @@ function assessCaptureCompleteness({
 async function finalizeFileBasedCapture({
   hostFilePath,
   destGzPath,
-  teardownWallMs,
+  quietBound,
   gapThresholdMs = STALE_CAPTURE_GAP_MS,
   parseTimeMs = (s) => Date.parse(s),
 }) {
@@ -444,8 +476,8 @@ async function finalizeFileBasedCapture({
   await once(out, 'finish');
   const completeness = assessCaptureCompleteness({
     lastLineWallMs: lastAppTimeMs,
-    teardownWallMs,
     lineCount,
+    quietBound,
     gapThresholdMs,
   });
   return {lineCount, completeness, bootSourceProvenance: provenance};
@@ -479,6 +511,8 @@ export {
   splitLinesByIncarnation,
   INCARNATION_BOUNDARY_EVENT,
   assessCaptureCompleteness,
+  CAPTURE_COMPLETENESS_NOT_RECORDED,
+  CAPTURE_COMPLETENESS_REASON,
   finalizeFileBasedCapture,
   findBootSourceProvenance,
   fullLogDestPath,

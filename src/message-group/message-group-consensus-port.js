@@ -28,6 +28,7 @@ import {
   RAFT_OPERATION_OUTCOME,
 } from '../raft/raft-operation-port-constants.js';
 import {
+  RAFT_COMMITTED_ENTRY_APPLY_MODE,
   RAFT_OPERATION_PORT_REQUEST,
   hostedConsensusSubstrate,
 } from '../raft/raft-operation-port-request.js';
@@ -35,6 +36,7 @@ import {committedMembershipRefusal} from
   '../raft/raft-rs-committed-membership-read.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 import {retireCdcCommitWaiters} from './message-group-cdc-committed-acceptance.js';
+import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 // The replica's opening: the message-group domain, for its group. Its typed
 // startup refusal is the port's one refusal - the runtime owner refused to
@@ -129,6 +131,8 @@ function messageGroupConsensusRequest(service, cdcCommitLifetime) {
     // Runs inside the transaction that also advances the applied state.
     [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: (committed) =>
       service.applyCommittedEntry(committed, cdcCommitLifetime),
+    [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY_MODE]:
+      RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
   };
 }
 
@@ -172,7 +176,7 @@ async function leadLoneMessageGroup(service) {
     service.raft.startScheduling();
     return;
   }
-  const campaign = await service.raft.campaign();
+  const campaign = await turnChainValue(service.raft.campaign());
   if (campaign?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
     throw consensusInitRefusedError({...messageGroupConsensusOpening(service),
       answer: campaign});

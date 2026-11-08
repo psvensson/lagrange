@@ -6,6 +6,7 @@ import {RAFT_OPERATION_OUTCOME} from
   '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from '../../../src/raft/raft-rs-ingress-constants.js';
 import {RAFT_RS_SQL} from '../../../src/raft/raft-rs-durable-store-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {PERSISTENCE_ADMISSION_WAIT, RUNTIME_PHASE} from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {A, B, C, SETUP_ROUNDS, assertNativeDelivery, deliverHeartbeat,
@@ -30,10 +31,10 @@ async function runCase(t, name, body, applyFor = null) {
 
 async function queueBehindHeldForward(f, selected) {
   const predecessor = {w07Companion: 'already-forwarding'};
-  const first = own(f, f.cluster.node(B).propose(predecessor));
+  const first = own(f, turnChainValue(f.cluster.node(B).propose(predecessor)));
   await observe(() => f.gates.length === 1, 'real predecessor forwarding held');
   assert.equal(proposalEntries(f, predecessor).length, 1);
-  const queued = own(f, f.cluster.node(B).propose(selected));
+  const queued = own(f, turnChainValue(f.cluster.node(B).propose(selected)));
   f.events.push({kind: 'selected-enqueued', selected});
   assert.equal(proposalEntries(f, selected).length, 0);
   return {first, queued};
@@ -118,7 +119,7 @@ function appliedMarkerCount(f, marker) {
 }
 
 function prepareFailedApplication(f, marker) {
-  assert.equal(f.cluster.node(A).propose(marker).outcome, CORE_OK);
+  assert.equal(f.cluster.node(A).propose(marker).result.outcome, CORE_OK);
   for (let round = 0; round < SETUP_ROUNDS; round += 1) {
     processSetupInbox(f.cluster, A);
     processSetupInbox(f.cluster, C);
@@ -132,8 +133,8 @@ function prepareFailedApplication(f, marker) {
   for (let round = 0; round < SETUP_ROUNDS; round += 1) {
     const envelope = f.cluster.replica(B).inbox.shift();
     assert.ok(envelope, 'setup: real committed marker delivery is available');
-    assert.equal(f.cluster.node(B).step(envelope).outcome, CORE_OK);
-    const result = f.cluster.node(B).tick();
+    assert.equal(f.cluster.node(B).step(envelope).result.outcome, CORE_OK);
+    const result = turnChainValue(f.cluster.node(B).tick());
     if (result.outcome !== HOST_FAILURE) continue;
     assert.equal(result.phase, 'application');
     f.events.push({kind: 'setup-application-failure', result, progress: durableProgress(f)});
@@ -168,7 +169,7 @@ async function reconstructedCapture(f, marker) {
   const waiting = holdReconstructionPersistence(f);
   f.control.capture = true;
   const selected = {w07Companion: 'capture-after-ensure-execution-completes'};
-  const queued = own(f, f.cluster.node(B).propose(selected));
+  const queued = own(f, turnChainValue(f.cluster.node(B).propose(selected)));
   await observe(() => waiting.held, 'native reconstruction reached real persistence wait');
   assert.equal(f.cluster.replica(B).db.inTransaction, true);
   assert.equal(proposalEntries(f, selected).length, 0);
@@ -213,7 +214,7 @@ async function guardedRemainder(f) {
   deliverHeartbeat(f, 1);
   deliverHeartbeat(f, 2);
   const selected = {w07Companion: 'must-not-enter-failed-generation'};
-  const initial = await own(f, f.cluster.node(B).propose(selected));
+  const initial = await own(f, turnChainValue(f.cluster.node(B).propose(selected)));
   assert.equal(trapped, true, 'actual final announcement trap engaged');
   assert.equal(initial.outcome, HOST_FAILURE);
   assert.equal(initial.phase, RUNTIME_PHASE.GENERATION_CHANGED);
@@ -225,7 +226,7 @@ async function guardedRemainder(f) {
   const firstGeneration = heartbeatSteps(f)[0].runtimeGeneration;
   f.events.push({kind: 'recovery-phase-cut', initial,
     driver: 'one explicit canonical B tick; this is preservation, not autonomous service'});
-  const recovered = await own(f, f.cluster.node(B).tick());
+  const recovered = await own(f, turnChainValue(f.cluster.node(B).tick()));
   assert.equal(recovered.outcome, CORE_OK);
   assert.equal(heartbeatSteps(f).length, CAPTURED_COPIES,
     'generation failure is checked before removal, preserving the second accepted envelope');

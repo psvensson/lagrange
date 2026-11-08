@@ -2,15 +2,34 @@
   "schema": "solve-quest/2",
   "id": "system-table-row-decoders",
   "epic": "code-navigability-and-mistake-resistance",
-  "statement": "Each of the services, nodes and replica_operations system tables has one decoder module that turns a raw row into a frozen canonical object with named states, is the only module permitted to read that table's raw column names or COLUMN constants, and every consumer reads the decoded object; alias reads (snake_case and camelCase on one field) and state-read defaults on these three tables reach zero and the row_field_alias_reads cap tightens by the number removed.",
+  "statement": "Each of the services, nodes and replica_operations system tables has one decoder module (<table>-row-decoder.js exporting decode<Table>Row) that turns a stored-shape row into a frozen canonical object with named states: closed domains (services status and raft_role, nodes status and connection_state, replica_operations type, status and workflow_step) refuse an unknown stored value, SQL NULL decodes to a named absent state, a column the row lacks is a typed refusal, and a partial SELECT decodes through a named projection declared once beside the query that yields exactly the projection's named fields and a projection marker; the existing per-table normalisers (normalizeServiceRow, normalizeReplicaRow, normalizeCensusServiceRow, normalizeCurrentVoterServiceRow, normalizeNodeRow, the column decoding of ReplicaOperationRepository#rowToOperation, normalizeReplicaOperationRecord, normalizeOperationProgressRecord, readOperationWorkflowRecord, normalizePublicationOperationWorkflowRecord and the routed display normalisers) are folded into the decoders so one version of each decoding exists and their call sites read decoded objects; and the budget gains the measuring rows system_table_raw_column_reads_outside_decoder (reads of a table's own columns outside its decoder and write builders, capped one-way at the measured count) and one row per directory group (rebalancer, control-plane, node, admin, query, partition; target 0) that the system-table-decoded-reads-* quests drive to zero; behaviour is unchanged.",
   "doneWhen": {
     "probe": "script",
-    "args": {"command": "node scripts/checks/code-navigability-budget.js --metric --rows formation_system_tables_without_decoder", "target": 0}
+    "args": {
+      "command": "node scripts/checks/code-navigability-budget.js --metric --rows formation_system_tables_without_decoder",
+      "target": 0
+    }
   },
   "constraints": [
-    {"id": "one-reader-of-raw-columns", "statement": "Only the table's decoder reads its raw column names. A consumer that still does is a violation the detector reports, not an allowed exception."},
-    {"id": "decoder-is-not-authority", "statement": "The decoder shapes the row it was given. It never fetches, caches or defaults a value the row lacks; an absent column is a typed refusal (R05, R07)."},
-    {"id": "caps-tighten", "statement": "The row_field_alias_reads and state_read_defaults baselines are lowered in the same change by the number of sites removed."},
-    {"id": "independent-verification", "statement": "The src/ changes land only behind an approving verification newer than the last attempt."}
+    {
+      "id": "one-reader-of-raw-columns",
+      "statement": "Only the table's decoder reads its raw column names. A consumer that still does is a violation the detector reports, not an allowed exception."
+    },
+    {
+      "id": "decoder-is-not-authority",
+      "statement": "The decoder shapes the row it was given. It never fetches, caches or defaults a value the row lacks; an absent column is a typed refusal (R05, R07)."
+    },
+    {
+      "id": "caps-tighten",
+      "statement": "The row_field_alias_reads and state_read_defaults baselines are lowered in the same change by the number of sites removed."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "The src/ changes land only behind an approving verification newer than the last attempt."
+    },
+    {
+      "id": "behaviour-unchanged",
+      "statement": "Decoding preserves every value consumers read today under its named field; every expectation change in an existing test is justified against HEAD behaviour with a production-shaped fixture."
+    }
   ]
 }

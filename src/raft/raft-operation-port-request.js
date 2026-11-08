@@ -51,12 +51,26 @@ const RAFT_OPERATION_PORT_REQUEST = Object.freeze({
   DEFER_ELECTION: 'deferElection',
   SEND_TO_PEER: 'sendToPeer',
   RESOLVE_PEER_ADDRESS: 'resolvePeerAddress',
+  // The group's application of one committed entry. It runs inside the
+  // SQLite transaction that advances the applied state, so it answers
+  // synchronously; its answer is discarded.
   APPLY_COMMITTED_ENTRY: 'applyCommittedEntry',
+  // The group's declaration, made once where it registers its application,
+  // of how that application completes: RAFT_COMMITTED_ENTRY_APPLY_MODE. Only
+  // SYNCHRONOUS opens a port; a missing or other declaration is the port's
+  // typed construction refusal.
+  APPLY_COMMITTED_ENTRY_MODE: 'applyCommittedEntryMode',
   SNAPSHOT_CATCHUP_NEEDED: 'snapshotCatchupNeeded',
   // A durable apply transaction did NOT commit, so any cached applied
   // progress is unreliable and must be re-read from the durable store. It
   // is the fact that crosses, never an event name.
   APPLY_TRANSACTION_ROLLED_BACK: 'applyTransactionRolledBack',
+});
+
+// How a group's committed-entry application completes (the request's
+// APPLY_COMMITTED_ENTRY_MODE).
+const RAFT_COMMITTED_ENTRY_APPLY_MODE = Object.freeze({
+  SYNCHRONOUS: 'synchronous',
 });
 
 /**
@@ -77,4 +91,8 @@ function hostedConsensusSubstrate(replica) {
   return substrate;
 }
 
-export {RAFT_OPERATION_PORT_REQUEST, hostedConsensusSubstrate};
+export {
+  RAFT_COMMITTED_ENTRY_APPLY_MODE,
+  RAFT_OPERATION_PORT_REQUEST,
+  hostedConsensusSubstrate,
+};

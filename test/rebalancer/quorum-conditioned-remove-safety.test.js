@@ -983,9 +983,9 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
           };
         },
         async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
-          return this.getMembershipPublicationPlanningSnapshotSync(nodeId);
+          return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
         },
-        getMembershipPublicationPlanningSnapshotSync(nodeId) {
+        getPriorityRecoveryPlanningAnswerSync(nodeId) {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: Object.freeze([

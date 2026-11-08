@@ -25,6 +25,7 @@ import {
   createMockPolicyService,
   createMockMessageRouter,
 } from './test-helpers.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 /**
  * Create a mock operation row for the SQL engine.
@@ -188,7 +189,7 @@ function createRecoveryTestCoordinator(options = {}) {
     },
   };
 
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: options.nodeId || 'test-node-1',
     systemTableCache: createMockCache(),
     cdcIntegrationService: cdcService,
@@ -208,7 +209,7 @@ function createRecoveryTestCoordinator(options = {}) {
     },
     storageAccountingService: {estimateReplicaBytes: () => 1},
     enableTimeouts: false,
-  });
+  }));
 
   /**
    * Get an operation from the tracked store.

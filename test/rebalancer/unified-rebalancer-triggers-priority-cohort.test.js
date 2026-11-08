@@ -26,6 +26,7 @@ import {
   createPostgresWireEndpoint,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 // Initialize test environment
 // Create a mock system table cache
@@ -122,7 +123,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
         createPostgresWireEndpoint('node-2'),
         createPostgresWireEndpoint('node-3'),
       ];
-      const readinessService = {
+      const readinessService = partialReadinessFake({
         ...createMockReadinessService(createMockCache(
           nodes,
           [],
@@ -149,7 +150,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
             },
           };
         },
-      };
+      });
       const rebalancer = createTestRebalancer({
         entityId: 'sql_write_operations-p1',
         entityType: EntityType.PARTITION,
@@ -258,7 +259,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           nodeEndpoints,
           serviceEndpoints,
         )),
-        getMembershipPublicationPlanningAnswerSync() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
@@ -359,7 +360,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           nodeEndpoints,
           serviceEndpoints,
         )),
-        getMembershipPublicationPlanningAnswerSync() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
@@ -470,7 +471,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           nodeEndpoints,
           serviceEndpoints,
         )),
-        getMembershipPublicationPlanningAnswerSync() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
@@ -580,7 +581,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 1', async (t) => {
           nodeEndpoints,
           serviceEndpoints,
         )),
-        getMembershipPublicationPlanningAnswerSync() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],

@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 import {CreateMessageGroupPhase} from
   '../../src/bootstrap/phases/create-message-group-phase.js';
@@ -125,7 +126,7 @@ test('M2: a first-join replica steps nothing until its services row is ' +
       {replicaOptions: replicaOptions(phase, [])});
     const port = services.get(REPLICA_ID).raft;
     assert.equal(port.readStatus().identityRecorded, false);
-    const early = await port.campaign();
+    const early = await turnChainValue(port.campaign());
     assert.equal(early?.reason, 'participation-gate-identity-unrecorded');
     assert.equal(await within(() => port.readStatus().role === 'leader',
       600), false, 'no leadership before the registration');
@@ -161,7 +162,7 @@ test('M4: a first join whose services-row registration fails abandons ' +
       REPLICA_ID, service, {status: 'stopped'}));
     const port = service.raft;
     assert.equal(port.readStatus().identityRecorded, false, 'not released');
-    const early = await port.campaign();
+    const early = await turnChainValue(port.campaign());
     assert.equal(early?.reason, 'participation-gate-identity-unrecorded');
     assert.equal(await within(() => port.readStatus().role === 'leader',
       600), false, 'never leads');

@@ -37,6 +37,7 @@ import {
   PEER_DELIVERY_OUTCOME,
 } from '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const {CORE_OK, CORE_REFUSED, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
 const LEADER_ROLE = 'leader';
@@ -148,7 +149,7 @@ async () => {
     const leader = elect(cluster);
     const follower = ['f11-a', 'f11-b'].find((id) => id !== leader);
     const followerFile = cluster.dbFileOf(follower);
-    await cluster.propose(leader, 'f11-first-write');
+    await turnChainValue(cluster.propose(leader, 'f11-first-write'));
     assert.equal(cluster.settle(() =>
       durableProgressOf(followerFile, cluster.partitionId).commit ===
         BigInt(cluster.node(leader).readStatus().commitIndex) &&
@@ -158,7 +159,7 @@ async () => {
 
     // The leader proposes; the follower's append and the leader's commit
     // are carried the way scheduling carries them.
-    await cluster.propose(leader, 'f11-measured-write');
+    await turnChainValue(cluster.propose(leader, 'f11-measured-write'));
     assert.ok(deliverAndTick(cluster, follower) > 0,
       'setup: the leader sent the follower its append');
     assert.ok(deliverAndTick(cluster, leader) > 0,
@@ -177,7 +178,7 @@ async () => {
     const ticksBefore = tickEntries(cluster);
     const pending = cluster.replica(follower).inbox.splice(0, held);
     for (const envelope of pending) {
-      const accepted = cluster.node(follower).step(envelope);
+      const accepted = turnChainValue(cluster.node(follower).step(envelope));
       assert.equal(accepted.outcome, CORE_OK);
     }
     const advanced = await waitUntil(() => {
@@ -228,9 +229,9 @@ for (const mode of ['rejects', 'no-handler']) {
       fault.target = unreachable;
       const outcomes = [];
       for (let write = 0; write < WRITES_WHILE_UNREACHABLE; write += 1) {
-        outcomes.push(await cluster.propose(leader, `f15-write-${write}`));
+        outcomes.push(await turnChainValue(cluster.propose(leader, `f15-write-${write}`)));
         cluster.settle(() => false, {rounds: 4,
-          between: () => outcomes.push(leaderPort.tick())});
+          between: () => outcomes.push(turnChainValue(leaderPort.tick()))});
       }
       const settled = await Promise.all(outcomes);
       assert.deepEqual(settled.filter((result) =>
@@ -292,10 +293,10 @@ test('F17: a follower reads its status while its configuration names a peer ' +
     cluster.replicaIds.push(joiner);
     const joinerPeerId = cluster.buildReplica(joiner, founding).node
       .readStatus().peerId;
-    const proposed = await cluster.node(leader).proposeConfChange({
+    const proposed = await turnChainValue(cluster.node(leader).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER,
       replicaIdentity: joiner,
-    });
+    }));
     assert.equal(proposed.outcome, CORE_OK,
       `setup: the leader admits the learner ${JSON.stringify(proposed)}`);
     assert.equal(cluster.settle(() =>
@@ -339,17 +340,17 @@ test('F18: the progress probe sends one heartbeat round to an idle ' +
       buildDeliveryEnvelope({acknowledged: true}) : undefined),
   });
   try {
-    assert.equal((await cluster.node(leader).campaign()).outcome, CORE_OK);
-    await cluster.propose(leader, 'f18-first-write');
+    assert.equal((await turnChainValue(cluster.node(leader).campaign())).outcome, CORE_OK);
+    await turnChainValue(cluster.propose(leader, 'f18-first-write'));
     new RaftRsPeerIdentityRegistry(cluster.replica(leader).db)
       .registerReplica(learner);
     cluster.replicaIds.push(learner);
     cluster.buildReplica(learner, [leader]);
     const learnerAddress = cluster.addressOf(learner);
-    const admitted = await cluster.node(leader).proposeConfChange({
+    const admitted = await turnChainValue(cluster.node(leader).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER,
       replicaIdentity: learner,
-    });
+    }));
     assert.equal(admitted.outcome, CORE_OK);
     assert.equal(cluster.settle(() => {
       const status = cluster.node(leader).readStatus();
@@ -364,7 +365,7 @@ test('F18: the progress probe sends one heartbeat round to an idle ' +
     cluster.restart(leader);
     const restarted = cluster.node(leader);
     if (restarted.readStatus().role !== LEADER_ROLE) {
-      assert.equal((await restarted.campaign()).outcome, CORE_OK);
+      assert.equal((await turnChainValue(restarted.campaign())).outcome, CORE_OK);
     }
     assert.equal(cluster.settle(() =>
       durableProgressOf(cluster.dbFileOf(learner), cluster.partitionId)
@@ -381,7 +382,7 @@ test('F18: the progress probe sends one heartbeat round to an idle ' +
     assert.ok(idle.commitIndex > 0);
 
     const ticksBefore = tickEntries(cluster);
-    const probe = await restarted.probePeerProgress(learnerAddress);
+    const probe = await turnChainValue(restarted.probePeerProgress(learnerAddress));
     assert.equal(probe.outcome, CORE_OK, JSON.stringify(probe));
     assert.equal(probe.reason, PROGRESS_PROBE_SENT,
       `a peer behind the commit index is probed ${JSON.stringify(probe)}`);
@@ -397,13 +398,13 @@ test('F18: the progress probe sends one heartbeat round to an idle ' +
     assert.equal(tickEntries(cluster), ticksAfterProbe,
       'the catch-up rode on delivered steps, not on ticks');
 
-    const observed = await restarted.probePeerProgress(learnerAddress);
+    const observed = await turnChainValue(restarted.probePeerProgress(learnerAddress));
     assert.equal(observed.outcome, CORE_OK);
     assert.equal(observed.reason, PROGRESS_OBSERVED);
     assert.equal(observed.matchIndex, probed.commitIndex);
 
-    const outsider = await restarted.probePeerProgress(
-      cluster.addressOf('f18-never-a-member'));
+    const outsider = await turnChainValue(restarted.probePeerProgress(
+      cluster.addressOf('f18-never-a-member')));
     assert.equal(outsider.outcome, CORE_REFUSED);
     assert.equal(outsider.reason, NOT_A_PEER);
   } finally {

@@ -18,13 +18,15 @@ import {
 import {
   resolveProjectionReadinessStateForEntry,
 } from '../../src/control-plane/projection-readiness-state.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   getSharedSyncSectionRegistry,
 } from '../../src/diagnostics/event-loop-gap-watchdog.js';
 
+import {
+  createReadinessServiceForTest,
+  readinessCollaboratorFakes,
+} from '../helpers/readiness-service-fixture.js';
 const OWNER_NODE_ID = 'node-identity-memo';
 const JOINER_OWNER_KEY = 'node-identity-joiner';
 const GATE_BUILD_SECTION = 'publication_recovery_gate_snapshot_build';
@@ -111,7 +113,7 @@ test('per-entry projection readiness state resolves to one frozen build ' +
 test('the planning answer fails closed while an observed source revision is ' +
   'unclassified', async (t) => {
   const cache = createVersionedTableCache();
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: OWNER_NODE_ID,
     systemTableCache: cache,
     now: () => 1000,
@@ -162,7 +164,7 @@ test('the planning answer fails closed while an observed source revision is ' +
 test('the planning answer projection keeps one identity per input snapshot ' +
   'and floored generation on the recovery-inactive path', async (t) => {
   const cache = createVersionedTableCache();
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: OWNER_NODE_ID,
     systemTableCache: cache,
     now: () => 1000,
@@ -204,7 +206,7 @@ test('the planning answer memo survives a candidate that proposes the next ' +
       return latestRow;
     },
   });
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: OWNER_NODE_ID,
     systemTableCache: cache,
     now: () => 1000,
@@ -220,12 +222,12 @@ test('the planning answer memo survives a candidate that proposes the next ' +
   t.equal(second, first,
     'a stable publication row keeps the memoized answer despite the ' +
       'next-epoch candidate');
-  readiness.syncOwnerDependencies({
+  readiness.syncOwnerDependencies(readinessCollaboratorFakes({
     membershipPublicationService: createMembershipOwner({
       publicationEpoch: 4,
       status: 'PUBLISHED',
     }),
-  });
+  }));
   const third =
     readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1150);
   t.not(third, first,
@@ -261,7 +263,7 @@ test('the startup-authority snapshot resolves to one identity per planning ' +
 function ownerReadIdentityFixture(mutate = () => undefined) {
   const derivationsByPublisher = new Map();
   const cache = createVersionedTableCache();
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: OWNER_NODE_ID,
     systemTableCache: cache,
     now: () => 1000,
@@ -359,7 +361,7 @@ test('disabling the authoritative per-publisher memo breaks concurrent ' +
 test('the planning answer keeps one identity through the retained-merge ' +
   'tail within a floored generation', async (t) => {
   const cache = createVersionedTableCache();
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: OWNER_NODE_ID,
     systemTableCache: cache,
     now: () => 1000,
@@ -390,7 +392,7 @@ test('the sync planning derivation keeps one memo slot per publisher under ' +
   'alternating reads', async (t) => {
   const cache = createVersionedTableCache();
   let derivations = 0;
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: OWNER_NODE_ID,
     systemTableCache: cache,
     now: () => 1000,
@@ -401,10 +403,10 @@ test('the sync planning derivation keeps one memo slot per publisher under ' +
       },
     },
   });
-  readiness.getPriorityRecoveryPlanningSnapshotSync(OWNER_NODE_ID, 1000);
-  readiness.getPriorityRecoveryPlanningSnapshotSync('node-identity-b', 1010);
-  readiness.getPriorityRecoveryPlanningSnapshotSync(OWNER_NODE_ID, 1020);
-  readiness.getPriorityRecoveryPlanningSnapshotSync('node-identity-b', 1030);
+  readiness.deriveMembershipPublicationPlanningSnapshotSync(OWNER_NODE_ID, 1000);
+  readiness.deriveMembershipPublicationPlanningSnapshotSync('node-identity-b', 1010);
+  readiness.deriveMembershipPublicationPlanningSnapshotSync(OWNER_NODE_ID, 1020);
+  readiness.deriveMembershipPublicationPlanningSnapshotSync('node-identity-b', 1030);
   t.equal(derivations, 2,
     'alternating publishers keep one derivation per publisher, not one ' +
       'per alternation');
@@ -453,7 +455,7 @@ test('the readiness planning owner reuses a completed snapshot within one ' +
 
 test('the untracked priority planning projection builds its recovery gate ' +
   'once per planning snapshot identity', async (t) => {
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: OWNER_NODE_ID,
     systemTableCache: {
       get() {

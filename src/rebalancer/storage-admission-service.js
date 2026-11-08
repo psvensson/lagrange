@@ -8,7 +8,9 @@
  */
 
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {ControlPlaneReadinessService} from '../control-plane/control-plane-readiness-service.js';
+import {
+  requireControlPlaneReadinessService,
+} from '../control-plane/control-plane-readiness-collaborators.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
@@ -42,6 +44,7 @@ import {
   STORAGE_ADMISSION_OPERATION_TYPE,
   STORAGE_ADMISSION_REASON,
 } from './storage-admission-constants.js';
+const STORAGE_ADMISSION_OWNER_NAME = 'StorageAdmissionService';
 const STORAGE_ADMISSION_SERVICE_LITERAL = Object.freeze({VALUE_10000: 10000});
 const PERCENT_DIVISOR = NUM.HUNDRED;
 const VALID_OPERATION_TYPES = new Set(Object.values(STORAGE_ADMISSION_OPERATION_TYPE));
@@ -59,25 +62,10 @@ class StorageAdmissionService {
     this.nodeId = options.nodeId || null;
     this.now = typeof options.now === 'function' ? options.now : () => Date.now();
     this.config = ConfigurationManager.getInstance();
-    this.controlPlaneReadinessService =
-      options.controlPlaneReadinessService ||
-      new ControlPlaneReadinessService({
-        nodeId: this.nodeId,
-        systemTableCache:
-          options.systemTableCache || this.accountingService.systemTableCache || null,
-        cacheMutationTarget:
-          options.cacheMutationTarget ||
-          options.systemTableCache ||
-          this.accountingService.systemTableCache ||
-          null,
-        messageRouter: options.messageRouter || null,
-        nodeLifecycleStateMachine: options.nodeLifecycleStateMachine || null,
-        storageAccountingService: this.accountingService,
-        cdcIntegrationService: options.cdcIntegrationService || null,
-        cdcGroupPropagationService: options.cdcGroupPropagationService || null,
-        controlPlaneSystemTableGateway: options.controlPlaneSystemTableGateway || null,
-        now: this.now,
-      });
+    // The node's one readiness service is a named collaborator: admission
+    // never builds a second instance of that authority.
+    this.controlPlaneReadinessService = requireControlPlaneReadinessService(
+      options, STORAGE_ADMISSION_OWNER_NAME);
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(STORAGE_CAPACITY_SUBSYSTEM) :

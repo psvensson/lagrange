@@ -16,6 +16,7 @@ import {RebalanceCoordinator} from
 import {
   OPERATION_TRANSITION_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 // ---------------------------------------------------------------------------
 // Test-local fixture constants
@@ -126,7 +127,7 @@ function createMinimalCoordinator(overrides = {}) {
       return sqlQueryEngine.executeQuery(sql, params);
     },
   };
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: MOCK_NODE_ID,
     systemTableCache: {
       get() {
@@ -148,7 +149,7 @@ function createMinimalCoordinator(overrides = {}) {
     controlPlaneSystemTableGateway,
     enableTimeouts: false,
     ...coordinatorOverrides,
-  });
+  }));
   coordinator.repository.replicaOperationAuthoritativeVisibilityTimeoutMs = 0;
   coordinator.repository.replicaOperationAuthoritativeVisibilityRetryDelayMs = 0;
   return coordinator;

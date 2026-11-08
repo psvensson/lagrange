@@ -85,8 +85,10 @@ const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE_TABLE = Object.freeze([
   }),
 ]);
 
+// The rebalancer's readiness service is the node's one service, a named
+// collaborator required at construction (requireControlPlaneReadinessService)
+// and only ever replaced by the coordinator's: every read below calls it.
 function isNodeReadyNow(readinessService, nodeId) {
-  if (typeof readinessService?.projectNodeLiveness !== 'function') return false;
   return readinessService.projectNodeLiveness(nodeId)?.readyNow === true;
 }
 
@@ -274,13 +276,6 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       return null;
     }
     const readinessService = this.controlPlaneReadinessService;
-    if (
-      !readinessService ||
-      typeof readinessService.getStartupAuthoritySnapshotSync !==
-        'function'
-    ) {
-      return null;
-    }
     try {
       const startupAuthority = readinessService.getStartupAuthoritySnapshotSync(
         this.nodeId,
@@ -395,14 +390,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
    * @return {boolean}
    */
   isNodeProcessAlive(nodeId) {
-    const readinessService = this.controlPlaneReadinessService;
-    if (
-      !readinessService ||
-      typeof readinessService.getNodeReadinessSync !== 'function'
-    ) {
-      return false;
-    }
-    const readiness = readinessService.getNodeReadinessSync(nodeId, {
+    const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(nodeId, {
       decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE,
     });
     return this.isReadinessDimensionSatisfied(
@@ -447,8 +435,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       readinessService,
       surfaces,
       publicationNodeId: this.nodeId,
-      observedAt: typeof readinessService.now === 'function' ?
-        readinessService.now() : this.nowFn(),
+      observedAt: readinessService.now(),
     });
   }
 
@@ -497,62 +484,16 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       return null;
     }
     const readinessService = this.controlPlaneReadinessService;
-    if (
-      !readinessService ||
-      (typeof readinessService.getPriorityRecoveryPlanningAnswerSync !==
-        'function' &&
-        typeof readinessService.getMembershipPublicationPlanningAnswerSync !==
-          'function' &&
-        typeof readinessService.getPriorityRecoveryPlanningSnapshotSync !==
-          'function' &&
-        typeof readinessService.getMembershipPublicationPlanningSnapshotSync !==
-          'function')
-    ) {
-      return null;
-    }
     const publicationNodeId = this.nodeId;
     const observedAt = Number.isFinite(options.observedAt) ?
       Math.floor(options.observedAt) :
-      typeof readinessService.now === 'function' ?
-        readinessService.now() : this.nowFn();
+      readinessService.now();
 
-    let planningSnapshot = null;
-    if (
-      typeof readinessService.getPriorityRecoveryPlanningAnswerSync ===
-      'function'
-    ) {
-      planningSnapshot = readinessService.getPriorityRecoveryPlanningAnswerSync(
+    const planningSnapshot =
+      readinessService.getPriorityRecoveryPlanningAnswerSync(
         publicationNodeId,
         observedAt,
       );
-    } else if (
-      typeof readinessService.getMembershipPublicationPlanningAnswerSync ===
-      'function'
-    ) {
-      planningSnapshot =
-        readinessService.getMembershipPublicationPlanningAnswerSync(
-          publicationNodeId,
-          observedAt,
-        );
-    } else if (
-      typeof readinessService.getPriorityRecoveryPlanningSnapshotSync ===
-      'function'
-    ) {
-      planningSnapshot =
-        readinessService.getPriorityRecoveryPlanningSnapshotSync(
-          publicationNodeId,
-          observedAt,
-        );
-    } else if (
-      typeof readinessService.getMembershipPublicationPlanningSnapshotSync ===
-      'function'
-    ) {
-      planningSnapshot =
-        readinessService.getMembershipPublicationPlanningSnapshotSync(
-          publicationNodeId,
-          observedAt,
-        );
-    }
     return planningSnapshot && typeof planningSnapshot === 'object' ?
       planningSnapshot :
       null;

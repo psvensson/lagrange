@@ -1,4 +1,8 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {
+  readinessCollaboratorFake,
+  withNodeReadinessService,
+} from '../helpers/readiness-service-fixture.js';
 export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionTests({
   test,
   RebalanceCoordinator,
@@ -91,7 +95,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
     'RebalanceCoordinator keeps priority add budget independent from ' +
     'non-priority in-flight adds',
     async (t) => {
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -141,7 +145,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       coordinator.config.maxConcurrentAdds = 1;
 
@@ -192,7 +196,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
       let nowMs = FIRST_GRACE_RECORDED_AT_MS;
       Date.now = () => nowMs;
 
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -220,7 +224,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
 
       try {
@@ -277,7 +281,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
     'RebalanceCoordinator reserves one shared add slot for priority recovery ' +
     'while non-priority scheduling remains capped below the full add budget',
     async (t) => {
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -305,19 +309,20 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       coordinator.config.maxConcurrentAdds = 2;
-      coordinator.controlPlaneReadinessService.membershipPublicationService = {
-        getLatestClusterPublicationSync() {
-          return {
-            status: 'PUBLISHED',
-            priorityPartitionSummary: {
-              satisfied: false,
-            },
-          };
-        },
-      };
+      coordinator.controlPlaneReadinessService.membershipPublicationService =
+        readinessCollaboratorFake('membershipPublicationService', {
+          getLatestClusterPublicationSync() {
+            return {
+              status: 'PUBLISHED',
+              priorityPartitionSummary: {
+                satisfied: false,
+              },
+            };
+          },
+        });
       coordinator.queryIncompleteOperations = async () => ([{
         operationId: 'op-non-priority-inflight',
         type: OperationType.ADD,
@@ -377,7 +382,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
           satisfied: false,
         },
       };
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         nowFn: () => now,
@@ -407,7 +412,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       coordinator.config.maxConcurrentAdds = 2;
       coordinator.getLatestMembershipPublicationRow = () => publicationRow;
@@ -507,7 +512,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
       let nowMs = FIRST_GRACE_RECORDED_AT_MS;
       Date.now = () => nowMs;
 
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -535,7 +540,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
 
       try {
@@ -590,7 +595,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
     'RebalanceCoordinator reserves one emergency priority add slot for ' +
     'transport-critical recovery while ordinary priority work is already in flight',
     async (t) => {
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -618,19 +623,20 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       coordinator.config.maxConcurrentAdds = 1;
-      coordinator.controlPlaneReadinessService.membershipPublicationService = {
-        getLatestClusterPublicationSync() {
-          return {
-            status: 'PUBLISHED',
-            priorityPartitionSummary: {
-              satisfied: false,
-            },
-          };
-        },
-      };
+      coordinator.controlPlaneReadinessService.membershipPublicationService =
+        readinessCollaboratorFake('membershipPublicationService', {
+          getLatestClusterPublicationSync() {
+            return {
+              status: 'PUBLISHED',
+              priorityPartitionSummary: {
+                satisfied: false,
+              },
+            };
+          },
+        });
       coordinator.queryIncompleteOperations = async () => ([{
         operationId: 'op-priority-sql-write',
         type: OperationType.ADD,
@@ -683,7 +689,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
   test(
     'RebalanceCoordinator keeps priority add admission on the critical pressure lane',
     async (t) => {
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -725,7 +731,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
 
       try {
@@ -832,7 +838,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
     'RebalanceCoordinator does not treat REPLACE STOPPING phase as ' +
     'add-budget in-flight for priority recovery',
     async (t) => {
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -860,7 +866,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       coordinator.config.maxConcurrentAdds = 1;
       coordinator.queryIncompleteOperations = async () => ([{

@@ -20,6 +20,7 @@ import {
 } from '../raft/raft-operation-port-constants.js';
 import {isGroupRetiringInView} from './group-retirement-evidence.js';
 import {recoveryRetryWindowMsOf} from '../raft/raft-rs-runtime-tuning.js';
+import {settledTurn, turnChainValue} from '../raft/raft-rs-turn-answer.js';
 import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
   './partition-replica-membership-constants.js';
 import {computeReplicaElectionTimeouts} from
@@ -109,21 +110,22 @@ function trackRetirement(service, change, answered) {
  * the port deferred it (the core held an unapplied change).
  * @param {Object} service - The partition service.
  * @param {Object} change - The REMOVE_PEER change.
- * @return {*} What the port answered.
+ * @return {Object} The port's turn (raft-rs-turn-answer.js), or the group's
+ *   retiring refusal settled without one.
  */
 function proposePeerRetirement(service, change) {
   const retiring = groupRetiringRefusal(service);
   if (retiring) {
     retirementsDeferredOf(service).delete(
       change.replicaIdentity ?? change.peerAddress);
-    return retiring;
+    return settledTurn(retiring);
   }
   const answered = service.raft.proposeConfChange(change);
-  if (answered && typeof answered.then === 'function') {
-    answered.then((settled) => trackRetirement(service, change, settled),
-      (error) => trackRetirement(service, change, {reason: error?.message}));
+  if (answered.settled) {
+    trackRetirement(service, change, answered.result);
   } else {
-    trackRetirement(service, change, answered);
+    answered.pending.then((settled) => trackRetirement(service, change, settled),
+      (error) => trackRetirement(service, change, {reason: error?.message}));
   }
   return answered;
 }
@@ -278,10 +280,10 @@ async function retirePartitionRaftPeer(service, replicaIdentity) {
   }
   let answered;
   try {
-    answered = await service.raft.proposeConfChange({
+    answered = await turnChainValue(service.raft.proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
       replicaIdentity,
-    });
+    }));
   } catch (error) {
     answered = {reason: error?.message || String(error)};
   }

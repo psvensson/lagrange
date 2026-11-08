@@ -87,6 +87,12 @@ import {
   runReplicaHandlerRetirement,
   runSerializedReplicaMutation,
 } from './replica-state-machine-serialization.js';
+import {
+  continueTurn,
+  pendingTurn,
+  settledTurn,
+  turnChainValue,
+} from '../raft/raft-rs-turn-answer.js';
 
 /**
  * Replica state constants.
@@ -399,7 +405,10 @@ class ReplicaStateMachine extends EventEmitter {
       return false;
     }
 
-    const transitionResult = this._applyTransition(
+    // An unpersisted transition settles in this call on an idle lane and
+    // waits behind the lane's in-flight mutation otherwise.
+    const transition = applyTransition(
+      this,
       replicaId,
       ReplicaState.REMOVED,
       context,
@@ -408,10 +417,8 @@ class ReplicaStateMachine extends EventEmitter {
         validate: false,
       },
     );
-    const finishRemoval = (result) => result === true ?
-      this.removeFromTracking(replicaId) : false;
-    return transitionResult instanceof Promise ?
-      transitionResult.then(finishRemoval) : finishRemoval(transitionResult);
+    return turnChainValue(continueTurn(transition, (result) => settledTurn(
+      result === true ? this.removeFromTracking(replicaId) : false)));
   }
 
   completeDurableRemovalWithAuthority(
@@ -431,8 +438,18 @@ class ReplicaStateMachine extends EventEmitter {
     );
   }
 
+  /**
+   * Apply one transition: the transition's turn read for a caller that
+   * awaits it (raft-rs-turn-answer.js turnChainValue).
+   * @param {string} replicaId
+   * @param {string} newState
+   * @param {Object} [context]
+   * @param {Object} [options]
+   * @return {boolean|Promise<boolean>} True if the transition succeeded.
+   */
   _applyTransition(replicaId, newState, context = {}, options = {}) {
-    return applyTransition(this, replicaId, newState, context, options);
+    return turnChainValue(
+      applyTransition(this, replicaId, newState, context, options));
   }
 
   async _createReplicaRowInCdc(replicaState) {
@@ -503,12 +520,9 @@ class ReplicaStateMachine extends EventEmitter {
 
   removeFromTracking(replicaId) {
     const admission = captureReplicaAdmission(this, replicaId);
-    return runSerializedReplicaMutation(this, replicaId, () => {
-      if (!isReplicaAdmissionCurrent(this, replicaId, admission)) {
-        return false;
-      }
-      return removeFromTracking(this, replicaId);
-    });
+    return turnChainValue(runSerializedReplicaMutation(this, replicaId,
+      () => settledTurn(isReplicaAdmissionCurrent(this, replicaId, admission) &&
+        removeFromTracking(this, replicaId))));
   }
 
   _updatePeakConcurrentOperations() {
@@ -702,10 +716,8 @@ class ReplicaStateMachine extends EventEmitter {
       });
       this.canonicalLeaderClearDebtByReplicaId.set(replicaId, debt);
     }
-    return Promise.resolve(runSerializedReplicaMutation(
-      this,
-      replicaId,
-      async () => {
+    return turnChainValue(runSerializedReplicaMutation(this, replicaId,
+      () => pendingTurn((async () => {
         if (this.canonicalLeaderClearDebtByReplicaId.get(replicaId) !== debt) {
           return false;
         }
@@ -748,8 +760,7 @@ class ReplicaStateMachine extends EventEmitter {
           debt.revision,
         );
         return true;
-      },
-    ));
+      })())));
   }
 
   async handleNodeRecovery(options = {}) {

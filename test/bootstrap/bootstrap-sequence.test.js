@@ -135,7 +135,7 @@ function disablePostPartitionBootstrapWork(bootstrap) {
     bootstrap.runtimeServiceHandler = EMPTY_SERVICE_HANDLE;
   };
   bootstrap.activateControlPlaneBackgroundWriters = NOOP_SYNC;
-  bootstrap.activateDistributedTransactionRecovery = NOOP_SYNC;
+  bootstrap.activateDistributedTransactionRecovery = NOOP_ASYNC;
   bootstrap.startLatencyTopologyLifecycle = NOOP_SYNC;
   bootstrap.assertOriginalSeedPublicAdmission = NOOP_SYNC;
   bootstrap.openExternalTransportAdmission = NOOP_SYNC;
@@ -484,7 +484,7 @@ test('BootstrapService - activates message-group rows after seed registration',
     bootstrap.activateControlPlaneBackgroundWriters = () => {
       order.push('background-writers');
     };
-    bootstrap.activateDistributedTransactionRecovery = () => {};
+    bootstrap.activateDistributedTransactionRecovery = async () => {};
     bootstrap.openExternalTransportAdmission = () => {};
     bootstrap.logger = {
       info() {},
@@ -560,7 +560,7 @@ test('BootstrapService - notifies local admin runtime before seed self-publicati
     bootstrap.initializeRuntimeServiceHandler = () => {};
     bootstrap.seedCacheHydrationPhase.startLatencyTopologyLifecycle = () => {};
     bootstrap.activateControlPlaneBackgroundWriters = () => {};
-    bootstrap.activateDistributedTransactionRecovery = () => {};
+    bootstrap.activateDistributedTransactionRecovery = async () => {};
     bootstrap.openExternalTransportAdmission = () => {};
     bootstrap.logger = {
       info() {},

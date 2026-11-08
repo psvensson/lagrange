@@ -68,12 +68,9 @@ function readTableRows(systemTableCache, tableName) {
     // must not escape and abort the barrier snapshot that merely reports this.
     return {readable: false, rows: [], reason: error?.message || null};
   }
-  // A thenable answer means an ASYNC cache (SystemCacheProxy.filter is async):
-  // treating it as rows would drop the promise and report a permanent
-  // unavailable, so name it rather than silently mis-read it.
-  if (rows && typeof rows.then === LOCAL_STR_FUNCTION) {
-    return {readable: false, rows: [], asynchronous: true};
-  }
+  // The node-local system table cache answers its rows synchronously; any
+  // other answer (an asynchronous cache client's promise among them) is
+  // unreadable evidence, never rows.
   return arrayIsArray(rows) ?
     {readable: true, rows} :
     {readable: false, rows: []};

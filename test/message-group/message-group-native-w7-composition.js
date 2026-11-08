@@ -27,6 +27,7 @@ import {PARTICIPANT_CUTOVER_OUTCOME} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from '../partition/partition-release-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {recordOf, json, payloadOf, cdcEvents} from
   './message-group-native-provisional-route-fixture.js';
 
@@ -306,7 +307,7 @@ async function openMultiReplica(
   await service.subscribeToCDC(table);
   if (replicas.length === 1 && electSingle) {
     for (let round = 0; round < SETUP_ROUNDS; round += 1) {
-      await service.raft.tick();
+      await turnChainValue(service.raft.tick());
       await pumpMulti(f, 4);
       const status = service.raft.readStatus();
       if (status.role === RAFT_ROLE.LEADER && status.appliedIndex > 0) break;
@@ -453,7 +454,7 @@ async function prepareOneTargetGroup(f, groupId) {
   }
   const leader = f.services.get(leaderId);
   for (let round = 0; round < SETUP_ROUNDS; round += 1) {
-    await leader.raft.tick();
+    await turnChainValue(leader.raft.tick());
     await pumpMulti(f, 8);
     const statuses = replicas.map((id) => f.services.get(id).raft.readStatus());
     if (
@@ -477,7 +478,7 @@ async function prepareOneTargetGroup(f, groupId) {
     f.routerB,
     [activeServiceRow(groupId, followerId, NODE_B, RAFT_ROLE.LEADER)],
   );
-  await first.raft.campaign();
+  await turnChainValue(first.raft.campaign());
   await pumpMulti(f, 8);
   const follower = await reopenMultiReplica(
     f,
@@ -506,7 +507,7 @@ async function prepareOneTargetGroup(f, groupId) {
     return Reflect.apply(reconcile, this, args);
   };
   for (let round = 0; round < SETUP_ROUNDS; round += 1) {
-    await leader.raft.tick();
+    await turnChainValue(leader.raft.tick());
     await pumpMulti(f, 4);
     if (follower.raft.readStatus().leaderId === leaderId) break;
   }

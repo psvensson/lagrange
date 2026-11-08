@@ -23,15 +23,14 @@ import {
   FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION,
   classifyFormationCohortSpreadCureNode,
 } from '../../src/control-plane/startup-authority-placement-eligibility.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   NodeJoiningReadySignalReadiness,
 } from '../../src/bootstrap/node-joining-ready-signal-readiness.js';
 import {buildClusterIncarnationFence} from '../../src/bootstrap/cluster-incarnation-fence.js';
 import fs from 'node:fs';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const NOW = 10_000;
 // The real startup-branch fences (src/lagrange-runtime-startup.js): the seed
 // boots over a fresh data directory; a joiner persists rejoin hints first.
@@ -368,7 +367,7 @@ async (t) => {
   let currentAuthority = buildAuthority();
   const requestedNodeIds = [];
   const cache = buildNodesCache(rows);
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: 'seed',
     formationReleaseAuthorityNodeId: 'seed',
     systemTableCache: cache,
@@ -466,7 +465,7 @@ test('the seed rebalancer read is the authoritative handoff observation ' +
   const rows = buildFormationRows();
   let currentAuthority = buildAuthority();
   const cache = buildNodesCache(rows);
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: 'seed',
     systemTableCache: cache,
     messageRouter: buildMessageRouter(() => rows),
@@ -539,7 +538,7 @@ test('formation barrier consumes the seed-owned durable contract on a distinct '
     },
   };
   const cache = buildNodesCache(rows);
-  const seedService = new ControlPlaneReadinessService({
+  const seedService = createReadinessServiceForTest({
     nodeId: 'seed',
     formationReleaseAuthorityNodeId: 'seed',
     systemTableCache: cache,
@@ -567,7 +566,7 @@ test('formation barrier consumes the seed-owned durable contract on a distinct '
   t.ok(durablePublicationRow,
     'the seed interaction owner publishes its captured generation durably');
 
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: 'joiner-a',
     formationReleaseAuthorityNodeId: 'seed',
     systemTableCache: cache,
@@ -650,7 +649,7 @@ test('a restarted seed rehydrates its one durable active generation during a ' +
     onCacheChange() {},
   };
   const reopenedAuthority = buildAuthority({ready: false, satisfied: false});
-  const restarted = new ControlPlaneReadinessService({
+  const restarted = createReadinessServiceForTest({
     nodeId: 'seed',
     formationReleaseAuthorityNodeId: 'seed',
     systemTableCache: cache,
@@ -681,7 +680,7 @@ test('a restarted seed rehydrates its one durable active generation during a ' +
       bootIncarnation: 2,
       connectionId: 'primary:joiner-b:2',
     } : getCurrent(nodeId);
-  const staleRestart = new ControlPlaneReadinessService({
+  const staleRestart = createReadinessServiceForTest({
     nodeId: 'seed',
     formationReleaseAuthorityNodeId: 'seed',
     systemTableCache: cache,

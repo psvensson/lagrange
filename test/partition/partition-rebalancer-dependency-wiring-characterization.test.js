@@ -43,6 +43,7 @@ import {
   createTestCoordinator,
 } from '../rebalancer/test-helpers.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 // ── Suite-local fixture constants ──────────────────────────────────
 
@@ -741,7 +742,7 @@ test('dependency propagation — maybeInitializeRebalancer routes ' +
 
 test('constructor gate — UnifiedRebalancer throws when ' +
   'entityId is missing', async (t) => {
-  t.throws(() => new UnifiedRebalancer({
+  t.throws(() => new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
     entityType: ENTITY_TYPE_PARTITION,
     nodeId: NODE_ID,
     systemTableCache: createMockCache(),
@@ -749,13 +750,13 @@ test('constructor gate — UnifiedRebalancer throws when ' +
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator: createMockCoordinator(),
-  }), {message: REBALANCER_ERROR_MSG.ENTITY_ID_REQUIRED},
+  })), {message: REBALANCER_ERROR_MSG.ENTITY_ID_REQUIRED},
   'throws when entityId missing');
 });
 
 test('constructor gate — UnifiedRebalancer throws when ' +
   'systemTableCache is missing', async (t) => {
-  t.throws(() => new UnifiedRebalancer({
+  t.throws(() => new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
     entityId: PARTITION_ID,
     entityType: ENTITY_TYPE_PARTITION,
     nodeId: NODE_ID,
@@ -763,13 +764,13 @@ test('constructor gate — UnifiedRebalancer throws when ' +
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator: createMockCoordinator(),
-  }), {message: REBALANCER_ERROR_MSG.CACHE_REQUIRED},
+  })), {message: REBALANCER_ERROR_MSG.CACHE_REQUIRED},
   'throws when systemTableCache missing');
 });
 
 test('constructor gate — UnifiedRebalancer throws when ' +
   'rebalanceCoordinator is missing', async (t) => {
-  t.throws(() => new UnifiedRebalancer({
+  t.throws(() => new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
     entityId: PARTITION_ID,
     entityType: ENTITY_TYPE_PARTITION,
     nodeId: NODE_ID,
@@ -777,7 +778,7 @@ test('constructor gate — UnifiedRebalancer throws when ' +
     cdcIntegrationService: createMockCdcService(),
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
-  }), {message: REBALANCER_ERROR_MSG.COORDINATOR_REQUIRED},
+  })), {message: REBALANCER_ERROR_MSG.COORDINATOR_REQUIRED},
   'throws when rebalanceCoordinator missing');
 });
 

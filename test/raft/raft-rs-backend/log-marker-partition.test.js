@@ -17,6 +17,7 @@ import {LogsOwner} from '../../../src/control-plane/owners/logs-owner.js';
 import {ControlPlaneSystemTableGateway} from
   '../../../src/control-plane/control-plane-system-table-gateway.js';
 import {CDCIntegrationService} from '../../../src/cdc/cdc-integration-service.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {durableConsumerView, holdNativeDeliveries, trackAnswer, traceConsumer} from
   './runtime-completion-consumers-fixture.js';
 
@@ -139,7 +140,7 @@ test('native logs marker remains unapplied and unacknowledged while quorum traff
       const answer = await pending.promise;
       assert.equal(answer.markerState, 'recorded');
       // Scheduling resumes real replication of the final committed frontier.
-      f.group.services.forEach((service) => service.raft.startScheduling());
+      f.group.services.forEach((service) => turnChainValue(service.raft.startScheduling()));
       assert.equal(await f.group.waitFor(() =>
         f.group.services.every((service) => rows(service).length === 1)), true);
       const original = rows(f.leader)[0];
@@ -151,7 +152,7 @@ test('native logs marker remains unapplied and unacknowledged while quorum traff
           durable: durableConsumerView(service), rows: rows(service)}))});
     } finally {
       await gate.restore();
-      f.group.services.forEach((service) => service.raft.startScheduling());
+      f.group.services.forEach((service) => turnChainValue(service.raft.startScheduling()));
       await pending.promise.catch(() => undefined);
     }
   });

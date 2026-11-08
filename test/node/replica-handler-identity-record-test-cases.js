@@ -24,9 +24,12 @@ import Database from 'better-sqlite3';
 
 import {createRaftRsOperationPort} from
   '../../src/raft/raft-rs-operation-port.js';
-import {RAFT_OPERATION_PORT_REQUEST as REQUEST} from
-  '../../src/raft/raft-operation-port-request.js';
+import {
+  RAFT_COMMITTED_ENTRY_APPLY_MODE,
+  RAFT_OPERATION_PORT_REQUEST as REQUEST,
+} from '../../src/raft/raft-operation-port-request.js';
 import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {COMMITTED_MEMBERSHIP_REFUSAL} from
   '../../src/raft/raft-committed-membership-constants.js';
 import {REPLICA_HANDLER_LOG_MSG} from
@@ -65,6 +68,7 @@ function portRequest(options, db, overrides = {}) {
     [REQUEST.SEND_TO_PEER]: () => undefined,
     [REQUEST.RESOLVE_PEER_ADDRESS]: addressOf,
     [REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
+    [REQUEST.APPLY_COMMITTED_ENTRY_MODE]: RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
     [REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
     ...overrides,
   };
@@ -306,13 +310,13 @@ export async function registerReplicaHandlerIdentityRecordTests({
       replicaId: 'r3-target',
       beforeMutation: (mutation, opened) => {
         if (syncingWrite(mutation, ReplicaStatus.SYNCING)) {
-          campaignWhileClosed = opened[0].port.campaign();
+          campaignWhileClosed = turnChainValue(opened[0].port.campaign());
           // The failure path's fence: what the port admits between the
           // refused write and its close.
           opened[0].beforeClose = (port) => {
             atClose = {
               identityRecorded: port.readStatus().identityRecorded,
-              campaign: port.campaign()?.reason ?? null,
+              campaign: port.campaign().result?.reason ?? null,
             };
           };
           throw new Error('SERVICES write refused');
