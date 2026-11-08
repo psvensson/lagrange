@@ -2,15 +2,30 @@
   "schema": "solve-quest/2",
   "id": "navigability-guideline-audit",
   "epic": "code-navigability-and-mistake-resistance",
-  "statement": "Every pattern in the epic budget is held by a one-way ratchet: scripts/check-guideline-navigability.js reads the shared detector module, records a per-violation baseline JSON per pattern in the guideline-check-shared.js shape with --update-baseline and the tighten hint, is chained into npm run audit:guidelines and so into test:static and the pre-push gate, and docs/development/code-style.md names each pattern together with the form that replaces it; the budget row navigability_patterns_without_ratchet reads zero.",
+  "statement": "Every pattern in the epic budget is held by a one-way ratchet: scripts/check-guideline-navigability.js reads the shared detector module, records a per-violation baseline JSON per pattern in the guideline-check-shared.js shape with --update-baseline and the tighten hint, is chained into npm run audit:guidelines and so into test:static and the pre-push gate, and docs/development/code-style.md names each pattern together with the form that replaces it; the budget row navigability_patterns_without_ratchet reads zero. The audit covers the fallback family too (two-source reads, typeof dual paths, catch-and-default, alias exports, legacy vocabulary), each with its own baseline file.",
   "doneWhen": {
     "probe": "script",
-    "args": {"command": "node scripts/checks/code-navigability-budget.js --metric --rows navigability_patterns_without_ratchet", "target": 0}
+    "args": {
+      "command": "node scripts/checks/code-navigability-budget.js --metric --rows navigability_patterns_without_ratchet",
+      "target": 0
+    }
   },
   "constraints": [
-    {"id": "baseline-seals-not-grants", "statement": "Writing the baseline at the current count is the only permitted baseline write in this quest; every later write may only lower a count. A new violation anywhere fails test:static."},
-    {"id": "same-detector", "statement": "The audit imports scripts/checks/code-navigability-detectors.js. It carries no detection of its own."},
-    {"id": "doc-names-the-replacement", "statement": "Each pattern's entry in docs/development/code-style.md states the replacement form (named collaborator, owner-held field, decoder, named state, always-promise), so an agent reading a violation knows what to write instead."},
-    {"id": "gate-not-advice", "statement": "The audit exits non-zero on growth and prints the tighten hint when a count falls below its baseline; a mode that cannot fail is not a check."}
+    {
+      "id": "baseline-seals-not-grants",
+      "statement": "Writing the baseline at the current count is the only permitted baseline write in this quest; every later write may only lower a count. A new violation anywhere fails test:static."
+    },
+    {
+      "id": "same-detector",
+      "statement": "The audit imports scripts/checks/code-navigability-detectors.js. It carries no detection of its own."
+    },
+    {
+      "id": "doc-names-the-replacement",
+      "statement": "Each pattern's entry in docs/development/code-style.md states the replacement form (named collaborator, owner-held field, decoder, named state, always-promise), so an agent reading a violation knows what to write instead."
+    },
+    {
+      "id": "gate-not-advice",
+      "statement": "The audit exits non-zero on growth and prints the tighten hint when a count falls below its baseline; a mode that cannot fail is not a check."
+    }
   ]
 }

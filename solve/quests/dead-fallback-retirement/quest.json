@@ -1,0 +1,17 @@
+{
+  "schema": "solve-quest/2",
+  "id": "dead-fallback-retirement",
+  "epic": "code-navigability-and-mistake-resistance",
+  "statement": "Every census record of class never or fallback-only is retired: a never site loses its fallback side and, where the primary side can be absent, answers with a named outcome instead of a silent default; a fallback-only site loses its dead primary side and is renamed for what it actually does; each deletion is one attempt per owner directory and cites the census record and run identities that justify it; the budget rows fallback_branches_never_taken and fallback_branches_only_fallback_taken read zero.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {"command": "node scripts/checks/code-navigability-budget.js --metric --rows fallback_branches_never_taken,fallback_branches_only_fallback_taken", "target": 0}
+  },
+  "constraints": [
+    {"id": "census-cites-the-run", "statement": "A deletion names the census record (file, hash, class) and the runs behind it. A site whose record is unloaded or whose hash changed since the census is not deletable on census evidence."},
+    {"id": "named-outcome-not-crash", "statement": "Removing a fallback never widens a failure into a crash path: where the primary side can be absent, the result is a typed refusal or named state the consumer handles (R07, R11)."},
+    {"id": "one-owner-per-attempt", "statement": "Each attempt changes one owner directory (readiness, partition, raft first) and lands on its own, so a regression is attributable to one owner."},
+    {"id": "no-legacy-kept", "statement": "No alias, compatibility branch or parallel implementation is kept for safety; a retained path is a finding routed to its owner, not a preserved fallback."},
+    {"id": "independent-verification", "statement": "The src/ changes land only behind an approving verification newer than the last attempt."}
+  ]
+}

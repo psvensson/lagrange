@@ -2,22 +2,34 @@
   "schema": "solve-quest/2",
   "id": "code-navigability-budget-check",
   "epic": "code-navigability-and-mistake-resistance",
-  "statement": "A deterministic script scripts/checks/code-navigability-budget.js measures every row of the code-navigability-and-mistake-resistance budget from a checkout and prints the unmet count as its last stdout line (--metric, --rows <name,...>, --json), reading one detector module scripts/checks/code-navigability-detectors.js that owns the AST detection of each pattern; measured at the sealing head it reports the baselines recorded in the epic table, a test measures it against a fixture tree it owns so the witness does not move when the repository moves, and the script passes the changed-path guideline checkers (eslint, literals, ambient intrinsics) without any baseline change.",
+  "statement": "A deterministic script scripts/checks/code-navigability-budget.js measures every row of the code-navigability-and-mistake-resistance budget from a checkout and prints the unmet count as its last stdout line (--metric, --rows <name,...>, --json), reading one detector module scripts/checks/code-navigability-detectors.js that owns the AST detection of each pattern; measured at the sealing head it reports the baselines recorded in the epic table, a test measures it against a fixture tree it owns so the witness does not move when the repository moves, and the script passes the changed-path guideline checkers (eslint, literals, ambient intrinsics) without any baseline change. The detector module also owns the fallback family (two-source reads, typeof dual paths, catch-and-default, re-export-only modules, alias exports, legacy vocabulary) and the census-reading rows, which report outstanding while data/fallback-census/census.json is absent.",
   "doneWhen": {
     "probe": "test-receipt",
     "args": {
       "file": "solve/quests/code-navigability-budget-check/evidence/receipt.json",
       "requiredReceipts": [
-        "budget-rows-reproduce-the-epic-baselines",
+        "budget-rows-measure-the-real-tree-within-caps",
         "fixture-tree-measures-every-row",
         "changed-path-guideline-checkers-pass"
       ]
     }
   },
   "constraints": [
-    {"id": "baseline-is-the-oracle", "statement": "A row whose sealing measurement differs from the epic's recorded baseline is either a detector defect or an epic correction, recorded together in the same attempt; it is never a silent renumbering of either side."},
-    {"id": "one-detector-owner", "statement": "The detector module is the only place a pattern is recognised. The budget script, the guideline audit and any test import it; none carries a second regex or AST walk for the same pattern (R01, R05)."},
-    {"id": "measure-never-act", "statement": "The script reads the tree and, for a pattern promoted to ESLint, runs eslint in report mode for that rule id only. It writes nothing and changes no file (R27)."},
-    {"id": "satisfy-the-checker-not-the-baseline", "statement": "The literal, ambient-intrinsic and lint checkers are satisfied by changing this script, never by a baseline entry, a raised count or a path exclusion (R23)."}
+    {
+      "id": "baseline-is-the-oracle",
+      "statement": "At the sealing head every cap row measures exactly the baseline the epic table records, and the measurement is recorded in the quest log as an evidence finding; a row that differs is a detector defect or an epic correction recorded together in the same attempt, never a silent renumbering of either side."
+    },
+    {
+      "id": "one-detector-owner",
+      "statement": "The detector module is the only place a pattern is recognised. The budget script, the guideline audit and any test import it; none carries a second regex or AST walk for the same pattern (R01, R05)."
+    },
+    {
+      "id": "measure-never-act",
+      "statement": "The script reads the tree and, for a pattern promoted to ESLint, runs eslint in report mode for that rule id only. It writes nothing and changes no file (R27)."
+    },
+    {
+      "id": "satisfy-the-checker-not-the-baseline",
+      "statement": "The literal, ambient-intrinsic and lint checkers are satisfied by changing this script, never by a baseline entry, a raised count or a path exclusion (R23)."
+    }
   ]
 }

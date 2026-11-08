@@ -1,0 +1,16 @@
+{
+  "schema": "solve-quest/2",
+  "id": "live-dual-path-classification",
+  "epic": "code-navigability-and-mistake-resistance",
+  "statement": "Every census record of class both carries a recorded classification in scripts/checks/code-navigability-fallback-classification.json, bound to the site's content hash with a reason: named-state-at-owner (the dual path becomes a named state decided once at its owner), documented-default (the schema or constructor guarantee that makes the default inert is cited), or second-authority (two owners answer one fact, an R03 finding routed to a quest of its own); the budget row fallback_sites_unclassified reads zero, and the classifications are verified by an agent other than the one that wrote them.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {"command": "node scripts/checks/code-navigability-budget.js --metric --rows fallback_sites_unclassified", "target": 0}
+  },
+  "constraints": [
+    {"id": "classification-is-a-claim", "statement": "A classification is a claim about authority and goes through the verification templates; a documented-default entry cites the guarantee that makes it inert, or it is not a documented default."},
+    {"id": "second-authority-routes", "statement": "An R03 finding is recorded and routed to its owner's quest; it is not edited inline here (R17)."},
+    {"id": "hash-voids", "statement": "A classification is void when the site's content hash changes; the row counts it unclassified again."},
+    {"id": "owner-order", "statement": "Classification proceeds owner by owner in the epic's order and each batch names the agent that classified and the agent that verified."}
+  ]
+}
