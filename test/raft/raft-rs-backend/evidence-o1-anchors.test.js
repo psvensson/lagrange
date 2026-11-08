@@ -109,6 +109,13 @@ function found(founders, target, filter = {value: null}) {
   return {model, leader, genesis};
 }
 
+// The evidence model drives the port synchronously: each turn it answers
+// settles in the call (raft-rs-turn-answer.js).
+function settledResult(turn) {
+  assert.equal(turn.settled, true, 'the synchronous model settles the turn');
+  return turn.result;
+}
+
 function bootstrapRead(model, replicaId) {
   return model.node(replicaId)[READ]({
     purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP});
@@ -216,22 +223,22 @@ test('anchor: a joint configuration is refused to a bootstrap read and as ' +
     for (const member of liveReplicas(model)) {
       reserveIdentity(model, member, 'jnt-t');
     }
-    const whileJoint = model.node(leader).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: 'jnt-t'});
+    const whileJoint = settledResult(model.node(leader).proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: 'jnt-t'}));
     assert.equal(whileJoint.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE,
       `an AddNode while joint is deferred (${JSON.stringify(whileJoint)})`);
     assert.equal(whileJoint.reason, RUNTIME_REASON.CONF_CHANGE_PENDING);
     assert.equal(whileJoint.retryable, true);
-    const leave = model.node(leader).proposeConfChange({
-      transition: WIRE.transition.Auto, changes: []});
+    const leave = settledResult(model.node(leader).proposeConfChange({
+      transition: WIRE.transition.Auto, changes: []}));
     assert.equal(leave.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       'the leave (a change with no steps) is taken while joint');
     assert.ok(settle(model, () =>
       durableOf(model, leader).applied.votersOutgoing.length === 0 &&
       durableOf(model, leader).applied.voters.length === 2, [leader]),
     'setup: the group left the joint state');
-    const afterLeave = model.node(leader).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: 'jnt-t'});
+    const afterLeave = settledResult(model.node(leader).proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: 'jnt-t'}));
     assert.equal(afterLeave.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       'the deferred AddNode is taken once the group left the joint state');
     assert.ok(settle(model, () => durableOf(model, leader).applied.voters
@@ -332,9 +339,9 @@ test('anchor (B13, RF = 1): a transfer to the target below its admission ' +
     joinFromStamp(model, target, stamp);
     const targetPeerId = peerIdIn(model, target, target);
     const before = termAndVote(durableOf(model, target).hard);
-    const premature = model.node(source).transferLeadership({
+    const premature = settledResult(model.node(source).transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: target});
+      replicaIdentity: target}));
     assert.equal(premature.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED,
       `one typed refusal (${JSON.stringify(premature)})`);
     assert.equal(premature.reason,
@@ -352,9 +359,9 @@ test('anchor (B13, RF = 1): a transfer to the target below its admission ' +
       durableOf(model, target).applied.admissionIndex === aSelf &&
       model.node(target).readStatus().gateOpen === true, [source]),
     'the target applies its admission and opens');
-    const retry = model.node(source).transferLeadership({
+    const retry = settledResult(model.node(source).transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: target});
+      replicaIdentity: target}));
     assert.equal(retry.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `the retry is stepped (${JSON.stringify(retry)})`);
     assert.equal(retry.reason,
@@ -438,9 +445,9 @@ test('anchor (B1 reachability): every append to the target after its ' +
       'every append the leader sent the target carries commit >= a_self ' +
         '(it tracks the target only after applying AddNode(t))');
 
-    const transfer = model.node(leader).transferLeadership({
+    const transfer = settledResult(model.node(leader).transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: target});
+      replicaIdentity: target}));
     assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `the leader stepped the transfer (${JSON.stringify(transfer)})`);
     assert.ok(model.settle(() => roleOf(model, target) === LEADER_ROLE,

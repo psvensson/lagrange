@@ -23,6 +23,7 @@ import {
   RAFT_LEADERSHIP_TRANSFER_REASON,
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
 } from '../../../src/raft/raft-operation-port-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {RUNTIME_PHASE} from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
 
@@ -98,9 +99,9 @@ async () => {
     proposeAndCommit(cluster, 'cf-b', 'forwarded-by-b');
 
     // A named transfer requested at a follower: forwarded to the leader.
-    const forwarded = await cluster.node('cf-b').transferLeadership({
+    const forwarded = await turnChainValue(cluster.node('cf-b').transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: 'cf-c'});
+      replicaIdentity: 'cf-c'}));
     assert.equal(forwarded.reason,
       RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_FORWARDED,
       JSON.stringify(forwarded));
@@ -109,9 +110,9 @@ async () => {
     proposeAndCommit(cluster, 'cf-c', 'after-forwarded-transfer');
 
     // The leader's own transfer: MsgTimeoutNow to a caught-up follower.
-    const requested = await cluster.node('cf-c').transferLeadership({
+    const requested = await turnChainValue(cluster.node('cf-c').transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: 'cf-a'});
+      replicaIdentity: 'cf-a'}));
     assert.equal(requested.reason,
       RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_REQUESTED,
       JSON.stringify(requested));

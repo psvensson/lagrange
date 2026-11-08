@@ -31,6 +31,7 @@ import {REPLICA_HANDLER_RETIREMENT_OUTCOME} from
   '../../src/node/replica-transport-handler-identity.js';
 import {runSerializedReplicaMutation} from
   '../../src/node/replica-state-machine-serialization.js';
+import {pendingTurn} from '../../src/raft/raft-rs-turn-answer.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {consensusInitRefusedError} from '../../src/raft/raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
@@ -245,8 +246,9 @@ test('MG N2 (3): the handler is retired after the preflight but immediately ' +
   // the queued activation's lane action runs.
   const occupantGate = gate();
   const occupant = runSerializedReplicaMutation(world.stateMachine,
-    REPLICA_ID, () => occupantGate.held.then(() =>
-      world.router.unregisterExact(ADDRESS, world.service.transportHandler)));
+    REPLICA_ID, () => pendingTurn(occupantGate.held.then(() =>
+      world.router.unregisterExact(ADDRESS, world.service.transportHandler))))
+    .pending;
   const tails = world.stateMachine.serviceRowPersistInFlightByServiceId;
   const occupantTail = tails.get(REPLICA_ID);
   const activation = world.activate();
@@ -313,7 +315,7 @@ test('MG N2 (4b): retirement does not wait for unrelated lifecycle work in ' +
   const world = createWorld();
   const never = new Promise(() => {});
   void runSerializedReplicaMutation(world.stateMachine, REPLICA_ID,
-    () => never);
+    () => pendingTurn(never));
   await world.retire();
   t.equal(world.router.getRegisteredHandler(ADDRESS), null,
     'a stuck unrelated lane action does not block handler retirement');

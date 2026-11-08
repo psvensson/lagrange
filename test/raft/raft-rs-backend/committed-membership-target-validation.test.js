@@ -43,6 +43,7 @@ import {RUNTIME_PHASE} from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {ENTITY_TYPE} from '../../../src/constants/addresses.js';
 import {isConsensusInitRefusal} from '../../../src/raft/raft-operation-port.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {reservePartitionRaftPeerIdentity} from
   '../../../src/partition/partition-service-raft-membership-administration.js';
 import {ReplicaOperationField} from
@@ -230,8 +231,8 @@ test('T3: a COMMITTED stamp already naming the target a voter, with no ' +
     await formGroup(harness, FOUNDERS);
     const leader = harness.leader();
     reservePartitionRaftPeerIdentity(leader, TARGET[0]);
-    const proposed = await leader.raft.proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: TARGET[0]});
+    const proposed = await turnChainValue(leader.raft.proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: TARGET[0]}));
     assert.equal(proposed.outcome, 'CORE_OK', 'setup: AddNode(target)');
     const zombieOf = () => statusOf(leader).peers.find((peer) =>
       peer.replicaIdentity === TARGET[0] && !peer.learner);
@@ -278,8 +279,8 @@ test('T3: learners in the committed configuration reach the target, and a ' +
     await formGroup(harness, FOUNDERS);
     const leader = harness.leader();
     reservePartitionRaftPeerIdentity(leader, learner);
-    await leader.raft.proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: learner});
+    await turnChainValue(leader.raft.proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: learner}));
     assert.ok(await waitFor(() =>
       statusOf(leader).confState.learners.length === 1),
     'setup: the group committed a learner');

@@ -33,24 +33,16 @@ const BOOTSTRAP_STARTUP_AUTHORITY_EVIDENCE_METHODS = Object.freeze({
       startupAuthority :
       null;
   },
+  // A synchronous read: only the service's synchronous reader answers it
+  // (its async reader always answers a promise).
   resolveLocalStartupAuthoritySnapshot(service, observedAt) {
-    if (typeof service.getStartupAuthoritySnapshotSync === 'function') {
-      return service.getStartupAuthoritySnapshotSync(
-        this.getSeedNodeId(),
-        observedAt,
-      );
-    }
-    if (typeof service.getStartupAuthoritySnapshot !== 'function') {
+    if (typeof service.getStartupAuthoritySnapshotSync !== 'function') {
       return null;
     }
-    const localStartupAuthority = service.getStartupAuthoritySnapshot(
+    return service.getStartupAuthoritySnapshotSync(
       this.getSeedNodeId(),
       observedAt,
     );
-    return localStartupAuthority &&
-      typeof localStartupAuthority.then === 'function' ?
-      null :
-      localStartupAuthority;
   },
   getStartupAuthoritySnapshot(observedAt = Date.now()) {
     const seedContactStartupAuthority =

@@ -57,6 +57,7 @@ import {setCoreFaultInjector} from
   '../../src/raft/raft-rs-runtime-owner.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
 
@@ -520,10 +521,10 @@ test('W3: on a three-replica group a retry answered by another replica, a ' +
         params: ['u', 'a', 'b'], entryId: 'w3-update'}}});
     assertRetainedReplay(forwarded, update, 'a follower\'s forwarded retry');
 
-    const transfer = await leader.raft.transferLeadership({
+    const transfer = await turnChainValue(leader.raft.transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
       replicaIdentity: follower.replicaId,
-    });
+    }));
     assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `setup: the live leader transfers to the follower (${JSON.stringify(transfer)})`);
     assert.equal(await waitFor(() => follower.raft.readStatus().role ===

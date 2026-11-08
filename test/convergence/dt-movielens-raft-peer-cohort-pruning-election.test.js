@@ -166,7 +166,7 @@ async (t) => {
   // Only the leader proposes membership. The election is the core's and this
   // double does not witness a vote: r1 campaigns through the port and the
   // double answers as a core that won it.
-  t.equal(partition.raft.campaign().outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+  t.equal(partition.raft.campaign().result.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     'r1 campaigns through the port');
   t.equal(partition.raft.readStatus().role, RaftRole.LEADER,
     'r1 leads the bootstrap cohort');

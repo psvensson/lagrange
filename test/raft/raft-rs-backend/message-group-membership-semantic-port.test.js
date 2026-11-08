@@ -20,6 +20,7 @@ import {RAFT_RS_CONF_CHANGE_TYPE} from
 import {durableLog} from './committed-membership-oracles.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {loadRaftRsCore} from './raw-raft-rs-test-core.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const GROUP = 'semantic-membership-group';
 const FOUNDERS = Object.freeze(['semantic-a', 'semantic-b', 'semantic-c']);
@@ -117,15 +118,15 @@ function permit(cluster, leader, stage, sequence, overrides = {}) {
 }
 
 function propose(cluster, leader, request) {
-  return cluster.node(leader)[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
-    request);
+  return turnChainValue(cluster.node(leader)[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
+    request));
 }
 
 function transferTo(cluster, from, to) {
-  const transferred = cluster.node(from).transferLeadership({
+  const transferred = turnChainValue(cluster.node(from).transferLeadership({
     successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
     replicaIdentity: to,
-  });
+  }));
   assert.equal(transferred.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
   cluster.tickers = [to];
   assert.ok(cluster.settle(() => cluster.leaderReplicaId() === to),
@@ -184,9 +185,9 @@ test('the semantic port anchors ADD_LEARNER, keeps ordinary traffic out of ' +
     RAFT_MEMBERSHIP_TRANSITION_STAGE.PROMOTE, 2));
   assert.equal(parkedPromotion.reason,
     RAFT_MEMBERSHIP_TRANSITION_REASON.PROMOTION_PROOF_REQUIRED);
-  const promoted = cluster.node(leader).proposeConfChange({transition: 0,
+  const promoted = turnChainValue(cluster.node(leader).proposeConfChange({transition: 0,
     changes: [{changeType: RAFT_RS_CONF_CHANGE_TYPE.ADD_NODE,
-      nodeId: targetPeer}]});
+      nodeId: targetPeer}]}));
   assert.equal(promoted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     'legacy proposal is test setup for a voter reached before duplicate ADD');
   assert.ok(cluster.settle(() => cluster.node(leader).readStatus()
@@ -294,11 +295,11 @@ test('an exact old port cannot rebind to a same-core reopen', (t) => {
   const oldPermit = permit(cluster, leader,
     RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER, 1);
   cluster.restart(leader);
-  const closed = oldPort[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
-    oldPermit);
+  const closed = turnChainValue(oldPort[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
+    oldPermit));
   assert.equal(closed.reason, 'closed');
-  const reopened = cluster.node(leader)[
-    RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](oldPermit);
+  const reopened = turnChainValue(cluster.node(leader)[
+    RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](oldPermit));
   assert.equal(reopened.reason,
     RAFT_MEMBERSHIP_TRANSITION_REASON.STALE_LEADERSHIP);
 });
@@ -418,12 +419,12 @@ test('malformed managed ConfChange context refuses before durable ' +
   const {cluster, leader} = electedWithoutTargetRegistration(t,
     'managed-context-negative');
   const targetPeer = deriveRaftRsPeerId(TARGET);
-  const proposed = cluster.node(leader).proposeConfChange({
+  const proposed = turnChainValue(cluster.node(leader).proposeConfChange({
     transition: 0,
     changes: [{changeType: RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
       nodeId: targetPeer}],
     context: Buffer.from('not json').toString('base64'),
-  });
+  }));
   assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
   assert.ok(cluster.settle(() => cluster.node(leader).readStatus()
     .outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE, {rounds: 400}),
@@ -442,12 +443,12 @@ test('decoded null managed ConfChange context refuses before durable or ' +
     'managed-null-context');
   const targetPeer = deriveRaftRsPeerId(TARGET);
   const before = cluster.node(leader).readStatus();
-  const proposed = cluster.node(leader).proposeConfChange({
+  const proposed = turnChainValue(cluster.node(leader).proposeConfChange({
     transition: 0,
     changes: [{changeType: RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
       nodeId: targetPeer}],
     context: Buffer.from('null').toString('base64'),
-  });
+  }));
   assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
   assert.ok(cluster.settle(() => cluster.node(leader).readStatus()
     .outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE, {rounds: 400}),
@@ -469,11 +470,11 @@ test('legacy empty-context ConfChange remains valid', (t) => {
   const {cluster, leader} = electedWithoutTargetRegistration(t,
     'legacy-empty-context');
   const targetPeer = deriveRaftRsPeerId(TARGET);
-  const legacy = cluster.node(leader).proposeConfChange({
+  const legacy = turnChainValue(cluster.node(leader).proposeConfChange({
     transition: 0,
     changes: [{changeType: RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
       nodeId: targetPeer}],
-  });
+  }));
   assert.equal(legacy.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     'empty legacy ConfChange context remains valid');
   assert.ok(cluster.settle(() => cluster.node(leader).readStatus()
@@ -517,7 +518,7 @@ test('committed context never treats an address as the replica identity', (t) =>
   const {cluster, leader} = electedWithoutTargetRegistration(t,
     'address-as-identity');
   const targetPeer = deriveRaftRsPeerId(TARGET);
-  const proposed = cluster.node(leader).proposeConfChange({
+  const proposed = turnChainValue(cluster.node(leader).proposeConfChange({
     transition: 0,
     changes: [{changeType: RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
       nodeId: targetPeer}],
@@ -529,7 +530,7 @@ test('committed context never treats an address as the replica identity', (t) =>
       replicaIdentity: cluster.addressOf(TARGET),
       peerId: targetPeer,
     })).toString('base64'),
-  });
+  }));
   assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
   assert.ok(cluster.settle(() => cluster.node(leader).readStatus()
     .outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE, {rounds: 400}));

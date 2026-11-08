@@ -66,6 +66,7 @@ import * as runtimeConstants from
   '../../src/raft/raft-rs-runtime-owner-constants.js';
 import * as runtimeTuning from '../../src/raft/raft-rs-runtime-tuning.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {coreTrappingAppend} from
   '../raft/raft-rs-backend/core-trap-envelope.js';
 
@@ -591,19 +592,19 @@ test('F-ap: a follower restarted while its record table is missing is ' +
 // (core-trap-envelope.js), driven by a tick.
 async function trapCoreThrough(partition) {
   const before = partition.raft.readStatus();
-  const accepted = await partition.raft.step(coreTrappingAppend({
+  const accepted = await turnChainValue(partition.raft.step(coreTrappingAppend({
     dbFile: partition.dbPath,
     groupId: partition.partitionId,
     status: before,
     from: String(Number(before.peerId) + FOREIGN_PEER_OFFSET),
     term: String(Number(before.term) + 1),
-  }));
+  })));
   assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     'setup: the trapping envelope is admitted');
   const originalConsoleError = console.error;
   try {
     console.error = () => undefined;
-    return await partition.raft.tick();
+    return await turnChainValue(partition.raft.tick());
   } finally {
     console.error = originalConsoleError;
   }

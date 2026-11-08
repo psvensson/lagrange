@@ -37,6 +37,7 @@ import {RUNTIME_FAULT_REPORT} from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {RaftRsReplicaLifecycleOwner} from
   '../../../src/raft/raft-rs-replica-lifecycle-owner.js';
+import {pendingTurn} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const RESEED_REQUIRED = COMMITTED_MEMBERSHIP_REFUSAL.RESEED_REQUIRED;
 const FORMED_ENTRIES = 12;
@@ -148,14 +149,15 @@ test('D3: a retirement that waited on a turn which held the replica ' +
     const owner = new RaftRsReplicaLifecycleOwner({db, groupId: 'd3',
       peerId: '7', replicaIdentity: 'd3-a'});
     let finishTurn = null;
-    const turn = owner.execute(() => new Promise((resolve) => {
+    // The admitted work answers a pending turn (raft-rs-turn-answer.js).
+    const turn = owner.execute(() => pendingTurn(new Promise((resolve) => {
       finishTurn = resolve;
-    }));
+    })));
     const retirement = owner.retire('group-retired');
     assert.equal(owner.holdForReseed().outcome,
       RAFT_OPERATION_OUTCOME.CORE_OK, 'the in-flight turn held the replica');
     finishTurn();
-    await turn;
+    await turn.pending;
     const retired = await retirement;
     assert.equal(retired.reason, RESEED_REQUIRED);
     const row = db.prepare('SELECT state, reason FROM ' +

@@ -83,6 +83,7 @@ import * as runtimeConstants from
   '../../src/raft/raft-rs-runtime-owner-constants.js';
 import * as runtimeTuning from '../../src/raft/raft-rs-runtime-tuning.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {PARTITION_SETTLED_REPLAY} from
   '../../src/partition/partition-committed-statement-outcome-constants.js';
 
@@ -737,20 +738,20 @@ test('W-B6-5: a core failure (the shared WASM instance trapped) still ' +
     const before = victim.partition.raft.readStatus();
     const siblingBefore = untouchedFacts(sibling.partition, sibling.dbPath);
 
-    const accepted = await victim.partition.raft.step(coreTrappingAppend({
+    const accepted = await turnChainValue(victim.partition.raft.step(coreTrappingAppend({
       dbFile: victim.dbPath,
       groupId: victim.partition.partitionId,
       status: before,
       from: String(Number(before.peerId) + FOREIGN_PEER_OFFSET),
       term: String(Number(before.term) + 1),
-    }));
+    })));
     assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       'setup: the envelope is admitted');
     const originalConsoleError = console.error;
     let trapped;
     try {
       console.error = () => undefined;
-      trapped = await victim.partition.raft.tick();
+      trapped = await turnChainValue(victim.partition.raft.tick());
     } finally {
       console.error = originalConsoleError;
     }

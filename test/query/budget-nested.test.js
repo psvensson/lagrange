@@ -404,6 +404,34 @@ describe('BudgetEnforcer — nested call budgets', () => {
         assert.equal(usage.inflight, 0);
       });
 
+    it('holds the inflight slot until a plan or stage call settles and ' +
+      'releases it at once for an iterator call', async () => {
+      const enforcer = new BudgetEnforcer({
+        [QB_FIELD.NESTED_MAX_CALLS]: 10,
+        [QB_FIELD.MAX_INFLIGHT]: 5,
+      });
+      const BOUNDED_SQL = 'SELECT * FROM users WHERE id = 1 LIMIT 1';
+      const settle = Promise.withResolvers();
+      const iterator = {[Symbol.asyncIterator]() {
+        return this;
+      }, next: async () => ({done: true}), then: undefined};
+      const execCtx = {
+        ...makeMockExecCtx(enforcer),
+        call: (query, params, handler) =>
+          typeof query === 'object' || typeof handler === 'function' ?
+            settle.promise : iterator,
+      };
+      const stageCtx = buildStageContext(execCtx, null);
+      const planned = stageCtx.call({kind: 'plan'}, [], null, null);
+      const staged = stageCtx.call(BOUNDED_SQL, [], () => {}, null);
+      assert.equal(enforcer.getUsage().inflight, 2);
+      assert.equal(stageCtx.call(BOUNDED_SQL, []), iterator);
+      assert.equal(enforcer.getUsage().inflight, 2);
+      settle.resolve({rows: []});
+      await Promise.all([planned, staged]);
+      assert.equal(enforcer.getUsage().inflight, 0);
+    });
+
     it('should throw when nested call budget exceeded',
       async () => {
         const enforcer = new BudgetEnforcer({

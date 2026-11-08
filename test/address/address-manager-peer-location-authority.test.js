@@ -54,6 +54,7 @@ import {waitForCondition} from '../partition/partition-service-test-support.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -200,13 +201,13 @@ function authoritativePartitionCache() {
 // services-cache reconcile proposes it. Admission is complete when the port's
 // configuration names the peer.
 async function leadAndAdmitPeer(partition, peerRow) {
-  assertRaftOperationSucceeded(await partition.raft.campaign());
-  assertRaftOperationSucceeded(await partition.raft.propose({
+  assertRaftOperationSucceeded(await turnChainValue(partition.raft.campaign()));
+  assertRaftOperationSucceeded(await turnChainValue(partition.raft.propose({
     type: PARTITION_SERVICE_OPERATION.INSERT,
     sql: PREFIX_INSERT_SQL,
     params: [ONE],
     entryId: `address-authority-prefix-${partition.replicaId}`,
-  }));
+  })));
   partition.systemTableCache.applySystemTableChange(
     TABLES.SERVICES, CDC_OPERATIONS.UPDATE, {...peerRow, updated_at: ONE + 1});
   const admitted = await waitForCondition(
@@ -222,7 +223,7 @@ async function leadAndAdmitPeer(partition, peerRow) {
 
 async function probePartitionPeerDestination(partition, peerAddress, sent) {
   const at = sent.length;
-  await partition.raft.probePeerProgress(peerAddress);
+  await turnChainValue(partition.raft.probePeerProgress(peerAddress));
   return sent.slice(at);
 }
 
@@ -392,7 +393,7 @@ test('a poisoned process registry cannot move a message-group peer destination',
     t.equal(status.peers[ZERO].address, GROUP_A,
       'the peer projection carries the authoritative address');
     const before = sent.length;
-    assertRaftOperationSucceeded(await group.raft.campaign());
+    assertRaftOperationSucceeded(await turnChainValue(group.raft.campaign()));
     await waitForCondition(() => sent.length > before, ADMISSION_BUDGET_MS);
     t.same(sent.slice(before), [GROUP_A],
       'and the vote request the port actually sent went there');

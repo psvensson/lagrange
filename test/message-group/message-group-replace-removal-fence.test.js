@@ -169,7 +169,7 @@ function handoffFromSourceToSurvivor(f, sourceReplicaId) {
       f.cluster.node(currentLeader).transferLeadership({
         successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
         replicaIdentity: survivor,
-      }).outcome,
+      }).result.outcome,
       RAFT_OPERATION_OUTCOME.CORE_OK,
     );
     f.cluster.tickers = [survivor];
@@ -182,7 +182,7 @@ function handoffFromSourceToSurvivor(f, sourceReplicaId) {
   } else {
     const beforeCommit = f.cluster.node(survivor).readStatus().commitIndex;
     assert.equal(
-      f.cluster.propose(survivor, {type: 'HANDOFF_NOOP'}).outcome,
+      f.cluster.propose(survivor, {type: 'HANDOFF_NOOP'}).result.outcome,
       RAFT_OPERATION_OUTCOME.CORE_OK,
     );
     assert.ok(f.cluster.settle(() => {
@@ -260,7 +260,7 @@ test('source retention and leadership handoff fence: source removal is refused '
       f.cluster.node(leaderOf(f)).transferLeadership({
         successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
         replicaIdentity: sourceReplicaId,
-      }).outcome,
+      }).result.outcome,
       RAFT_OPERATION_OUTCOME.CORE_OK,
     );
     f.cluster.tickers = [sourceReplicaId];

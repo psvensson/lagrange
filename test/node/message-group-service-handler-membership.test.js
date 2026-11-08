@@ -28,6 +28,7 @@ import {createFixture, createHandler, createPayload, settle} from
 import {createIdentityTransport} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {FOUNDERS, TARGET} from '../test-helpers/learner-operation-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {MessageGroupServiceHandlerSetup} from
   '../../src/bootstrap/shared/message-group-service-handler-setup.js';
 
@@ -132,10 +133,10 @@ test('the original payload-only composition is refused: no learner-join capabili
         .registerReplica(target));
     }
     const [targetPeerId] = [...peerIds];
-    const proposal = await cluster.node(leader).proposeConfChange({
+    const proposal = await turnChainValue(cluster.node(leader).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER,
       replicaIdentity: target,
-    });
+    }));
     assert.equal(proposal.outcome, 'CORE_OK', JSON.stringify(proposal));
     assert.equal(cluster.settle(() => founders.every((replicaId) =>
       cluster.node(replicaId).readStatus().confState.learners

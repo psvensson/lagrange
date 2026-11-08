@@ -35,6 +35,7 @@ import {BRANCH_CAS, PERMIT_COLUMN, TARGET_PEER, VOTER_RECEIPT, catchUpRoute, cau
   transferLeadership, votersEverywhere} from
   '../test-helpers/message-group-learner-promotion-fixture.js';
 import {workflowOwner} from '../test-helpers/learner-recipient-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const SUCCESSOR_PERMIT_WRITE = 'SET message_group_membership_permit = ? WHERE';
 const RECEIPT_COLUMNS = Object.freeze(['message_group_membership_phase',
@@ -45,15 +46,15 @@ const withoutColumns = (row, columns) => Object.fromEntries(Object.entries(row)
 function commitCommand(f, messageId) {
   const leader = leaderOf(f);
   const before = f.cluster.node(leader).readStatus().commitIndex;
-  assert.equal(f.cluster.propose(leader, {type: 'MESSAGE', messageId}).outcome,
+  assert.equal(f.cluster.propose(leader, {type: 'MESSAGE', messageId}).result.outcome,
     RAFT_OPERATION_OUTCOME.CORE_OK);
   assert.ok(f.cluster.settle(() => f.cluster.node(leader).readStatus().commitIndex > before),
     'the founders commit the command');
 }
 /** A raw native REMOVE of the learner (test physics), applied by every founder. */
 async function removeLearnerNatively(f) {
-  const removed = await f.cluster.node(leaderOf(f)).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: TARGET});
+  const removed = await turnChainValue(f.cluster.node(leaderOf(f)).proposeConfChange({
+    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: TARGET}));
   assert.equal(removed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK, JSON.stringify(removed));
   assert.ok(f.cluster.settle(() => FOUNDERS.every((id) => !f.cluster.node(id).readStatus()
     .confState.learners.map(String).includes(TARGET_PEER))), 'every founder applied the REMOVE');

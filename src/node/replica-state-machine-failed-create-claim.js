@@ -11,6 +11,7 @@ import {installAuthoritativeReplicaLifecycleInLane} from
   './replica-state-machine-recovery.js';
 import {runSerializedReplicaMutation} from
   './replica-state-machine-serialization.js';
+import {pendingTurn, turnChainValue} from '../raft/raft-rs-turn-answer.js';
 import {
   REPLICA_STATE_MACHINE_LOG_MSG,
   REPLICA_STATE_MACHINE_STATE,
@@ -116,11 +117,11 @@ async function claimFailedCreateCleanup(
     }
     return installClaimedRow(stateMachine, claimed.row);
   };
-  return Promise.resolve(runSerializedReplicaMutation(
+  return Promise.resolve(turnChainValue(runSerializedReplicaMutation(
     stateMachine,
     replicaId,
-    claim,
-  ));
+    () => pendingTurn(claim()),
+  )));
 }
 
 export {claimFailedCreateCleanup};

@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {coreTrappingAppend} from './core-trap-envelope.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -28,18 +29,18 @@ test('core and host outcomes are separated by execution provenance',
       assert.equal((await port.readStatus()).outcome, 'CORE_OK');
       // Conf changes are taken only at the leader's port (round 2 F-1): the
       // replica leads first, so the malformed change reaches the core.
-      await port.campaign();
-      const refused = await port.proposeConfChange({
+      await turnChainValue(port.campaign());
+      const refused = await turnChainValue(port.proposeConfChange({
         transition: 999,
         changes: [],
-      });
+      }));
       assert.equal(refused.outcome, 'CORE_REFUSED');
       assert.equal(refused.phase, 'propose_conf_change_v2');
       assert.equal((await port.readStatus()).runtimeHealth, 'healthy',
         'a tagged refusal does not poison the WASM runtime');
 
       hostFault.armed = true;
-      const hostFailure = await port.propose('host-origin-failure');
+      const hostFailure = await turnChainValue(port.propose('host-origin-failure'));
       assert.equal(hostFailure.outcome, 'HOST_FAILURE');
       assert.equal(hostFailure.phase, 'application');
       assert.equal(hostFailure.recoveryRequired, true);
@@ -62,16 +63,16 @@ test('core and host outcomes are separated by execution provenance',
       let fatal;
       try {
         console.error = () => undefined;
-        const accepted = await fatalCluster.node(victim).step(
+        const accepted = await turnChainValue(fatalCluster.node(victim).step(
           coreTrappingAppend({
             dbFile: fatalCluster.replica(victim).dbFile,
             groupId: fatalCluster.partitionId,
             status: victimStatus,
             from: fatalCluster.raftPeerIdOf(leader),
             term: String(victimStatus.term),
-          }));
+          })));
         assert.equal(accepted.reason, 'inbound-enqueued');
-        fatal = await fatalCluster.node(victim).tick();
+        fatal = await turnChainValue(fatalCluster.node(victim).tick());
       } finally {
         console.error = originalConsoleError;
       }

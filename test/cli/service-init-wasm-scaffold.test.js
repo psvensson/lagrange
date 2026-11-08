@@ -233,7 +233,7 @@ test('init exposes one code-first authoring model', async (t) => {
   const serviceDir = path.join(root, 'service');
 
   const created = runInitThroughRouter(['init', serviceDir]);
-  assert.equal(created.exitCode, SUCCESS_EXIT_CODE, created.stderr);
+  assert.equal(await created.pending, SUCCESS_EXIT_CODE, created.stderr);
   assert.match(created.stdout, /Created service project/);
   assert.ok((await listFiles(serviceDir)).includes('lagrange.service.js'));
 
@@ -242,7 +242,7 @@ test('init exposes one code-first authoring model', async (t) => {
     path.join(root, 'provider-specific'),
     '--oci',
   ]);
-  assert.notEqual(providerSpecific.exitCode, SUCCESS_EXIT_CODE);
+  assert.notEqual(await providerSpecific.pending, SUCCESS_EXIT_CODE);
   assert.match(providerSpecific.stderr, /usage|unknown option/iu);
 });
 
@@ -277,8 +277,8 @@ function captureRouterIo(fn) {
     return true;
   };
   try {
-    const exitCode = fn();
-    return {exitCode, stdout, stderr};
+    const pending = fn();
+    return {pending, stdout, stderr};
   } finally {
     process.stdout.write = stdoutWrite;
     process.stderr.write = stderrWrite;

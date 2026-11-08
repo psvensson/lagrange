@@ -31,6 +31,7 @@ import {
   RUNTIME_PHASE,
   RUNTIME_REASON,
 } from '../../../src/raft/raft-rs-runtime-owner-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../../src/raft/raft-operation-port-constants.js';
 import {setCoreFaultInjector} from
@@ -124,7 +125,7 @@ test('a taken Ready whose persistence admission wait passes its bound still ' +
     const leaderReplica = cluster.replica(leaderId);
     const followers = [...cluster.replicas.keys()]
       .filter((replicaId) => replicaId !== leaderId);
-    const proposed = await cluster.propose(leaderId, 'spent-across-send');
+    const proposed = await turnChainValue(cluster.propose(leaderId, 'spent-across-send'));
     assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     for (const follower of followers) {
       for (const envelope of cluster.replica(follower).inbox.splice(0)) {
@@ -141,7 +142,7 @@ test('a taken Ready whose persistence admission wait passes its bound still ' +
     let finished = null;
     lines = await capturingErrors(async () => {
       holdSends = true;
-      const ticked = Promise.resolve(cluster.node(leaderId).tick());
+      const ticked = Promise.resolve(turnChainValue(cluster.node(leaderId).tick()));
       await new Promise((resolve) => setImmediate(resolve));
       assert.ok(held.length > 0,
         'precondition: the Ready had a send in flight');
@@ -184,7 +185,7 @@ test('the delivered-inbound drain past its admission deadline stops polling ' +
     const leaderReplica = cluster.replica(leaderId);
     const followers = [...cluster.replicas.keys()]
       .filter((replicaId) => replicaId !== leaderId);
-    const proposed = await cluster.propose(leaderId, 'spent-inbound');
+    const proposed = await turnChainValue(cluster.propose(leaderId, 'spent-inbound'));
     assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     for (const follower of followers) {
       for (const envelope of cluster.replica(follower).inbox.splice(0)) {
@@ -239,7 +240,7 @@ test('the Ready drain at its cycle cap still answers ' +
         proposedBytes = args[0];
       }
     });
-    const proposed = await cluster.propose('alpha', 'ready-every-cycle');
+    const proposed = await turnChainValue(cluster.propose('alpha', 'ready-every-cycle'));
     setCoreFaultInjector(null);
     assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.ok(proposedBytes, 'precondition: the proposal bytes were seen');
@@ -253,7 +254,7 @@ test('the Ready drain at its cycle cap still answers ' +
         return realHasReady(handle, ...rest);
       };
       try {
-        answered = await cluster.node('alpha').tick();
+        answered = await turnChainValue(cluster.node('alpha').tick());
       } finally {
         binding.has_ready = realHasReady;
       }

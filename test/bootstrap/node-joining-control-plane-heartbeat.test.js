@@ -215,7 +215,7 @@ test('NodeJoiningService clears join-time reporter at READY cutover when heartbe
     service.runtimeHandoffOwner.delegates.flushDeferredCreateSelfHostedMetadata =
       () => {};
     service.runtimeHandoffOwner.delegates.activateDistributedTransactionRecovery =
-      () => {};
+      async () => {};
     service.runtimeHandoffOwner.delegates.startLatencyTopologyLifecycle =
       () => {};
     service.startTime = 0;

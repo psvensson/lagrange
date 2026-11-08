@@ -34,6 +34,7 @@ import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {durableLog} from '../raft/raft-rs-backend/committed-membership-oracles.js';
 import {loadRaftRsCore} from '../raft/raft-rs-backend/raw-raft-rs-test-core.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {fixture, GROUP, FOUNDERS, TARGET, NODE, SUCCESSOR, O, NOW} from
   '../test-helpers/learner-operation-fixture.js';
 import {connectRouters, workflowOwner, withoutReceipt, expireClaim} from
@@ -218,8 +219,8 @@ test('C1 owner path: the discovery turn issues exactly one ordered successor thr
   const late = f.proposalCount();
   assert.equal((await f.run()).reason, AUTHORIZATION.MISMATCH,
     'a delayed predecessor request finds the successor on the row and is refused');
-  assert.equal((await f.cluster.node(oldLeader).proposeMembershipTransition(
-    transitionOf(f, predecessor))).reason, REASON.STALE_LEADERSHIP,
+  assert.equal((await turnChainValue(f.cluster.node(oldLeader).proposeMembershipTransition(
+    transitionOf(f, predecessor)))).reason, REASON.STALE_LEADERSHIP,
   'a delayed predecessor native turn is refused at its old leader');
   assert.equal(f.proposalCount(), late, 'the delayed predecessor is proposed nowhere');
   for (const id of FOUNDERS) {
@@ -406,13 +407,13 @@ test('UNKNOWN keeps the debt: with the predecessor in the new leader\'s log and 
   admission.reserveGroupPeerIdentity({groupId: GROUP, localReplicaIdentity: kept}, TARGET);
   const shaped = successorShapedTransition(f, predecessor, window);
   const proposals = f.proposalCount();
-  const deferred = await f.cluster.node(kept).proposeMembershipTransition(shaped);
+  const deferred = await turnChainValue(f.cluster.node(kept).proposeMembershipTransition(shaped));
   assert.equal(deferred.reason, RUNTIME_REASON.CONF_CHANGE_PENDING,
     'the leader\'s one pending configuration change defers any successor');
   assert.equal(f.proposalCount(), proposals, 'nothing reaches the core');
   assert.ok(learnerEverywhere(f, [kept, missed], peer),
     'the delayed predecessor commits with the new leader\'s own entry');
-  const refused = await f.cluster.node(kept).proposeMembershipTransition(shaped);
+  const refused = await turnChainValue(f.cluster.node(kept).proposeMembershipTransition(shaped));
   assert.equal(refused.reason, REASON.STALE_CONFIGURATION,
     'once the predecessor applied, a successor bound to the absence is refused');
   assert.equal(f.proposalCount(), proposals);
@@ -464,7 +465,7 @@ test('STALE_LEADERSHIP is never escaped by refreshing the old permit: the runtim
   const third = FOUNDERS.find((id) => id !== oldLeader && id !== newLeader);
   const applied = f.cluster.node(third).readStatus().appliedIndex;
   assert.equal(f.cluster.node(newLeader).transferLeadership({
-    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED, replicaIdentity: third}).outcome,
+    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED, replicaIdentity: third}).result.outcome,
   RAFT_OPERATION_OUTCOME.CORE_OK);
   f.cluster.tickers = [third];
   assert.ok(f.cluster.settle(() => f.cluster.node(third).readStatus().role === RAFT_ROLE.LEADER &&

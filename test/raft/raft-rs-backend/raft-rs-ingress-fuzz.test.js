@@ -32,6 +32,7 @@ import {
   formedCluster,
   peerIdsOf,
 } from './identity-reuse-harness.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../../src/raft/raft-operation-port-constants.js';
 import {COMMITTED_MEMBERSHIP_REFUSAL} from
@@ -119,9 +120,9 @@ async function shapeFailure(shape, build) {
     const to = cluster.node(recipient).readStatus().peerId;
     const before = cluster.coreEntries.length;
     const lines = await capturingErrors(async () => {
-      await cluster.node(recipient).step(envelopeTo(cluster.partitionId,
-        to, message));
-      await cluster.node(recipient).tick();
+      await turnChainValue(cluster.node(recipient).step(envelopeTo(cluster.partitionId,
+        to, message)));
+      await turnChainValue(cluster.node(recipient).tick());
     });
     if (faultsIn(lines).length > 0) {
       return 'the core trapped';
@@ -263,9 +264,9 @@ async function fuzzOneSeed(seed) {
         Object.values(ids));
         const preVote = PRE_VOTE_TYPES.includes(message.msgType);
         const before = cluster.coreEntries.length;
-        await cluster.node(recipient).step(envelopeTo(cluster.partitionId,
-          status.peerId, message));
-        await cluster.node(recipient).tick();
+        await turnChainValue(cluster.node(recipient).step(envelopeTo(cluster.partitionId,
+          status.peerId, message)));
+        await turnChainValue(cluster.node(recipient).tick());
         if (preVote) {
           tally.preVoteGenerated += 1;
           tally.preVoteStepped += cluster.coreEntries.slice(before).some(

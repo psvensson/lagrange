@@ -29,6 +29,7 @@ import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
 
@@ -65,12 +66,12 @@ test('F-1: a follower\'s conf-change proposal behind the leader\'s pending ' +
   const peerC = String(cluster.raftPeerIdOf(C));
   // The leader holds a pending (effective) AddNode.
   assert.equal(cluster.node(A).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: EXTRA})
+    type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: EXTRA}).result
     .outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
   const logBefore = durableLog(cluster.replica(A).dbFile,
     cluster.partitionId).at(-1).index;
-  const answer = cluster.node(B).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C});
+  const answer = turnChainValue(cluster.node(B).proposeConfChange({
+    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C}));
   assert.deepEqual({
     outcome: answer.outcome, reason: answer.reason,
     retryable: answer.retryable, leaderReplicaId: answer.leaderReplicaId,
@@ -95,7 +96,7 @@ test('F-1: a follower\'s conf-change proposal behind the leader\'s pending ' +
 
   // Re-driven where it is taken: the leader's own port.
   assert.equal(cluster.node(A).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C})
+    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C}).result
     .outcome, RAFT_OPERATION_OUTCOME.CORE_OK, 'the leader takes it');
   assert.ok(cluster.settle(() =>
     !applied(cluster, A).voters.includes(peerC), {rounds: 80}),

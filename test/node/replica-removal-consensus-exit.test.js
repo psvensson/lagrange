@@ -47,6 +47,7 @@ import {
   createRemovalSourceHandler,
   durableLifecycleState,
 } from './replica-removal-consensus-exit-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const PARTITION_ID = 'users-p7';
 const SOURCE = `${PARTITION_ID}-r1`;
@@ -173,7 +174,7 @@ test('generic REMOVE in a two-voter group: the removed follower acks its ' +
   t.not(retiredWithApplied, null, 'the source retired');
   t.same(retiredWithApplied, [peerIds[LEADER]],
     'when it retired, its own applied configuration no longer named it');
-  t.equal(cluster.node(SOURCE).step({}).outcome,
+  t.equal(cluster.node(SOURCE).step({}).result.outcome,
     RAFT_OPERATION_OUTCOME.CORE_REFUSED,
     'a late step after retirement is refused typed');
   t.equal(cache.get('services', SOURCE) ?? null, null,
@@ -188,7 +189,7 @@ test('generic REMOVE in a two-voter group: the removed follower acks its ' +
   const leaderReplica = cluster.replica(LEADER);
   const applied = () => leaderReplica.appliedCommands.some((command) =>
     JSON.stringify(command).includes(marker));
-  await cluster.propose(LEADER, marker);
+  await turnChainValue(cluster.propose(LEADER, marker));
   cluster.settle(applied, {rounds: 200});
   t.equal(applied(), true,
     'the remaining voter keeps quorum (a write through it commits)');

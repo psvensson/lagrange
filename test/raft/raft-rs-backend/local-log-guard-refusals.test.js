@@ -52,6 +52,7 @@ import {
   openedLastIndex,
   persistedLastIndexAfter,
 } from '../../../src/raft/raft-rs-local-log-guard.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const FORMED_ENTRIES = 6;
 const BEYOND = 100n;
@@ -72,10 +73,10 @@ function refusalFrom(cluster, replicaId, sender) {
 // recipient's.
 async function deliverAlone(cluster, replicaId, envelope) {
   const before = cluster.coreEntries.length;
-  const accepted = await cluster.node(replicaId).step(envelope);
+  const accepted = await turnChainValue(cluster.node(replicaId).step(envelope));
   assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     'setup: the envelope passes routing and schema admission');
-  await cluster.node(replicaId).tick();
+  await turnChainValue(cluster.node(replicaId).tick());
   return stepCount(cluster, before);
 }
 
@@ -108,7 +109,7 @@ test('W5 P2: an append carrying an entry at or below the follower commit ' +
     const committedEntry = durableLog(cluster.dbFileOf('p2-b'),
       cluster.partitionId).find((entry) => entry.index === Number(commit));
     const before = cluster.coreEntries.length;
-    const admitted = await cluster.node('p2-b').step(envelopeTo(
+    const admitted = await turnChainValue(cluster.node('p2-b').step(envelopeTo(
       cluster.partitionId, ids['p2-b'], {
         msgType: RAFT_RS_MESSAGE_TYPE.APPEND,
         from: ids['p2-a'],
@@ -118,8 +119,8 @@ test('W5 P2: an append carrying an entry at or below the follower commit ' +
         commit,
         entries: [{index: commit, term: String(follower.term + 1),
           entryType: RAFT_RS_ENTRY_TYPE.NORMAL}],
-      }));
-    await cluster.node('p2-b').tick();
+      })));
+    await turnChainValue(cluster.node('p2-b').tick());
     assert.equal(admitted.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
     assert.equal(admitted.reason,
       RAFT_RS_INGRESS_REFUSAL.NON_CONTIGUOUS_ENTRIES);
@@ -221,10 +222,10 @@ test('a core trap and the runtime replacement it causes each write one ' +
     const victim = cluster.node('tl-b').readStatus();
     let trapped = null;
     const errors = await capturingErrors(async () => {
-      await cluster.node('tl-b').step(coreTrappingAppend({
+      await turnChainValue(cluster.node('tl-b').step(coreTrappingAppend({
         dbFile: cluster.dbFileOf('tl-b'), groupId: cluster.partitionId,
-        status: victim, from: ids['tl-a'], term: String(victim.term)}));
-      trapped = await cluster.node('tl-b').tick();
+        status: victim, from: ids['tl-a'], term: String(victim.term)})));
+      trapped = await turnChainValue(cluster.node('tl-b').tick());
       cluster.node('tl-a').readStatus();
     });
     assert.equal(trapped.outcome, RAFT_OPERATION_OUTCOME.CORE_FATAL);
@@ -281,9 +282,9 @@ const LINES_PER_REASON_BOUND = Math.floor(Math.log2(FLOOD)) + 1;
 async function floodLines(cluster, replicaId, messageAt) {
   const lines = await capturingErrors(async () => {
     for (let index = 0; index < FLOOD; index += 1) {
-      await cluster.node(replicaId).step(envelopeTo(cluster.partitionId,
-        cluster.node(replicaId).readStatus().peerId, messageAt(index)));
-      await cluster.node(replicaId).tick();
+      await turnChainValue(cluster.node(replicaId).step(envelopeTo(cluster.partitionId,
+        cluster.node(replicaId).readStatus().peerId, messageAt(index))));
+      await turnChainValue(cluster.node(replicaId).tick());
       // The group's own traffic keeps flowing: with check_quorum a leader
       // that hears no quorum for an election timeout steps down.
       cluster.deliverAll();

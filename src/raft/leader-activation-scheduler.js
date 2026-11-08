@@ -132,10 +132,9 @@ class LeaderActivationScheduler {
       }
       this.lastDispatchAt = this.timeSource.now();
       try {
-        const result = entry.run();
-        if (result && typeof result.catch === LOCAL_STR_FUNCTION) {
-          result.catch(() => {});
-        }
+        // An activation is synchronous and answers nothing (the gate's
+        // activateNow is the one producer): its answer is never read.
+        entry.run();
       } finally {
         this.scheduleDrain();
       }

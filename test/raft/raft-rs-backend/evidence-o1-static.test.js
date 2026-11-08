@@ -151,6 +151,9 @@ test('enumerations: the runtime reasons the gate and the record add sit ' +
       'READY_DEFERRED'],
     // V2: a conf-change proposal the core would drop is deferred typed.
     confChangeAdmission: ['CONF_CHANGE_PENDING'],
+    // The port's construction refuses a group that did not declare its
+    // committed-entry application synchronous.
+    portRegistration: ['COMMITTED_ENTRY_APPLY_MODE_NOT_SYNCHRONOUS'],
     progressProbe: ['PROGRESS_OBSERVED', 'PROGRESS_PROBE_SENT', 'NOT_A_PEER',
       'NOT_LEADER'],
     leadershipTransfer: ['TRANSFER_REQUESTED', 'TRANSFER_FORWARDED',
@@ -168,6 +171,7 @@ test('enumerations: the runtime reasons the gate and the record add sit ' +
     boundaryOpening: ['STAMP_VALIDATION', 'DURABLE_RECORD_READ',
       'BOOTSTRAP_PERSISTENCE'],
     confChangeAdmission: ['ADMISSION'],
+    portRegistration: ['PORT_REGISTRATION'],
     participation: ['CAMPAIGN_ELIGIBILITY', 'LEADERSHIP_TRANSFER',
       'PROGRESS_PROBE'],
     hostAndLifecycle: ['RUNTIME_REPLACEMENT', 'GENERATION_CHANGED',

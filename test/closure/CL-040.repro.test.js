@@ -1,6 +1,7 @@
 import t from 'tap';
 import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 import {connectRaftRsNetwork} from '../test-helpers/raft-rs-network-host.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 // CL-040 — committed-entry agreement after a partition + heal, on real raft-rs operation ports
 // (solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-040.md).
@@ -25,7 +26,7 @@ function leaderOf(host) {
 
 // A proposal's outcome is the port's to name; the stale one is expected to go nowhere.
 function proposeWithoutWaiting(host, id, command) {
-  Promise.resolve(host.propose(id, command)).catch(() => undefined);
+  Promise.resolve(turnChainValue(host.propose(id, command))).catch(() => undefined);
 }
 
 function committedTags(host, id) {

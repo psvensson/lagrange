@@ -12,8 +12,10 @@ import {createRaftRsOperationPort} from '../../../src/raft/raft-rs-operation-por
 import {RAFT_ROLE} from '../../../src/raft/constants.js';
 import {RAFT_OPERATION_PORT_METHODS} from
   '../../../src/raft/raft-operation-port.js';
-import {RAFT_OPERATION_PORT_REQUEST} from
-  '../../../src/raft/raft-operation-port-request.js';
+import {
+  RAFT_COMMITTED_ENTRY_APPLY_MODE,
+  RAFT_OPERATION_PORT_REQUEST,
+} from '../../../src/raft/raft-operation-port-request.js';
 import {genesisStamp} from
   '../../../src/raft/raft-committed-membership-stamp.js';
 
@@ -60,6 +62,8 @@ function minimalPartitionRequest(overrides = {}) {
     [RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER]: () => Promise.resolve(),
     [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]: (value) => value,
     [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
+    [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY_MODE]:
+      RAFT_COMMITTED_ENTRY_APPLY_MODE?.SYNCHRONOUS,
     [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
     [RAFT_OPERATION_PORT_REQUEST.APPLY_TRANSACTION_ROLLED_BACK]: () =>
       undefined,
@@ -160,6 +164,10 @@ test('the request carries the partition requirements and no retired field',
       ]) {
         assert.equal(typeof request[hook], 'function');
       }
+      assert.equal(
+        request[RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY_MODE],
+        RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
+        'the partition declares its committed-entry application synchronous');
     } finally {
       await service.shutdown();
     }
@@ -203,5 +211,21 @@ test('the rs-raft operation port refuses missing named requirements', () => {
     assert.throws(() => createRaftRsOperationPort(request),
       (error) => error.message.includes(field));
     request.durableStorage?.close();
+  }
+});
+
+test('the rs-raft operation port refuses a committed-entry application not ' +
+  'declared synchronous, at construction', () => {
+  for (const mode of [undefined, 'asynchronous']) {
+    const request = minimalPartitionRequest({
+      [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY_MODE]: mode,
+    });
+    try {
+      assert.throws(() => createRaftRsOperationPort(request), (error) =>
+        error.consensus?.outcome === 'CORE_REFUSED' &&
+        error.consensus?.reason === 'committed-entry-apply-mode-not-synchronous');
+    } finally {
+      request.durableStorage.close();
+    }
   }
 });

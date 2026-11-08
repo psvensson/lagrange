@@ -84,6 +84,7 @@ import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
 import {
   TEST_BOOT_INCARNATION,
 } from '../../test-helpers/boot-incarnation-fixture.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const TABLE = 'sn1_partition_rows';
 const PARTITION_ID = 'sn1_partition_rows-p1';
@@ -170,7 +171,7 @@ async function proposeInsertRow(leader, ordinal, timestamp) {
     entryId: `entry-${ordinal}`,
     timestamp: timestamp || descendingHlc(ordinal),
   };
-  const outcome = await leader.raft.propose(command);
+  const outcome = await turnChainValue(leader.raft.propose(command));
   if (outcome.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
     throw new Error(`propose failed: ${JSON.stringify(outcome)}`);
   }
@@ -679,7 +680,7 @@ test('SN1/F5: lagging established follower catches up via snapshot install, ' +
 
     // Elect r1 across the 3-node group so all 3 replicas establish their
     // initial participation state.
-    await r1.raft.campaign();
+    await turnChainValue(r1.raft.campaign());
     await waitFor(
       () => r1.raft.readStatus().role === 'leader' &&
         r3.raft.readStatus().appliedIndex >= 1,
@@ -724,7 +725,7 @@ test('SN1/F5: lagging established follower catches up via snapshot install, ' +
     const decisions = [];
     r1.onSnapshotCatchupNeeded = (decision) => decisions.push(decision);
     router.register(r3.getUnifiedAddress(), r3.transportHandler);
-    await r1.raft.probePeerProgress(r3.getUnifiedAddress());
+    await turnChainValue(r1.raft.probePeerProgress(r3.getUnifiedAddress()));
     await waitFor(
       () => decisions.length > 0,
       'leader emits INSTALL_SNAPSHOT catch-up decision for lagging r3');
@@ -805,7 +806,7 @@ test('SN1/F5: lagging established follower catches up via snapshot install, ' +
 
     // Now drive a heartbeat/probe from r1 to replacementR3 so raft-rs exits
     // ProgressState::Snapshot and replicates suffix rows 5 and 6!
-    await r1.raft.probePeerProgress(replacementR3.getUnifiedAddress());
+    await turnChainValue(r1.raft.probePeerProgress(replacementR3.getUnifiedAddress()));
     await waitFor(
       () => replacementR3.raft.readStatus().appliedIndex === headIndex &&
         readUserRows(replacementR3.db).length === 6,

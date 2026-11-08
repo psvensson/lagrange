@@ -17,6 +17,7 @@ import {PARTICIPANT_RELEASE_TYPE} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {observeParticipantReleaseDelivery} from './participant-release-delivery-recorder.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 function routeNativeServices(cache, services) {
   for (const service of services) {
@@ -79,7 +80,7 @@ async function attachQueryRelease({group, owners}) {
   };
   try {
     await progress.initialize();
-    await progress.raft.campaign();
+    await turnChainValue(progress.raft.campaign());
     assert.equal(progress.raft.readStatus().role, RAFT_ROLE.LEADER);
     routeNativeServices(cache, [...services.values()]);
     cdc.initialize();

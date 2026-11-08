@@ -59,6 +59,8 @@
  * grow.
  */
 
+import {turnFromForeignAnswer} from '../raft/raft-rs-turn-answer.js';
+
 const CONTROL_SNAPSHOT_OWNER_TYPE = 'object';
 const STRING_TYPE = 'string';
 const NO_SUPPRESSED_EVALUATIONS = 0;
@@ -281,12 +283,14 @@ function emitTransitionLine(record, owner, fields) {
     );
     record.failedEmissions = NO_FAILED_EMISSIONS;
     // The real logging service's `info` is synchronous and returns nothing.
-    // A sink that returns a thenable anyway would otherwise reject with
-    // nobody listening, so its rejection is counted like any other failed
-    // emission. Registering the handler schedules a microtask; it awaits
-    // nothing and changes no ordering the caller can observe.
-    if (typeof emitted?.then === 'function') {
-      emitted.then(undefined, () => {
+    // An installed sink's answer is foreign: the foreign-answer adapter names
+    // it, and a pending one that rejects is counted like any other failed
+    // emission (never left rejecting with nobody listening). Registering the
+    // handler schedules a microtask; it awaits nothing and changes no
+    // ordering the caller can observe.
+    const answered = turnFromForeignAnswer(emitted);
+    if (!answered.settled) {
+      answered.pending.then(undefined, () => {
         record.failedEmissions += 1;
       });
     }

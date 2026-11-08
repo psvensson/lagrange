@@ -564,10 +564,10 @@ class LiveQueryManager extends EventEmitter {
     if (this.unsubscribeFromPartition) {
       for (const partitionId of Array.from(group.subscribedPartitions)) {
         try {
-          const res = this.unsubscribeFromPartition(partitionId, group.queryId);
-          if (res && typeof res.catch === 'function') {
-            res.catch(() => undefined);
-          }
+          // The wiring's unsubscribe is asynchronous I/O and answers a
+          // promise on every path (live-query-startup-wiring.js).
+          this.unsubscribeFromPartition(partitionId, group.queryId)
+            .catch(() => undefined);
         } catch (error) {
           this.logger.debug(LIVE_QUERY_LOG_MSG.UNSUBSCRIBE_PARTITION_FAILED, {
             partitionId,

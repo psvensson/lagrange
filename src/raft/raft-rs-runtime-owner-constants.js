@@ -103,6 +103,8 @@ const PEER_DELIVERY_OBSERVATION_LIMIT = 256;
 // same bound as its per-peer delivery observations.
 const INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT = PEER_DELIVERY_OBSERVATION_LIMIT;
 const RUNTIME_PHASE = Object.freeze({
+  // The port's construction: what the opening group registered.
+  PORT_REGISTRATION: 'port-registration',
   RUNTIME_REPLACEMENT: 'runtime-replacement',
   GENERATION_CHANGED: 'runtime-generation-changed',
   BOOTSTRAP_PERSISTENCE: 'bootstrap-persistence',
@@ -131,6 +133,10 @@ const RUNTIME_PHASE = Object.freeze({
   LOCAL_LOG_GUARD: 'local-log-guard',
 });
 const RUNTIME_REASON = Object.freeze({
+  // The group did not declare its committed-entry application synchronous
+  // (RAFT_COMMITTED_ENTRY_APPLY_MODE).
+  COMMITTED_ENTRY_APPLY_MODE_NOT_SYNCHRONOUS:
+    'committed-entry-apply-mode-not-synchronous',
   REPLACEMENT_IN_PROGRESS: 'runtime-replacement-in-progress',
   CORE_REFUSED: 'core-refused',
   GENERATION_CHANGED:

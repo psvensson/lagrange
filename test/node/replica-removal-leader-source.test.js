@@ -42,6 +42,7 @@ import {
   nextTurns,
   partitionServiceRow as serviceRow,
 } from './replica-removal-consensus-exit-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const ELECTION_ROUNDS = 400;
 const EXIT_ROUNDS = 60;
@@ -121,7 +122,7 @@ async function removeLeaderSource(t, voterCount) {
   const leaderReplica = cluster.replica(newLeader());
   const writeApplied = () => leaderReplica.appliedCommands.some((command) =>
     JSON.stringify(command).includes(marker));
-  await cluster.propose(newLeader(), marker);
+  await turnChainValue(cluster.propose(newLeader(), marker));
   cluster.settle(writeApplied, {rounds: 200});
   t.equal(writeApplied(), true,
     'the survivors keep quorum (a write commits)');

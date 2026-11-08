@@ -56,6 +56,7 @@ import {
 } from '../helpers/hostile-intrinsics.js';
 import {observeParticipantReleaseDelivery} from './participant-release-delivery-recorder.js';
 import {waitForCondition} from './partition-service-test-support.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {CONTROL_PARTITION, NODE, PARTITION, SQL, cache,
   withParticipantReleaseProtocol as fixture} from
   '../test-helpers/participant-release-protocol-fixture.js';
@@ -181,7 +182,7 @@ test('real release route pauses initial writes, applies origin, censuses and res
     const replacement = create({bootstrapMembership: durableRecordBootstrap()});
     replace(replacement);
     await replacement.initialize();
-    await replacement.raft.campaign();
+    await turnChainValue(replacement.raft.campaign());
     assert.notEqual(participantCutoverPauseOf(replacement), null);
     assert.equal((await replacement.executeQuery(SQL, ['restarted', 'not yet'])).success, false);
     assert.equal(await waitForCondition(() => participantCutoverPauseOf(replacement) === null,

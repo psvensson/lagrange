@@ -19,6 +19,7 @@ import {activatePartitionServiceRows} from
   '../../src/bootstrap/shared/partition-service-activation.js';
 import {runSerializedReplicaMutation} from
   '../../src/node/replica-state-machine-serialization.js';
+import {pendingTurn} from '../../src/raft/raft-rs-turn-answer.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const NODE_ID = 'node-a';
@@ -171,8 +172,9 @@ test('N2 (3): the handler is retired after the preflight but immediately ' +
     release = resolve;
   });
   const occupant = runSerializedReplicaMutation(world.stateMachine,
-    REPLICA_ID, () => held.then(() =>
-      world.router.unregisterExact(ADDRESS, world.service.transportHandler)));
+    REPLICA_ID, () => pendingTurn(held.then(() =>
+      world.router.unregisterExact(ADDRESS, world.service.transportHandler))))
+    .pending;
   const tails = world.stateMachine.serviceRowPersistInFlightByServiceId;
   const occupantTail = tails.get(REPLICA_ID);
   const activation = world.activate();
@@ -243,7 +245,7 @@ test('N2 (4b): retirement does not wait for unrelated lifecycle work in the ' +
   world.router.register(ADDRESS, world.service.transportHandler);
   const never = new Promise(() => {});
   void runSerializedReplicaMutation(world.stateMachine, REPLICA_ID,
-    () => never);
+    () => pendingTurn(never));
   t.equal(await world.retire(), true,
     'a stuck unrelated lane action does not block handler retirement');
   t.equal(world.router.getRegisteredHandler(ADDRESS), null);

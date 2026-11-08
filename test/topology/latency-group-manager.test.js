@@ -264,7 +264,10 @@ test('runAssignmentCycle creates a group when no eligible group exists', async (
   t.end();
 });
 
-test('runAssignmentCycle tolerates async cache.has during group-id generation',
+// The manager reads its system-table cache synchronously (get, getAll, has):
+// a cache whose has() answers anything but a boolean is refused, never read
+// as "no collision".
+test('runAssignmentCycle refuses a cache whose has() does not answer a boolean',
   async (t) => {
     setupConfig();
     const cache = createMockCache({
@@ -287,15 +290,11 @@ test('runAssignmentCycle tolerates async cache.has during group-id generation',
     });
     manager.initialize();
 
-    const result = await manager.runAssignmentCycle();
-
-    assert.equal(result.success, true);
-    assert.equal(result.changed, true);
-    assert.equal(result.createdGroup, true);
-    assert.equal(result.reason, LATENCY_GROUP_MANAGER_REASON.CREATE_NEW_GROUP);
-    assert.equal(result.targetGroupId, 'lg-node-a-6000');
-    assert.equal(cdc.upserts.length, 1);
-    assert.equal(cdc.updates.length, 1);
+    await assert.rejects(manager.runAssignmentCycle(),
+      /system table cache has\(\) must answer a boolean/u);
+    assert.equal(cdc.upserts.length, 0);
+    assert.equal(cdc.updates.length, 0);
+    assert.equal(manager.cycleInFlight, false);
 
     teardownConfig();
     t.end();

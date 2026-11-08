@@ -19,6 +19,8 @@ import {test} from 'node:test';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
 import {NAVIGABILITY_PATTERN} from '../../scripts/check-guideline-navigability.js';
+import {defaultEslintRunner, promotedPatterns} from
+  '../../scripts/checks/code-navigability-eslint-promotion.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const AUDIT_SCRIPT = path.join(REPO_ROOT, 'scripts/check-guideline-navigability.js');
@@ -344,11 +346,17 @@ test('the real audit over src reports only inherited violations',
   {timeout: 180_000}, () => {
     assert.ok(fs.existsSync(DETECTOR_MODULE),
       'scripts/checks/code-navigability-detectors.js is required for the real audit');
-    const missing = ALL_ROWS.filter((row) => !fs.existsSync(path.join(
-      REPO_ROOT, 'scripts', `check-guideline-navigability-baseline-${row}.json`)));
+    const baselineExists = (row) => fs.existsSync(path.join(
+      REPO_ROOT, 'scripts', `check-guideline-navigability-baseline-${row}.json`));
+    // A row promoted to ESLint is gated there and keeps no baseline file
+    // (docs/development/code-style.md); every other row keeps one.
+    const promoted = promotedPatterns(REPO_ROOT, defaultEslintRunner, 'src/index.js', ALL_ROWS);
+    const missing = ALL_ROWS.filter((row) => !promoted.has(row) && !baselineExists(row));
     assert.deepEqual(missing, [],
       'generate the baselines: node scripts/check-guideline-navigability.js ' +
       '--update-baseline');
+    assert.deepEqual(ALL_ROWS.filter((row) => promoted.has(row) && baselineExists(row)), [],
+      'delete the baseline file of a row promoted to ESLint');
     const result = spawnSync(process.execPath, [AUDIT_SCRIPT], {
       cwd: REPO_ROOT, encoding: ENCODING, timeout: INTEGRATION_TIMEOUT_MS,
     });

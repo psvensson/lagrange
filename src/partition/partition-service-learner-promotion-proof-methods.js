@@ -14,6 +14,7 @@ import {
   TRANSPORT_CONFIG_KEY,
   TRANSPORT_DEFAULT,
 } from '../constants/transport.js';
+import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const {
   ConfigurationManager,
@@ -165,7 +166,7 @@ class PartitionServiceLearnerPromotionProofMethods {
       return;
     }
     try {
-      await Promise.resolve(this.raft.probePeerProgress(learnerAddress));
+      await turnChainValue(this.raft.probePeerProgress(learnerAddress));
     } catch (probeError) {
       this.logger.debug(
         PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_PROGRESS_PROBE_FAILED,

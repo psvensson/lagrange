@@ -10,6 +10,7 @@ import {
   createLifecycleControlPlaneGatewayForCache,
   createReplicaLifecycleStateMachineFixture,
 } from '../test-helpers/lifecycle-state-store.js';
+import {settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {registerReplicaHandlerRouterAdmissionTests} from
@@ -1285,9 +1286,9 @@ export async function registerReplicaHandlerTailMoreTests({
       getRole() {
         return this.role;
       },
-      async requestLeadershipTransfer(request) {
+      requestLeadershipTransfer(request) {
         trackedService.transfers.push(request);
-        return answer;
+        return settledTurn(answer);
       },
     };
     return trackedService;

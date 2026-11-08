@@ -2,6 +2,11 @@ import {
   REPLICA_ACTIVATION_HANDLER_NOT_REGISTERED,
   REPLICA_STATE_MACHINE_STATE,
 } from './replica-state-machine-constants.js';
+import {
+  pendingTurn,
+  settledTurn,
+  turnChainValue,
+} from '../raft/raft-rs-turn-answer.js';
 
 function getReplicaRevision(stateMachine, replicaId) {
   return stateMachine.replicaRevisionByReplicaId.get(replicaId) || 0;
@@ -63,15 +68,12 @@ function observeReplicaMutationTail(stateMachine, replicaId, tail) {
   );
 }
 
-function isPromiseLike(value) {
-  return value !== null &&
-    (typeof value === 'object' || typeof value === 'function') &&
-    typeof value.then === 'function';
-}
+// A mutation refused because the lane no longer admits mutations.
+const MUTATION_ADMISSION_CLOSED = settledTurn(false);
 
 function invokeReplicaMutation(stateMachine, action) {
   if (stateMachine.replicaMutationAdmissionClosed === true) {
-    return false;
+    return MUTATION_ADMISSION_CLOSED;
   }
   return action();
 }
@@ -79,25 +81,28 @@ function invokeReplicaMutation(stateMachine, action) {
 /**
  * Run one mutation in the replica's linearization domain. The first tail is
  * installed before invoking the action, closing synchronous re-entry from a
- * persistence adapter. A synchronous action stays synchronous when the lane
- * was idle; queued actions are necessarily awaitable.
+ * persistence adapter. `action` answers a named turn (raft-rs-turn-answer.js):
+ * settled when its mutation completed within the call, pending while it
+ * awaits. A settled action keeps the lane synchronous when the lane was
+ * idle; a queued action is necessarily pending.
  * @param {Object} stateMachine
  * @param {string} replicaId
- * @param {Function} action
- * @return {*|Promise<*>}
+ * @param {function(): Object} action - Answers a settled or pending turn.
+ * @return {Object} The mutation's turn; settled false when admission is
+ *   closed.
  */
 function runSerializedReplicaMutation(stateMachine, replicaId, action) {
   if (stateMachine.replicaMutationAdmissionClosed === true) {
-    return false;
+    return MUTATION_ADMISSION_CLOSED;
   }
   const tails = stateMachine.serviceRowPersistInFlightByServiceId;
   const previousTail = tails.get(replicaId) || null;
   if (previousTail) {
     const tail = previousTail.catch(() => null).then(() =>
-      invokeReplicaMutation(stateMachine, action));
+      turnChainValue(invokeReplicaMutation(stateMachine, action)));
     tails.set(replicaId, tail);
     observeReplicaMutationTail(stateMachine, replicaId, tail);
-    return tail;
+    return pendingTurn(tail);
   }
 
   let resolveReservation;
@@ -109,20 +114,21 @@ function runSerializedReplicaMutation(stateMachine, replicaId, action) {
   tails.set(replicaId, reservation);
   observeReplicaMutationTail(stateMachine, replicaId, reservation);
 
-  let result;
+  let answered;
   try {
-    result = invokeReplicaMutation(stateMachine, action);
+    answered = invokeReplicaMutation(stateMachine, action);
   } catch (error) {
     rejectReservation(error);
     releaseReplicaMutationTail(stateMachine, replicaId, reservation);
-    return Promise.reject(error);
+    return pendingTurn(Promise.reject(error));
   }
-  resolveReservation(result);
-  if (!isPromiseLike(result)) {
+  if (answered.settled) {
+    resolveReservation(answered.result);
     releaseReplicaMutationTail(stateMachine, replicaId, reservation);
-    return result;
+    return answered;
   }
-  return reservation;
+  resolveReservation(answered.pending);
+  return pendingTurn(reservation);
 }
 
 // The activation effect boundary (owner decision N2): the window from an
@@ -235,12 +241,14 @@ function runPersistedTransitionEffect(
  * @return {*|Promise<*>} The effect's result; false when admission is closed.
  */
 function runHandlerBoundActivation(stateMachine, replicaId, activation) {
-  return runSerializedReplicaMutation(stateMachine, replicaId, async () => {
+  const activate = async () => {
     const source = await activation.resolveSource();
     return runActivationEffectSection(stateMachine, replicaId,
       () => activation.requireHandler(source),
       () => activation.effect(source));
-  });
+  };
+  return turnChainValue(runSerializedReplicaMutation(stateMachine, replicaId,
+    () => pendingTurn(activate())));
 }
 
 /**

@@ -27,6 +27,7 @@ import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.j
 import {createLoopbackTransport} from '../partition/partition-service-test-support.js';
 import {deliverScheduled} from './wasm-strong-write-native-fixture.js';
 import {assertRecordedWrite, proposalEntries} from './wasm-strong-write-v1-native-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const PREFIX = {type: 'WASM_WRITER_V1', profile: 'wasm-writer-v1/1'};
 const SETUP_ROUNDS = 200;
@@ -115,7 +116,7 @@ function ownedDirectory(directory, nodeId) {
 
 async function form(f) {
   for (let round = 0; round < SETUP_ROUNDS; round += 1) {
-    await f.replicas[0].raft.tick();
+    await turnChainValue(f.replicas[0].raft.tick());
     await deliverScheduled(f);
     const statuses = f.replicas.map((replica) => replica.raft.readStatus());
     if (statuses[0].role !== 'leader' ||

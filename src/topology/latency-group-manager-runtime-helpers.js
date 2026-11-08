@@ -14,6 +14,9 @@ import {
   LATENCY_GROUP_MANAGER_DEFAULT,
 } from './latency-group-manager-constants.js';
 
+const SYSTEM_TABLE_CACHE_HAS_SHAPE_ERROR =
+  'latency group manager: system table cache has() must answer a boolean';
+
 function resolveLatencyGroupManagerConfig(config) {
   return {
     pinnedGroupId: resolvePinnedGroupIdConfig(config),
@@ -132,19 +135,17 @@ function hasLatencyGroup(systemTableCache, groupId) {
   if (typeof hasFn !== 'function') {
     return false;
   }
-  const hasResult = hasFn.call(
+  const present = hasFn.call(
     systemTableCache,
     TABLES.LATENCY_GROUPS,
     groupId,
   );
-
-  // `buildLatencyGroupId()` is synchronous; async cache responses are treated
-  // as non-colliding to preserve the original non-blocking retry behavior.
-  if (hasResult && typeof hasResult.then === 'function') {
-    return false;
+  // `buildLatencyGroupId()` is synchronous, like every read the manager makes
+  // of its system-table cache: has() answers one boolean.
+  if (typeof present !== 'boolean') {
+    throw new TypeError(SYSTEM_TABLE_CACHE_HAS_SHAPE_ERROR);
   }
-
-  return Boolean(hasResult);
+  return present;
 }
 
 export {

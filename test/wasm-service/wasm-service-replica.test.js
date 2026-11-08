@@ -38,6 +38,7 @@ import {AddressManager} from
   '../../src/address/address-manager.js';
 import {LeaderActivationScheduler} from '../../src/raft/leader-activation-scheduler.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {pendingTurn, settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
 import {TEST_BOOT_INCARNATION} from
   '../test-helpers/boot-incarnation-fixture.js';
 
@@ -297,9 +298,10 @@ describe('WasmServiceReplica', () => {
         const replica = createReplica(defaultOpts());
         let received = null;
         replica.raft = {
-          propose: async (command) => {
+          propose: (command) => {
             received = command;
-            return {outcome: RAFT_OPERATION_OUTCOME.CORE_OK};
+            return pendingTurn(
+              Promise.resolve({outcome: RAFT_OPERATION_OUTCOME.CORE_OK}));
           },
         };
         await replica.proposeEntry({
@@ -313,7 +315,7 @@ describe('WasmServiceReplica', () => {
     it('rejects a proposal its port refused', async () => {
       const replica = createReplica(defaultOpts());
       replica.raft = {
-        propose: async () => ({
+        propose: () => settledTurn({
           outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
           reason: 'not-leader',
         }),

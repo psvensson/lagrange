@@ -77,7 +77,7 @@ function handoffFromSourceToSurvivor(f, sourceReplicaId, preferredSurvivor = nul
       f.cluster.node(currentLeader).transferLeadership({
         successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
         replicaIdentity: survivor,
-      }).outcome,
+      }).result.outcome,
       RAFT_OPERATION_OUTCOME.CORE_OK,
     );
     f.cluster.tickers = [survivor];
@@ -90,7 +90,7 @@ function handoffFromSourceToSurvivor(f, sourceReplicaId, preferredSurvivor = nul
   } else {
     const beforeCommit = f.cluster.node(survivor).readStatus().commitIndex;
     assert.equal(
-      f.cluster.propose(survivor, {type: 'HANDOFF_NOOP'}).outcome,
+      f.cluster.propose(survivor, {type: 'HANDOFF_NOOP'}).result.outcome,
       RAFT_OPERATION_OUTCOME.CORE_OK,
     );
     assert.ok(f.cluster.settle(() => {

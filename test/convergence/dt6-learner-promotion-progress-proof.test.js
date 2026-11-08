@@ -74,6 +74,7 @@ import {
   waitFor,
   waitForLeaderReplicationToLearner,
 } from './dt6-learner-promotion-fixture.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const LAG_OBSERVATION_MS = 300;
 const PROMOTION_BUDGET_MS = 5000;
@@ -305,7 +306,7 @@ async (t) => {
     // probe triggers one append to the learner (lost here: the replication
     // path is still partitioned).
     t.match(
-      await leader.raft.probePeerProgress(LEARNER_ADDRESS),
+      await turnChainValue(leader.raft.probePeerProgress(LEARNER_ADDRESS)),
       {
         outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
         reason: RAFT_PEER_PROGRESS_PROBE_REASON.PROGRESS_PROBE_SENT,
@@ -333,7 +334,7 @@ async (t) => {
 
     // Typed outcome 2: caught up - the probe observes the leader's own
     // progress record, which covers the committed prefix.
-    const observed = await leader.raft.probePeerProgress(LEARNER_ADDRESS);
+    const observed = await turnChainValue(leader.raft.probePeerProgress(LEARNER_ADDRESS));
     t.match(
       observed,
       {

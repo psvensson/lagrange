@@ -42,6 +42,7 @@ import {
   ReplicaOperationReason,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const TEMP_PREFIX = 'replica-handler-leadership-transfer-';
 const TEST_TIMEOUT_MS = 60000;
@@ -219,10 +220,10 @@ test('W4 already-leader: a replacement that already leads is a named ' +
     assert.equal(response.status, ReplicaOperationResponseStatus.COMPLETED);
     assert.equal(response.handoffBranch, BRANCH?.TARGET_ELECTION_ROLE_NO_OP,
       'the no-op is named');
-    const named = await leader.requestLeadershipTransfer({
+    const named = await turnChainValue(leader.requestLeadershipTransfer({
       successor: portConstants.RAFT_LEADERSHIP_TRANSFER_SUCCESSOR?.NAMED,
       replicaIdentity: leader.replicaId,
-    });
+    }));
     assert.equal(named.outcome,
       portConstants.RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.equal(named.reason,

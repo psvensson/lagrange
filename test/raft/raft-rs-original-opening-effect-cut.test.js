@@ -21,7 +21,8 @@ import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
   '../../src/raft/raft-rs-original-allocation-constants.js';
 import {RAFT_RS_OPENING_HISTORY as HISTORY} from
   '../../src/raft/raft-rs-opening-history-constants.js';
-import {RAFT_OPERATION_PORT_REQUEST as REQUEST} from '../../src/raft/raft-operation-port-request.js';
+import {RAFT_COMMITTED_ENTRY_APPLY_MODE, RAFT_OPERATION_PORT_REQUEST as REQUEST} from
+  '../../src/raft/raft-operation-port-request.js';
 
 const TIMING = Object.freeze({heartbeatMs: 50, electionMinMs: 150,
   electionMaxMs: 300, tickIntervalMs: 10});
@@ -55,6 +56,7 @@ function fixture(t) {
     identityExisted: false, timing: TIMING, deferElection: true,
     resolvePeerAddress: () => 'local-original', sendToPeer: () => {},
     applyCommittedEntry: () => {},
+    [REQUEST.APPLY_COMMITTED_ENTRY_MODE]: RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
     [REQUEST.ORIGINAL_ALLOCATION_OPENING]: preparation.openingFor(member.replicaId)};
   const open = () => {
     port = createRaftRsOperationPort(request);

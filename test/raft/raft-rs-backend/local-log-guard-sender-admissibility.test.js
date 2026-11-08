@@ -55,6 +55,7 @@ import {
   RAFT_RS_LOCAL_LOG_REFUSAL,
   RUNTIME_PHASE,
 } from '../../../src/raft/raft-rs-runtime-owner-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {RAFT_RS_MESSAGE_TYPE} from
   '../../../src/raft/raft-rs-ingress-constants.js';
 
@@ -73,10 +74,10 @@ const STEP = 'step';
 // the core steps it observes are the recipient's.
 async function deliverAlone(cluster, replicaId, envelope) {
   const before = cluster.coreEntries.length;
-  const accepted = await cluster.node(replicaId).step(envelope);
+  const accepted = await turnChainValue(cluster.node(replicaId).step(envelope));
   assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     `setup: the envelope passes admission (${JSON.stringify(accepted)})`);
-  await cluster.node(replicaId).tick();
+  await turnChainValue(cluster.node(replicaId).tick());
   return cluster.coreEntries.slice(before)
     .filter((entry) => entry.operation === STEP).length;
 }
@@ -112,9 +113,9 @@ function heartbeat(ids, sender, recipient, term, commit) {
 function secondTermCluster(prefix) {
   const cluster = formedCluster(prefix,
     [`${prefix}-a`, `${prefix}-b`, `${prefix}-c`], FORMED_ENTRIES);
-  const transfer = cluster.node(`${prefix}-a`).transferLeadership({
+  const transfer = turnChainValue(cluster.node(`${prefix}-a`).transferLeadership({
     successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-    replicaIdentity: `${prefix}-b`});
+    replicaIdentity: `${prefix}-b`}));
   assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     `setup: the transfer was refused: ${JSON.stringify(transfer)}`);
   cluster.tickers = [`${prefix}-b`];
@@ -134,9 +135,9 @@ test('A1: a forged heartbeat (unknown raft id, commit beyond the log) is ' +
     const beyond = BigInt(leader.commitIndex) + BEYOND;
     // The verifier's exact T3 envelope (term 0) no longer passes admission:
     // raft-rs never sends a heartbeat without its term (ingress schema).
-    const termless = await cluster.node('a1-a').step(envelopeTo(
+    const termless = await turnChainValue(cluster.node('a1-a').step(envelopeTo(
       cluster.partitionId, ids['a1-a'],
-      heartbeat(ids, UNKNOWN_SENDER, 'a1-a', 0, beyond)));
+      heartbeat(ids, UNKNOWN_SENDER, 'a1-a', 0, beyond))));
     assert.equal(termless.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
     // The same forgery at the leader's own term reaches the guard.
     const steps = await deliverAlone(cluster, 'a1-a', envelopeTo(

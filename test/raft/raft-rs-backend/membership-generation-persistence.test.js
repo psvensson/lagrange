@@ -21,6 +21,7 @@ import {RaftRsDurableStore} from
 import {RAFT_RS_CONF_CHANGE_TYPE} from
   '../../../src/raft/raft-rs-ready-loop-constants.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const GROUP = 'membership-generation-group';
 const FOUNDERS = Object.freeze(['generation-a', 'generation-b',
@@ -130,7 +131,7 @@ test('an unbound durable snapshot never pairs its ConfState with a receiver ' +
   });
   assert.equal(membership.reason,
     COMMITTED_MEMBERSHIP_REFUSAL.CONFIGURATION_GENERATION_UNAVAILABLE);
-  const transition = cluster.node(leader)[
+  const transition = turnChainValue(cluster.node(leader)[
     RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION]({
     operationId: 'unknown-snapshot-operation',
     transitionIdentity: 'unknown-snapshot-transition',
@@ -145,7 +146,7 @@ test('an unbound durable snapshot never pairs its ConfState with a receiver ' +
       configurationKey: restored.configurationKey,
       membershipGenerationIndex: before.membershipGenerationIndex,
     },
-  });
+  }));
   assert.equal(transition.reason,
     RAFT_MEMBERSHIP_TRANSITION_REASON.CONFIGURATION_GENERATION_UNAVAILABLE);
 });

@@ -1,6 +1,54 @@
 import js from '@eslint/js';
 import googleConfig from 'eslint-config-google';
 
+// navigability rule value_or_promise_then_checks (epic code-navigability-and-
+// mistake-resistance, quest always-promise-port-answers): a consumer never
+// probes an answer for a promise shape. The selectors mirror the budget
+// detector: typeof on `.then`/`.catch` (optional chain or not) compared with
+// === or !==, a `.then`/`.catch` read whose truthiness decides an if or a
+// conditional (through !, &&, || and ??), and `instanceof Promise`. The one
+// adapter that names a foreign answer (turnFromForeignAnswer in
+// src/raft/raft-rs-turn-answer.js) reads `then` into a local and needs no
+// exemption.
+const PROMISE_METHOD_MEMBER = 'MemberExpression:matches(' +
+  '[computed=false][property.name=/^(?:then|catch)$/], ' +
+  '[computed=true][property.value=/^(?:then|catch)$/])';
+const TRUTHINESS_OPERAND =
+  ':matches(LogicalExpression, UnaryExpression[operator="!"])';
+// How deep a promise-method read may sit under !, &&, || and ?? in a test.
+const TRUTHINESS_OPERAND_DEPTH = 4;
+
+// Each selector reports the promise-method read itself, reached by child
+// steps from the comparison or the test it decides.
+function truthinessTestSelectors() {
+  const selectors = [];
+  for (let depth = 0; depth <= TRUTHINESS_OPERAND_DEPTH; depth += 1) {
+    const operands = Array.from({length: depth}, () => TRUTHINESS_OPERAND);
+    for (const leaf of [[PROMISE_METHOD_MEMBER],
+      ['ChainExpression', PROMISE_METHOD_MEMBER]]) {
+      const steps = [...operands, ...leaf];
+      steps[0] = `${steps[0]}.test`;
+      selectors.push(
+        [':matches(IfStatement, ConditionalExpression)', ...steps].join(' > '));
+    }
+  }
+  return selectors;
+}
+
+const VALUE_OR_PROMISE_MESSAGE = 'navigability-rule:value_or_promise_then_checks ' +
+  '- never probe an answer for a promise shape: its producer answers one ' +
+  'shape (a promise, or a named settled-or-pending turn from ' +
+  'src/raft/raft-rs-turn-answer.js).';
+const TYPEOF_COMPARISON =
+  'BinaryExpression[operator=/^[!=]==$/] > UnaryExpression[operator="typeof"]';
+const VALUE_OR_PROMISE_SELECTORS = Object.freeze([
+  `${TYPEOF_COMPARISON} > ${PROMISE_METHOD_MEMBER}`,
+  `${TYPEOF_COMPARISON} > ChainExpression > ${PROMISE_METHOD_MEMBER}`,
+  ...truthinessTestSelectors(),
+  'BinaryExpression[operator="instanceof"][right.type="Identifier"]' +
+    '[right.name="Promise"]',
+].map((selector) => Object.freeze({selector, message: VALUE_OR_PROMISE_MESSAGE})));
+
 export default [
   js.configs.recommended,
   {
@@ -88,6 +136,12 @@ export default [
           'UNSUPPORTED_MODE',
         ],
       }],
+    },
+  },
+  {
+    files: ['src/**/*.js'],
+    rules: {
+      'no-restricted-syntax': ['error', ...VALUE_OR_PROMISE_SELECTORS],
     },
   },
   {

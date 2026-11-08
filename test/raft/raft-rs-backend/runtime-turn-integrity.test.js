@@ -40,6 +40,7 @@ import {
 import {RAFT_RS_CORE_PRIMITIVES} from
   '../../../src/raft/raft-rs-core-constants.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -102,7 +103,7 @@ function quiesce(cluster) {
 // Hand envelopes to a replica's port without letting any turn run.
 function deliverPending(cluster, replicaId, envelopes) {
   for (const envelope of envelopes) {
-    const admitted = cluster.node(replicaId).step(envelope);
+    const admitted = turnChainValue(cluster.node(replicaId).step(envelope));
     assert.equal(admitted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       'setup: the port admits the delivered envelope');
   }
@@ -171,10 +172,10 @@ async () => {
       cSenderIds[cluster.partitionId] = cluster.raftPeerIdOf(C);
       return removedPeerAcknowledgementPending(cluster);
     },
-    decide: (cluster) => cluster.node(A).transferLeadership({
+    decide: (cluster) => turnChainValue(cluster.node(A).transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
       replicaIdentity: B,
-    }),
+    })),
     anchor: (answer) => assert.equal(answer.outcome,
       RAFT_OPERATION_OUTCOME.CORE_OK,
       `the leader decides the transfer to its voter B (${JSON.stringify(
@@ -197,7 +198,7 @@ test('CA1: a pending response the core refuses never answers a proposal',
   async () => {
     const results = await pendingAgainstProcessed('ca1-peer-not-found-propose', {
       pending: removedPeerAcknowledgementPending,
-      decide: (cluster) => cluster.node(A).propose({after: 'removal'}),
+      decide: (cluster) => turnChainValue(cluster.node(A).propose({after: 'removal'})),
       anchor: (answer) => assert.equal(answer.outcome,
         RAFT_OPERATION_OUTCOME.CORE_OK,
         `the leader appends its proposal (${JSON.stringify(answer)})`),
@@ -214,13 +215,13 @@ async () => {
   const results = await pendingAgainstProcessed('ca1-forwarded-propose', {
     pending: async (cluster) => {
       cluster.isolate(C);
-      const accepted = await cluster.node(A).transferLeadership({
+      const accepted = await turnChainValue(cluster.node(A).transferLeadership({
         successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
         replicaIdentity: C,
-      });
+      }));
       assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
         'setup: A runs a transfer to the cut-off C');
-      const forwarded = await cluster.node(B).propose({forwardedBy: B});
+      const forwarded = await turnChainValue(cluster.node(B).propose({forwardedBy: B}));
       assert.equal(forwarded.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
         'setup: B forwards its proposal to its leader');
       bSenderIds.push(cluster.raftPeerIdOf(B));
@@ -230,7 +231,7 @@ async () => {
       'setup: B\'s forwarded proposal is pending at A');
       return envelopes;
     },
-    decide: (cluster) => cluster.node(A).propose({own: A}),
+    decide: (cluster) => turnChainValue(cluster.node(A).propose({own: A})),
     anchor: (answer) => assert.equal(
       answer.outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
       answer.retryable === true && answer.recoveryRequired === false, true,
@@ -261,7 +262,7 @@ test('CA1 / M9: the envelopes after a refused one are stepped in the same ' +
     processFirst(cluster, A);
     // A forwarded proposal of B's, delivered after a response of C's that A
     // (which removed C) refuses.
-    await cluster.node(B).propose({afterRefused: true});
+    await turnChainValue(cluster.node(B).propose({afterRefused: true}));
     const [forwarded] = takeInbox(cluster, A);
     assert.equal(forwarded?.message.msgType, MESSAGE_TYPE.MsgPropose,
       'setup: B\'s forwarded proposal');
@@ -298,7 +299,7 @@ async () => {
         listenerReads.push(port.readStatus());
         // A command asked inside the announcement (hypothesis 2): it must
         // queue behind the turn, never run nested inside it.
-        const asked = port.probePeerProgress('no-such-peer-address');
+        const asked = turnChainValue(port.probePeerProgress('no-such-peer-address'));
         listenerCommands.push({
           queued: typeof asked?.then === 'function',
           ranAfterTurn: Promise.resolve(asked).then(() => outerTurnReturned),
@@ -313,9 +314,9 @@ async () => {
     });
     // B's transfer election (CAMPAIGN_TRANSFER): under check_quorum the
     // only higher-term vote request a leader in its lease steps.
-    await cluster.node(A).transferLeadership({
+    await turnChainValue(cluster.node(A).transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: B});
+      replicaIdentity: B}));
     processAt(cluster, B);
     processAt(cluster, C);
     processAt(cluster, B);

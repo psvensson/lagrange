@@ -24,6 +24,7 @@ import {
   RAFT_EVENT,
   RAFT_MEMBERSHIP_OPERATION,
 } from '../../../src/raft/raft-operation-port-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const PARTITION_ID = 'membership-event-partition';
 const FOUNDING = Object.freeze(['replica-a', 'replica-b', 'replica-c']);
@@ -122,10 +123,10 @@ test('membership changed: a committed RemoveNode is announced once on every ' +
       assert.equal(received.get(replicaId).length, 0,
         `${replicaId}: no configuration change, no announcement`);
     }
-    const proposed = cluster.node(leader).proposeConfChange({
+    const proposed = turnChainValue(cluster.node(leader).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
       replicaIdentity: retiring,
-    });
+    }));
     assert.equal(proposed.outcome, 'CORE_OK', 'the removal is proposed');
     const announced = cluster.settle(() => remaining.every((replicaId) =>
       received.get(replicaId).length > 0 &&

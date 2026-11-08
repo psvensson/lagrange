@@ -1,6 +1,8 @@
 // Real operation port and SQLite; no substitute history or consensus owner.
 import Database from 'better-sqlite3';
 import {createRaftRsOperationPort} from '../../../src/raft/raft-rs-operation-port.js';
+import {RAFT_COMMITTED_ENTRY_APPLY_MODE, RAFT_OPERATION_PORT_REQUEST as REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {genesisStamp} from '../../../src/raft/raft-committed-membership-stamp.js';
 import {VirtualTimeSource} from '../../../src/time/time-source.js';
 
@@ -14,7 +16,8 @@ function historyRequest(db, overrides = {}) {
     sendToPeer: () => undefined, resolvePeerAddress: () => 'history://r1',
     applyCommittedEntry: ({command, index}) => {
       db.prepare('INSERT INTO history_witness VALUES (?, ?)').run(command, index);
-    }, snapshotCatchupNeeded: () => undefined, ...overrides};
+    }, [REQUEST.APPLY_COMMITTED_ENTRY_MODE]: RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
+    snapshotCatchupNeeded: () => undefined, ...overrides};
 }
 export function historyDb(file) {
   const db = new Database(file);

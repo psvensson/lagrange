@@ -14,6 +14,7 @@ import {setActualCoreEntryObserver, setCoreFaultInjector,
   '../../../src/raft/raft-rs-runtime-owner.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {coreTrappingAppend} from './core-trap-envelope.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 function observedClock(clock = new VirtualTimeSource({startMs: 1000})) {
   const originalSet = clock.setTimeout.bind(clock);
@@ -127,7 +128,7 @@ test('an accepted native envelope references its original Node timer until its r
     const issuedBefore = owned.issued.length;
     // Capture the scheduling obligation at the synchronous admission boundary;
     // awaiting a settled step can allow its 0ms callback to retire the timer.
-    const accepted = recipient.node.step(envelope);
+    const accepted = turnChainValue(recipient.node.step(envelope));
     assert.notEqual(typeof accepted?.then, 'function',
       'native ingress returns its typed enqueue outcome before the drain');
     assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
@@ -154,8 +155,8 @@ test('two admitted native envelopes share one timer, then close cancels its exac
   }) => {
     const baseline = owned.clock.pendingTimerCount();
     assert.equal(baseline, 0, 'old setup delivery has no pending timer');
-    const first = await recipient.node.step(envelope);
-    const second = await recipient.node.step(envelope);
+    const first = await turnChainValue(recipient.node.step(envelope));
+    const second = await turnChainValue(recipient.node.step(envelope));
     assert.equal(first.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.equal(second.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.equal(first.reason, 'inbound-enqueued');
@@ -187,7 +188,7 @@ test('an accepted inbound retry stays bounded and close retires its original clo
     const db = recipient.db;
     const baseline = owned.clock.pendingTimerCount();
     assert.equal(baseline, 0);
-    const accepted = await recipient.node.step(envelope);
+    const accepted = await turnChainValue(recipient.node.step(envelope));
     assert.equal(accepted.reason, 'inbound-enqueued');
     const initialHandle = owned.issued.at(-1)?.handle;
     db.exec('BEGIN');
@@ -250,7 +251,7 @@ test('a replacement-time native drain preserves the admitted follower debt',
           stages.push(event.stage);
         }
       });
-      const accepted = recipient.node.step(envelope);
+      const accepted = turnChainValue(recipient.node.step(envelope));
       assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
       assert.equal(accepted.reason, 'inbound-enqueued');
       assert.equal(originalScheduler.pendingTimerCount(), 1,
@@ -275,7 +276,7 @@ test('a replacement-time native drain preserves the admitted follower debt',
             'injected shared-core replacement');
         }
       });
-      const trapped = second.node('trigger-r1').tick();
+      const trapped = turnChainValue(second.node('trigger-r1').tick());
       assert.equal(injected, true, 'the real second group traps its core');
       assert.notEqual(trapped.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
       // Existing trigger-group recovery drives the shared replacement once;
@@ -341,7 +342,7 @@ test('failed shared reconstruction retains the exact admitted wake until a later
         groupId: partitionId, status,
         from: sender.peerId, term: '1'});
       setCoreFaultInjector(null);
-      const admitted = recipient.node.step(envelope);
+      const admitted = turnChainValue(recipient.node.step(envelope));
       assert.equal(admitted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
       assert.equal(admitted.reason, 'inbound-enqueued');
       assert.equal(scheduler.pendingTimerCount(), 1);
@@ -374,7 +375,7 @@ test('failed shared reconstruction retains the exact admitted wake until a later
             'injected failed shared reconstruction');
         }
       });
-      const first = triggerGroup.node('retry-trigger').tick();
+      const first = turnChainValue(triggerGroup.node('retry-trigger').tick());
       assert.equal(trappedTick, true, 'the real core tick traps once');
       assert.notEqual(first.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
       const failed = triggerGroup.node('retry-trigger').readStatus();
@@ -423,7 +424,7 @@ test('a failed timer clear is typed without skipping actual native group close',
   }) => {
     const baseline = owned.clock.pendingTimerCount();
     assert.equal(baseline, 0);
-    assert.equal((await recipient.node.step(envelope)).reason, 'inbound-enqueued');
+    assert.equal((await turnChainValue(recipient.node.step(envelope))).reason, 'inbound-enqueued');
     const originalClear = owned.clock.clearTimeout;
     const refusal = new Error('timer cancellation refused by source clock');
     owned.clock.clearTimeout = () => {

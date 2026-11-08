@@ -14,6 +14,7 @@ import {readCommittedStatementOutcome} from
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE as RECORD} from
   '../../../src/partition/partition-committed-statement-outcome-constants.js';
 import {RAFT_ROLE} from '../../../src/raft/constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {RAFT_RS_MESSAGE_TYPE as MESSAGE, RAFT_RS_TRANSPORT_PROTOCOL} from
   '../../../src/raft/raft-rs-ingress-constants.js';
 import {traceConsumer, trackAnswer, holdNativeDeliveries,
@@ -147,7 +148,7 @@ test('partition shutdown after proposal returns same-entry UNKNOWN and a survivi
       // recipient. Their failure is retained; no fake successful ACK is used.
       await gate.restore();
       const survivors = f.group.services.filter((service) => service !== f.leader);
-      survivors.forEach((service) => service.raft.startScheduling());
+      survivors.forEach((service) => turnChainValue(service.raft.startScheduling()));
       assert.equal(await f.group.waitFor(() => survivors.some((service) =>
         service.raft.readStatus().role === RAFT_ROLE.LEADER)), true,
       'post-measurement recovery: the actual surviving quorum elects a leader');

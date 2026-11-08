@@ -39,6 +39,7 @@ import {
   mostCaughtUp,
   namedSuccessor,
 } from './transfer-leadership-driver.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const {CORE_OK, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
 const A = 'matrix-replica-a';
@@ -88,7 +89,7 @@ function terms(driver, replicaIds) {
 // An immediate write on the leader commits: no drop window was opened.
 function assertWritable(driver, leader, tag) {
   const command = {writable: tag};
-  const answer = driver.propose(leader, command);
+  const answer = turnChainValue(driver.propose(leader, command));
   assert.equal(answer.outcome, CORE_OK, JSON.stringify(answer));
   assert.equal(driver.applied(leader, command), true, 'the write committed');
 }
@@ -100,7 +101,7 @@ async function refusedWithoutEffect(driver,
   const replicaIds = [...driver.cluster.replicas.keys()];
   const termsBefore = terms(driver, replicaIds);
   const operationsBefore = driver.coreOperations().length;
-  const answer = await driver.port(asker).transferLeadership(request);
+  const answer = await turnChainValue(driver.port(asker).transferLeadership(request));
   assertRefused(answer, reason);
   assert.deepEqual(driver.coreOperations().slice(operationsBefore)
     .filter((operation) => operation === STEP_OPERATION), [],
@@ -128,7 +129,7 @@ function roundsUntilWritable(driver, leader, bound) {
   for (let round = 1; round <= bound; round += 1) {
     driver.round();
     const command = {retry: round};
-    const answer = driver.propose(leader, command);
+    const answer = turnChainValue(driver.propose(leader, command));
     if (answer.outcome === CORE_OK) {
       assert.equal(driver.applied(leader, command), true);
       return round;
@@ -142,7 +143,7 @@ test('W3 a non-leader with a known leader forwards, and the target leads', async
   const driver = formedGroup('w3-forward-known-leader');
   try {
     const termBefore = driver.status(A).term;
-    assertAccepted(await driver.port(B).transferLeadership(namedSuccessor(C)),
+    assertAccepted(await turnChainValue(driver.port(B).transferLeadership(namedSuccessor(C))),
       TRANSFER_REASON.FORWARDED);
     driver.deliver();
     within(driver, () => driver.leads(C),
@@ -178,7 +179,7 @@ test('W3 a learner target is refused as not a voter and nothing is stepped',
       const learnerId = driver.reserveEverywhere(D);
       assert.equal(driver.port(A).proposeConfChange({
         type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D,
-      }).outcome, CORE_OK);
+      }).result.outcome, CORE_OK);
       within(driver, () =>
         driver.status(A).confState.learners.includes(learnerId),
       'the learner is committed and applied');
@@ -220,7 +221,7 @@ test('W3 a target already leading answers already-leader and moves no term',
     const driver = formedGroup('w3-already-leader');
     try {
       const termBefore = driver.status(A).term;
-      assertAccepted(await driver.port(A).transferLeadership(namedSuccessor(A)),
+      assertAccepted(await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(A))),
         TRANSFER_REASON.ALREADY_LEADER);
       driver.deliver();
       driver.round();
@@ -239,7 +240,7 @@ test('W3 a solo group has no eligible successor, and naming itself is ' +
     await refusedWithoutEffect(driver, {asker: A, request: mostCaughtUp(),
       reason: TRANSFER_REASON.NO_ELIGIBLE_SUCCESSOR, leader: A});
     const termBefore = driver.status(A).term;
-    assertAccepted(await driver.port(A).transferLeadership(namedSuccessor(A)),
+    assertAccepted(await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(A))),
       TRANSFER_REASON.ALREADY_LEADER);
     assert.equal(driver.status(A).term, termBefore);
     assertWritable(driver, A, 'solo');
@@ -253,7 +254,7 @@ test('W3 the leader crashing before MsgTimeoutNow leaves: survivors elect, ' +
   const driver = formedGroup('w3-leader-crash-before-timeout-now');
   try {
     driver.isolate(A);
-    assertAccepted(await driver.port(A).transferLeadership(namedSuccessor(C)),
+    assertAccepted(await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))),
       TRANSFER_REASON.REQUESTED);
     assert.deepEqual(heldMessageTypes(driver, C), [],
       'precondition: MsgTimeoutNow never left the leader');
@@ -275,7 +276,7 @@ test('W3 the leader crashing after MsgTimeoutNow left: the target still leads',
     const driver = formedGroup('w3-leader-crash-after-timeout-now');
     try {
       const termBefore = driver.status(A).term;
-      assertAccepted(await driver.port(A).transferLeadership(namedSuccessor(C)),
+      assertAccepted(await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))),
         TRANSFER_REASON.REQUESTED);
       assert.ok(heldMessageTypes(driver, C).includes(
         bindingMessageType(TIMEOUT_NOW)),
@@ -304,11 +305,11 @@ test('W3 the target crashing mid-transfer: writes and configuration changes ' +
     driver.crash(C);
     driver.lagBehind(A, C);
     const termBefore = driver.status(A).term;
-    assertAccepted(await driver.port(A).transferLeadership(namedSuccessor(C)),
+    assertAccepted(await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))),
       TRANSFER_REASON.REQUESTED);
-    assertTransferInProgress(driver.propose(A, {during: 'transfer'}));
-    assertTransferInProgress(driver.port(A).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D}));
+    assertTransferInProgress(turnChainValue(driver.propose(A, {during: 'transfer'})));
+    assertTransferInProgress(turnChainValue(driver.port(A).proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D})));
     const rounds = roundsUntilWritable(driver, A, driver.electionTick());
     assert.notEqual(rounds, null,
       'the leader takes writes again within one election timeout');
@@ -329,7 +330,7 @@ test('W3 a transfer forwarded over the transport opens the same retryable ' +
     driver.crash(C);
     driver.lagBehind(A, C);
     const leader = driver.status(A);
-    const accepted = driver.port(A).step({
+    const accepted = turnChainValue(driver.port(A).step({
       protocol: RAFT_RS_TRANSPORT_PROTOCOL,
       groupId: driver.cluster.partitionId,
       from: driver.raftIdAt(A, C),
@@ -337,11 +338,11 @@ test('W3 a transfer forwarded over the transport opens the same retryable ' +
       message: {msgType: bindingMessageType(TRANSFER_LEADER),
         from: driver.raftIdAt(A, C), to: leader.peerId,
         term: String(leader.term), logTerm: '0', index: '0', commit: '0'},
-    });
+    }));
     assert.equal(accepted.outcome, CORE_OK, JSON.stringify(accepted));
     driver.deliver();
     driver.status(A);
-    assertTransferInProgress(driver.propose(A, {during: 'forwarded'}));
+    assertTransferInProgress(turnChainValue(driver.propose(A, {during: 'forwarded'})));
     assert.notEqual(roundsUntilWritable(driver, A, driver.electionTick()),
       null, 'writable again within one election timeout');
     assert.equal(driver.leads(A), true);
@@ -359,10 +360,10 @@ test('W3 a transfer with a configuration change pending converges and ' +
     driver.isolate(C);
     assert.equal(driver.port(A).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D,
-    }).outcome, CORE_OK);
+    }).result.outcome, CORE_OK);
     driver.deliver();
     driver.heal(C);
-    assertAccepted(await driver.port(A).transferLeadership(namedSuccessor(C)),
+    assertAccepted(await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))),
       TRANSFER_REASON.REQUESTED);
     driver.deliver();
     within(driver, () => driver.leads(C),
@@ -385,11 +386,11 @@ test('W3 a committed removal of the transferee aborts the transfer: the ' +
     driver.isolate(C);
     assert.equal(driver.port(A).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C,
-    }).outcome, CORE_OK);
+    }).result.outcome, CORE_OK);
     const termBefore = driver.status(A).term;
-    assertAccepted(await driver.port(A).transferLeadership(namedSuccessor(C)),
+    assertAccepted(await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))),
       TRANSFER_REASON.REQUESTED);
-    assertTransferInProgress(driver.propose(A, {before: 'removal'}));
+    assertTransferInProgress(turnChainValue(driver.propose(A, {before: 'removal'})));
     driver.heal(B);
     const rounds = within(driver, () =>
       !driver.status(A).confState.voters.includes(removedId),
@@ -411,14 +412,14 @@ test('W3 a repeated request is idempotent: one term change, and a repeat ' +
     driver.lagBehind(A, C);
     const termBefore = driver.status(A).term;
     for (let repeat = 0; repeat < 2; repeat += 1) {
-      assertAccepted(await driver.port(A).transferLeadership(namedSuccessor(C)),
+      assertAccepted(await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))),
         TRANSFER_REASON.REQUESTED);
     }
     driver.heal(C);
     within(driver, () => driver.leads(C),
       'the target leads within one election timeout');
     assert.equal(driver.status(C).term, termBefore + 1, 'one term change');
-    const again = await driver.port(A).transferLeadership(namedSuccessor(C));
+    const again = await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C)));
     assert.equal(again.outcome, CORE_OK, JSON.stringify(again));
     assert.ok([TRANSFER_REASON.ALREADY_LEADER, TRANSFER_REASON.FORWARDED]
       .includes(again.reason), JSON.stringify(again));
@@ -436,9 +437,9 @@ test('W3 a retarget while a transfer is in progress hands leadership to the ' +
   try {
     driver.lagBehind(A, C);
     const termBefore = driver.status(A).term;
-    assertAccepted(await driver.port(A).transferLeadership(namedSuccessor(C)),
+    assertAccepted(await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))),
       TRANSFER_REASON.REQUESTED);
-    assertAccepted(await driver.port(A).transferLeadership(namedSuccessor(B)),
+    assertAccepted(await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(B))),
       TRANSFER_REASON.REQUESTED);
     driver.deliver();
     within(driver, () => driver.leads(B),
@@ -461,7 +462,7 @@ test('W3 a closed port refuses as closed without entering the core', async () =>
     port.close();
     const entriesBefore = driver.cluster.coreEntryCount();
     for (const request of [namedSuccessor(C), mostCaughtUp()]) {
-      assertRefused(await port.transferLeadership(request), RUNTIME_REASON.CLOSED);
+      assertRefused(await turnChainValue(port.transferLeadership(request)), RUNTIME_REASON.CLOSED);
     }
     assert.equal(driver.cluster.coreEntryCount(), entriesBefore,
       'nothing entered the core');
@@ -479,7 +480,7 @@ test('W3 an open user transaction defers the request, retryable, without ' +
     const termBefore = driver.status(A).term;
     db.exec(BEGIN);
     const entriesBefore = driver.cluster.coreEntryCount();
-    const answer = await driver.port(A).transferLeadership(namedSuccessor(C));
+    const answer = await turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C)));
     assert.equal(driver.cluster.coreEntryCount(), entriesBefore,
       'nothing entered the core');
     db.exec(ROLLBACK);

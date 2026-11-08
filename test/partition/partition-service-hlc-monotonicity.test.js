@@ -34,6 +34,7 @@ import {RAFT_RS_ENTRY_TYPE} from
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const SCHEMA = {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]};
 
@@ -63,13 +64,13 @@ test('Fix 1: applyCommittedEntry witnesses a remote HLC so the next local ' +
 
   // Committed through the partition's own port: a lone rs-raft leader
   // commits and applies its proposal before propose() returns.
-  const proposed = await partition.raft.propose({
+  const proposed = await turnChainValue(partition.raft.propose({
     entryId: 'e-remote',
     type: 'INSERT',
     sql: 'INSERT INTO t (id) VALUES (?)',
     params: ['a'],
     timestamp: remote,
-  });
+  }));
   t.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     'the remote write commits and applies');
 
@@ -86,13 +87,13 @@ test('Fix 1: a missing/unparseable timestamp is skipped, never fatal',
     await partition.initialize();
 
     const before = partition.hlcClock.current();
-    const proposed = await partition.raft.propose({
+    const proposed = await turnChainValue(partition.raft.propose({
       entryId: 'e-no-ts',
       type: 'INSERT',
       sql: 'INSERT INTO t (id) VALUES (?)',
       params: ['b'],
       // no timestamp field
-    });
+    }));
     t.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       'applying an entry without an HLC must not fail its application');
     t.equal(partition.db.prepare('SELECT COUNT(*) AS count FROM t').get()

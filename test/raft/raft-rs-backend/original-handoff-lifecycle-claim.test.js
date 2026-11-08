@@ -4,6 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import {createRaftRsOperationPort} from '../../../src/raft/raft-rs-operation-port.js';
+import {RAFT_COMMITTED_ENTRY_APPLY_MODE, RAFT_OPERATION_PORT_REQUEST as REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {genesisStamp} from '../../../src/raft/raft-committed-membership-stamp.js';
 import {raftRsLifecycleAdministration as administration} from
   '../../../src/raft/raft-rs-lifecycle-administration.js';
@@ -20,7 +22,8 @@ function generation(t) {
     peerAddress: 'local-replica', durableStorage: db, timing: TIMING,
     bootstrapPeerIds: [REPLICA], bootstrapMembership: genesisStamp([REPLICA]),
     resolvePeerAddress: () => 'local-replica', sendToPeer: () => {},
-    applyCommittedEntry: () => {}, deferElection: true});
+    applyCommittedEntry: () => {}, deferElection: true,
+    [REQUEST.APPLY_COMMITTED_ENTRY_MODE]: RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS});
   const request = Object.freeze({runtime: port, groupId: GROUP,
     replicaIdentity: REPLICA, incarnation: port.readStatus().lifecycleIncarnation});
   t.after(() => {
@@ -48,7 +51,7 @@ test('claim holds retirement through awaited effects and permits native progress
   const work = administration.withReplicaLifecycleClaim(g.request, async (check) => {
     assertCurrent = check;
     check();
-    assert.equal(g.port.tick().outcome, 'CORE_OK', 'participation claim is not a native mutex');
+    assert.equal(g.port.tick().result.outcome, 'CORE_OK', 'participation claim is not a native mutex');
     entered.resolve();
     await release.promise;
     return 'settled';

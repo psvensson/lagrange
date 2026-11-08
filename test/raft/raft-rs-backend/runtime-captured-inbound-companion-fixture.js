@@ -9,6 +9,7 @@ import {encodeProposal} from '../../../src/raft/raft-rs-proposal-codec.js';
 import {setActualCoreEntryObserver, setCoreFaultInjector,
   setNativeInboundStageObserver} from '../../../src/raft/raft-rs-runtime-owner.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const REPLICAS = ['w07-companion-a', 'w07-companion-b', 'w07-companion-c'];
 const [A, B, C] = REPLICAS;
@@ -49,7 +50,7 @@ function processSetupInbox(cluster, replica) {
 
 function form(cluster) {
   assert.equal(cluster.settle(() => cluster.leaderReplicaId() === A), true);
-  assert.equal(cluster.propose(A, {setup: cluster.partitionId}).outcome,
+  assert.equal(cluster.propose(A, {setup: cluster.partitionId}).result.outcome,
     RAFT_OPERATION_OUTCOME.CORE_OK);
   // Use the existing fixture's delivery/settlement driver for both commit
   // propagation and quiescence. This is setup only, before any measured cut.
@@ -143,7 +144,7 @@ function clearObservers() {
 
 function deliverHeartbeat(f, ordinal) {
   const envelopeHash = hash(f.heartbeat);
-  const result = f.cluster.node(B).step(f.heartbeat);
+  const result = turnChainValue(f.cluster.node(B).step(f.heartbeat));
   f.events.push({kind: 'delivery', ordinal, envelopeHash, result,
     provenance: ordinal === 1 ? 'captured-native-heartbeat' : 'exact-duplicate'});
   assert.equal(result.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
