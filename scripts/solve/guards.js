@@ -41,6 +41,7 @@ const CHECKERS = Object.freeze([
   {label: 'ambient-intrinsics audit',
     script: 'scripts/check-guideline-ambient-intrinsics.js', args: []},
   {label: 'silent-catch audit', script: 'scripts/check-guideline-silent-catch.js', args: []},
+  {label: 'navigability audit', script: 'scripts/check-guideline-navigability.js', args: []},
 ]);
 const TRIGGERED_PAIR_PREFIX = 'coupled pair ';
 const PROBLEM_JOIN_SEPARATOR = '; ';

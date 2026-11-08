@@ -10,6 +10,7 @@
   "analyze:rolling-restart-liveness": "Classify rolling-restart failed samples with deterministic liveness progress-witness discipline.",
   "analyze:topology-convergence": "Explain topology-convergence edges from a scenario artifact (add --explain <edge>).",
   "audit:closure-ledger": "Validate closure-ledger state.",
+  "audit:guideline:navigability": "One-way ratchet per navigability/fallback pattern over the shared detector module; ESLint-promoted patterns are skipped, --update-baseline only lowers.",
   "audit:runtime-grammar": "Check runtime grammar contracts plus state-machine pressure preflight.",
   "audit:source-owner-index": "Check every src directory INDEX.md against its generator; prints each missing or stale index, then their count as the last line.",
   "check:formation": "Local seed-starvation gate: run the formation-only demo with five local node processes and fail unless the formation verdict is PASS and the seed stayed inside its hardware-relative event-loop budget.",

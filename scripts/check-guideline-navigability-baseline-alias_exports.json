@@ -1,0 +1,367 @@
+{
+  "version": 1,
+  "generatedAt": "2026-11-08T12:15:36.639Z",
+  "rawViolationCount": 40,
+  "violations": [
+    {
+      "filePath": "src/admin/admin-websocket-api-composition.js",
+      "line": 33,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-websocket-load-lane-admission.js",
+      "line": 606,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/node-joining-service.js",
+      "line": 2,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/node-joining-service.js",
+      "line": 4,
+      "column": 8,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/cache/cache-hydration-service.js",
+      "line": 218,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/cli/views/services-view.js",
+      "line": 784,
+      "column": 8,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-aware.js",
+      "line": 41,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-service.js",
+      "line": 10,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-coordinator-queue.js",
+      "line": 684,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-priority-partition-canonical-data.js",
+      "line": 356,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-priority-partition-canonical-data.js",
+      "line": 357,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/message-group/index.js",
+      "line": 11,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/message-group/index.js",
+      "line": 12,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/index.js",
+      "line": 9,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/index.js",
+      "line": 19,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/index.js",
+      "line": 20,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/index.js",
+      "line": 26,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/index.js",
+      "line": 41,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/index.js",
+      "line": 42,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/index.js",
+      "line": 48,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/node-reintegration-service.js",
+      "line": 776,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/participant-release-diagnostic-observation.js",
+      "line": 157,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/managed-workflow-record-store.js",
+      "line": 774,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/managed-workflow-record-store.js",
+      "line": 776,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-cdc-obligation-ledger.js",
+      "line": 516,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-pause.js",
+      "line": 296,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/public-api.js",
+      "line": 27,
+      "column": 8,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/query-executor.js",
+      "line": 1,
+      "column": 8,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-membership-transition.js",
+      "line": 193,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/index.js",
+      "line": 36,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-message-group-membership-owner-claim.js",
+      "line": 288,
+      "column": 8,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/unified-rebalancer.js",
+      "line": 12,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/unified-rebalancer.js",
+      "line": 15,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/unified-rebalancer.js",
+      "line": 16,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/unified-rebalancer.js",
+      "line": 17,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/unified-rebalancer.js",
+      "line": 18,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/service/service-consensus-creation-intent.js",
+      "line": 476,
+      "column": 36,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/service/service-consensus-creation-intent.js",
+      "line": 478,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/threading/service-thread-manager.js",
+      "line": 421,
+      "column": 8,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/transport/index.js",
+      "line": 7,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "alias_exports",
+      "reason": "alias export; import the original name directly",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    }
+  ]
+}

@@ -119,6 +119,56 @@ When writing or modifying code:
 - Do not leak raw storage or transport field shapes into runtime model names or
   contracts.
 
+## Navigability and fallback patterns
+
+Each shape below makes the next reader re-derive what an owner is or what a
+value means before they can change anything, and each fallback shape keeps a
+second path alive beside the real one. Write the replacement form instead.
+
+- `owner_port_feature_detection`: `typeof this.x.y === 'function'` (or on a
+  parameter member) to discover what an owner can do. Replace it with a named
+  collaborator passed to the constructor and validated once there.
+- `identity_keyed_module_state`: a module-scope `new WeakMap()`, `Map()`,
+  `Set()` or `WeakSet()` keyed by an owner's identity. Replace it with an
+  owner-held field on the instance that owns the state.
+- `prototype_copy_bags`: copying `Object.getOwnPropertyNames(X.prototype)`
+  onto another class. Replace it with an explicit-context module whose
+  functions take the owner as their first argument.
+- `inheritance_depth_over_two`: a class whose `extends` chain is deeper than
+  two. Replace it with composition: named collaborators held by one class.
+- `row_field_alias_reads`: `row.x || row.y` where `x` and `y` are one field in
+  two spellings. Replace it with one row decoder that maps the stored shape
+  to the runtime shape once.
+- `state_read_defaults`: `||` or `??` defaulting a `status`, `role`,
+  `raft_role`, `workflow_step`, `phase` or `step` read. Replace it with a
+  named state that the absent case decodes to explicitly.
+- `value_or_promise_then_checks`: `typeof x.then === 'function'` at a call
+  site. Replace it with an always-promise producer, so the caller always
+  awaits.
+- `two_source_fallback_reads`: `a.x || b.y`, one fact read from two roots.
+  Replace it with one authority per fact and read only that authority.
+- `typeof_dual_paths`: a `typeof f === 'function'` test with a real else
+  branch. Replace it with one path; delete the branch that is not the
+  contract.
+- `catch_returns_default`: a catch whose last statement returns a literal,
+  null or nothing. Replace it with a typed refusal the caller must decide on.
+- `alias_exports`: `export {x as y}`. Replace it with a direct import of the
+  original name at every consumer.
+- `legacy_term_identifiers`: identifiers carrying legacy, compat, fallback,
+  shim, interim and similar vocabulary. Retire the legacy path and its
+  vocabulary instead of carrying them forward.
+
+`npm run audit:guideline:navigability` enforces these with one-way baselines,
+one file per pattern (`scripts/check-guideline-navigability-baseline-<row>.json`):
+a new site fails the audit, and a count below its baseline prints the tighten
+hint. Lower a baseline with `--update-baseline --pattern <row>`; never raise
+one. A pattern that reaches zero is promoted to an ESLint
+`no-restricted-syntax` selector, at error severity, whose message carries
+`navigability-rule:<row>` in `eslint.config.js`. The audit reads promotion
+from ESLint's resolved configuration (the same reader as the budget script,
+`scripts/checks/code-navigability-eslint-promotion.js`) and drops a promoted
+pattern: ESLint is then its only gate, and it needs no baseline file.
+
 ## Before Completing Code Changes
 
 - Ensure all new code follows the linting rules above

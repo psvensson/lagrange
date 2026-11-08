@@ -84,6 +84,17 @@ test('static quality: absent checkers skip; a failing checker names itself', (t)
   assert.deepEqual(staticQualityProblems(root, [DOC]), [], 'only linted trees');
 });
 
+test('static quality: the navigability audit runs over the changed paths', (t) => {
+  const root = repo(t);
+  write(root, SRC, TEXT);
+  write(root, 'scripts/check-guideline-navigability.js',
+    'process.exitCode = 1; process.stdout.write(process.argv.slice(2).join(" "));\n');
+  const problems = staticQualityProblems(root, [SRC]);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /navigability audit failed over the changed paths/u);
+  assert.match(problems[0], /src\/a\.js/u);
+});
+
 test('coupled pairs: fewer than two paths or no registry means nothing to guard', (t) => {
   const root = repo(t);
   assert.deepEqual(coupledPairProblems(root, [SRC]), []);

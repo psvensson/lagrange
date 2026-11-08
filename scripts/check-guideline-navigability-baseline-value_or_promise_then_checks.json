@@ -1,0 +1,412 @@
+{
+  "version": 1,
+  "generatedAt": "2026-11-08T12:15:36.618Z",
+  "rawViolationCount": 45,
+  "violations": [
+    {
+      "filePath": "src/admin/admin-control-snapshot-stale-watermark-record.js",
+      "line": 288,
+      "column": 8,
+      "functionName": "emitTransitionLine",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/bootstrap-api-readiness-methods.js",
+      "line": 143,
+      "column": 8,
+      "functionName": "getStartupAuthoritySnapshotForBootstrapResponse",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/critical-placement-formation-observer.js",
+      "line": 74,
+      "column": 14,
+      "functionName": "readTableRows",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
+      "line": 577,
+      "column": 19,
+      "functionName": "getControlPlanePublicationStory",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
+      "line": 616,
+      "column": 25,
+      "functionName": "getMembershipPublicationDiagnostics",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/owners/bootstrap-startup-authority-evidence.js",
+      "line": 51,
+      "column": 6,
+      "functionName": "resolveLocalStartupAuthoritySnapshot",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/owners/startup-runtime-handoff-owner.js",
+      "line": 244,
+      "column": 18,
+      "functionName": "trackDistributedTransactionRecovery",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/owners/startup-runtime-handoff-owner.js",
+      "line": 302,
+      "column": 20,
+      "functionName": "activateDistributedTransactionRecovery",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/shared/startup-sql-runtime-handoff.js",
+      "line": 26,
+      "column": 18,
+      "functionName": "activateOwnerTrackedTransactionRecovery",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/readiness-admission-transition-record.js",
+      "line": 314,
+      "column": 8,
+      "functionName": "emit",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/diagnostics/resource-diagnostics-sampler.js",
+      "line": 390,
+      "column": 8,
+      "functionName": "collectComponentStats",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/live-query/live-query-manager.js",
+      "line": 568,
+      "column": 21,
+      "functionName": "removeGroup",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/live-query/live-query-startup-wiring.js",
+      "line": 163,
+      "column": 22,
+      "functionName": "dispatchTopologyChange",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-create-process-owner.js",
+      "line": 215,
+      "column": 18,
+      "functionName": "<anonymous>",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-state-machine-serialization.js",
+      "line": 69,
+      "column": 4,
+      "functionName": "isPromiseLike",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-state-machine.js",
+      "line": 413,
+      "column": 11,
+      "functionName": "completeDurableRemoval",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-raft-membership-administration.js",
+      "line": 122,
+      "column": 18,
+      "functionName": "proposePeerRetirement",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/call-stage.js",
+      "line": 73,
+      "column": 10,
+      "functionName": "call",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/sql-parser-schema-mutation-methods.js",
+      "line": 172,
+      "column": 8,
+      "functionName": "collectMutationChildNodes",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/leader-activation-scheduler.js",
+      "line": 136,
+      "column": 22,
+      "functionName": "dispatchNext",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-application-transaction-owner.js",
+      "line": 65,
+      "column": 21,
+      "functionName": "<anonymous>",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-application-transaction-owner.js",
+      "line": 73,
+      "column": 31,
+      "functionName": "<anonymous>",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-group-membership-admission.js",
+      "line": 127,
+      "column": 19,
+      "functionName": "proposeAdmission",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-operation-port.js",
+      "line": 124,
+      "column": 19,
+      "functionName": "containRuntimeThrow",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-operation-port.js",
+      "line": 263,
+      "column": 32,
+      "functionName": "createRaftRsOperationPort",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-operation-port.js",
+      "line": 442,
+      "column": 15,
+      "functionName": "<anonymous>",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-peer-delivery.js",
+      "line": 31,
+      "column": 18,
+      "functionName": "thenMaybe",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-peer-delivery.js",
+      "line": 138,
+      "column": 20,
+      "functionName": "notifySnapshotCatchupNeeded",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-peer-delivery.js",
+      "line": 168,
+      "column": 19,
+      "functionName": "deliverToPeer",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-replica-lifecycle-owner.js",
+      "line": 287,
+      "column": 18,
+      "functionName": "execute",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-runtime-owner.js",
+      "line": 742,
+      "column": 19,
+      "functionName": "run",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-runtime-owner.js",
+      "line": 1084,
+      "column": 16,
+      "functionName": "enqueue",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-runtime-owner.js",
+      "line": 1092,
+      "column": 18,
+      "functionName": "thenMaybe",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-runtime-owner.js",
+      "line": 1224,
+      "column": 19,
+      "functionName": "applyEntries",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-runtime-owner.js",
+      "line": 1295,
+      "column": 22,
+      "functionName": "finishReady",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-runtime-owner.js",
+      "line": 1356,
+      "column": 26,
+      "functionName": "drainReady",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-runtime-owner.js",
+      "line": 1550,
+      "column": 14,
+      "functionName": "readStatusInRecovery",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-runtime-owner.js",
+      "line": 1576,
+      "column": 17,
+      "functionName": "readStatusObserved",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-runtime-owner.js",
+      "line": 1953,
+      "column": 19,
+      "functionName": "drainInbound",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-runtime-owner.js",
+      "line": 2077,
+      "column": 17,
+      "functionName": "runScheduledInboundDrain",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-runtime-owner.js",
+      "line": 2088,
+      "column": 26,
+      "functionName": "settleBatchTurn",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/operation-owner-shutdown-join.js",
+      "line": 52,
+      "column": 19,
+      "functionName": "<anonymous>",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/rebalance-coordinator-lifecycle.js",
+      "line": 40,
+      "column": 18,
+      "functionName": "startFailedCreateCleanupReleaseRecovery",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/sea-entry.js",
+      "line": 56,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/topology/latency-group-manager-runtime-helpers.js",
+      "line": 143,
+      "column": 19,
+      "functionName": "hasLatencyGroup",
+      "kind": "value_or_promise_then_checks",
+      "reason": ".then check on a value-or-promise; make the producer always return a promise",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    }
+  ]
+}
