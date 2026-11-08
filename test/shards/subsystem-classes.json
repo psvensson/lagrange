@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 208,
     "storage-raft": 148,
-    "test-infrastructure": 157,
+    "test-infrastructure": 159,
     "transactions": 17,
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2557,
-  "digest": "fnv1a32-e1e76711",
+  "censusSize": 2559,
+  "digest": "fnv1a32-1676c309",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f7119dc1",
+  "observationDigest": "fnv1a32-6493a783",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2233,6 +2233,8 @@
     "test/scripts/check-unified-system-metadata-gateway.test.js": "test-infrastructure",
     "test/scripts/closed-quest-shape.test.js": "test-infrastructure",
     "test/scripts/closure-ledger-state.test.js": "test-infrastructure",
+    "test/scripts/code-navigability-budget.test.js": "test-infrastructure",
+    "test/scripts/code-navigability-detectors.test.js": "test-infrastructure",
     "test/scripts/complexity-ratchet-closure.test.js": "test-infrastructure",
     "test/scripts/dependency-policy-authority.test.js": "test-infrastructure",
     "test/scripts/dependency-policy-classification.test.js": "test-infrastructure",
@@ -17134,6 +17136,28 @@
     "test/scripts/closure-ledger-state.test.js": {
       "directories": [
         "solve/specs/membership-lifecycle-placement-hard-cutover"
+      ]
+    },
+    "test/scripts/code-navigability-budget.test.js": {
+      "files": [
+        "package.json",
+        "scripts/check-guideline-ambient-intrinsics.js",
+        "scripts/check-guideline-decision-boundaries.js",
+        "scripts/check-guideline-literals.js",
+        "scripts/checks/code-navigability-budget.js",
+        "scripts/checks/code-navigability-detectors.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/raft/raft-rs-group-membership-admission.js",
+        "test/distributed/harness/failure-bundle-artifact-foundation.js"
+      ],
+      "directories": [
+        "scripts/checks",
+        "src"
+      ]
+    },
+    "test/scripts/code-navigability-detectors.test.js": {
+      "directories": [
+        "src"
       ]
     },
     "test/scripts/complexity-ratchet-closure.test.js": {

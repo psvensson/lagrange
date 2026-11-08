@@ -64,29 +64,29 @@ Change a number here and in the budget script together, never in one place.
 
 | Row | What it counts | Baseline | Target |
 | --- | --- | --- | --- |
-| `navigability_patterns_without_ratchet` | the twelve audited patterns below (seven navigability, five fallback) with no audit baseline file or ESLint rule | 12 | 0 |
-| `owner_port_feature_detection` | `typeof <member> === 'function'` / `TYPE.FUNCTION` on `this.` or a parameter member | 1322 | cap 1322 |
-| `owner_port_feature_detection_pilot_owners` | the same, in `control-plane-readiness-*.js`, `partition-service*.js` and the two rebalancer consumers of the planning-answer chain | 144 | 0 |
+| `navigability_patterns_without_ratchet` | the twelve audited patterns below (seven navigability, five fallback) with neither a baseline file in the shared audit shape nor an ESLint `no-restricted-syntax` entry whose message carries `navigability-rule:<row>` | 12 | 0 |
+| `owner_port_feature_detection` | `typeof <member>` compared with `===`/`!==` to `'function'` or to a constant or member whose name contains the word FUNCTION, the member optionally chained, on any object (no scope analysis), excluding `.then` and `.catch` | 2130 | cap 2130 |
+| `owner_port_feature_detection_pilot_owners` | the same, in `control-plane-readiness-*.js`, `partition-service*.js` and the two rebalancer consumers of the planning-answer chain | 172 | 0 |
 | `identity_keyed_module_state` | module-scope `new WeakMap()`, `Map()`, `Set()`, `WeakSet()` with no arguments | 87 | cap 87 |
-| `identity_keyed_module_state_admission_path` | the same, in `partition-service-raft-membership-administration.js` and `raft-rs-group-membership-admission.js` (branch `work/composed-05-comparison-readiness-20261103` adds a fourth in `partition-replica-admission.js`) | 3 | 0 |
-| `prototype_copy_bags` | `Object.getOwnPropertyNames(X.prototype)` copy loops | 59 | cap 59 |
+| `identity_keyed_module_state_admission_path` | the same, in `partition-service-raft-membership-administration.js`, `raft-rs-group-membership-admission.js` and `partition-service-raft-peer-cache-reconciliation.js` (branch `work/composed-05-comparison-readiness-20261103` adds a fourth store in `partition-replica-admission.js`) | 3 | 0 |
+| `prototype_copy_bags` | `Object.getOwnPropertyNames(X.prototype)` copy loops, the prototype member optionally chained (`X?.prototype`) | 59 | cap 59 |
 | `prototype_copy_bags_partition_service` | the same, in `partition-service*.js` | 12 | 0 |
 | `inheritance_depth_over_two` | classes whose `extends` chain is deeper than two | 65 | cap 65 |
 | `inheritance_depth_over_two_readiness` | the same, among the control-plane readiness classes (nine `extends` today) | 7 | 0 |
-| `row_field_alias_reads` | `a.x \|\| a.y` or `??` where `x` and `y` are one name in two spellings | 399 | cap 399 |
-| `formation_system_tables_without_decoder` | of `services`, `nodes`, `replica_operations`, tables with no single decoder module | 3 | 0 |
-| `state_read_defaults` | `\|\|` or `??` default on a `status`, `role`, `raft_role`, `workflow_step`, `phase` or `step` read | 159 | 0 |
-| `value_or_promise_then_checks` | `typeof x.then === 'function'` at a call site | 26 | 0 |
+| `row_field_alias_reads` | in a flattened `\|\|` or `??` chain, an adjacent pair reading the same object (structural identity, optionally chained) under two spellings of one field name that differ but normalise equal (plain, string-literal key, or any constants object's member such as `COLUMN.NODE_ID`); one count per such pair | 745 | cap 745 |
+| `formation_system_tables_without_decoder` | of `services`, `nodes`, `replica_operations`, tables with no module `<table>-row-decoder.js` exporting `decode<Table>Row` | 3 | 0 |
+| `state_read_defaults` | in a flattened `\|\|` or `??` chain, a read of `status`, `role`, `raft_role`/`raftRole`, `workflow_step`/`workflowStep`, `phase` or `step` (plain, string-literal key, or any constants object's member named STATUS, ROLE, RAFT_ROLE, WORKFLOW_STEP, PHASE or STEP, optionally chained) that has a term after it; one count per such read | 413 | 0 |
+| `value_or_promise_then_checks` | a promise-shape probe at a call site: `typeof x.then` or `x.catch` (optionally chained) compared with `===`/`!==`, a truthiness test on `.then`/`.catch` as the test of a conditional or if, or `instanceof Promise`; excluded are only the sites inside a function named `turnFromForeignAnswer` in the file `src/raft/raft-rs-turn-answer.js` (the designated foreign-answer adapter; path and function both, never a basename) | 45 | 0 |
 | `source_directories_over_cap` | `src` directories with more than 120 `.js` files directly inside | 4 | 0 |
-| `stale_owner_indexes` | `src` directories whose `INDEX.md` is missing or disagrees with its generator | 57 | 0 |
-| `failure_bundle_log_windows_without_coverage` | bundle writers that truncate node logs (`LOG_TAIL_LINE_COUNT`) without recording coverage | 1 | 0 |
-| `two_source_fallback_reads` | `\|\|` or `??` whose member terms read different root objects (`a.x \|\| b.y`) | 1956 | cap 1956 |
-| `typeof_dual_paths` | `typeof f === 'function'` test with a real else branch | 544 | cap 544 |
-| `catch_returns_default` | catch whose last statement returns a literal, null, or nothing | 387 | cap 387 |
+| `stale_owner_indexes` | `src` directories whose `INDEX.md` is missing or disagrees with its generator (the generator's exit must be zero; otherwise the row is outstanding) | 57 | 0 |
+| `failure_bundle_log_windows_without_coverage` | bundle writers that truncate node logs (`LOG_TAIL_LINE_COUNT`) without recording coverage (`LOG_WINDOW_COVERAGE`): 1 when the foundation module exports `LOG_TAIL_LINE_COUNT` and not `LOG_WINDOW_COVERAGE`, 0 when it exports `LOG_WINDOW_COVERAGE`; outstanding when the foundation module is absent, unparsable, or exports neither name | 1 | 0 |
+| `two_source_fallback_reads` | `\|\|` or `??` whose member terms (optionally chained) read at least two different objects: different roots or different object paths under one root (`a.x \|\| b.y`, `o.x \|\| o.d?.x`), never two properties of one object | 1789 | cap 1789 |
+| `typeof_dual_paths` | an if or conditional with a real else branch whose test contains the typeof-function comparison FORM (as defined for `owner_port_feature_detection`) on ANY operand - member, bare identifier, or `.then`/`.catch` included | 627 | cap 627 |
+| `catch_returns_default` | catch whose last statement returns a primitive literal, an object or array literal (members may be computed), null, undefined, or nothing | 387 | cap 387 |
 | `reexport_only_modules` | modules whose body is only imports and re-exports | 35 | cap 35 |
 | `alias_exports` | `export {x as y}` | 40 | 0 |
-| `legacy_term_identifiers` | identifiers containing legacy, compat, fallback, deprecat, shim, interim, transitional, backward, retired, obsolete, polyfill, workaround, temporar, or the prefixes old and v1 before a capital or underscore | 4284 | cap 4284 |
-| `fallback_sites_uncensused` | two-source, typeof-dual-path and catch-default sites with no census record matching their content hash | 2887 | 0 |
+| `legacy_term_identifiers` | identifier tokens (a shorthand specifier counts once) containing legacy, compat, fallback, deprecat, shim, interim, transitional, backward, retired, obsolete, polyfill, workaround, temporar, or the whole word old or v1 among the identifier's words; a property accessed on another object is that object's vocabulary and is excluded | 2924 | cap 2924 |
+| `fallback_sites_uncensused` | two-source, typeof-dual-path and catch-default sites with no census record of an executed class (`never`, `primary-only`, `fallback-only`, `both`) matching (row, file, hash, occurrence); an `unloaded`, unknown or duplicated record leaves the site uncensused | 2803 | 0 |
 | `fallback_branches_never_taken` | census class `never`: the file was loaded, neither side executed | census | 0 |
 | `fallback_branches_only_fallback_taken` | census class `fallback-only`: only the fallback side executed | census | 0 |
 | `fallback_sites_unclassified` | census class `both` with no recorded classification | census | 0 |
@@ -122,7 +122,9 @@ They are recorded, not in scope (R17); the readiness chain is the pilot.
   `fallback-only` are deletions under the no-legacy rule; only `both` needs
   judgment, recorded per site with a reason and voided when the hash changes.
   A file no run loaded is `unloaded`, never `never`: an incomplete census
-  fails the site, it does not acquit it.
+  fails the site, it does not acquit it, so an `unloaded`, unknown or
+  duplicated record leaves the site uncensused. Site identity is (row, file,
+  hash, occurrence) with occurrence numbered within the row.
 - **Rows read the tree.** Every row is computable from a checkout, the census
   included because it is committed with the hashes that bind it; no row reads
   a live run, so the probe measures and never acts (R27).
@@ -162,3 +164,51 @@ They are recorded, not in scope (R17); the readiness chain is the pilot.
   back as they land; `source-directory-owner-index` was split so its
   generator half runs now and the file moves (`source-directory-file-cap`)
   run last.
+- 2026-11-08: `legacy_term_identifiers` corrected from 4284 to 3288 at the
+  budget script's sealing measurement: the scratch regex matched `old`
+  inside placeholders, thresholds and holders (996 false positives); the
+  detector now splits identifiers into words. Recorded with the
+  `code-navigability-budget-check` attempt (constraint baseline-is-the-oracle).
+  Every other cap row reproduced exactly.
+- 2026-11-08: the first independent verification of the budget script
+  rejected (optional-chained members uncounted by five detectors, shorthand
+  legacy tokens double-counted, a dot inside a computed member corrupting the
+  two-source object path, cross-object alias reads, and an unloaded census
+  class acquitting sites). Row definitions above are restated exactly as
+  the second attempt measures them; the baselines move with that attempt.
+- 2026-11-08: the second verification of the budget script rejected on one
+  new mechanism (state-default and alias detectors inspected only the head of
+  a `||`/`??` chain) and restated the two rows to count every chain position;
+  baselines move with attempt 3. Recorded gaps the definitions exclude, for
+  a later decision: optional-call feature detection `m?.()` (765 sites, the
+  same mistake class as `typeof m === 'function'`), private-field legacy names
+  (3), destructuring and parameter defaults on `status` (7). Attempt 3
+  measured the flattened chains: `row_field_alias_reads` 643 -> 745 (102
+  pairs at a non-head position in 98 chains; the 643 head pairs reproduce
+  exactly) and `state_read_defaults` 341 -> 413 (72 reads at a non-head
+  position in 64 chains; the 341 head reads reproduce exactly); every other
+  row equals attempt 2, the structural object key moving none. A chain that
+  is a two-source read and holds a defaulted state read is one site of
+  each row with different hashes, because each site spans what its row
+  counts (the chain, the term); identity carries the row, so they never
+  collide. A census or classification record is an object with string
+  row, file and hash and an integer occurrence (never coerced); anything
+  else censuses or classifies nothing, and a census file that fails the
+  schema is absent. An unparsable bundle writer leaves its row
+  outstanding. Promotion needs the whole `navigability-rule:<row>` token
+  in an error-severity `no-restricted-syntax` entry; `warn` promotes
+  nothing.
+- 2026-11-08: the third verification of the budget script approved with
+  known-shape findings, corrected in attempt 4 without moving any baseline
+  (every row reproduces attempt 3): an absent `src` root leaves every row
+  that reads detector sites or the source tree outstanding, as a parse
+  failure does; the bundle-writer row is outstanding when the foundation
+  module exports neither name; `prototype_copy_bags` counts an optionally
+  chained prototype argument (0 in src); the then-checks exclusion is one
+  function in one file; census and classification fields are read as own
+  fields only and a whitespace-only classification classifies nothing; an
+  unrecognised budget argument (`--rows=name` included) is a usage refusal.
+  `typeof_dual_paths` is restated to what its one definition counts: of 627,
+  574 test a member, 47 a bare identifier, 6 `.then`. Recorded gap added for
+  a later decision: logical assignment `||=`/`??=` (34 in src, none on a
+  state field or alias pair) is not a `||`/`??` chain and is not counted.

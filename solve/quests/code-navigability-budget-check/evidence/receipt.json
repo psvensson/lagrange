@@ -1,0 +1,32 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "code-navigability-budget-check",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/code-navigability-budget.test.js": "8b01bd1f9ab820a8a9720363c51f4c2ed9e747c971162f635eb3fa382cdd306b"
+  },
+  "generatedAt": "2026-11-08T11:12:36.607Z",
+  "receipts": [
+    {
+      "id": "budget-rows-measure-the-real-tree-within-caps",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the real tree measures every row and every cap row is within its cap$\" test/scripts/code-navigability-budget.test.js",
+      "detail": "the budget script run with --json on this checkout reports every sealed row in order, every cap row at or below its cap, every zero and census row as a count or null and met only at 0, and the unmet count as the last stdout line and the exit status",
+      "testFile": "test/scripts/code-navigability-budget.test.js"
+    },
+    {
+      "id": "fixture-tree-measures-every-row",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every budget row is measured from the fixture tree it is given$\" test/scripts/code-navigability-budget.test.js",
+      "detail": "a fixture tree meeting every row and one offending every row (each cap exceeded by one, the census present but incomplete) measure the exact value restated for every row, met and unmet respectively",
+      "testFile": "test/scripts/code-navigability-budget.test.js"
+    },
+    {
+      "id": "changed-path-guideline-checkers-pass",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the budget script and the detector module pass the changed-path guideline checkers$\" test/scripts/code-navigability-budget.test.js",
+      "detail": "the literals, ambient-intrinsics and decision-boundaries checkers find no raw violation in each scripts/checks/code-navigability-*.js file, and eslint passes on them",
+      "testFile": "test/scripts/code-navigability-budget.test.js"
+    }
+  ]
+}

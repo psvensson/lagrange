@@ -31,5 +31,6 @@
       "id": "satisfy-the-checker-not-the-baseline",
       "statement": "The literal, ambient-intrinsic and lint checkers are satisfied by changing this script, never by a baseline entry, a raised count or a path exclusion (R23)."
     }
-  ]
+  ],
+  "sealedAt": "45871d8267d9e8f8bf0ffccbadd1aa571aa83d9d"
 }
