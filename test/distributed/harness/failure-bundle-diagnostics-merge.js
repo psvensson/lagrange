@@ -405,8 +405,8 @@ export function buildFocusedNodeDiagnostics(
       decisionArtifacts,
       restartBoundaries,
       routingDiagnostics,
+      // The retained window itself lives once, in logs.excerptsByNodeId.
       logPath: nodeLogPath,
-      logExcerpt,
     };
   }
 

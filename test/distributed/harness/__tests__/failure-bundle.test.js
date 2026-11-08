@@ -6,6 +6,9 @@ import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {ReportWriter} from '../report-writer.js';
 import {writeFailureBundlesForReport} from '../failure-bundle.js';
+// The registered cases classify failures; they model runs whose node-log
+// evidence is complete (failure-bundle-full-log-fixture.js).
+import {writeFailureBundlesForCompleteRun} from './failure-bundle-full-log-fixture.js';
 import {
   CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON,
   CONTROL_PLANE_QUIESCENCE_REASON,
@@ -1055,7 +1058,7 @@ describe('failure-bundle', () => {
     STARTUP_SEED_CONTACT_SEED_ADDRESS,
     TEST_COUNT_ZERO,
     UTF8_ENCODING,
-    writeFailureBundlesForReport,
+    writeFailureBundlesForReport: writeFailureBundlesForCompleteRun,
     writeFile,
     state: {
       get tempDir() {
@@ -1159,7 +1162,7 @@ describe('failure-bundle', () => {
     readFile,
     resolve,
     ReportWriter,
-    writeFailureBundlesForReport,
+    writeFailureBundlesForReport: writeFailureBundlesForCompleteRun,
     UTF8_ENCODING,
     state: {
       get tempDir() {

@@ -1,5 +1,8 @@
 import {PRIORITY_RECOVERY_INVARIANT_FALLBACK} from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT} from './failure-bundle-diagnostics-contract-reexport.js';
+import {
+  formatLogWindowCoverageVerdict,
+} from './failure-bundle-artifact-foundation.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   ZERO,
@@ -211,6 +214,7 @@ function buildScenarioTriageSummary(bundleJson, links = {}) {
       phase: bundleJson?.summary?.phase || null,
       rootCauseClass: bundleJson?.summary?.rootCauseClass || null,
       dominantReason: bundleJson?.summary?.dominantReason || null,
+      logWindowCoverage: bundleJson?.summary?.logWindowCoverage || null,
       failureClass:
         bundleJson?.summary?.failureClassification?.failureClass || null,
       failureClassSignals: Array.isArray(
@@ -314,6 +318,8 @@ function renderScenarioTriageSummaryMarkdown(summary) {
     `- Phase: ${summary?.summary?.phase || UNKNOWN_VALUE}`,
     `- Root Cause Class: ${summary?.summary?.rootCauseClass || UNKNOWN_VALUE}`,
     `- Dominant Reason: ${summary?.summary?.dominantReason || UNKNOWN_VALUE}`,
+    '- Log Window Coverage: ' +
+      formatLogWindowCoverageVerdict(summary?.summary?.logWindowCoverage),
     `- Failure Class: ${summary?.summary?.failureClass || UNKNOWN_VALUE}`,
     `- Readiness Failure: ${formatReadinessFailure(summary?.summary?.readinessFailure)}`,
     `- Failure Class Signals: ${

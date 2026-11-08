@@ -22,6 +22,12 @@ import {
   PORTS,
   REQUEST_CELL_AUTH,
 } from './cluster-test-helpers.js';
+import {DockerProvider} from '../docker-provider.js';
+import {
+  DOCKER_STREAM,
+  dockerLogFrame,
+  fakeDockerDaemon,
+} from './fake-docker-daemon.js';
 
 const REQUEST_CELL_AUTH_ENV_LINES = Object.freeze([
   `PGWIRE_AUTH_USER=${REQUEST_CELL_AUTH.USER}`,
@@ -1233,13 +1239,12 @@ test('Unit: _collectFailureLogs collects from all nodes', async () => {
     image: 'distributed-db:test',
   });
 
-  const logsCalled = [];
-  const mockProvider = {
-    getContainerLogs: async (containerId, _opts) => {
-      logsCalled.push(containerId);
-      return 'mock log output for ' + containerId;
-    },
-  };
+  // The real provider reads each node's log window from the fake daemon
+  // (NodeHandle.getLogWindow -> DockerProvider.readContainerLogWindow).
+  const dials = [];
+  const mockProvider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+  mockProvider._docker = fakeDockerDaemon((options) => [dockerLogFrame(
+    DOCKER_STREAM.STDOUT, 'mock log output for ' + options.path + '\n')], dials);
 
   cluster._nodes.set('n1', new NodeHandle(
     'n1', 'container-aaa', '10.0.0.1', NODE_ROLES.SEED,
@@ -1250,9 +1255,10 @@ test('Unit: _collectFailureLogs collects from all nodes', async () => {
     mockProvider,
   ));
 
-  // _collectFailureLogs writes to stderr; just verify it
-  // calls getLogs on each node without throwing
+  // _collectFailureLogs writes to stderr; just verify it reads each
+  // node's log window without throwing
   await cluster._collectFailureLogs();
+  const logsCalled = arrayMap(dials, (options) => options.path);
 
   assert.strictEqual(
     logsCalled.length,
@@ -1260,11 +1266,11 @@ test('Unit: _collectFailureLogs collects from all nodes', async () => {
     'should collect logs from both nodes',
   );
   assert.ok(
-    logsCalled.includes('container-aaa'),
+    logsCalled.includes('/containers/container-aaa/logs?'),
     'should collect logs from first node container',
   );
   assert.ok(
-    logsCalled.includes('container-bbb'),
+    logsCalled.includes('/containers/container-bbb/logs?'),
     'should collect logs from second node container',
   );
 });

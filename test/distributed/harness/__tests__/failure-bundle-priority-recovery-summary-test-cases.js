@@ -1,3 +1,4 @@
+import {writeRunFullNodeLogs} from './failure-bundle-full-log-fixture.js';
 export function registerFailureBundlePriorityRecoverySummaryTests(context) {
   const {
     it,
@@ -600,6 +601,7 @@ export function registerFailureBundlePriorityRecoverySummaryTests(context) {
       const writer = new ReportWriter(reportPath);
       writer.scenarios.push(scenario);
 
+      await writeRunFullNodeLogs(scenarioDir, scenario, ['node-1', 'seed-1']);
       const failureBundle = await writeFailureBundlesForReport({
         scenarios: writer.scenarios,
         reportOutputPath: reportPath,

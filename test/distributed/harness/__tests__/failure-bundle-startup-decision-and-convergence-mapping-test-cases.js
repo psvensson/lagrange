@@ -1,3 +1,4 @@
+import {writeRunFullNodeLogs} from './failure-bundle-full-log-fixture.js';
 export function registerFailureBundleStartupDecisionAndConvergenceMappingTests(context) {
   const {
     it,
@@ -141,6 +142,7 @@ export function registerFailureBundleStartupDecisionAndConvergenceMappingTests(c
         },
       };
 
+      await writeRunFullNodeLogs(scenarioDir, scenario, [STARTUP_SEED_CONTACT_NODE_ID, 'joiner-1', 'node-1', 'seed-1']);
       await writeFailureBundlesForReport({
         scenarios: [scenario],
         reportOutputPath: reportPath,
@@ -262,6 +264,7 @@ export function registerFailureBundleStartupDecisionAndConvergenceMappingTests(c
         },
       };
 
+      await writeRunFullNodeLogs(scenarioDir, scenario, [STARTUP_SEED_CONTACT_NODE_ID, 'joiner-1', 'node-1', 'seed-1']);
       await writeFailureBundlesForReport({
         scenarios: [scenario],
         reportOutputPath: reportPath,
@@ -440,6 +443,7 @@ export function registerFailureBundleStartupDecisionAndConvergenceMappingTests(c
       );
 
       const scenario = buildLoadLaneTimeoutFailureScenario();
+      await writeRunFullNodeLogs(scenarioDir, scenario, ['11601fe0-72d6-5853-8590-ec2881853e72']);
       await writeFailureBundlesForReport({
         scenarios: [scenario],
         reportOutputPath: reportPath,
@@ -511,6 +515,7 @@ export function registerFailureBundleStartupDecisionAndConvergenceMappingTests(c
       await writeFile(join(scenarioDir, 'seed-1.log'), 'convergence timeout\n');
 
       const scenario = buildConvergenceDiagnosticsOnlyScenario();
+      await writeRunFullNodeLogs(scenarioDir, scenario, ['joiner-1', 'node-1', 'seed-1']);
       await writeFailureBundlesForReport({
         scenarios: [scenario],
         reportOutputPath: reportPath,
@@ -626,6 +631,7 @@ export function registerFailureBundleStartupDecisionAndConvergenceMappingTests(c
         },
       });
 
+      await writeRunFullNodeLogs(scenarioDir, writer.scenarios[0], ['node-1', 'seed-1']);
       const {scenarioBundles, runBundle} = await writeFailureBundlesForReport({
         scenarios: writer.scenarios,
         reportOutputPath: reportPath,

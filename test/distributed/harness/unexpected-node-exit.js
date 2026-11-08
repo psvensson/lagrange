@@ -95,52 +95,70 @@ function withSweepTimeout(promise, timeoutMs, label) {
  * @param {Iterable<Object>} nodes - NodeHandle instances (entries lacking
  *   inspectContainerState — e.g. unit-test stubs — are skipped).
  * @param {(nodeId: string) => boolean} isNodeExpectedDown
+ * @param {(nodeId: string, finishedAt: ?string) => void} [onContainerExited]
+ *   told of EVERY exited container, expected-down or not (the capture quiet
+ *   bound, capture-quiet-bound.js, is an observation of any node's exit).
  * @returns {Promise<Array<Object>>} unexpected-exit entries
  */
-async function sweepUnexpectedNodeExits(nodes, isNodeExpectedDown) {
+async function sweepUnexpectedNodeExits(nodes, isNodeExpectedDown,
+  onContainerExited = () => {}) {
   const exits = [];
   for (const node of nodes) {
-    if (!node || typeof node.inspectContainerState !== 'function') {
+    const state = await inspectExitedContainer(node);
+    if (state === null) {
       continue;
     }
-    if (isNodeExpectedDown(String(node.id))) {
-      continue;
+    onContainerExited(String(node.id), state.finishedAt || null);
+    if (!isNodeExpectedDown(String(node.id))) {
+      exits.push(await buildUnexpectedExit(node, state));
     }
-    let state;
-    try {
-      state = await withSweepTimeout(
-        node.inspectContainerState(),
-        EXIT_SWEEP_PER_NODE_TIMEOUT_MS,
-        'Container inspect for node ' + node.id,
-      );
-    } catch (_error) {
-      continue;
-    }
-    if (!state || state.error || !isExitedContainerStatus(state.status)) {
-      continue;
-    }
-    let stdoutTail = null;
-    try {
-      stdoutTail = boundExitEvidenceTail(await withSweepTimeout(
-        node.getLogs({tail: EXIT_EVIDENCE_TAIL_LINES}),
-        EXIT_SWEEP_PER_NODE_TIMEOUT_MS,
-        'Exit-evidence log tail for node ' + node.id,
-      ));
-    } catch (_logError) {
-      // Exit evidence is best-effort; the exit fact itself stands.
-    }
-    exits.push({
-      nodeId: String(node.id),
-      role: node.role || null,
-      containerStatus: state.status,
-      exitCode: state.exitCode,
-      oomKilled: state.oomKilled === true,
-      finishedAt: state.finishedAt || null,
-      fatalLines: extractFatalLines(stdoutTail),
-      stdoutTail,
-    });
   }
   return exits;
+}
+
+// The node's container state when it has exited, else null (no inspect
+// method, inspect failure or timeout, missing container, still running).
+async function inspectExitedContainer(node) {
+  if (!node || typeof node.inspectContainerState !== 'function') {
+    return null;
+  }
+  let state;
+  try {
+    state = await withSweepTimeout(
+      node.inspectContainerState(),
+      EXIT_SWEEP_PER_NODE_TIMEOUT_MS,
+      'Container inspect for node ' + node.id,
+    );
+  } catch (_error) {
+    return null;
+  }
+  if (!state || state.error || !isExitedContainerStatus(state.status)) {
+    return null;
+  }
+  return state;
+}
+
+async function buildUnexpectedExit(node, state) {
+  let stdoutTail = null;
+  try {
+    stdoutTail = boundExitEvidenceTail(await withSweepTimeout(
+      node.getLogs({tail: EXIT_EVIDENCE_TAIL_LINES}),
+      EXIT_SWEEP_PER_NODE_TIMEOUT_MS,
+      'Exit-evidence log tail for node ' + node.id,
+    ));
+  } catch (_logError) {
+    // Exit evidence is best-effort; the exit fact itself stands.
+  }
+  return {
+    nodeId: String(node.id),
+    role: node.role || null,
+    containerStatus: state.status,
+    exitCode: state.exitCode,
+    oomKilled: state.oomKilled === true,
+    finishedAt: state.finishedAt || null,
+    fatalLines: extractFatalLines(stdoutTail),
+    stdoutTail,
+  };
 }
 
 /**

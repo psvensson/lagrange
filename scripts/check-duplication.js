@@ -257,8 +257,10 @@ const RATCHET_TARGETS = [
     // checker's hint.
     // Publisher and corpus-ratchet speedups: tightened 650/24370 -> 649/24346
     // on the checker's hint.
+    // Failure-bundle evidence completeness: tightened 24346 -> 24333 on the
+    // checker's hint.
     baselineCloneGroupCount: 649,
-    baselineDuplicatedLineCount: 24346,
+    baselineDuplicatedLineCount: 24333,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

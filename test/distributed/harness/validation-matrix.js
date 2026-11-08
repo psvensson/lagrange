@@ -325,6 +325,24 @@ const HARNESS_VERDICTS = Object.freeze({
   REFUSED_NOT_RUN: 'REFUSED_NOT_RUN',
 });
 const REFUSED_DEFAULT_REASON = 'refused_not_run';
+// The reason each scenario verdict rule records. LOG_WINDOW_COVERAGE_INCOMPLETE
+// is the non-measuring outcome of a failure bundle whose retained node-log
+// window did not cover first divergence to the end of the run: the analysis
+// was incomplete, so the subject fails and no product verdict is derived from
+// the part the bundle saw (failure-bundle-artifact-foundation.js
+// LOG_WINDOW_COVERAGE owns the coverage record).
+const SCENARIO_VERDICT_REASON = Object.freeze({
+  SCENARIO_PASSED: 'scenario_passed',
+  LOG_WINDOW_COVERAGE_INCOMPLETE: 'log_window_coverage_incomplete',
+  HARNESS_CONNECTIVITY_OR_SYSTEM_FAILURE:
+    'harness_connectivity_or_system_failure',
+  CORE_INVARIANT_OR_SAFETY_VIOLATION: 'core_invariant_or_safety_violation',
+  TOPOLOGY_PROGRESS_BLOCKED: 'topology_progress_blocked',
+  PERFORMANCE_METRIC_EXCEEDED_LIMITS: 'performance_metric_exceeded_limits',
+  EXECUTION_INCOMPLETE_OR_METRICS_MISSING:
+    'execution_incomplete_or_metrics_missing',
+  UNKNOWN_FAILURE_MODE: 'unknown_failure_mode',
+});
 
 const SCENARIO_HARNESS_INVALID_PATTERNS = Object.freeze([
   'readiness probe timed out',
@@ -527,6 +545,8 @@ function buildScenarioVerdictEvidence(result) {
 
   return {
     passed: result?.passed === true,
+    hasIncompleteLogWindowCoverage:
+      result?.logWindowCoverage?.complete === false,
     hasLoadMetrics: loadMetrics !== null,
     hasNoCompletedOperations: loadMetrics !== null && totalOperations === ZERO,
     hasHarnessFailureSignal: messageMatchesAnyPattern(
@@ -565,39 +585,44 @@ function buildScenarioVerdictEvidence(result) {
 const SCENARIO_VERDICT_RULES = Object.freeze([
   {
     verdict: HARNESS_VERDICTS.PASS,
-    reason: 'scenario_passed',
+    reason: SCENARIO_VERDICT_REASON.SCENARIO_PASSED,
     matches: (evidence) => evidence.passed,
   },
   {
+    verdict: HARNESS_VERDICTS.BLOCK_EVIDENCE_INCOMPLETE,
+    reason: SCENARIO_VERDICT_REASON.LOG_WINDOW_COVERAGE_INCOMPLETE,
+    matches: (evidence) => evidence.hasIncompleteLogWindowCoverage,
+  },
+  {
     verdict: HARNESS_VERDICTS.BLOCK_HARNESS_INVALID,
-    reason: 'harness_connectivity_or_system_failure',
+    reason: SCENARIO_VERDICT_REASON.HARNESS_CONNECTIVITY_OR_SYSTEM_FAILURE,
     matches: (evidence) =>
       evidence.hasHarnessFailureSignal &&
       evidence.hasMeasuredProductEvidence !== true,
   },
   {
     verdict: HARNESS_VERDICTS.FAIL_CORE_INVARIANT,
-    reason: 'core_invariant_or_safety_violation',
+    reason: SCENARIO_VERDICT_REASON.CORE_INVARIANT_OR_SAFETY_VIOLATION,
     matches: (evidence) => evidence.hasCoreInvariantSignal,
   },
   {
     verdict: HARNESS_VERDICTS.BLOCK_TOPOLOGY_CONVERGENCE,
-    reason: 'topology_progress_blocked',
+    reason: SCENARIO_VERDICT_REASON.TOPOLOGY_PROGRESS_BLOCKED,
     matches: (evidence) => evidence.hasMeasuredConvergenceSignal,
   },
   {
     verdict: HARNESS_VERDICTS.BLOCK_PERFORMANCE_REGRESSION,
-    reason: 'performance_metric_exceeded_limits',
+    reason: SCENARIO_VERDICT_REASON.PERFORMANCE_METRIC_EXCEEDED_LIMITS,
     matches: (evidence) => evidence.hasPerformanceRegressionSignal,
   },
   {
     verdict: HARNESS_VERDICTS.BLOCK_EVIDENCE_INCOMPLETE,
-    reason: 'execution_incomplete_or_metrics_missing',
+    reason: SCENARIO_VERDICT_REASON.EXECUTION_INCOMPLETE_OR_METRICS_MISSING,
     matches: (evidence) => evidence.hasEvidenceIncompleteSignal,
   },
   {
     verdict: HARNESS_VERDICTS.BLOCK_PERFORMANCE_INVALID,
-    reason: 'unknown_failure_mode',
+    reason: SCENARIO_VERDICT_REASON.UNKNOWN_FAILURE_MODE,
     matches: () => true,
   },
 ]);
@@ -771,6 +796,7 @@ export {
   DEFAULT_SCENARIO,
   DEFAULT_SHIP_GATE,
   HARNESS_VERDICTS,
+  SCENARIO_VERDICT_REASON,
   extractNodeJoinLoadMetrics,
   extractNodeFailureRebalanceLoadMetrics,
   summarizeValidationRuns,

@@ -11,7 +11,7 @@ import {
   computeStandardSummary,
   JSON_INDENT,
 } from '../report-writer.js';
-import {writeFailureBundlesForReport} from '../failure-bundle.js';
+import {writeFailureBundlesForCompleteRun} from './failure-bundle-full-log-fixture.js';
 
 const JSON_INDENT_EXPECTED = 2;
 describe('ReportWriter', () => {
@@ -605,7 +605,7 @@ describe('ReportWriter', () => {
           },
         };
 
-        await writeFailureBundlesForReport({
+        await writeFailureBundlesForCompleteRun({
           scenarios: writer.scenarios,
           reportOutputPath: outputPath,
           outputDir: tempDir,

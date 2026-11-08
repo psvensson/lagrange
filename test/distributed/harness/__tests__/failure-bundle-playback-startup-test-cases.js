@@ -1,3 +1,4 @@
+import {writeRunFullNodeLogs} from './failure-bundle-full-log-fixture.js';
 export function registerFailureBundlePlaybackStartupTests({
   it,
   assert,
@@ -44,6 +45,7 @@ export function registerFailureBundlePlaybackStartupTests({
       buildPlaybackDerivedFailureResult(),
     );
 
+    await writeRunFullNodeLogs(scenarioDir, writer.scenarios[0], ['node-1']);
     const {scenarioBundles, runBundle} = await writeFailureBundlesForReport({
       scenarios: writer.scenarios,
       reportOutputPath: state.reportPath,
@@ -128,6 +130,7 @@ export function registerFailureBundlePlaybackStartupTests({
       buildPlaybackDerivedFailureResult(),
     );
 
+    await writeRunFullNodeLogs(scenarioDir, writer.scenarios[0], ['node-1']);
     const {scenarioBundles, runBundle} = await writeFailureBundlesForReport({
       scenarios: writer.scenarios,
       reportOutputPath: state.reportPath,
@@ -310,6 +313,7 @@ export function registerFailureBundlePlaybackStartupTests({
       buildPlaybackDerivedFailureResult(),
     );
 
+    await writeRunFullNodeLogs(scenarioDir, writer.scenarios[0], ['node-1']);
     const {scenarioBundles} = await writeFailureBundlesForReport({
       scenarios: writer.scenarios,
       reportOutputPath: state.reportPath,
@@ -1094,6 +1098,7 @@ export function registerFailureBundlePlaybackStartupTests({
       buildPlaybackDerivedFailureResult(),
     );
 
+    await writeRunFullNodeLogs(scenarioDir, writer.scenarios[0], ['joiner-1', 'node-1', 'seed-1']);
     const {scenarioBundles, runBundle} = await writeFailureBundlesForReport({
       scenarios: writer.scenarios,
       reportOutputPath: state.reportPath,

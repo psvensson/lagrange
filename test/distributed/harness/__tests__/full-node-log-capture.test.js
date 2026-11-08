@@ -15,6 +15,10 @@ import {
   fullLogDestPath,
   STALE_CAPTURE_GAP_MS,
 } from '../full-node-log-capture.js';
+import {resolveCaptureQuietBound} from '../capture-quiet-bound.js';
+import {CAPTURE_QUIET_BOUND_SOURCE, NODE_LIFECYCLE_ACTION} from '../constants.js';
+
+const atTeardown = (teardownWallMs) => resolveCaptureQuietBound({teardownWallMs});
 
 const STREAM_STDOUT = 1;
 const FRAME_HEADER_BYTES = 8;
@@ -120,7 +124,7 @@ describe('finalizeFileBasedCapture', () => {
     const r = await finalizeFileBasedCapture({
       hostFilePath,
       destGzPath,
-      teardownWallMs,
+      quietBound: atTeardown(teardownWallMs),
     });
     assert.equal(r.lineCount, 2);
     assert.equal(r.completeness.complete, true, 'tail reaches teardown');
@@ -140,16 +144,34 @@ describe('finalizeFileBasedCapture', () => {
       JSON.stringify({time: '2026-06-09T13:00:30.000Z', msg: 'last'}) + '\n',
       'utf8',
     );
-    const r = await finalizeFileBasedCapture({hostFilePath, destGzPath, teardownWallMs});
+    const r = await finalizeFileBasedCapture({hostFilePath, destGzPath,
+      quietBound: atTeardown(teardownWallMs)});
     assert.equal(r.completeness.complete, false);
     assert.equal(r.completeness.reason, 'stale-tail');
+  });
+
+  it('judges a file-logged node to its observed container exit', async () => {
+    const hostFilePath = path.join(workspace, 'exited.ndjson');
+    const destGzPath = path.join(workspace, 'out', 'exited.log.gz');
+    const exitMs = Date.parse('2026-06-09T13:00:31.000Z');
+    await writeFile(hostFilePath,
+      JSON.stringify({time: '2026-06-09T13:00:30.000Z', msg: 'last'}) +
+        '\nFATAL ERROR: Reached heap limit\n', 'utf8');
+    const quietBound = resolveCaptureQuietBound({
+      teardownWallMs: Date.parse('2026-06-09T13:10:00.000Z'),
+      observedExitMs: exitMs});
+    const r = await finalizeFileBasedCapture({hostFilePath, destGzPath, quietBound});
+    assert.equal(r.completeness.complete, true);
+    assert.equal(r.completeness.gapMs, 1000);
+    assert.deepEqual(r.completeness.quietBound, {atMs: exitMs,
+      source: CAPTURE_QUIET_BOUND_SOURCE.CONTAINER_EXIT, action: null});
   });
 
   it('reports incomplete (no lines) when the host file is missing', async () => {
     const r = await finalizeFileBasedCapture({
       hostFilePath: path.join(workspace, 'does-not-exist.ndjson'),
       destGzPath: path.join(workspace, 'out', 'missing.log.gz'),
-      teardownWallMs: Date.now(),
+      quietBound: atTeardown(Date.now()),
     });
     assert.equal(r.completeness.complete, false);
     assert.equal(r.completeness.reason, 'no-lines-captured');
@@ -188,35 +210,76 @@ describe('findBootSourceProvenance', () => {
 });
 
 describe('assessCaptureCompleteness', () => {
-  it('flags a capture with no lines', () => {
+  const TEARDOWN_MS = 1_000_000;
+  const KILLED = resolveCaptureQuietBound({teardownWallMs: TEARDOWN_MS,
+    expectedDown: {action: NODE_LIFECYCLE_ACTION.KILL, sinceMs: 700_000}});
+  const EXITED = resolveCaptureQuietBound({teardownWallMs: TEARDOWN_MS,
+    observedExitMs: 600_000});
+
+  it('flags a capture with no lines, naming its bound', () => {
     const r = assessCaptureCompleteness({
       lastLineWallMs: 0,
-      teardownWallMs: 1000,
       lineCount: 0,
+      quietBound: EXITED,
     });
     assert.equal(r.complete, false);
     assert.equal(r.reason, 'no-lines-captured');
+    assert.equal(r.quietBound, EXITED);
   });
 
   it('flags a stale tail (node went quiet long before teardown)', () => {
-    const teardownWallMs = 1_000_000;
     const r = assessCaptureCompleteness({
-      lastLineWallMs: teardownWallMs - (STALE_CAPTURE_GAP_MS + 1),
-      teardownWallMs,
+      lastLineWallMs: TEARDOWN_MS - (STALE_CAPTURE_GAP_MS + 1),
       lineCount: 500,
+      quietBound: atTeardown(TEARDOWN_MS),
     });
     assert.equal(r.complete, false);
     assert.equal(r.reason, 'stale-tail');
+    assert.equal(r.quietBound.source, CAPTURE_QUIET_BOUND_SOURCE.TEARDOWN);
   });
 
   it('accepts a capture whose tail reaches teardown', () => {
-    const teardownWallMs = 1_000_000;
     const r = assessCaptureCompleteness({
-      lastLineWallMs: teardownWallMs - 100,
-      teardownWallMs,
+      lastLineWallMs: TEARDOWN_MS - 100,
       lineCount: 500,
+      quietBound: atTeardown(TEARDOWN_MS),
     });
     assert.equal(r.complete, true);
+    assert.equal(r.gapMs, 100);
+  });
+
+  it('judges a harness-stopped node to the stop mark and names the action',
+    () => {
+      const r = assessCaptureCompleteness({lastLineWallMs: 699_000,
+        lineCount: 500, quietBound: KILLED});
+      assert.equal(r.complete, true);
+      assert.deepEqual(r.quietBound, {atMs: 700_000,
+        source: CAPTURE_QUIET_BOUND_SOURCE.HARNESS_STOP,
+        action: NODE_LIFECYCLE_ACTION.KILL});
+      const quietBefore = assessCaptureCompleteness({
+        lastLineWallMs: 700_000 - STALE_CAPTURE_GAP_MS - 1,
+        lineCount: 500, quietBound: KILLED});
+      assert.equal(quietBefore.reason, 'stale-tail');
+    });
+
+  it('judges a node that exited on its own to its observed exit', () => {
+    const r = assessCaptureCompleteness({lastLineWallMs: 599_500,
+      lineCount: 500, quietBound: EXITED});
+    assert.equal(r.complete, true);
+    assert.equal(r.gapMs, 500);
+    assert.equal(r.quietBound.source, CAPTURE_QUIET_BOUND_SOURCE.CONTAINER_EXIT);
+  });
+
+  it('clamps the gap at zero for lines after the bound', () => {
+    const r = assessCaptureCompleteness({lastLineWallMs: 701_000,
+      lineCount: 500, quietBound: KILLED});
+    assert.equal(r.complete, true);
+    assert.equal(r.gapMs, 0);
+  });
+
+  it('refuses to judge without a quiet bound', () => {
+    assert.throws(() => assessCaptureCompleteness({lastLineWallMs: 1,
+      lineCount: 1}), TypeError);
   });
 });
 

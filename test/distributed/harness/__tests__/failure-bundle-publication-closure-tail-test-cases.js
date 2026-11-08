@@ -1,6 +1,6 @@
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
-import {writeFailureBundlesForReport} from '../failure-bundle.js';
+import {writeFailureBundlesForCompleteRun} from './failure-bundle-full-log-fixture.js';
 import {FAILURE_BUNDLE_FOUNDATION} from '../failure-bundle-foundation.js';
 
 const {
@@ -140,7 +140,7 @@ export function registerFailureBundlePublicationClosureTailTests({
         },
       }];
 
-      const {scenarioBundles} = await writeFailureBundlesForReport({
+      const {scenarioBundles} = await writeFailureBundlesForCompleteRun({
         scenarios,
         reportOutputPath: state.reportPath,
         outputDir: state.tempDir,
@@ -269,7 +269,7 @@ export function registerFailureBundlePublicationClosureTailTests({
         },
       }];
 
-      const {scenarioBundles} = await writeFailureBundlesForReport({
+      const {scenarioBundles} = await writeFailureBundlesForCompleteRun({
         scenarios,
         reportOutputPath: state.reportPath,
         outputDir: state.tempDir,
@@ -483,7 +483,7 @@ export function registerFailureBundlePublicationClosureTailTests({
         },
       }];
 
-      const {scenarioBundles} = await writeFailureBundlesForReport({
+      const {scenarioBundles} = await writeFailureBundlesForCompleteRun({
         scenarios,
         reportOutputPath: state.reportPath,
         outputDir: state.tempDir,

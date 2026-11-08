@@ -1211,6 +1211,12 @@ class NodeHandle {
     return this._dockerProvider.getContainerLogs(this.containerId, options);
   }
 
+  /** The last maxRetainedBytes of the container's output, streamed. */
+  async getLogWindow({maxRetainedBytes}) {
+    return this._dockerProvider.readContainerLogWindow(this.containerId,
+      {maxRetainedBytes});
+  }
+
   /**
    * Inspect this node's container runtime state (CL-030: the
    * unexpected-exit sweep reads this at scenario-failure time).
