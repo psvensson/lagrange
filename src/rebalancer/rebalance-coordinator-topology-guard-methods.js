@@ -317,12 +317,20 @@ class RebalanceCoordinatorTopologyGuardMethods {
     );
   }
 
-  async resolveTopologyGuardTargetReplicaCount({partitionId, entityType}) {
+  async resolveTopologyGuardTargetReplicaCount({
+    partitionId,
+    entityType,
+    requireAuthoritative = false,
+  }) {
     if (entityType !== SERVICE_TYPE.PARTITION) {
       return null;
     }
     try {
-      const policy = await readPolicyForPartition(this.tablePolicyService, partitionId);
+      const policy = await readPolicyForPartition(
+        this.tablePolicyService,
+        partitionId,
+        requireAuthoritative ? {requireAuthoritative: true} : undefined,
+      );
       return requirePolicyTargetReplicaCount(policy);
     } catch {
       return null;
@@ -333,7 +341,11 @@ class RebalanceCoordinatorTopologyGuardMethods {
     partitionId,
     entityType,
   }) {
-    return this.resolveTopologyGuardTargetReplicaCount({partitionId, entityType});
+    return this.resolveTopologyGuardTargetReplicaCount({
+      partitionId,
+      entityType,
+      requireAuthoritative: true,
+    });
   }
 
   isPrioritySurplusRemovePlacementFenceApplicable(context) {
@@ -348,40 +360,29 @@ class RebalanceCoordinatorTopologyGuardMethods {
 
   buildPrioritySurplusRemovePlacementFenceError(context, decision) {
     const reason = PRIORITY_SURPLUS_REMOVE_FENCE_REASON;
+    const replicaId = String(context?.move?.replicaId || 'unknown');
+    const partitionId = String(context?.partitionId || 'unknown');
     const error = new Error(
-      `Priority surplus REMOVE placement fence blocked ${String(
-        context?.move?.replicaId || 'unknown',
-      )} for ${String(context?.partitionId || 'unknown')}: ${decision.state}`,
+      `Priority surplus REMOVE placement fence blocked ${replicaId} for ${partitionId}: ${decision.state}`,
     );
     error.rebalanceSkipReason = REBALANCER_SKIP_REASON.SAFETY_BLOCKED;
     error.admissionResult = Object.freeze({
       allowed: false,
       decisionType: STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
       reason,
-      blockingReasons: Object.freeze([
-        Object.freeze({code: reason, state: decision.state}),
-      ]),
+      blockingReasons: Object.freeze([Object.freeze({code: reason, state: decision.state})]),
       placementFenceDecision: decision,
     });
     return error;
   }
 
-  /**
-   * Revalidate a priority standalone REMOVE at the destructive commit boundary.
-   * Cache-local placement may propose the move, but it cannot authorize it.
-   *
-   * @param {Object} context
-   * @return {Promise<void>}
-   * @private
-   */
   async ensurePrioritySurplusRemovePlacementFenceAllowed(context) {
-    if (!this.isPrioritySurplusRemovePlacementFenceApplicable(context)) {
-      return;
-    }
+    if (!this.isPrioritySurplusRemovePlacementFenceApplicable(context)) return;
+    const entityType = context.entityType || SERVICE_TYPE.PARTITION;
     const targetReplicaCount =
       await this.resolvePrioritySurplusRemoveFenceTargetReplicaCount({
         partitionId: context.partitionId,
-        entityType: context.entityType || SERVICE_TYPE.PARTITION,
+        entityType,
       });
     let observation = Object.freeze({
       available: false,
@@ -393,12 +394,12 @@ class RebalanceCoordinatorTopologyGuardMethods {
       try {
         observation = await this.getAuthoritativeEntityServiceRowsObservation({
           partitionId: context.partitionId,
-          entityType: context.entityType || SERVICE_TYPE.PARTITION,
+          entityType,
           entityId: context.entityId || context.partitionId,
           readOptions: {
             authoritativeReadMode:
               CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-            leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+            leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
           },
         });
       } catch (error) {
@@ -416,13 +417,9 @@ class RebalanceCoordinatorTopologyGuardMethods {
       targetReplicaCount,
       capturedAtMs: this.nowFn(),
     });
-    if (decision.allowed === true) {
-      return;
+    if (decision.allowed !== true) {
+      throw this.buildPrioritySurplusRemovePlacementFenceError(context, decision);
     }
-    throw this.buildPrioritySurplusRemovePlacementFenceError(
-      context,
-      decision,
-    );
   }
 
   /**

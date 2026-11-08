@@ -6,7 +6,11 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {TablePolicyService} from '../../src/policy/table-policy-service.js';
 import {NUM, STRING, TYPEOF} from '../../src/constants/index.js';
-import {POLICY_ERROR_CODE, POLICY_ERROR_MSG} from '../../src/policy/policy-constants.js';
+import {
+  POLICY_AUTHORITY_STATE,
+  POLICY_ERROR_CODE,
+  POLICY_ERROR_MSG,
+} from '../../src/policy/policy-constants.js';
 import {CDC_TABLE_POLICY_REFUSAL} from '../../src/cache/cdc-table-policy.js';
 import {
   STORAGE_PLACEMENT_CONSTRAINT,
@@ -552,16 +556,15 @@ test('TablePolicyService - getDefaultMessageGroupPolicy returns complete policy'
     t.end();
   });
 
-test('TablePolicyService - getMessageGroupPolicy without engine returns default',
+test('TablePolicyService - unavailable message group read is retryable, never a default',
   async (t) => {
     const service = new TablePolicyService();
-    const policy = await service.getMessageGroupPolicy('mg-1');
-
-    t.equal(policy.targetReplicaCount, 3,
-      'Should return default policy without engine');
-    t.equal(policy.ensureLocalAccess, true,
-      'Should have ensureLocalAccess');
-    t.end();
+    await t.rejects(service.getMessageGroupPolicy('mg-1'), {
+      code: POLICY_ERROR_CODE.READ_UNAVAILABLE,
+      deferRetry: true,
+    });
+    const decision = await service.resolveMessageGroupPolicyFact('mg-1');
+    t.equal(decision.state, POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE);
   });
 
 test('TablePolicyService - getMessageGroupPolicy reads the configured system-cache observation',
@@ -575,6 +578,7 @@ test('TablePolicyService - getMessageGroupPolicy reads the configured system-cac
           return [
             {
               group_id: 'mg-self-hosted-1',
+              replica_count: 3,
               policy: JSON.stringify({
                 ensureLocalAccess: false,
                 placementConstraints: {
@@ -589,6 +593,8 @@ test('TablePolicyService - getMessageGroupPolicy reads the configured system-cac
 
     const policy = await service.getMessageGroupPolicy('mg-self-hosted-1');
 
+    t.equal(policy.targetReplicaCount, 3,
+      'Should use declared row replica_count');
     t.equal(policy.ensureLocalAccess, false,
       'Should use cached ensureLocalAccess override');
     t.equal(policy.placementConstraints.spreadAcrossNodes, false,
@@ -774,6 +780,7 @@ test('TablePolicyService - getEffectiveMessageGroupStorageConstraints',
           return {
             rows: [{
               group_id: 'mg-1',
+              replica_count: 3,
               policy: JSON.stringify({
                 placementConstraints: {
                   [STORAGE_PLACEMENT_CONSTRAINT
@@ -859,16 +866,111 @@ test('TablePolicyService - message group policy cache works',
       sqlQueryEngine: mockEngine,
     });
 
-    await service.getMessageGroupPolicy('mg-1');
+    const first = await service.getMessageGroupPolicy('mg-1');
     t.equal(callCount, 1, 'First call should query SQL engine');
 
-    await service.getMessageGroupPolicy('mg-1');
-    t.equal(callCount, 1, 'Second call should use cache');
+    t.equal(await service.getMessageGroupPolicy('mg-1'), first);
+    t.equal(callCount, 2, 'Every read still observes message-group availability');
 
     service.clearCache();
-    await service.getMessageGroupPolicy('mg-1');
-    t.equal(callCount, 2,
-      'After clearCache should query SQL engine again');
+    t.not(await service.getMessageGroupPolicy('mg-1'), first);
+    t.equal(callCount, 3,
+      'After clearCache should query and resolve policy again');
+    t.end();
+  });
+
+test('TablePolicyService - resolveMessageGroupPolicyFact distinguishes authoritative policy, authoritative absence, and stale/unavailable evidence',
+  async (t) => {
+    let row = {
+      group_id: 'mg-fact',
+      replica_count: 5,
+      policy: JSON.stringify({targetReplicaCount: 5}),
+    };
+    let readAvailable = true;
+    let witnessRole = 'leader';
+    let rowSetComplete = true;
+    const service = new TablePolicyService({
+      controlPlaneSystemTableGateway: {
+        readAuthoritativeRows: async () => {
+          if (!readAvailable) {
+            return {success: false, error: 'authority_unavailable'};
+          }
+          return {
+            success: true,
+            rowSetComplete,
+            rows: row ? [row] : [],
+            readAuthorityWitness: {
+              state: 'observed',
+              partitionId: 'message_groups-p1',
+              servingNodeId: 'node-1',
+              servingReplicaId: 'message_groups-p1-r1',
+              role: witnessRole,
+              leaderNodeId: 'node-1',
+              term: 1,
+              commitIndex: 1,
+              appliedIndex: 1,
+              observedAtMs: 1_000_000,
+            },
+          };
+        },
+      },
+    });
+
+    const validDecision = await service.resolveMessageGroupPolicyFact(
+      'mg-fact',
+      {requireAuthoritative: true},
+    );
+    t.equal(validDecision.state, POLICY_AUTHORITY_STATE.AUTHORITATIVE_POLICY);
+    t.equal(validDecision.minReplicaCount, 5);
+    t.equal(validDecision.targetReplicaCount, 5);
+
+    witnessRole = 'follower';
+    const followerDecision = await service.resolveMessageGroupPolicyFact(
+      'mg-fact',
+      {requireAuthoritative: true},
+    );
+    t.equal(followerDecision.state, POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE);
+
+    witnessRole = 'leader';
+    rowSetComplete = false;
+    const incompleteDecision = await service.resolveMessageGroupPolicyFact(
+      'mg-fact',
+      {requireAuthoritative: true},
+    );
+    t.equal(incompleteDecision.state, POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE);
+
+    rowSetComplete = true;
+    readAvailable = false;
+    const staleDecision = await service.resolveMessageGroupPolicyFact(
+      'mg-fact',
+      {requireAuthoritative: true},
+    );
+    t.equal(staleDecision.state, POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE);
+    t.equal(staleDecision.minReplicaCount, null);
+
+    readAvailable = true;
+    row = null;
+    const absentDecision = await service.resolveMessageGroupPolicyFact(
+      'mg-fact',
+      {requireAuthoritative: true},
+    );
+    t.equal(absentDecision.state, POLICY_AUTHORITY_STATE.AUTHORITATIVE_ABSENCE);
+    t.equal(absentDecision.minReplicaCount, null);
+
+    const cacheOnlyService = new TablePolicyService({
+      systemTableCache: {
+        get: () => ({
+          group_id: 'mg-fact',
+          replica_count: 5,
+          policy: JSON.stringify({targetReplicaCount: 5}),
+        }),
+      },
+    });
+    const cacheOnlyDecision = await cacheOnlyService.resolveMessageGroupPolicyFact(
+      'mg-fact',
+      {requireAuthoritative: true},
+    );
+    t.equal(cacheOnlyDecision.state, POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE);
     t.end();
   });
 
@@ -1050,5 +1152,111 @@ test('site 6: an unavailable committed read refuses the update typed and ' +
   t.equal(refusal?.retryAfterMs, 250, 'with the authority\'s retryAfterMs');
   t.equal(gateway.writes.length, 0, 'no write without a committed base');
   t.equal(gateway.projectionReads, 0, 'no projection read');
+  t.end();
+});
+
+test('strict policy fact resolution rejects in-flight stale reads across ' +
+  'single and multi-write policy updates without pairing cached policy ' +
+  'with a stale witness', async (t) => {
+  let row = {
+    table_id: 'table-fenced',
+    table_policies: JSON.stringify({
+      minReplicaCount: 3,
+    }),
+    updated_at: 100,
+  };
+  let releaseHeldRead = null;
+  const heldReadGate = new Promise((resolve) => {
+    releaseHeldRead = resolve;
+  });
+  let holdNextRead = false;
+  const gateway = {
+    async readAuthoritativeRows() {
+      const captured = {...row};
+      if (holdNextRead) {
+        holdNextRead = false;
+        await heldReadGate;
+      }
+      return {
+        success: true,
+        source: 'owner_rpc_lane',
+        rowSetComplete: true,
+        rows: [captured],
+        readAuthorityWitness: {
+          state: 'observed',
+          role: 'leader',
+          partitionId: 'tables-p1',
+          servingNodeId: 'n1',
+          servingReplicaId: 'tables-p1-r1',
+          term: 1,
+          commitIndex: captured.updated_at,
+          appliedIndex: captured.updated_at,
+          observedAtMs: 1700000000000,
+        },
+      };
+    },
+    async submitMutation(mutation) {
+      row = {
+        ...row,
+        table_policies: mutation.data.table_policies,
+        updated_at: mutation.data.updated_at,
+      };
+      return {
+        success: true,
+        outcome: 'applied',
+        partitionResult: {affectedRows: 1},
+      };
+    },
+  };
+  const service = policyServiceOver(gateway);
+
+  // Warm committed base at 3, then hold an authoritative read at 3 while
+  // two updates (3 -> 5 -> 7) commit.
+  await service.resolveTablePolicyFact('table-fenced', {
+    requireAuthoritative: true,
+  });
+  holdNextRead = true;
+  const inFlightStaleRead = service.resolveTablePolicyFact('table-fenced', {
+    requireAuthoritative: true,
+  });
+  await Promise.resolve();
+  await service.updateTablePolicy('table-fenced', {
+    minReplicaCount: 5,
+  });
+  await service.updateTablePolicy('table-fenced', {
+    minReplicaCount: 7,
+  });
+  releaseHeldRead();
+
+  const staleFact = await inFlightStaleRead;
+  t.equal(
+    staleFact.state,
+    'unavailable_or_stale',
+    'in-flight pre-update read must be rejected after 3 -> 5 -> 7 commits',
+  );
+  t.equal(
+    staleFact.readAuthorityWitness,
+    null,
+    'rejected stale policy read must not retain a witness',
+  );
+  t.equal(
+    service.committedPolicyFences.has('table-fenced'),
+    true,
+    'stale read must not delete the active committed policy fence',
+  );
+
+  // A subsequent fresh read observing the committed 7 snapshot succeeds and
+  // clears the fence.
+  const freshFact = await service.resolveTablePolicyFact('table-fenced', {
+    requireAuthoritative: true,
+  });
+  t.equal(freshFact.state, 'authoritative_policy');
+  t.equal(freshFact.minReplicaCount, 7);
+  t.equal(freshFact.readAuthorityWitness?.commitIndex, row.updated_at);
+  t.equal(
+    service.committedPolicyFences.has('table-fenced'),
+    false,
+    'fence clears once authoritative read catches up to latest commit',
+  );
   t.end();
 });

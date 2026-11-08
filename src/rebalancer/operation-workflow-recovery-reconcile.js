@@ -1,4 +1,8 @@
 import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+
+const LOCAL_STR_ACTIVE_REPLICAS_BELOW_MINIMUM =
+  'would drop active replicas below minimum';
+const LOCAL_STR_SAFETY_POLICY_UNAVAILABLE = 'safety policy unavailable';
 import {OPERATION_RESERVATION_RECOVERY_OUTCOME} from
   './operation-reservation-attempt-outcome.js';
 import {OperationWorkflowRecoveryDrain} from './operation-workflow-recovery-drain.js';
@@ -396,7 +400,11 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
 
       if (
         recoveryOutcome === OPERATION_RESERVATION_RECOVERY_OUTCOME
-          .RESERVATION_BACKED_PENDING_REDRIVEN
+          .RESERVATION_BACKED_PENDING_REDRIVEN ||
+        this.isRemoveInitialDispatchPhase({
+          type: op.type,
+          workflowStep: originalStep,
+        })
       ) {
         result.reconciled++;
       } else if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
@@ -441,6 +449,8 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
         OPERATION_WORKFLOW_OWNER_LITERAL
           .WOULD_DROP_VOTER_DASH_READY_REPLICAS_BELOW_MINIMUM_2,
       ) ||
+      normalized.includes(LOCAL_STR_ACTIVE_REPLICAS_BELOW_MINIMUM) ||
+      normalized.includes(LOCAL_STR_SAFETY_POLICY_UNAVAILABLE) ||
       normalized.includes(
         OPERATION_WORKFLOW_OWNER_LITERAL.SAFETY_CHECK_UNAVAILABLE_2,
       ) ||

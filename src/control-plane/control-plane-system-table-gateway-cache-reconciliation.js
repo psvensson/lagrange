@@ -344,6 +344,9 @@ function applyAuthoritativeUpserts(options) {
       canonicalRow,
       options.upsertOptions,
     );
+    if (Array.isArray(options.changedRowIds)) {
+      options.changedRowIds.push(normalizedKey);
+    }
     mutationCount += 1;
   }
   return mutationCount;
@@ -372,6 +375,9 @@ function applyMissingRowDeletes(options) {
       cachedRow,
       options.causeOptions,
     );
+    if (Array.isArray(options.changedRowIds)) {
+      options.changedRowIds.push(String(key));
+    }
     mutationCount += 1;
   }
   return mutationCount;
@@ -553,6 +559,7 @@ function buildReconciliationContext(options) {
     cachedEntries,
     rowComparator,
     causeOptions,
+    changedRowIds: [],
   };
 }
 
@@ -607,9 +614,12 @@ function applyCacheReconciliation(context, indexes) {
     causeOptions: context.causeOptions,
     upsertOptions,
     deleteMissingPolicy: context.deleteMissingPolicy,
+    changedRowIds: context.changedRowIds,
   };
-  return applyAuthoritativeUpserts(mutationOptions) +
-    applyMissingRowDeletes(mutationOptions);
+  return (
+    applyAuthoritativeUpserts(mutationOptions) +
+    applyMissingRowDeletes(mutationOptions)
+  );
 }
 
 function observationCacheIsVerified(context, indexes) {
@@ -631,6 +641,7 @@ function buildReconciliationSuccess(context, mutationCount, publication) {
     tableName: context.tableName,
     reconcileIntent: context.reconcileIntent,
     mutationCount,
+    changedRowIds: [...context.changedRowIds],
     authoritativeObservedAtMs: publication.observedAtMs,
     outcome: mutationCount > 0 ?
       CONTROL_PLANE_MUTATION_OUTCOME.APPLIED :

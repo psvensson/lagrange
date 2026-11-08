@@ -518,10 +518,17 @@ class AdminControlSnapshotControlPlaneDiagnostics
           },
         );
     }
+    const hasSyncReadinessResolution =
+      typeof this.controlPlaneReadinessService?.getAllNodeReadinessSync ===
+        'function';
     const readinessEntries = await this.resolveControlPlaneReadinessEntries({
       allowAuthoritativeRefresh:
         !boundedObservationProbe &&
-        options.allowAuthoritativeReadinessRefresh !== false,
+        (options.allowAuthoritativeReadinessRefresh === true ||
+          ((options.preferAuthoritativePublicationRead === true ||
+            options.reconcileAuthoritativeMembershipPublication === true ||
+            !hasSyncReadinessResolution) &&
+            options.allowAuthoritativeReadinessRefresh !== false)),
       allowStaleOnCacheChange:
         options.allowStaleReadinessOnCacheChange !== false,
     });
@@ -624,9 +631,14 @@ class AdminControlSnapshotControlPlaneDiagnostics
         serviceRows,
         logsTable: priorityRecoveryPressureDiagnostics,
       });
-    this.schedulePriorityRecoveryDispatchPendingReentries(
-      priorityRecoveryDecisionSnapshots,
-    );
+    if (
+      options.preferAuthoritativePublicationRead === true ||
+      options.reconcileAuthoritativeMembershipPublication === true
+    ) {
+      this.schedulePriorityRecoveryDispatchPendingReentries(
+        priorityRecoveryDecisionSnapshots,
+      );
+    }
     const publicationEvidence =
       this.resolveCanonicalPublicationRecoveryEvidenceDiagnostics(
         readinessEntries,

@@ -536,6 +536,12 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
           scope: CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
         },
       );
+      if (
+        Array.isArray(options.changedRowIdsSink) &&
+        Array.isArray(result?.changedRowIds)
+      ) {
+        options.changedRowIdsSink.push(...result.changedRowIds);
+      }
       return result?.mutationCount || 0;
     }
 

@@ -218,12 +218,17 @@ function buildAuthoritativeControlPlaneReadIntent(
   tableName,
   sql,
   params = [],
+  options = {},
 ) {
   return {
     tableName,
     sql,
     params: Array.isArray(params) ? params : [],
-    strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE,
+    strategy:
+      options?.strategy ===
+      CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED ?
+        CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED :
+        CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE,
   };
 }
 

@@ -61,6 +61,7 @@ function hasAuthoritativeReadFailureEvidence(result = {}) {
 
 function isCompleteAuthoritativeReadResult(result = {}) {
   return result?.success === true &&
+    result?.rowSetComplete === true &&
     Array.isArray(result?.rows) &&
     !hasAuthoritativeReadFailureEvidence(result);
 }

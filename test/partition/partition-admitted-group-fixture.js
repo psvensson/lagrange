@@ -139,8 +139,10 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
       // It asks the leader its stamp names to admit it.
       const request = await replica.requestReplicaAdmission(
         operations[joined - 1].operation_id);
-      assert.equal(request.state, 'admitted',
-        `setup: the leader admits ${members[joined][0]} from its committed ` +
+      assert.equal(
+        ['in_flight', 'proposed', 'already_member'].includes(request.lastOutcome),
+        true,
+        `setup: the leader accepts ${members[joined][0]} from its committed ` +
         `operation (${request.lastOutcome})`);
       replica.startElection();
       assert.equal(await waitFor(() => {
@@ -148,6 +150,10 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
         return status.followerProgress[members[joined][0]] ===
           status.commitIndex;
       }), true, `setup: replica ${members[joined][0]} is admitted`);
+      await replica.driveReplicaAdmission();
+      assert.equal(request.state, 'admitted',
+        `setup: the leader admits ${members[joined][0]} from its committed ` +
+        `operation (${request.lastOutcome})`);
     }
   } catch (error) {
     try {

@@ -1,5 +1,11 @@
 import {PRIORITY_RECOVERY_COMPLETION_STATE} from
   '../control-plane/priority-recovery-completion.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from '../bootstrap/system-table-schemas-constants.js';
+import {isValidLeaderReadAuthorityWitness} from
+  '../control-plane/control-plane-authoritative-read-witness.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   REPLICA_INVENTORY_OBSERVATION_STATE,
@@ -13,6 +19,7 @@ const LOCAL_STR_OBJECT = 'object';
 
 const {
   CONTROL_PLANE_QUERY_OPTIONS,
+  CONTROL_PLANE_READ_LEADER_MODE,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   SERVICE_TYPE,
@@ -503,12 +510,30 @@ class RebalanceCoordinatorOperationReadMethods {
           {}),
       },
     );
+    const requireLeaderWitness =
+      readOptions?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE?.REQUIRED;
+    const hasUsableRows =
+      result?.success === true &&
+      result?.partial !== true &&
+      result?.rowSetComplete !== false &&
+      Array.isArray(result?.rows);
+    const hasCompleteLeaderProvenance =
+      hasUsableRows &&
+      result?.rowSetComplete === true &&
+      isValidLeaderReadAuthorityWitness(
+        result?.readAuthorityWitness,
+        INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES],
+      );
+    const available = requireLeaderWitness ?
+      hasCompleteLeaderProvenance :
+      hasUsableRows;
     return Object.freeze({
-      available: result.success === true && Array.isArray(result.rows),
-      rows:
-        result.success === true && Array.isArray(result.rows) ?
-          result.rows :
-          [],
+      available,
+      rows: available ? result.rows : [],
+      rowSetComplete:
+        result?.rowSetComplete === true && result?.partial !== true,
+      partial: result?.partial === true,
+      readAuthorityWitness: result?.readAuthorityWitness || null,
       error: result?.error || null,
       reasonCode: result?.reasonCode || null,
       source: result?.source || null,

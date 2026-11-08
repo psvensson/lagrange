@@ -151,7 +151,22 @@ test('AdminControlSnapshot surfaces handoff owner outcome when repair is not sel
       },
     });
 
-    const result = await snapshot.resolveLocalControlSnapshot();
+    const ordinaryResult = await snapshot.resolveLocalControlSnapshot();
+    t.equal(
+      observedHandoff,
+      null,
+      'ordinary control snapshot observation must not trigger the membership publication owner when repair is not selected',
+    );
+    t.equal(
+      ordinaryResult.controlPlaneDiagnostics.publicationConvergence
+        .membershipPublicationHandoffOutcome,
+      undefined,
+      'ordinary control snapshot observation must not attach a handoff owner command outcome',
+    );
+
+    const result = await snapshot.triggerMembershipPublicationHandoffOwnerCommand(
+      localSnapshot,
+    );
 
     t.match(
       observedHandoff,
@@ -161,7 +176,7 @@ test('AdminControlSnapshot surfaces handoff owner outcome when repair is not sel
           ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_NODE_IDS,
         ],
       },
-      'active-gate owner reconcile signals should trigger the membership publication owner even without repair',
+      'explicit handoff owner command should trigger the membership publication owner',
     );
     t.match(
       result.controlPlaneDiagnostics.publicationConvergence
@@ -170,7 +185,7 @@ test('AdminControlSnapshot surfaces handoff owner outcome when repair is not sel
         state:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_PUBLISHED_VISIBLE,
       },
-      'representative publication convergence should surface the owner command outcome',
+      'explicit handoff owner command should surface the owner command outcome',
     );
   });
 

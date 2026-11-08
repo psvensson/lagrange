@@ -606,6 +606,16 @@ test(
       {capturedAt: TEST_NOW_MS},
       {allowAuthoritativeRepair: false},
     );
+    t.equal(
+      scheduledRepairOptions.length,
+      0,
+      'ordinary non-repair control-snapshot observation must not schedule handoff repair',
+    );
+
+    await owner.resolveControlSnapshot(
+      {capturedAt: TEST_NOW_MS + 500},
+      {allowAuthoritativeRepair: true},
+    );
     await owner.resolveControlSnapshot(
       {capturedAt: TEST_NOW_MS + 1000},
       {allowAuthoritativeRepair: true},
@@ -614,17 +624,17 @@ test(
     t.equal(
       scheduledRepairOptions.length,
       2,
-      'both non-blocking and allowed control-snapshot paths schedule handoff repair',
+      'allowed control-snapshot paths schedule handoff repair on each completion',
     );
     t.equal(
       scheduledRepairOptions[0]?.bypassReuse,
       true,
-      'handoff-gap background schedule bypasses the 5s reuse window',
+      'first allowed handoff-gap schedule bypasses the 5s reuse window',
     );
     t.equal(
       scheduledRepairOptions[1]?.bypassReuse,
       true,
-      'allowed control-snapshot schedule bypasses the 5s reuse window on handoff gap',
+      'subsequent allowed control-snapshot schedule bypasses the 5s reuse window on handoff gap',
     );
   },
 );

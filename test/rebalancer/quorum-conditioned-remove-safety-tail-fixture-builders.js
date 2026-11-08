@@ -1,3 +1,4 @@
+import {createMockPolicyService} from './test-helpers.js';
 /**
  * Shared fixture builders for the quorum-conditioned remove-safety tail
  * test-case modules. These collapse the verbose per-test coordinator wiring
@@ -152,9 +153,9 @@ export async function runReplacementElectionNudgeScenario(context, t, {
       activeNodeIds: Object.freeze(['node-a', 'node-b', 'node-c', 'node-d']),
       membershipTargetNodeId: testReplacementNodeId,
     })},
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-    },
+    }),
     cacheData: {
       nodes: ['node-a', 'node-b', 'node-c', 'node-d'].map(createReadyNode),
       services: buildScenarioServiceRows('follower'),

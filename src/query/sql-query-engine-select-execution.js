@@ -435,20 +435,37 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
 
     const confirmEmptyLocalReadWithOwnerRpc =
       this.shouldConfirmEmptyAuthoritativeSystemTableRead(tableName, ast);
+    const suppliedReadAuthority =
+      queryOptions?.readAuthority &&
+      Object.isFrozen(queryOptions.readAuthority) === true &&
+      (queryOptions.readAuthority.authoritativeReadMode ===
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY ||
+        queryOptions.readAuthority.authoritativeReadMode ===
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+            .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC ||
+        queryOptions.readAuthority.authoritativeReadMode ===
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_ONLY) ?
+        queryOptions.readAuthority :
+        null;
+    const readAuthority = suppliedReadAuthority ||
+      buildControlPlaneReadAuthority({
+        authoritativeReadMode: confirmEmptyLocalReadWithOwnerRpc ?
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+            .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC :
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+        localReadConsistency:
+          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
+        replicaFallbackConsistency: confirmEmptyLocalReadWithOwnerRpc ?
+          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA :
+          null,
+      });
     const executableSql = this.queryExecutor.buildSelectSQL(ast);
     const localResult = await authoritativeControlPlaneView.readRows(
       tableName,
       executableSql,
       params,
       {
-        readAuthority: buildControlPlaneReadAuthority({
-          authoritativeReadMode: confirmEmptyLocalReadWithOwnerRpc ?
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-              .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC :
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-          replicaFallbackConsistency:
-            LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
-        }),
+        readAuthority,
         queryTimeoutMs: queryOptions?.timeoutMs,
       },
     );

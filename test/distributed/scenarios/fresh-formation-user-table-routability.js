@@ -169,16 +169,30 @@ function errorText(error) {
     base;
 }
 
+function isReadRowSetComplete(result) {
+  return result?.rowSetComplete === true;
+}
+
+function resolvePrimaryReadWitness(result) {
+  if (result.readAuthorityWitness) return result.readAuthorityWitness;
+  return Array.isArray(result.readAuthorityWitnesses) ?
+    result.readAuthorityWitnesses[ZERO] ?? null :
+    null;
+}
+
 async function readRows(node, sql, timeoutMs) {
   try {
     const result = await node.queryWithTimeout(sql, [], {timeoutMs});
     const rows = Array.isArray(result?.rows) ? result.rows : null;
     if (rows === null) return {error: 'rows_absent'};
+    const complete = isReadRowSetComplete(result);
     return {
-      complete: Number.isSafeInteger(result.count) &&
-        result.count === rows.length,
+      authoritativeObservation: result.authoritativeObservation ?? null,
+      complete,
       partitions: result.partitions ?? null,
+      readAuthorityWitness: resolvePrimaryReadWitness(result),
       readAuthorityWitnesses: result.readAuthorityWitnesses ?? null,
+      rowSetComplete: complete,
       rows,
     };
   } catch (error) {

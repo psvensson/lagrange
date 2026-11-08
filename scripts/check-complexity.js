@@ -145,9 +145,9 @@ const TARGET_THRESHOLD = 12;
 // on the checker hint after deleting alternate required-read adaptation.
 // 2026-11-07: tightened 1719 -> 1718 -> 1715 -> 1714 on the checker hint after unifying the
 // priority-recovery planning-answer reader and decomposing reconcile/routing helpers.
-// 2026-11-08: tightened 1714 -> 1712 on the checker hint after removing safety-row and
-// publication-scope fallbacks.
-const BASELINE_COUNT = 1712;
+// 2026-11-08: tightened 1714 -> 1712 -> 1711 on the checker hint after removing safety-row and
+// publication-scope fallbacks and decomposing formation priority-spread completeness checks.
+const BASELINE_COUNT = 1711;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

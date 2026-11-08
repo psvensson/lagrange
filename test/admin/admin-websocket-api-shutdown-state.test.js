@@ -657,18 +657,14 @@ test('AdminWebSocketAPI resolved control snapshot re-drives when handoff ' +
     shouldRepair: false,
   });
   controlSnapshot.canRunAuthoritativeControlSnapshotRepair = () => false;
-  controlSnapshot.triggerMembershipPublicationHandoffOwnerCommand =
-    async (snapshot) => {
-      handoffCount += 1;
-      if (handoffCount === 1) {
-        handoffStarted.resolve();
-        await releaseHandoff.promise;
-      }
-      return snapshot;
-    };
-  controlSnapshot.prepareVisibleMembershipPublicationHandoffRefresh =
-    async (snapshot) => ({snapshot, refreshed: false});
-  controlSnapshot.resolveSharedControlSnapshot = async (snapshot) => snapshot;
+  controlSnapshot.resolveSharedControlSnapshot = async (snapshot) => {
+    handoffCount += 1;
+    if (handoffCount === 1) {
+      handoffStarted.resolve();
+      await releaseHandoff.promise;
+    }
+    return snapshot;
+  };
 
   const snapshotPromise = controlSnapshot.resolveLocalControlSnapshot();
   await handoffStarted.promise;

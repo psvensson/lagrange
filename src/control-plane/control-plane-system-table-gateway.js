@@ -195,7 +195,7 @@ async function readAuthoritativeControlPlaneRows(
   }
   if (target && typeof target.executeRead === 'function') {
     return target.executeRead(
-      buildAuthoritativeControlPlaneReadIntent(tableName, sql, params),
+      buildAuthoritativeControlPlaneReadIntent(tableName, sql, params, options),
       options,
     );
   }

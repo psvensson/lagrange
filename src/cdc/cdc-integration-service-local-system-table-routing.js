@@ -1,6 +1,8 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {issueAuthoritativeReadStage} from './cdc-terminal-gate.js';
+import {isValidLeaderReadAuthorityWitness} from
+  '../control-plane/control-plane-authoritative-read-witness.js';
 import {readAdmittedPartitionRows} from
   '../partition/partition-statement-admission.js';
 
@@ -11,6 +13,165 @@ const {
   SYSTEM_TABLE_NAME,
   VALID_SYSTEM_TABLES,
 } = CDC_INTEGRATION_SERVICE_SHARED;
+
+const LOCAL_AUTHORITATIVE_OBSERVATION_SCOPE = 'complete_table';
+const ABSENT_WITNESS_VALUE = null;
+const ABSENT_OBSERVATION_VALUE = null;
+
+function isPlainWitnessObject(candidate) {
+  return Boolean(
+    candidate &&
+    typeof candidate === 'object' &&
+    !Array.isArray(candidate),
+  );
+}
+
+function hasValidCommittedWitnessIndices(witness) {
+  return Number.isSafeInteger(witness?.term) &&
+    witness.term >= 1 &&
+    Number.isSafeInteger(witness?.appliedIndex) &&
+    witness.appliedIndex >= 0 &&
+    Number.isSafeInteger(witness?.commitIndex) &&
+    witness.commitIndex >= 0;
+}
+
+function isUsableLocalLeaderWitness(witness, partitionId) {
+  return isPlainWitnessObject(witness) &&
+    typeof partitionId === 'string' &&
+    partitionId.length > 0 &&
+    isValidLeaderReadAuthorityWitness(witness, partitionId) &&
+    hasValidCommittedWitnessIndices(witness);
+}
+
+export function selectLocalPartitionWitness(
+  _service,
+  partitionService,
+  result,
+) {
+  const partitionId = partitionService?.partitionId || null;
+  if (isUsableLocalLeaderWitness(result?.readAuthorityWitness, partitionId)) {
+    return Object.freeze({...result.readAuthorityWitness});
+  }
+  if (typeof partitionService?.buildRemoteReadAuthorityWitness === 'function') {
+    const builtWitness = partitionService.buildRemoteReadAuthorityWitness(false);
+    if (isUsableLocalLeaderWitness(builtWitness, partitionId)) {
+      return Object.freeze({...builtWitness});
+    }
+  }
+  return ABSENT_WITNESS_VALUE;
+}
+
+function maxSafeIntegerOrNull(current, candidate) {
+  if (!Number.isSafeInteger(candidate)) return current;
+  return current === null ? candidate : Math.max(current, candidate);
+}
+
+function maxNonNegativeFloorOrNull(current, candidate) {
+  if (!Number.isFinite(candidate) || candidate < 0) return current;
+  const floored = Math.floor(candidate);
+  return current === null ? floored : Math.max(current, floored);
+}
+
+const COMPLETE_TABLE_READ_SQL_PATTERN =
+  /^SELECT\s+\*\s+FROM\s+([A-Za-z_][A-Za-z0-9_]*)\s*;?$/iu;
+
+function isCompleteTableReadRequest(tableName, sql, params) {
+  if (Array.isArray(params) && params.length > 0) {
+    return false;
+  }
+  const match = String(sql || '').trim().match(
+    COMPLETE_TABLE_READ_SQL_PATTERN,
+  );
+  return match?.[1] === tableName;
+}
+
+function areAllWitnessesValidLeaderReceipts(witnessList) {
+  if (!Array.isArray(witnessList) || witnessList.length === 0) {
+    return false;
+  }
+  return witnessList.every((witness) =>
+    isUsableLocalLeaderWitness(witness, witness?.partitionId),
+  );
+}
+
+function isValidSinglePartitionLocalObservation(
+  tableName,
+  rowSetComplete,
+  witnessList,
+  sql,
+  params,
+) {
+  const canonicalPartitionId = INITIAL_PARTITION_IDS[tableName];
+  if (
+    !rowSetComplete ||
+    !canonicalPartitionId ||
+    !isCompleteTableReadRequest(tableName, sql, params) ||
+    !areAllWitnessesValidLeaderReceipts(witnessList)
+  ) {
+    return false;
+  }
+  return (
+    witnessList.length === 1 &&
+    witnessList[0]?.partitionId === canonicalPartitionId
+  );
+}
+
+export function buildLocalAuthoritativeObservation(
+  tableName,
+  rowSetComplete,
+  witnessList,
+  sql = null,
+  params = [],
+) {
+  if (
+    !isValidSinglePartitionLocalObservation(
+      tableName,
+      rowSetComplete,
+      witnessList,
+      sql,
+      params,
+    )
+  ) {
+    return ABSENT_OBSERVATION_VALUE;
+  }
+  const primaryWitness = witnessList[0];
+  let maxAppliedIndex = null;
+  let maxCommitIndex = null;
+  let maxTerm = null;
+  let maxObservedAtMs = null;
+  for (const witness of witnessList) {
+    maxAppliedIndex = maxSafeIntegerOrNull(
+      maxAppliedIndex,
+      witness.appliedIndex,
+    );
+    maxCommitIndex = maxSafeIntegerOrNull(
+      maxCommitIndex,
+      witness.commitIndex,
+    );
+    maxTerm = maxSafeIntegerOrNull(maxTerm, witness.term);
+    maxObservedAtMs = maxNonNegativeFloorOrNull(
+      maxObservedAtMs,
+      witness.observedAtMs,
+    );
+  }
+  return Object.freeze({
+    scope: LOCAL_AUTHORITATIVE_OBSERVATION_SCOPE,
+    tableName,
+    rowSetComplete: true,
+    observedPartitionCount: witnessList.length,
+    witnessCount: witnessList.length,
+    observedAtMs: maxObservedAtMs,
+    term: maxTerm,
+    appliedIndex: maxAppliedIndex,
+    commitIndex: maxCommitIndex,
+    maxTerm,
+    maxAppliedIndex,
+    maxCommitIndex,
+    servingNodeId: primaryWitness.servingNodeId,
+    servingReplicaId: primaryWitness.servingReplicaId || null,
+    partitionId: primaryWitness.partitionId,
+  });
+}
 
 function resolvePartitionRowsFromCache(cache, tableName) {
   const partitionPredicate = (row) => {
@@ -124,29 +285,25 @@ function resolvePartitionServicesForSegment(service) {
 }
 
 function resolveSystemTablePartitionIdsForSegment(service, tableName) {
+  const canonicalPartitionId = INITIAL_PARTITION_IDS[tableName] || null;
   const cache = service.systemTableCache;
   if (!cache) {
-    return INITIAL_PARTITION_IDS[tableName] ?
-      [INITIAL_PARTITION_IDS[tableName]] :
-      [];
+    return canonicalPartitionId ? [canonicalPartitionId] : [];
   }
 
   const partitionRows = resolvePartitionRowsFromCache(cache, tableName);
   const resolvedPartitionIds = [
     ...new Set(
-      partitionRows
-        .map((row) => row?.partition_id ?? row?.partitionId ?? row?.id ?? null)
-        .filter(Boolean),
+      [
+        canonicalPartitionId,
+        ...partitionRows.map(
+          (row) => row?.partition_id ?? row?.partitionId ?? row?.id ?? null,
+        ),
+      ].filter(Boolean),
     ),
   ];
 
-  if (resolvedPartitionIds.length > 0) {
-    return resolvedPartitionIds;
-  }
-
-  return INITIAL_PARTITION_IDS[tableName] ?
-    [INITIAL_PARTITION_IDS[tableName]] :
-    [];
+  return resolvedPartitionIds;
 }
 
 function resolvePartitionServicesForTable(service, tableName, options = {}) {

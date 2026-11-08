@@ -1,7 +1,10 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED as SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {
+  createMockPolicyService,
+  createTestCoordinator,
+} from './test-helpers.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -97,13 +100,23 @@ function createRemoveCoordinator({
   removeResponseStatus = ReplicaOperationResponseStatus.INITIATED,
 }) {
   const deliveries = [];
+  const nodeIds = [
+    ...new Set(
+      [
+        OWNER_NODE_ID,
+        TARGET_NODE_ID,
+        ...serviceRows.map((row) => row?.node_id),
+      ].filter(Boolean),
+    ),
+  ];
   const coordinator = createTestCoordinator({
     nodeId: OWNER_NODE_ID,
     enableTimeouts: false,
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 2}),
-    },
+    }),
     cacheData: {
+      nodes: nodeIds.map((nodeId) => ({node_id: nodeId, status: 'active'})),
       services: serviceRows,
       replicaOperations: [operationRow],
     },

@@ -133,9 +133,15 @@ async function executeRemoteQuery(service, payload) {
 
 function remoteQueryAnswer(service, result, readAuthorityWitness) {
   const success = result?.success !== false;
+  const rowSetComplete = success &&
+    Array.isArray(result?.rows) &&
+    result?.partial !== true &&
+    result?.rowSetComplete !== false;
   const answer = {
     success, rows: result.rows, changes: result.changes,
     count: result.count, partitionId: service.partitionId,
+    rowSetComplete,
+    ...(result?.partial === true ? {partial: true} : {}),
     durableCommitWitness: result.durableCommitWitness,
     originHlc: result.originHlc, acceptingNodeId: result.acceptingNodeId,
     acknowledgedAtMs: result.acknowledgedAtMs, readAuthorityWitness,

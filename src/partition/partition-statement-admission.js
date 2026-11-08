@@ -445,7 +445,11 @@ function readAdmittedPartitionRows(service, sql, params = []) {
   if (!admission.admitted) {
     return partitionStatementRefusalAnswer(service, sql, admission);
   }
-  return {success: true, rows: admission.statement.all(...params)};
+  return {
+    success: true,
+    rows: admission.statement.all(...params),
+    rowSetComplete: true,
+  };
 }
 
 export {

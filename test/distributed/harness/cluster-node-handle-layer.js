@@ -851,7 +851,10 @@ class NodeHandle {
       operation: parsed.operation,
       affectedRows: parsed.affectedRows,
       writeReceipt: parsed.writeReceipt,
+      rowSetComplete: parsed.rowSetComplete === true,
+      readAuthorityWitness: parsed.readAuthorityWitness ?? null,
       readAuthorityWitnesses: parsed.readAuthorityWitnesses,
+      authoritativeObservation: parsed.authoritativeObservation ?? null,
       warning: parsed.warning,
       outcome: typeof parsed.outcome === 'string' ? parsed.outcome : undefined,
       visibilityState:

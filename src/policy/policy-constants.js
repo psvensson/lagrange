@@ -39,15 +39,28 @@ const POLICY_ERROR_CODE = Object.freeze({
   BASE_UNAVAILABLE: 'TABLE_POLICY_BASE_UNAVAILABLE',
 });
 
+const POLICY_AUTHORITY_STATE = Object.freeze({
+  AUTHORITATIVE_POLICY: 'authoritative_policy',
+  AUTHORITATIVE_ABSENCE: 'authoritative_absence',
+  UNAVAILABLE_OR_STALE: 'unavailable_or_stale',
+});
+
 const POLICY_READ_REASON = Object.freeze({
   TABLE_UNAVAILABLE: 'table_unavailable',
+  TABLE_ABSENT: 'table_absent',
   PARTITION_UNAVAILABLE: 'partition_unavailable',
+  PARTITION_ABSENT: 'partition_absent',
+  MESSAGE_GROUP_UNAVAILABLE: 'message_group_unavailable',
+  MESSAGE_GROUP_ABSENT: 'message_group_absent',
   TARGET_UNDECLARED: 'partition_target_undeclared',
+  MESSAGE_GROUP_TARGET_UNDECLARED: 'message_group_target_undeclared',
   POLICY_INVALID: 'policy_invalid',
   TARGET_INVALID: 'policy_target_invalid',
   MINIMUM_INVALID: 'policy_minimum_invalid',
   OWNER_UNAVAILABLE: 'policy_owner_unavailable',
   READ_FAILED: 'policy_read_failed',
+  STALE_EVIDENCE: 'policy_evidence_stale',
+  UNSUPPORTED_ENTITY_TYPE: 'unsupported_entity_type',
 });
 
 const TABLE_POLICY_TARGET_FIELDS = Object.freeze([
@@ -159,6 +172,7 @@ export {
   DEFAULT_MESSAGE_GROUP_POLICY,
   DEFAULT_TABLE_POLICY,
   MESSAGE_GROUP_POLICY_FIELD_TYPES,
+  POLICY_AUTHORITY_STATE,
   POLICY_DEFAULT,
   POLICY_ERROR_CODE,
   POLICY_ERROR_MSG,

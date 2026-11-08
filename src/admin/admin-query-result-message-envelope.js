@@ -2,6 +2,7 @@ import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {buildAdminWriteReceipt} from './admin-write-receipt.js';
 
 const NO_OPERATION_VALUE = null;
+const EMPTY_WITNESS_LIST = Object.freeze([]);
 
 const {
   ADMIN_CACHE_DUMP,
@@ -135,9 +136,14 @@ function applyAdminRowsQueryResultMessagePayload(message, result) {
   message.count =
     result.count !== undefined ? result.count : message.results.length;
   applyAdminQueryResultTableScope(message, result);
+  message.rowSetComplete = result.rowSetComplete === true;
+  message.readAuthorityWitness =
+    result.readAuthorityWitness || NO_OPERATION_VALUE;
   message.readAuthorityWitnesses = Array.isArray(
     result.readAuthorityWitnesses,
-  ) ? result.readAuthorityWitnesses : [];
+  ) ? result.readAuthorityWitnesses : EMPTY_WITNESS_LIST;
+  message.authoritativeObservation =
+    result.authoritativeObservation || NO_OPERATION_VALUE;
 }
 
 function applyAdminDefaultWriteQueryResultMessagePayload(message, result) {

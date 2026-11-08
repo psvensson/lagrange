@@ -797,6 +797,15 @@ test('AdminControlSnapshot schedules workflow-owner reentry for dispatch-pending
     });
 
     await snapshot.buildLocalControlSnapshot();
+    t.equal(
+      scheduledReentries.length,
+      0,
+      'ordinary local control snapshots must not schedule workflow-owner reentry',
+    );
+
+    await snapshot.buildLocalControlSnapshot({
+      allowAuthoritativeRepair: true,
+    });
 
     t.equal(
       scheduledReentries.length,

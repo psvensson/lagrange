@@ -387,6 +387,54 @@ function buildUnavailablePriorityLeaderCoverage(priorityPartitionIds) {
   });
 }
 
+function buildCurrentPriorityRowsByPartitionId({
+  priorityPartitionIds,
+  partitionRows,
+  serviceRows,
+}) {
+  const priorityPartitionIdSet = buildStringSet(priorityPartitionIds);
+  const partitionRowById = new MapConstructor();
+  for (let index = 0; index < partitionRows.length; index += 1) {
+    const partitionRow = partitionRows[index];
+    const partitionId = readOwnPrimitiveString(
+      partitionRow,
+      ['partition_id', 'partitionId'],
+    );
+    if (setHas(priorityPartitionIdSet, partitionId)) {
+      mapSet(partitionRowById, partitionId, partitionRow);
+    }
+  }
+  const serviceRowsById = new MapConstructor();
+  for (let index = 0; index < priorityPartitionIds.length; index += 1) {
+    mapSet(serviceRowsById, priorityPartitionIds[index], []);
+  }
+  for (let index = 0; index < serviceRows.length; index += 1) {
+    const serviceRow = serviceRows[index];
+    const partitionId = readOwnPrimitiveString(
+      serviceRow,
+      ['partition_id', 'partitionId'],
+    );
+    if (setHas(priorityPartitionIdSet, partitionId)) {
+      appendOwnArrayValue(mapGet(serviceRowsById, partitionId), serviceRow);
+    }
+  }
+  const rowsByPartitionId = {};
+  for (let index = 0; index < priorityPartitionIds.length; index += 1) {
+    const partitionId = priorityPartitionIds[index];
+    const partitionServiceRows = mapGet(serviceRowsById, partitionId) || [];
+    objectDefineProperty(rowsByPartitionId, partitionId, {
+      value: objectFreeze({
+        partitionRow: mapGet(partitionRowById, partitionId) || null,
+        serviceRows: objectFreeze(partitionServiceRows),
+      }),
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+  return objectFreeze(rowsByPartitionId);
+}
+
 function canonicalizeCurrentPlacementInputs(options) {
   const optionsSnapshot = copyStrictOwnDataRecord(options);
   const safeOptions = optionsSnapshot || createNullRecord(null);
@@ -458,6 +506,11 @@ function buildCurrentPriorityPlacementObservation(options = {}) {
       eligibleNodeIds,
     }) :
     buildUnavailablePriorityLeaderCoverage(priorityPartitionIds);
+  const rowsByPartitionId = buildCurrentPriorityRowsByPartitionId({
+    priorityPartitionIds,
+    partitionRows: inputs.valid ? partitionRows : [],
+    serviceRows: inputs.valid ? serviceRows : [],
+  });
   const available = priorityPartitionSummary !== null;
   return objectFreeze({
     state: available ?
@@ -471,6 +524,7 @@ function buildCurrentPriorityPlacementObservation(options = {}) {
     priorityPartitionIds: objectFreeze(priorityPartitionIds),
     priorityPartitionSummary,
     leaderCoverage,
+    rowsByPartitionId,
     satisfied:
       available &&
       priorityPartitionSummary.satisfied === true &&

@@ -70,6 +70,7 @@ import {
 } from '../control-plane/timeout-budget.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
   readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {
@@ -394,7 +395,8 @@ const REMOVE_SAFETY_READ_QUERY_OPTIONS = Object.freeze({
   routingReadinessDimension:
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
   authoritativeReadMode:
-    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+  leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
 });
 const REMOVE_SAFETY_SQL = Object.freeze({
   SELECT_PARTITION_REPLICA_ROWS:

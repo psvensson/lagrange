@@ -1,7 +1,13 @@
 import {PriorityPublicationSafetyTopology} from './priority-publication-safety-topology.js';
 import {
-  readPolicyForPartition,
+  POLICY_AUTHORITY_STATE,
+  POLICY_READ_REASON,
+} from '../policy/policy-constants.js';
+import {
+  policyReadUnavailable,
   requirePolicyMinimumReplicaCount,
+  resolveMessageGroupPolicyFactFromOwner,
+  resolvePartitionPolicyFactFromOwner,
 } from '../policy/table-policy-resolution.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
@@ -11,6 +17,10 @@ import {REBALANCER_DEFAULT_POLICY} from './rebalancer-constants.js';
 import {
   readAuthoritativeEntityServiceRows,
 } from './entity-service-row-read.js';
+import {isValidLeaderReadAuthorityWitness} from
+  '../control-plane/control-plane-authoritative-read-witness.js';
+import {INITIAL_PARTITION_IDS} from
+  '../bootstrap/system-table-schemas-constants.js';
 
 import {
   hasAuthoritativeRemoveSafetyPlanningProvider,
@@ -45,6 +55,19 @@ function createCriticalReplicaRowsList(
   return list;
 }
 
+function isCompleteAuthoritativeServicesResult(result) {
+  return Boolean(
+    result?.success === true &&
+      result?.partial !== true &&
+      result?.rowSetComplete === true &&
+      Array.isArray(result?.rows) &&
+      isValidLeaderReadAuthorityWitness(
+        result?.readAuthorityWitness,
+        INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES],
+      ),
+  );
+}
+
 class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
   async getCriticalReplicaRowsForSafety(partitionId) {
     const gateway = this.repository?.controlPlaneSystemTableGateway;
@@ -59,7 +82,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
         [SERVICE_TYPE.PARTITION, partitionId],
         REMOVE_SAFETY_READ_QUERY_OPTIONS,
       );
-      if (!result?.success || !Array.isArray(result.rows)) {
+      if (!isCompleteAuthoritativeServicesResult(result)) {
         return createCriticalReplicaRowsList([], false);
       }
       if (result.rows.length === 0) {
@@ -97,7 +120,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
         identity,
         REMOVE_SAFETY_READ_QUERY_OPTIONS,
       );
-      if (!result?.success || !Array.isArray(result.rows)) {
+      if (!isCompleteAuthoritativeServicesResult(result)) {
         return Object.freeze({
           available: false,
           rows: [],
@@ -115,10 +138,38 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     }
   }
 
+  async resolveEntityRemoveSafetyPolicyFact(entityType, entityId) {
+    if (entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE) {
+      const minReplicaCount =
+        REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE.minReplicaCount;
+      return Object.freeze({
+        state: POLICY_AUTHORITY_STATE.AUTHORITATIVE_POLICY,
+        minReplicaCount,
+        targetReplicaCount: minReplicaCount,
+        reason: null,
+      });
+    }
+    if (entityType !== SERVICE_TYPE.MESSAGE_GROUP) {
+      return Object.freeze({
+        state: POLICY_AUTHORITY_STATE.AUTHORITATIVE_ABSENCE,
+        minReplicaCount: null,
+        targetReplicaCount: null,
+        reason: POLICY_READ_REASON.UNSUPPORTED_ENTITY_TYPE,
+      });
+    }
+    return resolveMessageGroupPolicyFactFromOwner(
+      this.tablePolicyService,
+      entityId,
+      {requireAuthoritative: true},
+    );
+  }
+
   /**
    * Resolve the minimum live-replica floor from the policy owner for the
    * entity type. Runtime services own an availability floor; message groups
-   * own a replicated-group target floor. Unknown types fail closed.
+   * own a replicated-group target floor. Destructive REMOVE authorization
+   * requires an accepted authoritative policy fact and never substitutes a
+   * caller default when policy is absent, stale, or unavailable.
    * @param {string} entityType
    * @param {string} entityId
    * @return {Promise<number|null>}
@@ -130,27 +181,21 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     if (entityType !== SERVICE_TYPE.MESSAGE_GROUP) {
       return null;
     }
-    const defaultCount =
-      REBALANCER_DEFAULT_POLICY.MESSAGE_GROUP.targetReplicaCount;
-    if (
-      !this.tablePolicyService ||
-      typeof this.tablePolicyService.getMessageGroupPolicy !== 'function'
-    ) {
-      return defaultCount;
-    }
-    try {
-      const policy = await this.tablePolicyService.getMessageGroupPolicy(
-        entityId,
+    const decision = await this.resolveEntityRemoveSafetyPolicyFact(
+      entityType,
+      entityId,
+    );
+    if (decision?.state !== POLICY_AUTHORITY_STATE.AUTHORITATIVE_POLICY) {
+      throw policyReadUnavailable(
+        decision?.reason || POLICY_READ_REASON.POLICY_READ_UNAVAILABLE,
+        {
+          groupId: entityId,
+          authorityState:
+            decision?.state || POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE,
+        },
       );
-      const count = Number(
-        policy?.minReplicaCount ?? policy?.targetReplicaCount,
-      );
-      return Number.isFinite(count) && count > 0 ?
-        Math.floor(count) :
-        defaultCount;
-    } catch {
-      return defaultCount;
     }
+    return requirePolicyMinimumReplicaCount(decision);
   }
 
   getCachedCriticalPartitionRow(partitionId) {
@@ -250,9 +295,29 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     }
   }
 
+  async resolvePartitionRemoveSafetyPolicyFact(partitionId) {
+    return resolvePartitionPolicyFactFromOwner(
+      this.tablePolicyService,
+      partitionId,
+      {requireAuthoritative: true},
+    );
+  }
+
   async getCriticalMinReplicaCount(partitionId) {
-    const policy = await readPolicyForPartition(this.tablePolicyService, partitionId);
-    return requirePolicyMinimumReplicaCount(policy);
+    const decision = await this.resolvePartitionRemoveSafetyPolicyFact(
+      partitionId,
+    );
+    if (decision?.state !== POLICY_AUTHORITY_STATE.AUTHORITATIVE_POLICY) {
+      throw policyReadUnavailable(
+        decision?.reason || POLICY_READ_REASON.POLICY_READ_UNAVAILABLE,
+        {
+          partitionId,
+          authorityState:
+            decision?.state || POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE,
+        },
+      );
+    }
+    return requirePolicyMinimumReplicaCount(decision);
   }
 
   isNodeReadyForRouting(nodeId, options = {}) {

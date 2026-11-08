@@ -728,3 +728,87 @@ test('AuthoritativeControlPlaneView consumes the strict owner-rpc token ' +
     'diagnostics profile should route through repair-eligible readiness',
   );
 });
+
+test('AuthoritativeControlPlaneView preserves rowSetComplete, readAuthorityWitness, readAuthorityWitnesses, and authoritativeObservation', async (t) => {
+  const witness = Object.freeze({
+    appliedIndex: 42,
+    commitIndex: 42,
+    nodeId: FIXTURE_LOCAL_NODE_ID,
+    observedAtMs: 1700000000000,
+    partitionId: 'services-p1',
+    role: 'leader',
+    term: 3,
+  });
+  const authoritativeObservation = Object.freeze({
+    tableName: TABLES.SERVICES,
+    observedPartitionCount: 1,
+    witnessCount: 1,
+    maxAppliedIndex: 42,
+    maxCommitIndex: 42,
+    maxTerm: 3,
+  });
+  const view = new AuthoritativeControlPlaneView({
+    nodeId: FIXTURE_LOCAL_NODE_ID,
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead() {
+        return {
+          authoritativeObservation,
+          readAuthorityWitness: witness,
+          rowSetComplete: true,
+          rows: [{service_id: 'svc-1', status: 'active'}],
+          source: 'local_partition_replica',
+          success: true,
+        };
+      },
+    },
+  });
+
+  const result = await view.readRows(
+    TABLES.SERVICES,
+    `SELECT * FROM ${TABLES.SERVICES}`,
+    [],
+  );
+
+  t.equal(result.success, true);
+  t.equal(result.rowSetComplete, true, 'rowSetComplete should be preserved');
+  t.same(
+    result.readAuthorityWitness,
+    witness,
+    'readAuthorityWitness should be preserved',
+  );
+  t.same(
+    result.readAuthorityWitnesses,
+    [witness],
+    'readAuthorityWitnesses should default from readAuthorityWitness',
+  );
+  t.same(
+    result.authoritativeObservation,
+    authoritativeObservation,
+    'authoritativeObservation should be preserved',
+  );
+
+  const incompleteView = new AuthoritativeControlPlaneView({
+    nodeId: FIXTURE_LOCAL_NODE_ID,
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead() {
+        return {
+          count: 1,
+          rowSetComplete: false,
+          rows: [{service_id: 'svc-1', status: 'active'}],
+          source: 'local_partition_replica',
+          success: true,
+        };
+      },
+    },
+  });
+  const incompleteResult = await incompleteView.readRows(
+    TABLES.SERVICES,
+    `SELECT * FROM ${TABLES.SERVICES}`,
+    [],
+  );
+  t.equal(
+    incompleteResult.rowSetComplete,
+    false,
+    'count === rows.length must never manufacture rowSetComplete: true',
+  );
+});

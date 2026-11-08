@@ -1,3 +1,4 @@
+import {createMockPolicyService} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
   test,
@@ -57,9 +58,9 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        tablePolicyService: {
+        tablePolicyService: createMockPolicyService({
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-        },
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),
@@ -195,9 +196,9 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },
-      tablePolicyService: {
+      tablePolicyService: createMockPolicyService({
         getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-      },
+      }),
       cacheData: {
         nodes: [
           createReadyNode('node-a'),
@@ -347,9 +348,9 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
             };
           },
         }},
-        tablePolicyService: {
+        tablePolicyService: createMockPolicyService({
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-        },
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),

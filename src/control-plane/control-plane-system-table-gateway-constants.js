@@ -48,6 +48,7 @@ const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL = Object.freeze({
   ROUTINGREADINESSDIMENSION: 'routingReadinessDimension',
   SELECT: 'select',
   SESSIONID: 'sessionId',
+  STRING_STRING: 'string',
   SYSTEM_TABLE_CACHE_UNAVAILABLE: 'system_table_cache_unavailable',
   TIMEOUTBUDGET: 'timeoutBudget',
   UNKNOWN: 'unknown',

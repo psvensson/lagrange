@@ -28,7 +28,7 @@
   "censusSize": 2605,
   "digest": "fnv1a32-6ddfcebd",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-e5dc525a",
+  "observationDigest": "fnv1a32-c1b5abd3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2871,6 +2871,7 @@
     "test/admin/completed-placement-autonomous-progress.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/partition/partition-committed-statement-outcome.js",
@@ -13807,9 +13808,11 @@
     },
     "test/query/sql-query-engine-system-table-local-read.test.js": {
       "files": [
+        "src/admin/admin-query-result-message-envelope.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
-        "src/control-plane/projection-readiness-constants.js"
+        "src/control-plane/projection-readiness-constants.js",
+        "src/query/query-executor.js"
       ]
     },
     "test/query/sql-query-engine-system-table-write-admission.test.js": {

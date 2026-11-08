@@ -21,7 +21,7 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {createMockPolicyService, createTestCoordinator} from './test-helpers.js';
 import {registerQuorumConditionedRemoveSafetyDeferredDispatchTests} from './quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js';
 import {registerQuorumConditionedRemoveSafetyTailTests} from './quorum-conditioned-remove-safety-tail-test-cases.js';
 
@@ -90,6 +90,19 @@ function installAuthoritativeServicesRead(coordinator, rowsProvider) {
       return {
         success: true,
         source: 'owner_rpc_lane',
+        rowSetComplete: true,
+        readAuthorityWitness: {
+          state: 'observed',
+          partitionId: 'services-p1',
+          servingNodeId: 'node-a',
+          servingReplicaId: 'services-p1-r1',
+          role: 'leader',
+          leaderNodeId: 'node-a',
+          term: 1,
+          commitIndex: 1,
+          appliedIndex: 1,
+          observedAtMs: Date.now(),
+        },
         rows: Array.isArray(rows) ?
           rows.map((row) => ({...row})) :
           [],
@@ -123,9 +136,9 @@ test('RebalanceCoordinator - blocks REMOVE that drops critical voter quorum', as
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
     },
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-    },
+    }),
     cacheData: {
       nodes: [
         createReadyNode('node-a'),
@@ -195,9 +208,9 @@ test('RebalanceCoordinator - logs quorum safety block as warning, not error', as
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
     },
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-    },
+    }),
     cacheData: {
       nodes: [
         createReadyNode('node-a'),
@@ -265,9 +278,9 @@ test('RebalanceCoordinator - lower-case remove preflight respects safety policy'
   const coordinator = createTestCoordinator({
     nodeId: 'seed-node',
     enableTimeouts: false,
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-    },
+    }),
     cacheData: {
       nodes: [
         createReadyNode('node-a'),
@@ -342,9 +355,9 @@ test('RebalanceCoordinator - normalizes object error payloads for safety-blocked
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },
-      tablePolicyService: {
+      tablePolicyService: createMockPolicyService({
         getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-      },
+      }),
       cacheData: {
         nodes: [
           createReadyNode('node-a'),
@@ -430,9 +443,9 @@ test('RebalanceCoordinator - normalizes errorMessage payloads for safety-blocked
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },
-      tablePolicyService: {
+      tablePolicyService: createMockPolicyService({
         getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-      },
+      }),
       cacheData: {
         nodes: [
           createReadyNode('node-a'),
@@ -515,9 +528,9 @@ test('RebalanceCoordinator - allows REMOVE when projected quorum remains safe', 
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
     },
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 2}),
-    },
+    }),
     cacheData: {
       nodes: [
         createReadyNode('node-a'),
@@ -587,9 +600,9 @@ test('RebalanceCoordinator - defers REPLACE remove until replacement is voter-re
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },
-      tablePolicyService: {
+      tablePolicyService: createMockPolicyService({
         getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 2}),
-      },
+      }),
       cacheData: {
         nodes: [
           createReadyNode('node-a'),
@@ -701,9 +714,9 @@ test('RebalanceCoordinator - defers over-replicated REMOVE until quorum is voter
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },
-      tablePolicyService: {
+      tablePolicyService: createMockPolicyService({
         getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-      },
+      }),
       cacheData: {
         nodes: [
           createReadyNode('node-a'),
@@ -830,9 +843,9 @@ test('RebalanceCoordinator - defers critical REPLACE source removal until owner-
           };
         },
       }},
-      tablePolicyService: {
+      tablePolicyService: createMockPolicyService({
         getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-      },
+      }),
       cacheData: {
         nodes: [
           createReadyNode('node-a'),
@@ -1020,9 +1033,9 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
           };
         },
       }},
-      tablePolicyService: {
+      tablePolicyService: createMockPolicyService({
         getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-      },
+      }),
       cacheData: {
         nodes: [
           createReadyNode(SOURCE_NODE_ID),
@@ -1134,4 +1147,81 @@ registerQuorumConditionedRemoveSafetyTailTests({
   createCriticalPartitionServiceRow,
   createCriticalPartitionRow,
   installAuthoritativeServicesRead,
+});
+
+test('priority publication safety services row rejects partial, incomplete, and follower responses', async (t) => {
+  const validRows = [
+    createCriticalPartitionServiceRow({
+      partitionId: 'sql_transactions-p1',
+      replicaId: 'sql_transactions-p1-r1',
+      nodeId: 'node-1',
+      raftRole: 'leader',
+    }),
+  ];
+  const leaderWitness = {
+    state: 'observed',
+    role: 'leader',
+    partitionId: 'services-p1',
+    servingNodeId: 'node-1',
+    servingReplicaId: 'services-p1-r1',
+    term: 2,
+    commitIndex: 8,
+    appliedIndex: 8,
+    observedAtMs: 1700000000000,
+  };
+  for (const invalidRead of [
+    {
+      name: 'partial: true',
+      response: {
+        success: true,
+        source: 'owner_rpc_lane',
+        partial: true,
+        rowSetComplete: true,
+        readAuthorityWitness: leaderWitness,
+        rows: validRows,
+      },
+    },
+    {
+      name: 'rowSetComplete: false',
+      response: {
+        success: true,
+        source: 'owner_rpc_lane',
+        rowSetComplete: false,
+        readAuthorityWitness: leaderWitness,
+        rows: validRows,
+      },
+    },
+    {
+      name: 'follower witness',
+      response: {
+        success: true,
+        source: 'owner_rpc_lane',
+        rowSetComplete: true,
+        readAuthorityWitness: {...leaderWitness, role: 'follower'},
+        rows: validRows,
+      },
+    },
+  ]) {
+    const coordinator = createTestCoordinator({
+      nodeId: 'node-1',
+      controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows() {
+          return invalidRead.response;
+        },
+      },
+    });
+    try {
+      const rows = await coordinator.workflowOwner.getCriticalReplicaRowsForSafety(
+        'sql_transactions-p1',
+      );
+      t.equal(
+        rows.authoritativeReadAvailable,
+        false,
+        `${invalidRead.name} must not be accepted as authoritative SERVICES evidence`,
+      );
+      t.equal(rows.length, 0);
+    } finally {
+      await coordinator.shutdown();
+    }
+  }
 });

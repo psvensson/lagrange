@@ -19,6 +19,15 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {test} from '../../../../src/test-helpers/tap.js';
 import {
+  createAdminQueryResultMessageEnvelope,
+} from '../../../../src/admin/admin-query-result-message-envelope.js';
+import {
+  AuthoritativeControlPlaneView,
+} from '../../../../src/control-plane/authoritative-control-plane-view.js';
+import {
+  INVESTIGATION_TARGET,
+} from '../fresh-formation-disagreement-evidence.js';
+import {
   LOG_OBSERVATION,
   PREDICATE,
   SERVE_BLOCKING_REASON_CODES,
@@ -80,11 +89,52 @@ function cacheDumpOf(capture) {
   return capture.unsolicited[0].msg.data;
 }
 
+function witnessedAuthorityRead(tableName, rows, observedAtMs = T0) {
+  const partitionId = `${tableName}-p1`;
+  const servingReplicaId = `${partitionId}-r1`;
+  const witness = {
+    appliedIndex: 42,
+    commitIndex: 42,
+    nodeId: NODE_IDS[0],
+    observedAtMs,
+    partitionId,
+    role: 'leader',
+    servingNodeId: NODE_IDS[0],
+    servingReplicaId,
+    state: 'observed',
+    term: 3,
+  };
+  return {
+    authoritativeObservation: {
+      appliedIndex: 42,
+      commitIndex: 42,
+      maxAppliedIndex: 42,
+      maxCommitIndex: 42,
+      maxTerm: 3,
+      observedAtMs,
+      partitionId,
+      rowSetComplete: true,
+      scope: 'complete_table',
+      servingNodeId: NODE_IDS[0],
+      servingReplicaId,
+      tableName,
+      term: 3,
+    },
+    complete: true,
+    readAuthorityWitness: witness,
+    readAuthorityWitnesses: [witness],
+    rowSetComplete: true,
+    rows,
+    tableName,
+  };
+}
+
 // The recorded state at one capture instant, in the scenario's observation
 // shape. No snapshot was captured: every observer's read is the recorded
 // failure (seed) or absent (joiners).
 function recordedObservation(capture, capturedAtIso) {
   const cache = cacheDumpOf(capture);
+  const capturedAtMs = Date.parse(capturedAtIso);
   const snapshots = {};
   for (const nodeId of NODE_IDS) {
     snapshots[nodeId] = {error: nodeId === NODE_IDS[0] ? SNAPSHOT_ERROR :
@@ -92,11 +142,23 @@ function recordedObservation(capture, capturedAtIso) {
   }
   return {
     authority: {
-      partitions: {complete: true, rows: cache.partitions},
-      replicaOperations: {complete: true, rows: cache.replica_operations},
-      services: {complete: true, rows: cache.services},
+      partitions: witnessedAuthorityRead(
+        'partitions',
+        cache.partitions,
+        capturedAtMs,
+      ),
+      replicaOperations: witnessedAuthorityRead(
+        'replica_operations',
+        cache.replica_operations,
+        capturedAtMs,
+      ),
+      services: witnessedAuthorityRead(
+        'services',
+        cache.services,
+        capturedAtMs,
+      ),
     },
-    capturedAtMs: Date.parse(capturedAtIso),
+    capturedAtMs,
     clusterNodeIds: [...NODE_IDS],
     snapshots,
   };
@@ -264,11 +326,15 @@ function satisfiedAuthority() {
     }
   }
   return {
-    partitions: {complete: true, rows: partitions},
-    replicaOperations: {complete: true, rows: [{operation_id: 'op-1',
-      partition_id: 'replica_operations-p1', status: 'removed',
-      type: 'REMOVE', workflow_step: 'REMOVED'}]},
-    services: {complete: true, rows: services},
+    partitions: witnessedAuthorityRead('partitions', partitions),
+    replicaOperations: witnessedAuthorityRead('replica_operations', [{
+      operation_id: 'op-1',
+      partition_id: 'replica_operations-p1',
+      status: 'removed',
+      type: 'REMOVE',
+      workflow_step: 'REMOVED',
+    }]),
+    services: witnessedAuthorityRead('services', services),
   };
 }
 
@@ -571,4 +637,462 @@ test('authoritativePrioritySpread requires canonical voter holder readiness whil
   });
   assert.equal(routable.met, true);
   t.end();
+});
+
+test('disagreements retain authority/observer cache rows, versions, decisions, watermarks, repair changedRowIds, and discriminate investigationTarget', (t) => {
+  const targetPartitionId = 'replica_operations-p1';
+  const buildDisagreeingObservation = () => {
+    const observation = satisfiedObservation(T0);
+    observation.authority.services.complete = true;
+    observation.authority.services.rowSetComplete = true;
+    observation.authority.services.readAuthorityWitnesses = [{
+      appliedIndex: 55,
+      commitIndex: 55,
+      nodeId: NODE_IDS[0],
+      observedAtMs: T0,
+      partitionId: 'services-p1',
+      role: 'leader',
+      servingNodeId: NODE_IDS[0],
+      servingReplicaId: 'services-p1-r1',
+      state: 'observed',
+      term: 4,
+    }];
+    observation.authority.services.authoritativeObservation = {
+      appliedIndex: 55,
+      commitIndex: 55,
+      maxAppliedIndex: 55,
+      maxCommitIndex: 55,
+      maxTerm: 4,
+      observedAtMs: T0,
+      partitionId: 'services-p1',
+      rowSetComplete: true,
+      scope: 'complete_table',
+      servingNodeId: NODE_IDS[0],
+      servingReplicaId: 'services-p1-r1',
+      tableName: 'services',
+      term: 4,
+    };
+    for (const row of observation.authority.services.rows) {
+      if (row.partition_id === targetPartitionId) {
+        row.updated_at = T0 - 10;
+        row.origin_hlc = '1793563095000-0-services-p1-r1';
+      }
+    }
+    const authPartitionRow = arrayFind(
+      observation.authority.partitions.rows,
+      (row) => row.partition_id === targetPartitionId,
+    );
+    const authServiceRows = arrayFilter(
+      observation.authority.services.rows,
+      (row) => row.partition_id === targetPartitionId,
+    );
+    const diagnostics = observation.snapshots[NODE_IDS[0]].payload
+      .controlPlaneDiagnostics;
+    diagnostics.tableRevisionWatermarks = {
+      services: {
+        lastAuthoritativeAppliedIndex: 55,
+        lastOriginHlc: '1793563095000-0-services-p1-r1',
+        lastSourceLogIndex: 55,
+        tableMutationRevision: 9,
+      },
+    };
+    diagnostics.currentPriorityPlacementObservation = {
+      rowsByPartitionId: {
+        [targetPartitionId]: {
+          partitionRow: {...authPartitionRow},
+          serviceRows: arrayMap(authServiceRows, (row) => ({...row})),
+        },
+      },
+    };
+    diagnostics.publicationConvergence.priorityPartitionSummary = {
+      blockedPartitions: [{
+        partitionId: targetPartitionId,
+        readyDistinctNodeCount: 2,
+        requiredDistinctNodeCount: 3,
+      }],
+      satisfied: false,
+    };
+    return observation;
+  };
+
+  // 1. Missing valid completeness/receipt -> Oracle provenance
+  const missingReceiptObs = buildDisagreeingObservation();
+  missingReceiptObs.authority.services.readAuthorityWitnesses = [];
+  const missingReceiptEval = evaluateFormationObservation(missingReceiptObs);
+  assert.equal(missingReceiptEval.disagreements.length, 1);
+  assert.equal(
+    missingReceiptEval.disagreements[0].authorityProvenance.validReceipt,
+    false,
+  );
+  assert.equal(
+    missingReceiptEval.disagreements[0].investigationTarget,
+    INVESTIGATION_TARGET.ORACLE_PROVENANCE,
+  );
+
+  // 1b. Synthetic {term: 0} witness or missing authoritativeObservation -> Oracle provenance
+  const zeroTermObs = buildDisagreeingObservation();
+  zeroTermObs.authority.services.readAuthorityWitnesses = [{
+    appliedIndex: 0,
+    commitIndex: 0,
+    observedAtMs: T0,
+    partitionId: 'services-p1',
+    role: 'leader',
+    servingNodeId: NODE_IDS[0],
+    servingReplicaId: 'services-p1-r1',
+    state: 'observed',
+    term: 0,
+  }];
+  const zeroTermEval = evaluateFormationObservation(zeroTermObs);
+  assert.equal(
+    zeroTermEval.disagreements[0].authorityProvenance.validReceipt,
+    false,
+  );
+  assert.equal(
+    zeroTermEval.disagreements[0].investigationTarget,
+    INVESTIGATION_TARGET.ORACLE_PROVENANCE,
+  );
+
+  // 2. Valid authority row newer than cache -> Publication, delivery or cache application
+  const staleCacheObs = buildDisagreeingObservation();
+  const cachedTargetRows = staleCacheObs.snapshots[NODE_IDS[0]].payload
+    .controlPlaneDiagnostics.currentPriorityPlacementObservation
+    .rowsByPartitionId[targetPartitionId];
+  cachedTargetRows.serviceRows[2].raft_role = null;
+  cachedTargetRows.serviceRows[2].updated_at = T0 - 500;
+  cachedTargetRows.serviceRows[2].origin_hlc =
+    '1793563094000-0-services-p1-r1';
+  const staleCacheEval = evaluateFormationObservation(staleCacheObs);
+  const staleDisagreement = staleCacheEval.disagreements[0];
+  assert.equal(staleDisagreement.authorityProvenance.validReceipt, true);
+  assert.equal(
+    staleDisagreement.authorityRows.serviceRows.length,
+    3,
+  );
+  assert.equal(
+    staleDisagreement.authorityRowVersion.maxOriginHlc,
+    '1793563095000-0-services-p1-r1',
+  );
+  assert.equal(
+    staleDisagreement.observerCacheRowVersion.byRowId[
+      `${targetPartitionId}-r3`
+    ].maxOriginHlc,
+    '1793563094000-0-services-p1-r1',
+  );
+  assert.equal(staleDisagreement.derivedDecision.authority.satisfied, true);
+  assert.equal(
+    staleDisagreement.derivedDecision.observerCache.satisfied,
+    false,
+  );
+  assert.equal(
+    staleDisagreement.derivedDecision.observerProjection.satisfied,
+    false,
+  );
+  assert.equal(
+    staleDisagreement.deliveryApplicationWatermark.watermark
+      .tableMutationRevision,
+    9,
+  );
+  assert.equal(
+    staleDisagreement.investigationTarget,
+    INVESTIGATION_TARGET.PUBLICATION_DELIVERY_OR_CACHE_APPLICATION,
+  );
+
+  // 3. Same relevant cache fields, different decision -> Projection invalidation or reuse
+  const staleProjectionObs = buildDisagreeingObservation();
+  const staleProjectionEval = evaluateFormationObservation(staleProjectionObs);
+  const projectionDisagreement = staleProjectionEval.disagreements[0];
+  assert.equal(
+    projectionDisagreement.derivedDecision.authority.satisfied,
+    true,
+  );
+  assert.equal(
+    projectionDisagreement.derivedDecision.observerCache.satisfied,
+    true,
+  );
+  assert.equal(
+    projectionDisagreement.derivedDecision.observerProjection.satisfied,
+    false,
+  );
+  assert.equal(
+    projectionDisagreement.investigationTarget,
+    INVESTIGATION_TARGET.PROJECTION_INVALIDATION_OR_REUSE,
+  );
+
+  // 4. Snapshot acquisition changes state -> Observer purity
+  const impureObs = buildDisagreeingObservation();
+  impureObs.snapshots[NODE_IDS[0]].payload.authoritativeRepair = {
+    changedRowIds: [`services:${targetPartitionId}-r3`],
+    repaired: true,
+    repairedTables: ['services'],
+  };
+  const impureEval = evaluateFormationObservation(impureObs);
+  const impureDisagreement = impureEval.disagreements[0];
+  assert.deepEqual(
+    impureDisagreement.repairChangedRowIds,
+    [`services:${targetPartitionId}-r3`],
+  );
+  assert.equal(
+    impureDisagreement.investigationTarget,
+    INVESTIGATION_TARGET.OBSERVER_PURITY,
+  );
+  t.end();
+});
+
+test('evaluateProjectionAgreement preserves both 1,393 ms and 1,336 ms failures and retains per-disagreement evidence on persistent entries', (t) => {
+  const buildPoll = (capturedAtMs, blockedNodeId, partitionId) => {
+    const observation = satisfiedObservation(capturedAtMs);
+    observation.authority.services.complete = true;
+    observation.authority.services.rowSetComplete = true;
+    observation.authority.services.readAuthorityWitnesses = [{
+      appliedIndex: 70,
+      commitIndex: 70,
+      observedAtMs: capturedAtMs,
+      partitionId: 'services-p1',
+      role: 'leader',
+      servingNodeId: NODE_IDS[0],
+      servingReplicaId: 'services-p1-r1',
+      state: 'observed',
+      term: 3,
+    }];
+    observation.authority.services.authoritativeObservation = {
+      appliedIndex: 70,
+      commitIndex: 70,
+      maxAppliedIndex: 70,
+      maxCommitIndex: 70,
+      maxTerm: 3,
+      observedAtMs: capturedAtMs,
+      partitionId: 'services-p1',
+      rowSetComplete: true,
+      scope: 'complete_table',
+      servingNodeId: NODE_IDS[0],
+      servingReplicaId: 'services-p1-r1',
+      tableName: 'services',
+      term: 3,
+    };
+    observation.snapshots[blockedNodeId].payload.capturedAt = capturedAtMs;
+    observation.snapshots[blockedNodeId].payload.controlPlaneDiagnostics
+      .publicationConvergence.priorityPartitionSummary = {
+        blockedPartitions: [{
+          partitionId,
+          readyDistinctNodeCount: 2,
+          requiredDistinctNodeCount: 3,
+        }],
+        satisfied: false,
+      };
+    return evaluateFormationObservation(observation);
+  };
+
+  const eval1393 = evaluateProjectionAgreement([
+    buildPoll(T0, NODE_IDS[0], 'control_plane_publications-p1'),
+    buildPoll(T0 + 1393, NODE_IDS[0], 'control_plane_publications-p1'),
+  ]);
+  assert.equal(eval1393.met, false);
+  assert.equal(eval1393.detail.persistent[0].longestSpanMs, 1393);
+  assert.equal(eval1393.detail.persistent[0].observerSpanMs, 1393);
+  assert.equal(
+    eval1393.detail.persistent[0].authorityProvenance.validReceipt,
+    true,
+  );
+  assert.equal(
+    eval1393.detail.persistent[0].authorityRows.serviceRows.length,
+    3,
+  );
+
+  const eval1336 = evaluateProjectionAgreement([
+    buildPoll(T0, NODE_IDS[2], 'sql_write_operations-p1'),
+    buildPoll(T0 + 1336, NODE_IDS[2], 'sql_write_operations-p1'),
+  ]);
+  assert.equal(eval1336.met, false);
+  assert.equal(eval1336.detail.persistent[0].longestSpanMs, 1336);
+  assert.equal(eval1336.detail.persistent[0].observerSpanMs, 1336);
+  assert.equal(
+    eval1336.detail.persistent[0].authorityProvenance.validReceipt,
+    true,
+  );
+  assert.equal(
+    eval1336.detail.persistent[0].authorityRows.serviceRows.length,
+    3,
+  );
+  t.end();
+});
+
+test('end-to-end authority transport preserves rowSetComplete, leader witness, and authoritativeObservation across AuthoritativeControlPlaneView and admin query envelope', async (_t) => {
+  const observation = satisfiedObservation(T0);
+  observation.snapshots[NODE_IDS[0]].payload.controlPlaneDiagnostics
+    .publicationConvergence.priorityPartitionSummary = {
+      blockedPartitions: [{
+        partitionId: 'replica_operations-p1',
+        readyDistinctNodeCount: 2,
+        requiredDistinctNodeCount: 3,
+      }],
+      satisfied: false,
+    };
+
+  const toOracleRead = (envelope) => ({
+    authoritativeObservation: envelope.authoritativeObservation ?? null,
+    complete: envelope.rowSetComplete === true,
+    partitions: envelope.partitions ?? null,
+    readAuthorityWitness: envelope.readAuthorityWitness ?? null,
+    readAuthorityWitnesses: envelope.readAuthorityWitnesses ?? null,
+    rowSetComplete: envelope.rowSetComplete === true,
+    rows: envelope.results,
+  });
+
+  // 1. Incomplete result with count === rows.length stays incomplete across view + envelope
+  const incompleteView = new AuthoritativeControlPlaneView({
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead() {
+        return {
+          count: observation.authority.services.rows.length,
+          rowSetComplete: false,
+          rows: observation.authority.services.rows,
+          source: 'local_partition_replica',
+          success: true,
+        };
+      },
+    },
+    nodeId: NODE_IDS[0],
+  });
+  const incompleteViewResult = await incompleteView.readRows(
+    'services',
+    'SELECT * FROM services',
+    [],
+  );
+  const incompleteEnvelope = createAdminQueryResultMessageEnvelope(
+    'q-incomplete',
+    incompleteViewResult,
+  );
+  const incompleteObs = satisfiedObservation(T0);
+  incompleteObs.authority.services = toOracleRead(incompleteEnvelope);
+  incompleteObs.snapshots = observation.snapshots;
+  const incompleteEval = evaluateFormationObservation(incompleteObs);
+  assert.equal(incompleteEnvelope.rowSetComplete, false);
+  assert.equal(
+    incompleteEval.disagreements[0].authorityProvenance.validReceipt,
+    false,
+  );
+  assert.equal(
+    incompleteEval.disagreements[0].investigationTarget,
+    INVESTIGATION_TARGET.ORACLE_PROVENANCE,
+  );
+
+  // 2. Complete leader-witnessed result with bound authoritativeObservation survives view + envelope
+  const leaderWitness = {
+    appliedIndex: 88,
+    commitIndex: 88,
+    observedAtMs: T0,
+    partitionId: 'services-p1',
+    role: 'leader',
+    servingNodeId: NODE_IDS[0],
+    servingReplicaId: 'services-p1-r1',
+    state: 'observed',
+    term: 5,
+  };
+  const boundObservation = {
+    appliedIndex: 88,
+    commitIndex: 88,
+    maxAppliedIndex: 88,
+    maxCommitIndex: 88,
+    maxTerm: 5,
+    observedAtMs: T0,
+    partitionId: 'services-p1',
+    rowSetComplete: true,
+    scope: 'complete_table',
+    servingNodeId: NODE_IDS[0],
+    servingReplicaId: 'services-p1-r1',
+    tableName: 'services',
+    term: 5,
+  };
+  const completeView = new AuthoritativeControlPlaneView({
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead() {
+        return {
+          authoritativeObservation: boundObservation,
+          count: observation.authority.services.rows.length,
+          readAuthorityWitness: leaderWitness,
+          readAuthorityWitnesses: [leaderWitness],
+          rowSetComplete: true,
+          rows: observation.authority.services.rows,
+          source: 'local_partition_replica',
+          success: true,
+        };
+      },
+    },
+    nodeId: NODE_IDS[0],
+  });
+  const completeViewResult = await completeView.readRows(
+    'services',
+    'SELECT * FROM services',
+    [],
+  );
+  const completeEnvelope = createAdminQueryResultMessageEnvelope(
+    'q-complete',
+    completeViewResult,
+  );
+  const completeObs = satisfiedObservation(T0);
+  completeObs.authority.services = toOracleRead(completeEnvelope);
+  completeObs.snapshots = observation.snapshots;
+  const completeEval = evaluateFormationObservation(completeObs);
+  assert.equal(completeEnvelope.rowSetComplete, true);
+  assert.equal(
+    completeEval.disagreements[0].authorityProvenance.validReceipt,
+    true,
+  );
+  assert.equal(
+    completeEval.disagreements[0].investigationTarget,
+    INVESTIGATION_TARGET.PROJECTION_INVALIDATION_OR_REUSE,
+  );
+
+  // 3. Mismatched receipt/witness identity or missing provenance is rejected
+  const mismatchedObs = satisfiedObservation(T0);
+  mismatchedObs.snapshots = observation.snapshots;
+  mismatchedObs.authority.services = {
+    ...toOracleRead(completeEnvelope),
+    authoritativeObservation: {
+      ...boundObservation,
+      servingNodeId: NODE_IDS[1],
+    },
+  };
+  const mismatchedEval = evaluateFormationObservation(mismatchedObs);
+  assert.equal(
+    mismatchedEval.disagreements[0].authorityProvenance.validReceipt,
+    false,
+  );
+  assert.equal(
+    mismatchedEval.disagreements[0].investigationTarget,
+    INVESTIGATION_TARGET.ORACLE_PROVENANCE,
+  );
+
+  const missingProvenanceObs = satisfiedObservation(T0);
+  missingProvenanceObs.authority = {
+    partitions: {
+      complete: true,
+      rows: missingProvenanceObs.authority.partitions.rows,
+    },
+    replicaOperations: {
+      complete: true,
+      rows: missingProvenanceObs.authority.replicaOperations.rows,
+    },
+    services: {
+      complete: true,
+      rows: missingProvenanceObs.authority.services.rows,
+    },
+  };
+  const missingProvenanceEval = evaluateFormationObservation(
+    missingProvenanceObs,
+  );
+  assert.equal(missingProvenanceEval.satisfied, false);
+  assert.ok(
+    arrayIncludes(
+      predicateById(missingProvenanceEval, PREDICATE.PRIORITY_SPREAD)
+        .reasonCodes,
+      'services_observation_incomplete',
+    ),
+  );
+  assert.ok(
+    arrayIncludes(
+      predicateById(missingProvenanceEval, PREDICATE.LEDGER_QUIET).reasonCodes,
+      'replica_operations_observation_incomplete',
+    ),
+  );
 });

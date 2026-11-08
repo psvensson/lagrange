@@ -1,3 +1,4 @@
+import {createMockPolicyService} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 
 export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
@@ -96,11 +97,11 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
             };
           },
         }},
-        tablePolicyService: {
+        tablePolicyService: createMockPolicyService({
           // Setting minReplicaCount to 5 will trigger the minimum replica count check violation
           // since we only have 4 replicas total (source, follow1, follow2, replacement)
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 5}),
-        },
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),
@@ -288,9 +289,9 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
             };
           },
         }},
-        tablePolicyService: {
+        tablePolicyService: createMockPolicyService({
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-        },
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),
@@ -506,9 +507,9 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
             };
           },
         }},
-        tablePolicyService: {
+        tablePolicyService: createMockPolicyService({
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-        },
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),
@@ -690,12 +691,12 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
             };
           },
         }},
-        tablePolicyService: {
+        tablePolicyService: createMockPolicyService({
           getPolicyForPartition: () => ({
             minReplicaCount: 2,
             targetReplicaCount: 3,
           }),
-        },
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),

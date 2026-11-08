@@ -244,8 +244,9 @@ Required patterns:
 
 1. Non-forced readers consume owner outcomes such as `fresh`,
    `stale-but-usable`, `deferred-refresh`, or `failed`.
-2. Non-forced readers schedule repair through the owner reconcile path instead
-   of doing synchronous repair on the hot path.
+2. Non-forced readers are side-effect-free observers of owner state; they do
+   not schedule repair, mutate state, or perform synchronous repair on read.
+   Repair scheduling runs only on explicit reconcile or forced-refresh paths.
 3. Forced repair, when allowed, still routes through the same owner and bounded
    budget.
 4. Reader-local caches do not memoize stale or deferred blocked answers as

@@ -14,6 +14,8 @@ import {SYSTEM_TABLE_SCHEMAS, generateCreateTableSQL, INITIAL_PARTITION_IDS} fro
 import {TABLES} from '../../src/constants/index.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
+import {ControlPlaneReadinessService} from
+  '../../src/control-plane/control-plane-readiness-service.js';
 import {createSystemMetadataOwners} from '../../src/control-plane/owners/index.js';
 import {MembershipPublicationCoordinator} from
   '../../src/control-plane/membership-publication-coordinator.js';
@@ -47,16 +49,17 @@ function seed(db, cache, table, input, projection = input) {
 }
 
 function publication(db) {
-  const row = db.prepare(`SELECT * FROM ${TABLES.CONTROL_PLANE_PUBLICATIONS} WHERE publication_id = ?`)
-    .get(PUBLICATION);
+  const row = db.prepare(
+    `SELECT * FROM ${TABLES.CONTROL_PLANE_PUBLICATIONS} ORDER BY publication_epoch DESC, updated_at DESC LIMIT 1`,
+  ).get();
   return {...row, priority_partition_summary: JSON.parse(row.priority_partition_summary)};
 }
 
-function seedCompletedPlacement(db, cache) {
+function seedCompletedPlacement(db, cache, publishedActiveNodeIds = NODES) {
   for (const nodeId of NODES) {
-    seed(db, cache, TABLES.NODES, {node_id: nodeId, status: 'active', connection_state: 'ready',
+    seed(db, cache, TABLES.NODES, {node_id: nodeId, boot_incarnation: 1, status: 'active', connection_state: 'ready',
       node_address: `${nodeId}:8080`, cpu_cores: 4, memory_mb: 4096, disk_gb: 100, last_heartbeat: START_MS, ready_lease_expires_at: START_MS + 300000});
-    seed(db, cache, TABLES.NODE_ENDPOINTS, {endpoint_id: `${nodeId}-ws`, node_id: nodeId,
+    seed(db, cache, TABLES.NODE_ENDPOINTS, {endpoint_id: `${nodeId}-ws`, node_id: nodeId, boot_incarnation: 1,
       transport_type: 'ws', status: 'active', address: `ws://${nodeId}:8082`});
   }
   for (const [index, partitionId] of PARTITIONS.entries()) {
@@ -80,17 +83,23 @@ function seedCompletedPlacement(db, cache) {
   seed(db, cache, TABLES.CONTROL_PLANE_PUBLICATIONS, {publication_id: PUBLICATION,
     publication_kind: 'cluster_membership', publication_epoch: 21, publisher_node_id: NODES[0],
     transition_history: [],
-    published_active_node_ids: NODES, required_ack_node_ids: NODES, acknowledged_node_ids: NODES,
+    published_active_node_ids: publishedActiveNodeIds,
+    required_ack_node_ids: publishedActiveNodeIds,
+    acknowledged_node_ids: publishedActiveNodeIds,
     priority_partition_summary: {satisfied: false, requiredDistinctNodeCount: 3,
       readyEligibleNodeCount: 3, totalPriorityPartitionCount: PARTITIONS.length,
       missingPartitionIds: [PARTITION], blockedPartitions: [{partitionId: PARTITION,
         requiredDistinctNodeCount: 3, readyDistinctNodeCount: 2, spreadGap: 1}]},
-    membership_lifecycle_summary: {lifecycleState: 'published_active', epochBoundary: 'published_membership'},
+    membership_lifecycle_summary: {lifecycleState: 'published_active',
+      epochBoundary: 'published_membership',
+      projectedServingNodeIds: NODES,
+      locallyEligibleNodeIds: NODES,
+      recoveryActiveNodeIds: NODES},
     status: 'PUBLISHED', updated_at: START_MS - 1000, published_at: START_MS - 1000,
     closed_at: START_MS - 1000});
 }
 
-async function autonomousHandoffFixture(t) {
+async function autonomousHandoffFixture(t, options = {}) {
   const db = new Database(':memory:');
   let cdc = null;
   let membership = null;
@@ -117,7 +126,7 @@ async function autonomousHandoffFixture(t) {
     const schema = SYSTEM_TABLE_SCHEMAS.find((candidate) => candidate.tableName === table);
     db.exec(generateCreateTableSQL(schema));
   }
-  seedCompletedPlacement(db, cache);
+  seedCompletedPlacement(db, cache, options.publishedActiveNodeIds || NODES);
   const f = {db, cache, clock, blocked: true, failedReads: 0, pendingTicks: 0,
     writes: [], errors: [], hydrations: []};
   const logger = {...QUIET, error: (...args) => f.errors.push(args)};
@@ -140,7 +149,25 @@ async function autonomousHandoffFixture(t) {
       return {success: false, error: 'FINITE_SERVICES_READ_UNAVAILABLE',
         errorCode: 'AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE'};
     }
-    return engine.executeQuery(sql, params);
+    const res = await engine.executeQuery(sql, params);
+    const partitionId = INITIAL_PARTITION_IDS[table] || `${table}-p1`;
+    const readAuthorityWitness = Object.freeze({
+      state: 'observed',
+      role: 'leader',
+      partitionId,
+      servingNodeId: NODES[0],
+      servingReplicaId: `${partitionId}-${NODES[0]}`,
+      term: 1,
+      appliedIndex: 1,
+      commitIndex: 1,
+      observedAtMs: clock.now(),
+    });
+    return {
+      ...res,
+      rowSetComplete: true,
+      readAuthorityWitness,
+      readAuthorityWitnesses: [readAuthorityWitness],
+    };
   };
   cdc.executeAuthoritativeSystemTableRead = read;
   const hydrate = cdc.hydrateCdcPropagatedTablesFromAuthority.bind(cdc);
@@ -150,13 +177,19 @@ async function autonomousHandoffFixture(t) {
     return result;
   };
   const gateway = new ControlPlaneSystemTableGateway({nodeId: NODES[0],
-    systemTableCache: cache, cdcIntegrationService: cdc, sqlQueryEngine: engine});
-  gateway.readAuthoritativeRows = read;
+    systemTableCache: cache, cdcIntegrationService: cdc, sqlQueryEngine: engine,
+    now: () => clock.now()});
   const owners = createSystemMetadataOwners({controlPlaneSystemTableGateway: gateway});
   membership = new MembershipPublicationCoordinator({nodeId: NODES[0],
     systemTableCache: cache, cdcIntegrationService: cdc,
     controlPlanePublicationsOwner: owners.controlPlanePublicationsOwner,
     resolveIsControlPlanePublicationsWriteLeader: () => true,
+    now: () => clock.now(), logger});
+  const readiness = new ControlPlaneReadinessService({nodeId: NODES[0],
+    systemTableCache: cache, cdcIntegrationService: cdc,
+    membershipPublicationService: membership,
+    nodesOwner: owners.nodesOwner, servicesOwner: owners.servicesOwner,
+    nodeEndpointsOwner: owners.nodeEndpointsOwner,
     now: () => clock.now(), logger});
   // The existing priority cache listener is installed by the real constructor.
   // No planner start/new placement is requested: the placement already completed.
@@ -180,7 +213,7 @@ async function autonomousHandoffFixture(t) {
     return pending;
   };
   membership.startOwnerMembershipDriver({timeSource: clock});
-  return Object.assign(f, {membership, cdc, rebalancer,
+  return Object.assign(f, {membership, cdc, rebalancer, engine, gateway, owners, readiness,
     publication: () => publication(db),
     operation: () => db.prepare(`SELECT * FROM ${TABLES.REPLICA_OPERATIONS} WHERE operation_id = ?`).get(OPERATION),
     target: () => cache.get(TABLES.SERVICES, TARGET)});

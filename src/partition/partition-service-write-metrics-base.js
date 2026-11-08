@@ -151,6 +151,7 @@ function executeAdmittedReadQuery(service, admission, params, options) {
     success: true,
     rows: visibleRows,
     count: visibleRows.length,
+    rowSetComplete: true,
     partitionId: service.partitionId,
   };
 }
@@ -238,6 +239,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
           success: true,
           rows,
           count: rows.length,
+          rowSetComplete: true,
           partitionId: this.partitionId,
         };
       }

@@ -1,3 +1,4 @@
+import {createMockPolicyService} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerQuorumConditionedRemoveSafetyTailReplacementElection} from './quorum-conditioned-remove-safety-tail-replacement-election.js';
 
@@ -88,9 +89,9 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
             };
           },
         }},
-        tablePolicyService: {
+        tablePolicyService: createMockPolicyService({
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-        },
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),
@@ -241,9 +242,9 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
             };
           },
         }},
-        tablePolicyService: {
+        tablePolicyService: createMockPolicyService({
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-        },
+        }),
         cacheData: {
           nodes: [
             createReadyNode(TEST_SOURCE_NODE_ID),
@@ -422,9 +423,9 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
             };
           },
         }},
-        tablePolicyService: {
+        tablePolicyService: createMockPolicyService({
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-        },
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),
@@ -632,9 +633,9 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
             };
           },
         }},
-        tablePolicyService: {
+        tablePolicyService: createMockPolicyService({
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-        },
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),
@@ -820,9 +821,9 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
             };
           },
         }},
-        tablePolicyService: {
+        tablePolicyService: createMockPolicyService({
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-        },
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),
@@ -967,9 +968,9 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
             };
           },
         }},
-        tablePolicyService: {
+        tablePolicyService: createMockPolicyService({
           getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-        },
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),

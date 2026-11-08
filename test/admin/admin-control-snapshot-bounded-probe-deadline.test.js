@@ -116,8 +116,17 @@ test('a stalled lane drives the membership-publication reconcile through the bou
       return candidate;
     };
 
+    const ordinaryResult = await snapshot.buildControlSnapshotQueryResult({
+      queryTimeoutMs: 6,
+    });
+    t.same(ordinaryResult.rows, [CACHE_SNAPSHOT],
+      'ordinary bounded observation still returns the cache-only snapshot');
+    t.equal(reconcileSnapshot, null,
+      'ordinary bounded observation must not schedule or invoke the owner reconcile command');
+
     const result = await snapshot.buildControlSnapshotQueryResult({
-      queryTimeoutMs: 5000,
+      allowAuthoritativeRepair: true,
+      queryTimeoutMs: 6,
     });
 
     t.same(result.rows, [CACHE_SNAPSHOT],
@@ -162,6 +171,7 @@ test('the bounded reconcile is skipped when the owner-command method is unavaila
     snapshot.triggerMembershipPublicationHandoffOwnerCommand = null;
 
     const result = await snapshot.buildControlSnapshotQueryResult({
+      allowAuthoritativeRepair: true,
       queryTimeoutMs: 5000,
     });
 

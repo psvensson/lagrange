@@ -206,7 +206,9 @@ function createMockCache(options = {}) {
     services: new Map(services.map((s) => [s.service_id, s])),
     partitions: new Map(partitions.map((p) => [p.partition_id, p])),
     tables: new Map(tables.map((t) => [t.table_id, t])),
-    message_groups: new Map(messageGroups.map((mg) => [mg.message_group_id, mg])),
+    message_groups: new Map(
+      messageGroups.map((mg) => [mg.group_id ?? mg.message_group_id, mg]),
+    ),
     replica_operations: new Map(
       normalizedReplicaOperations
         .filter((operation) => operation.operation_id)
@@ -248,7 +250,12 @@ function createMockCache(options = {}) {
 
       const normalizedRow = normalizeCacheRow(tableName, row);
       const keyField = getSystemTablePrimaryKeyField(tableName);
-      const key = keyField ? normalizedRow[keyField] : null;
+      const key =
+        tableName === SYSTEM_TABLE_NAME.MESSAGE_GROUPS ?
+          normalizedRow.group_id ?? normalizedRow.message_group_id :
+          keyField ?
+            normalizedRow[keyField] :
+            null;
       if (key === null || key === undefined) {
         return null;
       }
@@ -381,24 +388,113 @@ function createMockTransactionCoordinator() {
   };
 }
 
+function buildMockPolicyAuthorityWitness(partitionId) {
+  return Object.freeze({
+    state: 'observed',
+    partitionId,
+    servingNodeId: 'test-node-1',
+    servingReplicaId: `${partitionId}-r1`,
+    role: 'leader',
+    leaderNodeId: 'test-node-1',
+    term: 1,
+    commitIndex: 1,
+    appliedIndex: 1,
+    observedAtMs: 1_000_000,
+  });
+}
+
 /**
  * Create a mock table policy service.
  * @param {Object} options - Policy options.
  * @return {Object} Mock policy service.
  */
 function createMockPolicyService(options = {}) {
-  const {partitions = [], tables = []} = options;
-
-  return {
-    getPolicyForPartition: (partitionId) => {
+  const {
+    partitions = [],
+    tables = [],
+    getPolicyForPartition = null,
+    getMessageGroupPolicy = null,
+  } = options;
+  const resolvePartitionPolicy = typeof getPolicyForPartition === 'function' ?
+    getPolicyForPartition :
+    (partitionId) => {
       const partition = partitions.find((p) => p.partition_id === partitionId);
       if (!partition) return {...DEFAULT_TABLE_POLICY, targetReplicaCount: 3};
       const table = tables.find((t) => t.table_id === partition.table_id);
       if (!table || !table.table_policies) return {...DEFAULT_TABLE_POLICY, targetReplicaCount: 3};
       return {...DEFAULT_TABLE_POLICY, ...JSON.parse(table.table_policies),
         targetReplicaCount: partition.replica_count ?? 3};
+    };
+  const resolveMessageGroupPolicy = typeof getMessageGroupPolicy === 'function' ?
+    getMessageGroupPolicy :
+    () => ({...DEFAULT_MESSAGE_GROUP_POLICY});
+
+  return {
+    getPolicyForPartition: resolvePartitionPolicy,
+    getMessageGroupPolicy: async (groupId) => resolveMessageGroupPolicy(groupId),
+    resolvePartitionPolicyFact: async (partitionId) => {
+      const policy = await resolvePartitionPolicy(partitionId);
+      if (!policy || typeof policy !== 'object') {
+        return Object.freeze({
+          state: 'unavailable_or_stale',
+          reason: 'policy_read_unavailable',
+          partitionId: partitionId || null,
+          tableId: null,
+          policy: null,
+          targetReplicaCount: null,
+          minReplicaCount: null,
+          maxReplicaCount: null,
+          partitionReadAuthorityWitness: null,
+          tableReadAuthorityWitness: null,
+          readAuthorityWitness: null,
+          rowSetComplete: false,
+        });
+      }
+      const partitionWitness = buildMockPolicyAuthorityWitness('partitions-p1');
+      const tableWitness = buildMockPolicyAuthorityWitness('tables-p1');
+      return Object.freeze({
+        state: 'authoritative_policy',
+        reason: null,
+        partitionId: partitionId || null,
+        tableId: null,
+        policy,
+        targetReplicaCount: policy.targetReplicaCount,
+        minReplicaCount: policy.minReplicaCount ?? policy.targetReplicaCount,
+        maxReplicaCount: policy.maxReplicaCount ?? null,
+        partitionReadAuthorityWitness: partitionWitness,
+        tableReadAuthorityWitness: tableWitness,
+        readAuthorityWitness: partitionWitness,
+        rowSetComplete: true,
+      });
     },
-    getMessageGroupPolicy: async () => ({...DEFAULT_MESSAGE_GROUP_POLICY}),
+    resolveMessageGroupPolicyFact: async (groupId) => {
+      const policy = await resolveMessageGroupPolicy(groupId);
+      if (!policy || typeof policy !== 'object') {
+        return Object.freeze({
+          state: 'unavailable_or_stale',
+          reason: 'policy_read_unavailable',
+          groupId: groupId || null,
+          policy: null,
+          targetReplicaCount: null,
+          minReplicaCount: null,
+          maxReplicaCount: null,
+          readAuthorityWitness: null,
+          rowSetComplete: false,
+        });
+      }
+      const witness = buildMockPolicyAuthorityWitness('message_groups-p1');
+      return Object.freeze({
+        state: 'authoritative_policy',
+        reason: null,
+        groupId: groupId || null,
+        policy,
+        targetReplicaCount: policy.targetReplicaCount,
+        minReplicaCount: policy.minReplicaCount ?? policy.targetReplicaCount,
+        maxReplicaCount: policy.maxReplicaCount ?? null,
+        readAuthorityWitness: witness,
+        rowSetComplete: true,
+      });
+    },
   };
 }
 
@@ -1095,7 +1191,12 @@ function createTestCoordinator(options = {}) {
           serviceRows = serviceRows.filter((row) =>
             String(row.service_id || '').startsWith(serviceIdPrefix));
         }
-        return {success: true, rows: serviceRows};
+        return {
+          success: true,
+          rows: serviceRows,
+          rowSetComplete: true,
+          readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
+        };
       }
 
       return {success: true, rows: []};

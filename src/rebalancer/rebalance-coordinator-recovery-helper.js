@@ -106,7 +106,14 @@ async function handleRecovery(coordinator) {
       continue;
     }
 
-    if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
+    if (
+      coordinator.workflowOwner.isRemoveInitialDispatchPhase({
+        type: op.type,
+        workflowStep: originalStep,
+      })
+    ) {
+      result.reconciled++;
+    } else if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
       result.markedFailed++;
     } else if (originalStep === WORKFLOW_STEP.SYNCING) {
       result.reconciled++;

@@ -79,18 +79,22 @@ function resolveCdcSubscriptionDiagnostics(partitionService) {
 
 function buildControlSnapshotResolveOptions(options = {}) {
   const forceAuthoritativeRepair = options.forceAuthoritativeRepair === true;
+  const allowAuthoritativeRepair = options.allowAuthoritativeRepair === true;
+  const allowAuthoritativeReadinessRefresh =
+    options.allowAuthoritativeReadinessRefresh === undefined ?
+      (forceAuthoritativeRepair || allowAuthoritativeRepair ? undefined : false) :
+      options.allowAuthoritativeReadinessRefresh;
   return {
     ...(forceAuthoritativeRepair ?
       {forceAuthoritativeRepair: true} :
       {}),
     allowAuthoritativeRepair: options.allowAuthoritativeRepair,
-    ...(!forceAuthoritativeRepair ?
+    ...(!forceAuthoritativeRepair && allowAuthoritativeRepair ?
       {[CONTROL_SNAPSHOT_DEFER_INLINE_OWNER_COMMAND_FIELD]: true} :
       {}),
     boundedObservationProbe: !forceAuthoritativeRepair,
     queryTimeoutMs: options.queryTimeoutMs,
-    allowAuthoritativeReadinessRefresh:
-        options.allowAuthoritativeReadinessRefresh,
+    allowAuthoritativeReadinessRefresh,
     allowStaleReadinessOnCacheChange:
         options.allowStaleReadinessOnCacheChange,
     allowAuthoritativePublishedMembershipRecovery:
@@ -647,8 +651,10 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       resolveOptions = {},
     ) {
       if (
+        (resolveOptions.allowAuthoritativeRepair !== true &&
+          resolveOptions.forceAuthoritativeRepair !== true) ||
         typeof this.triggerMembershipPublicationHandoffOwnerCommand !==
-        'function'
+          'function'
       ) {
         return boundedSnapshot;
       }

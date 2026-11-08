@@ -45,32 +45,6 @@ const CONTROL_PLANE_SNAPSHOT_REASON_CODE = Object.freeze({
     'priority_placement_completion_handoff_gap',
 });
 
-function maybeScheduleHandoffGapDiscoveryRepair(owner, reasonCodes) {
-  if (
-    owner.controlSnapshot?.canRunAuthoritativeControlSnapshotRepair?.() !==
-      true ||
-    !reasonCodes.includes(
-      CONTROL_PLANE_SNAPSHOT_REASON_CODE.PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP,
-    )
-  ) {
-    return;
-  }
-  const handoffRepairOptions = {
-    reason: CONTROL_PLANE_SNAPSHOT_REPAIR_REASON.CONTROL_SNAPSHOT,
-    bypassReuse: true,
-    triggerCodes: reasonCodes,
-  };
-  const handoffRepairDecision = owner.resolveRepairDecision(handoffRepairOptions);
-  if (
-    handoffRepairDecision.state ===
-      CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.SCHEDULED
-  ) {
-    owner.serviceDiscovery?.scheduleAuthoritativeDiscoveryCacheRepair?.(
-      handoffRepairOptions,
-    );
-  }
-}
-
 function normalizeDistinctStringArray(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
@@ -435,7 +409,6 @@ class ControlPlaneSnapshotOwner {
     if (this.controlSnapshot?.canRunAuthoritativeControlSnapshotRepair?.() !==
       true ||
       resolvedOptions.allowAuthoritativeRepair !== true) {
-      maybeScheduleHandoffGapDiscoveryRepair(this, reasonCodes);
       const observedSnapshot = attachSnapshotObservation(
         localSnapshot,
         buildStaleSnapshotObservation(

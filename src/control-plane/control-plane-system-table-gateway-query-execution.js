@@ -449,7 +449,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
 
   async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
     return this.executeRead(
-      buildAuthoritativeControlPlaneReadIntent(tableName, sql, params),
+      buildAuthoritativeControlPlaneReadIntent(tableName, sql, params, options),
       options,
     );
   },

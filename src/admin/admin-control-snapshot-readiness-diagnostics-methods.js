@@ -512,7 +512,18 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       });
     }
     async getControlSnapshot(options = {}) {
-      return this.buildLocalControlSnapshot(options);
+      const ordinaryObservation =
+        options.forceAuthoritativeRepair !== true &&
+        options.allowAuthoritativeRepair !== true &&
+        options.allowAuthoritativeReadinessRefresh === undefined;
+      return this.buildLocalControlSnapshot(
+        ordinaryObservation ?
+          {
+            ...options,
+            allowAuthoritativeReadinessRefresh: false,
+          } :
+          options,
+      );
     }
     /**
      * Resolve heartbeat publication diagnostics from the local owner.
