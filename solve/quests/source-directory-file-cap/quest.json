@@ -1,0 +1,31 @@
+{
+  "schema": "solve-quest/2",
+  "id": "source-directory-file-cap",
+  "epic": "code-navigability-and-mistake-resistance",
+  "statement": "No src directory holds more than 120 .js files directly (control-plane 256, rebalancer 243, partition 159, query 127 at e29e295a6): the overflow moves into owner-named subdirectories with import paths updated and file contents otherwise byte-identical, the generated INDEX.md files are regenerated, and the budget row source_directories_over_cap reads zero; this quest runs after every source-changing quest of the epic has landed, because a move conflicts with any concurrent edit of the moved file.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/code-navigability-budget.js --metric --rows source_directories_over_cap",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "owner-named-subdirectories",
+      "statement": "A new subdirectory is named for the owner or decision it holds, never for an ordinal or a grab-bag term, as code-style.md requires of files."
+    },
+    {
+      "id": "moves-are-not-rewrites",
+      "statement": "A moved file keeps its content byte-identical except import paths. A behaviour change travels in its own quest."
+    },
+    {
+      "id": "ratchet-one-way",
+      "statement": "The 120-file cap only tightens; raising it is a refusal, not an option."
+    },
+    {
+      "id": "last-in-order",
+      "statement": "Starts only after the other source-changing quests of this epic have landed on the stream branch."
+    }
+  ]
+}

@@ -17,6 +17,7 @@ quests:
   - partition-service-constructor-injection
   - system-table-row-decoders
   - source-directory-owner-index
+  - source-directory-file-cap
   - failure-bundle-evidence-completeness
   - fallback-branch-coverage-census
   - dead-fallback-retirement
@@ -140,6 +141,8 @@ They are recorded, not in scope (R17); the readiness chain is the pilot.
 6. `fallback-branch-coverage-census` after step 2, then
    `dead-fallback-retirement` and `live-dual-path-classification` in parallel,
    owner by owner (readiness, partition, raft first).
+7. `source-directory-file-cap` last: moving files conflicts with every
+   concurrent source edit, so it waits for the other source quests.
 
 ## Decision log
 
@@ -154,3 +157,8 @@ They are recorded, not in scope (R17); the readiness chain is the pilot.
   because census-driven retirement reaches every owner; the quest statements
   bound each attempt to one owner. Executed on branch
   `work/code-navigability-fallback-census-20261108`.
+- 2026-11-08: owner asked for maximal parallelism. Quests run in one worktree
+  each on `work/nav-<quest>-20261108` branches off the stream branch and merge
+  back as they land; `source-directory-owner-index` was split so its
+  generator half runs now and the file moves (`source-directory-file-cap`)
+  run last.
