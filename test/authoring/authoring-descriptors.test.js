@@ -14,6 +14,8 @@ import {AuthoringError, sql} from '../../src/authoring/sql-template.js';
 
 const AUTHORING_DIRECTORY =
   fileURLToPath(new URL('../../src/authoring/', import.meta.url));
+// A generated directory index (INDEX.md) is not a module; only .js entries ship.
+const MODULE_SUFFIX = '.js';
 const EXPECTED_MODULES = Object.freeze([
   'define-service.js',
   'distributed-operation.js',
@@ -143,8 +145,9 @@ describe('authoring descriptors', () => {
   });
 
   it('ships exactly the four guest-safe modules with no barrel', () => {
-    assert.deepEqual(readdirSync(AUTHORING_DIRECTORY).sort(),
-      [...EXPECTED_MODULES]);
+    assert.deepEqual(readdirSync(AUTHORING_DIRECTORY)
+      .filter((entry) => entry.endsWith(MODULE_SUFFIX)).sort(),
+    [...EXPECTED_MODULES]);
   });
 
   it('imports only relative package-local modules — guest safe', () => {

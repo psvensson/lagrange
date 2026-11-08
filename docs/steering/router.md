@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-10-30
+last_reviewed: 2026-11-08
 ---
 
 # Owner router
@@ -21,7 +21,7 @@ an implementation changes its row, not the rule. Consult only relevant owners.
 | `record-history` | `npm run audit:quest-log-append-only` and [`documentation-lifecycle.md`](../development/documentation-lifecycle.md) | correcting recorded evidence or maintaining its current summary |
 | `publication` | [`solver-runbook.md`](../development/solver-runbook.md) | landing, publishing, or repairing a red shared branch |
 | `action-authority` | [`action-authority.js`](../../scripts/action-authority.js) | taking an action that cannot be taken back, or that leaves this repository |
-| `solve-probes` | [`probes.js`](../../scripts/solve/probes.js) and [`probe-guard.js`](../../src/test-helpers/probe-guard.js) | writing a `doneWhen` probe, or a harness that must refuse to run under one |
+| `solve-probes` | [`probes.js`](../../scripts/solve/probes.js) and `probe-guard.js` in [`src/test-helpers/INDEX.md`](../../src/test-helpers/INDEX.md) | writing a `doneWhen` probe, or a harness that must refuse to run under one |
 | `steering` | [`rules.md`](rules.md), this router, `npm run audit:steering-diet` and `npm run audit:rule-set` | adding, moving or removing steering material |
 
 ## Conditional material

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2215,
+    "unit": 2216,
     "integration": 119,
     "bootstrap": 218,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2559,
-  "digest": "fnv1a32-54a8e86a",
+  "censusSize": 2560,
+  "digest": "fnv1a32-7a682dcf",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2229,6 +2229,7 @@
     "test/scripts/formation-health.test.js": "unit",
     "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": "unit",
     "test/scripts/gen-solve-commands-index.test.js": "unit",
+    "test/scripts/generate-source-owner-index.test.js": "unit",
     "test/scripts/git-invocation-owner.test.js": "unit",
     "test/scripts/helper-import-closure.test.js": "unit",
     "test/scripts/historical-record-exemptions.test.js": "unit",

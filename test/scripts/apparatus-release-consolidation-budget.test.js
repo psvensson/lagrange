@@ -443,4 +443,10 @@ test('pre-commit refreshes generated test metadata as one owned unit', () => {
       `pre-commit stages regenerated artifact ${artifact}`,
     );
   }
+  const indexRefresh = hook.indexOf(
+    'node scripts/generate-source-owner-index.js --write');
+  assert.ok(indexRefresh > hook.indexOf('npm run -s test:metadata:refresh'),
+    'pre-commit regenerates the src directory indexes after the graph refresh');
+  assert.ok(hook.indexOf('git add -A -- \':(glob)src/**/INDEX.md\'', indexRefresh) > 0,
+    'pre-commit stages every src directory index, deletions included');
 });

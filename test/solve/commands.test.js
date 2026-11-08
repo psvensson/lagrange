@@ -18,7 +18,7 @@ import {
   LANDING_MARKER_ENV, LANDING_MARKER_VALUE,
   SolveError, acquireLandingLock, board, isLockStale, isPidAlive, land,
   landChangeProofEnvironment, note, probe, requiresInventoryRefresh,
-  runChangeProof, start,
+  runChangeProof, stageGeneratedArtifacts, start,
 } from '../../scripts/solve/commands.js';
 import {gitCommonDir} from '../../scripts/solve/guards.js';
 import {
@@ -220,6 +220,28 @@ test('the change proof runs against the tree that will be committed', (t) => {
     trackedDuringProof = git(root, ['ls-files', DOC_FILE]).trim();
   }});
   assert.equal(trackedDuringProof, DOC_FILE);
+});
+
+test('land stages the regenerated src directory indexes by pathspec', (t) => {
+  const root = repo(t);
+  write(root, 'src/added/INDEX.md', 'no root index yet\n');
+  stageGeneratedArtifacts(root);
+  assert.equal(git(root, ['diff', '--cached', '--name-only']).trim(), '',
+    'a tree with no src/INDEX.md has no generated indexes to stage');
+  write(root, 'src/INDEX.md', 'old index\n');
+  write(root, 'src/gone/INDEX.md', 'removed directory\n');
+  git(root, ['add', '-A']);
+  git(root, ['commit', '-q', '-m', 'add indexes']);
+  // What the land refresh's generator leaves behind, after the change set
+  // was measured: a rewritten index, a new directory's index and a removed
+  // directory's index gone with it.
+  write(root, 'src/INDEX.md', 'new index\n');
+  fs.rmSync(path.join(root, 'src/gone'), {recursive: true});
+  write(root, DOC_FILE, TEXT);
+  stageGeneratedArtifacts(root);
+  assert.deepEqual(git(root, ['diff', '--cached', '--name-status']).trim().split('\n'),
+    ['M\tsrc/INDEX.md', 'D\tsrc/gone/INDEX.md'],
+    'every index, a deletion included, and nothing else');
 });
 
 test('a failing change proof leaves nothing staged and the quest open', (t) => {

@@ -18,7 +18,8 @@ const MERGE_DRIVER_NAME = 'keep ours; the merged tree regenerates generated meta
 const MERGE_DRIVER_COMMAND_KEY = 'merge.lagrange-generated.driver';
 const MERGE_DRIVER_COMMAND = 'sh -c \'echo "[merge] kept ours for $1; the merged tree owes: ' +
   'npm run -s test:metadata:refresh and node scripts/generate-global-owner-debt-inventory.js ' +
-  '(--refresh when its inputs are absent), then commit" >&2\' lagrange-generated %P';
+  '(--refresh when its inputs are absent), then npm run generate:source-owner-index, ' +
+  'then commit" >&2\' lagrange-generated %P';
 const LOCAL_STR_HOOKS_CONFIG_FAILED = 'Failed to configure ';
 const HOOKS_PATH_KEY = 'core.hooksPath';
 const HOOKS_PATH = '.githooks';

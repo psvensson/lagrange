@@ -91,6 +91,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:runtime-grammar:file` — `node scripts/check-runtime-grammar-contracts.js`
 - `audit:service-portability-claims` — `node scripts/check-service-portability-claims.js`
 - `audit:shards` — `node scripts/check-curated-test-shards.js && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check && node scripts/generate-test-subsystem-classes.js --check`
+- `audit:source-owner-index` — Check every src directory INDEX.md against its generator; prints each missing or stale index, then their count as the last line.
 - `audit:state-machine-pressure` — `node scripts/check-state-machine-pressure-preflight.js`
 - `audit:steering-diet` — `node scripts/checks/check-steering-diet.js`
 - `audit:step-coverage-owner` — `node scripts/check-step-coverage-owner.js`
@@ -148,6 +149,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## gate
 
 - `gate:preflight` — `node scripts/gate-preflight.js`
+
+## generate
+
+- `generate:source-owner-index` — Regenerate the INDEX.md in every src directory (file summaries and importer counts from the sealed import graph).
 
 ## guard
 
@@ -268,7 +273,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:roadmap-authority` — `node scripts/run-documentation-current-state-scenario.js roadmap-audience-authority-cutover`
 - `test:safety-pregate` — `node scripts/run-classified-test-files.js $(cat test/shards/safety-pregate.txt)`
 - `test:smoke` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/developer-smoke-proof-manifest.json --receipt-dir test-output/acceptance/developer-smoke`
-- `test:static` — `node scripts/checks/run-static-audits.js --chain "npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run audit:file-size && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:operation-progress-authority && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:no-legacy-consensus-references && npm run audit:quest-log-append-only && npm run audit:comparative-recompute && npm run audit:benchmark-history-append-only && npm run audit:closed-quest-shape && npm run audit:steering-diet && npm run audit:rule-set && npm run audit:impact-contracts && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:roadmap-authority && npm run steering:check && npm run lint:scripts && npm run lint"`
+- `test:static` — `node scripts/checks/run-static-audits.js --chain "npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run audit:file-size && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:operation-progress-authority && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:no-legacy-consensus-references && npm run audit:quest-log-append-only && npm run audit:comparative-recompute && npm run audit:benchmark-history-append-only && npm run audit:closed-quest-shape && npm run audit:steering-diet && npm run audit:rule-set && npm run audit:impact-contracts && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:source-owner-index && npm run audit:roadmap-authority && npm run steering:check && npm run lint:scripts && npm run lint"`
 - `test:static:postpush` — `node scripts/checks/run-static-audits.js`
 - `test:task27:invariant-suite` — `bash scripts/run-task27-deterministic-invariant-suite.sh`
 - `test:topology-failure-gates` — Run the topology failure gates.
@@ -290,4 +295,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-194 scripts indexed; 36 have a curated description, 158 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+196 scripts indexed; 38 have a curated description, 158 fall back to their raw command. Improve coverage in the two sources named in the header comment.

@@ -63,6 +63,13 @@ const LAND_PROOF_BASE_ANNOUNCEMENT =
 const INVENTORY_PRODUCER = 'scripts/generate-global-owner-debt-inventory.js';
 const INVENTORY_REFRESH_ARGUMENT = '--refresh';
 const PRIORITY_INVENTORY_PRODUCER = 'scripts/generate-priority-recovery-owner-inventory.js';
+// The src directory indexes read the sealed import graph the inventory
+// refresh writes, so they regenerate after it; the pathspec stages every
+// index, a removed directory's deletion included.
+const SOURCE_OWNER_INDEX_PRODUCER = 'scripts/generate-source-owner-index.js';
+const SOURCE_OWNER_INDEX_WRITE_ARGUMENT = '--write';
+const SOURCE_OWNER_INDEX_ROOT = 'src/INDEX.md';
+const SOURCE_OWNER_INDEX_PATHSPEC = ':(glob)src/**/INDEX.md';
 const LAND_LOCK_FILENAME = 'lagrange-solve-land.lock';
 const LAND_LOCK_STALE_MS = 2 * 60 * 60 * 1000;
 const LAND_LOCK_POLL_MS = 200;
@@ -407,6 +414,12 @@ function refreshInventories(root) {
   if (testMetadata.status !== 0) {
     refuse(`test metadata refresh failed: ${testMetadata.stderr}`);
   }
+  const ownerIndexes = spawnSync(process.execPath,
+    [path.join(root, SOURCE_OWNER_INDEX_PRODUCER), SOURCE_OWNER_INDEX_WRITE_ARGUMENT],
+    {cwd: root, encoding: TEXT_ENCODING, maxBuffer: SPAWN_MAX_BUFFER});
+  if (ownerIndexes.status !== 0) {
+    refuse(`source owner index refresh failed: ${ownerIndexes.stderr}`);
+  }
 }
 
 // The environment the landing proof runs under: the caller's, with the
@@ -460,8 +473,17 @@ function commitSubject(quest) {
 // the terminal log entry is appended in between.
 function stageLanding(root, quest, paths) {
   git(root, [...GIT_ADD, ...stageablePaths(root, paths), questDir(root, quest.id)]);
+  stageGeneratedArtifacts(root);
+}
+
+// The refresh's outputs are not in the quest's recorded paths: they are
+// written after the change set is measured, so they are staged by name.
+function stageGeneratedArtifacts(root) {
   for (const generated of GENERATED_INVENTORY_PATHS) {
     if (fs.existsSync(path.join(root, generated))) git(root, [...GIT_ADD_ONE, generated]);
+  }
+  if (fs.existsSync(path.join(root, SOURCE_OWNER_INDEX_ROOT))) {
+    git(root, [...GIT_ADD, SOURCE_OWNER_INDEX_PATHSPEC]);
   }
 }
 
@@ -932,5 +954,5 @@ export {
   LANDING_MARKER_ENV, LANDING_MARKER_VALUE, NEXT_OWNER,
   SolveError, acquireLandingLock, board, evidenceAdd, evidenceDelete, evidenceRelocate,
   isLockStale, isPidAlive, land, landChangeProofEnvironment,
-  note, probe, requiresInventoryRefresh, runChangeProof, start,
+  note, probe, requiresInventoryRefresh, runChangeProof, stageGeneratedArtifacts, start,
 };

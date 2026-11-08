@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2533,
+    "ordinary": 2534,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2559,
-  "digest": "fnv1a32-55d567e1",
+  "censusSize": 2560,
+  "digest": "fnv1a32-775a5eec",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2228,6 +2228,7 @@
     "test/scripts/formation-health.test.js": "ordinary",
     "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": "ordinary",
     "test/scripts/gen-solve-commands-index.test.js": "ordinary",
+    "test/scripts/generate-source-owner-index.test.js": "ordinary",
     "test/scripts/git-invocation-owner.test.js": "ordinary",
     "test/scripts/helper-import-closure.test.js": "ordinary",
     "test/scripts/historical-record-exemptions.test.js": "ordinary",

@@ -42,13 +42,19 @@ test('install-git-hooks writes no diagnostics to stdout', async (t) => {
 // repository marks those files merge=lagrange-generated, and the installer
 // configures that driver where it sets core.hooksPath: it keeps ours, so the
 // merge does not stop, and names the regeneration the merged tree owes.
-const GENERATED_PATHS = [
-  'test/shards/impact-graph-seal.json',
-  'test/shards/primary-classes.json',
-  'test/shards/resource-classes.json',
-  'test/shards/subsystem-classes.json',
-  'solve/changes/global-owner-debt-inventory/inventory.json',
+// Each attribute pattern, with the files a merge exercises it on: the src
+// directory indexes are one pattern, proven at the root and one level down.
+const GENERATED_ATTRIBUTES = [
+  ['test/shards/impact-graph-seal.json', ['test/shards/impact-graph-seal.json']],
+  ['test/shards/primary-classes.json', ['test/shards/primary-classes.json']],
+  ['test/shards/resource-classes.json', ['test/shards/resource-classes.json']],
+  ['test/shards/subsystem-classes.json', ['test/shards/subsystem-classes.json']],
+  ['solve/changes/global-owner-debt-inventory/inventory.json',
+    ['solve/changes/global-owner-debt-inventory/inventory.json']],
+  ['src/**/INDEX.md', ['src/INDEX.md', 'src/raft/INDEX.md']],
 ];
+const GENERATED_PATTERNS = GENERATED_ATTRIBUTES.map(([pattern]) => pattern);
+const GENERATED_PATHS = GENERATED_ATTRIBUTES.flatMap(([, files]) => files);
 
 test('a merge of two regenerated branches keeps ours instead of conflicting', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merge-driver-'));
@@ -70,7 +76,7 @@ test('a merge of two regenerated branches keeps ours instead of conflicting', as
   }
   const attributes = fs.readFileSync(path.join(REPO_ROOT, '.gitattributes'), 'utf8')
     .split('\n').filter((line) => /\smerge=lagrange-generated(\s|$)/u.test(line));
-  t.same(attributes.map((line) => line.split(/\s+/u)[0]), GENERATED_PATHS,
+  t.same(attributes.map((line) => line.split(/\s+/u)[0]), GENERATED_PATTERNS,
     'the repository marks exactly the generated files');
   write('.gitattributes', `${attributes.join('\n')}\n`);
   for (const file of GENERATED_PATHS) write(file, 'base\n');
@@ -105,5 +111,7 @@ test('a merge of two regenerated branches keeps ours instead of conflicting', as
   }
   t.match(merged.stderr, /npm run -s test:metadata:refresh/u,
     'and the regeneration the merged tree owes');
+  t.match(merged.stderr, /npm run generate:source-owner-index/u,
+    'including the src directory indexes');
   t.ok(fs.existsSync(path.join(dir, 'test', 'side.test.js')), 'the rest of side merged');
 });

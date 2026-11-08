@@ -184,6 +184,16 @@ if [ "$REGEN_TEST_METADATA" = "1" ] \
     test/shards/impact-graph-seal.json
 fi
 
+# The src directory indexes read the sealed import graph the two blocks above
+# refresh, so they regenerate after them and ship in the same commit. The
+# pathspec stages a removed directory's index deletion too.
+if { [ "$REGEN_INVENTORIES" = "1" ] || [ "$REGEN_TEST_METADATA" = "1" ]; } \
+  && [ "$SOLVER_AUTHORIZED" = "0" ] \
+  && [ -z "${LAGRANGE_SKIP_INVENTORY_REGEN:-}" ]; then
+  node scripts/generate-source-owner-index.js --write > /dev/null
+  git add -A -- ':(glob)src/**/INDEX.md'
+fi
+
 if [ "$FAILURES" -gt 0 ]; then
   echo "pre-commit: ${FAILURES} staged check(s) failed - fix and re-commit"
   echo "pre-commit: (bypass for WIP: LAGRANGE_SKIP_PRECOMMIT=1 git commit)"

@@ -240,6 +240,17 @@
       ]
     },
     {
+      "id": "npm-run-audit-source-owner-index",
+      "command": "npm run audit:source-owner-index",
+      "inputs": [
+        "package.json",
+        "package-lock.json",
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ]
+    },
+    {
       "id": "npm-run-audit-roadmap-authority",
       "command": "npm run audit:roadmap-authority",
       "inputs": [
