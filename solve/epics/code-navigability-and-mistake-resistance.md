@@ -29,6 +29,10 @@ authorizes:
   - test
   - docs/development
   - docs/steering/router.md
+  - docs/steering/generated
+  - docs/steering/tool-descriptions.json
+  - .githooks
+  - .gitattributes
   - src
   - data/fallback-census
 ---
@@ -212,3 +216,15 @@ They are recorded, not in scope (R17); the readiness chain is the pilot.
   574 test a member, 47 a bare identifier, 6 `.then`. Recorded gap added for
   a later decision: logical assignment `||=`/`??=` (34 in src, none on a
   state field or alias pair) is not a `||`/`??` chain and is not counted.
+- 2026-11-08: `authorizes` widened (R16, recorded) with `.githooks`,
+  `.gitattributes`, `docs/steering/generated` and
+  `docs/steering/tool-descriptions.json`: a script that joins the static audit
+  chain is wired into the pre-commit hook, registered in the generated tools
+  index and its curated sidecar, and a generated artifact declares its merge
+  driver; `source-directory-owner-index` and `navigability-guideline-audit`
+  touch all four. No source directory was added. The R17 fix quest
+  `priority-recovery-owner-read-snapshot-await`, recorded by the readiness
+  quest, lives outside this epic and lands as its own record. The shared proof
+  chain was repaired first at c0c2a8ad6 (import-graph producer: a module
+  resolving outside the repository root is never a node); the budget-check
+  quest landed on it as 86ee709c8.
