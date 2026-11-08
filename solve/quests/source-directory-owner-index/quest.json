@@ -19,5 +19,6 @@
       "id": "no-moves",
       "statement": "No source file moves or changes in this quest; it adds INDEX.md files, the generator, its audit and router rows only, so it cannot conflict with the source quests running in parallel."
     }
-  ]
+  ],
+  "sealedAt": "0e4deb6943354fc692040e7339df0980f6f8f382"
 }
