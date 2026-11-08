@@ -72,8 +72,9 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:guideline:deferred-outcomes` — `node scripts/check-guideline-deferred-outcomes.js`
 - `audit:guideline:hot-path-diagnostics` — `node scripts/check-guideline-hot-path-diagnostics.js`
 - `audit:guideline:literals` — `node scripts/check-guideline-literals.js`
+- `audit:guideline:navigability` — One-way ratchet per navigability/fallback pattern over the shared detector module; ESLint-promoted patterns are skipped, --update-baseline only lowers.
 - `audit:guideline:silent-catch` — `node scripts/check-guideline-silent-catch.js`
-- `audit:guidelines` — `npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:guideline:ambient-intrinsics && npm run audit:style-terminal-vocabulary`
+- `audit:guidelines` — `npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:guideline:ambient-intrinsics && npm run audit:style-terminal-vocabulary && npm run audit:guideline:navigability`
 - `audit:hold-engagement-owner` — `node scripts/check-hold-engagement-owner.js`
 - `audit:impact-contracts` — `node scripts/checks/impact-contract-registry.js`
 - `audit:no-kiro` — `node scripts/check-no-kiro-refs.js`
@@ -290,4 +291,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-194 scripts indexed; 36 have a curated description, 158 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+195 scripts indexed; 37 have a curated description, 158 fall back to their raw command. Improve coverage in the two sources named in the header comment.

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2215,
+    "unit": 2216,
     "integration": 119,
     "bootstrap": 218,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2559,
-  "digest": "fnv1a32-54a8e86a",
+  "censusSize": 2560,
+  "digest": "fnv1a32-ec215cb2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2200,6 +2200,7 @@
     "test/scripts/check-guideline-decision-boundaries.test.js": "unit",
     "test/scripts/check-guideline-deferred-outcomes.test.js": "unit",
     "test/scripts/check-guideline-literals.test.js": "unit",
+    "test/scripts/check-guideline-navigability.test.js": "unit",
     "test/scripts/check-no-ordinal-files.test.js": "unit",
     "test/scripts/check-operation-dispatch-completion-owner.test.js": "unit",
     "test/scripts/check-operation-progress-authority.test.js": "unit",

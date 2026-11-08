@@ -1,0 +1,790 @@
+{
+  "version": 1,
+  "generatedAt": "2026-11-08T12:15:36.615Z",
+  "rawViolationCount": 87,
+  "violations": [
+    {
+      "filePath": "src/admin/admin-control-snapshot-stale-watermark-record.js",
+      "line": 114,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/boot-incarnation-owner.js",
+      "line": 95,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/cdc/cdc-delivery-invocation.js",
+      "line": 11,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/cdc/cdc-event-envelope.js",
+      "line": 25,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-system-table-gateway-read-strategies.js",
+      "line": 25,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-write-identity.js",
+      "line": 93,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/failure-class-registry.js",
+      "line": 32,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/membership-planning-version-key.js",
+      "line": 33,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/owners/service-definitions-owner.js",
+      "line": 22,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/owners/service-instance-metadata.js",
+      "line": 22,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/pressure-governor.js",
+      "line": 84,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/pressure-governor.js",
+      "line": 490,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-planning-answer-origin.js",
+      "line": 57,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/priority-recovery-planning-answer-origin.js",
+      "line": 59,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/projection-readiness-evidence-generation.js",
+      "line": 337,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/projection-readiness-state.js",
+      "line": 104,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/publication-recovery-evidence-builders.js",
+      "line": 29,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/publication-recovery-evidence-builders.js",
+      "line": 30,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/readiness-resolved-planning-answer-context.js",
+      "line": 11,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/startup-authority-placement-eligibility.js",
+      "line": 8,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/startup-authority-snapshot-owner.js",
+      "line": 236,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/diagnostics/formation-turn-attribution.js",
+      "line": 97,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/message-group/message-group-forwarding-owner-routing-methods.js",
+      "line": 39,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/node-host-statistics-sampler.js",
+      "line": 3,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/participant-release-applied-position-observation.js",
+      "line": 21,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/participant-release-authorization-owner.js",
+      "line": 4,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-create-admission-evidence.js",
+      "line": 3,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-create-admission-owner.js",
+      "line": 73,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-create-process-owner.js",
+      "line": 69,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-create-process-owner.js",
+      "line": 70,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-participant-cutover.js",
+      "line": 32,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/runtime-service-call-cell-handler.js",
+      "line": 587,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-locking-read-reservation.js",
+      "line": 32,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-locking-read-reservation.js",
+      "line": 35,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-locking-read-reservation.js",
+      "line": 38,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-locking-read-reservation.js",
+      "line": 41,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-locking-read-reservation.js",
+      "line": 44,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-connection.js",
+      "line": 12,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-pause.js",
+      "line": 190,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-self-check.js",
+      "line": 16,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-self-check.js",
+      "line": 18,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-session.js",
+      "line": 29,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-session.js",
+      "line": 32,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-session.js",
+      "line": 33,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-session.js",
+      "line": 34,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-session.js",
+      "line": 35,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-session.js",
+      "line": 36,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-staging.js",
+      "line": 68,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-store.js",
+      "line": 38,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-read-statement-owner.js",
+      "line": 1,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-raft-membership-administration.js",
+      "line": 88,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-raft-write-commit.js",
+      "line": 145,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-raft-write-commit.js",
+      "line": 146,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-row-owner.js",
+      "line": 61,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-statement-admission-rowid-rules.js",
+      "line": 46,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-transaction-determinism.js",
+      "line": 78,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-transaction-execution-envelope.js",
+      "line": 28,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-transaction-execution-envelope.js",
+      "line": 30,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/leader-activation-scheduler.js",
+      "line": 9,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-group-membership-admission.js",
+      "line": 162,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-group-membership-admission.js",
+      "line": 163,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-membership-administration.js",
+      "line": 4,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-original-allocation-preparation.js",
+      "line": 143,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-preparation-custody.js",
+      "line": 8,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-replica-lifecycle-owner.js",
+      "line": 54,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-runtime-owner.js",
+      "line": 153,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/raft-rs-runtime-owner.js",
+      "line": 155,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/raft/snapshot-catchup.js",
+      "line": 69,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/background-priority-spread-release-tracker.js",
+      "line": 7,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/global-topology-blocking-operation-view.js",
+      "line": 10,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/operation-workflow-replace-handoff-attempt.js",
+      "line": 72,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/operation-workflow-replace-owner-recovery.js",
+      "line": 110,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/operation-workflow-replace-owner-state.js",
+      "line": 50,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/operation-workflow-replace-owner-wake.js",
+      "line": 88,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/priority-placement-observation-memo.js",
+      "line": 26,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/steps-history-parse-memo.js",
+      "line": 40,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
+      "line": 137,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/service/call-shard-read-view-manager.js",
+      "line": 391,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/storage/data-directory-process-owner.js",
+      "line": 7,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/storage/data-directory-process-owner.js",
+      "line": 8,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/test-helpers/port-allocator.js",
+      "line": 73,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/test-helpers/port-allocator.js",
+      "line": 74,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/threading/service-worker.js",
+      "line": 20,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/topology/cdc-group-propagation-retry-wait-report.js",
+      "line": 14,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/transport/message-router-delivery-lifetime.js",
+      "line": 8,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/transport/transport-semantic-outcome.js",
+      "line": 18,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/transport/transport-semantic-outcome.js",
+      "line": 19,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    }
+  ]
+}

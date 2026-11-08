@@ -1,0 +1,592 @@
+{
+  "version": 1,
+  "generatedAt": "2026-11-08T12:15:36.616Z",
+  "rawViolationCount": 65,
+  "violations": [
+    {
+      "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
+      "line": 404,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-control-snapshot-coverage-gap-evaluation.js",
+      "line": 43,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-control-snapshot-leadership-summary.js",
+      "line": 281,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
+      "line": 578,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-control-snapshot-node-view-projection.js",
+      "line": 470,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/node-joining-admission-readiness.js",
+      "line": 116,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/node-joining-backfill-merge-and-status.js",
+      "line": 74,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/node-joining-cdc-subscription-and-backfill.js",
+      "line": 38,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/node-joining-message-group-runtime-delegation.js",
+      "line": 23,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/node-joining-publication-activation.js",
+      "line": 60,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
+      "line": 85,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/node-joining-replica-descriptor-coordination.js",
+      "line": 19,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-evidence-reasons.js",
+      "line": 77,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
+      "line": 27,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+      "line": 71,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-aware.js",
+      "line": 13,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "line": 19,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+      "line": 42,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
+      "line": 32,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-coordinator-queue.js",
+      "line": 622,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
+      "line": 350,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/replica-dispatch-operation-execution.js",
+      "line": 32,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/replica-dispatch-readiness-capture.js",
+      "line": 45,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/replica-dispatch-replay-health-readiness.js",
+      "line": 79,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/replica-dispatch-retry-scheduling.js",
+      "line": 29,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/replica-dispatch-service.js",
+      "line": 41,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-assembly.js",
+      "line": 30,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-cdc-stream-base.js",
+      "line": 82,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-entry-apply-base.js",
+      "line": 112,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-schema-migration-base.js",
+      "line": 33,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-split-accessor-base.js",
+      "line": 109,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-write-metrics-base.js",
+      "line": 158,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/query-executor-cancellation-routing-install.js",
+      "line": 20,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/query-executor-partition-service-resolution.js",
+      "line": 38,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/query-executor-write-retry-routing.js",
+      "line": 25,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-bootstrap-routing-overlay.js",
+      "line": 27,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
+      "line": 48,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-partition-routing-readiness.js",
+      "line": 33,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-select-execution.js",
+      "line": 52,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-statement-execution.js",
+      "line": 98,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-transaction-recovery-methods.js",
+      "line": 24,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-write-execution.js",
+      "line": 88,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-write-failure-methods.js",
+      "line": 27,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/sql-query-engine.js",
+      "line": 95,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/operation-workflow-dispatch-execution.js",
+      "line": 39,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/operation-workflow-owner.js",
+      "line": 62,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/operation-workflow-recovery-drain.js",
+      "line": 67,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/operation-workflow-recovery-observation.js",
+      "line": 93,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/operation-workflow-recovery-reconcile.js",
+      "line": 83,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
+      "line": 119,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
+      "line": 134,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-handoff.js",
+      "line": 46,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-leader-safety.js",
+      "line": 22,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-rows.js",
+      "line": 30,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-topology.js",
+      "line": 29,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/priority-recovery-observation.js",
+      "line": 72,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
+      "line": 48,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/unified-rebalancer-budget-planning.js",
+      "line": 52,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/unified-rebalancer-core.js",
+      "line": 17,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/unified-rebalancer-follow-up-decision.js",
+      "line": 213,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/unified-rebalancer-follow-up-move.js",
+      "line": 276,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/unified-rebalancer-move-execution.js",
+      "line": 263,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/unified-rebalancer-rebalance-loop.js",
+      "line": 56,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
+      "line": 70,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/runtime/endpoint-sync-source-client.js",
+      "line": 100,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "inheritance_depth_over_two",
+      "reason": "extends chain deeper than two; compose named collaborators instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    }
+  ]
+}

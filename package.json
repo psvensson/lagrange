@@ -221,8 +221,9 @@
     "analyze:soft-warning-strikes": "node scripts/analyze-soft-warning-strikes.js",
     "gate:preflight": "node scripts/gate-preflight.js",
     "audit:guideline:silent-catch": "node scripts/check-guideline-silent-catch.js",
+    "audit:guideline:navigability": "node scripts/check-guideline-navigability.js",
     "audit:guideline:deferred-outcomes": "node scripts/check-guideline-deferred-outcomes.js",
-    "audit:guidelines": "npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:guideline:ambient-intrinsics && npm run audit:style-terminal-vocabulary"
+    "audit:guidelines": "npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:guideline:ambient-intrinsics && npm run audit:style-terminal-vocabulary && npm run audit:guideline:navigability"
   },
   "keywords": [
     "distributed",

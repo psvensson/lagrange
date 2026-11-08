@@ -113,6 +113,8 @@ if [ "${#JS_FILES[@]}" -gt 0 ]; then
     node scripts/check-guideline-ambient-intrinsics.js "${JS_FILES[@]}"
   run_check "silent catch (staged files)" \
     node scripts/check-guideline-silent-catch.js "${JS_FILES[@]}"
+  run_check "navigability patterns (staged files)" \
+    node scripts/check-guideline-navigability.js "${JS_FILES[@]}"
 fi
 if [ "${#CODE_JS_FILES[@]}" -gt 0 ]; then
   # Report-only: scoped mode lists violations in the staged files (exit 0

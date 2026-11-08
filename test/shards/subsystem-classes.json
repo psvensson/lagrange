@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 208,
     "storage-raft": 148,
-    "test-infrastructure": 159,
+    "test-infrastructure": 160,
     "transactions": 17,
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2559,
-  "digest": "fnv1a32-1676c309",
+  "censusSize": 2560,
+  "digest": "fnv1a32-c2ad3d49",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6493a783",
+  "observationDigest": "fnv1a32-4205c7c9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2219,6 +2219,7 @@
     "test/scripts/check-guideline-decision-boundaries.test.js": "test-infrastructure",
     "test/scripts/check-guideline-deferred-outcomes.test.js": "test-infrastructure",
     "test/scripts/check-guideline-literals.test.js": "test-infrastructure",
+    "test/scripts/check-guideline-navigability.test.js": "test-infrastructure",
     "test/scripts/check-no-ordinal-files.test.js": "test-infrastructure",
     "test/scripts/check-operation-dispatch-completion-owner.test.js": "test-infrastructure",
     "test/scripts/check-operation-progress-authority.test.js": "test-infrastructure",
@@ -16962,6 +16963,19 @@
         "test"
       ]
     },
+    "test/scripts/check-guideline-navigability.test.js": {
+      "files": [
+        "scripts/check-guideline-navigability.js",
+        "scripts/checks/code-navigability-detectors.js",
+        "scripts/guideline-check-shared.js"
+      ],
+      "directories": [
+        "scripts",
+        "src",
+        "test",
+        "test/scripts"
+      ]
+    },
     "test/scripts/check-no-ordinal-files.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-service-node-methods.js",
@@ -17316,6 +17330,7 @@
         "scripts/check-guideline-ambient-intrinsics.js",
         "scripts/check-guideline-decision-boundaries.js",
         "scripts/check-guideline-literals.js",
+        "scripts/check-guideline-navigability.js",
         "scripts/check-guideline-silent-catch.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-priority-recovery-owner-inventory.js",
@@ -17613,6 +17628,7 @@
         "scripts/check-guideline-ambient-intrinsics.js",
         "scripts/check-guideline-decision-boundaries.js",
         "scripts/check-guideline-literals.js",
+        "scripts/check-guideline-navigability.js",
         "scripts/check-guideline-silent-catch.js",
         "scripts/checks/impact-proof-cone-inputs.js",
         "scripts/generate-global-owner-debt-inventory.js",
@@ -18428,6 +18444,7 @@
         "scripts/check-guideline-ambient-intrinsics.js",
         "scripts/check-guideline-decision-boundaries.js",
         "scripts/check-guideline-literals.js",
+        "scripts/check-guideline-navigability.js",
         "scripts/check-guideline-silent-catch.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/inventory-ordinal-segments.js",
@@ -19455,6 +19472,7 @@
         "scripts/check-guideline-ambient-intrinsics.js",
         "scripts/check-guideline-decision-boundaries.js",
         "scripts/check-guideline-literals.js",
+        "scripts/check-guideline-navigability.js",
         "scripts/check-guideline-silent-catch.js",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
@@ -19519,6 +19537,7 @@
         "scripts/check-guideline-ambient-intrinsics.js",
         "scripts/check-guideline-decision-boundaries.js",
         "scripts/check-guideline-literals.js",
+        "scripts/check-guideline-navigability.js",
         "scripts/check-guideline-silent-catch.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/inventory-ordinal-segments.js",

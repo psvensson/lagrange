@@ -126,6 +126,11 @@ const COMPOSITE_SUBTASKS = Object.freeze({
       priority: false,
       scriptName: 'audit:style-terminal-vocabulary',
     }),
+    Object.freeze({
+      extraArguments: Object.freeze([]),
+      priority: false,
+      scriptName: 'audit:guideline:navigability',
+    }),
   ]),
 });
 const PRIORITY_AUDIT_SCRIPTS = Object.freeze([

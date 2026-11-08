@@ -1,0 +1,538 @@
+{
+  "version": 1,
+  "generatedAt": "2026-11-08T12:15:36.616Z",
+  "rawViolationCount": 59,
+  "violations": [
+    {
+      "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
+      "line": 661,
+      "column": 27,
+      "functionName": "assignAdminControlSnapshotLocalDiagnosticsMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-control-snapshot-readiness-diagnostics-methods.js",
+      "line": 676,
+      "column": 27,
+      "functionName": "assignAdminControlSnapshotReadinessDiagnosticsMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-service-discovery-readiness-context-methods.js",
+      "line": 734,
+      "column": 27,
+      "functionName": "assignAdminServiceDiscoveryReadinessContextMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-service-discovery-readiness-methods.js",
+      "line": 180,
+      "column": 27,
+      "functionName": "assignAdminServiceDiscoveryReadinessMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-service-discovery-repair-cache-methods.js",
+      "line": 560,
+      "column": 27,
+      "functionName": "assignAdminServiceDiscoveryRepairCacheMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-service-discovery-repair-methods.js",
+      "line": 534,
+      "column": 27,
+      "functionName": "assignAdminServiceDiscoveryRepairMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-service-discovery-replica-readiness-methods.js",
+      "line": 693,
+      "column": 27,
+      "functionName": "assignAdminServiceDiscoveryReplicaReadinessMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-service-discovery-table-readiness-methods.js",
+      "line": 461,
+      "column": 27,
+      "functionName": "assignAdminServiceDiscoveryTableReadinessMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/bootstrap/phases/seed-partition-replica-progress.js",
+      "line": 165,
+      "column": 27,
+      "functionName": "assignSeedPartitionReplicaProgressMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/cache/system-table-cache-observation-methods.js",
+      "line": 454,
+      "column": 27,
+      "functionName": "assignSystemTableCacheObservationMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/migration/migration-coordinator-lifecycle-methods.js",
+      "line": 334,
+      "column": 4,
+      "functionName": "createMigrationCoordinatorLifecycleMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/migration/migration-coordinator-stage-methods.js",
+      "line": 637,
+      "column": 4,
+      "functionName": "createMigrationCoordinatorStageMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-committed-membership-methods.js",
+      "line": 164,
+      "column": 27,
+      "functionName": "assignReplicaHandlerCommittedMembershipMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-create-admission-methods.js",
+      "line": 783,
+      "column": 27,
+      "functionName": "assignReplicaHandlerCreateAdmissionMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-create-methods.js",
+      "line": 691,
+      "column": 27,
+      "functionName": "assignReplicaHandlerCreateMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-create-status-methods.js",
+      "line": 716,
+      "column": 27,
+      "functionName": "assignReplicaHandlerCreateStatusMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-group-retired-tombstone-methods.js",
+      "line": 387,
+      "column": 21,
+      "functionName": "assignReplicaHandlerGroupRetiredTombstoneMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-group-retirement-request-methods.js",
+      "line": 329,
+      "column": 21,
+      "functionName": "assignReplicaHandlerGroupRetirementRequestMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-leader-handoff-methods.js",
+      "line": 149,
+      "column": 27,
+      "functionName": "assignReplicaHandlerLeaderHandoffMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-lifecycle-methods.js",
+      "line": 176,
+      "column": 27,
+      "functionName": "assignReplicaHandlerLifecycleMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-membership-methods.js",
+      "line": 122,
+      "column": 27,
+      "functionName": "assignReplicaHandlerMembershipMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-progress-methods.js",
+      "line": 202,
+      "column": 27,
+      "functionName": "assignReplicaHandlerProgressMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-remove-execution-methods.js",
+      "line": 787,
+      "column": 27,
+      "functionName": "assignReplicaHandlerRemoveExecutionMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-remove-request-methods.js",
+      "line": 658,
+      "column": 27,
+      "functionName": "assignReplicaHandlerRemoveRequestMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-runtime-metadata-methods.js",
+      "line": 661,
+      "column": 27,
+      "functionName": "assignReplicaHandlerRuntimeMetadataMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-runtime-methods.js",
+      "line": 714,
+      "column": 27,
+      "functionName": "assignReplicaHandlerRuntimeMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-status-methods.js",
+      "line": 264,
+      "column": 27,
+      "functionName": "assignReplicaHandlerStatusMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-handler-voter-readiness-methods.js",
+      "line": 272,
+      "column": 27,
+      "functionName": "assignReplicaHandlerVoterReadinessMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-durability-fitness.js",
+      "line": 326,
+      "column": 25,
+      "functionName": "createPartitionServiceDurabilityFitnessMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-learner-promotion-count-check-methods.js",
+      "line": 339,
+      "column": 25,
+      "functionName": "createPartitionServiceLearnerPromotionCountCheckMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-learner-promotion-methods.js",
+      "line": 671,
+      "column": 4,
+      "functionName": "createPartitionServiceLearnerPromotionMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-learner-promotion-proof-methods.js",
+      "line": 325,
+      "column": 25,
+      "functionName": "createPartitionServiceLearnerPromotionProofMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-learner-promotion-wake-methods.js",
+      "line": 215,
+      "column": 25,
+      "functionName": "createPartitionServiceLearnerPromotionWakeMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-lifecycle-methods.js",
+      "line": 236,
+      "column": 21,
+      "functionName": "createPartitionServiceLifecycleMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-merge-replication-methods.js",
+      "line": 714,
+      "column": 25,
+      "functionName": "createPartitionServiceMergeReplicationMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-merge-replication-resumption-methods.js",
+      "line": 118,
+      "column": 21,
+      "functionName": "createPartitionServiceMergeReplicationResumptionMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-metadata-delivery-methods.js",
+      "line": 595,
+      "column": 4,
+      "functionName": "createPartitionServiceMetadataDeliveryMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-rebalancer-methods.js",
+      "line": 244,
+      "column": 21,
+      "functionName": "createPartitionServiceRebalancerMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-source-replication-start-methods.js",
+      "line": 427,
+      "column": 21,
+      "functionName": "createPartitionServiceSourceReplicationStartMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-service-split-mirror-queue-methods.js",
+      "line": 296,
+      "column": 25,
+      "functionName": "createPartitionServiceSplitMirrorQueueMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-split-merge-manager-core-methods.js",
+      "line": 583,
+      "column": 21,
+      "functionName": "createPartitionSplitMergeManagerCoreMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-split-merge-manager-proposal-methods.js",
+      "line": 240,
+      "column": 16,
+      "functionName": "createPartitionSplitMergeManagerProposalMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-split-merge-manager-transition-methods.js",
+      "line": 744,
+      "column": 4,
+      "functionName": "createPartitionSplitMergeManagerTransitionMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/move-planner-state-methods.js",
+      "line": 863,
+      "column": 9,
+      "functionName": "createMovePlannerStateMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/rebalance-coordinator-operation-persistence-collision.js",
+      "line": 119,
+      "column": 27,
+      "functionName": "applyRebalanceCoordinatorOperationPersistenceCollisionMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
+      "line": 322,
+      "column": 24,
+      "functionName": "assignReplicaOperationRepositoryEntityReadMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-incomplete-read-methods.js",
+      "line": 499,
+      "column": 24,
+      "functionName": "assignReplicaOperationRepositoryIncompleteReadMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-message-group-membership-methods.js",
+      "line": 152,
+      "column": 24,
+      "functionName": "assignReplicaOperationRepositoryMessageGroupMembershipMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-mutation-budget-methods.js",
+      "line": 59,
+      "column": 24,
+      "functionName": "assignReplicaOperationRepositoryMutationBudgetMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+      "line": 737,
+      "column": 24,
+      "functionName": "assignReplicaOperationRepositoryMutationGatewayMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
+      "line": 724,
+      "column": 24,
+      "functionName": "assignReplicaOperationRepositoryMutationPersistenceMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
+      "line": 167,
+      "column": 24,
+      "functionName": "assignReplicaOperationRepositoryMutationRowMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-mutation-transition-methods.js",
+      "line": 127,
+      "column": 24,
+      "functionName": "assignReplicaOperationRepositoryMutationTransitionMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-mutation-update-methods.js",
+      "line": 545,
+      "column": 24,
+      "functionName": "assignReplicaOperationRepositoryMutationUpdateMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
+      "line": 627,
+      "column": 24,
+      "functionName": "assignReplicaOperationRepositoryObservationMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
+      "line": 667,
+      "column": 24,
+      "functionName": "assignReplicaOperationRepositoryReadMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
+      "line": 469,
+      "column": 24,
+      "functionName": "assignReplicaOperationRepositoryRowMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-visibility-methods.js",
+      "line": 790,
+      "column": 24,
+      "functionName": "assignReplicaOperationRepositoryVisibilityMethods",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/workflow/durable-workflow-coordinator.js",
+      "line": 740,
+      "column": 25,
+      "functionName": "<anonymous>",
+      "kind": "prototype_copy_bags",
+      "reason": "prototype-copy method bag; write an explicit-context module instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    }
+  ]
+}
