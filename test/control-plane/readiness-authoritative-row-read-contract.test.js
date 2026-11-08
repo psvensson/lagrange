@@ -15,8 +15,7 @@
  */
 import {test} from '../../src/test-helpers/tap.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
-import {ControlPlaneReadinessService} from
-  '../../src/control-plane/control-plane-readiness-service.js';
+
 import {MembershipPublicationCoordinatorReads} from
   '../../src/control-plane/membership-publication-coordinator-reads.js';
 import {
@@ -29,6 +28,7 @@ import {
   createCache,
 } from './control-plane-readiness-service-test-support.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 ConfigurationManager.getInstance().initialize();
 
 const CACHE_NODE_ID = 'node-cache-visible';
@@ -76,10 +76,16 @@ test('the readiness list reader and the membership publication coordinator ' +
       canRead: () => true,
       readRows: async () => buildResult(),
     };
-    const readiness = new ControlPlaneReadinessService({
+    // The single-row owner reads are not under test here; they answer the
+    // cache row, which is what the reader answered before the owner
+    // interface was validated (no single-row member meant the cache row).
+    const cacheNodeRow = async (nodeId) => cache.get(TABLES.NODES, nodeId);
+    const readiness = createReadinessServiceForTest({
       nodeId: 'seed-node',
       systemTableCache: cache,
       nodesOwner: {
+        getNode: cacheNodeRow,
+        getNodeFromCache: cacheNodeRow,
         listNodes: async () => buildResult(),
         listNodesFromCache: async () =>
           ({success: true, rows: cache.getAll(TABLES.NODES)}),

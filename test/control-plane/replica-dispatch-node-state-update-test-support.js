@@ -19,6 +19,7 @@ import {NodeReadyLeaseAuthority} from
 import {
   NODE_CAPABILITY,
 } from '../../src/constants/index.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 export const READY_NODE_CAPABILITIES = Object.freeze([
   NODE_CAPABILITY.PARTITION_REPLICA,
@@ -153,52 +154,53 @@ export function createService(options = {}) {
     executeOperation: async () => ({success: true}),
   };
 
-  const service = new ReplicaDispatchService({
-    nodeId: options.nodeId || 'node-1',
-    messageRouter: options.messageRouter || {},
-    cdcIntegrationService,
-    controlPlaneSystemTableGateway,
-    controlPlaneReadinessService,
-    // The receiving replica's node lifecycle owner over the durable fixture.
-    nodeLifecyclePublication: controlPlaneSystemTableGateway ?
-      new NodeLifecyclePublication({
-        gateway: controlPlaneSystemTableGateway,
-        leaseAuthority: NodeReadyLeaseAuthority.fromConfiguration(),
-        now: options.now,
-      }) :
-      null,
-    operationDispatchQueueShardCount:
+  const service = new ReplicaDispatchService(withNodeReadinessService(
+    'ReplicaDispatchService', {
+      nodeId: options.nodeId || 'node-1',
+      messageRouter: options.messageRouter || {},
+      cdcIntegrationService,
+      controlPlaneSystemTableGateway,
+      controlPlaneReadinessService,
+      // The receiving replica's node lifecycle owner over the durable fixture.
+      nodeLifecyclePublication: controlPlaneSystemTableGateway ?
+        new NodeLifecyclePublication({
+          gateway: controlPlaneSystemTableGateway,
+          leaseAuthority: NodeReadyLeaseAuthority.fromConfiguration(),
+          now: options.now,
+        }) :
+        null,
+      operationDispatchQueueShardCount:
       options.operationDispatchQueueShardCount,
-    setTimeoutFn: options.setTimeoutFn,
-    clearTimeoutFn: options.clearTimeoutFn,
-    nodeStateUpdateRetryAfterMs: options.nodeStateUpdateRetryAfterMs,
-    operationDispatchRetryAfterMs: options.operationDispatchRetryAfterMs,
-    replicaOperationDispatchTimeoutMs:
+      setTimeoutFn: options.setTimeoutFn,
+      clearTimeoutFn: options.clearTimeoutFn,
+      nodeStateUpdateRetryAfterMs: options.nodeStateUpdateRetryAfterMs,
+      operationDispatchRetryAfterMs: options.operationDispatchRetryAfterMs,
+      replicaOperationDispatchTimeoutMs:
       options.replicaOperationDispatchTimeoutMs,
-    dispatchReadinessRefreshTimeoutMs:
+      dispatchReadinessRefreshTimeoutMs:
       options.dispatchReadinessRefreshTimeoutMs,
-    systemTableCache: {
-      get: (tableName, nodeId) => {
-        if (tableName !== 'nodes') {
-          return null;
-        }
-        return cacheByNodeId.get(nodeId) || null;
+      systemTableCache: {
+        get: (tableName, nodeId) => {
+          if (tableName !== 'nodes') {
+            return null;
+          }
+          return cacheByNodeId.get(nodeId) || null;
+        },
+        getAll: (tableName) => {
+          if (tableName === 'replica_operations') {
+            return cacheReplicaOperations;
+          }
+          if (tableName === 'services') {
+            return cacheServices;
+          }
+          if (tableName === 'nodes') {
+            return cacheNodes;
+          }
+          return [];
+        },
       },
-      getAll: (tableName) => {
-        if (tableName === 'replica_operations') {
-          return cacheReplicaOperations;
-        }
-        if (tableName === 'services') {
-          return cacheServices;
-        }
-        if (tableName === 'nodes') {
-          return cacheNodes;
-        }
-        return [];
-      },
-    },
-    rebalanceCoordinator,
-  });
+      rebalanceCoordinator,
+    }));
   service.initialize();
   return service;
 }

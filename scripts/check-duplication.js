@@ -257,8 +257,9 @@ const RATCHET_TARGETS = [
     // checker's hint.
     // Publisher and corpus-ratchet speedups: tightened 650/24370 -> 649/24346
     // on the checker's hint.
-    baselineCloneGroupCount: 649,
-    baselineDuplicatedLineCount: 24346,
+    baselineCloneGroupCount: 648,
+    // readiness-service-constructor-injection: 24346 -> 24336 -> 24292 (round 2, clones 649 -> 648) -> 24272 (B1 repair).
+    baselineDuplicatedLineCount: 24272,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

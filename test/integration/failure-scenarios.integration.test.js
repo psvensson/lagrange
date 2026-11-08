@@ -30,6 +30,7 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
 import {
@@ -50,7 +51,7 @@ function createAlwaysReadyControlPlaneReadinessService() {
     [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
     [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
   };
-  return {
+  return readinessServiceFake({
     getNodeReadinessSync: (_nodeId, options = {}) => ({
       dimensions: {
         ...dimensions,
@@ -59,7 +60,7 @@ function createAlwaysReadyControlPlaneReadinessService() {
           {}),
       },
     }),
-  };
+  });
 }
 
 function getCachePrimaryKeyField(tableName) {

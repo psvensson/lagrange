@@ -36,8 +36,7 @@ import {SystemTableCache} from
   '../../src/cache/system-table-cache.js';
 import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from
   '../../src/constants/index.js';
-import {ControlPlaneReadinessService} from
-  '../../src/control-plane/control-plane-readiness-service.js';
+
 import {MembershipPublicationCoordinator} from
   '../../src/control-plane/membership-publication-coordinator.js';
 import {
@@ -45,6 +44,7 @@ import {
   planningIdentitiesEqual,
 } from '../../src/control-plane/readiness-planning-semantic-generation.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const NODE_ID = 'node-a';
 const T0 = Date.parse('2026-10-02T06:00:00.000Z');
 const READY_LEASE_WINDOW_MS = 60000;
@@ -72,7 +72,7 @@ async function composeSingleNodeReadiness({clock}) {
   const cache = new SystemTableCache({
     cacheId: 'witness-cache',
   });
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: NODE_ID,
     systemTableCache: cache,
     now: () => clock,

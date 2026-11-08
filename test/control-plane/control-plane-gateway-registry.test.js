@@ -4,6 +4,14 @@ import {LeaseService} from '../../src/control-plane/lease-service.js';
 import {ReplicaDispatchService} from '../../src/control-plane/replica-dispatch-service.js';
 import {ControlPlaneReadinessService} from '../../src/control-plane/control-plane-readiness-service.js';
 import {
+  CONTROL_PLANE_READINESS_COLLABORATOR,
+  CONTROL_PLANE_READINESS_ERROR_CODE,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  createReadinessServiceForTest,
+  partialReadinessFake,
+} from '../helpers/readiness-service-fixture.js';
+import {
   clearRegisteredControlPlaneSystemTableGateway,
   registerControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-gateway-registry.js';
@@ -31,11 +39,11 @@ test('runtime services require explicit gateway wiring while admin consumers ' +
     nodeId: 'node-a',
     nodeLeaseOwner: {},
   });
-  const readinessService = new ControlPlaneReadinessService({
-    nodeId: 'node-a',
-  });
+  const readinessService = createReadinessServiceForTest({nodeId: 'node-a'});
+  t.teardown(() => readinessService.shutdown());
   const dispatchService = new ReplicaDispatchService({
     nodeId: 'node-a',
+    controlPlaneReadinessService: partialReadinessFake(),
   });
   const serviceDiscovery = new AdminServiceDiscovery({
     nodeId: 'node-a',
@@ -51,9 +59,20 @@ test('runtime services require explicit gateway wiring while admin consumers ' +
     null,
     'LeaseService should not use the registered gateway implicitly',
   );
-  t.equal(
+  // A readiness service without its system-table cache is a construction
+  // refusal, never a degraded service that could fall back to the
+  // registered gateway (quest readiness-service-constructor-injection).
+  t.throws(
+    () => new ControlPlaneReadinessService({nodeId: 'node-a'}),
+    {
+      code: CONTROL_PLANE_READINESS_ERROR_CODE.COLLABORATOR_MISSING,
+      collaborator: CONTROL_PLANE_READINESS_COLLABORATOR.SYSTEM_TABLE_CACHE,
+    },
+    'ControlPlaneReadinessService refuses construction without its cache',
+  );
+  t.not(
     readinessService.controlPlaneSystemTableGateway,
-    null,
+    sentinelGateway,
     'ControlPlaneReadinessService should not use the registered gateway implicitly',
   );
   t.equal(

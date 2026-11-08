@@ -20,11 +20,15 @@ import {ALLOWED_UNIFIED_SERVICE_TYPES} from
 import {
   runRebalancerActivity,
 } from '../diagnostics/formation-owner-attribution.js';
+import {
+  requireControlPlaneReadinessService,
+} from '../control-plane/control-plane-readiness-collaborators.js';
+
+const UNIFIED_REBALANCER_OWNER_NAME = 'UnifiedRebalancer';
 
 const {
   CLUSTER_READINESS_TIMEOUT_MS,
   ConfigurationManager,
-  ControlPlaneReadinessService,
   DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
   EventEmitter,
   LoggingService,
@@ -278,33 +282,12 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
         now: this.nowFn,
       });
     // The readiness service is NODE-scoped and owned by the node composition
-    // owner (bootstrap control-plane setup), which hands it to the
-    // RebalanceCoordinator — the node-scoped service container every
-    // partition rebalancer receives. Resolve it from there BEFORE ever
-    // constructing one: a per-rebalancer construction (quest
-    // single-readiness-owner) left 51 abandoned services per seed process,
-    // each subscribed to cache changes and rebuilding every node's planning
-    // snapshot while serving no reads, because the coordinator's instance was
-    // adopted only after construction. A private instance is built solely
-    // when no container provides one (standalone / unit fixtures), and then
-    // THIS rebalancer owns its lifecycle (shut down with the rebalancer).
-    const containerReadinessService =
-      options.controlPlaneReadinessService ||
-      this.rebalanceCoordinator?.controlPlaneReadinessService ||
-      null;
-    this.ownsControlPlaneReadinessService = !containerReadinessService;
-    this.controlPlaneReadinessService =
-      containerReadinessService ||
-      new ControlPlaneReadinessService({
-        nodeId: this.nodeId,
-        systemTableCache: this.systemTableCache,
-        cacheMutationTarget: this.systemTableCache,
-        messageRouter: this.messageRouter,
-        storageAccountingService: this.storageAccountingService,
-        cdcIntegrationService: this.cdcIntegrationService,
-        cdcGroupPropagationService: this.cdcGroupPropagationService,
-        controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
-      });
+    // owner (bootstrap control-plane setup); every rebalancer receives that
+    // one service as a named collaborator and never builds a second instance
+    // of the authority (quest single-readiness-owner: per-rebalancer
+    // constructions left 51 abandoned services per seed process).
+    this.controlPlaneReadinessService = requireControlPlaneReadinessService(
+      options, UNIFIED_REBALANCER_OWNER_NAME);
 
     // Cluster readiness gate (optional, for bootstrap-lifecycle-hardening)
     // When provided, defers first planning cycle until cluster is ready.
@@ -390,22 +373,6 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
   }
 
   /**
-   * Shut down the readiness service only when this rebalancer constructed it
-   * (no container provided one). A node-owned service is never touched by a
-   * partition lifecycle.
-   * @private
-   */
-  releaseOwnedControlPlaneReadinessService() {
-    if (
-      this.ownsControlPlaneReadinessService &&
-      typeof this.controlPlaneReadinessService?.shutdown === 'function'
-    ) {
-      this.controlPlaneReadinessService.shutdown();
-    }
-    this.ownsControlPlaneReadinessService = false;
-  }
-
-  /**
    * Set the RebalanceCoordinator for delegated operation execution.
    * Requirements: 2.5
    * @param {Object} coordinator - RebalanceCoordinator instance.
@@ -469,24 +436,6 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
     ) {
       this.startupRecoveryCoordinator =
         options.startupRecoveryCoordinator || null;
-    }
-
-    // Only a readiness service THIS rebalancer constructed is its to
-    // reconfigure; the node-owned service's dependencies belong to the node
-    // composition owner (syncing a consumer's possibly-null dependency into
-    // the shared service would null it for every consumer).
-    if (
-      this.ownsControlPlaneReadinessService &&
-      this.controlPlaneReadinessService &&
-      typeof this.controlPlaneReadinessService.syncOwnerDependencies ===
-        'function'
-    ) {
-      this.controlPlaneReadinessService.syncOwnerDependencies({
-        systemTableCache: this.systemTableCache,
-        cacheMutationTarget: this.systemTableCache,
-        messageRouter: this.messageRouter,
-        cdcIntegrationService: this.cdcIntegrationService,
-      });
     }
 
     if (Object.hasOwn(options, 'partitionServices')) {
@@ -562,12 +511,8 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
         this.controlPlaneReadinessService,
         coordinator.controlPlaneReadinessService,
       );
-      // Adopting the container's node-owned service abandons a privately
-      // constructed one: shut it down so it stops subscribing and rebuilding.
-      this.releaseOwnedControlPlaneReadinessService();
       this.controlPlaneReadinessService =
         coordinator.controlPlaneReadinessService;
-      this.ownsControlPlaneReadinessService = false;
     }
     if (this.managesStoragePressureBehavior && this.storageAccountingService) {
       this.storagePressureBehavior = new StoragePressureBehavior({

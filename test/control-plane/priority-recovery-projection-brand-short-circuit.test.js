@@ -1,10 +1,7 @@
 import t from 'tap';
 import {
-  ControlPlaneReadinessPublicationPlanningSnapshot,
-} from '../../src/control-plane/control-plane-readiness-publication-planning-snapshot.js';
-import {
-  ControlPlaneReadinessDiagnosticsEligibility,
-} from '../../src/control-plane/control-plane-readiness-diagnostics-eligibility.js';
+  ControlPlaneReadinessService,
+} from '../../src/control-plane/control-plane-readiness-service.js';
 import {
   PRIORITY_RECOVERY_PLANNING_PROJECTION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -22,10 +19,11 @@ import {
 // the semantics trap the matrix identified. Section counts from the gap
 // watchdog prove the skip/rebuild split.
 
-const planningProto = ControlPlaneReadinessPublicationPlanningSnapshot.prototype;
-const eligProto = ControlPlaneReadinessDiagnosticsEligibility.prototype;
+const planningProto = ControlPlaneReadinessService.prototype;
+const eligProto = ControlPlaneReadinessService.prototype;
 const GATE_SITE = 'publication_recovery_gate_snapshot_build';
 const PROJECTION_SITE = 'priority_recovery_planning_projection_build';
+const CTX_NOW_MS = 1_760_000_000_000;
 
 function siteCount(site) {
   return getSharedSyncSectionRegistry().snapshot().sites[site]?.count || 0;
@@ -35,6 +33,8 @@ function makeCtx() {
   const ctx = Object.create(planningProto);
   ctx.nodeId = 'node-a';
   ctx.localClusterIncarnationFenceProvider = () => null;
+  // A host built without the constructor states its clock explicitly.
+  ctx.now = () => CTX_NOW_MS;
   return ctx;
 }
 const eligCtx = Object.create(eligProto);

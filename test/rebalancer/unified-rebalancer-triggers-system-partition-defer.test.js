@@ -24,6 +24,7 @@ import {
   createPostgresWireEndpoint,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 // Initialize test environment
 // Create a mock system table cache
@@ -33,7 +34,7 @@ import {
 // Create mock rebalance coordinator
 // Create mock readiness service backed by the same cache
 function createMockReadinessService(mockCache) {
-  return {
+  return partialReadinessFake({
     getNodeReadinessSync: (nodeId) => {
       const nodeRow = mockCache.get('nodes', nodeId);
       if (!nodeRow) {
@@ -106,7 +107,7 @@ function createMockReadinessService(mockCache) {
       return createMockReadinessService(mockCache)
         .getNodeReadinessSync(nodeId);
     },
-  };
+  });
 }
 
 // Create a fully configured rebalancer for testing

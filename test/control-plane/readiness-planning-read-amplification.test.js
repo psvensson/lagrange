@@ -8,14 +8,13 @@ import {
 import {
   CONTROL_PLANE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   readSharedNodeRows,
 } from '../../src/control-plane/readiness-planning-formation-source.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const READ_AMPLIFICATION_NOW_MS = 620000;
 const NODE_COUNT = 3;
 
@@ -36,7 +35,7 @@ function createCountingService() {
     }
     return originalGetAll(tableName);
   };
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: nodeIds[0],
     systemTableCache: cache,
     cdcGroupPropagationService: createPublicationService({

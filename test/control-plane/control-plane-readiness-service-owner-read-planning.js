@@ -5,14 +5,13 @@ import {
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from '../../src/control-plane/control-plane-publication-merge.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   RECOVERY_PROTOCOL_STATE,
 } from '../../src/control-plane/membership-lifecycle-constants.js';
 import {TEST_PRIORITY_SERVE_PARTITION_ID, TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT, createCache} from './control-plane-readiness-service-planning-snapshot-support.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 test('ControlPlaneReadinessService owner-read planning answer uses the direct ready publication row over a stale same-epoch planning witness',
   async (t) => {
     const TEST_NODE_ID = 'node-priority-owner-read-direct-ready';
@@ -41,7 +40,7 @@ test('ControlPlaneReadinessService owner-read planning answer uses the direct re
         }),
       ]),
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       membershipPublicationService: {
@@ -129,7 +128,7 @@ test('ControlPlaneReadinessService owner-read planning answer keeps the direct s
         }),
       ]),
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       membershipPublicationService: {
@@ -242,7 +241,7 @@ test('ControlPlaneReadinessService owner-read planning answer keeps the direct s
       publicationPending: false,
       ackPending: false,
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       membershipPublicationService: {
@@ -443,7 +442,7 @@ test('ControlPlaneReadinessService owner-read planning answer demotes lower-epoc
       unresolvedSemanticBlockedPartitionCount: 1,
       hasExplicitSemanticStateContract: true,
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       membershipPublicationService: {
@@ -556,14 +555,14 @@ test('ControlPlaneReadinessService owner-read sync planning answer keeps the dir
       publicationPending: false,
       ackPending: false,
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
+      // Readiness reads the cluster's latest publication row (the
+      // production coordinator's cluster read); the fixture derives the
+      // per-node read from it.
       membershipPublicationService: {
-        getLatestPublicationForNodeSync(targetNodeId) {
-          if (targetNodeId !== TEST_NODE_ID) {
-            return null;
-          }
+        getLatestClusterPublicationSync() {
           return {
             publicationEpoch: TEST_PUBLICATION_EPOCH,
             status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,

@@ -228,3 +228,23 @@ They are recorded, not in scope (R17); the readiness chain is the pilot.
   chain was repaired first at c0c2a8ad6 (import-graph producer: a module
   resolving outside the repository root is never a node); the budget-check
   quest landed on it as 86ee709c8.
+- 2026-11-08: readiness injection rulings. Four owners (RebalanceCoordinator,
+  UnifiedRebalancer, ReplicaDispatchService, StorageAdmissionService) built a
+  private readiness service when none was injected: a hidden second authority
+  (R01, R03) that the quest removes by injecting the node's service and
+  sweeping the test construction sites through one fixture helper. Late-bound
+  collaborators are wired at one validated point; a read before wiring is a
+  named unavailable state. Routed finding (R17): the unawaited best-effort
+  planning read consumed as a snapshot, quest
+  `priority-recovery-owner-read-snapshot-await` (class fix).
+- 2026-11-08 (lead decision, supersedes one clause of the readiness injection
+  ruling above, R09 recorded): re-wiring a late-bound collaborator through
+  `syncOwnerDependencies` IS a production path (control-plane-setup, the
+  heartbeat service, the coordinator lifecycle and the SQL-runtime handoff each
+  wire different fields at different times, and the storage-accounting
+  replacement already has a named semantic-owner replacement step). A second
+  wiring is therefore not refused: every wiring validates the collaborator's
+  interface once at that point (a malformed one is a typed refusal), a
+  replacement is the named transition that clears the owner's derived memos,
+  and a read before wiring answers a named unavailable state. The sealed
+  constraint behaviour-unchanged outranks the earlier wording.

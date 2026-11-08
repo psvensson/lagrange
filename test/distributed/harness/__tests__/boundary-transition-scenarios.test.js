@@ -16,6 +16,7 @@ import {
   buildLoadNodeAvailabilitySnapshot,
   resolveLoadNodeAvailabilityState,
 } from '../load-node-availability.js';
+import {withNodeReadinessService} from '../../../helpers/readiness-service-fixture.js';
 
 const TABLES_SQL_FRAGMENT = 'FROM tables';
 const PARTITIONS_SQL_FRAGMENT = 'FROM partitions';
@@ -347,7 +348,7 @@ test('boundary-transition scenario preserves authority-establishment ' +
 
 test('boundary-transition scenario defers critical partition create admission ' +
   'while authoritative operation visibility remains unresolved', async () => {
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: 'node-local',
     transactionCoordinator: createBoundaryScenarioTransactionCoordinator(),
     systemTableCache: {
@@ -375,7 +376,7 @@ test('boundary-transition scenario defers critical partition create admission ' 
     },
     ...createBoundaryScenarioStorageOwners(),
     enableTimeouts: false,
-  });
+  }));
   coordinator.initialize();
   coordinator.repository.getOperationsByEntityAuthoritativeObservation =
     async () => ({

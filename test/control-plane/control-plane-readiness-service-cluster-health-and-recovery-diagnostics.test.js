@@ -23,9 +23,7 @@ import {
 } from '../../src/control-plane/projection-readiness-constants.js';
 import {
 } from '../../src/control-plane/control-plane-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
@@ -33,7 +31,7 @@ import {
 import {
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
-
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 test('isClusterMemberHealthy returns true for transport-connected ready ' +
   'node with expired lease but recent heartbeat ' +
   '(uses ControlPlaneReadinessService.isClusterMemberHealthy, ' +
@@ -48,7 +46,7 @@ test('isClusterMemberHealthy returns true for transport-connected ready ' +
     }],
     services: [createMessageGroupService('node-cache-lag-remote')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -106,7 +104,7 @@ test('isClusterMemberHealthy grants remote membership on live transport ' +
     }],
     services: [createMessageGroupService(nodeId)],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -153,7 +151,7 @@ test('isClusterMemberHealthy denies a stale-heartbeat remote peer when the ' +
     }],
     services: [createMessageGroupService(nodeId)],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -209,7 +207,7 @@ test('isClusterMemberHealthy drops the inert || READY disjunct: a live router ' 
     }],
     services: [createMessageGroupService(nodeId)],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -255,7 +253,7 @@ async (t) => {
     }],
     services: [createMessageGroupService('node-cache-lag')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -335,7 +333,7 @@ async (t) => {
     }],
     services: [createMessageGroupService(selfNodeId)],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: selfNodeId,
     systemTableCache: cache,
     messageRouter: {
@@ -391,7 +389,7 @@ async (t) => {
     }],
     services: [createMessageGroupService(remoteNodeId)],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: selfNodeId,
     systemTableCache: cache,
     messageRouter: {
@@ -441,7 +439,7 @@ async (t) => {
     }],
     services: [createMessageGroupService(selfNodeId)],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: selfNodeId,
     systemTableCache: cache,
     messageRouter: {
@@ -479,7 +477,7 @@ test('ControlPlaneReadinessService retains recovery admission on live ' +
   'transport and service evidence', async (t) => {
   const now = 500000;
   const nodeId = 'node-recovery-grace';
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: createCache({
       nodes: [{
@@ -526,7 +524,7 @@ test('ControlPlaneReadinessService retains recovery admission on live ' +
 test('ControlPlaneReadinessService records recovery participation ' +
   'decisions in the diagnostics ledger', (t) => {
   const nodeId = 'node-recovery-ledger';
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: createCache({
       nodes: [createActiveNode(nodeId)],
@@ -621,7 +619,7 @@ test('ControlPlaneReadinessService records authoritative repair attempts ' +
       [COLUMN.STATUS]: 'syncing',
     }],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -702,7 +700,7 @@ test('ControlPlaneReadinessService getNodeReadiness remains read-only for ' +
   'lifecycle and placement state when no authoritative refresh is requested',
 async (t) => {
   const nodeId = 'node-read-only';
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: createCache({
       nodes: [createActiveNode(nodeId)],
@@ -768,7 +766,7 @@ async (t) => {
     }],
   });
   const gatewayCalls = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: {
@@ -859,7 +857,7 @@ async (t) => {
 test('ControlPlaneReadinessService exposes controlPlanePublished while keeping recovery eligibility open during publication convergence', async (t) => {
   const now = 610000;
   const nodeId = 'node-publication-pending';
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: createCache({
       nodes: [createActiveNode(nodeId)],
@@ -976,7 +974,7 @@ test('ControlPlaneReadinessService exposes controlPlanePublished while keeping r
 
 test('ControlPlaneReadinessService awaits async membership publication reads before computing recovery eligibility', async (t) => {
   const nodeId = 'node-publication-async';
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: createCache({
       nodes: [createActiveNode(nodeId)],
@@ -1026,7 +1024,7 @@ test('ControlPlaneReadinessService awaits async membership publication reads bef
 test('ControlPlaneReadinessService splits publication diagnostics from recovery planning when computing readiness', async (t) => {
   const nodeId = 'node-publication-lane-split';
   const capturedReadProfiles = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: createCache({
       nodes: [createActiveNode(nodeId)],
@@ -1045,11 +1043,10 @@ test('ControlPlaneReadinessService splits publication diagnostics from recovery 
       enteredAt: '2026-03-04T00:00:00.000Z',
       recentTransitions: [],
     }),
+    // Readiness reads the cluster's latest publication row (the production
+    // coordinator's cluster read); the fixture derives the per-node read.
     membershipPublicationService: {
-      async getLatestPublicationForNode(targetNodeId, options = {}) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      async getLatestClusterPublication(options = {}) {
         capturedReadProfiles.push(options);
         if (options.readProfile === 'diagnostics') {
           return null;
@@ -1062,10 +1059,7 @@ test('ControlPlaneReadinessService splits publication diagnostics from recovery 
           acknowledgedNodeIds: [],
         };
       },
-      getLatestPublicationForNodeSync(targetNodeId, options = {}) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      getLatestClusterPublicationSync(options = {}) {
         capturedReadProfiles.push(options);
         if (options.readProfile === 'diagnostics') {
           return null;
@@ -1133,10 +1127,16 @@ test('ControlPlaneReadinessService splits publication diagnostics from recovery 
   t.end();
 });
 
-test('ControlPlaneReadinessService sync readiness splits publication diagnostics from recovery planning', (t) => {
+// The sync CLUSTER publication read is memoized per publication change
+// (CL-019) whenever a publication owner is wired, as it always was with the
+// production coordinator: the diagnostics lane and the recovery-planning lane
+// of one sync readiness build observe the same row. (A per-read-profile split
+// was observable only through a fake without the cluster read, which skipped
+// the memo; that fake shape is now refused.)
+test('ControlPlaneReadinessService sync readiness derives publication diagnostics and recovery planning from one memoized cluster publication read', (t) => {
   const nodeId = 'node-publication-lane-split-sync';
   const capturedReadProfiles = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: createCache({
       nodes: [createActiveNode(nodeId)],
@@ -1155,15 +1155,11 @@ test('ControlPlaneReadinessService sync readiness splits publication diagnostics
       enteredAt: '2026-03-04T00:00:00.000Z',
       recentTransitions: [],
     }),
+    // Readiness reads the cluster's latest publication row (the production
+    // coordinator's cluster read); the fixture derives the per-node read.
     membershipPublicationService: {
-      getLatestPublicationForNodeSync(targetNodeId, options = {}) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      getLatestClusterPublicationSync(options = {}) {
         capturedReadProfiles.push(options);
-        if (options.readProfile === 'diagnostics') {
-          return null;
-        }
         return {
           publicationEpoch: 24,
           status: 'ACK_PENDING',
@@ -1181,20 +1177,23 @@ test('ControlPlaneReadinessService sync readiness splits publication diagnostics
   });
 
   t.same(
-    capturedReadProfiles.map((options) => options.readProfile).sort(),
-    ['diagnostics', 'planning'],
-    'sync readiness should read diagnostics and planning publication lanes separately',
+    capturedReadProfiles.map((options) => options.readProfile),
+    ['diagnostics'],
+    'sync readiness reads the cluster publication once; the planning lane is served from the memoized row',
   );
   t.equal(
-    readiness.membershipPublication,
-    null,
-    'sync diagnostics publication truth should remain null when no durable publication row is visible',
+    readiness.membershipPublication?.status,
+    'ACK_PENDING',
+    'sync publication truth is the memoized cluster row',
   );
-  t.equal(readiness.dimensions.controlPlanePublished, true);
-  t.equal(readiness.dimensions.controlPlaneRecoveryEligible, true);
+  t.equal(readiness.dimensions.controlPlanePublished, false,
+    'a pending publication is not published');
+  t.equal(readiness.dimensions.controlPlaneRecoveryEligible, true,
+    'a pending publication keeps recovery open');
   t.same(
     readiness.priorityControlPlaneRecovery.reasonCodes,
     [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING],
+    'priority recovery reasons derive from the same row',
   );
   t.end();
 });

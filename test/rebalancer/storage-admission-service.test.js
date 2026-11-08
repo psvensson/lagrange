@@ -12,9 +12,7 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   COLUMN,
   NUM,
@@ -43,6 +41,10 @@ import {
 import {
   StorageAdmissionService,
 } from '../../src/rebalancer/storage-admission-service.js';
+import {
+  createReadinessServiceForTest,
+  withNodeReadinessService,
+} from '../helpers/readiness-service-fixture.js';
 
 function initializeConfig(overrides = {}) {
   ConfigurationManager.resetInstance();
@@ -74,7 +76,7 @@ function insertRow(cache, tableName, row) {
 }
 
 function createServices(cache, accounting) {
-  const service = new StorageAdmissionService({
+  const service = new StorageAdmissionService(withNodeReadinessService('StorageAdmissionService', {
     accountingService: accounting,
     cdcGroupPropagationService: {
       getPublicationModeDiagnostics() {
@@ -86,7 +88,7 @@ function createServices(cache, accounting) {
         };
       },
     },
-  });
+  }));
   return service;
 }
 
@@ -178,7 +180,7 @@ function setupWithNode(nodeId, budgetBytes) {
 test('constructor - throws when accountingService is missing', async (t) => {
   initializeConfig();
   t.throws(
-    () => new StorageAdmissionService({}),
+    () => new StorageAdmissionService(withNodeReadinessService('StorageAdmissionService', {})),
     {message: STORAGE_ADMISSION_ERROR_MSG.ACCOUNTING_SERVICE_REQUIRED},
   );
   t.end();
@@ -745,7 +747,7 @@ test('checkSplit - repairs stale connected node readiness from ' +
     [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
   });
 
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -1189,9 +1191,9 @@ test('PBT: admission never allows over-budget allocation', async (t) => {
           [COLUMN.STORAGE_BUDGET_BYTES]: budget,
         });
 
-        const admission = new StorageAdmissionService({
+        const admission = new StorageAdmissionService(withNodeReadinessService('StorageAdmissionService', {
           accountingService: accounting,
-        });
+        }));
 
         const result = await admission.checkAdd({
           targetNodeId: 'pbt-node',
@@ -1237,9 +1239,9 @@ test('PBT: deterministic admission for identical inputs', async (t) => {
           [COLUMN.STORAGE_BUDGET_BYTES]: budget,
         });
 
-        const admission = new StorageAdmissionService({
+        const admission = new StorageAdmissionService(withNodeReadinessService('StorageAdmissionService', {
           accountingService: accounting,
-        });
+        }));
 
         const r1 = await admission.checkAdd({
           targetNodeId: 'det-node',
@@ -1286,9 +1288,9 @@ test('PBT: critical replace allows more than non-critical at same usage',
             [COLUMN.STORAGE_BUDGET_BYTES]: budget,
           });
 
-          const admission = new StorageAdmissionService({
+          const admission = new StorageAdmissionService(withNodeReadinessService('StorageAdmissionService', {
             accountingService: accounting,
-          });
+          }));
 
           const nonCritical = await admission.checkReplace({
             targetNodeId: 'crit-node',

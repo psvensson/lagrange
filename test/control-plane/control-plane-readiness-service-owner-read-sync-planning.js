@@ -14,9 +14,7 @@ import {
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from '../../src/control-plane/control-plane-publication-merge.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   RECOVERY_PROTOCOL_STATE,
 } from '../../src/control-plane/membership-lifecycle-constants.js';
@@ -25,6 +23,7 @@ import {
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {TEST_PRIORITY_RECOVERY_PENDING_REASON, TEST_PRIORITY_SERVE_BUDGET_BYTES, TEST_PRIORITY_SERVE_EPOCH, TEST_PRIORITY_SERVE_LAST_HEARTBEAT, TEST_PRIORITY_SERVE_NODE_ID, TEST_PRIORITY_SERVE_OBSERVED_AT, TEST_PRIORITY_SERVE_PARTITION_ID, TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT, TEST_PRIORITY_SERVE_READY_LEASE_EXPIRES_AT, createAccountingService, createActiveNode, createCache, createMessageGroupService, createPublicationService} from './control-plane-readiness-service-planning-snapshot-support.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 test('ControlPlaneReadinessService owner-read sync planning answer demotes lower-epoch retained decision snapshots behind the direct publication row',
   (t) => {
     const TEST_NODE_ID = 'node-priority-owner-read-sync-direct-newer-epoch';
@@ -159,14 +158,14 @@ test('ControlPlaneReadinessService owner-read sync planning answer demotes lower
       unresolvedSemanticBlockedPartitionCount: 1,
       hasExplicitSemanticStateContract: true,
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
+      // Readiness reads the cluster's latest publication row (the
+      // production coordinator's cluster read); the fixture derives the
+      // per-node read from it.
       membershipPublicationService: {
-        getLatestPublicationForNodeSync(targetNodeId) {
-          if (targetNodeId !== TEST_NODE_ID) {
-            return null;
-          }
+        getLatestClusterPublicationSync() {
           return {
             publicationEpoch: TEST_DIRECT_PUBLICATION_EPOCH,
             status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
@@ -277,7 +276,7 @@ test('ControlPlaneReadinessService keeps same-epoch planning closure witnesses d
       publicationPending: false,
       ackPending: false,
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache({
         nodes: [createActiveNode(TEST_NODE_ID)],
@@ -403,7 +402,7 @@ test('ControlPlaneReadinessService keeps same-epoch planning closure witnesses d
 
 test('ControlPlaneReadinessService closes external serve readiness during priority recovery while keeping recovery admission open',
   (t) => {
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: TEST_PRIORITY_SERVE_NODE_ID,
       systemTableCache: createCache(),
       now: () => TEST_PRIORITY_SERVE_LAST_HEARTBEAT,
@@ -500,7 +499,7 @@ test('ControlPlaneReadinessService preserves source snapshot version in membersh
       nodes: [createActiveNode(nodeId)],
       services: [createMessageGroupService(nodeId)],
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId,
       systemTableCache: cache,
       storageAccountingService: createAccountingService({
@@ -559,7 +558,7 @@ test('ControlPlaneReadinessService reports stale published priority summaries wi
         missingPartitionIds: ['sql_write_operations-p1'],
       },
     };
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'node-priority-refresh',
       systemTableCache: cache,
       storageAccountingService: createAccountingService({
@@ -626,7 +625,7 @@ test('ControlPlaneReadinessService keeps priority control-plane recovery mode ac
       nodes: [createActiveNode('node-priority-missing')],
       services: [createMessageGroupService('node-priority-missing')],
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'node-priority-missing',
       systemTableCache: cache,
       storageAccountingService: createAccountingService({
@@ -682,7 +681,7 @@ test('ControlPlaneReadinessService marks hard-pressure nodes ineligible',
       nodes: [overloadedNode],
       services: [createMessageGroupService('node-3')],
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'node-3',
       systemTableCache: cache,
       storageAccountingService: createAccountingService({
@@ -721,7 +720,7 @@ test('ControlPlaneReadinessService fails closed without storage owner',
       nodes: [createActiveNode('node-4')],
       services: [createMessageGroupService('node-4')],
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'node-4',
       systemTableCache: cache,
       cdcGroupPropagationService: createPublicationService({
@@ -753,7 +752,7 @@ async (t) => {
     nodes: [createActiveNode('node-4-warn')],
     services: [createMessageGroupService('node-4-warn')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'node-4-warn',
     systemTableCache: cache,
     cdcGroupPropagationService: createPublicationService({

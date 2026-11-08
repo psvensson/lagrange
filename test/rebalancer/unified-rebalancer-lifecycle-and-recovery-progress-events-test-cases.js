@@ -1,3 +1,4 @@
+import {partialReadinessFake, withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests(context) {
   const {
     CONTROL_PLANE_READINESS_DIMENSION,
@@ -229,7 +230,7 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
             return {success: true, rows: []};
           },
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: partialReadinessFake({
           projectNodeLiveness: () => Object.freeze({readyNow: true}),
           getNodeReadinessSync: () => ({
             dimensions: {
@@ -241,7 +242,7 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
               [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
             },
           }),
-        },
+        }),
         storagePressureBehavior: {
           async shouldAllowMove(nodeId, criticality) {
             pressureCalls.push({nodeId, criticality});
@@ -797,7 +798,7 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
         const mockCache = createMockCache([
           {node_id: 'node-1', status: NodeStatus.ACTIVE, connection_state: 'ready'},
         ]);
-        const rebalancer = new UnifiedRebalancer({
+        const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
           entityId: 'partition-1',
           entityType: EntityType.PARTITION,
           nodeId: 'node-0',
@@ -818,7 +819,7 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
               throw error;
             },
           },
-        });
+        }));
 
         const result = await rebalancer.executeMoveViaCoordinator({
           type: MoveType.ADD,
@@ -854,11 +855,11 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
           cdcIntegrationService: createMockCdcService(),
           tablePolicyService: createMockPolicyService(),
           messageRouter: createMockMessageRouter(),
-          controlPlaneReadinessService: {
+          controlPlaneReadinessService: partialReadinessFake({
             getCurrentPublishedMembershipEpochSync() {
               return 11;
             },
-          },
+          }),
           rebalanceCoordinator: {
             ...createMockCoordinator(),
             async createOperation(move) {
@@ -902,11 +903,11 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
           cdcIntegrationService: createMockCdcService(),
           tablePolicyService: createMockPolicyService(),
           messageRouter: createMockMessageRouter(),
-          controlPlaneReadinessService: {
+          controlPlaneReadinessService: partialReadinessFake({
             getCurrentPublishedMembershipEpochSync() {
               return 12;
             },
-          },
+          }),
           rebalanceCoordinator: {
             ...createMockCoordinator(),
             async createOperation(move) {

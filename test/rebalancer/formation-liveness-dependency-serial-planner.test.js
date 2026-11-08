@@ -16,6 +16,7 @@ import {
   createPostgresWireEndpoint,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 const NODE_IDS = Object.freeze([
   'node-1',
@@ -74,7 +75,7 @@ function readinessService(options = {}) {
     options.omitRecoveryEligibility === true;
   const fallbackDimensionsSatisfied =
     options.fallbackDimensionsSatisfied === true;
-  return {
+  return partialReadinessFake({
     getNodeReadinessSync(nodeId) {
       const recoveryEligible = eligibleNodeIds.has(nodeId);
       const sourceNode = nodeId === 'node-1';
@@ -111,7 +112,7 @@ function readinessService(options = {}) {
         reasons: recoveryEligible ? [] : [{code: 'ready_lease_expired'}],
       };
     },
-  };
+  });
 }
 
 function createHarness(options = {}) {

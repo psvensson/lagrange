@@ -6,9 +6,11 @@ const UNIFIED_REBALANCER_PATH = path.resolve(
   process.cwd(),
   'src/rebalancer/unified-rebalancer.js',
 );
+// The readiness module that defines isClusterMemberHealthy (the service
+// class only delegates to it).
 const READINESS_SERVICE_PATH = path.resolve(
   process.cwd(),
-  'src/control-plane/control-plane-readiness-service.js',
+  'src/control-plane/control-plane-readiness-node-service-rows.js',
 );
 
 test('projection boundary guard - rebalancer availability cannot fall back to stale cache readiness',
@@ -39,7 +41,7 @@ test('projection boundary guard - transport cannot directly restore cluster memb
 
     t.notMatch(
       readinessSource,
-      /isClusterMemberHealthy\(nodeId,\s*nodeRow\)\s*\{[\s\S]*?if\s*\(!this\.isNodeTransportConnected\(nodeId,\s*nodeRow\)\)\s*\{\s*return false;\s*\}\s*return true;/,
+      /isClusterMemberHealthy\((?:service,\s*)?nodeId,\s*nodeRow\)\s*\{[\s\S]*?if\s*\(!(?:this|service)\.isNodeTransportConnected\(nodeId,\s*nodeRow\)\)\s*\{\s*return false;\s*\}\s*return true;/,
       'cluster membership health must not be restored by transport connectivity alone',
     );
   });

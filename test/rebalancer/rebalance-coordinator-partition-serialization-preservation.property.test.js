@@ -19,6 +19,7 @@ import assert from 'node:assert/strict';
 import {
   RebalanceCoordinator,
 } from '../../src/rebalancer/rebalance-coordinator.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const COORDINATOR_NODE_ID = 'coordinator-pres-node';
 
@@ -27,7 +28,7 @@ const COORDINATOR_NODE_ID = 'coordinator-pres-node';
  * @return {RebalanceCoordinator} Coordinator instance.
  */
 function createCoordinator() {
-  return new RebalanceCoordinator({
+  return new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: COORDINATOR_NODE_ID,
     systemTableCache: {
       getAll: () => [],
@@ -38,7 +39,7 @@ function createCoordinator() {
     sqlQueryEngine: {
       executeQuery: async () => ({success: true, rows: []}),
     },
-  });
+  }));
 }
 
 test('Property 2 Preservation E: ' +

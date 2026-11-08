@@ -12,9 +12,7 @@
  * invalidates.
  */
 import {test} from '../../src/test-helpers/tap.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   readMembershipPlanningDerivationVersionKey,
 } from '../../src/control-plane/membership-planning-version-key.js';
@@ -29,6 +27,7 @@ import {
   createTestRebalancer,
 } from './test-helpers.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const SWEEP_NODE_ID = 'node-sweep-memo';
 const SWEEP_CALL_COUNT = 10;
 
@@ -66,7 +65,7 @@ test('the sync membership-planning snapshot derives once per source-table ' +
   'generation', async (t) => {
   const cache = createVersionedCacheStub();
   let derivations = 0;
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: SWEEP_NODE_ID,
     systemTableCache: cache,
     membershipPublicationService: {
@@ -82,17 +81,17 @@ test('the sync membership-planning snapshot derives once per source-table ' +
   });
 
   for (let index = 0; index < SWEEP_CALL_COUNT; index++) {
-    readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 1000);
+    readiness.deriveMembershipPublicationPlanningSnapshotSync(SWEEP_NODE_ID, 1000);
   }
   t.equal(derivations, 1,
     'a synchronous sweep of identical reads shares one derivation');
 
   cache.bump('nodes');
-  readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 2000);
+  readiness.deriveMembershipPublicationPlanningSnapshotSync(SWEEP_NODE_ID, 2000);
   t.equal(derivations, 2,
     'a source-table write invalidates the derivation memo');
 
-  readiness.getPriorityRecoveryPlanningSnapshotSync('node-other', 3000);
+  readiness.deriveMembershipPublicationPlanningSnapshotSync('node-other', 3000);
   t.equal(derivations, 3,
     'a different publisher never reuses another publisher’s memo');
   t.end();
@@ -426,7 +425,7 @@ test('the sync membership-planning derivation refuses the version-key floor ' +
   'while a source revision is unclassified', async (t) => {
   const cache = createVersionedCacheStub();
   let derivations = 0;
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: SWEEP_NODE_ID,
     systemTableCache: cache,
     // One clock domain: internal reads share the logical test clock so the
@@ -443,10 +442,10 @@ test('the sync membership-planning derivation refuses the version-key floor ' +
       },
     },
   });
-  readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 1000);
+  readiness.deriveMembershipPublicationPlanningSnapshotSync(SWEEP_NODE_ID, 1000);
   t.equal(derivations, 1, 'the first read derives');
   cache.bump('nodes');
-  readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 1100);
+  readiness.deriveMembershipPublicationPlanningSnapshotSync(SWEEP_NODE_ID, 1100);
   t.equal(derivations, 2,
     'an unclassified write bypasses the pre-write derivation immediately');
   // While the write stays unclassified the planning identity is saturated and
@@ -455,7 +454,7 @@ test('the sync membership-planning derivation refuses the version-key floor ' +
   // post-write derivation instead of deriving again (a per-read rebuild under
   // formation write bursts starved the seed). Snapshot admission itself stays
   // fail closed on the saturated identity.
-  readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 1400);
+  readiness.deriveMembershipPublicationPlanningSnapshotSync(SWEEP_NODE_ID, 1400);
   t.equal(derivations, 2,
     'reads at unchanged table versions share the derivation while unclassified');
   t.equal(
@@ -465,7 +464,7 @@ test('the sync membership-planning derivation refuses the version-key floor ' +
   );
   cache.bump('nodes');
   // Past the floored key's latch window the moved table version is visible.
-  readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 2400);
+  readiness.deriveMembershipPublicationPlanningSnapshotSync(SWEEP_NODE_ID, 2400);
   t.equal(derivations, 3,
     'a further write still forces a fresh derivation (floored key moved)');
   t.end();
@@ -480,7 +479,7 @@ test('the spread-blocker recovery gate builds once per planning snapshot ' +
     priorityPartitionSummary: Object.freeze({satisfied: false}),
   });
   stack.rebalancer.controlPlaneReadinessService
-    .getMembershipPublicationPlanningAnswerSync = () => planningSnapshot;
+    .getPriorityRecoveryPlanningAnswerSync = () => planningSnapshot;
   const readGateBuilds = () => {
     const site = getSharedSyncSectionRegistry()
       .sites.get('publication_recovery_gate_snapshot_build');
@@ -495,7 +494,7 @@ test('the spread-blocker recovery gate builds once per planning snapshot ' +
       'build');
 
   stack.rebalancer.controlPlaneReadinessService
-    .getMembershipPublicationPlanningAnswerSync =
+    .getPriorityRecoveryPlanningAnswerSync =
       () => Object.freeze({...planningSnapshot});
   stack.rebalancer.getControlPlanePrioritySpreadBlocker();
   t.equal(readGateBuilds() - before, 2,
@@ -507,7 +506,7 @@ test('the async membership-planning snapshot derives once per source-table ' +
   'generation across concurrent callers', async (t) => {
   const cache = createVersionedCacheStub();
   let derivations = 0;
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: SWEEP_NODE_ID,
     systemTableCache: cache,
     membershipPublicationService: {

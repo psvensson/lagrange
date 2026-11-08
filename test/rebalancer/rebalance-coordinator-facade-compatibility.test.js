@@ -11,6 +11,7 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function createTransactionCoordinator() {
   return {
@@ -133,7 +134,7 @@ function createFacadeCoordinator(overrides = {}) {
     },
   };
 
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: 'node-local',
     transactionCoordinator: createTransactionCoordinator(),
     systemTableCache: {
@@ -185,7 +186,7 @@ function createFacadeCoordinator(overrides = {}) {
     provisioningAdmissionPolicy,
     enableTimeouts: false,
     ...overrides,
-  });
+  }));
 
   return {coordinator, calls};
 }

@@ -36,6 +36,7 @@ import {registerRebalanceCoordinatorOperationOwnershipTailTests} from './rebalan
 import {
   registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionTests,
 } from './rebalance-coordinator-operation-ownership-critical-admission-test-cases.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const EMERGENCY_TRANSPORT_PARTITION_ID = 'control_plane_publications-p1';
 const REPLICA_OPERATION_EMERGENCY_PARTITION_ID = 'replica_operations-p1';
@@ -223,7 +224,7 @@ function createCoordinator(overrides = {}) {
     overrides.controlPlaneSystemTableGateway &&
     typeof overrides.controlPlaneSystemTableGateway === 'object';
 
-  return new RebalanceCoordinator({
+  return new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     ...overrides,
     sqlQueryEngine,
     controlPlaneSystemTableGateway: hasExplicitGateway ?
@@ -239,7 +240,7 @@ function createCoordinator(overrides = {}) {
           return sqlQueryEngine.executeQuery(sql, params, options);
         },
       },
-  });
+  }));
 }
 
 function disablePersistenceConfirmation(coordinator) {
@@ -250,7 +251,7 @@ function disablePersistenceConfirmation(coordinator) {
 test('RebalanceCoordinator executeOperation skips operations owned by another node',
   async (t) => {
     let deliverCalls = 0;
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-local',
       transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
@@ -279,7 +280,7 @@ test('RebalanceCoordinator executeOperation skips operations owned by another no
       },
       ...createStorageOwners(),
       enableTimeouts: false,
-    });
+    }));
     coordinator.initialize();
     disablePersistenceConfirmation(coordinator);
 
@@ -328,7 +329,7 @@ test('RebalanceCoordinator executeOperation skips operations owned by another no
 test('RebalanceCoordinator keeps priority control-plane REPLACE ownership on ' +
   'the target during SENDING',
 async (t) => {
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: 'node-local',
     transactionCoordinator: createTransactionCoordinator(),
     systemTableCache: {
@@ -356,7 +357,7 @@ async (t) => {
     },
     ...createStorageOwners(),
     enableTimeouts: false,
-  });
+  }));
   coordinator.initialize();
 
   try {

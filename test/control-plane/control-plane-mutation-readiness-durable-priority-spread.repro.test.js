@@ -14,9 +14,7 @@ import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   getLocalControlPlaneMutationReadinessBlocker,
 } from '../../src/control-plane/control-plane-mutation-readiness.js';
@@ -33,6 +31,7 @@ import {
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const TEST_NODE_ID = 'node-1';
 const TEST_PRIORITY_PARTITION_ID = 'sql_transaction_participants-p1';
 
@@ -123,7 +122,7 @@ test('background mutation stays deferred when optimistic priority closure ' +
   );
 
   const dimensions = buildReadyDimensions();
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: TEST_NODE_ID,
     systemTableCache: createEmptySystemTableCache(),
   });

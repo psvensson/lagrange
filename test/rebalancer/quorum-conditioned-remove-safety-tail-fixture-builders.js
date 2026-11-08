@@ -7,6 +7,7 @@
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 
 const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
 
@@ -55,7 +56,7 @@ export function createPublishedPlanningReadinessService({
     async getMembershipPublicationPlanningSnapshot(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
-    getMembershipPublicationPlanningSnapshotSync(nodeId) {
+    getPriorityRecoveryPlanningAnswerSync(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
   };
@@ -83,9 +84,9 @@ export function withOwnerReadPlanningEvidence(readinessService) {
     typeof readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead ===
       'function'
   ) {
-    return readinessService;
+    return readinessServiceFake(readinessService);
   }
-  return {
+  return readinessServiceFake({
     ...readinessService,
     async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId, observedAt) {
       if (
@@ -105,7 +106,7 @@ export function withOwnerReadPlanningEvidence(readinessService) {
       }
       return null;
     },
-  };
+  });
 }
 
 /**

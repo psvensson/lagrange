@@ -66,6 +66,7 @@ import {
 import {
   createMockReadinessService,
 } from './unified-rebalancer-test-support.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {
   registerUnifiedRebalancerPriorityFollowupCreationTests,
 } from './unified-rebalancer-priority-followup-creation-test-cases.js';
@@ -428,7 +429,8 @@ function createTestRebalancer(options = {}) {
       return {success: true, rows: []};
     },
   };
-  const mockReadinessService = controlPlaneReadinessService ||
+  const mockReadinessService = controlPlaneReadinessService ?
+    readinessServiceFake(controlPlaneReadinessService, nowFn || Date.now) :
     createMockReadinessService(mockCache);
 
   return new UnifiedRebalancer({

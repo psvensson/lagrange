@@ -25,6 +25,7 @@ import {
 } from '../../src/constants/unified-service-lifecycle.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -93,7 +94,7 @@ function createRebalancer(options = {}) {
     nodes, services, replicaOperations, serviceDefinitions,
   );
 
-  return new UnifiedRebalancer({
+  return new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
     entityId,
     entityType,
     nodeId,
@@ -125,7 +126,7 @@ function createRebalancer(options = {}) {
         operationsFailed: 0,
       }),
     },
-  });
+  }));
 }
 
 

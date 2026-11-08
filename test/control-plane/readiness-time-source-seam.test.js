@@ -7,11 +7,10 @@ import {
   createPublicationService,
 } from './control-plane-readiness-service-test-support.js';
 import {CONTROL_PLANE_PUBLICATION_MODE} from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 // DT4 step 1 (seam proof): a VirtualTimeSource passed to the readiness service
 // must DRIVE its clock — this is what lets the convergence harness advance time
 // to reproduce the freeze→leadership chain in-process. Without a real consumer,
@@ -24,7 +23,7 @@ function buildService(options) {
     nodes: [createActiveNode('node-1')],
     services: [createMessageGroupService('node-1')],
   });
-  return new ControlPlaneReadinessService({
+  return createReadinessServiceForTest({
     nodeId: 'node-1',
     systemTableCache: cache,
     storageAccountingService: createAccountingService({

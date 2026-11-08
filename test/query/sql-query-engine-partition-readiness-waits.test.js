@@ -21,9 +21,7 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
 } from '../../src/partition/partition-constants.js';
 import {
@@ -54,7 +52,7 @@ import {
   createProvisioningReadyService,
 } from './sql-query-engine-test-support.js';
 
-
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 test('SQLQueryEngine - provisionInitialTablePartition waits for active leader ' +
   'routes before continuing', async (t) => {
   const tableId = 'tbl-split-active-leader';
@@ -469,7 +467,7 @@ async (t) => {
       },
     ],
   );
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: localNodeId,
     systemTableCache: cache,
     messageRouter: {
@@ -763,7 +761,7 @@ async (t) => {
       [COLUMN.DISK_USAGE_PERCENT]: 30,
     })),
   );
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'node-a',
     systemTableCache: cache,
     messageRouter: {

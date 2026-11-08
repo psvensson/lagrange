@@ -13,12 +13,12 @@ import {
 } from '../../src/constants/index.js';
 import {CONTROL_PLANE_PUBLICATION_MODE} from
   '../../src/control-plane/control-plane-readiness-constants.js';
-import {ControlPlaneReadinessService} from
-  '../../src/control-plane/control-plane-readiness-service.js';
+
 import {MembershipPublicationCoordinatorReads} from
   '../../src/control-plane/membership-publication-coordinator-reads.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 // Production-shaped witness for the readiness-routing-cache-lag-bridge
 // quest: the REAL SystemTableCache, the real readiness service with its
 // single planning owner, and the real QueryExecutor. The cache has two
@@ -129,7 +129,7 @@ function createRig() {
     nodeId: 'seed-node',
     systemTableCache: cache,
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     membershipPublicationService,

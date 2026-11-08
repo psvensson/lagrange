@@ -32,8 +32,7 @@ import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../../src/control-plane/control-plane-readiness-constants.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {QUERY_ERROR_MSG} from '../../src/query/query-constants.js';
-import {ControlPlaneReadinessService} from
-  '../../src/control-plane/control-plane-readiness-service.js';
+
 import {MembershipPublicationCoordinator} from
   '../../src/control-plane/membership-publication-coordinator.js';
 import {ReadinessPlanningSnapshotOwner} from
@@ -49,6 +48,7 @@ import {
   driveFormationShapedChurn,
 } from './readiness-planning-formation-rig.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 // The failing user table from the forensic run, verbatim. A user table has no
 // system-table classification, so it never reaches the system-table leader
 // fail-open and is filtered strictly by readiness.
@@ -500,7 +500,7 @@ test('production-composition-control-denial-vocabulary', async () => {
   const cache = createFormationShapedCache(T0);
   installUserTablePartition(cache);
   const pendingDrains = [];
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: LEADER_NODE_ID,
     systemTableCache: cache,
     now: () => state.clock,

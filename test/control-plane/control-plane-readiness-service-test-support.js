@@ -91,6 +91,8 @@ export function createReadinessSnapshotStoreTestStub({
     },
     getReadinessTransitionHistory: () => Object.freeze([]),
     recordRecoveryEpochObservation: () => {},
+    // No local query transport evidence: a stored snapshot never drifts.
+    getLocalQueryTransportEvidence: () => null,
   };
   installControlPlaneReadinessSnapshotStoreMethods(stub);
   return {stub, state};

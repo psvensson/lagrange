@@ -67,6 +67,7 @@ import {
 } from '../../src/rebalancer/storage-admission-constants.js';
 import {DISPATCH_EVENT} from
   '../../src/control-plane/replica-dispatch-service-constants.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 const TEST_NODE_ID = 'node-test-1';
 const TEST_BUDGET_BYTES = 1000000;
@@ -155,14 +156,14 @@ function createReadiness(nodeId, overrides = {}) {
 }
 
 function createReadinessService(readinessByNodeId) {
-  return {
+  return partialReadinessFake({
     getNodeReadinessSync(nodeId) {
       return readinessByNodeId[nodeId] || null;
     },
     async getNodeReadiness(nodeId) {
       return readinessByNodeId[nodeId] || createReadiness(nodeId);
     },
-  };
+  });
 }
 
 function createTransactionCoordinator() {

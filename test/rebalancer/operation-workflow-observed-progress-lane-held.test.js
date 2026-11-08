@@ -9,6 +9,7 @@ import {
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const TEST_OPERATION_ID = 'op-observed-progress-lane-held';
 const TEST_DISPATCH_WAKE_OPERATION_ID = 'op-observed-dispatch-wake-creating';
@@ -261,7 +262,7 @@ function createObservedProgressCoordinator({
     },
   };
 
-  return new RebalanceCoordinator({
+  return new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: TEST_TARGET_NODE_ID,
     transactionCoordinator: buildTransactionCoordinator(),
     sqlQueryEngine: {
@@ -361,7 +362,7 @@ function createObservedProgressCoordinator({
         timer.cleared = true;
       }
     },
-  });
+  }));
 }
 
 test('service progress decodes only operation rows that can match its target',

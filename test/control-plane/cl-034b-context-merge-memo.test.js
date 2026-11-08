@@ -1,7 +1,7 @@
 import t from 'tap';
 import {
-  ControlPlaneReadinessPublicationPlanningResolution,
-} from '../../src/control-plane/control-plane-readiness-publication-planning-resolution.js';
+  ControlPlaneReadinessService,
+} from '../../src/control-plane/control-plane-readiness-service.js';
 
 // CL-034 follow-up: the readiness-build sub-builders re-run the SAME merge ~6 times
 // per getNodeReadinessSync, all threading the SAME already-resolved planning snapshot
@@ -11,7 +11,7 @@ import {
 // return a result computed for a different logical input. These tests exercise the
 // wrapper directly via the prototype method with a mock `this`.
 const resolveMemo =
-  ControlPlaneReadinessPublicationPlanningResolution.prototype
+  ControlPlaneReadinessService.prototype
     .resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync;
 
 function memoCtx() {
