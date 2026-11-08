@@ -14,7 +14,14 @@
     }
   },
   "constraints": [
-    {"id": "behaviour-change-named", "statement": "The attempt names every rebalancer decision that changes when deferral starts reading as active, with the witness that covers it."},
-    {"id": "independent-verification", "statement": "The src/ change lands only behind an approving verification newer than the last attempt."}
-  ]
+    {
+      "id": "behaviour-change-named",
+      "statement": "The attempt names every rebalancer decision that changes when deferral starts reading as active, with the witness that covers it."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "The src/ change lands only behind an approving verification newer than the last attempt."
+    }
+  ],
+  "sealedAt": "1b0c5e36241463d758b1219ed658b2470cf4cd28"
 }
