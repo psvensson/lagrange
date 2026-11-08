@@ -5,12 +5,28 @@
   "statement": "Each of the services, nodes and replica_operations system tables has one decoder module that turns a raw row into a frozen canonical object with named states, is the only module permitted to read that table's raw column names or COLUMN constants, and every consumer reads the decoded object; alias reads (snake_case and camelCase on one field) and state-read defaults on these three tables reach zero and the row_field_alias_reads cap tightens by the number removed.",
   "doneWhen": {
     "probe": "script",
-    "args": {"command": "node scripts/checks/code-navigability-budget.js --metric --rows formation_system_tables_without_decoder", "target": 0}
+    "args": {
+      "command": "node scripts/checks/code-navigability-budget.js --metric --rows formation_system_tables_without_decoder",
+      "target": 0
+    }
   },
   "constraints": [
-    {"id": "one-reader-of-raw-columns", "statement": "Only the table's decoder reads its raw column names. A consumer that still does is a violation the detector reports, not an allowed exception."},
-    {"id": "decoder-is-not-authority", "statement": "The decoder shapes the row it was given. It never fetches, caches or defaults a value the row lacks; an absent column is a typed refusal (R05, R07)."},
-    {"id": "caps-tighten", "statement": "The row_field_alias_reads and state_read_defaults baselines are lowered in the same change by the number of sites removed."},
-    {"id": "independent-verification", "statement": "The src/ changes land only behind an approving verification newer than the last attempt."}
-  ]
+    {
+      "id": "one-reader-of-raw-columns",
+      "statement": "Only the table's decoder reads its raw column names. A consumer that still does is a violation the detector reports, not an allowed exception."
+    },
+    {
+      "id": "decoder-is-not-authority",
+      "statement": "The decoder shapes the row it was given. It never fetches, caches or defaults a value the row lacks; an absent column is a typed refusal (R05, R07)."
+    },
+    {
+      "id": "caps-tighten",
+      "statement": "The row_field_alias_reads and state_read_defaults baselines are lowered in the same change by the number of sites removed."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "The src/ changes land only behind an approving verification newer than the last attempt."
+    }
+  ],
+  "sealedAt": "77e672a0012037d98c0e5a41d6ae18e42b3539ac"
 }
