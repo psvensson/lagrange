@@ -133,26 +133,30 @@ function notifyNextWaitingDurableSliceTable(owner) {
   }
 }
 
+function clearActiveDurableSliceIfMatching(owner, tableName) {
+  if (owner.durableSliceTable !== tableName) return false;
+  owner.durableSliceTable = null;
+  owner.durableSliceWaves = 0;
+  return true;
+}
+
 function releaseWaitingDurableSliceContender(owner, tableName) {
   if (!owner || typeof tableName !== 'string' || tableName.length === 0) {
     return false;
   }
-  const wasHead =
-    Array.isArray(owner.waitingDurableSliceTables) &&
-    owner.waitingDurableSliceTables[0] === tableName;
-  const wasQueued =
-    Array.isArray(owner.waitingDurableSliceTables) &&
-    owner.waitingDurableSliceTables.includes(tableName);
+  const wasActiveSlice = clearActiveDurableSliceIfMatching(owner, tableName);
+  const waiting = owner.waitingDurableSliceTables;
+  const wasHead = Array.isArray(waiting) && waiting[0] === tableName;
+  const wasQueued = Array.isArray(waiting) && waiting.includes(tableName);
   dequeueWaitingDurableSliceTable(owner, tableName);
-  if (!Array.isArray(owner.waitingDurableSliceTables) ||
-      owner.waitingDurableSliceTables.length === 0) {
+  if (!Array.isArray(waiting) || waiting.length === 0) {
     owner.durableSliceContended = false;
     owner.yieldedDurableSliceUntilMs = 0;
     owner.yieldedDurableSliceTable = null;
-  } else if (wasHead) {
+  } else if (wasHead || wasActiveSlice) {
     notifyNextWaitingDurableSliceTable(owner);
   }
-  return wasQueued;
+  return wasQueued || wasActiveSlice;
 }
 
 function expireYieldedSliceHoldIfElapsed(owner) {
@@ -265,12 +269,15 @@ function shouldMarkSliceContended(owner, wasCredited) {
   );
 }
 
-function advanceDurablePropagationSlice(owner, tableName, context) {
+function advanceDurablePropagationSlice(
+  owner, tableName, context, deliveryContext = null,
+) {
   expireYieldedSliceHoldIfElapsed(owner);
   const wasCredited = Boolean(
     owner.creditedWaitingDurableSliceTables?.has?.(tableName),
   );
   dequeueWaitingDurableSliceTable(owner, tableName);
+  deliveryContext?.registerContentionOwner?.(owner, tableName);
   owner.yieldedDurableSliceTable = null;
   owner.yieldedDurableSliceUntilMs = 0;
   if (owner.durableSliceTable === tableName) {
@@ -467,7 +474,7 @@ async function propagateDurableCdcEvent(owner, options) {
   const context = openCdcDeliveryChildScope(parent);
   const wave = {context, source: options.sourceMessageGroupService};
   owner.activeDurablePropagation = wave;
-  advanceDurablePropagationSlice(owner, options.tableName, context);
+  advanceDurablePropagationSlice(owner, options.tableName, context, parent);
   context.cleanup.then(() => {
     if (owner.activeDurablePropagation === wave) {
       owner.activeDurablePropagation = null;

@@ -20,7 +20,7 @@ import {PARTITION_SERVICE_DEFAULT, PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_TYPE} from './partition-service-constants.js';
 import {admitCommittedCommand} from './partition-committed-command-admission.js';
 import {isWriteOutcomeUnknown} from './partition-write-kernel.js';
-import {CDC_COMPLETION, CDC_COVERAGE_STATE} from '../cdc/cdc-delivery-outcome.js';
+import {CDC_COVERAGE_STATE} from '../cdc/cdc-delivery-outcome.js';
 import {beginCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
 import {captureCdcEvents} from '../cdc/cdc-event-envelope.js';
 import {cdcObligationCoverage, cdcProgressCurrent, cdcSubscriberInvocation, nextCdcSubscriber,
@@ -354,10 +354,9 @@ function wakeContendedLaneForSliceTurn(delivery, lane) {
   lane.consecutiveBackpressure = 0;
   lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
   const retryArmed = lane.retryTimer.state === OBLIGATION_RETRY_STATE.ARMED;
-  lane.sliceTurnReady = !retryArmed && Boolean(lane.inFlight);
+  lane.sliceTurnReady = !retryArmed;
   if (retryArmed) {
-    scheduleDeliveryRetry(delivery, {retryAfterMs: 1, reason: CDC_COMPLETION.BACKPRESSURE},
-      OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
+    scheduleDeliveryRetry(delivery, {retryAfterMs: 1}, OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED);
   }
 }
 
@@ -510,6 +509,7 @@ async function driveOneObligation(delivery, lane, obligation, subscribers,
   reason, delivered, context) {
   const step = resolveDriveObligationStep(delivery, lane, obligation);
   if (step === DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE) {
+    releaseContendedPropagationOwners(lane);
     scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
     return {outcome: driveOutcome(lane, DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE, {reason, delivered})};
   }
@@ -547,7 +547,9 @@ function yieldPageOutcome(delivery, lane, scan, reason, delivered, yieldedOnCont
   if (yieldedOnContention && !scan.provisional) scan.through = null;
   const disposition = delivered > 0 || !scan.provisional ?
     OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED : OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE;
-  const retryDelayMs = scheduleDeliveryRetry(delivery, null, disposition);
+  const hint = yieldedOnContention && disposition === OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED ?
+    {retryAfterMs: 10} : null;
+  const retryDelayMs = scheduleDeliveryRetry(delivery, hint, disposition);
   return driveOutcome(lane, DRIVE.PAGE_YIELDED, {reason, delivered, retryDelayMs});
 }
 
@@ -563,23 +565,22 @@ function finalizeDrainedScan(delivery, lane, scan) {
   const noInFlightAck = lane.pending.size === 0 && lane.commands.size === 0;
   if (hasOwedWorkBeyondScan(owner, scan) || (noInFlightAck && readOwedCdcHead(owner.db) !== null)) {
     lane.rerun = true;
-  } else if (!lane.rerun && !hasUnproposedCommand(lane)) {
+    return;
+  }
+  if (lane.rerun) return;
+  releaseContendedPropagationOwners(lane);
+  if (!hasUnproposedCommand(lane)) {
     scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
   }
 }
 
 function drivePageFinished(
-  delivery, lane, visited, reason, delivered, yieldedOnContention = false,
-) {
+  delivery, lane, visited, reason, delivered, yieldedOnContention = false) {
   const scan = lane.scan;
-  const moreWorkAfterContention =
-    yieldedOnContention &&
+  const moreWorkAfterContention = yieldedOnContention &&
     (hasOwedWorkBeyondScan(delivery.owner, scan) || lane.rerun);
-  if (
-    ((visited >= BOUND.DRIVE_PAGE_ROWS || yieldedOnContention) &&
-      !scanReachedTail(scan)) ||
-    moreWorkAfterContention
-  ) {
+  if (((visited >= BOUND.DRIVE_PAGE_ROWS || yieldedOnContention) && !scanReachedTail(scan)) ||
+      moreWorkAfterContention) {
     if (moreWorkAfterContention) lane.rerun = false;
     return yieldPageOutcome(delivery, lane, scan, reason, delivered, yieldedOnContention);
   }
@@ -729,9 +730,7 @@ function retireHydratedInvocationAndResetIdleScan(delivery, lane, throughLogInde
     lane.currentObligation = null;
     delivery.activeCdcInvocation?.retire();
   }
-  if (!lane.inFlight) {
-    lane.scan = null;
-  }
+  if (!lane.inFlight) lane.scan = null;
 }
 
 function acknowledgeHydratedObligationList(delivery, lane, obligations) {

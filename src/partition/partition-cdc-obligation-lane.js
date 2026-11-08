@@ -168,9 +168,11 @@ function consumeRetryHintMs(lane, error) {
 
 function computeRetryDelayMs(lane, error, disposition) {
   resetYieldedRetryDelay(lane, disposition);
+  const sliceTurnWoken = lane.sliceTurnReady === true;
   const rawHint = consumeRetryHintMs(lane, error);
   const hasHint = Number.isFinite(rawHint) && rawHint > 0;
-  const isBackpressure = disposition === OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE;
+  const isBackpressure =
+    disposition === OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE && !sliceTurnWoken;
   const isTransient = disposition === OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE;
   const initDelay = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
   const maxDelay = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS;

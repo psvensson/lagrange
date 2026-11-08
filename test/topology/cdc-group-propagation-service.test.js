@@ -899,5 +899,9 @@ test('releasing an active durable slice wave notifies onSliceTurnReady on the he
     1,
     'head contender is notified immediately when active wave releases',
   );
+  assert.equal(f.service.durableSliceTable, TABLES.SERVICES);
+  assert.equal(f.service.releaseDurableSliceContender(TABLES.SERVICES), true);
+  assert.equal(f.service.durableSliceTable, null);
+  assert.equal(f.service.durableSliceWaves, 0);
   baseContext.finish();
 });
