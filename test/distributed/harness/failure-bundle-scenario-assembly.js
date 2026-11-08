@@ -1,4 +1,8 @@
 import {FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT} from './failure-bundle-diagnostics-contract-reexport.js';
+import {
+  LOG_WINDOW_COVERAGE,
+  formatLogWindowCoverageVerdict,
+} from './failure-bundle-artifact-foundation.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
@@ -13,7 +17,6 @@ const {
   ANALYSIS_FILENAME,
   UTF8_ENCODING,
   ZERO,
-  LOG_TAIL_LINE_COUNT,
   MARKDOWN_SECTION_BREAK,
   UNKNOWN_VALUE,
   NO_PROGRESS_REASON_CODE,
@@ -83,7 +86,6 @@ const {
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,
   toWorkspaceRelative,
   sanitizePathSegment,
-  sliceLogTail,
   parseStructuredLogLine,
   resolveStructuredLogMessage,
   resolveStructuredLogTimestamp,
@@ -279,6 +281,80 @@ function resolveSummaryPhase(diagnostics, logs) {
   return logs?.playbackEventSummary?.failedScenarioStep?.step || null;
 }
 
+// Incomplete analysis fails the subject: when any node's retained log window
+// misses part of the failure window (or the capture owner judged the capture
+// incomplete, or no node log could be examined), the bundle is published
+// non-measuring. This is the one function that decides what such a bundle
+// publishes: it keeps the evidence it gathered, publishes
+// LOG_WINDOW_COVERAGE.WITHHELD in place of every verdict field derived from
+// that evidence (summary and diagnostics.failure dominant reason, root cause
+// class, failure classification, first-fault reason, and the root-cause
+// bundle's rootCauseCode/rootCauseClass, so the artifact never carries a
+// second root-cause answer beside the withheld one), empties the reason
+// ranking, and names the withheld bytes instead (validation-matrix.js turns
+// the coverage into the verdict; the scenario entry copies these fields).
+const WITHHELD = LOG_WINDOW_COVERAGE.WITHHELD;
+const WITHHELD_FAILURE_CLASSIFICATION = Object.freeze({
+  failureClass: WITHHELD,
+  rootCauseClass: WITHHELD,
+  dominantReason: WITHHELD,
+  signals: Object.freeze([]),
+});
+
+function withholdFailureArtifact(failure) {
+  if (!isRecord(failure)) {
+    return failure;
+  }
+  return {
+    ...failure,
+    rootCauseClass: WITHHELD,
+    dominantReason: WITHHELD,
+    reasonCounts: {},
+    ...(isRecord(failure.firstFault) ?
+      {firstFault: {...failure.firstFault, reason: WITHHELD}} :
+      {}),
+  };
+}
+
+// logWindowCoverage is null only on the passing path, which retains no
+// windows and publishes no verdict (writers attachPassingScenario...).
+function withholdRootCauseBundle(rootCauseBundle) {
+  return isRecord(rootCauseBundle) ?
+    {...rootCauseBundle, rootCauseCode: WITHHELD, rootCauseClass: WITHHELD} :
+    rootCauseBundle;
+}
+
+function withholdVerdictForIncompleteCoverage(bundle, logWindowCoverage) {
+  if (logWindowCoverage === null || logWindowCoverage.complete === true) {
+    return bundle;
+  }
+  const withheld = formatLogWindowCoverageVerdict(logWindowCoverage);
+  return {
+    ...bundle,
+    summary: {
+      ...bundle.summary,
+      rootCauseClass: WITHHELD,
+      dominantReason: WITHHELD,
+      failureClassification: {...WITHHELD_FAILURE_CLASSIFICATION, signals: []},
+      failureAction:
+        `${LOG_WINDOW_COVERAGE.INCOMPLETE_GUIDANCE.failureAction} ` +
+        `Coverage: ${withheld}.`,
+      operatorRecommendation:
+        LOG_WINDOW_COVERAGE.INCOMPLETE_GUIDANCE.operatorRecommendation,
+    },
+    diagnostics: {
+      ...bundle.diagnostics,
+      failure: withholdFailureArtifact(bundle.diagnostics.failure),
+      rootCauseBundle: withholdRootCauseBundle(bundle.diagnostics.rootCauseBundle),
+    },
+    topFailures: {
+      ...bundle.topFailures,
+      reasonCounts: {},
+      topReasons: [],
+    },
+  };
+}
+
 function buildScenarioFailureBundle({
   entry,
   reportOutputPath,
@@ -372,12 +448,14 @@ function buildScenarioFailureBundle({
     failure,
     failureClassification,
   );
-  return {
+  const logWindowCoverage = logs?.logWindowCoverage || null;
+  return withholdVerdictForIncompleteCoverage({
     schemaVersion: FAILURE_BUNDLE_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     reportPath: reportOutputPath,
     scenario: entry.scenario,
     summary: {
+      logWindowCoverage,
       passed: entry.passed === true,
       error: entry.error || null,
       phase: resolveSummaryPhase(diagnostics, logs),
@@ -433,7 +511,7 @@ function buildScenarioFailureBundle({
     playback: entry.playback || null,
     trace: entry.trace || null,
     stabilityGates,
-  };
+  }, logWindowCoverage);
 }
 
 export const FAILURE_BUNDLE_SCENARIO_ASSEMBLY = {
@@ -450,7 +528,6 @@ export const FAILURE_BUNDLE_SCENARIO_ASSEMBLY = {
   ANALYSIS_FILENAME,
   UTF8_ENCODING,
   ZERO,
-  LOG_TAIL_LINE_COUNT,
   MARKDOWN_SECTION_BREAK,
   UNKNOWN_VALUE,
   NO_PROGRESS_REASON_CODE,
@@ -520,7 +597,6 @@ export const FAILURE_BUNDLE_SCENARIO_ASSEMBLY = {
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,
   toWorkspaceRelative,
   sanitizePathSegment,
-  sliceLogTail,
   parseStructuredLogLine,
   resolveStructuredLogMessage,
   resolveStructuredLogTimestamp,

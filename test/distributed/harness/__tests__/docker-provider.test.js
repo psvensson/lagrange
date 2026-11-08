@@ -18,6 +18,7 @@ import {
   DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
   DockerProvider,
   parseContainerStats,
+  CONTAINER_LOG_TOO_LARGE_CODE,
 } from '../docker-provider.js';
 import {CONTAINER_ENV_KEYS, PORTS} from '../constants.js';
 
@@ -862,30 +863,25 @@ test('Unit: getContainerLogs normalizes numeric tail option to string',
     assert.strictEqual(logs, 'line-a\nline-b\n');
   });
 
-test('Unit: getContainerLogs retries with safe tail after oversized payload error',
+test('Unit: getContainerLogs fails typed on an oversized payload, no tail retry',
   async () => {
     const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
     let callCount = 0;
-    let fallbackLogOpts = null;
 
     provider._docker.getContainer = () => ({
-      logs: async (logOpts) => {
+      logs: async () => {
         callCount += 1;
-        if (callCount === 1) {
-          const error = new Error('payload too large');
-          error.code = 'ERR_STRING_TOO_LONG';
-          throw error;
-        }
-        fallbackLogOpts = logOpts;
-        return Buffer.from('trimmed-log-line\n', 'utf8');
+        const error = new Error('payload too large');
+        error.code = 'ERR_STRING_TOO_LONG';
+        throw error;
       },
     });
 
-    const logs = await provider.getContainerLogs('container-logs-large');
-
-    assert.strictEqual(callCount, 2);
-    assert.strictEqual(fallbackLogOpts.tail, '50');
-    assert.strictEqual(logs, 'trimmed-log-line\n');
+    await assert.rejects(
+      provider.getContainerLogs('container-logs-large'),
+      (error) => error.code === CONTAINER_LOG_TOO_LARGE_CODE,
+    );
+    assert.strictEqual(callCount, 1);
   });
 
 test('Unit: parseContainerStats computes cpu/memory/network metrics', async () => {

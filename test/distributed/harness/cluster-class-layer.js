@@ -22,7 +22,7 @@ const {
   CLUSTER_READINESS_MODE_LOAD,
   CLUSTER_READINESS_MODE_STARTUP,
   CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
-  CONTAINER_LOG_TAIL_LINES,
+  FAILURE_STDERR_LOG_TAIL_BYTES,
   LOG_COLLECTION_TIMEOUT_MS,
   MIN_TIMEOUT_MS,
   STARTUP_ADMISSION_STATE_BLOCKED,
@@ -1036,8 +1036,8 @@ class Cluster extends ClusterControlSnapshotRecovery {
   async _collectFailureLogs() {
     for (const node of this._nodes.values()) {
       try {
-        const logs = await withTimeout(
-          node.getLogs({tail: CONTAINER_LOG_TAIL_LINES}),
+        const window = await withTimeout(
+          node.getLogWindow({maxRetainedBytes: FAILURE_STDERR_LOG_TAIL_BYTES}),
           LOG_COLLECTION_TIMEOUT_MS,
           'Timed out collecting logs for node ' + node.id,
         );
@@ -1046,8 +1046,11 @@ class Cluster extends ClusterControlSnapshotRecovery {
             node.id +
             ' (' +
             node.role +
+            ', last ' + window.coverage.retainedBytes + ' bytes; ' +
+            (window.coverage.missingReason ??
+              window.coverage.withheldBytes + ' earlier bytes withheld') +
             ') ---\n' +
-            logs +
+            window.lines.join('\n') +
             '\n',
         );
       } catch (_err) {

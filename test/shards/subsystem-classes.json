@@ -9,7 +9,7 @@
     "cli-tooling": 99,
     "control-plane": 225,
     "convergence-topology": 78,
-    "distributed-harness": 210,
+    "distributed-harness": 214,
     "examples-e2e": 8,
     "pgwire-compat": 21,
     "placement-rebalance": 270,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2561,
-  "digest": "fnv1a32-24bae3b0",
+  "censusSize": 2565,
+  "digest": "fnv1a32-34a9be35",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-43d5a9a8",
+  "observationDigest": "fnv1a32-2cf65e4f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -847,6 +847,8 @@
     "test/distributed/harness/__tests__/benchmark-whole-topology-resource-accounting-adversarial.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-whole-topology-resource-accounting.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/boundary-transition-scenarios.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/capture-completeness-handoff.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/capture-quiet-bound.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/certification-evidence-archive.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/certification-image-identity.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/chaos.test.js": "distributed-harness",
@@ -898,6 +900,7 @@
     "test/distributed/harness/__tests__/config-parser.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/consistency-evaluator.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/constants.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/container-log-window.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/control-plane-quiescence-snapshot.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/convergence-budget-calibration.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/convergence-voter-targets.test.js": "distributed-harness",
@@ -911,6 +914,7 @@
     "test/distributed/harness/__tests__/docker-provider.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/failure-bundle-dominant-reason-denoise.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/failure-bundle-fallback.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/failure-bundle-log-window-coverage.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/failure-bundle-sql-query-engine-availability.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/failure-bundle.test.js": "distributed-harness",
@@ -5894,6 +5898,47 @@
         "test/distributed/scenarios/table-distribution-helpers-load-node-planning.js"
       ]
     },
+    "test/distributed/harness/__tests__/capture-completeness-handoff.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/control-plane/priority-recovery-observation-snapshot.js",
+        "src/control-plane/publication-recovery-evidence.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/__fixtures__/failing-scenario.js",
+        "test/distributed/harness/active-gate-closure-classification.js",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
+        "test/distributed/harness/priority-recovery-summary-normalization.js",
+        "test/distributed/harness/publication-evidence-contract.js",
+        "test/distributed/harness/report-writer-optimization-summary.js",
+        "test/distributed/harness/startup-readiness-evidence.js",
+        "test/distributed/run.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover",
+        "test/distributed/config",
+        "test/distributed/scenarios"
+      ],
+      "env": [
+        "LAGRANGE_CAPTURE_LOGS",
+        "LAGRANGE_DEBUG_LOGS",
+        "TAP"
+      ]
+    },
+    "test/distributed/harness/__tests__/capture-quiet-bound.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json"
+      ]
+    },
     "test/distributed/harness/__tests__/certification-evidence-archive.test.js": {
       "files": [
         "Dockerfile",
@@ -6857,6 +6902,14 @@
         "test/distributed/config/local.json"
       ]
     },
+    "test/distributed/harness/__tests__/container-log-window.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/container-memory-working-set.js"
+      ]
+    },
     "test/distributed/harness/__tests__/convergence-voter-targets.test.js": {
       "files": [
         "Dockerfile",
@@ -6928,6 +6981,32 @@
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/publication-evidence-contract.js"
+      ]
+    },
+    "test/distributed/harness/__tests__/failure-bundle-log-window-coverage.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/control-plane/priority-recovery-observation-snapshot.js",
+        "src/control-plane/publication-recovery-evidence.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-gate-closure-classification.js",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
+        "test/distributed/harness/publication-evidence-contract.js"
+      ],
+      "directories": [
+        "scripts/checks",
+        "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
+        "solve/quests",
+        "test/distributed/harness"
       ]
     },
     "test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js": {

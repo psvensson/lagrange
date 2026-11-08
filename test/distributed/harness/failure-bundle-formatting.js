@@ -7,6 +7,8 @@ import {
   formatPriorityRecoveryPartitionWitnesses,
 } from './failure-bundle-priority-recovery-formatters.js';
 import {FAILURE_BUNDLE_SCENARIO_ASSEMBLY} from './failure-bundle-scenario-assembly.js';
+import {formatLogWindowCoverageVerdict} from './failure-bundle-artifact-foundation.js';
+import {renderLogWindowSections} from './failure-bundle-log-window-markdown.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
@@ -21,7 +23,6 @@ const {
   ANALYSIS_FILENAME,
   UTF8_ENCODING,
   ZERO,
-  LOG_TAIL_LINE_COUNT,
   MARKDOWN_SECTION_BREAK,
   UNKNOWN_VALUE,
   NO_PROGRESS_REASON_CODE,
@@ -91,7 +92,6 @@ const {
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,
   toWorkspaceRelative,
   sanitizePathSegment,
-  sliceLogTail,
   parseStructuredLogLine,
   resolveStructuredLogMessage,
   resolveStructuredLogTimestamp,
@@ -555,6 +555,8 @@ function renderScenarioFailureBundleMarkdown(bundle) {
       `- Phase: ${bundle.summary.phase || UNKNOWN_VALUE}`,
       `- Root Cause Class: ${bundle.summary.rootCauseClass || UNKNOWN_VALUE}`,
       `- Dominant Reason: ${bundle.summary.dominantReason || UNKNOWN_VALUE}`,
+      '- Log Window Coverage: ' +
+        formatLogWindowCoverageVerdict(bundle.summary.logWindowCoverage),
       '- Failure Class: ' +
         String(
           bundle.summary.failureClassification?.failureClass || UNKNOWN_VALUE,
@@ -838,22 +840,7 @@ function renderScenarioFailureBundleMarkdown(bundle) {
     );
   }
 
-  const excerpts =
-    bundle?.logs?.excerptsByNodeId &&
-    typeof bundle.logs.excerptsByNodeId === 'object' ?
-      Object.entries(bundle.logs.excerptsByNodeId) :
-      [];
-  if (excerpts.length > ZERO) {
-    sections.push(
-      '## Log Excerpts\n' +
-        excerpts
-          .map(([nodeId, lines]) => {
-            const content = Array.isArray(lines) ? lines.join('\n') : '';
-            return `### ${nodeId}\n\n\`\`\`text\n${content}\n\`\`\``;
-          })
-          .join(MARKDOWN_SECTION_BREAK),
-    );
-  }
+  sections.push(...renderLogWindowSections(bundle));
 
   const nodeDiagnostics =
     bundle?.nodeDiagnostics && typeof bundle.nodeDiagnostics === 'object' ?
@@ -1211,7 +1198,6 @@ export const FAILURE_BUNDLE_FORMATTING = {
   ANALYSIS_FILENAME,
   UTF8_ENCODING,
   ZERO,
-  LOG_TAIL_LINE_COUNT,
   MARKDOWN_SECTION_BREAK,
   UNKNOWN_VALUE,
   NO_PROGRESS_REASON_CODE,
@@ -1281,7 +1267,6 @@ export const FAILURE_BUNDLE_FORMATTING = {
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,
   toWorkspaceRelative,
   sanitizePathSegment,
-  sliceLogTail,
   parseStructuredLogLine,
   resolveStructuredLogMessage,
   resolveStructuredLogTimestamp,

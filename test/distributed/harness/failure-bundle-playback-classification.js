@@ -24,7 +24,6 @@ const {
   ANALYSIS_FILENAME,
   UTF8_ENCODING,
   ZERO,
-  LOG_TAIL_LINE_COUNT,
   MARKDOWN_SECTION_BREAK,
   UNKNOWN_VALUE,
   NO_PROGRESS_REASON_CODE,
@@ -98,7 +97,6 @@ const {
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,
   toWorkspaceRelative,
   sanitizePathSegment,
-  sliceLogTail,
   parseStructuredLogLine,
   resolveStructuredLogMessage,
   resolveStructuredLogTimestamp,
@@ -465,7 +463,10 @@ function buildFirstFaultTimelineFromPlaybackEvents(events) {
 // This run's own facts from its own event stream: the node ids the
 // harness created (the only nodes whose curated logs belong to the run)
 // and the scenario step that failed (its step log names it, so triage
-// never reads "unknown" for a failure at a named step).
+// never reads "unknown" for a failure at a named step). The failed step's
+// startedAtMs is the run's first divergence: every earlier step completed,
+// so the scenario vouches for nothing after that step began
+// (scenario-step-log.js records it on the failed event).
 const SCENARIO_STEP_STATUS_FAILED = 'failed';
 
 function resolveScenarioRunFacts(sortedEvents) {
@@ -481,6 +482,7 @@ function resolveScenarioRunFacts(sortedEvents) {
         typeof details.step === 'string') {
       failedScenarioStep = {
         error: typeof details.error === 'string' ? details.error : null,
+        startedAtMs: normalizeNonNegativeCount(details.startedAtMs),
         step: details.step,
         timestampMs: normalizeNonNegativeCount(event?.timestamp),
       };
@@ -839,7 +841,6 @@ export const FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION = {
   ANALYSIS_FILENAME,
   UTF8_ENCODING,
   ZERO,
-  LOG_TAIL_LINE_COUNT,
   MARKDOWN_SECTION_BREAK,
   UNKNOWN_VALUE,
   NO_PROGRESS_REASON_CODE,
@@ -913,7 +914,6 @@ export const FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION = {
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,
   toWorkspaceRelative,
   sanitizePathSegment,
-  sliceLogTail,
   parseStructuredLogLine,
   resolveStructuredLogMessage,
   resolveStructuredLogTimestamp,

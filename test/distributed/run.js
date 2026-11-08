@@ -1340,6 +1340,7 @@ async function main() {
       reportSummary: reportPreview.summary,
       standardSummary: reportPreview.standardSummary,
       benchmarkRegressionGate,
+      scenarioConfigs: runConfig.scenarios || null,
     });
     runStatusContext.milestones.failureBundlesWrittenAt =
       new Date().toISOString();

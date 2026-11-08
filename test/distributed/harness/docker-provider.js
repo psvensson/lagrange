@@ -13,9 +13,10 @@ import {
   TIMEOUTS,
   DOCKER_DEFAULTS,
   RESOURCE_DEFAULTS,
-  CONTAINER_LOG_TAIL_LINES,
+  FAILURE_STDERR_LOG_TAIL_BYTES,
 } from './constants.js';
 import {buildImageContext} from './docker-build-context.js';
+import {readContainerLogWindow} from './container-log-window.js';
 import {RETIREMENT, imageIdOf, retirePreviousImage} from './docker-image-retirement.js';
 import {resolveDockerMemoryWorkingSetBytes} from
   './container-memory-working-set.js';
@@ -70,6 +71,10 @@ const DOCKER_OP_DISCONNECT_NETWORK = 'network.disconnect';
 const DEFAULT_BUILD_LABELS = Object.freeze({});
 const CONTAINER_LOG_OPTION_RAW_BUFFER = 'rawBuffer';
 const CONTAINER_LOG_ERROR_STRING_TOO_LONG = 'ERR_STRING_TOO_LONG';
+// A container log too large to read into memory is an explicit, typed
+// failure, never a quieter line tail: the complete per-node output is the
+// streamed capture under .full-logs (full-node-log-capture.js).
+const CONTAINER_LOG_TOO_LARGE_CODE = 'CONTAINER_LOG_TOO_LARGE';
 const UTF8_ENCODING = 'utf8';
 const NETWORK_EXISTS_ERROR_PATTERN = 'already exists';
 const NETWORK_LIST_FILTER_NAME = 'name';
@@ -689,12 +694,14 @@ class DockerProvider {
    */
   async _cleanupFailedContainer(containerId) {
     try {
-      const logs = await this.getContainerLogs(containerId, {
-        tail: CONTAINER_LOG_TAIL_LINES,
-      });
-      if (logs) {
+      const window = await this.readContainerLogWindow(containerId,
+        {maxRetainedBytes: FAILURE_STDERR_LOG_TAIL_BYTES});
+      if (window.coverage.retainedBytes > ZERO) {
         process.stderr.write(
-          `Logs from failed container ${containerId}:\n${logs}\n`,
+          `Logs from failed container ${containerId} (last ` +
+          `${window.coverage.retainedBytes} bytes; ` +
+          `${window.coverage.withheldBytes} earlier bytes withheld):\n` +
+          `${window.lines.join('\n')}\n`,
         );
       }
     } catch (logErr) {
@@ -856,41 +863,46 @@ class DockerProvider {
    */
   async getContainerLogs(containerId, options = {}) {
     const container = this._docker.getContainer(containerId);
-    const {logOptions, normalizedTail} =
-      normalizeContainerLogOptions(options);
+    const {logOptions} = normalizeContainerLogOptions(options);
     const buffer = await this._readContainerLogs({
       container,
       containerId,
-      options,
       logOptions,
-      normalizedTail,
     });
     if (options[CONTAINER_LOG_OPTION_RAW_BUFFER] === true) return buffer;
     return buffer.toString(UTF8_ENCODING);
   }
 
+  /**
+   * Stream a container's log output into a byte-bounded tail window: peak
+   * memory is the window, never the log (container-log-window.js).
+   * @param {string} containerId
+   * @param {{maxRetainedBytes: number}} options
+   * @returns {Promise<{lines: Array<string>, coverage: Object}>}
+   */
+  readContainerLogWindow(containerId, options) {
+    return readContainerLogWindow(this._docker, containerId, options);
+  }
+
   async _readContainerLogs({
     container,
     containerId,
-    options,
     logOptions,
-    normalizedTail,
   }) {
-    let buffer;
     try {
-      buffer = await container.logs(logOptions);
+      return await container.logs(logOptions);
     } catch (error) {
-      const isStringTooLongError = error?.code ===
-        CONTAINER_LOG_ERROR_STRING_TOO_LONG;
-      if (isStringTooLongError && normalizedTail === null) {
-        return this.getContainerLogs(containerId, {
-          ...options,
-          tail: CONTAINER_LOG_TAIL_LINES,
-        });
+      if (error?.code === CONTAINER_LOG_ERROR_STRING_TOO_LONG) {
+        const tooLarge = new Error(
+          `Container ${containerId} log is too large to read into memory; ` +
+          'its complete output is the streamed capture under .full-logs',
+          {cause: error},
+        );
+        tooLarge.code = CONTAINER_LOG_TOO_LARGE_CODE;
+        throw tooLarge;
       }
       throw error;
     }
-    return buffer;
   }
 
   /**
@@ -1433,6 +1445,7 @@ function parseContainerStats(stats) {
 }
 
 export {
+  CONTAINER_LOG_TOO_LARGE_CODE,
   DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
   DockerProvider,
   parseContainerStats,

@@ -3,6 +3,9 @@ import {join, resolve} from 'node:path';
 import {FAILURE_BUNDLE_FORMATTING} from './failure-bundle-formatting.js';
 import {classifyScenarioVerdict} from './validation-matrix.js';
 import {SCENARIO_OUTCOME, scenarioOutcomeOf} from './scenario-outcome.js';
+import {
+  resolveLogWindowMaxRetainedBytes,
+} from './failure-bundle-artifact-foundation.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
@@ -17,7 +20,6 @@ const {
   ANALYSIS_FILENAME,
   UTF8_ENCODING,
   ZERO,
-  LOG_TAIL_LINE_COUNT,
   MARKDOWN_SECTION_BREAK,
   UNKNOWN_VALUE,
   NO_PROGRESS_REASON_CODE,
@@ -86,7 +88,6 @@ const {
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,
   toWorkspaceRelative,
   sanitizePathSegment,
-  sliceLogTail,
   parseStructuredLogLine,
   resolveStructuredLogMessage,
   resolveStructuredLogTimestamp,
@@ -241,6 +242,16 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
     diagnostics.failure = bundleJson.diagnostics.failure;
   }
 
+  // The bundle's root-cause bundle is the entry's own, or its withheld form
+  // when the bundle is non-measuring (scenario-assembly withholds it).
+  if (isRecord(bundleJson.diagnostics?.rootCauseBundle)) {
+    diagnostics.rootCauseBundle = bundleJson.diagnostics.rootCauseBundle;
+  }
+
+  if (isRecord(bundleJson.summary?.logWindowCoverage)) {
+    entry.logWindowCoverage = bundleJson.summary.logWindowCoverage;
+  }
+
   if (isRecord(bundleJson.summary?.failureClassification)) {
     // Scenario-level only: mirroring the classification into
     // details.diagnostics doubled a multi-MB blob in every report and had no
@@ -368,12 +379,14 @@ async function writeScenarioFailureBundleArtifacts({
   standardSummary,
   benchmarkRegressionGate,
   workspaceRoot,
+  scenarioConfig,
 }) {
   const logs = await collectScenarioLogArtifacts(
     scenarioDir,
     resolveRelevantNodeIds(entry),
     workspaceRoot,
     entry,
+    {maxRetainedBytes: resolveLogWindowMaxRetainedBytes(scenarioConfig)},
   );
   const bundleJson = buildScenarioFailureBundle({
     entry,
@@ -523,6 +536,7 @@ async function attachPassingScenarioConvergenceEvidence({
         resolveRelevantNodeIds(entry),
         workspaceRoot,
         entry,
+        {retainLogWindows: false},
       );
     } catch (_logError) {
       // Playback-log collection is best-effort; the convergence summary can
@@ -561,6 +575,7 @@ async function writeFailureBundlesForReport({
   standardSummary,
   benchmarkRegressionGate,
   workspaceRoot = process.cwd(),
+  scenarioConfigs = null,
 }) {
   const scenarioEntries = Array.isArray(scenarios) ? scenarios : [];
   const absoluteOutputDir = resolve(String(outputDir || '.'));
@@ -609,6 +624,9 @@ async function writeFailureBundlesForReport({
           standardSummary,
           benchmarkRegressionGate,
           workspaceRoot,
+          scenarioConfig: isRecord(scenarioConfigs) ?
+            scenarioConfigs[entry.scenario] :
+            null,
         }),
       );
     } catch (bundleError) {
@@ -693,7 +711,6 @@ export const FAILURE_BUNDLE_ARTIFACT_WRITERS = {
   ANALYSIS_FILENAME,
   UTF8_ENCODING,
   ZERO,
-  LOG_TAIL_LINE_COUNT,
   MARKDOWN_SECTION_BREAK,
   UNKNOWN_VALUE,
   NO_PROGRESS_REASON_CODE,
@@ -762,7 +779,6 @@ export const FAILURE_BUNDLE_ARTIFACT_WRITERS = {
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,
   toWorkspaceRelative,
   sanitizePathSegment,
-  sliceLogTail,
   parseStructuredLogLine,
   resolveStructuredLogMessage,
   resolveStructuredLogTimestamp,

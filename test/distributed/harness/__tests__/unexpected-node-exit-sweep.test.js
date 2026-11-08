@@ -86,6 +86,28 @@ test('sweep reports only non-expected-down exited containers', async (t) => {
   t.match(exits[0].stdoutTail, /Reached heap limit/);
 });
 
+test('sweep tells the observer of every exited container, expected-down ' +
+  'or not (the capture quiet bound)', async (t) => {
+  const observed = [];
+  const runningNode = buildExitedStubNode('joiner-1', {
+    inspectContainerState: async () => ({status: 'running', running: true,
+      exitCode: 0, oomKilled: false, finishedAt: null, error: null}),
+  });
+  const exits = await sweepUnexpectedNodeExits(
+    [runningNode, buildExitedStubNode('restartee'), buildExitedStubNode('seed-1')],
+    (id) => id === 'restartee',
+    (nodeId, finishedAt) => {
+      observed[observed.length] = [nodeId, finishedAt];
+    },
+  );
+  t.equal(exits.length, 1);
+  t.equal(exits[0].nodeId, 'seed-1');
+  t.same(observed, [
+    ['restartee', '2026-06-12T15:03:45.521Z'],
+    ['seed-1', '2026-06-12T15:03:45.521Z'],
+  ]);
+});
+
 test('sweep keeps the exit fact when log collection fails', async (t) => {
   const deadNode = buildExitedStubNode('seed-1', {
     getLogs: async () => {

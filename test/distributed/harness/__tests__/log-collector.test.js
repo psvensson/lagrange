@@ -24,20 +24,15 @@ import {join} from 'node:path';
 import {access, rm} from 'node:fs/promises';
 import {randomBytes} from 'node:crypto';
 import {LogCollector} from '../log-collector.js';
+import {readContainerLogWindow} from '../container-log-window.js';
 import {LOG_SUBSCRIPTION_CAPABILITY} from '../constants.js';
+import {
+  DOCKER_STREAM,
+  dockerLogFrame,
+  fakeDockerDaemon,
+} from './fake-docker-daemon.js';
 
 const LIVE_SELECT_BASE = 'LIVE SELECT * FROM logs';
-const DOCKER_STREAM_STDOUT = 1;
-const DOCKER_STREAM_STDERR = 2;
-
-function buildDockerLogFrame(streamType, text) {
-  const payload = Buffer.from(text, 'utf8');
-  const header = Buffer.alloc(8);
-  header[0] = streamType;
-  header.writeUInt32BE(payload.length, 4);
-  return Buffer.concat([header, payload]);
-}
-
 /**
  * Generate a unique temp directory path for test isolation.
  */
@@ -504,6 +499,19 @@ test('collectFinalSnapshot returns empty when no node',
     assert.deepStrictEqual(result, []);
   });
 
+// A node whose Docker log stream carries `payload` (Docker's multiplexed
+// frame format): getLogWindow is the real NodeHandle path, the real
+// container-log-window reader and docker-modem's demultiplexer, fed by a
+// fake daemon response.
+function containerNode(id, payload) {
+  const docker = fakeDockerDaemon([payload]);
+  return {
+    id,
+    containerId: id,
+    getLogWindow: (options) => readContainerLogWindow(docker, id, options),
+  };
+}
+
 /**
  * Unit test: collectContainerFallback parses Docker logs
  * Validates: Requirements 7.6
@@ -511,18 +519,12 @@ test('collectFinalSnapshot returns empty when no node',
 test('collectContainerFallback parses Docker logs',
   async (_t) => {
     // Each node reads through its OWN provider (multi-host contract):
-    // distinct getLogs implementations prove per-node provider routing.
+    // distinct log streams prove per-node provider routing.
     const nodes = [
-      {
-        id: 'node-1',
-        containerId: 'c1',
-        getLogs: async () => 'Starting node\nListening on port 8081',
-      },
-      {
-        id: 'node-2',
-        containerId: 'c2',
-        getLogs: async () => 'Joined cluster\nReady',
-      },
+      containerNode('node-1', dockerLogFrame(DOCKER_STREAM.STDOUT,
+        'Starting node\nListening on port 8081')),
+      containerNode('node-2', dockerLogFrame(DOCKER_STREAM.STDOUT,
+        'Joined cluster\nReady')),
     ];
 
     const collector = new LogCollector(tempDir());
@@ -534,8 +536,8 @@ test('collectContainerFallback parses Docker logs',
     // Verify node-1 entries
     assert.equal(buffer[0].node_id, 'node-1');
     assert.equal(buffer[0].message, 'Starting node');
-    assert.equal(buffer[0].level, 'info');
     assert.equal(buffer[0].source, 'container');
+    assert.equal(buffer[0].level, 'info');
 
     assert.equal(buffer[1].node_id, 'node-1');
     assert.equal(buffer[1].message, 'Listening on port 8081');
@@ -554,57 +556,49 @@ test('collectContainerFallback parses Docker logs',
 test('collectContainerFallback demultiplexes Docker-framed logs',
   async (_t) => {
     const multiplexed = Buffer.concat([
-      buildDockerLogFrame(DOCKER_STREAM_STDOUT, 'stdout line 1\n'),
-      buildDockerLogFrame(DOCKER_STREAM_STDERR, 'stderr line 2\n'),
-      buildDockerLogFrame(DOCKER_STREAM_STDOUT, 'stdout line 3'),
+      dockerLogFrame(DOCKER_STREAM.STDOUT, 'stdout line 1\n'),
+      dockerLogFrame(DOCKER_STREAM.STDERR, 'stderr line 2\n'),
+      dockerLogFrame(DOCKER_STREAM.STDOUT, 'stdout line 3'),
     ]);
 
-    let observedOptions = null;
-    const nodes = [
-      {
-        id: 'node-1',
-        containerId: 'c1',
-        getLogs: async (options) => {
-          observedOptions = options;
-          return multiplexed;
-        },
-      },
-    ];
-
     const collector = new LogCollector(tempDir());
-    await collector.collectContainerFallback(nodes);
+    await collector.collectContainerFallback(
+      [containerNode('node-1', multiplexed)]);
 
     const buffer = collector.getBuffer();
     assert.equal(buffer.length, 3);
     assert.equal(buffer[0].message, 'stdout line 1');
     assert.equal(buffer[1].message, 'stderr line 2');
     assert.equal(buffer[2].message, 'stdout line 3');
-    assert.equal(
-      observedOptions.rawBuffer,
-      true,
-      'collector should request raw Docker log buffer',
-    );
   });
 
-test('collectContainerFallback requests bounded Docker tail to avoid oversized payloads',
+test('collectContainerFallback keeps a byte window of the streamed output',
   async (_t) => {
-    let observedOptions = null;
-    const nodes = [
-      {
-        id: 'node-1',
-        containerId: 'c1',
-        getLogs: async (options) => {
-          observedOptions = options;
-          return '';
-        },
-      },
-    ];
+    const allLines = [];
+    for (let index = 0; index < 100; index += 1) {
+      allLines.push(`line ${1000 + index} ${'x'.repeat(90)}`);
+    }
+    const frames = [];
+    for (const line of allLines) {
+      frames.push(dockerLogFrame(DOCKER_STREAM.STDOUT, line + '\n'));
+    }
+    const maxRetainedBytes = 1000;
 
     const collector = new LogCollector(tempDir());
-    await collector.collectContainerFallback(nodes);
+    await collector.collectContainerFallback(
+      [containerNode('node-1', Buffer.concat(frames))], {maxRetainedBytes});
 
-    assert.equal(observedOptions.tail, 50);
-    assert.equal(observedOptions.rawBuffer, true);
+    const buffer = collector.getBuffer();
+    let retainedBytes = 0;
+    for (const entry of buffer) {
+      retainedBytes += Buffer.byteLength(entry.message, 'utf8') + 1;
+    }
+    assert.ok(retainedBytes <= maxRetainedBytes + 1);
+    assert.ok(buffer.length > 0 && buffer.length < allLines.length);
+    assert.equal(
+      buffer[buffer.length - 1].message,
+      allLines[allLines.length - 1],
+    );
   });
 
 /**
@@ -617,15 +611,12 @@ test('collectContainerFallback skips unreachable containers',
       {
         id: 'node-1',
         containerId: 'c1',
-        getLogs: async () => {
+        getLogWindow: async () => {
           throw new Error('container not found');
         },
       },
-      {
-        id: 'node-2',
-        containerId: 'c2',
-        getLogs: async () => 'OK line',
-      },
+      containerNode('node-2', dockerLogFrame(DOCKER_STREAM.STDOUT,
+        'OK line')),
     ];
 
     const collector = new LogCollector(tempDir());
