@@ -1,0 +1,16 @@
+{
+  "schema": "solve-quest/2",
+  "id": "readiness-service-constructor-injection",
+  "epic": "code-navigability-and-mistake-resistance",
+  "statement": "The control-plane readiness service is one class whose collaborators (system-table cache, planning snapshot source, node service rows, clock) are named constructor parameters validated once at construction, replacing the nine-deep extends chain across the 24 control-plane-readiness-*.js files; the planning-answer chain (getMembershipPublicationPlanningAnswerSync, getPriorityRecoveryPlanningAnswerSync and their snapshot forms) is one method with one name, and its three consumers (partition-service-learner-promotion-methods.js, replica-operation-repository-visibility-methods.js, unified-rebalancer-available-nodes.js) call it without typeof checks; readiness behaviour and every existing witness are unchanged.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {"command": "node scripts/checks/code-navigability-budget.js --metric --rows inheritance_depth_over_two_readiness", "target": 0}
+  },
+  "constraints": [
+    {"id": "behaviour-unchanged", "statement": "No readiness verdict, timing, cache key or publication changes. Existing readiness witnesses pass with construction-only edits."},
+    {"id": "validate-once", "statement": "Collaborator interfaces are validated in the constructor and nowhere else; a missing collaborator is a construction refusal, never a runtime fallback or a null-returning getter."},
+    {"id": "one-name-per-answer", "statement": "The four-way planning-answer chain collapses to one method. Aliases and compatibility paths are deleted, not kept."},
+    {"id": "independent-verification", "statement": "The src/ changes land only behind an approving verification newer than the last attempt."}
+  ]
+}

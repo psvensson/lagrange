@@ -1,0 +1,17 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-service-constructor-injection",
+  "epic": "code-navigability-and-mistake-resistance",
+  "statement": "PartitionService is assembled by constructor injection instead of prototype copying: the 13 create*Methods bags across the 41 partition-service*.js files become explicit-context modules or constructor-held collaborators as docs/development/code-style.md already prescribes for new extractions, the 12 Object.getOwnPropertyNames(X.prototype) copy loops are deleted, the process-local admission stores (RETIREMENTS_DEFERRED in partition-service-raft-membership-administration.js, ADMISSIONS_IN_FLIGHT and ADMISSIONS_DEFERRED in raft-rs-group-membership-admission.js) become named fields of the owner that re-drives them, and no typeof feature check remains in the pilot owner files; behaviour is unchanged.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {"command": "node scripts/checks/code-navigability-budget.js --metric --rows prototype_copy_bags_partition_service,identity_keyed_module_state_admission_path,owner_port_feature_detection_pilot_owners", "target": 0}
+  },
+  "constraints": [
+    {"id": "behaviour-unchanged", "statement": "No admission, promotion, retirement or re-drive decision changes. Existing partition witnesses pass with construction-only edits."},
+    {"id": "state-moves-semantics-do-not", "statement": "Moving a store into its owner changes where it lives, not when it is written or re-driven. The formation ADD continuation owner across a leader change is the formation work's repair and is not absorbed here (R17)."},
+    {"id": "no-new-bag", "statement": "No new *-methods.js fragment, prototype copy or inheritance level is introduced to finish the migration."},
+    {"id": "after-readiness", "statement": "Starts after readiness-service-constructor-injection lands, since the pilot-owner row counts both owners."},
+    {"id": "independent-verification", "statement": "The src/ changes land only behind an approving verification newer than the last attempt."}
+  ]
+}

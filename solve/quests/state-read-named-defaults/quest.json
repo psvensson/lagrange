@@ -1,0 +1,16 @@
+{
+  "schema": "solve-quest/2",
+  "id": "state-read-named-defaults",
+  "epic": "code-navigability-and-mistake-resistance",
+  "statement": "No read of a status, role, raft_role, workflow_step, phase or step field carries a || or ?? default: each of the 159 sites either reads a value the schema or constructor already guarantees (the services status column is NOT NULL DEFAULT 'active') or routes the absent case to a named state (R07) at the one owner or decoder that defines it; once the count is zero the pattern is an ESLint no-restricted-syntax selector in eslint.config.js and the guideline audit drops it.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {"command": "node scripts/checks/code-navigability-budget.js --metric --rows state_read_defaults", "target": 0}
+  },
+  "constraints": [
+    {"id": "named-state-not-silent-default", "statement": "An absent or unknown state value becomes a named outcome the consumer handles; it never becomes the most common value by default."},
+    {"id": "schema-proves-presence", "statement": "Deleting a default without adding a named state cites the column constraint or constructor validation that makes the value present on every path."},
+    {"id": "eslint-after-zero", "statement": "The no-restricted-syntax selector lands in the same change as the last deletion, never earlier: a single-file linter rule with existing hits blocks everything or nothing."},
+    {"id": "independent-verification", "statement": "The src/ changes land only behind an approving verification newer than the last attempt."}
+  ]
+}

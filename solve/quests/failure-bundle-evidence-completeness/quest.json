@@ -1,0 +1,16 @@
+{
+  "schema": "solve-quest/2",
+  "id": "failure-bundle-evidence-completeness",
+  "epic": "code-navigability-and-mistake-resistance",
+  "statement": "A failure bundle records, for each retained node-log window, its coverage of the failure window (first divergence to the end of the run) and the byte count it withheld, and a bundle whose coverage is partial is published as incomplete: the scenario verdict for it is non-measuring with the withheld bytes named, never a dominant reason derived from the retained tail; the LOG_TAIL_LINE_COUNT writer in test/distributed/harness/failure-bundle-artifact-foundation.js gains that coverage record or is replaced by retention bounded in bytes from the first divergence.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {"command": "node scripts/checks/code-navigability-budget.js --metric --rows failure_bundle_log_windows_without_coverage", "target": 0}
+  },
+  "constraints": [
+    {"id": "incomplete-fails-the-subject", "statement": "When the analysis cannot be complete, the bundle fails the subject and states how much went unexamined; it never reports a verdict derived from the part it saw (runner-output-bound, 2026-09-18)."},
+    {"id": "bounded-in-bytes", "statement": "Retention is bounded in bytes, not lines, so a newline-free log cannot defeat the bound."},
+    {"id": "prerequisite-diff", "statement": "The uncommitted retainContainerLogLines and terminal-status-set changes on work/composed-05-comparison-readiness-20261103 are the starting material; they land through this quest or are superseded by it, never both."},
+    {"id": "test-and-scripts-only", "statement": "This quest changes test/ and scripts/ only. A src/ change it uncovers is recorded and routed to its owner (R17)."}
+  ]
+}
