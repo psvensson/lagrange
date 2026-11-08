@@ -24,9 +24,7 @@ import {
 import {
   CONTROL_PLANE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   ProjectionReadinessEvidenceOwner,
 } from '../../src/control-plane/projection-readiness-evidence-owner.js';
@@ -34,6 +32,7 @@ import {
   buildProjectionReadinessGenerationKey,
 } from '../../src/control-plane/projection-readiness-evidence-generation.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const CLOCK_START_MS = 350000;
 // Keep observation time moving without crossing a node-liveness semantic
 // deadline; time-only liveness transitions have their own owner receipts.
@@ -101,7 +100,7 @@ function buildMovingClockFixture(nodeId) {
       return publicationService.getPublicationModeDiagnostics();
     },
   };
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId,
     systemTableCache: cache,
     cacheMutationTarget: cache,

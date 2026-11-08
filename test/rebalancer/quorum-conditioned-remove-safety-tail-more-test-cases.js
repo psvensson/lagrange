@@ -95,7 +95,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           async getMembershipPublicationPlanningSnapshot(nodeId) {
             return this.getMembershipPublicationPlanningSnapshotBestEffort(nodeId);
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
               publishedActiveNodeIdsPresent: true,
@@ -310,7 +310,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           async getMembershipPublicationPlanningSnapshot(nodeId) {
             return this.getMembershipPublicationPlanningSnapshotBestEffort(nodeId);
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
               publishedActiveNodeIdsPresent: true,
@@ -551,7 +551,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           async getMembershipPublicationPlanningSnapshot(nodeId) {
             return this.getMembershipPublicationPlanningSnapshotBestEffort(nodeId);
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
               publishedActiveNodeIdsPresent: true,
@@ -758,7 +758,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           async getMembershipPublicationPlanningSnapshot(nodeId) {
             return this.getMembershipPublicationPlanningSnapshotBestEffort(nodeId);
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
               publishedActiveNodeIdsPresent: true,

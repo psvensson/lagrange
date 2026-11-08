@@ -259,8 +259,10 @@ const RATCHET_TARGETS = [
     // on the checker's hint.
     // Failure-bundle evidence completeness: tightened 24346 -> 24333 on the
     // checker's hint.
-    baselineCloneGroupCount: 649,
-    baselineDuplicatedLineCount: 24333,
+    // readiness-service-constructor-injection: 24346 -> 24336 -> 24292 (round 2, clones 649 -> 648) -> 24272 (B1 repair).
+    // Merged stream: the lower of the two one-way baselines, then tightened 24272 -> 24259 on the hint.
+    baselineCloneGroupCount: 648,
+    baselineDuplicatedLineCount: 24259,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

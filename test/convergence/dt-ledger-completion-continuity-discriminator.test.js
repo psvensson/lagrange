@@ -71,6 +71,7 @@ import {
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const {
   PRIORITY_PUBLICATION_FOLLOWER_SOURCE_REMOVAL_SAFETY_STATE,
@@ -375,7 +376,7 @@ function buildSweepCoordinator({operationRows, serviceRows}) {
       return {success: true, rows: []};
     },
   };
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: 'test-node-1',
     systemTableCache: createMockCache(),
     cdcIntegrationService: {
@@ -416,7 +417,7 @@ function buildSweepCoordinator({operationRows, serviceRows}) {
     },
     storageAccountingService: {estimateReplicaBytes: () => 1},
     enableTimeouts: false,
-  });
+  }));
   return {coordinator, getOp: (id) => trackedOperations.get(id) || null};
 }
 

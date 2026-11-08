@@ -30,10 +30,8 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 function createCache() {
   return {
     get() {
@@ -50,7 +48,7 @@ function createCache() {
 }
 
 function buildSnapshot(activeGate, overrides = {}) {
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: createCache(),
   });

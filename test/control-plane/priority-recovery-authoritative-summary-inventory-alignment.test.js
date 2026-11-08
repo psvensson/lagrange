@@ -15,13 +15,12 @@ import {
 import {
   MembershipPublicationCoordinator,
 } from '../../src/control-plane/membership-publication-coordinator.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   buildReplicaInventorySnapshot,
 } from '../../src/rebalancer/replica-inventory.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const NODE_IDS = Object.freeze(['seed', 'node-2', 'node-3', 'node-4']);
 const READY_NODE_IDS = Object.freeze(['seed', 'node-2', 'node-4']);
 const PRIORITY_PARTITION_IDS = Object.freeze([
@@ -152,7 +151,7 @@ test('priority planning invalidates every publisher memo when terminal replica r
       systemTableCache: cache,
       now: () => nowMs,
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'seed',
       systemTableCache: cache,
       membershipPublicationService: publicationCoordinator,
@@ -160,7 +159,7 @@ test('priority planning invalidates every publisher memo when terminal replica r
     });
 
     const stalePlanning =
-      readinessService.getMembershipPublicationPlanningAnswerSync('seed', nowMs);
+      readinessService.getPriorityRecoveryPlanningAnswerSync('seed', nowMs);
     t.match(
       schemaOperationsBlock(stalePlanning.priorityPartitionSummary),
       {
@@ -229,7 +228,7 @@ test('priority planning invalidates every publisher memo when terminal replica r
     cache.applyServiceChange('UPDATE', authoritativeRows[3]);
 
     const terminalPlanning =
-      readinessService.getMembershipPublicationPlanningAnswerSync('seed', nowMs);
+      readinessService.getPriorityRecoveryPlanningAnswerSync('seed', nowMs);
     t.equal(
       terminalPlanning.priorityPartitionSummary.satisfied,
       true,
@@ -252,7 +251,7 @@ test('priority planning invalidates the publication merge memo on remote termina
       systemTableCache: cache,
       now: () => nowMs,
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'seed',
       systemTableCache: cache,
       membershipPublicationService: publicationCoordinator,

@@ -32,8 +32,8 @@ import {
   statePriorityRecoveryPlanningAnswerOrigin,
 } from '../../src/control-plane/priority-recovery-planning-answer-origin.js';
 import {
-  ControlPlaneReadinessPublicationPlanningSnapshot,
-} from '../../src/control-plane/control-plane-readiness-publication-planning-snapshot.js';
+  ControlPlaneReadinessService,
+} from '../../src/control-plane/control-plane-readiness-service.js';
 import {
   createPartitionServiceLearnerPromotionMethods,
 } from '../../src/partition/partition-service-learner-promotion-methods.js';
@@ -98,7 +98,7 @@ function planningOwner(overrides = {}) {
   let clock = T0;
   const builds = [];
   const owner = Object.create(
-    ControlPlaneReadinessPublicationPlanningSnapshot.prototype,
+    ControlPlaneReadinessService.prototype,
   );
   Object.assign(owner, {
     nodeId: PUBLISHER_NODE_ID,
@@ -106,7 +106,7 @@ function planningOwner(overrides = {}) {
     membershipPublicationPlanningActiveStaleGraceMs: STALE_GRACE_MS,
     membershipPublicationPlanningSourceRevision: 0,
     priorityRecoveryPlanningProjectionMemoByNodeId: new Map(),
-    getMembershipPublicationPlanningSnapshotSync: (nodeId) => ({read: nodeId}),
+    deriveMembershipPublicationPlanningSnapshotSync: (nodeId) => ({read: nodeId}),
     buildTrackedPriorityRecoveryPlanningProjection: (snapshot) => {
       builds.push(snapshot?.read ?? null);
       return Object.freeze({
@@ -126,7 +126,7 @@ function planningOwner(overrides = {}) {
 // show what the builder does to the summary object it is handed.
 function projectionCarrierOwner() {
   const owner = Object.create(
-    ControlPlaneReadinessPublicationPlanningSnapshot.prototype,
+    ControlPlaneReadinessService.prototype,
   );
   Object.assign(owner, {
     nodeId: PUBLISHER_NODE_ID,

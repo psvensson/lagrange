@@ -240,7 +240,7 @@ function createColdFormationReadinessService({denialReasonCodesByNodeId}) {
     async getMembershipPublicationPlanningSnapshot(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
-    getMembershipPublicationPlanningSnapshotSync(nodeId) {
+    getPriorityRecoveryPlanningAnswerSync(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
   };

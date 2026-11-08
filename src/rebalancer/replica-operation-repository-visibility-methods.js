@@ -375,6 +375,10 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         return null;
       }
       const observedAt = this.timeSource.now();
+      // The real readiness service answers through its async best-effort
+      // surface, so callers receive a Promise here; the surface choice stays
+      // as found until the owner decides it (recorded finding of quest
+      // readiness-service-constructor-injection).
       if (
         typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
         'function'
@@ -397,39 +401,12 @@ function assignReplicaOperationRepositoryVisibilityMethods(
           ) || null
         );
       }
-      if (typeof readinessService.getPriorityRecoveryPlanningAnswerSync === 'function') {
-        return (
-          readinessService.getPriorityRecoveryPlanningAnswerSync(this.nodeId, observedAt) || null
-        );
-      }
-      if (
-        typeof readinessService.getMembershipPublicationPlanningAnswerSync ===
-        'function'
-      ) {
-        return (
-          readinessService.getMembershipPublicationPlanningAnswerSync(
-            this.nodeId,
-            observedAt,
-          ) || null
-        );
-      }
-      if (typeof readinessService.getPriorityRecoveryPlanningSnapshotSync === 'function') {
-        return (
-          readinessService.getPriorityRecoveryPlanningSnapshotSync(this.nodeId, observedAt) || null
-        );
-      }
-      if (
-        typeof readinessService.getMembershipPublicationPlanningSnapshotSync ===
-        'function'
-      ) {
-        return (
-          readinessService.getMembershipPublicationPlanningSnapshotSync(
-            this.nodeId,
-            observedAt,
-          ) || null
-        );
-      }
-      return null;
+      // The planning answer is a method of every readiness service (one
+      // name, no probe); the two best-effort probes above are the alias
+      // family the fix quest priority-recovery-owner-read-snapshot-await owns.
+      return (
+        readinessService.getPriorityRecoveryPlanningAnswerSync(this.nodeId, observedAt) || null
+      );
     }
     isPriorityRecoveryOwnerReadActive(planningSnapshot = null) {
       if (!planningSnapshot || typeof planningSnapshot !== 'object') {

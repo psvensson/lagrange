@@ -17,6 +17,8 @@ import {LEASE_STATE} from
 import {ExecutorOutcomeEmitter} from
   '../../../src/rebalancer/executor-outcome-emitter.js';
 import {TEST_BOOT_INCARNATION} from '../../test-helpers/boot-incarnation-fixture.js';
+import {readinessCollaboratorFake} from
+  '../../helpers/readiness-service-fixture.js';
 
 const TEST_NODE_ID = 'test-node';
 const TEST_NODE_ADDRESS = 'localhost:8080';
@@ -63,7 +65,10 @@ describe('ControlPlaneSetup', () => {
     });
 
     const registeredHandlers = new Map();
-    mockMessageRouter = {
+    // ControlPlaneSetup wires the router and the cache into the node's
+    // readiness service, which validates each collaborator's interface:
+    // the fixture completes these stubs with the neutral answers.
+    mockMessageRouter = readinessCollaboratorFake('messageRouter', {
       register: (address, handler) => {
         registeredHandlers.set(address, handler);
       },
@@ -77,7 +82,7 @@ describe('ControlPlaneSetup', () => {
         return true;
       },
       send: async () => {},
-    };
+    });
 
     mockCdcIntegrationService = {
       updateSystemTableRow: async () => {},
@@ -94,11 +99,11 @@ describe('ControlPlaneSetup', () => {
       },
     };
 
-    mockSystemTableCache = {
+    mockSystemTableCache = readinessCollaboratorFake('systemTableCache', {
       get: () => null,
       getAll: () => [],
       filter: () => [],
-    };
+    });
 
     mockTablePolicyService = {
       getPolicy: () => null,

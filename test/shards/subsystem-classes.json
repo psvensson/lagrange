@@ -7,7 +7,7 @@
     "bootstrap-membership": 331,
     "cdc-metadata": 67,
     "cli-tooling": 99,
-    "control-plane": 225,
+    "control-plane": 226,
     "convergence-topology": 78,
     "distributed-harness": 214,
     "examples-e2e": 8,
@@ -25,10 +25,10 @@
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2571,
-  "digest": "fnv1a32-4052984d",
+  "censusSize": 2572,
+  "digest": "fnv1a32-7275e4f3",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3e5dd68e",
+  "observationDigest": "fnv1a32-508fbb08",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -546,6 +546,7 @@
     "test/control-plane/control-plane-publications-leadership.test.js": "control-plane",
     "test/control-plane/control-plane-read-authority-token.test.js": "control-plane",
     "test/control-plane/control-plane-readiness-service-cluster-health-and-recovery-diagnostics.test.js": "control-plane",
+    "test/control-plane/control-plane-readiness-service-construction.test.js": "control-plane",
     "test/control-plane/control-plane-readiness-service-formation-owner-fairness.test.js": "control-plane",
     "test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js": "control-plane",
     "test/control-plane/control-plane-readiness-service-owner-read-count-only-ack-upgrade.test.js": "control-plane",
@@ -3743,7 +3744,8 @@
         "src/bootstrap/shared/control-plane-setup.js",
         "src/control-plane/lease-service-constants.js",
         "src/query/distributed/distributed-transaction-coordinator.js",
-        "src/rebalancer/executor-outcome-emitter.js"
+        "src/rebalancer/executor-outcome-emitter.js",
+        "test/helpers/readiness-service-fixture.js"
       ]
     },
     "test/bootstrap/shared/startup-sql-runtime-handoff.test.js": {
@@ -4280,11 +4282,6 @@
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js"
       ]
     },
-    "test/control-plane/authoritative-node-evidence-reconciler.test.js": {
-      "files": [
-        "src/control-plane/control-plane-readiness-service.js"
-      ]
-    },
     "test/control-plane/binding-schema-v3-handler-interfaces.test.js": {
       "files": [
         "src/control-plane/owners/request-binding-service-definition-contract.js"
@@ -4379,6 +4376,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/config/configuration-manager.js",
         "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+        "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/membership-publication-candidate-derivation.js",
         "src/control-plane/projection-readiness-evidence-source.js",
         "src/control-plane/projection-readiness-evidence.js",
@@ -4739,7 +4737,6 @@
         "src/control-plane/authoritative-node-evidence-reconciler.js",
         "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
         "src/control-plane/control-plane-readiness-evidence-reasons.js",
-        "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/control-plane-readiness-snapshot-store.js",
         "src/control-plane/formation-release-handoff-evidence.js",
         "src/control-plane/node-liveness-semantic-projection-owner.js",
@@ -4835,7 +4832,6 @@
         "src/cdc/cdc-integration-service-owner-rpc-read-execution.js",
         "src/control-plane/authoritative-control-plane-view.js",
         "src/control-plane/control-plane-readiness-constants.js",
-        "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/control-plane-snapshot-owner.js",
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
         "src/control-plane/heartbeat-service.js",
@@ -4898,14 +4894,12 @@
     },
     "test/control-plane/readiness-admission-transitions-observed.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/readiness-planning-snapshot-owner.js"
       ]
     },
     "test/control-plane/readiness-authoritative-row-read-contract.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/membership-publication-coordinator-reads.js"
       ]
     },
@@ -4929,7 +4923,6 @@
     },
     "test/control-plane/readiness-liveness-projection-single-source.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/node-liveness-semantic-projection-owner.js",
         "src/control-plane/readiness-denial-classification.js",
         "src/control-plane/readiness-planning-version-contract.js"
@@ -4952,7 +4945,6 @@
     "test/control-plane/readiness-planning-deferral-bounded.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
-        "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/membership-planning-version-key.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/readiness-planning-snapshot-owner.js",
@@ -4976,15 +4968,11 @@
       "files": [
         "src/cache/system-table-cache.js",
         "src/constants/index.js",
-        "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/membership-publication-coordinator.js"
       ]
     },
     "test/control-plane/readiness-planning-publication-version-key.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-        "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-        "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/membership-publication-coordinator.js"
       ]
     },
@@ -5000,14 +4988,12 @@
     },
     "test/control-plane/readiness-planning-snapshot-identity-owner.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/membership-publication-coordinator.js"
       ]
     },
     "test/control-plane/readiness-routing-heartbeat-window.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
-        "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/membership-publication-coordinator-reads.js"
       ]
     },
@@ -12715,7 +12701,6 @@
     },
     "test/query/readiness-routing-denial-observability.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/eligibility-snapshot.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/readiness-planning-snapshot-owner.js"
@@ -15303,7 +15288,7 @@
     },
     "test/rebalancer/projection-boundary.guard.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-service.js",
+        "src/control-plane/control-plane-readiness-node-service-rows.js",
         "src/rebalancer/unified-rebalancer.js"
       ]
     },
@@ -17180,7 +17165,7 @@
       "files": [
         "architecture/current-owner-maps.md",
         "src/admin/admin-websocket-load-lane-admission.js",
-        "src/control-plane/control-plane-readiness-publication-aware.js",
+        "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
         "src/control-plane/membership-publication-coordinator-planning.js",
         "src/control-plane/membership-publication-coordinator-reads.js",
         "src/control-plane/publication-recovery-gate.js",

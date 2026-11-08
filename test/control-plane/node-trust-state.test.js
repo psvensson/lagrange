@@ -2,9 +2,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   NODE_TRUST_STATE,
   buildNodeTrustState,
@@ -14,6 +12,7 @@ import {
   projectNodeLivenessSemantics,
 } from '../../src/control-plane/node-liveness-semantic-projection.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const NODE_ID = 'node-a';
 
 function buildPublication(nodeIds = [NODE_ID], publicationEpoch = 7) {
@@ -261,7 +260,7 @@ function createTrustViewFixture() {
       return tableName === 'nodes' ? nodesAppliedAtMs : 901;
     },
   };
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: 'observer-a',
     clusterMemberStaleHeartbeatMaxAgeMs: 500,
     systemTableCache: cache,
@@ -440,7 +439,7 @@ test('W7 trust view: rowless formation self uses explicit bounded runtime ' +
       return 900;
     },
   };
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: cache,
     messageRouter: {

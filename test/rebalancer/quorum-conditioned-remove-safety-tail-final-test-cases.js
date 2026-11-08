@@ -41,7 +41,7 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
               },
             };
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publishedActiveNodeIdsPresent: true,
               publishedActiveNodeIds: Object.freeze(['node-a', 'node-b', 'node-c']),
@@ -192,7 +192,7 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
               },
             };
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publishedActiveNodeIdsPresent: true,
               publishedActiveNodeIds: Object.freeze([...publishedActiveNodeIds]),

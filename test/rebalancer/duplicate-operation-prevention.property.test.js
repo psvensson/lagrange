@@ -27,6 +27,7 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const EntityType = REBALANCER_ENTITY_TYPE;
 const MoveType = REBALANCER_MOVE_TYPE;
@@ -206,10 +207,10 @@ function createMockCoordinatorDeps(sqlEngine) {
 }
 
 function createCoordinatorUnderTest(sqlEngine, overrides = {}) {
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     ...createMockCoordinatorDeps(sqlEngine),
     ...overrides,
-  });
+  }));
   coordinator.initialize();
   const baseCreateOperation = coordinator.createOperation.bind(coordinator);
   coordinator.createOperation = async (move = {}) => {

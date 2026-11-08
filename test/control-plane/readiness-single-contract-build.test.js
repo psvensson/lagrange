@@ -8,19 +8,18 @@ import {
 import {
   CONTROL_PLANE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   buildProjectionReadinessState,
 } from '../../src/control-plane/projection-readiness-state.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const READINESS_BUILD_NOW_MS = 620000;
 
 test('one readiness build constructs one projection contract shared with ' +
   'its transition state', async (t) => {
   const nodeId = 'node-single-contract-build';
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: createCache({
       nodes: [createActiveNode(nodeId)],
@@ -89,7 +88,7 @@ test('membership publication diagnostics are recursively frozen and reused ' +
   'by the projection normalization cache', async (t) => {
   const nodeId = 'node-frozen-publication-diagnostics';
   const peerNodeId = 'node-frozen-publication-peer';
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: createCache({
       nodes: [createActiveNode(nodeId)],

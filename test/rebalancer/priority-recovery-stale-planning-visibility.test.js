@@ -52,6 +52,7 @@ const TEST_NODE_STATUS_ACTIVE = 'active';
 const TEST_SERVICE_TYPE_PARTITION = 'partition';
 const TEST_RAFT_ROLE_FOLLOWER = 'follower';
 const TEST_NOW_MS = 1780622700000;
+const testClock = () => TEST_NOW_MS;
 const TEST_SYNCING_STALE_AGE_MS = 360000;
 const TEST_STALE_OPERATION_UPDATED_AT_MS =
   TEST_NOW_MS - TEST_SYNCING_STALE_AGE_MS;
@@ -272,8 +273,9 @@ function buildPriorityPlacementCacheData({
   };
 }
 
-function createPlanningReadinessService(planningSnapshot) {
-  const readinessService = createMockControlPlaneReadinessService();
+// `clock` is the owner's clock (the rebalancer's nowFn) when the test has one.
+function createPlanningReadinessService(planningSnapshot, clock = null) {
+  const readinessService = createMockControlPlaneReadinessService({clock});
   readinessService.getPriorityRecoveryPlanningSnapshotBestEffort = async () =>
     planningSnapshot;
   readinessService.getPriorityRecoveryPlanningAnswerSync = () =>
@@ -306,8 +308,12 @@ function createRecoveryOnlyTargetPlanningReadinessService(
   return readinessService;
 }
 
-function createBlockedLocalServePlanningReadinessService(planningSnapshot) {
-  const readinessService = createPlanningReadinessService(planningSnapshot);
+function createBlockedLocalServePlanningReadinessService(
+  planningSnapshot,
+  clock,
+) {
+  const readinessService = createPlanningReadinessService(planningSnapshot,
+    clock);
   readinessService.getNodeReadinessSync = (nodeId) => Object.freeze({
     nodeId,
     dimensions: Object.freeze({
@@ -339,7 +345,7 @@ function createPriorityRebalancer(options = {}) {
   const planningSnapshot = options.planningSnapshot || buildStalePlanningSnapshot();
   const readinessService =
     options.controlPlaneReadinessService ||
-    createPlanningReadinessService(planningSnapshot);
+    createPlanningReadinessService(planningSnapshot, options.nowFn);
   const rebalanceCoordinator =
     options.rebalanceCoordinator || createMockCoordinator();
   rebalanceCoordinator.controlPlaneReadinessService = readinessService;
@@ -876,9 +882,10 @@ test(
     const rebalancer = createPriorityRebalancer({
       planningSnapshot,
       controlPlaneReadinessService:
-        createBlockedLocalServePlanningReadinessService(planningSnapshot),
+        createBlockedLocalServePlanningReadinessService(planningSnapshot,
+          testClock),
       replicaOperations: [buildStaleInFlightReplaceOperation()],
-      nowFn: () => TEST_NOW_MS,
+      nowFn: testClock,
     });
 
     const planningGateSnapshot =
@@ -910,9 +917,10 @@ test(
     const rebalancer = createPriorityRebalancer({
       planningSnapshot,
       controlPlaneReadinessService:
-        createBlockedLocalServePlanningReadinessService(planningSnapshot),
+        createBlockedLocalServePlanningReadinessService(planningSnapshot,
+          testClock),
       replicaOperations: [buildInFlightReplaceOperation()],
-      nowFn: () => TEST_NOW_MS,
+      nowFn: testClock,
     });
 
     const planningGateSnapshot =

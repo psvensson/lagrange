@@ -1,4 +1,5 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionTests({
   test,
   assert,
@@ -84,7 +85,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
 
   test('RebalanceCoordinator limits critical partitions to one add-like operation in flight',
     async (t) => {
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -112,7 +113,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       coordinator.repository.getOperationsByEntityAuthoritative = async () => ([
         {
@@ -153,7 +154,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
 
   test('RebalanceCoordinator critical add-like gate uses authoritative ' +
     'replica_operations reads when cache is empty', async (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-local',
       transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
@@ -181,7 +182,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       ...createStorageOwners(),
       enableTimeouts: false,
-    });
+    }));
     coordinator.initialize();
     coordinator.repository.getOperationsByEntity = async () => [];
     coordinator.repository.getOperationsByEntityAuthoritative = async () => ([
@@ -226,7 +227,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
 
   test('RebalanceCoordinator defers critical add-like admission ' +
     'when authoritative operation visibility remains unresolved', async (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-local',
       transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
@@ -254,7 +255,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       ...createStorageOwners(),
       enableTimeouts: false,
-    });
+    }));
     coordinator.initialize();
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
       async () => ({
@@ -302,7 +303,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
   test('RebalanceCoordinator keeps emergency publication create admission moving ' +
     'when deferred visibility is caused only by contained background pressure',
   async (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-local',
       transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
@@ -333,7 +334,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       ...createStorageOwners(),
       enableTimeouts: false,
-    });
+    }));
     coordinator.initialize();
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
       async () => ({
@@ -477,7 +478,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
 
   test('RebalanceCoordinator defers conflicting-remove admission when ' +
     'authoritative operation visibility remains unresolved', async (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-local',
       transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
@@ -505,7 +506,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       ...createStorageOwners(),
       enableTimeouts: false,
-    });
+    }));
     coordinator.initialize();
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
       async () => ({
@@ -550,7 +551,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
   test('RebalanceCoordinator keeps emergency publication remove admission moving ' +
     'when deferred visibility is caused only by contained background pressure',
   async (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-local',
       transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
@@ -581,7 +582,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       ...createStorageOwners(),
       enableTimeouts: false,
-    });
+    }));
     coordinator.initialize();
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
       async () => ({
@@ -617,7 +618,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
   test('RebalanceCoordinator serializes critical publication removes behind ' +
     'in-flight source removal',
   async (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-local',
       transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
@@ -645,7 +646,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       ...createStorageOwners(),
       enableTimeouts: false,
-    });
+    }));
     coordinator.initialize();
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
       async () => ({
@@ -699,7 +700,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
 
   test('RebalanceCoordinator critical add-like gate ignores replace remove-phase work',
     async (t) => {
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -727,7 +728,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       coordinator.repository.getOperationsByEntityAuthoritative = async () => ([
         {

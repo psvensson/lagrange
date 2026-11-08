@@ -15,7 +15,7 @@
 
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
-import {ControlPlaneReadinessService} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   ControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -46,6 +46,7 @@ import {LEGACY_SIMULATED_NODE_HOST_COMPOSER} from
   './formation-sim-infrastructure-composition.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const QUIET_LOGGER = Object.freeze({warn() {}, info() {}, debug() {}, error() {}});
 const DRAIN_DELAY_MS = 0;
 const NEXT_TURN_DELAY_MS = 0;
@@ -105,7 +106,7 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
     nodeId, systemTableCache: cache, cdcIntegrationService, sqlQueryEngine, messageRouter,
     getControlPlaneReadinessService: () => controlPlaneReadinessService, now,
   });
-  controlPlaneReadinessService = new ControlPlaneReadinessService({
+  controlPlaneReadinessService = createReadinessServiceForTest({
     nodeId, systemTableCache: cache, cacheMutationTarget: cache, cdcIntegrationService,
     messageRouter, controlPlaneSystemTableGateway, timeSource,
     // The readiness planning queue drains on a macrotask, and its default is

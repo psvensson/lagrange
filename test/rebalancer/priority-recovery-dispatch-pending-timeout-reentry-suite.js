@@ -31,6 +31,7 @@ import {registerPriorityRecoverySqlDispatchTimeoutReentryTestCases} from './prio
 import {registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases} from './priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js';
 import {registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases} from './priority-recovery-serial-wait-coordinator-handoff-test-cases.js';
 import {registerPriorityRecoverySpreadSatisfiedStallReentryTestCases} from './priority-recovery-spread-satisfied-stall-reentry-test-cases.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const {
   PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION,
@@ -558,7 +559,7 @@ function createCoordinator(overrides = {}) {
     },
   };
 
-  return new RebalanceCoordinator({
+  return new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     ...overrides,
     sqlQueryEngine,
     controlPlaneSystemTableGateway: {
@@ -572,7 +573,7 @@ function createCoordinator(overrides = {}) {
         return sqlQueryEngine.executeQuery(sql, params, options);
       },
     },
-  });
+  }));
 }
 
 function createTopologyOperatorWitnessCoordinator() {

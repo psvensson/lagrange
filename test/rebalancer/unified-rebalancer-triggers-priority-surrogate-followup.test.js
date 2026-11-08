@@ -395,9 +395,6 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
         async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
-        getMembershipPublicationPlanningAnswerSync() {
-          return planningSnapshot;
-        },
         async getMembershipPublicationPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
@@ -594,9 +591,6 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
           return planningSnapshot;
         },
         async getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return planningSnapshot;
-        },
-        getMembershipPublicationPlanningAnswerSync() {
           return planningSnapshot;
         },
         async getMembershipPublicationPlanningSnapshotBestEffort() {

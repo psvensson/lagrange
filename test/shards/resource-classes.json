@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2545,
+    "ordinary": 2546,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2571,
-  "digest": "fnv1a32-a543cae2",
+  "censusSize": 2572,
+  "digest": "fnv1a32-f9a38cdc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -526,6 +526,7 @@
     "test/control-plane/control-plane-publications-leadership.test.js": "ordinary",
     "test/control-plane/control-plane-read-authority-token.test.js": "ordinary",
     "test/control-plane/control-plane-readiness-service-cluster-health-and-recovery-diagnostics.test.js": "ordinary",
+    "test/control-plane/control-plane-readiness-service-construction.test.js": "ordinary",
     "test/control-plane/control-plane-readiness-service-formation-owner-fairness.test.js": "ordinary",
     "test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js": "ordinary",
     "test/control-plane/control-plane-readiness-service-owner-read-count-only-ack-upgrade.test.js": "ordinary",

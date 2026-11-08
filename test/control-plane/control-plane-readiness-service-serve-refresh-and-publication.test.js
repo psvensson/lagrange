@@ -21,9 +21,7 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
 } from '../../src/control-plane/control-plane-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -33,7 +31,7 @@ import {
 import {
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
-
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 test('ControlPlaneReadinessService refreshes cached ineligible snapshots ' +
   'in the background for serve decisions', async (t) => {
   const now = 529000;
@@ -59,7 +57,7 @@ test('ControlPlaneReadinessService refreshes cached ineligible snapshots ' +
   const backgroundReadStarted = new Promise((resolve) => {
     backgroundReadStartedResolve = resolve;
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -160,7 +158,7 @@ test('ControlPlaneReadinessService refreshes cached ineligible snapshots ' +
     }],
   });
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -255,7 +253,7 @@ test('ControlPlaneReadinessService bypasses authoritative repair cooldown ' +
   });
   const authoritativeReads = [];
   let repairAttempt = 0;
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -368,7 +366,7 @@ test('ControlPlaneReadinessService bypasses authoritative repair cooldown ' +
   });
   const authoritativeReads = [];
   let repairAttempt = 0;
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -474,7 +472,7 @@ test('ControlPlaneReadinessService refreshes a transport-connected stale ' +
     services: [createMessageGroupService(nodeId)],
   });
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -562,7 +560,7 @@ async (t) => {
     services: [createMessageGroupService('node-routed-refresh')],
   });
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -666,7 +664,7 @@ async (t) => {
     services: [createMessageGroupService('node-self-fallback')],
   });
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'node-self-fallback',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -745,7 +743,7 @@ test('ControlPlaneReadinessService repairs self readiness through the ' +
     }],
   });
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -850,7 +848,7 @@ test('ControlPlaneReadinessService classifies degraded publication separately',
       nodes: [createActiveNode('node-2')],
       services: [createMessageGroupService('node-2')],
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'node-2',
       systemTableCache: cache,
       storageAccountingService: createAccountingService({
@@ -894,7 +892,7 @@ test('ControlPlaneReadinessService treats config-safe publication as writable',
       nodes: [createActiveNode('node-safe')],
       services: [createMessageGroupService('node-safe')],
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'node-safe',
       systemTableCache: cache,
       storageAccountingService: createAccountingService({
@@ -940,7 +938,7 @@ test('ControlPlaneReadinessService exposes active priority control-plane recover
       nodes: [createActiveNode(nodeId)],
       services: [createMessageGroupService(nodeId)],
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId,
       systemTableCache: cache,
       storageAccountingService: createAccountingService({
@@ -1040,7 +1038,7 @@ test('ControlPlaneReadinessService clears priority control-plane recovery mode a
       nodes: [createActiveNode('node-priority-steady')],
       services: [createMessageGroupService('node-priority-steady')],
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'node-priority-steady',
       systemTableCache: cache,
       storageAccountingService: createAccountingService({
@@ -1086,7 +1084,7 @@ test('ControlPlaneReadinessService clears priority control-plane recovery mode a
 test('ControlPlaneReadinessService exposes a normalized membership publication planning snapshot',
   (t) => {
     let planningPublicationReadOptions = null;
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'node-planning-snapshot',
       systemTableCache: createCache(),
       membershipPublicationService: {
@@ -1107,7 +1105,7 @@ test('ControlPlaneReadinessService exposes a normalized membership publication p
       now: () => 1500,
     });
 
-    const snapshot = readinessService.getMembershipPublicationPlanningSnapshotSync(
+    const snapshot = readinessService.deriveMembershipPublicationPlanningSnapshotSync(
       'node-planning-snapshot',
       1500,
     );

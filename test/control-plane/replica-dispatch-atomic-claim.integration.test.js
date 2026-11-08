@@ -34,6 +34,7 @@ import {
   createCanonicalPartitionOperationRow,
   initializeAtomicClaimTestEnvironment as initEnv,
 } from './replica-dispatch-atomic-claim-test-support.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function createObservableCache({get, getAll}) {
   const listeners = new Set();
@@ -75,7 +76,7 @@ test(
     });
 
     let executeCount = 0;
-    const service = new ReplicaDispatchService({
+    const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
       nodeId: 'node-1',
       messageRouter: {
         getConnectionState: () => STATE.CONNECTED,
@@ -162,7 +163,7 @@ test(
           return {success: true};
         },
       },
-    });
+    }));
     service.initialize();
 
     const leaderMessageGroup = {
@@ -352,7 +353,7 @@ test(
       executeCount += 1;
       return {success: true};
     };
-    const service = new ReplicaDispatchService({
+    const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
       nodeId: 'node-1',
       messageRouter: {
         getConnectionState: () => STATE.DISCONNECTED,
@@ -399,7 +400,7 @@ test(
         getAll: (_tableName) => [],
       },
       rebalanceCoordinator: coordinator,
-    });
+    }));
     service.initialize();
 
     try {
@@ -570,7 +571,7 @@ test(
     });
 
     let executeCount = 0;
-    const service = new ReplicaDispatchService({
+    const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
       nodeId: 'node-1',
       messageRouter: {
         getConnectionState: () => STATE.CONNECTED,
@@ -658,7 +659,7 @@ test(
           return {success: true};
         },
       },
-    });
+    }));
     service.initialize();
 
     const followerMessageGroup = {
@@ -739,7 +740,7 @@ test(
         return [];
       },
     });
-    const service = new ReplicaDispatchService({
+    const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
       nodeId: 'node-1',
       messageRouter: {
         getConnectionState: () => routerConnectionState,
@@ -819,7 +820,7 @@ test(
           return {success: true};
         },
       },
-    });
+    }));
     service.initialize();
 
     try {
@@ -887,7 +888,7 @@ test(
     });
 
     let executeCount = 0;
-    const service = new ReplicaDispatchService({
+    const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
       nodeId: 'node-1',
       messageRouter: {
         getConnectionState: () => STATE.DISCONNECTED,
@@ -991,7 +992,7 @@ test(
           return {success: true, rows: []};
         },
       },
-    });
+    }));
     service.initialize();
 
     try {
@@ -1066,7 +1067,7 @@ test(
         return [];
       },
     });
-    const service = new ReplicaDispatchService({
+    const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
       nodeId: 'node-1',
       messageRouter: {
         getConnectionState: (nodeId) =>
@@ -1142,7 +1143,7 @@ test(
           return {success: true};
         },
       },
-    });
+    }));
     service.initialize();
 
     const leaderMessageGroup = {
@@ -1263,7 +1264,7 @@ test(
       },
     };
 
-    const service = new ReplicaDispatchService({
+    const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
       nodeId: 'node-1',
       messageRouter: {
         getConnectionState: (nodeId) => nodeId === 'node-2' && !node2CacheTransportConnected ? STATE.DISCONNECTED : STATE.CONNECTED,
@@ -1336,7 +1337,7 @@ test(
           return {success: true};
         },
       },
-    });
+    }));
     service.initialize();
 
     try {

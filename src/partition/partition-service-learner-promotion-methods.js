@@ -178,52 +178,12 @@ class PartitionServiceLearnerPromotionMethods {
     if (!readinessService) {
       return null;
     }
-    const observedAt = Date.now();
-    if (
-      typeof readinessService.getPriorityRecoveryPlanningAnswerSync ===
-      PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
-      return (
-        readinessService.getPriorityRecoveryPlanningAnswerSync(
-          this.nodeId,
-          observedAt,
-        ) || null
-      );
-    }
-    if (
-      typeof readinessService.getMembershipPublicationPlanningAnswerSync ===
-      PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
-      return (
-        readinessService.getMembershipPublicationPlanningAnswerSync(
-          this.nodeId,
-          observedAt,
-        ) || null
-      );
-    }
-    if (
-      typeof readinessService.getPriorityRecoveryPlanningSnapshotSync ===
-      PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
-      return (
-        readinessService.getPriorityRecoveryPlanningSnapshotSync(
-          this.nodeId,
-          observedAt,
-        ) || null
-      );
-    }
-    if (
-      typeof readinessService.getMembershipPublicationPlanningSnapshotSync ===
-      PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
-      return (
-        readinessService.getMembershipPublicationPlanningSnapshotSync(
-          this.nodeId,
-          observedAt,
-        ) || null
-      );
-    }
-    return null;
+    return (
+      readinessService.getPriorityRecoveryPlanningAnswerSync(
+        this.nodeId,
+        Date.now(),
+      ) || null
+    );
   }
   getPriorityRecoveryOperationContextsForLearnerPromotion() {
     if (

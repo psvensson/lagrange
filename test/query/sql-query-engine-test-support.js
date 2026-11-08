@@ -7,6 +7,7 @@
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {COLUMN} from '../../src/constants/index.js';
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
@@ -168,7 +169,7 @@ export function createAdmittedSplitAdmissionService() {
  * workflow rather than readiness evidence. The source may be a node-row array,
  * a cache exposing getAll('nodes'), or a function returning node rows.
  */
-export function createProvisioningReadyService(nodeSource) {
+export function createProvisioningReadyService(nodeSource, clock) {
   const getRows = () => {
     if (typeof nodeSource === 'function') {
       return nodeSource() || [];
@@ -193,7 +194,7 @@ export function createProvisioningReadyService(nodeSource) {
       serveEligible: true,
     },
   });
-  return {
+  return readinessServiceFake({
     getProvisioningNodeTrustViewSync() {
       return getNodeIds().map((nodeId) => ({
         nodeId,
@@ -220,5 +221,5 @@ export function createProvisioningReadyService(nodeSource) {
         saturated: false,
       });
     },
-  };
+  }, clock);
 }

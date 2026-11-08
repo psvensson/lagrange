@@ -2,6 +2,7 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {
   OPERATION_TRANSITION_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const NON_PRIORITY_SYSTEM_REPLACE_OPERATION_ID =
   'op-system-replace-target-owner';
@@ -157,7 +158,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
     async (t) => {
       const now = Date.now();
       const reconciledOperationIds = [];
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -185,7 +186,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
 
       coordinator.workflowOwner.repository.queryIncompleteOperations =
@@ -283,7 +284,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
   test('RebalanceCoordinator re-arms critical PENDING operations when ' +
   'observed replica status remains pending',
   async (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-local',
       transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
@@ -317,7 +318,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       },
       ...createStorageOwners(),
       enableTimeouts: false,
-    });
+    }));
     coordinator.initialize();
 
     const operation = {
@@ -373,7 +374,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
   test('RebalanceCoordinator re-arms overdue critical PENDING operations ' +
   'while operation budget remains active',
   async (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: PRIORITY_PENDING_REARM_NODE_ID,
       transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
@@ -407,7 +408,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       },
       ...createStorageOwners(),
       enableTimeouts: false,
-    });
+    }));
     coordinator.initialize();
 
     const now = Date.now();
@@ -897,7 +898,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       };
       let failedCount = 0;
 
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -925,7 +926,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
 
       coordinator.workflowOwner.repository.queryIncompleteOperations =
@@ -974,7 +975,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
 
   test('RebalanceCoordinator updateStep persists durable transition fields',
     async (t) => {
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -1002,7 +1003,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       disablePersistenceConfirmation(coordinator);
 
@@ -1219,7 +1220,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       return originalTransitionStep(...args);
     };
 
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-local',
       transactionCoordinator: createTransactionCoordinator(),
       operationWorkflowCoordinator: workflowCoordinator,
@@ -1248,7 +1249,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       },
       ...createStorageOwners(),
       enableTimeouts: false,
-    });
+    }));
     coordinator.initialize();
     disablePersistenceConfirmation(coordinator);
 

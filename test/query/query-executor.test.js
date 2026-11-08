@@ -24,9 +24,7 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
 } from '../../src/query/query-constants.js';
 import {
@@ -38,9 +36,9 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
-
 
 test('QueryExecutor - executes SELECT on single partition', async (t) => {
   mockPartitionData.set('p1', [
@@ -1168,7 +1166,7 @@ test('QueryExecutor - fresh bootstrap routing admits transport-connected ' +
     },
   };
 
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'node1',
     systemTableCache: systemCache,
     messageRouter: {

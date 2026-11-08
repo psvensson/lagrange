@@ -1,11 +1,10 @@
 /**
- * ControlPlaneReadinessParticipationBase delegates to the readiness planning
+ * ControlPlaneReadinessService delegates to the readiness planning
  * snapshot owner: the storage-capacity semantic projection binding, planning
  * diagnostics, the per-node planning identity (and its current-only memo
  * currency), snapshot subscriptions, readiness/recovery-epoch change
- * notifications, and owner shutdown. Installed on the participation base
- * prototype so the base keeps construction, owner dependency sync, and
- * participation evaluation.
+ * notifications, and owner shutdown. Installed on the service prototype
+ * (inherited mixin fragment).
  */
 
 import {
@@ -28,8 +27,7 @@ const controlPlaneReadinessPlanningOwnerDelegateMethods = {
   },
 
   readPlanningProjectionIdentity(nodeId, observedAtMs) {
-    const currentObservedAtMs = observedAtMs ??
-      (typeof this.now === 'function' ? this.now() : undefined);
+    const currentObservedAtMs = observedAtMs ?? this.now();
     return this.readinessPlanningSnapshotOwner?.readPlanningProjectionIdentity(
       nodeId,
       currentObservedAtMs,

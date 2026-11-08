@@ -34,7 +34,7 @@ function planningService({asyncAnswer, armed = []}) {
       return {delayMs};
     },
     clearTimeoutFn: () => {},
-    getMembershipPublicationPlanningAnswerSync: () => ({source: 'available'}),
+    getPriorityRecoveryPlanningAnswerSync: () => ({source: 'available'}),
     getMembershipPublicationPlanningSnapshot: () => asyncAnswer,
     resolvePriorityRecoveryPlanningAnswer: (_nodeId, _at, answer) => answer,
   });

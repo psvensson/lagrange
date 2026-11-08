@@ -31,9 +31,10 @@ const NODES = Object.freeze([
 
 // The test-support readiness mock reads the ambient clock for lease expiry;
 // it is a stand-in, not the owner under proof, so it answers on the injected
-// clock here.
-function clockNeutralReadiness(cache, clock) {
-  const mock = createMockReadinessService(cache);
+// clock here; its `now` is the owner's clock, so a planning read of the
+// readiness clock is a read of the injected clock.
+function clockNeutralReadiness(cache, clock, ownerClock) {
+  const mock = createMockReadinessService(cache, ownerClock);
   const original = mock.getNodeReadinessSync.bind(mock);
   mock.getNodeReadinessSync = (nodeId, options) => {
     const saved = Date.now;
@@ -48,6 +49,7 @@ function clockNeutralReadiness(cache, clock) {
 }
 
 function buildRebalancer(clock) {
+  const ownerClock = () => clock.nowMs;
   const cache = createMockCache([...NODES], [], [], [], [], [], []);
   return new UnifiedRebalancer({
     entityId: 'control_plane_publications-p1',
@@ -62,8 +64,9 @@ function buildRebalancer(clock) {
       return {success: true, rows: []};
     }},
     controlPlaneSystemTableGateway: null,
-    controlPlaneReadinessService: clockNeutralReadiness(cache, clock),
-    nowFn: () => clock.nowMs,
+    controlPlaneReadinessService: clockNeutralReadiness(cache, clock,
+      ownerClock),
+    nowFn: ownerClock,
     randomSource: {random: () => 0},
   });
 }

@@ -69,6 +69,7 @@ import {
   waitForPublishedMembership,
 } from './membership-consistency-integration-test-helpers.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 // ============================================================================
 // TEST SUITE
@@ -742,14 +743,14 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       });
       endpointSvc.initialize();
 
-      const dispatchSvc = new ReplicaDispatchService({
+      const dispatchSvc = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
         nodeId: 'control-plane-node',
         messageRouter,
         cdcIntegrationService: cdcService,
         systemTableCache: cache,
         rebalanceCoordinator: mockCoordinator,
         sqlQueryEngine: createSqlEngineSeamFor(cache),
-      });
+      }));
       dispatchSvc.initialize();
 
       dispatchSvc.attachMessageGroupService(messageGroup);
@@ -1163,7 +1164,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
       const cdcService = bootstrapService.cdcIntegrationService;
 
-      const rebalancer = new UnifiedRebalancer({
+      const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
         entityId: 'partition-timer',
         entityType: EntityType.PARTITION,
         systemTableCache,
@@ -1172,7 +1173,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         messageRouter: bootstrapService.messageRouter,
         rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
         nodeId: seedNodeId,
-      });
+      }));
       rebalancer.initialize();
       rebalancer.setLeader(true);
 
@@ -1380,14 +1381,14 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       });
       endpointSvc.initialize();
 
-      const dispatchSvc = new ReplicaDispatchService({
+      const dispatchSvc = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
         nodeId: 'follower-node',
         messageRouter: mockRouter,
         cdcIntegrationService: cdcService,
         systemTableCache: cache,
         rebalanceCoordinator: mockCoordinator,
         sqlQueryEngine: createSqlEngineSeamFor(cache),
-      });
+      }));
       dispatchSvc.initialize();
 
       dispatchSvc.attachMessageGroupService(followerGroup);

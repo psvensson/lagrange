@@ -46,6 +46,7 @@ import {
   buildMembershipPublicationTrimServiceRow,
 } from './membership-publication-coordinator-candidate-fixtures.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 test('deriveMembershipPublicationCandidate keeps the latest in-flight publication membership as a convergence floor',
   async (t) => {
     const candidate = deriveMembershipPublicationCandidate({
@@ -338,7 +339,7 @@ test('deriveMembershipPublicationCandidate excludes an admission-blocked publish
 test('MembershipPublicationCoordinator reuses startup-owned admission evidence from the readiness planning answer',
   async (t) => {
     const nodeId = 'node-3';
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId,
       systemTableCache: {
         get() {
