@@ -34,6 +34,7 @@ import {
   globPatternToRegex,
   importGraphResolverStateDigest,
   isBarePackageSpecifier,
+  isRepositoryModulePath,
   javascriptSourceDigest,
   listImportGraphInputFiles,
   listJavaScriptFiles,
@@ -56,7 +57,9 @@ import {spawnGit} from './checks/git-invocation.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = OWNER_DEBT.output;
-const NODE_MODULES_PREFIX = 'node_modules/';
+const NODE_MODULES_DIRECTORY = 'node_modules';
+const NODE_MODULES_PREFIX =
+  `${NODE_MODULES_DIRECTORY}${OWNER_DEBT_PACKAGE_PATH_SEPARATOR}`;
 const VERIFY_IMPORT_GRAPH_FLAG = '--verify-import-graph';
 const REFRESH_IMPORT_GRAPH_ONLY_FLAG = '--refresh-import-graph-only';
 const IMPORT_GRAPH_PRODUCER_MISMATCH_ERROR =
@@ -591,18 +594,33 @@ function loadDependencyPolicy(root) {
 //
 // Matching only the first spelling silently readmits the second, which is how
 // the pristine graph grew two nodes the polluted graph did not have. The
-// predicate is purely lexical - it asks which package a path belongs to, never
-// whether anything exists on disk.
-function optionalExternalModulePath(modulePath, optionalExternals) {
-  const relative = modulePath.startsWith(NODE_MODULES_PREFIX) ?
-    modulePath.slice(NODE_MODULES_PREFIX.length) : modulePath;
-  for (const name of optionalExternals) {
-    if (relative === name ||
-        relative.startsWith(`${name}${OWNER_DEBT_PACKAGE_PATH_SEPARATOR}`)) {
-      return true;
+// installed spelling is recognised at ANY `node_modules/<name>` segment, not
+// only as a prefix: a nested or symlinked node_modules can place the package
+// anywhere in the path. The predicate is purely lexical - it asks which
+// package a path belongs to, never whether anything exists on disk.
+function packagePathCandidates(modulePath) {
+  const segments = modulePath.split(OWNER_DEBT_PACKAGE_PATH_SEPARATOR);
+  const candidates = [modulePath];
+  segments.forEach((segment, index) => {
+    if (segment === NODE_MODULES_DIRECTORY) {
+      candidates.push(segments.slice(index + 1)
+        .join(OWNER_DEBT_PACKAGE_PATH_SEPARATOR));
     }
-  }
-  return false;
+  });
+  return candidates;
+}
+
+function optionalExternalModulePath(modulePath, optionalExternals) {
+  return packagePathCandidates(modulePath).some((relative) =>
+    [...optionalExternals].some((name) => relative === name ||
+      relative.startsWith(`${name}${OWNER_DEBT_PACKAGE_PATH_SEPARATOR}`)));
+}
+
+// A cruised module is a graph node only when it is a repository file and does
+// not belong to an optional-external package.
+function isGraphModulePath(modulePath, optionalExternals) {
+  return isRepositoryModulePath(modulePath) &&
+    !optionalExternalModulePath(modulePath, optionalExternals);
 }
 
 function shouldCaptureResolvedProbe(dependency, target) {
@@ -636,10 +654,7 @@ function remapEscapingFollowedPath(root, relative, realTarget) {
     return relative.replaceAll(path.sep, OWNER_DEBT.pathSeparator);
   }
   const remapped = normalizePathThroughSymlinkedRoot(root, realTarget);
-  return remapped.startsWith(PARENT_PATH_PREFIX) ||
-    remapped === PARENT_PATH_SEGMENT || path.isAbsolute(remapped) ?
-    null :
-    remapped;
+  return isRepositoryModulePath(remapped) ? remapped : null;
 }
 
 function canonicalFollowedFilePath(root, rootReal, moduleSource) {
@@ -665,11 +680,11 @@ function followedFileDigests(root, modules, primaryFileDigests) {
 }
 
 
-function recordUnresolvedEdge(resolverInputs, source, specifier) {
+function recordTargetlessEdge(resolverInputs, source, specifier, state) {
   resolverInputs.set(JSON.stringify([source, specifier]), {
     from: source,
     specifier,
-    state: OWNER_DEBT_RESOLVER_STATE.unresolved,
+    state,
   });
 }
 
@@ -685,11 +700,8 @@ function applyDependencyPolicy(dependency, source, context) {
     context.referencedOptionalExternals.add(packageNameOf(dependency.module));
     // Record the dependency truthfully, but stop here: following it would make
     // the graph depend on whether the package happens to be installed.
-    context.resolverInputs.set(JSON.stringify([source, dependency.module]), {
-      from: source,
-      specifier: dependency.module,
-      state: OWNER_DEBT_RESOLVER_STATE.optionalExternal,
-    });
+    recordTargetlessEdge(context.resolverInputs, source, dependency.module,
+      OWNER_DEBT_RESOLVER_STATE.optionalExternal);
     return true;
   }
   // Legality does not depend on resolution succeeding: otherwise the same
@@ -716,10 +728,19 @@ function recordDependencyEdge(root, source, dependency, graph) {
   // needs no bucket of its own and no consumer invariant has to change.
   if (applyDependencyPolicy(dependency, source, policyContext)) return 1;
   if (dependency.couldNotResolve || !dependency.resolved) {
-    recordUnresolvedEdge(resolverInputs, source, dependency.module);
+    recordTargetlessEdge(resolverInputs, source, dependency.module,
+      OWNER_DEBT_RESOLVER_STATE.unresolved);
     return 1;
   }
   const target = normalizePathThroughSymlinkedRoot(root, dependency.resolved);
+  // A target outside the root is not a repository module, whatever specifier
+  // reached it: the edge is recorded with its own state and, having no node,
+  // projects into the unresolved term like an optional external.
+  if (!isRepositoryModulePath(target)) {
+    recordTargetlessEdge(resolverInputs, source, dependency.module,
+      OWNER_DEBT_RESOLVER_STATE.outsideRoot);
+    return 1;
+  }
   if (shouldCaptureResolvedProbe(dependency, target)) {
     resolverInputs.set(JSON.stringify([source, dependency.module]), {
       from: source,
@@ -901,7 +922,7 @@ async function buildImportGraph(root, files) {
     new Set() : policy.optionalExternals;
   const referencedOptionalExternals = new Set();
   const modules = result.output.modules.filter((module) =>
-    !optionalExternalModulePath(
+    isGraphModulePath(
       normalizePathThroughSymlinkedRoot(root, module.source),
       optionalExternals));
   const degrees = new Map(files.map((file) => [file, {in: 0, out: 0}]));

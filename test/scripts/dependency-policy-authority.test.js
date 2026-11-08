@@ -46,10 +46,12 @@ test('editing the policy changes the producer-input identity', async () => {
 
 test('optional-external is a distinct canonical resolver state', () => {
   assert.equal(OWNER_DEBT_RESOLVER_STATE.optionalExternal, 'optional-external');
+  assert.equal(OWNER_DEBT_RESOLVER_STATE.outsideRoot, 'outside-root');
   const states = new Set(Object.values(OWNER_DEBT_RESOLVER_STATE));
-  assert.equal(states.size, 3,
-    'resolved / unresolved / optional-external: an intentional absence must ' +
-    'not be disguised as an ordinary failed resolution');
+  assert.equal(states.size, 4,
+    'resolved / unresolved / optional-external / outside-root: neither an ' +
+    'intentional absence nor a target outside the repository may be ' +
+    'disguised as an ordinary failed resolution');
 });
 
 test('every optional-external entry names an owner and a reason', () => {

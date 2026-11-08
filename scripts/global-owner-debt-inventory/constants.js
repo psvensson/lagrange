@@ -141,4 +141,9 @@ export const OWNER_DEBT_RESOLVER_STATE = Object.freeze({
   // and is recorded, but the target is never followed, so the canonical graph
   // is identical whether or not the package happens to sit in node_modules.
   optionalExternal: 'optional-external',
+  // An edge whose target resolved OUTSIDE the repository root (for example a
+  // node_modules entry symlinked to another directory). The edge is recorded,
+  // but the target is never a node: its path depends on the checkout's depth
+  // and on the machine's links, not on the repository.
+  outsideRoot: 'outside-root',
 });

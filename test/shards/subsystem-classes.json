@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 208,
     "storage-raft": 148,
-    "test-infrastructure": 156,
+    "test-infrastructure": 157,
     "transactions": 17,
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2556,
-  "digest": "fnv1a32-713ef5b6",
+  "censusSize": 2557,
+  "digest": "fnv1a32-e1e76711",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b9d19216",
+  "observationDigest": "fnv1a32-f7119dc1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2255,6 +2255,7 @@
     "test/scripts/impact-proof-cone-followed-file-races.test.js": "test-infrastructure",
     "test/scripts/impact-proof-cone-producer.test.js": "test-infrastructure",
     "test/scripts/impact-proof-cone.test.js": "test-infrastructure",
+    "test/scripts/import-graph-repository-boundary.test.js": "test-infrastructure",
     "test/scripts/install-git-hooks-stdout-purity.test.js": "test-infrastructure",
     "test/scripts/inventory-ordinal-segments.test.js": "test-infrastructure",
     "test/scripts/lab-fleet-discovery.test.js": "test-infrastructure",
@@ -17610,6 +17611,35 @@
         "src/test-helpers",
         "test",
         "wit"
+      ]
+    },
+    "test/scripts/import-graph-repository-boundary.test.js": {
+      "files": [
+        "dependency-cruiser.config.cjs",
+        "package-lock.json",
+        "package.json",
+        "scripts/check-file-size-thresholds.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/global-owner-debt-inventory/constants.js",
+        "scripts/inventory-ordinal-segments.js",
+        "solve/changes/global-owner-debt-inventory/inventory.json"
+      ],
+      "directories": [
+        "scripts",
+        "solve/quests",
+        "src",
+        "src/bootstrap",
+        "src/control-plane",
+        "src/query",
+        "src/rebalancer",
+        "test"
+      ],
+      "env": [
+        "LANG",
+        "LC_ALL",
+        "NODE_OPTIONS",
+        "NODE_PATH",
+        "TZ"
       ]
     },
     "test/scripts/install-git-hooks-stdout-purity.test.js": {

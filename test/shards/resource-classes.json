@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2530,
+    "ordinary": 2531,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2556,
-  "digest": "fnv1a32-665969f6",
+  "censusSize": 2557,
+  "digest": "fnv1a32-88a5c035",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2235,6 +2235,7 @@
     "test/scripts/impact-proof-cone-followed-file-races.test.js": "ordinary",
     "test/scripts/impact-proof-cone-producer.test.js": "ordinary",
     "test/scripts/impact-proof-cone.test.js": "ordinary",
+    "test/scripts/import-graph-repository-boundary.test.js": "ordinary",
     "test/scripts/install-git-hooks-stdout-purity.test.js": "ordinary",
     "test/scripts/inventory-ordinal-segments.test.js": "ordinary",
     "test/scripts/lab-fleet-discovery.test.js": "ordinary",

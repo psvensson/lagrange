@@ -83,6 +83,12 @@ const COVERAGE_OPEN_FLAGS = fs.constants.O_RDONLY |
   (fs.constants.O_NOFOLLOW || 0);
 const COVERAGE_MAX_FILE_BYTES = 16 * 1024 * 1024;
 const liveGraphValidationCache = new Map();
+// Resolver states whose probe carries no target node (see resolverProbeProblem).
+const TARGETLESS_RESOLVER_STATES = new Set([
+  OWNER_DEBT_RESOLVER_STATE.unresolved,
+  OWNER_DEBT_RESOLVER_STATE.optionalExternal,
+  OWNER_DEBT_RESOLVER_STATE.outsideRoot,
+]);
 
 export function currentFileDigest(root, relPath) {
   const absolute = path.join(root, relPath);
@@ -267,17 +273,15 @@ function resolverProbeProblem(value, probe) {
       !objectHasOwn(value.degrees, probe.target) ?
       `${IMPORT_GRAPH_INPUT_NAME} contains an invalid resolver probe` : null;
   }
-  // Semantic edge state is three-valued; the aggregate ACCOUNTING stays
-  // two-valued. An optional external is structurally identical to an
-  // unresolved probe - it carries no target, because it is deliberately never
-  // followed - so it validates the same way here and projects into the same
-  // unresolved term. Only the state name distinguishes an intentional absence
-  // from an ordinary failed resolution, and nothing downstream has to learn a
-  // third arithmetic category to reconcile the graph.
-  const carriesNoTarget =
-    probe.state === OWNER_DEBT_RESOLVER_STATE.unresolved ||
-    probe.state === OWNER_DEBT_RESOLVER_STATE.optionalExternal;
-  if (!carriesNoTarget || objectHasOwn(probe, RESOLVER_TARGET_FIELD)) {
+  // Semantic edge state is four-valued; the aggregate ACCOUNTING stays
+  // two-valued. An optional external and an edge resolved outside the root are
+  // structurally identical to an unresolved probe - they carry no target,
+  // because no repository node exists to point at - so they validate the same
+  // way here and project into the same unresolved term. Only the state name
+  // distinguishes them from an ordinary failed resolution, and nothing
+  // downstream has to learn a third arithmetic category to reconcile the graph.
+  if (!TARGETLESS_RESOLVER_STATES.has(probe.state) ||
+      objectHasOwn(probe, RESOLVER_TARGET_FIELD)) {
     return `${IMPORT_GRAPH_INPUT_NAME} contains an invalid resolver probe`;
   }
   return null;

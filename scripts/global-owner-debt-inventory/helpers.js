@@ -182,12 +182,22 @@ function resolverSurfaceError(code, relativePath) {
   return error;
 }
 
+// The one test of whether a normalised, root-relative module path names a
+// file of THIS repository. A path that escapes the root (`..`, `../...`) or
+// stays absolute after normalisation is outside the repository whatever
+// specifier reached it: its spelling depends on how deep the checkout sits and
+// on what the machine's node_modules happens to link to, so it can never be a
+// node of the canonical graph.
+function isRepositoryModulePath(relativePath) {
+  return !path.posix.isAbsolute(relativePath) &&
+    relativePath !== RESOLVER_PARENT_PATH &&
+    !relativePath.startsWith(RESOLVER_PARENT_PREFIX);
+}
+
 function isCanonicalResolverPath(relativePath) {
   return typeof relativePath === 'string' && relativePath.length > 0 &&
-    !path.posix.isAbsolute(relativePath) &&
+    isRepositoryModulePath(relativePath) &&
     path.posix.normalize(relativePath) === relativePath &&
-    relativePath !== RESOLVER_PARENT_PATH &&
-    !relativePath.startsWith(RESOLVER_PARENT_PREFIX) &&
     !relativePath.includes(RESOLVER_BACKSLASH);
 }
 
@@ -430,8 +440,12 @@ function updateProbeSurface(hash, context, probe) {
   // An optional external contributes only its declaration, never a filesystem
   // probe. Hashing lookup roots here would reintroduce the exact defect the
   // state exists to remove: the digest would still move depending on whether
-  // the package happened to be installed on the machine generating it.
-  if (probe.state === OWNER_DEBT_RESOLVER_STATE.optionalExternal) return;
+  // the package happened to be installed on the machine generating it. An
+  // edge resolved outside the root is the same shape: its target is not a
+  // repository path, so there is no in-root surface to bind and the lookup
+  // roots lead out of the root (which the portable surface refuses).
+  if (probe.state === OWNER_DEBT_RESOLVER_STATE.optionalExternal ||
+      probe.state === OWNER_DEBT_RESOLVER_STATE.outsideRoot) return;
   if (probe.state === OWNER_DEBT_RESOLVER_STATE.resolved) {
     updatePortableSurface(hash, context, probe.target, false);
     updatePortableSurface(hash, context, path.posix.dirname(probe.target), false);
@@ -584,6 +598,7 @@ export {
   javascriptSourceDigest,
   importGraphResolverStateDigest,
   isBarePackageSpecifier,
+  isRepositoryModulePath,
   listImportGraphInputFiles,
   listJavaScriptFiles,
   logicalJsonIdentity,
