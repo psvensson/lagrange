@@ -1,0 +1,42 @@
+{
+  "schema": "solve-quest/2",
+  "id": "experimental-release-0-5-0-preparation",
+  "class": "fix",
+  "statement": "Prepare the operator-selected experimental 0.5.0 cut of current main with coherent versions and release notes, reconcile its publication path in all three roadmaps, and integrate the required published-runtime provenance repair (PR198) and fixture prerequisite (PR199) before acceptance. This prepares source for release; it does not certify the unfinished 0.4.1/0.5 milestones, publish any channel or accept the OE native viewer. OE Bead lagrange-object-environment-8ex owns the dependent work graph and independently approved plan.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/experimental-release-0-5-0-preparation/evidence/receipt.json",
+      "requiredReceipts": [
+        "version-notes-consistency",
+        "scope-reconciliation",
+        "prerequisite-integration",
+        "candidate-regressions",
+        "independent-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "bounded-preparation",
+      "statement": "Only version literals, release notes, three roadmap publication-path reconciliations and owner-generated metadata belong to this preparation. Preserve stable row identities, acceptance owners, sealed historical records and unfinished correctness/pilot obligations. Separate the next experimental artifact cut from milestone acceptance; do not move basic correctness to a later qualification."
+    },
+    {
+      "id": "dependency-order",
+      "statement": "An interim draft may branch from current main while PR198 and PR199 remain unmerged, but may claim only implementation actually present. Integrate both accepted repairs from main before final candidate proof or merge. Keep original failures, evidence limitations and open first-write/cache discoveries visible; no source-checkout substitute for published artifact acceptance."
+    },
+    {
+      "id": "unchanged-proof-authority",
+      "statement": "Use canonical Solver landing, targeted and affected proofs, required repository gates and final exact-head CI. No retry policy is added or changed: ordinary CI retains its existing reported policy, while release-full-v1 rejects files qualified only on retry. Full release proof, publishability, post-merge corpus and package/native acceptance are separate states; no bypass or fabricated proof."
+    },
+    {
+      "id": "release-scope",
+      "statement": "Version 0.5.0 is ordinary semver on npm latest, not an RC. Do not publish a package or release tag as part of this Quest. Release preflight and proof authority govern candidate ancestry/content-identity reuse. Existing user authority covers preparation, PR review and merge after gates; assess any missing concrete publication authority only after preparation."
+    },
+    {
+      "id": "execution-safety",
+      "statement": "Do not overlap local builds/tests with foreign runs. Use reduced priority, one worker/job/thread as applicable, and sensor-based thermal gates. Do not alter unrelated worktrees or processes. No expensive release proof against the interim draft."
+    }
+  ],
+  "sealedAt": "e29e295a60caee9c36614954ee72c97e2998a691"
+}

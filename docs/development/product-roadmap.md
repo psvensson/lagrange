@@ -13,8 +13,9 @@ Commercial products govern, integrate and verify those mechanisms across
 organizations without introducing a parallel core authority. Optional
 Lagrange Images/Object Environment development tools are not required for
 any enterprise feature; their own releases and licensing live in their
-repositories. Publication and milestone acceptance
-follow the preceding release. Independent bounded implementation may proceed
+repositories. Milestone acceptance retains its ordered scope allocations;
+experimental implementation cuts do not close unfinished milestones.
+Independent bounded implementation may proceed
 concurrently when consumed contracts are defined, with one writer per changing
 interaction and ordered integration. A section assigns intended scope, not a
 delivery date or a claim that its work is complete.
@@ -32,7 +33,12 @@ proof, a qualified release and a supported operating guarantee are distinct
 states. The active epic and its original evidence establish detailed progress.
 No status in this roadmap substitutes for that evidence.
 
-## Release Sequence
+## Milestone Sequence
+
+The next publication is experimental 0.5.0 from current main, selected on
+8 November 2026. It carries the implemented bounded 0.4.1 corrections; a
+separate 0.4.1 maintenance publication is not being prepared. The allocations
+below preserve unfinished acceptance and do not promise separate package cuts.
 
 | Version | Product outcome | Edition scope |
 | --- | --- | --- |
@@ -50,10 +56,13 @@ No status in this roadmap substitutes for that evidence.
 | 2.1 | Specialized search and data-local processing services | Community search substrate; AI edition remains unclassified |
 
 The published baseline is 0.4.0 (experimental alpha). Its publication does not
-complete every former 0.4 milestone obligation. The next bounded repair release
-is 0.4.1; 0.5 carries remaining 0.3.1/0.3.2/0.4 feature, developer-journey and
+complete every former 0.4 milestone obligation. Unfinished 0.4.1 correction
+acceptance remains required in the experimental 0.5.0 path; 0.5 carries remaining
+0.3.1/0.3.2/0.4 feature, developer-journey and
 comparison acceptance alongside standard HTTP authoring and existing pilot
-qualification. Original owners and applicable evidence remain in force. The
+qualification. The cut does not complete either milestone or defer required
+correctness to a later qualification. Original owners and applicable evidence
+remain in force. The
 standing major-feature
 [user-journey rule](../../test/guidelines/release-gate.md#major-feature-user-journeys)
 governs useful public outcomes; this visibility document does not certify them.
@@ -94,9 +103,9 @@ and its existing owners rather than relabeling publication as completion.
 ## Phase 0.4.1 - Bounded Correctness And Claim Repairs
 
 The existing stabilization and bounded feature owners complete the selected
-correction slice on the published baseline. Shared setup and valid existing
-evidence are reused. This release does not discharge the whole Queryable Core epic,
-stabilization Q17 or the full distributed service milestone.
+correction slice carried into the experimental 0.5.0 cut. Shared setup and valid
+existing evidence are reused. Publication does not discharge the whole
+Queryable Core epic, stabilization Q17 or the full distributed service milestone.
 
 | Requirement | Edition | Release outcome |
 | --- | --- | --- |
