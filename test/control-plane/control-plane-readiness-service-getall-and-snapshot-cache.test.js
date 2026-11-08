@@ -682,8 +682,8 @@ async (t) => {
       },
     },
     membershipPublicationService: {
-      getLatestPublicationForNodeSync(requestedNodeId) {
-        return requestedNodeId === nodeId ? publicationRow : null;
+      getLatestClusterPublicationSync() {
+        return publicationRow;
       },
     },
     cdcGroupPropagationService: createPublicationService({

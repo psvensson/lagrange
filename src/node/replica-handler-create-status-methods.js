@@ -573,7 +573,14 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         null;
       const preservedRole = trackedState ?
         resolvePreservedReplicaRaftRole(
-          {systemTableCache: this.systemTableCache},
+          {
+            systemTableCache: this.systemTableCache,
+            resolveLiveReplicaRole: (serviceId) => {
+              const role = this.getTrackedReplicaRole(serviceId);
+              return isVoterRaftRole(role) ? normalizePublishedRaftRole(
+                role, {collapseLeaderToFollower: true}) : null;
+            },
+          },
           {
             ...trackedState,
             replicaId,

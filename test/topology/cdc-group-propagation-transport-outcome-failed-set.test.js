@@ -116,6 +116,8 @@ for (const {name, reply, options} of LANES) {
       createDurablePropagationRequest(source, EVENT));
     t.equal(result.success, false,
       `${name}: the wave is incomplete while the target the owner did not classify delivered is uncovered`);
+    t.same(result.failedTargetGroupIds, [failing.groupId],
+      `${name}: only the uncovered target group remains in failedTargetGroupIds`);
     t.equal(calls.get(delivered.address), 1,
       `${name}: the covered target is not delivered again`);
     t.ok(calls.get(failing.address) >= MAX_ATTEMPTS,

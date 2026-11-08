@@ -1,9 +1,14 @@
 import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
-import {captureReplaceOwnerLevel, registerReplaceOwnerWaiter} from './operation-workflow-replace-owner-wake.js';
+import {
+  captureReplaceOwnerLevel,
+  registerReplaceOwnerWaiter,
+  resolveReplaceOwnerEntryLevel,
+} from './operation-workflow-replace-owner-wake.js';
 import {
   REPLACE_EFFECT_ADMISSION,
+  REPLACE_WAIT_REASON,
   admitReplaceSourceRemovalEffect,
   isPartitionReplace,
   isReplaceRemovalIntentDurable,
@@ -293,11 +298,29 @@ function isReplaceStoppingOwnerEntry(operation, options) {
     options?.replaceStoppingEffect !== true;
 }
 
-// The removal-effect boundary after SAFE for a partition REPLACE: null when
-// the effect is sent now; otherwise the owner's result (T5'' or a wait).
+// The removal-effect boundary after SAFE for a partition REPLACE or initial
+// REMOVE: null when the effect is sent now; otherwise the owner's result.
 async function holdReplaceSourceRemovalEffect(
   owner, operation, replaceRemoveDispatchPhase, entryLevel) {
   if (!replaceRemoveDispatchPhase || !isPartitionReplace(operation)) {
+    const resolvedEntry = resolveReplaceOwnerEntryLevel(entryLevel);
+    if (
+      owner.isRemoveInitialDispatchPhase(operation) &&
+      resolvedEntry &&
+      captureReplaceOwnerLevel(owner, operation)?.levelKey !==
+        resolvedEntry.levelKey
+    ) {
+      owner.armReplaceOwnerWait(
+        operation,
+        REPLACE_WAIT_REASON.EFFECT_REVALIDATION_MOVED,
+        resolvedEntry,
+      );
+      return owner.buildSkippedOperationResult(
+        REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+        operation.operationId,
+        {deferReason: REPLACE_WAIT_REASON.EFFECT_REVALIDATION_MOVED},
+      );
+    }
     return null;
   }
   const effect = await admitReplaceSourceRemovalEffect(
@@ -611,8 +634,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     }
     this.clearDeferredSafetyBlockState(operation.operationId);
     const heldEffect = await holdReplaceSourceRemovalEffect(
-      this, operation, replaceRemoveDispatchPhase,
-      removeSafetyEvaluation?.readinessEntryLevel ?? readinessEntryLevel);
+      this, operation, replaceRemoveDispatchPhase, readinessEntryLevel);
     if (heldEffect) {
       return heldEffect;
     }

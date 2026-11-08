@@ -505,3 +505,70 @@ test(
     );
   },
 );
+
+test(
+  'degraded control snapshot repair refreshes the local snapshot after the ' +
+  'repair await completes on both thrown and unapplied repair paths',
+  async (t) => {
+    const staleSnapshot = {
+      capturedAt: TEST_NOW_MS,
+      replicaOperations: {inFlightCount: 1},
+      controlPlaneDiagnostics: {},
+    };
+    const postAwaitFreshSnapshot = {
+      capturedAt: TEST_NOW_MS + 2000,
+      replicaOperations: {inFlightCount: 0},
+      controlPlaneDiagnostics: {},
+    };
+    for (const mode of ['thrown', 'unapplied']) {
+      let currentSnapshot = staleSnapshot;
+      const cache = createAuthoritativeRepairCache('node-local');
+      const controlSnapshot = new AdminControlSnapshot({
+        systemTableCache: cache,
+        cacheMutationTarget: cache,
+        nodeId: 'node-local',
+        nowFn: () => currentSnapshot.capturedAt,
+        ensureAuthoritativeDiscoveryCacheRepair: async () => {
+          cache.applySystemTableChange(
+            TABLES.REPLICA_OPERATIONS,
+            'UPDATE',
+            buildTerminalOperationRow(),
+          );
+          currentSnapshot = postAwaitFreshSnapshot;
+          if (mode === 'thrown') {
+            const error = new Error('repair rpc timed out');
+            error.failedTables = [TABLES.REPLICA_OPERATIONS];
+            throw error;
+          }
+          return {
+            applied: false,
+            failedTables: [TABLES.REPLICA_OPERATIONS],
+          };
+        },
+      });
+      controlSnapshot.buildLocalControlSnapshot = async () => ({
+        ...currentSnapshot,
+      });
+      controlSnapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
+        shouldRepair: true,
+        triggerCodes: [
+          AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATION_IN_FLIGHT,
+        ],
+        tableNames: [TABLES.REPLICA_OPERATIONS],
+      });
+      const resolved = await controlSnapshot.resolveLocalControlSnapshot({
+        allowAuthoritativeRepair: true,
+      });
+      t.equal(
+        resolved.capturedAt,
+        TEST_NOW_MS + 2000,
+        `${mode} degraded repair returns post-await refreshed local snapshot`,
+      );
+      t.equal(
+        resolved.replicaOperations?.inFlightCount,
+        0,
+        `${mode} degraded repair reflects cache updates that arrived during repair await`,
+      );
+    }
+  },
+);

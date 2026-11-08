@@ -45,10 +45,7 @@ test('ControlPlaneReadinessService owner-read planning answer uses the direct re
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       membershipPublicationService: {
-        async getLatestPublicationForNode(targetNodeId) {
-          if (targetNodeId !== TEST_NODE_ID) {
-            return null;
-          }
+        async getLatestClusterPublication() {
           return {
             publicationEpoch: TEST_PUBLICATION_EPOCH,
             status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
@@ -133,10 +130,7 @@ test('ControlPlaneReadinessService owner-read planning answer keeps the direct s
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       membershipPublicationService: {
-        async getLatestPublicationForNode(targetNodeId) {
-          if (targetNodeId !== TEST_NODE_ID) {
-            return null;
-          }
+        async getLatestClusterPublication() {
           return {
             publicationEpoch: TEST_PUBLICATION_EPOCH,
             status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
@@ -246,10 +240,7 @@ test('ControlPlaneReadinessService owner-read planning answer keeps the direct s
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       membershipPublicationService: {
-        async getLatestPublicationForNode(targetNodeId) {
-          if (targetNodeId !== TEST_NODE_ID) {
-            return null;
-          }
+        async getLatestClusterPublication() {
           return {
             publicationEpoch: TEST_PUBLICATION_EPOCH,
             status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
@@ -447,10 +438,7 @@ test('ControlPlaneReadinessService owner-read planning answer demotes lower-epoc
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       membershipPublicationService: {
-        async getLatestPublicationForNode(targetNodeId) {
-          if (targetNodeId !== TEST_NODE_ID) {
-            return null;
-          }
+        async getLatestClusterPublication() {
           return {
             publicationEpoch: TEST_DIRECT_PUBLICATION_EPOCH,
             status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
@@ -560,10 +548,7 @@ test('ControlPlaneReadinessService owner-read sync planning answer keeps the dir
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       membershipPublicationService: {
-        getLatestPublicationForNodeSync(targetNodeId) {
-          if (targetNodeId !== TEST_NODE_ID) {
-            return null;
-          }
+        getLatestClusterPublicationSync() {
           return {
             publicationEpoch: TEST_PUBLICATION_EPOCH,
             status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,

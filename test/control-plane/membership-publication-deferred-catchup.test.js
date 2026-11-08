@@ -271,8 +271,10 @@ test('steady-state-hydration-covers-routing-tables: the sibling sweep asks for '
   t.equal(swept.maxAttemptsPerTable, 1,
     'a single attempt per table: a slow owner cannot stall the deferral tick ' +
     'behind retry sleeps');
-  t.equal(swept.tables.includes('replica_operations'), false,
-    'unbounded-growth tables are never swept (no routing benefit, full scans)');
+  t.equal(swept.tables.includes(TABLES.REPLICA_OPERATIONS), true,
+    'replica_operations is swept so non-leader observers converge ledger in-flight projections');
+  t.equal(swept.tables.includes(TABLES.LOGS), false,
+    'unbounded-growth non-propagated tables are never swept');
 
   clock += 20000; // still within the 30000ms sibling cooldown
   await coordinator.reconcileClusterMembership();
@@ -800,4 +802,18 @@ async (t) => {
   await coordinator.refreshDeferredPropagatedCachesFromAuthority();
   t.equal(propagatedSweeps.length, 3,
     'at t=37000 (+30500ms after t=6500) the steady-state sweep runs again');
+
+  cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'UPSERT', {
+    operation_id: 'op-in-flight-1',
+    partition_id: 'tables-p1',
+    replica_id: 'tables-p1-r3',
+    type: 'ADD',
+    status: 'syncing',
+    workflow_step: 'SYNCING',
+  }, {causeId: 'seed-op-in-flight'});
+  t.equal(
+    resolveDeferredPropagatedCatchupCooldownMs(cache, spyService),
+    5000,
+    'non-terminal replica_operations row keeps the fast 5000ms catch-up cooldown active',
+  );
 });

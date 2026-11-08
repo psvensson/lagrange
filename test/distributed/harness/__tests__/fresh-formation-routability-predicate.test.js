@@ -504,11 +504,71 @@ test('evaluateProjectionAgreement preserves firstSeenAtMs across projectionRevis
   const persistent = failed.detail.persistent[0];
   assert.equal(persistent.firstSeenAtMs, T0);
   assert.equal(persistent.longestSpanMs, 1200);
+  assert.equal(persistent.firstObserverCapturedAtMs, T0 - 200);
+  assert.equal(persistent.latestObserverCapturedAtMs, T0 + 1200);
+  assert.equal(persistent.observerSpanMs, 1400);
   assert.equal(persistent.firstProjectionRevision, 5);
   assert.equal(persistent.latestProjectionRevision, 14);
   assert.equal(persistent.projectionRevision, 14);
   assert.equal(persistent.authorityWatermark.maxAppliedIndex, 12);
   assert.equal(persistent.lastEntry.projectionRevision, 14);
   assert.equal(persistent.lastEntry.authorityWatermark.maxAppliedIndex, 12);
+  t.end();
+});
+
+test('authoritativePrioritySpread requires canonical voter holder readiness while user-table routability keeps active services semantics', (t) => {
+  const observation = satisfiedObservation(T0);
+  const nonVoterTarget = arrayFind(
+    observation.authority.services.rows,
+    (row) => row.partition_id === 'replica_operations-p1' &&
+      row.node_id === NODE_IDS[2],
+  );
+  nonVoterTarget.raft_role = null;
+  for (const nodeId of NODE_IDS) {
+    observation.snapshots[nodeId].payload.controlPlaneDiagnostics
+      .publicationConvergence.priorityPartitionSummary = {
+        blockedPartitions: [{
+          partitionId: 'replica_operations-p1',
+          readyDistinctNodeCount: 2,
+          requiredDistinctNodeCount: 3,
+        }],
+        satisfied: false,
+      };
+  }
+  const evaluation = evaluateFormationObservation(observation);
+  const spread = predicateById(evaluation, PREDICATE.PRIORITY_SPREAD);
+  assert.equal(spread.met, false);
+  assert.ok(arrayIncludes(
+    spread.reasonCodes,
+    'authority_not_spread:replica_operations-p1:2/3',
+  ));
+  assert.equal(
+    evaluation.disagreements.length,
+    0,
+    'authority and observer projection both exclude active priority replica with raft_role: null',
+  );
+
+  const routable = evaluateUserTableRoutability({
+    countProbe: {rows: [{cnt: 0}]},
+    create: {contractState: 'ready', reasonCodes: []},
+    partitions: {rows: [{
+      leader_node_id: NODE_IDS[0],
+      partition_id: 'tbl-x-p1',
+      replica_count: 3,
+      table_name: 'ffr_probe',
+    }]},
+    services: {rows: arrayMap(NODE_IDS, (nodeId, index) => ({
+      address: `${nodeId}/partition/tbl-x-p1-r${index + 1}`,
+      node_id: nodeId,
+      partition_id: 'tbl-x-p1',
+      raft_role: null,
+      service_id: `tbl-x-p1-r${index + 1}`,
+      service_type: 'partition',
+      status: 'active',
+    }))},
+    tableName: 'ffr_probe',
+    tables: {rows: [{table_name: 'ffr_probe'}]},
+  });
+  assert.equal(routable.met, true);
   t.end();
 });

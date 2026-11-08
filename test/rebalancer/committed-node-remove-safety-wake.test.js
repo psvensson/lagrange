@@ -107,3 +107,34 @@ test('committed node availability is revalidated after the last awaited intent b
     await settleOwnerTurns();
     t.equal(h.state.effects.length, 1, 'recovery re-evaluates and permits one removal');
   });
+
+test('remaining peer liveness degradation during evaluateRemoveSafety awaits after readCommittedNodeFloor is caught by pre-evaluation baseline',
+  async (t) => {
+    const h = await createCommittedFloorHarness({replace: true});
+    t.teardown(() => h.shutdown());
+    await h.readiness.readServeEligibility();
+    const pingNode = h.owner.messageRouter.pingNode.bind(h.owner.messageRouter);
+    let degradedMidEvaluation = false;
+    h.owner.messageRouter.pingNode = async (...args) => {
+      const ok = await pingNode(...args);
+      if (!degradedMidEvaluation) {
+        degradedMidEvaluation = true;
+        // Remaining peer FLOOR_NODE_IDS[1] degrades during evaluateRemoveSafety
+        // after readCommittedNodeFloor has already accepted the floor.
+        h.state.nodes[1] = {...floorNodeRow(FLOOR_NODE_IDS[1]), ready_lease_expires_at: undefined};
+        await h.readiness.readServeEligibility();
+      }
+      return ok;
+    };
+    await h.coordinator.executeOperation(h.operation);
+    await settleOwnerTurns();
+    t.equal(degradedMidEvaluation, true, 'peer liveness degraded during evaluateRemoveSafety after floor read');
+    t.equal(h.state.effects.length, 0, 'pre-evaluation readinessEntryLevel catches mid-evaluation degradation and withholds REMOVE_REPLICA');
+    const row = await h.coordinator.queryOperationById(h.operation.operationId);
+    t.equal(row.workflowStep, WORKFLOW_STEP.ACTIVE, 'STOPPING intent is not persisted when inputs degraded during evaluation');
+    h.owner.messageRouter.pingNode = pingNode;
+    h.state.nodes[1] = floorNodeRow(FLOOR_NODE_IDS[1]);
+    h.readiness.noteServeEligibilitySourceChange(TABLES.NODES, h.state.nodes[1]);
+    await settleOwnerTurns();
+    t.equal(h.state.effects.length, 1, 'subsequent recovery re-evaluates and permits one removal');
+  });

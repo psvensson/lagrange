@@ -70,7 +70,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-11-06 (partition-placement-declared-target): tightened 1389 -> 1388
 // on the checker hint after consolidating partition policy target authority.
 // 2026-11-06 runtime-definition-create-authority removes the retired CREATE resolver.
-const BASELINE_UNUSED_EXPORT_COUNT = 1387;
+// 2026-11-08 (composed-05-comparison-readiness): tightened 1387 -> 1386
+// on the checker hint after consuming noteReplaceOwnerObservedReplicaRows.
+const BASELINE_UNUSED_EXPORT_COUNT = 1386;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

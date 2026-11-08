@@ -43,6 +43,9 @@ import {
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
 } from '../../../src/bootstrap/system-partition-classification.js';
 import {
+  isPrioritySpreadHolderServiceRow,
+} from '../../../src/control-plane/membership-publication-priority-partition-summary.js';
+import {
   isTerminalReplicaOperationRecord,
 } from '../../../src/rebalancer/replica-operation-progress.js';
 import {
@@ -254,6 +257,13 @@ function activePartitionServiceNodeIds(serviceRows, partitionId) {
     typeof row?.node_id === TYPEOF_STRING), (row) => row.node_id));
 }
 
+function readyPriorityPartitionServiceNodeIds(serviceRows, partitionId) {
+  return uniqueSorted(arrayMap(arrayFilter(serviceRows, (row) =>
+    row?.partition_id === partitionId &&
+    isPrioritySpreadHolderServiceRow(row) &&
+    typeof row?.node_id === TYPEOF_STRING), (row) => row.node_id));
+}
+
 function resolveAuthorityWitnesses(tableObservation) {
   if (Array.isArray(tableObservation?.readAuthorityWitnesses)) {
     return tableObservation.readAuthorityWitnesses;
@@ -400,7 +410,7 @@ function authoritativePrioritySpread(partitionRows, serviceRows, reasons) {
   }
   return arrayMap(rows, (row) => {
     const required = Number(row.replica_count);
-    const nodeIds = activePartitionServiceNodeIds(serviceRows,
+    const nodeIds = readyPriorityPartitionServiceNodeIds(serviceRows,
       row.partition_id);
     if (!Number.isSafeInteger(required) || required < ONE) {
       reasons.push(`replica_count_invalid:${row.partition_id}`);
@@ -629,6 +639,25 @@ function evaluateFormationObservation(observation) {
   };
 }
 
+function resolveObserverCapturedAtMs(obsRev) {
+  return Number.isFinite(obsRev?.capturedAtMs) && obsRev.capturedAtMs > ZERO ?
+    obsRev.capturedAtMs :
+    null;
+}
+
+function resolveEpisodeObserverSpanMs(episode) {
+  if (
+    !Number.isFinite(episode?.firstObserverCapturedAtMs) ||
+    !Number.isFinite(episode?.latestObserverCapturedAtMs)
+  ) {
+    return null;
+  }
+  return Math.max(
+    ZERO,
+    episode.latestObserverCapturedAtMs - episode.firstObserverCapturedAtMs,
+  );
+}
+
 function createDisagreementEpisode(context) {
   const {
     authRev,
@@ -637,15 +666,19 @@ function createDisagreementEpisode(context) {
     projectionRevision,
     skew,
   } = context;
+  const observerCapturedAtMs = resolveObserverCapturedAtMs(obsRev);
   return {
     authorityWatermark: authRev,
     firstAuthorityRevision: authRev,
+    firstObserverCapturedAtMs: observerCapturedAtMs,
     firstObserverRevision: obsRev,
     firstProjectionRevision: projectionRevision,
     firstSeenAtMs: capturedAtMs,
     latestAuthorityRevision: authRev,
+    latestObserverCapturedAtMs: observerCapturedAtMs,
     latestObserverRevision: obsRev,
     latestProjectionRevision: projectionRevision,
+    observerSpanMs: observerCapturedAtMs !== null ? ZERO : null,
     projectionRevision,
     revisionSkewObserved: skew,
   };
@@ -653,10 +686,18 @@ function createDisagreementEpisode(context) {
 
 function updateDisagreementEpisodeWindow(episode, context) {
   const {authRev, obsRev, projectionRevision, skew} = context;
+  const observerCapturedAtMs = resolveObserverCapturedAtMs(obsRev);
   episode.authorityWatermark = authRev;
   episode.latestAuthorityRevision = authRev;
+  if (observerCapturedAtMs !== null) {
+    if (episode.firstObserverCapturedAtMs === null) {
+      episode.firstObserverCapturedAtMs = observerCapturedAtMs;
+    }
+    episode.latestObserverCapturedAtMs = observerCapturedAtMs;
+  }
   episode.latestObserverRevision = obsRev;
   episode.latestProjectionRevision = projectionRevision;
+  episode.observerSpanMs = resolveEpisodeObserverSpanMs(episode);
   episode.projectionRevision = projectionRevision;
   episode.revisionSkewObserved = episode.revisionSkewObserved || skew;
 }
@@ -709,15 +750,18 @@ function evaluateProjectionAgreement(evaluations,
         persistent.set(entry.key, {
           authorityWatermark: episode.authorityWatermark,
           firstAuthorityRevision: episode.firstAuthorityRevision,
+          firstObserverCapturedAtMs: episode.firstObserverCapturedAtMs,
           firstObserverRevision: episode.firstObserverRevision,
           firstProjectionRevision: episode.firstProjectionRevision,
           firstSeenAtMs: episode.firstSeenAtMs,
           key: entry.key,
           lastEntry: entry,
           latestAuthorityRevision: episode.latestAuthorityRevision,
+          latestObserverCapturedAtMs: episode.latestObserverCapturedAtMs,
           latestObserverRevision: episode.latestObserverRevision,
           latestProjectionRevision: episode.latestProjectionRevision,
           longestSpanMs: Math.max(prior?.longestSpanMs ?? ZERO, spanMs),
+          observerSpanMs: episode.observerSpanMs,
           projectionRevision: episode.projectionRevision,
           revisionSkewObserved: episode.revisionSkewObserved,
         });

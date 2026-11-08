@@ -88,7 +88,7 @@ test('ControlPlaneReadinessService returns the AVAILABLE planning answer whateve
     nodeId: 'node-available',
     systemTableCache: createCache(),
     membershipPublicationService: {
-      getLatestPublicationForNodeSync() {
+      getLatestClusterPublicationSync() {
         return {
           publicationEpoch: 21,
           status: 'PUBLISHED',
@@ -125,7 +125,7 @@ test('ControlPlaneReadinessService exposes canonical priority-recovery planning 
       nodeId: 'node-priority-sync-contract',
       systemTableCache: createCache(),
       membershipPublicationService: {
-        getLatestPublicationForNodeSync() {
+        getLatestClusterPublicationSync() {
           return {
             publicationEpoch: 33,
             status: 'PUBLISHED',
@@ -169,10 +169,7 @@ test('ControlPlaneReadinessService enriches the local planning answer with start
       getLocalClusterIncarnationFence: () =>
         TEST_LOCAL_CLUSTER_INCARNATION_FENCE_BLOCKED,
       membershipPublicationService: {
-        getLatestPublicationForNodeSync(targetNodeId) {
-          if (targetNodeId !== nodeId) {
-            return null;
-          }
+        getLatestClusterPublicationSync() {
           return {
             publicationEpoch: 35,
             status: 'PUBLISHED',
@@ -222,7 +219,7 @@ test('ControlPlaneReadinessService exposes the canonical AVAILABLE priority-reco
     nodeId: 'node-priority-best-effort-contract',
     systemTableCache: createCache(),
     membershipPublicationService: {
-      async getLatestPublicationForNode() {
+      async getLatestClusterPublication() {
         ownerReadCalled = true;
         return {
           publicationEpoch: 34,
@@ -231,7 +228,7 @@ test('ControlPlaneReadinessService exposes the canonical AVAILABLE priority-reco
           publishedActiveNodeIds: ['node-priority-best-effort-contract'],
         };
       },
-      getLatestPublicationForNodeSync() {
+      getLatestClusterPublicationSync() {
         return {
           publicationEpoch: 31,
           status: 'PUBLISHED',
@@ -284,10 +281,7 @@ test('ControlPlaneReadinessService reuses the last active sync priority-recovery
       },
     };
     const createMembershipPublicationService = () => ({
-      getLatestPublicationForNodeSync(targetNodeId) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      getLatestClusterPublicationSync() {
         return publicationRow;
       },
       getLatestMembershipPublicationEpochStatusForNodeSync(targetNodeId) {
@@ -416,10 +410,7 @@ test('ControlPlaneReadinessService retains a fresher authoritative priority-reco
       priorityPartitionSummary: SETTLED_PRIORITY_PARTITION_SUMMARY,
     };
     const createMembershipPublicationService = () => ({
-      getLatestPublicationForNodeSync(targetNodeId) {
-        if (targetNodeId !== TARGET_NODE_ID) {
-          return null;
-        }
+      getLatestClusterPublicationSync() {
         return publicationRow;
       },
       getLatestMembershipPublicationEpochStatusForNodeSync(targetNodeId) {
@@ -551,7 +542,7 @@ test('ControlPlaneReadinessService exposes a readiness-owned current published m
       nodeId: 'node-current-epoch',
       systemTableCache: createCache(),
       membershipPublicationService: {
-        getLatestPublicationForNodeSync() {
+        getLatestClusterPublicationSync() {
           return {
             publicationEpoch: 24,
             status: 'PUBLISHED',

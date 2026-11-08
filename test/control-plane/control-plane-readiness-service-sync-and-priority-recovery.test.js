@@ -64,13 +64,10 @@ test('sync snapshot uses synchronous publication and capacity accessors ' +
       recentTransitions: [],
     }),
     membershipPublicationService: {
-      async getLatestPublicationForNode() {
+      async getLatestClusterPublication() {
         return null;
       },
-      getLatestPublicationForNodeSync(targetNodeId) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      getLatestClusterPublicationSync() {
         return {
           publicationEpoch: 23,
           status: 'ACK_PENDING',
@@ -936,10 +933,7 @@ test('priority recovery keeps a transport-connected active node recovery-eligibl
       recentTransitions: [],
     }),
     membershipPublicationService: {
-      getLatestPublicationForNode(targetNodeId) {
-        if (targetNodeId !== joiningNodeId) {
-          return null;
-        }
+      getLatestClusterPublication() {
         return {
           publicationEpoch: 41,
           status: 'ACK_PENDING',
@@ -1026,10 +1020,7 @@ test('priority recovery current sync evaluation closes recovery eligibility ' +
       recentTransitions: [],
     }),
     membershipPublicationService: {
-      getLatestPublicationForNodeSync(targetNodeId, options = {}) {
-        if (targetNodeId !== joiningNodeId) {
-          return null;
-        }
+      getLatestClusterPublicationSync(options = {}) {
         return options?.readProfile === planningReadProfile ?
           planningPublicationRow :
           diagnosticsPublicationRow;
@@ -1056,10 +1047,7 @@ test('priority recovery current sync evaluation closes recovery eligibility ' +
   };
   readinessService.syncOwnerDependencies({
     membershipPublicationService: {
-      getLatestPublicationForNodeSync(targetNodeId, options = {}) {
-        if (targetNodeId !== joiningNodeId) {
-          return null;
-        }
+      getLatestClusterPublicationSync(options = {}) {
         return options?.readProfile === planningReadProfile ?
           planningPublicationRow :
           diagnosticsPublicationRow;
@@ -1128,10 +1116,7 @@ async (t) => {
       recentTransitions: [],
     }),
     membershipPublicationService: {
-      getLatestPublicationForNode(targetNodeId) {
-        if (targetNodeId !== joiningNodeId) {
-          return null;
-        }
+      getLatestClusterPublication() {
         return {
           publicationEpoch: 42,
           status: 'ACK_PENDING',

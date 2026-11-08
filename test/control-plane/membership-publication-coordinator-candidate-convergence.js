@@ -355,10 +355,7 @@ test('MembershipPublicationCoordinator reuses startup-owned admission evidence f
       getLocalClusterIncarnationFence: () =>
         MEMBERSHIP_PUBLICATION_BLOCKED_FENCE,
       membershipPublicationService: {
-        async getLatestPublicationForNode(targetNodeId) {
-          if (targetNodeId !== nodeId) {
-            return null;
-          }
+        async getLatestClusterPublication() {
           return {
             publicationEpoch: 30,
             status: 'PUBLISHED',
@@ -368,10 +365,7 @@ test('MembershipPublicationCoordinator reuses startup-owned admission evidence f
             acknowledgedNodeIds: ['node-1', 'node-2', 'node-3'],
           };
         },
-        getLatestPublicationForNodeSync(targetNodeId) {
-          if (targetNodeId !== nodeId) {
-            return null;
-          }
+        getLatestClusterPublicationSync() {
           return {
             publicationEpoch: 30,
             status: 'PUBLISHED',

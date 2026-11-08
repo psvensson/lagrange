@@ -34,6 +34,10 @@ function discardProvisionalCoverage(progress) {
   }
 }
 
+function hasRouteAddress(routeOrTarget) {
+  return typeof routeOrTarget?.address === 'string' && routeOrTarget.address.length > 0;
+}
+
 function refreshCdcPropagationRoutes(progress, targets) {
   let requirementsChanged = false;
   for (const target of targets) {
@@ -44,6 +48,7 @@ function refreshCdcPropagationRoutes(progress, targets) {
       requirementsChanged = true;
       continue;
     }
+    if (!hasRouteAddress(target) && hasRouteAddress(leaf.route)) continue;
     if (sameObservedRoute(leaf.route, target)) continue;
     // Observed route replacement invalidates weak coverage. A native receipt
     // remains a fact of its captured group; omitted groups remain required.
@@ -144,6 +149,9 @@ function bindCdcPropagationProgress(context, progress, events) {
         progress.targets.map((leaf) => leaf.coverage), progress.sourceGroupId,
         progress.source.resolveStrictCdcForwardRetryAfterMs());
     },
+    failedTargetGroupIds: () => progress.targets
+      .filter((leaf) => leaf.coverage.state === CDC_COVERAGE_STATE.UNCOVERED)
+      .map((leaf) => leaf.groupId),
   });
 }
 

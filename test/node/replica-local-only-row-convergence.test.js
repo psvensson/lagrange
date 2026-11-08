@@ -619,6 +619,7 @@ test('shared incarnation rule governs both durable role persistence and local pr
     false,
     'seedLocalReplicaVoterRaftRole refuses to seed voter role onto conflicting cached incarnation',
   );
+  handler.getTrackedReplicaRole = () => null;
 
   // Negative control 2: local ACTIVE seed for attempt-2 must not combine new attempt/created_at
   // metadata with the cached follower role from attempt-1 via SystemTableCache merge
@@ -671,5 +672,92 @@ test('shared incarnation rule governs both durable role persistence and local pr
   const failedRow = handler.systemTableCache.get('services', REPLICA_ID);
   t.equal(failedRow?.status, ReplicaStatus.FAILED, 'row transitioned to failed');
   t.equal(failedRow?.raft_role, null, 'terminal FAILED seed clears cached raft_role');
+
+  // Positive control 5: live tracked voter role is resolved on SYNCING -> ACTIVE
+  // when cached SERVICES row had raft_role: null, and preserved across in-flight
+  // authoritative catch-up replacement with raft_role: null at <= updated_at
+  const {
+    buildAuthoritativeSystemTableCacheReplacement,
+    buildAuthoritativeServiceLifecycleCacheReplacement,
+  } = await import(
+    '../../src/cache/system-table-cache-authoritative-reconciliation.js'
+  );
+  handler.systemTableCache.clear();
+  stateMachine.resolveLiveReplicaRole = (serviceId) =>
+    handler.getTrackedReplicaRole(serviceId) === 'leader' ? 'follower' : null;
+  stateMachine.replicas.set(REPLICA_ID, {
+    replicaId: REPLICA_ID,
+    replicaIdentity: `${REPLICA_ID}#inc-3`,
+    partitionId: PARTITION_ID,
+    nodeId: NODE_ID,
+    state: ReplicaStatus.ACTIVE,
+    previousState: ReplicaStatus.SYNCING,
+    createdAt: 4000,
+    stateEnteredAt: 4100,
+    durableVersion: 4100,
+    createAttemptToken: 'attempt-3',
+    cleanupToken: null,
+  });
+  handler.systemTableCache.applySystemTableChange('services', 'UPSERT', {
+    service_id: REPLICA_ID,
+    replica_id: `${REPLICA_ID}#inc-3`,
+    partition_id: PARTITION_ID,
+    node_id: NODE_ID,
+    service_type: 'partition',
+    status: ReplicaStatus.SYNCING,
+    raft_role: null,
+    created_at: 4000,
+    updated_at: 4050,
+    create_attempt_token: 'attempt-3',
+  });
+  handler.getTrackedReplicaRole = () => 'leader';
+  t.equal(
+    stateMachine._buildUpdateCdcData(
+      stateMachine.getState(REPLICA_ID),
+      REPLICA_ID,
+      ReplicaStatus.SYNCING,
+      null,
+    ).raft_role,
+    'follower',
+    'ReplicaStateMachine resolves live voter role on SYNCING -> ACTIVE transition when cached raft_role is null',
+  );
+  handler.seedLocalPriorityServiceRow(REPLICA_ID, PARTITION_ID, ReplicaStatus.ACTIVE, {
+    markLocalOnly: false,
+  });
+  const seededFromLiveRole = handler.systemTableCache.get('services', REPLICA_ID);
+  t.equal(
+    seededFromLiveRole?.raft_role,
+    'follower',
+    'seedLocalPriorityServiceRow resolves live voter role (collapsing leader to follower) when cached raft_role is null',
+  );
+  const inFlightAuthoritativeRow = {
+    ...seededFromLiveRole,
+    raft_role: null,
+    updated_at: seededFromLiveRole.updated_at,
+  };
+  t.equal(
+    buildAuthoritativeSystemTableCacheReplacement(
+      seededFromLiveRole,
+      inFlightAuthoritativeRow,
+    ).raft_role,
+    'follower',
+    'buildAuthoritativeSystemTableCacheReplacement preserves non-leader voter raft_role against in-flight null authoritative read',
+  );
+  t.equal(
+    buildAuthoritativeServiceLifecycleCacheReplacement(
+      seededFromLiveRole,
+      inFlightAuthoritativeRow,
+    ).raft_role,
+    'follower',
+    'buildAuthoritativeServiceLifecycleCacheReplacement preserves non-leader voter raft_role against in-flight null authoritative read',
+  );
+  t.equal(
+    buildAuthoritativeSystemTableCacheReplacement(
+      {...seededFromLiveRole, raft_role: 'leader'},
+      inFlightAuthoritativeRow,
+    ).raft_role,
+    null,
+    'buildAuthoritativeSystemTableCacheReplacement never preserves leader raft_role when authoritative row clears raft_role',
+  );
   stateMachine.shutdown?.();
 });

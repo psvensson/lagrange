@@ -896,10 +896,7 @@ test('ControlPlaneReadinessService exposes controlPlanePublished while keeping r
       recentTransitions: [],
     }),
     membershipPublicationService: {
-      getLatestPublicationForNode(targetNodeId) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      getLatestClusterPublication() {
         return {
           publicationEpoch: 14,
           status: 'ACK_PENDING',
@@ -1008,10 +1005,7 @@ test('ControlPlaneReadinessService awaits async membership publication reads bef
       recentTransitions: [],
     }),
     membershipPublicationService: {
-      async getLatestPublicationForNode(targetNodeId) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      async getLatestClusterPublication() {
         return {
           publicationEpoch: 22,
           status: 'ACK_PENDING',
@@ -1058,10 +1052,7 @@ test('ControlPlaneReadinessService splits publication diagnostics from recovery 
       recentTransitions: [],
     }),
     membershipPublicationService: {
-      async getLatestPublicationForNode(targetNodeId, options = {}) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      async getLatestClusterPublication(options = {}) {
         capturedReadProfiles.push(options);
         if (options.readProfile === 'diagnostics') {
           return null;
@@ -1074,10 +1065,7 @@ test('ControlPlaneReadinessService splits publication diagnostics from recovery 
           acknowledgedNodeIds: [],
         };
       },
-      getLatestPublicationForNodeSync(targetNodeId, options = {}) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      getLatestClusterPublicationSync(options = {}) {
         capturedReadProfiles.push(options);
         if (options.readProfile === 'diagnostics') {
           return null;
@@ -1168,10 +1156,7 @@ test('ControlPlaneReadinessService sync readiness splits publication diagnostics
       recentTransitions: [],
     }),
     membershipPublicationService: {
-      getLatestPublicationForNodeSync(targetNodeId, options = {}) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      getLatestClusterPublicationSync(options = {}) {
         capturedReadProfiles.push(options);
         if (options.readProfile === 'diagnostics') {
           return null;

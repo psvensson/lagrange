@@ -447,26 +447,55 @@ for (const partitionId of WAKE_PARTITIONS) {
     );
   });
 
-  test(`W7 (${partitionId}): owner-read cache refresh or leadership handoff ` +
-    'during SAFE evaluation updates readinessEntryLevel so ' +
-    'admitReplaceSourceRemovalEffect does not self-reject with ' +
-    'effect_revalidation_inputs_moved', async (t) => {
+  test(`W7 (${partitionId}): adverse readiness change during SAFE evaluation ` +
+    'is caught by admitReplaceSourceRemovalEffect against the pre-evaluation ' +
+    'readinessEntryLevel and withholds REMOVE_REPLICA', async (t) => {
+    await withScenario({partitionId, profiles: {}}, async (scenario) => {
+      const originalOwnerRead = scenario.readiness
+        .getPriorityRecoveryPlanningAnswerForOwnerRead.bind(scenario.readiness);
+      scenario.readiness.getPriorityRecoveryPlanningAnswerForOwnerRead =
+        async (...args) => {
+          const answer = await originalOwnerRead(...args);
+          // After the initial floor check has already credited WAKE_NODE.PEER,
+          // WAKE_NODE.PEER degrades during the async planning check.
+          scenario.readiness.setProfile(WAKE_NODE.PEER, READINESS_PROFILE.UNSAFE);
+          return answer;
+        };
+      const result = await scenario.execute();
+      t.equal(Boolean(result?.skipped), true,
+        'adverse change after floor read must withhold immediate send');
+      t.equal(result?.deferReason, 'effect_revalidation_inputs_moved',
+        'admitReplaceSourceRemovalEffect rejects the stale SAFE evaluation');
+      t.equal(await scenario.readStep(), WORKFLOW_STEP.ACTIVE,
+        'STOPPING intent is not persisted when inputs moved during evaluation');
+      await settleWithoutFallback();
+      t.equal(scenario.removals.length, 0,
+        'redriven evaluation sees the degraded peer and never sends REMOVE_REPLICA');
+    });
+  });
+
+  test(`W7 (${partitionId}): improving owner-read refresh during evaluation ` +
+    'withholds the stale-baseline send at revalidation and progresses on the ' +
+    'immediate wake redrive without fallback advance', async (t) => {
     await withScenario({
       partitionId,
-      profiles: {[WAKE_NODE.OWNER]: READINESS_PROFILE.SYSTEM_FLOOR},
+      profiles: {[WAKE_NODE.SOURCE]: READINESS_PROFILE.SYSTEM_FLOOR},
     }, async (scenario) => {
       const originalOwnerRead = scenario.readiness
         .getPriorityRecoveryPlanningAnswerForOwnerRead.bind(scenario.readiness);
       scenario.readiness.getPriorityRecoveryPlanningAnswerForOwnerRead =
         async (...args) => {
-          scenario.readiness.setProfile(WAKE_NODE.OWNER, READINESS_PROFILE.READY);
+          scenario.readiness.setProfile(WAKE_NODE.SOURCE, READINESS_PROFILE.READY);
           return originalOwnerRead(...args);
         };
       const result = await scenario.execute();
-      t.equal(Boolean(result?.skipped), false,
-        'SAFE after owner-read refresh executes without deferral');
+      t.equal(Boolean(result?.skipped), true,
+        'changed level during evaluation withholds immediate send at revalidation');
+      t.equal(result?.deferReason, 'effect_revalidation_inputs_moved',
+        'admitReplaceSourceRemovalEffect catches the level change on run 1');
+      await settleWithoutFallback();
       t.same(await readProgress(scenario), PROGRESSED,
-        'REMOVE_REPLICA is sent immediately without spurious effect_revalidation_inputs_moved');
+        'subscribe-before-recheck redrives immediately and sends REMOVE_REPLICA');
     });
   });
 }

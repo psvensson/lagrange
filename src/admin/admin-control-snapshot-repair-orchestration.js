@@ -56,6 +56,38 @@ import {
   isVisibleMembershipPublicationHandoffOutcome,
   selectMembershipPublicationHandoffOutcome,
 } from './admin-control-snapshot-publication-handoff.js';
+
+function captureControlSnapshotCacheVersion(systemTableCache) {
+  if (
+    !systemTableCache ||
+    typeof systemTableCache.getTableNames !== 'function' ||
+    typeof systemTableCache.getTableMutationVersion !== 'function'
+  ) {
+    return null;
+  }
+  const versions = {};
+  for (const tableName of systemTableCache.getTableNames()) {
+    versions[tableName] = systemTableCache.getTableMutationVersion(tableName);
+  }
+  return versions;
+}
+
+function hasControlSnapshotCacheChangedSince(
+  systemTableCache,
+  previousVersions,
+) {
+  if (!previousVersions) {
+    return false;
+  }
+  const currentVersions = captureControlSnapshotCacheVersion(systemTableCache);
+  if (!currentVersions) {
+    return false;
+  }
+  return Object.keys(currentVersions).some(
+    (tableName) => currentVersions[tableName] !== previousVersions[tableName],
+  );
+}
+
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
  * Control snapshot builder.
@@ -71,6 +103,27 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
       );
     } catch (_error) {
       return CONTROL_SNAPSHOT_ABSENT_DEFERRED_SNAPSHOT;
+    }
+  }
+
+  async refreshDegradedControlSnapshotAfterRepairAttempt(
+    localSnapshot = null,
+    preRepairCacheVersion = null,
+    options = {},
+  ) {
+    if (
+      !hasControlSnapshotCacheChangedSince(
+        this.systemTableCache,
+        preRepairCacheVersion,
+      )
+    ) {
+      return localSnapshot;
+    }
+    try {
+      const refreshedSnapshot = await this.buildLocalControlSnapshot(options);
+      return refreshedSnapshot || localSnapshot;
+    } catch (_error) {
+      return localSnapshot;
     }
   }
 
@@ -401,6 +454,9 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
         forceAuthoritativeRepair,
         repairEvaluation,
       });
+    const preRepairCacheVersion = captureControlSnapshotCacheVersion(
+      this.systemTableCache,
+    );
     let repair = null;
     try {
       repair = await this[CONTROL_SNAPSHOT_AUTHORITATIVE_REPAIR_METHOD]({
@@ -433,6 +489,11 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
         return forcedRepairDeferredSnapshot;
       }
       if (canDegradeThrownRepairFailure) {
+        snapshot = await this.refreshDegradedControlSnapshotAfterRepairAttempt(
+          snapshot,
+          preRepairCacheVersion,
+          options,
+        );
         const triggeredSnapshot =
           await this.triggerMembershipPublicationHandoffOwnerCommand(
             snapshot,
@@ -491,6 +552,11 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
           repair,
         });
       if (canDegradeUnappliedRepair) {
+        snapshot = await this.refreshDegradedControlSnapshotAfterRepairAttempt(
+          snapshot,
+          preRepairCacheVersion,
+          options,
+        );
         const triggeredSnapshot =
           await this.triggerMembershipPublicationHandoffOwnerCommand(
             snapshot,

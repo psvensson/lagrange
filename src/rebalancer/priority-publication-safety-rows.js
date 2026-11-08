@@ -29,53 +29,27 @@ const {
   readAuthoritativeControlPlaneRows,
 } = SHARED;
 
-class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
-  mergeReplicaRowsForSafety(authoritativeRows, cachedRows) {
-    const mergedRowsById = new Map();
-    const mergeDefinedReplicaRowFields = (baseRow, incomingRow) => {
-      const mergedRow = {
-        ...(baseRow || {}),
-      };
-      for (const [fieldName, fieldValue] of Object.entries(incomingRow || {})) {
-        if (fieldValue === null || fieldValue === undefined) {
-          continue;
-        }
-        mergedRow[fieldName] = fieldValue;
-      }
-      return mergedRow;
-    };
-    const appendRow = (row, preferIncoming = false) => {
-      if (!row || typeof row !== 'object') {
-        return;
-      }
-      const rowId = this.getReplicaRowIdentity(row);
-      if (!rowId) {
-        mergedRowsById.set(Symbol('service_row'), {...row});
-        return;
-      }
-      if (!preferIncoming || !mergedRowsById.has(rowId)) {
-        mergedRowsById.set(rowId, {...row});
-        return;
-      }
-      mergedRowsById.set(
-        rowId,
-        mergeDefinedReplicaRowFields(mergedRowsById.get(rowId), row),
-      );
-    };
-    for (const cachedRow of cachedRows) {
-      appendRow(cachedRow, false);
-    }
-    for (const authoritativeRow of authoritativeRows) {
-      appendRow(authoritativeRow, true);
-    }
-    return [...mergedRowsById.values()];
-  }
+const AUTHORITATIVE_READ_AVAILABLE_PROP = 'authoritativeReadAvailable';
 
+function createCriticalReplicaRowsList(
+  rows = [],
+  authoritativeReadAvailable = true,
+) {
+  const list = [...rows];
+  Object.defineProperty(list, AUTHORITATIVE_READ_AVAILABLE_PROP, {
+    value: Boolean(authoritativeReadAvailable),
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return list;
+}
+
+class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
   async getCriticalReplicaRowsForSafety(partitionId) {
-    const cachedRows = this.getCachedCriticalReplicaRows(partitionId);
     const gateway = this.repository?.controlPlaneSystemTableGateway;
     if (!gateway) {
-      return cachedRows;
+      return createCriticalReplicaRowsList([], false);
     }
     try {
       const result = await readAuthoritativeControlPlaneRows(
@@ -85,16 +59,20 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
         [SERVICE_TYPE.PARTITION, partitionId],
         REMOVE_SAFETY_READ_QUERY_OPTIONS,
       );
-      if (
-        !result?.success ||
-        !Array.isArray(result.rows) ||
-        result.rows.length === 0
-      ) {
-        return cachedRows;
+      if (!result?.success || !Array.isArray(result.rows)) {
+        return createCriticalReplicaRowsList([], false);
       }
-      return this.mergeReplicaRowsForSafety(result.rows, cachedRows);
+      if (result.rows.length === 0) {
+        return createCriticalReplicaRowsList([], true);
+      }
+      return createCriticalReplicaRowsList(
+        result.rows
+          .filter((row) => row && typeof row === 'object')
+          .map((row) => ({...row})),
+        true,
+      );
     } catch {
-      return cachedRows;
+      return createCriticalReplicaRowsList([], false);
     }
   }
 
@@ -190,12 +168,11 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
   }
 
   mergePartitionRowForSafety(authoritativeRow, cachedRow) {
-    if (!cachedRow && !authoritativeRow) {
+    if (!authoritativeRow) {
       return null;
     }
     const mergedRow = {
-      ...(cachedRow || {}),
-      ...(authoritativeRow || {}),
+      ...authoritativeRow,
     };
     // The owner-local canonical leader seed (the PARTITIONS-row sibling of
     // CL-035, partition-service-metadata-delivery-methods.js) makes an
@@ -237,10 +214,9 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
   }
 
   async getCriticalPartitionRowForSafety(partitionId) {
-    const cachedRow = this.getCachedCriticalPartitionRow(partitionId);
     const gateway = this.repository?.controlPlaneSystemTableGateway;
     if (!partitionId || !gateway) {
-      return cachedRow;
+      return null;
     }
     try {
       const result = await readAuthoritativeControlPlaneRows(
@@ -250,6 +226,13 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
         [partitionId],
         REMOVE_SAFETY_READ_QUERY_OPTIONS,
       );
+      if (
+        !result?.success ||
+        !Array.isArray(result.rows) ||
+        result.rows.length === 0
+      ) {
+        return null;
+      }
       // Revalidate AFTER the await: a demotion (or successor publication)
       // landing while the authoritative read was in flight clears or
       // replaces the cached leader projection, and a pre-await capture must
@@ -258,19 +241,12 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
       // freshest local truth the preference may consult.
       const postAwaitCachedRow =
         this.getCachedCriticalPartitionRow(partitionId);
-      if (
-        !result?.success ||
-        !Array.isArray(result.rows) ||
-        result.rows.length === 0
-      ) {
-        return postAwaitCachedRow;
-      }
       return this.mergePartitionRowForSafety(
         result.rows[0],
         postAwaitCachedRow,
       );
     } catch {
-      return this.getCachedCriticalPartitionRow(partitionId) || cachedRow;
+      return null;
     }
   }
 

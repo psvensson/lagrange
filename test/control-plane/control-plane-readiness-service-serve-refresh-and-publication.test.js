@@ -972,7 +972,7 @@ test('ControlPlaneReadinessService exposes active priority control-plane recover
         recentTransitions: [],
       }),
       membershipPublicationService: {
-        getLatestPublicationForNode(_nodeId, options = null) {
+        getLatestClusterPublication(options = null) {
           publicationReadOptions.push(options);
           return {
             publicationEpoch: 14,
@@ -1072,7 +1072,7 @@ test('ControlPlaneReadinessService clears priority control-plane recovery mode a
         recentTransitions: [],
       }),
       membershipPublicationService: {
-        getLatestPublicationForNode() {
+        getLatestClusterPublication() {
           return {
             publicationEpoch: 15,
             status: 'PUBLISHED',
@@ -1105,7 +1105,7 @@ test('ControlPlaneReadinessService exposes a normalized membership publication p
       nodeId: 'node-planning-snapshot',
       systemTableCache: createCache(),
       membershipPublicationService: {
-        getLatestPublicationForNodeSync(_nodeId, options = {}) {
+        getLatestClusterPublicationSync(options = {}) {
           planningPublicationReadOptions = options;
           return {
             publicationEpoch: 21,

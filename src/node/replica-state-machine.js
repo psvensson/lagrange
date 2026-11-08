@@ -132,6 +132,10 @@ function defineReplicaLifecycleOwnerIncarnation(target, ownerIncarnation) {
  * Enforces valid transitions and emits events for all state changes.
  *
  */
+function resolveOptionalFunction(candidate) {
+  return typeof candidate === 'function' ? candidate : null;
+}
+
 class ReplicaStateMachine extends EventEmitter {
   /**
    * Create a new ReplicaStateMachine.
@@ -173,6 +177,9 @@ class ReplicaStateMachine extends EventEmitter {
       options.now :
       options.timeSource ? () => this.timeSource.now() : REPLICA_STATE_MACHINE_NOW;
     this.systemTableCache = options.systemTableCache || null;
+    this.resolveLiveReplicaRole = resolveOptionalFunction(
+      options.resolveLiveReplicaRole,
+    );
 
     // CL-016: service rows seeded into the LOCAL cache by the priority
     // create fallback, whose durable write is still unconfirmed. Their

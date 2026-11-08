@@ -235,3 +235,79 @@ test(
     t.end();
   },
 );
+
+test(
+  'evaluateRemoveSafety defers on unavailable authoritative replica reads and fails on authoritative empty replica sets',
+  async (t) => {
+    const {PriorityPublicationSafetyRows} = await import(
+      '../../src/rebalancer/priority-publication-safety-rows.js'
+    );
+    const unavailableReader = Object.create(PriorityPublicationSafetyRows.prototype);
+    unavailableReader.repository = {
+      controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows() {
+          return {success: false, rows: []};
+        },
+      },
+    };
+    const unavailableRows =
+      await unavailableReader.getCriticalReplicaRowsForSafety(USER_PARTITION_ID);
+    t.equal(
+      unavailableRows.authoritativeReadAvailable,
+      false,
+      'failed gateway read marks authoritativeReadAvailable=false',
+    );
+    const unavailableContext = buildContext({
+      rows: unavailableRows,
+      minReplicaCount: 2,
+    });
+    const unavailableRemove = await evaluateRemoveSafety(
+      unavailableContext,
+      removeOperation(USER_PARTITION_ID, 'custom-p1-r1'),
+    );
+    t.equal(
+      unavailableRemove.classification,
+      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
+      'REMOVE defers when authoritative replica read is unavailable',
+    );
+
+    const emptyReader = Object.create(PriorityPublicationSafetyRows.prototype);
+    emptyReader.repository = {
+      controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows() {
+          return {success: true, rows: []};
+        },
+      },
+    };
+    const emptyRows =
+      await emptyReader.getCriticalReplicaRowsForSafety(USER_PARTITION_ID);
+    t.equal(
+      emptyRows.authoritativeReadAvailable,
+      true,
+      'authoritative empty read marks authoritativeReadAvailable=true',
+    );
+    const emptyContext = buildContext({
+      rows: emptyRows,
+      minReplicaCount: 2,
+    });
+    const emptyRemove = await evaluateRemoveSafety(
+      emptyContext,
+      removeOperation(USER_PARTITION_ID, 'custom-p1-r1'),
+    );
+    t.equal(
+      emptyRemove.classification,
+      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.FAIL,
+      'REMOVE fails when authoritative replica read is empty',
+    );
+    const emptyReplace = await evaluateRemoveSafety(emptyContext, {
+      ...removeOperation(USER_PARTITION_ID, 'custom-p1-r1'),
+      type: OperationType.REPLACE,
+    });
+    t.equal(
+      emptyReplace.classification,
+      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.FAIL,
+      'pre-intent REPLACE fails when authoritative replica read is empty',
+    );
+    t.end();
+  },
+);

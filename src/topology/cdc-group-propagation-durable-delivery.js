@@ -253,6 +253,18 @@ function durablePropagationRefusal(owner, admission, options = null) {
     fallbackReason: CDC_GROUP_PROPAGATION_REASON.SOURCE_GROUP_MISMATCH};
 }
 
+function shouldMarkSliceContended(owner, wasCredited) {
+  const hasOtherCreditedContender =
+    !wasCredited &&
+    owner.creditedWaitingDurableSliceTables instanceof Set &&
+    owner.creditedWaitingDurableSliceTables.size > 0;
+  return (
+    hasOtherCreditedContender ||
+    (owner.durableSliceContended &&
+      owner.durableSliceWaves >= CONTENDED_TABLE_SLICE_WAVES)
+  );
+}
+
 function advanceDurablePropagationSlice(owner, tableName, context) {
   expireYieldedSliceHoldIfElapsed(owner);
   const wasCredited = Boolean(
@@ -270,15 +282,7 @@ function advanceDurablePropagationSlice(owner, tableName, context) {
       Array.isArray(owner.waitingDurableSliceTables) &&
       owner.waitingDurableSliceTables.length > 0;
   }
-  const hasOtherCreditedContender =
-    !wasCredited &&
-    owner.creditedWaitingDurableSliceTables instanceof Set &&
-    owner.creditedWaitingDurableSliceTables.size > 0;
-  if (
-    hasOtherCreditedContender ||
-    (owner.durableSliceContended &&
-      owner.durableSliceWaves >= CONTENDED_TABLE_SLICE_WAVES)
-  ) {
+  if (shouldMarkSliceContended(owner, wasCredited)) {
     context.markContended?.();
   }
 }
@@ -331,7 +335,12 @@ async function deliverTarget(owner, source, events, leaf, context) {
   if (owner.resolvePropagationPressure(events).action === PRESSURE_GOVERNOR_ACTION.DEFER) {
     return notSentTarget(CDC_COMPLETION.BACKPRESSURE);
   }
-  if (!owner.messageRouter || typeof owner.messageRouter.deliver !== 'function') {
+  if (
+    !owner.messageRouter ||
+    typeof owner.messageRouter.deliver !== 'function' ||
+    typeof leaf.route?.address !== 'string' ||
+    leaf.route.address.length === 0
+  ) {
     return notSentTarget();
   }
   const profile = resolveCdcPropagationDeliveryProfile(events);
@@ -390,6 +399,7 @@ function prepareDurableForegroundWave(owner, wave, events, plan) {
     const answer = progress.result();
     return complete(answer) ? propagationResult(owner, source, plan, progress, answer) :
       {...propagationResult(owner, source, plan, progress, unknownCdcAcceptance()),
+        failedTargetGroupIds: progress.failedTargetGroupIds(),
         cause: lastFailure};
   };
   return {

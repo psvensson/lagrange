@@ -36,7 +36,10 @@ import {
 } from '../partition/partition-replica-membership-constants.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   './replica-operation-update-disposition.js';
-import {captureReplaceOwnerLevel} from './operation-workflow-replace-owner-wake.js';
+import {
+  captureReplaceOwnerLevel,
+  resolveReplaceOwnerEntryLevel,
+} from './operation-workflow-replace-owner-wake.js';
 import {
   isPartitionReplace,
   isReplaceRemovalIntentDurable,
@@ -607,83 +610,68 @@ function waitAdmission(reason, witness = null) {
     admission: REPLACE_EFFECT_ADMISSION.WAIT, reason, witness});
 }
 
-/**
- * The synchronous checks after the last await before the REMOVE_REPLICA
- * effect (design §3.2, A12): the live operation still holds its durable
- * intent and is not terminal (a cached terminal row wins); the target has not
- * failed; and the owner's waited-on level - readiness of every node the
- * floor may count, the partition's consensus observation, the entity's
- * concurrent operations - is the one the SAFE evaluation started from.
- * @param {Object} owner
- * @param {Object} operation
- * @param {Object|null} entryLevel
- * @return {Object} Frozen admission.
- */
-function revalidateReplaceSourceRemovalEffect(owner, operation, entryLevel) {
+function revalidateReplaceSourceRemovalEffect(
+  owner, operation, entryLevel, expectedStep = WORKFLOW_STEP.STOPPING) {
   if (isDeferredVisibilitySnapshot(operation)) {
     return waitAdmission(REPLACE_WAIT_REASON.DEFERRED_VISIBILITY);
   }
   if (isReplaceOperationTerminalObserved(owner, operation) ||
-      operation.workflowStep !== WORKFLOW_STEP.STOPPING ||
+      operation.workflowStep !== expectedStep ||
       isTargetFailureDetectorDead(owner, operation)) {
     return waitAdmission(REPLACE_WAIT_REASON.EFFECT_REVALIDATION_MOVED);
   }
-  if (entryLevel &&
+  const resolvedEntry = resolveReplaceOwnerEntryLevel(entryLevel);
+  if (resolvedEntry &&
       captureReplaceOwnerLevel(owner, operation)?.levelKey !==
-        entryLevel.levelKey) {
+        resolvedEntry.levelKey) {
     return waitAdmission(REPLACE_WAIT_REASON.EFFECT_REVALIDATION_MOVED);
   }
   return Object.freeze({admission: REPLACE_EFFECT_ADMISSION.SEND});
 }
 
-/**
- * The removal-effect boundary after remove safety answered SAFE: at ACTIVE,
- * read the witness, then persist the removal intent (the STOPPING CAS, with
- * the witness and its commit index) BEFORE any effect; a source that is
- * already unreachable or retiring goes to the STOPPING owner without a
- * REMOVE_REPLICA (T5''). Then the synchronous revalidations decide whether
- * the effect is sent now.
- * @param {Object} owner
- * @param {Object} operation
- * @param {Object|null} entryLevel
- * @return {Promise<Object>} Frozen {admission, reason?, witness?}.
- */
+async function admitActiveReplaceSourceRemovalIntent(
+  owner, operation, entryLevel) {
+  const witness = await readReplaceWitnessMembership(owner, operation);
+  if (witness.state !== PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER &&
+      witness.state !== PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT) {
+    return waitAdmission(REPLACE_WAIT_REASON.WITNESS_UNAVAILABLE, witness);
+  }
+  const sourceRow = await observeReplaceSourceRow(owner, operation);
+  if (sourceRow.state === STOPPING_OBSERVATION_UNAVAILABLE) {
+    return waitAdmission(REPLACE_WAIT_REASON.SOURCE_ROW_UNAVAILABLE, witness);
+  }
+  const preIntent = revalidateReplaceSourceRemovalEffect(
+    owner, operation, entryLevel, WORKFLOW_STEP.ACTIVE);
+  if (preIntent.admission !== REPLACE_EFFECT_ADMISSION.SEND) {
+    return preIntent;
+  }
+  const sourceUnreachable = sourceRow.lifecycleStatus === ReplicaStatus.FAILED;
+  const persisted = await owner.persistReplaceRemovalIntent(
+    operation,
+    buildReplaceRemovalIntentMetadata(operation, witness, {sourceUnreachable}),
+  );
+  if (!persisted) {
+    return waitAdmission(REPLACE_WAIT_REASON.REMOVAL_INTENT_NOT_DURABLE,
+      witness);
+  }
+  const postIntent = revalidateReplaceSourceRemovalEffect(
+    owner, operation, entryLevel);
+  if (postIntent.admission === REPLACE_EFFECT_ADMISSION.SEND &&
+      (sourceUnreachable ||
+       RETIRING_SOURCE_ROW_STATUSES.has(sourceRow.lifecycleStatus))) {
+    return Object.freeze({
+      admission: REPLACE_EFFECT_ADMISSION.STOPPING_OWNER, witness});
+  }
+  return postIntent;
+}
+
 async function admitReplaceSourceRemovalEffect(owner, operation, entryLevel) {
   if (isDeferredVisibilitySnapshot(operation)) {
     // BR12: no intent and no effect from a deferred snapshot.
     return waitAdmission(REPLACE_WAIT_REASON.DEFERRED_VISIBILITY);
   }
   if (operation.workflowStep === WORKFLOW_STEP.ACTIVE) {
-    const witness = await readReplaceWitnessMembership(owner, operation);
-    if (witness.state !== PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER &&
-        witness.state !== PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT) {
-      return waitAdmission(REPLACE_WAIT_REASON.WITNESS_UNAVAILABLE, witness);
-    }
-    const sourceRow = await observeReplaceSourceRow(owner, operation);
-    if (sourceRow.state === STOPPING_OBSERVATION_UNAVAILABLE) {
-      return waitAdmission(REPLACE_WAIT_REASON.SOURCE_ROW_UNAVAILABLE,
-        witness);
-    }
-    const sourceUnreachable =
-      sourceRow.lifecycleStatus === ReplicaStatus.FAILED;
-    const persisted = await owner.persistReplaceRemovalIntent(
-      operation,
-      buildReplaceRemovalIntentMetadata(operation, witness,
-        {sourceUnreachable}),
-    );
-    if (!persisted) {
-      return waitAdmission(REPLACE_WAIT_REASON.REMOVAL_INTENT_NOT_DURABLE,
-        witness);
-    }
-    // A source whose lifecycle is already retiring (REMOVING/REMOVED) or
-    // failed gets no effect (T5''). An absent row may be visibility lag, and
-    // a source already out of the configuration may still run: both still
-    // get the idempotent effect (the source answers NOT_FOUND if it is gone).
-    if (sourceUnreachable ||
-        RETIRING_SOURCE_ROW_STATUSES.has(sourceRow.lifecycleStatus)) {
-      return Object.freeze({
-        admission: REPLACE_EFFECT_ADMISSION.STOPPING_OWNER, witness});
-    }
+    return admitActiveReplaceSourceRemovalIntent(owner, operation, entryLevel);
   }
   return revalidateReplaceSourceRemovalEffect(owner, operation, entryLevel);
 }

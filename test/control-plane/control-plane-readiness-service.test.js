@@ -787,7 +787,7 @@ test('ControlPlaneReadinessService opens provisioning grace during ' +
       recentTransitions: [],
     }),
     membershipPublicationService: {
-      getLatestPublicationForNode() {
+      getLatestClusterPublication() {
         return {
           publicationEpoch: 21,
           status: 'ACK_PENDING',

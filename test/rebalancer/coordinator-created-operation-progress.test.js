@@ -72,6 +72,14 @@ test('armCoordinatorCreatedOperation immediately dispatches locally owned ' +
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
       defaultRepairEligible: true,
+      readNodeRows: () => [
+        {
+          node_id: 'node-peer',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: Date.now() + 60_000,
+        },
+      ],
     }),
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
@@ -289,6 +297,14 @@ async (t) => {
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
       defaultRepairEligible: true,
+      readNodeRows: () => [
+        {
+          node_id: 'node-peer',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: Date.now() + 60_000,
+        },
+      ],
     }),
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
@@ -375,6 +391,16 @@ test('createOperation defers retryable participant-pressure failures and ' +
   const deferredTimers = [];
   const deliveries = [];
 
+  const seededSafetyPeerRow = {
+    service_id: 'partition-pressure-retry-test-r2',
+    replica_id: 'partition-pressure-retry-test-r2',
+    service_type: 'partition',
+    partition_id: 'partition-pressure-retry-test',
+    node_id: 'node-peer',
+    status: 'active',
+    raft_role: 'follower',
+    address: 'node-peer/partition/partition-pressure-retry-test-r2',
+  };
   const authoritativeRead = async (tableName, sql, params = []) => {
     if (tableName === 'replica_operations' &&
         String(sql).includes('WHERE operation_id = ?')) {
@@ -383,6 +409,13 @@ test('createOperation defers retryable participant-pressure failures and ' +
         success: true,
         rows: row ? [{...row}] : [],
         affectedRows: row ? 1 : 0,
+      };
+    }
+    if (tableName === 'services') {
+      return {
+        success: true,
+        rows: [{...seededSafetyPeerRow}],
+        affectedRows: 1,
       };
     }
     return {
@@ -455,16 +488,6 @@ test('createOperation defers retryable participant-pressure failures and ' +
   // owner-lane retry priming, not the floor — seed one voter-ready peer row
   // (with the floor already lowered via tablePolicyService below) so the
   // plain REMOVE dispatch can proceed once the deferred retry resumes.
-  const seededSafetyPeerRow = {
-    service_id: 'partition-pressure-retry-test-r2',
-    replica_id: 'partition-pressure-retry-test-r2',
-    service_type: 'partition',
-    partition_id: 'partition-pressure-retry-test',
-    node_id: 'node-peer',
-    status: 'active',
-    raft_role: 'follower',
-    address: 'node-peer/partition/partition-pressure-retry-test-r2',
-  };
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-local',
     systemTableCache: {
@@ -519,6 +542,14 @@ test('createOperation defers retryable participant-pressure failures and ' +
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
       defaultRepairEligible: true,
+      readNodeRows: () => [
+        {
+          node_id: 'node-peer',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: Date.now() + 60_000,
+        },
+      ],
     }),
     transactionCoordinator: createMockTransactionCoordinator(),
     setTimeoutFn(fn, delayMs) {
@@ -744,6 +775,14 @@ test('dispatchOperation defers priority claim misses when durable ' +
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
       defaultRepairEligible: true,
+      readNodeRows: () => [
+        {
+          node_id: 'node-peer',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: Date.now() + 60_000,
+        },
+      ],
     }),
     transactionCoordinator: createMockTransactionCoordinator(),
     setTimeoutFn(fn, delayMs) {
@@ -905,6 +944,14 @@ test('dispatchOperationInternal executes the claimed operation snapshot ' +
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
       defaultRepairEligible: true,
+      readNodeRows: () => [
+        {
+          node_id: 'node-peer',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: Date.now() + 60_000,
+        },
+      ],
     }),
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
@@ -1052,6 +1099,14 @@ test('dispatchOperationInternal rehydrates REPLACE source replica metadata ' +
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
       defaultRepairEligible: true,
+      readNodeRows: () => [
+        {
+          node_id: 'node-peer',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: Date.now() + 60_000,
+        },
+      ],
     }),
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
@@ -1230,6 +1285,14 @@ async (t) => {
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
       defaultRepairEligible: true,
+      readNodeRows: () => [
+        {
+          node_id: 'node-peer',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: Date.now() + 60_000,
+        },
+      ],
     }),
     transactionCoordinator: createMockTransactionCoordinator(),
     setTimeoutFn(fn, delayMs) {

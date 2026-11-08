@@ -724,22 +724,14 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
     const normalizedScope = resolveMembershipPublicationReadScope(
       readOptions?.scope,
     );
-    if (
-      normalizedScope === MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER &&
-      typeof service.getLatestClusterPublicationSync === 'function'
-    ) {
-      return service.getLatestClusterPublicationSync(normalizedReadOptions);
+    if (normalizedScope === MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER) {
+      return typeof service.getLatestClusterPublicationSync === 'function' ?
+        service.getLatestClusterPublicationSync(normalizedReadOptions) :
+        null;
     }
-    if (typeof service.getLatestPublicationForNodeSync === 'function') {
-      return service.getLatestPublicationForNodeSync(
-        nodeId,
-        normalizedReadOptions,
-      );
-    }
-    if (typeof service.getLatestClusterPublicationSync === 'function') {
-      return service.getLatestClusterPublicationSync(normalizedReadOptions);
-    }
-    return null;
+    return typeof service.getLatestPublicationForNodeSync === 'function' ?
+      service.getLatestPublicationForNodeSync(nodeId, normalizedReadOptions) :
+      null;
   }
 
   async getLatestMembershipPublicationRow(nodeId, readOptions = {}) {
@@ -752,19 +744,14 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
     const normalizedScope = resolveMembershipPublicationReadScope(
       readOptions?.scope,
     );
-    if (
-      normalizedScope === MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER &&
-      typeof service.getLatestClusterPublication === 'function'
-    ) {
-      return service.getLatestClusterPublication(normalizedReadOptions);
+    if (normalizedScope === MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER) {
+      return typeof service.getLatestClusterPublication === 'function' ?
+        service.getLatestClusterPublication(normalizedReadOptions) :
+        null;
     }
-    if (typeof service.getLatestPublicationForNode === 'function') {
-      return service.getLatestPublicationForNode(nodeId, normalizedReadOptions);
-    }
-    if (typeof service.getLatestClusterPublication === 'function') {
-      return service.getLatestClusterPublication(normalizedReadOptions);
-    }
-    return null;
+    return typeof service.getLatestPublicationForNode === 'function' ?
+      service.getLatestPublicationForNode(nodeId, normalizedReadOptions) :
+      null;
   }
 
   getLatestPublishedMembershipPublicationRowSync(readOptions = {}) {

@@ -88,6 +88,7 @@ const NO_CONSENSUS_OBSERVATION = '';
 // Owner-scoped state, keyed by the owner instance (released with it and
 // cleared at shutdown).
 const WAKE_STATE_BY_OWNER = new WeakMap();
+const AUGMENTED_ENTRY_LEVEL = new WeakMap();
 
 function readWakeState(owner) {
   let state = WAKE_STATE_BY_OWNER.get(owner);
@@ -96,6 +97,8 @@ function readWakeState(owner) {
       waiterByOperationId: new Map(),
       redriveInFlightOperationIds: new Set(),
       consensusLevelByPartitionId: new Map(),
+      observedNodeIdsByPartitionId: new Map(),
+      lastCapturedByOperationId: new Map(),
       // Planning, committed-node and consensus subscriptions share this lifetime.
       unsubscribes: [],
       readinessSubscribed: false,
@@ -123,7 +126,23 @@ function collectReplaceOwnerNodeIds(owner, operation) {
   for (const row of Array.isArray(rows) ? rows : []) {
     addNodeId(nodeIds, row?.node_id);
   }
+  for (const nodeId of operation?.waitedPeerNodeIds || []) {
+    addNodeId(nodeIds, nodeId);
+  }
+  const observed = WAKE_STATE_BY_OWNER.get(owner)
+    ?.observedNodeIdsByPartitionId.get(operation?.partitionId);
+  for (const nodeId of observed || []) {
+    addNodeId(nodeIds, nodeId);
+  }
   return [...nodeIds].sort();
+}
+
+function buildReadinessOptions(operation) {
+  return {
+    partitionId: operation?.partitionId || null,
+    decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
+    participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
+  };
 }
 
 function readNodeLevel(owner, nodeId, readinessOptions) {
@@ -131,24 +150,26 @@ function readNodeLevel(owner, nodeId, readinessOptions) {
   return nodeId + LEVEL_FIELD_SEPARATOR + (ready ? LEVEL_TRUE : LEVEL_FALSE);
 }
 
-function readReplaceOwnerLevel(owner, operation, nodeIds) {
-  const readinessOptions = {
-    partitionId: operation?.partitionId || null,
-    decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
-    participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
-  };
-  const readinessLevel = nodeIds
-    .map((nodeId) => readNodeLevel(owner, nodeId, readinessOptions))
-    .join(LEVEL_NODE_SEPARATOR);
+function readReplaceOwnerTailParts(owner, operation) {
   const consensusLevel = WAKE_STATE_BY_OWNER.get(owner)
     ?.consensusLevelByPartitionId.get(operation?.partitionId) ??
     NO_CONSENSUS_OBSERVATION;
   return [
-    readinessLevel,
     committedNodeFloorLevel(owner),
     consensusLevel,
     concurrentOperationLevel(owner, operation),
     sourceRowLevel(owner, operation),
+  ];
+}
+
+function readReplaceOwnerLevel(owner, operation, nodeIds) {
+  const readinessOptions = buildReadinessOptions(operation);
+  const readinessLevel = nodeIds
+    .map((nodeId) => readNodeLevel(owner, nodeId, readinessOptions))
+    .join(LEVEL_NODE_SEPARATOR);
+  return [
+    readinessLevel,
+    ...readReplaceOwnerTailParts(owner, operation),
   ].join(LEVEL_PART_SEPARATOR);
 }
 
@@ -215,10 +236,91 @@ function captureReplaceOwnerLevel(owner, operation) {
     return null;
   }
   const nodeIds = collectReplaceOwnerNodeIds(owner, operation);
-  return Object.freeze({
+  const readinessOptions = buildReadinessOptions(operation);
+  const nodeLevelById = new Map(
+    nodeIds.map((nodeId) => [
+      nodeId,
+      readNodeLevel(owner, nodeId, readinessOptions),
+    ]),
+  );
+  const tailParts = readReplaceOwnerTailParts(owner, operation);
+  const readinessLevel = nodeIds
+    .map((nodeId) => nodeLevelById.get(nodeId))
+    .join(LEVEL_NODE_SEPARATOR);
+  const entryLevel = Object.freeze({
     nodeIds: Object.freeze(nodeIds),
-    levelKey: readReplaceOwnerLevel(owner, operation, nodeIds),
+    levelKey: [readinessLevel, ...tailParts].join(LEVEL_PART_SEPARATOR),
   });
+  readWakeState(owner).lastCapturedByOperationId.set(operation.operationId, {
+    entryLevel,
+    nodeLevelById,
+    tailParts,
+  });
+  return entryLevel;
+}
+
+function recordObservedReplicaNodes(owner, operation, replicaRows) {
+  const observed = new Set(operation?.waitedPeerNodeIds || []);
+  for (const row of replicaRows) {
+    addNodeId(observed, row?.node_id);
+  }
+  if (observed.size === 0) {
+    return null;
+  }
+  const sortedObserved = Object.freeze([...observed].sort());
+  operation.waitedPeerNodeIds = sortedObserved;
+  const partitionId = operation.partitionId;
+  if (typeof partitionId === 'string' && partitionId.length > 0) {
+    readWakeState(owner).observedNodeIdsByPartitionId.set(
+      partitionId,
+      sortedObserved,
+    );
+  }
+  return sortedObserved;
+}
+
+function noteReplaceOwnerObservedReplicaRows(owner, operation, replicaRows) {
+  if (!owner || !operation || !Array.isArray(replicaRows)) {
+    return;
+  }
+  const sortedObserved = recordObservedReplicaNodes(
+    owner,
+    operation,
+    replicaRows,
+  );
+  const captured = WAKE_STATE_BY_OWNER.get(owner)
+    ?.lastCapturedByOperationId.get(operation.operationId);
+  if (!sortedObserved || !captured) {
+    return;
+  }
+  const readinessOptions = buildReadinessOptions(operation);
+  let added = false;
+  for (const nodeId of sortedObserved) {
+    if (!captured.nodeLevelById.has(nodeId)) {
+      captured.nodeLevelById.set(
+        nodeId,
+        readNodeLevel(owner, nodeId, readinessOptions),
+      );
+      added = true;
+    }
+  }
+  if (!added) {
+    return;
+  }
+  const nodeIds = Object.freeze([...captured.nodeLevelById.keys()].sort());
+  const readinessLevel = nodeIds
+    .map((nodeId) => captured.nodeLevelById.get(nodeId))
+    .join(LEVEL_NODE_SEPARATOR);
+  const levelKey = [readinessLevel, ...captured.tailParts]
+    .join(LEVEL_PART_SEPARATOR);
+  AUGMENTED_ENTRY_LEVEL.set(
+    captured.entryLevel,
+    Object.freeze({nodeIds, levelKey}),
+  );
+}
+
+function resolveReplaceOwnerEntryLevel(entryLevel) {
+  return (entryLevel && AUGMENTED_ENTRY_LEVEL.get(entryLevel)) || entryLevel;
 }
 
 function wakeWaiters(owner, state, matches) {
@@ -358,19 +460,20 @@ function attachReplicaConsensusEvents(owner, source) {
  */
 function registerReplaceOwnerWaiter(owner, operation, entryLevel) {
   const operationId = operation?.operationId;
-  if (!entryLevel || !operationId || owner.isShuttingDown) {
+  const resolvedEntry = resolveReplaceOwnerEntryLevel(entryLevel);
+  if (!resolvedEntry || !operationId || owner.isShuttingDown) {
     return false;
   }
   const state = readWakeState(owner);
   ensureWakeSubscriptions(owner, state);
   state.waiterByOperationId.set(operationId, Object.freeze({
     operation,
-    nodeIds: entryLevel.nodeIds,
-    levelKey: entryLevel.levelKey,
+    nodeIds: resolvedEntry.nodeIds,
+    levelKey: resolvedEntry.levelKey,
   }));
   if (
-    readReplaceOwnerLevel(owner, operation, entryLevel.nodeIds) !==
-    entryLevel.levelKey
+    readReplaceOwnerLevel(owner, operation, resolvedEntry.nodeIds) !==
+    resolvedEntry.levelKey
   ) {
     redriveReplaceOwnerWake(owner, operationId);
   }
@@ -472,7 +575,9 @@ async function redriveReplaceOwnerWake(owner, operationId) {
  * @param {string} operationId
  */
 function clearReplaceOwnerWaiter(owner, operationId) {
-  WAKE_STATE_BY_OWNER.get(owner)?.waiterByOperationId.delete(operationId);
+  const state = WAKE_STATE_BY_OWNER.get(owner);
+  state?.waiterByOperationId.delete(operationId);
+  state?.lastCapturedByOperationId.delete(operationId);
 }
 
 /**
@@ -494,6 +599,8 @@ function shutdownReplaceOwnerWake(owner) {
   state.consensusSubscribed = false;
   state.waiterByOperationId.clear();
   state.consensusLevelByPartitionId.clear();
+  state.observedNodeIdsByPartitionId.clear();
+  state.lastCapturedByOperationId.clear();
 }
 
 export {
@@ -501,6 +608,8 @@ export {
   wakeReplaceOwnersForReplicaRow,
   captureReplaceOwnerLevel,
   clearReplaceOwnerWaiter,
+  noteReplaceOwnerObservedReplicaRows,
   registerReplaceOwnerWaiter,
+  resolveReplaceOwnerEntryLevel,
   shutdownReplaceOwnerWake,
 };

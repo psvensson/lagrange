@@ -280,8 +280,9 @@ const RATCHET_TARGETS = [
     // to 633/23857 after consolidating coordinator fixture construction.
     // 2026-11-06: shared Binding producer fixture, 632 groups / 23837 lines.
     // 2026-11-07: tightened 632/23837 -> 630/23777 -> 630/23772 -> 629/23740 -> 629/23695 on the checker hint.
+    // 2026-11-08: tightened 629/23695 -> 629/23689 on the checker hint.
     baselineCloneGroupCount: 629,
-    baselineDuplicatedLineCount: 23695,
+    baselineDuplicatedLineCount: 23689,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

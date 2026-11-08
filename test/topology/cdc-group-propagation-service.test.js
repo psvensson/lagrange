@@ -153,15 +153,20 @@ test('grouped mode: the durable wave fans out to every group coordinator on the 
     CDC_GROUP_PUBLICATION_MODE.GROUPED);
 });
 
-test('grouped mode: a missing coordinator address falls back to the conservative ' +
-  'fan-out, and recovery returns to grouped with both transitions recorded', async (t) => {
-  const f = compose(t, LATENCY_PROPAGATION_MODE.GROUPED, {services: []});
+test('grouped mode: a missing coordinator address retains target-group debt ' +
+  'without silent completion, and recovery returns to grouped with both transitions recorded', async (t) => {
+  const f = compose(t, LATENCY_PROPAGATION_MODE.GROUPED,
+    {services: [], options: {deliveryRetryMaxAttempts: 1}});
   const fallback = await f.propagate();
   assert.equal(fallback.mode, CDC_GROUP_PROPAGATION_STATUS.SAFE);
   assert.equal(fallback.strategy, CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT);
   assert.equal(fallback.fallbackReason,
     CDC_GROUP_PROPAGATION_REASON.MISSING_COORDINATOR_ADDRESS);
-  assert.equal(fallback.success, true, 'with no target, the source receipt completes it');
+  assert.equal(fallback.success, false,
+    'missing coordinator address keeps the required target group uncovered');
+  assert.equal(fallback.deferRetry, true);
+  assert.equal(fallback.targetGroupCount, 1);
+  assert.deepEqual(fallback.failedTargetGroupIds, ['g-2']);
   assert.equal(f.calls.length, 0);
   const degraded = f.service.getPublicationModeDiagnostics();
   assert.equal(degraded.currentMode, CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT);
@@ -176,6 +181,24 @@ test('grouped mode: a missing coordinator address falls back to the conservative
     [CDC_GROUP_PUBLICATION_MODE.GROUPED, CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT],
     [CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT, CDC_GROUP_PUBLICATION_MODE.GROUPED],
   ]);
+});
+
+test('grouped mode: a newly known group in latency_groups is captured and delivered ' +
+  'even when latencyTreeService.getRoutingOrder lags', async (t) => {
+  const f = compose(t, LATENCY_PROPAGATION_MODE.GROUPED, {
+    groups: ['g-1', 'g-2', 'g-3'],
+    routingOrder: ['g-1', 'g-2'],
+  });
+  const result = await f.propagate();
+  assert.equal(result.success, true);
+  assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.GROUPED);
+  assert.equal(result.strategy, CDC_GROUP_PROPAGATION_STRATEGY.GROUP_COORDINATOR);
+  assert.equal(result.targetGroupCount, 2);
+  assert.deepEqual(
+    f.calls.map((call) => call.payload.targetGroupId),
+    ['g-2', 'g-3'],
+    'lagging routingOrder is supplemented with required target groups from the cache',
+  );
 });
 
 test('a thrown target delivery is an unknown answer, never a throw: the wave ' +

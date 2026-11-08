@@ -11,6 +11,7 @@ import {
 } from './system-row-normalizers.js';
 import {hasPriorityRecoverySpreadGap} from './priority-recovery-planning-intent.js';
 import {buildDerivedPriorityPartitionSummary} from './membership-publication-priority-partition-summary.js';
+import {isTerminalReplicaOperationRecord} from '../rebalancer/replica-operation-progress.js';
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_KIND,
@@ -78,6 +79,7 @@ const DEFERRED_PROPAGATED_CATCHUP_ROUTING_TABLES = Object.freeze([
   TABLES.SERVICES,
   TABLES.PARTITIONS,
   TABLES.NODES,
+  TABLES.REPLICA_OPERATIONS,
   TABLES.MESSAGE_GROUPS,
   TABLES.TABLES,
   TABLES.NODE_ENDPOINTS,
@@ -145,6 +147,15 @@ function hasInProgressServiceRows(serviceRows) {
   );
 }
 
+function hasLocalNonTerminalReplicaOperations(systemTableCache) {
+  if (typeof systemTableCache?.getAll !== 'function') {
+    return false;
+  }
+  const operationRows =
+    systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [];
+  return operationRows.some((row) => !isTerminalReplicaOperationRecord(row));
+}
+
 function extractActiveNodeIds(nodeRows) {
   return normalizeNodeIdList(
     nodeRows
@@ -178,7 +189,10 @@ function hasLocalServicesConvergenceGap(systemTableCache) {
     return false;
   }
   const serviceRows = systemTableCache.getAll(TABLES.SERVICES) || [];
-  if (hasInProgressServiceRows(serviceRows)) {
+  if (
+    hasInProgressServiceRows(serviceRows) ||
+    hasLocalNonTerminalReplicaOperations(systemTableCache)
+  ) {
     return true;
   }
   const locallyEligibleNodeIds = extractActiveNodeIds(
@@ -204,14 +218,24 @@ function hasLocalServicesConvergenceGap(systemTableCache) {
   );
 }
 
+function canWriteTableLocally(cdcIntegrationService, tableName) {
+  return (
+    typeof cdcIntegrationService?.canWriteSystemTableLocally === 'function' &&
+    cdcIntegrationService.canWriteSystemTableLocally(tableName) === true
+  );
+}
+
 function resolveDeferredPropagatedCatchupCooldownMs(
   systemTableCache,
   cdcIntegrationService,
 ) {
-  if (
-    typeof cdcIntegrationService?.canWriteSystemTableLocally === 'function' &&
-    cdcIntegrationService.canWriteSystemTableLocally(TABLES.SERVICES) === true
-  ) {
+  if (canWriteTableLocally(cdcIntegrationService, TABLES.SERVICES)) {
+    if (
+      !canWriteTableLocally(cdcIntegrationService, TABLES.REPLICA_OPERATIONS) &&
+      hasLocalNonTerminalReplicaOperations(systemTableCache)
+    ) {
+      return DEFERRED_PUBLICATIONS_CATCHUP_COOLDOWN_MS;
+    }
     return DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS;
   }
   return hasLocalServicesConvergenceGap(systemTableCache) ?

@@ -736,10 +736,7 @@ test('ControlPlaneReadinessService priority recovery health uses the direct read
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       membershipPublicationService: {
-        getLatestPublicationForNodeSync(targetNodeId) {
-          if (targetNodeId !== TEST_NODE_ID) {
-            return null;
-          }
+        getLatestClusterPublicationSync() {
           return {
             publicationEpoch: TEST_PUBLICATION_EPOCH,
             status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,

@@ -24,7 +24,6 @@ const {
   MEMBERSHIP_PUBLICATION_READ_SCOPE,
   buildControlPlanePublicationStory,
   resolveMembershipPublicationReadLane,
-  resolveMembershipPublicationReadOptions,
   resolveMembershipPublicationReadScope,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
@@ -55,23 +54,10 @@ class ControlPlaneReadinessPublicationDiagnostics
     if (!service || typeof service !== 'object') {
       return null;
     }
-    const normalizedReadOptions = resolveMembershipPublicationReadOptions({
-      lane: resolveMembershipPublicationReadLane(readOptions?.lane),
-      queryTimeoutMs:
-        Number.isFinite(readOptions?.queryTimeoutMs) &&
-        readOptions.queryTimeoutMs > 0 ?
-          readOptions.queryTimeoutMs :
-          this.membershipPublicationDiagnosticsQueryTimeoutMs,
-    });
-    let row = null;
-    if (typeof service.getLatestPublicationForNode === 'function') {
-      row = await service.getLatestPublicationForNode(
-        nodeId,
-        normalizedReadOptions,
-      );
-    } else if (typeof service.getLatestClusterPublication === 'function') {
-      row = await service.getLatestClusterPublication(normalizedReadOptions);
-    }
+    const row = await this.getLatestMembershipPublicationRow(
+      nodeId,
+      readOptions,
+    );
     return this.buildMembershipPublicationDiagnostics(row, observedAt);
   }
 
@@ -97,6 +83,8 @@ class ControlPlaneReadinessPublicationDiagnostics
     // (handleCacheChange) stays as belt-and-suspenders for caches without a
     // version surface.
     const memoizableRead =
+      resolveMembershipPublicationReadLane(readOptions?.lane) ===
+        MEMBERSHIP_PUBLICATION_READ_LANE.DIAGNOSTICS &&
       resolveMembershipPublicationReadScope(readOptions?.scope) ===
         MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER &&
       typeof this.membershipPublicationService

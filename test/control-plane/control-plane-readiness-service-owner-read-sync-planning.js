@@ -163,10 +163,7 @@ test('ControlPlaneReadinessService owner-read sync planning answer demotes lower
       nodeId: TEST_NODE_ID,
       systemTableCache: createCache(),
       membershipPublicationService: {
-        getLatestPublicationForNodeSync(targetNodeId) {
-          if (targetNodeId !== TEST_NODE_ID) {
-            return null;
-          }
+        getLatestClusterPublicationSync() {
           return {
             publicationEpoch: TEST_DIRECT_PUBLICATION_EPOCH,
             status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
@@ -297,10 +294,7 @@ test('ControlPlaneReadinessService keeps same-epoch planning closure witnesses d
         recentTransitions: [],
       }),
       membershipPublicationService: {
-        async getLatestPublicationForNode(targetNodeId) {
-          if (targetNodeId !== TEST_NODE_ID) {
-            return null;
-          }
+        async getLatestClusterPublication() {
           return {
             publicationEpoch: TEST_PUBLICATION_EPOCH,
             status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
@@ -515,10 +509,7 @@ test('ControlPlaneReadinessService preserves source snapshot version in membersh
         recentTransitions: [],
       }),
       membershipPublicationService: {
-        getLatestPublicationForNode(targetNodeId) {
-          if (targetNodeId !== nodeId) {
-            return null;
-          }
+        getLatestClusterPublication() {
           return {
             publicationEpoch: 12,
             status: 'PUBLISHED',
@@ -574,7 +565,7 @@ test('ControlPlaneReadinessService reports stale published priority summaries wi
         recentTransitions: [],
       }),
       membershipPublicationService: {
-        async getLatestPublicationForNode() {
+        async getLatestClusterPublication() {
           return stalePublication;
         },
         enqueueClusterMembershipReconcile(reason, context) {
@@ -641,7 +632,7 @@ test('ControlPlaneReadinessService keeps priority control-plane recovery mode ac
         recentTransitions: [],
       }),
       membershipPublicationService: {
-        getLatestPublicationForNode() {
+        getLatestClusterPublication() {
           return {
             publicationEpoch: 16,
             status: 'PUBLISHED',

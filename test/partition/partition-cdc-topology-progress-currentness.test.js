@@ -179,8 +179,14 @@ test('grouped source contradiction refuses before effects even with another fall
     assertDebtWithoutAck(f);
     f.projection.nodes.get(SOURCE_NODE)[COLUMN.LATENCY_GROUP_ID] = SOURCE_GROUP;
     f.projection.groups[0][COLUMN.GROUP_ID] = SOURCE_GROUP;
+    assert.equal((await f.drive()).state, DRIVE.HELD_BY_SUBSCRIBER,
+      'missing coordinator node retains target group debt instead of bypassing grouped routing');
+    assert.equal(f.sourceCalls.length, 1);
+    assert.equal(f.targetCalls.length, 0);
+    assertDebtWithoutAck(f);
+    f.projection.groups[1][COLUMN.COORDINATOR_NODE_ID] = TARGET_NODE;
     assert.equal((await f.drive()).state, DRIVE.DRAINED,
-      'aligned-source conservative fanout remains deliverable');
+      'restoring coordinator node drains retained grouped obligation');
     assert.equal(f.sourceCalls.length, 1);
     assert.equal(f.targetCalls.length, 1);
   });
