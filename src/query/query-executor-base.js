@@ -1,5 +1,8 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {
+  INITIAL_PARTITION_IDS,
+} from '../bootstrap/system-table-schemas-constants.js';
+import {
   buildLocalAuthoritativeObservation,
 } from '../cdc/cdc-integration-service-local-system-table-routing.js';
 import {
@@ -31,6 +34,21 @@ const {
   QUERY_SUBSYSTEM,
   buildDistributedFailureSummary,
 } = QUERY_EXECUTOR_SHARED;
+
+/**
+ * The one table-name read for a SELECT that executeSelect fans out. The SQL
+ * parser's SELECT shape (sql-parser-select-methods convertSelect/convertFrom)
+ * names the base table only as `from.name`: `from` is an object, or null for
+ * a FROM-less SELECT, and its name is null for a derived-table subquery. The
+ * locking-read PK select builds the same `{from: {name}}` shape. Top-level
+ * `table` belongs to INSERT/UPDATE/DELETE ASTs, which never reach SELECT
+ * execution, and the parser never produces a string `from`.
+ * @param {Object} ast - Parsed SELECT AST.
+ * @return {string|null} Base table name, or null when the SELECT has none.
+ */
+function resolveSelectTableName(ast) {
+  return ast?.from?.name || null;
+}
 
 class QueryExecutorBase {
   constructor(options = {}) {
@@ -417,6 +435,10 @@ class QueryExecutorBase {
     );
 
     // Execute on all partitions in parallel (read operations can go to any replica)
+    const tableName = resolveSelectTableName(ast);
+    const preferLeader =
+      options.preferLeader === true ||
+      Boolean(tableName && INITIAL_PARTITION_IDS[tableName]);
     const results = await this.executeOnPartitions(
       partitionIds,
       sql,
@@ -424,7 +446,7 @@ class QueryExecutorBase {
       queryTimestamp,
       true,
       // forRead = true for SELECT
-      options.preferLeader || false,
+      preferLeader,
       options.preferSameLatencyGroup === true,
       {
         sessionId: options.sessionId,
@@ -436,7 +458,7 @@ class QueryExecutorBase {
         cancellationToken: options.cancellationToken || null,
         resultMaxBytes,
         resultMaxRows,
-        tableName: ast.table,
+        tableName,
       },
     );
     const fanoutMetrics = this.getLastCoordinatorMetrics();
@@ -495,7 +517,6 @@ class QueryExecutorBase {
           result?.rowSetComplete === true &&
           result?.partial !== true,
       );
-    const tableName = ast?.table || ast?.from || null;
     const authoritativeObservation = rowSetComplete ?
       (results.length === 1 && results[0]?.authoritativeObservation ?
         results[0].authoritativeObservation :

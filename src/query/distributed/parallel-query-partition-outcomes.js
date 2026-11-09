@@ -117,7 +117,11 @@ function buildPartitionExecutionSuccessOutcome(
     status: partitionMetrics.status,
     rows: result.rows || [],
     changes: result.changes,
+    rowSetComplete: result.rowSetComplete === true,
     readAuthorityWitness: result.readAuthorityWitness,
+    ...(result.partial === undefined ? {} : {partial: result.partial}),
+    ...(result.authoritativeObservation === undefined ? {} :
+      {authoritativeObservation: result.authoritativeObservation}),
     // A settled replay's named state travels with its count (or in place of
     // a count it does not know).
     ...(result.settledReplay === undefined ? {} :

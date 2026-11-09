@@ -42,7 +42,9 @@ const ADMIN_WEBSOCKET_LOCAL_OBSERVATION_METHODS = {
     if (
       !this.systemTableCache ||
       typeof this.systemTableCache.getAll !== 'function' ||
-      typeof sql !== 'string'
+      typeof sql !== 'string' ||
+      this.sqlQueryEngine?.getAuthoritativeControlPlaneView?.()?.canRead?.() ===
+        true
     ) {
       return null;
     }

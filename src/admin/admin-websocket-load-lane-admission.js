@@ -394,8 +394,14 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
     const snapshot =
       await this.serviceDiscovery.resolveServiceDiscoverySnapshot({
         tableName: normalizedTableName,
-        serviceIdAllowlist: [META_SERVICE_ID.POSTGRES_WIRE],
-        protocolAllowlist: [WASM_SERVICE_PROTOCOL.POSTGRESQL],
+        serviceIdAllowlist: [
+          META_SERVICE_ID.POSTGRES_WIRE,
+          META_SERVICE_ID.ADMIN_META,
+        ],
+        protocolAllowlist: [
+          WASM_SERVICE_PROTOCOL.POSTGRESQL,
+          WASM_SERVICE_PROTOCOL.WEBSOCKET,
+        ],
         allowAuthoritativeRepair: true,
       });
     const services = Array.isArray(snapshot?.services) ?

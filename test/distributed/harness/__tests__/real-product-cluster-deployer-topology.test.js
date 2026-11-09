@@ -11,6 +11,7 @@ import {
   arrayEvery,
   arrayFilter,
   arrayFind,
+  arrayFindIndex,
   arrayMap,
   arraySome,
   stringIncludes,
@@ -185,4 +186,18 @@ test('Lagrange: an unanswered version is null with the product\'s non-answer as 
     const silent = arrayFind(products, (one) => one.host === '10.0.0.2');
     assert.equal(silent.reportedVersion, null);
     assert.match(silent.reportedVersionError, /"status":503/u);
+  });
+
+test('Lagrange: starts all joining nodes before polling joiner /readyz so 3-node priority spread can converge',
+  async () => {
+    const ledger = createContainerLedger();
+    const {sshRun, calls} = createScriptedSsh(lagrangeHealthyRules(ledger, {hosts: HOSTS}));
+    await deployers.deployComparativeTarget('lagrange', input(sshRun));
+    const thirdNodeStartIndex = arrayFindIndex(calls, (call) =>
+      call.host === '10.0.0.3' && /^docker run -d .*lagrange-node-3/u.test(call.command));
+    const firstJoinerReadyPollIndex = arrayFindIndex(calls, (call) =>
+      stringIncludes(call.command, '//10.0.0.2:8080/readyz'));
+    assert.ok(thirdNodeStartIndex > 0, 'third lagrange-node container must be started');
+    assert.ok(firstJoinerReadyPollIndex > thirdNodeStartIndex,
+      'joiner /readyz must not be polled before all joining node containers are started');
   });

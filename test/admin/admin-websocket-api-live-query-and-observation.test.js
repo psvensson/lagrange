@@ -336,3 +336,73 @@ test('AdminWebSocketAPI - local system-table observation supports projection ord
     t.equal(executeRequestCalls, 0, 'projected cache observation query should bypass routed SQL');
   },
 );
+
+test('AdminWebSocketAPI - system-table SELECT routes through SqlCore when AuthoritativeControlPlaneView is readable and preserves provenance',
+  async (t) => {
+    let executeRequestCalls = 0;
+    const cache = createPopulatedCache();
+    const expectedWitness = Object.freeze({
+      partitionId: 'partitions-p1',
+      nodeId: 'node-1',
+      replicaId: 'partitions-p1-r1',
+      raftRole: 'leader',
+      raftTerm: 2,
+      commitIndex: 9,
+      appliedIndex: 9,
+      observedAtMs: 1700000000000,
+    });
+    const expectedObservation = Object.freeze({
+      tableName: TABLES.PARTITIONS,
+      partitionId: 'partitions-p1',
+      mode: 'leader_witnessed',
+      scope: 'complete_table',
+      rowSetComplete: true,
+      witnessCount: 1,
+      leaderWitnessCount: 1,
+      maxTerm: 2,
+      maxCommitIndex: 9,
+      maxAppliedIndex: 9,
+      maxObservedAtMs: 1700000000000,
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-1',
+      systemTableCache: cache,
+      sqlQueryEngine: {
+        getAuthoritativeControlPlaneView() {
+          return {
+            canRead() {
+              return true;
+            },
+          };
+        },
+        async executeRequest(request) {
+          executeRequestCalls += 1;
+          t.equal(request.statement, 'SELECT * FROM partitions');
+          return {
+            success: true,
+            rows: [{partition_id: 'partitions-p1', table_name: 'partitions'}],
+            count: 1,
+            partitions: ['partitions-p1'],
+            tableName: TABLES.PARTITIONS,
+            rowSetComplete: true,
+            readAuthorityWitness: expectedWitness,
+            readAuthorityWitnesses: [expectedWitness],
+            authoritativeObservation: expectedObservation,
+          };
+        },
+      },
+    });
+
+    const result = await api.executeLocalQueryEnvelope({
+      queryId: 'q-authoritative-partitions-select',
+      sql: 'SELECT * FROM partitions',
+      params: [],
+    });
+
+    t.equal(executeRequestCalls, 1, 'must execute via SqlCore when authoritative view is readable');
+    t.equal(result.success, true);
+    t.equal(result.rowSetComplete, true);
+    t.same(result.readAuthorityWitness, expectedWitness);
+    t.same(result.authoritativeObservation, expectedObservation);
+  },
+);

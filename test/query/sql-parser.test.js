@@ -1212,3 +1212,32 @@ test('SQLParser - refuses non-literal or nondeterministic column DEFAULT in ' +
   t.equal(createAst.columns[3].defaultValue.value, -5);
   t.equal(createAst.columns[4].defaultValue.value, null);
 });
+
+// Witness for QueryExecutorBase resolveSelectTableName: the parser's SELECT
+// shape names the base table only as an object `from.name` (null for a
+// derived table, `from` null without FROM), never a top-level `table` or a
+// string `from`; `table` is the INSERT/UPDATE/DELETE shape.
+test('SQLParser - SELECT names its base table only as from.name', async (t) => {
+  const selects = [
+    ['SELECT * FROM partitions', 'partitions'],
+    ['SELECT u.id FROM users u JOIN orders o ON o.user_id = u.id', 'users'],
+    ['SELECT id FROM users UNION SELECT id FROM admins', 'users'],
+    ['WITH c AS (SELECT id FROM users) SELECT id FROM c', 'c'],
+    ['SELECT id FROM (SELECT id FROM users) AS t', null],
+    ['SELECT 1', null],
+  ];
+  for (const dialect of [undefined, PARSER_DIALECT.POSTGRESQL]) {
+    for (const [sql, expected] of selects) {
+      const ast = new SQLParser(sql, {dialect}).parse();
+      t.equal(ast.table, undefined, `${dialect || 'sqlite'} no table: ${sql}`);
+      t.not(typeof ast.from, 'string', `${dialect || 'sqlite'} from shape: ${sql}`);
+      t.equal(ast.from?.name || null, expected, `${dialect || 'sqlite'}: ${sql}`);
+    }
+  }
+  for (const sql of ['INSERT INTO users (id) VALUES (1)',
+    'UPDATE users SET id = 2', 'DELETE FROM users']) {
+    const ast = new SQLParser(sql).parse();
+    t.equal(ast.table, 'users', sql);
+    t.equal(ast.from, undefined, sql);
+  }
+});

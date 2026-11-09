@@ -48,7 +48,7 @@ documentClass: generated
 - [query-cancellation.js](query-cancellation.js) - Enforce cooperative query cancellation without duplicating token-shape branches inside hot owner methods. (importers: few)
 - [query-constants.js](query-constants.js) - Cross-partition JOIN pushdown limits. (importers: hub)
 - [query-execution-budget.js](query-execution-budget.js) - The one participant failure entry of a write or read fan-out, for every statement kind: what the participant was... (importers: many)
-- [query-executor-base.js](query-executor-base.js) - Initialize logger. (importers: one)
+- [query-executor-base.js](query-executor-base.js) - The one table-name read for a SELECT that executeSelect fans out. (importers: one)
 - [query-executor-cancellation-routing-install.js](query-executor-cancellation-routing-install.js) - Signal that the owning SQL query engine is shutting down. (importers: one)
 - [query-executor-canonical-leader-routing-methods.js](query-executor-canonical-leader-routing-methods.js) - No leading comment; first export: QueryExecutorCanonicalLeaderRoutingMethods. (importers: one)
 - [query-executor-join-execution.js](query-executor-join-execution.js) - Canonical outcomes for one join-table fetch decision. (importers: one)

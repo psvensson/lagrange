@@ -192,10 +192,30 @@ function lagrangeSystemTableRules(nodeIds, hosts) {
 }
 
 function lagrangeHealthyRules(ledger, {hosts = ['10.0.0.1', '10.0.0.2', '10.0.0.3']} = {}) {
+  const seedHost = hosts[0];
   return [
     ...lagrangeSystemTableRules(LAGRANGE_NODE_IDS.slice(0, hosts.length), hosts),
     ...dockerRules(ledger),
-    [/\/readyz/u, http(200, {ready: true, phase: 'ready', state: 'ready', reasons: []})],
+    [/\/readyz/u, (command) => {
+      if (!stringIncludes(command, `//${seedHost}:8080/readyz`)) {
+        let runningNodeCount = 0;
+        for (const entry of ledger.containers.values()) {
+          if (entry.running && stringIncludes(entry.name, '-lagrange-node-')) {
+            runningNodeCount += 1;
+          }
+        }
+        if (runningNodeCount < hosts.length) {
+          return http(503, {
+            ready: false,
+            phase: 'DEGRADED',
+            state: 'degraded',
+            reasons: ['PRIORITY_CONTROL_PLANE_RECOVERY_PENDING'],
+            priorityRecoveryReasonCodes: ['priority_partitions_not_spread'],
+          });
+        }
+      }
+      return http(200, {ready: true, phase: 'ready', state: 'ready', reasons: []});
+    }],
     [/\/health/u, '{"status":"healthy","ready":true}'],
     [/\/management\/v1\/facts/u, http(200, {release: {version: '0.4.0'},
       topology: {nodeCount: hosts.length, readyNodeCount: hosts.length}})],
