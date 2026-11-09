@@ -28,7 +28,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {WORKFLOW_STEP, NODE_STATE} from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {MOVE_REASON} from '../../src/rebalancer/rebalancer-constants.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {createMockPolicyService, createTestCoordinator} from './test-helpers.js';
 
 const CRITICAL_PARTITION_ID = 'replica_operations-p1';
 const CONCURRENT_OP_ERROR = /concurrent partition operation/i;
@@ -93,9 +93,9 @@ function buildCoordinatorWithConcurrentOp(concurrentOp, {pingNode}) {
       pingNode,
       isOutboundQueueAvailable: () => true,
     },
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-    },
+    }),
     cacheData: {
       nodes: [
         createReadyNode('node-a'),

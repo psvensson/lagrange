@@ -169,13 +169,8 @@ function buildGuardedSplitWorkflow(options) {
 test('overlap-refused-at-registration: a split whose source key range ' +
   'overlaps a persisted in-flight transition is refused with the ' +
   'typed outcome; non-overlapping registrations pass', async (t) => {
-  const usersTableRow = createDurableTableRow(
-    FIXTURE_TABLE_ID,
-    FIXTURE_TABLE_NAME,
-    Object.keys(createThreePartitionInfos()).length,
-  );
   const ordersTableRow = createDurableTableRow('tbl-orders', 'orders', 2);
-  const allTableRows = [usersTableRow, ordersTableRow];
+  const allTableRows = [ordersTableRow];
   const partitionById = {
     ...createThreePartitionInfos(),
     'orders-p1': {
@@ -196,8 +191,7 @@ test('overlap-refused-at-registration: a split whose source key range ' +
       table_id: 'tbl-orders',
       table_name: 'orders',
       // Disjoint from every persisted range of the foreign in-flight
-      // split on users-p2 (source ['m','t'), children ['m','q') and
-      // ['q','t')).
+      // split (source ['m','t'), children ['m','q') and ['q','t')).
       partition_key_start: 'u',
       partition_key_end: null,
       partition_key_type: 'TEXT',
@@ -208,11 +202,11 @@ test('overlap-refused-at-registration: a split whose source key range ' +
       state: 'NORMAL',
     },
   };
-  // A foreign in-flight split persisted on users-p2 ['m','t') — this
+  // A foreign in-flight split persisted on the same table ['m','t') — this
   // node never saw it (no process-local handle), only the durable
   // store carries it.
   persistForeignInFlightSplit({
-    durableTableRow: usersTableRow,
+    durableTableRow: ordersTableRow,
     sourcePartitionId: FIXTURE_RIGHT_PARTITION_ID,
     sourceRange: {start: 'm', end: 't'},
     splitKey: 'q',
@@ -235,8 +229,30 @@ test('overlap-refused-at-registration: a split whose source key range ' +
   t.equal(thrown?.message, SPLIT_OVERLAP_ERROR,
     'overlapping split registration is refused with the typed outcome');
 
-  // Non-overlapping candidate: splitting orders-p2 ['u',null) is
-  // disjoint from every persisted range and must register cleanly.
+  // Disjoint candidate on the same table while the foreign transition is
+  // still active: refused with the plain already-in-progress error (not the
+  // overlap suffix), because a single tables row cannot persist two concurrent
+  // active transitions.
+  const sameTableDisjoint = buildGuardedSplitWorkflow({
+    tableRow: ordersTableRow,
+    allTableRows,
+    partitionById,
+    tableId: 'tbl-orders',
+  });
+  let disjointThrown = null;
+  try {
+    await sameTableDisjoint.workflow.execute('orders-p2');
+  } catch (error) {
+    disjointThrown = error;
+  }
+  t.equal(disjointThrown?.message,
+    QUERY_ERROR_MSG.TABLE_SPLIT_ALREADY_IN_PROGRESS,
+    'same-table disjoint split is refused without the overlap suffix');
+
+  // Once the foreign transition on the table row clears, the non-overlapping
+  // candidate registers cleanly.
+  ordersTableRow.partition_transition_state = null;
+  ordersTableRow.partition_transition_metadata = null;
   const nonOverlapping = buildGuardedSplitWorkflow({
     tableRow: ordersTableRow,
     allTableRows,
@@ -446,13 +462,8 @@ test('restart-surviving-guard (split): a fresh split workflow ' +
 
 test('terminal durable transitions do not block registration ' +
   '(retryable states are skipped by the guard)', async (t) => {
-  const usersTableRow = createDurableTableRow(
-    FIXTURE_TABLE_ID,
-    FIXTURE_TABLE_NAME,
-    Object.keys(createThreePartitionInfos()).length,
-  );
   const ordersTableRow = createDurableTableRow('tbl-orders', 'orders');
-  const allTableRows = [usersTableRow, ordersTableRow];
+  const allTableRows = [ordersTableRow];
   const partitionById = {
     ...createThreePartitionInfos(),
     'orders-p1': {
@@ -473,7 +484,7 @@ test('terminal durable transitions do not block registration ' +
   // range; the guard must skip it — a retryable row is not an
   // in-flight transition.
   persistForeignInFlightSplit({
-    durableTableRow: usersTableRow,
+    durableTableRow: ordersTableRow,
     sourcePartitionId: FIXTURE_RIGHT_PARTITION_ID,
     sourceRange: {start: 'm', end: 't'},
     splitKey: 'q',
@@ -488,4 +499,55 @@ test('terminal durable transitions do not block registration ' +
   const result = await workflow.execute('orders-p1');
   t.equal(result.success, true,
     'retryable durable rows are skipped by the overlap guard');
+});
+
+test('cross-table isolation: an in-flight transition on another table ' +
+  'covering [null, null) does not block split registration on an ' +
+  'unrelated table', async (t) => {
+  const logsTableRow = createDurableTableRow('logs', 'logs', 1);
+  const ordersTableRow = createDurableTableRow('tbl-orders', 'orders', 1);
+  const allTableRows = [logsTableRow, ordersTableRow];
+  const partitionById = {
+    'logs-p1': {
+      partition_id: 'logs-p1',
+      table_id: 'logs',
+      table_name: 'logs',
+      partition_key_start: null,
+      partition_key_end: null,
+      partition_key_type: 'TEXT',
+      partition_version: 1,
+      replica_count: 2,
+      leader_node_id: 'node-a',
+      size_bytes: 64,
+      state: 'NORMAL',
+    },
+    'orders-p1': {
+      partition_id: 'orders-p1',
+      table_id: 'tbl-orders',
+      table_name: 'orders',
+      partition_key_start: null,
+      partition_key_end: null,
+      partition_key_type: 'TEXT',
+      partition_version: 1,
+      replica_count: 2,
+      leader_node_id: 'node-a',
+      size_bytes: 64,
+      state: 'NORMAL',
+    },
+  };
+  persistForeignInFlightSplit({
+    durableTableRow: logsTableRow,
+    sourcePartitionId: 'logs-p1',
+    sourceRange: {start: null, end: null},
+    splitKey: '7e530709',
+  });
+  const {workflow} = buildGuardedSplitWorkflow({
+    tableRow: ordersTableRow,
+    allTableRows,
+    partitionById,
+    tableId: 'tbl-orders',
+  });
+  const result = await workflow.execute('orders-p1');
+  t.equal(result.success, true,
+    'in-flight split on logs [null, null) does not block tbl-orders split');
 });

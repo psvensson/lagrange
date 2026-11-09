@@ -20,7 +20,10 @@ import {
 } from '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
-import {createMockControlPlaneReadinessService} from './test-helpers.js';
+import {
+  buildMockPolicyAuthorityWitness,
+  createMockControlPlaneReadinessService,
+} from './test-helpers.js';
 import {PriorityPublicationSafetyTopology} from '../../src/rebalancer/priority-publication-safety-topology.js';
 
 const REMOVE_SAFETY_EVALUATION_CLASSIFICATION =
@@ -275,7 +278,12 @@ test(
     emptyReader.repository = {
       controlPlaneSystemTableGateway: {
         async readAuthoritativeRows() {
-          return {success: true, rows: []};
+          return {
+            success: true,
+            rows: [],
+            rowSetComplete: true,
+            readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
+          };
         },
       },
     };

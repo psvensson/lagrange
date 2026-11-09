@@ -35,8 +35,17 @@ import {SeededRandomSource} from '../../src/random/random-source.js';
 import {FORMATION_OWNER} from '../../src/diagnostics/formation-diagnostics-contract.js';
 import {configureSharedSyncSectionClock} from '../../src/diagnostics/event-loop-gap-watchdog.js';
 import {
+  seedPartitionRow,
+  seedTableRow,
+} from '../../src/bootstrap/seed-foundation-rows.js';
+import {
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
 } from '../../src/bootstrap/system-partition-classification.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_SCHEMAS,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
 import {EntityType, ReplicaStatus} from '../../src/rebalancer/unified-rebalancer.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
@@ -147,6 +156,53 @@ const RAFT_TIMING = Object.freeze({
   heartbeatMs: SCENARIO.heartbeatMs,
 });
 
+const PARTITION_TABLE_BY_ID = Object.freeze(
+  Object.fromEntries(
+    Object.entries(INITIAL_PARTITION_IDS).map(([tableName, partitionId]) => [
+      partitionId,
+      tableName,
+    ]),
+  ),
+);
+const SCHEMA_BY_TABLE_ID = Object.freeze(
+  Object.fromEntries(
+    SYSTEM_TABLE_SCHEMAS.map((schema) => [schema.tableName, schema]),
+  ),
+);
+const BOOTSTRAP_LEADER_TERM = 1;
+const BOOTSTRAP_COMMITTED_INDEX = 1;
+
+function createScenarioPartitionAuthority({cohorts, hosts, leadership, seedId}) {
+  const seedLeadership = Object.freeze({
+    leaderId: seedId,
+    term: BOOTSTRAP_LEADER_TERM,
+    commitIndex: BOOTSTRAP_COMMITTED_INDEX,
+    appliedIndex: BOOTSTRAP_COMMITTED_INDEX,
+  });
+  return Object.freeze({
+    resolvePartitionLeader(partitionId) {
+      const tableName = PARTITION_TABLE_BY_ID[partitionId] || null;
+      if (!tableName) return null;
+      if (cohorts.has(tableName)) return leadership.get(tableName) || null;
+      return seedLeadership;
+    },
+    hasLocalReplica(nodeId, partitionId) {
+      const tableName = PARTITION_TABLE_BY_ID[partitionId] || null;
+      if (!tableName) return false;
+      if (cohorts.has(tableName)) {
+        return cohorts.get(tableName).ports.has(nodeId);
+      }
+      return nodeId === seedId;
+    },
+    resolveNodeSqlEngine(targetNodeId) {
+      return hosts.get(targetNodeId)?.sqlQueryEngine || null;
+    },
+    resolveNodeNow(targetNodeId) {
+      return hosts.get(targetNodeId)?.now() ?? SCENARIO.startEpochMs;
+    },
+  });
+}
+
 // The cold boot as data: every priority table has one partition whose only
 // replica is the seed's leader replica, the shape the seed is in when the
 // joiners arrive (the real bootstrap that writes these rows is a later
@@ -154,10 +210,17 @@ const RAFT_TIMING = Object.freeze({
 function seedPriorityRows(hosts, seedId, groupIds) {
   const nowMs = hosts.now();
   for (const tableId of groupIds) {
+    const schema = SCHEMA_BY_TABLE_ID[tableId];
     const partitionId = `${tableId}${PARTITION_SUFFIX}`;
+    hosts.cache.applySystemTableChange(
+      TABLES.TABLES,
+      INSERT,
+      seedTableRow(schema, nowMs),
+    );
     hosts.cache.applySystemTableChange(TABLES.PARTITIONS, INSERT, {
-      partition_id: partitionId, table_id: tableId,
-      replica_count: SCENARIO.targetReplicaCount, created_at: nowMs,
+      ...seedPartitionRow(schema, seedId, nowMs),
+      replica_count: SCENARIO.targetReplicaCount,
+      leader_node_id: null,
     });
     hosts.cache.applySystemTableChange(TABLES.SERVICES, INSERT, {
       service_id: `${partitionId}${SEED_REPLICA_SUFFIX}`,
@@ -176,18 +239,35 @@ function seedPriorityRows(hosts, seedId, groupIds) {
 // node was ever the publication owner and the heartbeat's reconcile tick
 // returned at its first gate. The cohort's own elected leader is written into
 // every node's cache, the way CDC would carry it.
+function buildCohortLeaderRecord(leader, status) {
+  return Object.freeze({
+    leaderId: leader,
+    term: status?.term ?? BOOTSTRAP_LEADER_TERM,
+    commitIndex: status?.commitIndex ?? 0,
+    appliedIndex: status?.appliedIndex ?? 0,
+  });
+}
+
+function applyLeaderPartitionRowToHosts(hosts, schema, leader) {
+  for (const node of hosts.values()) {
+    runOnExecutionNode(node.nodeId, () =>
+      node.cache.applySystemTableChange(TABLES.PARTITIONS, UPDATE, {
+        ...seedPartitionRow(schema, leader, node.now()),
+        replica_count: SCENARIO.targetReplicaCount,
+      }));
+  }
+}
+
 function publishCohortLeadership({hosts, cohorts, leadership, rebalancers, seedId}) {
   for (const [groupId, cohort] of cohorts) {
     const leader = cohort.leaderId();
-    if (!leader || leadership.get(groupId) === leader) continue;
-    leadership.set(groupId, leader);
-    for (const node of hosts.values()) {
-      runOnExecutionNode(node.nodeId, () =>
-        node.cache.applySystemTableChange(TABLES.PARTITIONS, UPDATE, {
-          partition_id: `${groupId}${PARTITION_SUFFIX}`, table_id: groupId,
-          replica_count: SCENARIO.targetReplicaCount, leader_node_id: leader,
-        }));
-    }
+    if (!leader) continue;
+    const status = runOnExecutionNode(leader, () =>
+      cohort.ports.get(leader)?.readStatus());
+    const previousLeader = leadership.get(groupId)?.leaderId || null;
+    leadership.set(groupId, buildCohortLeaderRecord(leader, status));
+    if (previousLeader === leader) continue;
+    applyLeaderPartitionRowToHosts(hosts, SCHEMA_BY_TABLE_ID[groupId], leader);
     // Leadership acquisition is the production entry that starts planning:
     // setLeader enqueues a check and arms the planner's own periodic timer.
     // It is a lifecycle hook driven by Raft's election, not a cadence.
@@ -348,6 +428,13 @@ async function runSimulationGeneration(seed, options = {}) {
   // The watchdog's sync-section stamps are measurement, not decisions;
   // they read the virtual clock so tagging inside a dispatch is ambient-free.
   configureSharedSyncSectionClock(() => network.now());
+  // Log stamps are measurement too, and pino reads a clock to make them. The
+  // logging service is process-wide, which is why the scenario rather than a
+  // node points it at virtual time.
+  const logging = LoggingService.getInstance();
+  if (logging.isInitialized()) {
+    logging.now = () => network.now();
+  }
   const cohorts = new Map();
   for (const nodeId of ids) {
     network.registerNode(nodeId, (message, api) => {
@@ -371,9 +458,17 @@ async function runSimulationGeneration(seed, options = {}) {
   // production, and async resources created here are resumed later; binding
   // them now is what keeps their continuations off the wrong node.
   const hosts = new Map();
+  const leadership = new Map();
+  const partitionAuthority = createScenarioPartitionAuthority({
+    cohorts,
+    hosts,
+    leadership,
+    seedId,
+  });
   for (const nodeId of ids) {
     const node = runOnExecutionNode(nodeId, () =>
       createSimulatedNodeHosts({network, nodeId, chargeDispatch,
+        partitionAuthority,
         randomSource: new SeededRandomSource({
           seed: seed * SEED_STREAM_STRIDE + HOST_STREAM_OFFSET + nodeIndex(nodeId),
         })}));
@@ -388,29 +483,30 @@ async function runSimulationGeneration(seed, options = {}) {
   // Sampling frequency is the caller's; it must not change any owner count.
   const observeEveryMs = Number.isFinite(options.observeEveryMs) ?
     options.observeEveryMs : SCENARIO.observeEveryMs;
-  const leadership = new Map();
   const joins = ids.slice(SEED_INDEX + 1).map((nodeId, index) => ({
     nodeId, atMs: SCENARIO.startEpochMs + SCENARIO.joinAtMs[index],
   }));
   const joinedIds = [seedId];
-  // The seed's watchdog runs from the start of the window; a joiner's from
-  // the moment it is part of the cluster, as its process would.
-  gapObserver.start(seedId);
-  runOnExecutionNode(seedId, () => startHeartbeat(hosts.get(seedId)));
   let quorumAtMs = null;
   let fifthJoinAtMs = null;
   let clusterFormedAtMs = null;
   let nextPassAtMs = SCENARIO.startEpochMs;
+  let strandedEvents = 0;
+  let groups = [];
   const deadline = SCENARIO.startEpochMs + SCENARIO.deadlineMs;
   const observer = options.observer || new ScenarioHostObserver().enable();
   const ownsObserver = !options.observer;
   observer.begin(options.generation || DEFAULT_GENERATION);
   const owners = closureContracts(hosts, rebalancers, observer);
   try {
-  // Instant by instant, never "run everything through virtual time X". Each
-  // iteration closes the instant the scheduler stands on, then advances to
-  // the next causal instant. Joins are scenario inputs applied at the instant
-  // they are due, which is why the horizon is consulted before stepping.
+    // The seed's watchdog runs from the start of the window; a joiner's from
+    // the moment it is part of the cluster, as its process would.
+    gapObserver.start(seedId);
+    runOnExecutionNode(seedId, () => startHeartbeat(hosts.get(seedId)));
+    // Instant by instant, never "run everything through virtual time X". Each
+    // iteration closes the instant the scheduler stands on, then advances to
+    // the next causal instant. Joins are scenario inputs applied at the instant
+    // they are due, which is why the horizon is consulted before stepping.
     let instantMs = SCENARIO.startEpochMs;
     await closeCurrentInstant({network, observer, owners});
     for (let guard = 0; guard < SCENARIO.maxInstants; guard += 1) {
@@ -443,32 +539,39 @@ async function runSimulationGeneration(seed, options = {}) {
       if (advanced === null) break;
       instantMs = advanced;
     }
-  // The scenario is over only when nothing the production owners queued is
-  // still runnable. Breaking out of the drive loop the instant the cohorts
-  // report formed left promise chains outstanding; in one process they landed
-  // during the NEXT run and moved its counters, which is how the same seed
-  // produced two different reports.
+    // The scenario is over only when nothing the production owners queued is
+    // still runnable. Breaking out of the drive loop the instant the cohorts
+    // report formed left promise chains outstanding; in one process they
+    // landed during the NEXT run and moved its counters, which is how the same
+    // seed produced two different reports.
+    // Retire every continuation the run started before the meter closes, so a
+    // chain from this scenario cannot land inside the next one and move its
+    // counters. Flushing is unconditional here rather than until-quiet: a
+    // pure promise chain queues nothing, so there is no event to observe.
+    const boundaryMs = network.now();
+    await settle(network, boundaryMs, observer, owners);
+    // Runnable at the boundary, which future-due timers are not.
+    strandedEvents = network.run({untilMs: boundaryMs}).steps;
+    groups = groupIds.map((groupId) => ({
+      groupId,
+      leaderId: cohorts.get(groupId).leaderId(),
+    }));
   } catch (error) {
     reportUnboundProvenance(meter);
     throw error;
+  } finally {
+    teardownSimulationGeneration({
+      cohorts,
+      gapObserver,
+      hosts,
+      ids,
+      meter,
+      observer,
+      ownsObserver,
+      rebalancers,
+      seedId,
+    });
   }
-  // Retire every continuation the run started before the meter closes, so a
-  // chain from this scenario cannot land inside the next one and move its
-  // counters. Flushing is unconditional here rather than until-quiet: a
-  // pure promise chain queues nothing, so there is no event to observe.
-  const boundaryMs = network.now();
-  await settle(network, boundaryMs, observer, owners);
-  // Runnable at the boundary, which future-due timers are not.
-  const strandedEvents = network.run({untilMs: boundaryMs}).steps;
-  const groups = groupIds.map((groupId) => ({groupId, leaderId: cohorts.get(groupId).leaderId()}));
-  // Every replica is closed through its port's own lifecycle before the
-  // generation seals, so no runtime this scenario opened outlives it.
-  for (const cohort of cohorts.values()) cohort.end();
-  meter.stop();
-  // Owners stopped, scheduler quiescent, meter closed: only now is the
-  // generation sealed, so a later callback rooted in it is an escape.
-  observer.seal();
-  if (ownsObserver) observer.disable();
   const windowEndedAtMs = clusterFormedAtMs ?? network.now();
   const windowMs = windowEndedAtMs - SCENARIO.startEpochMs;
   // busyMs is every charged millisecond, which is diagnostic evidence only.
@@ -513,6 +616,40 @@ async function runSimulationGeneration(seed, options = {}) {
     admissionTransitions: [],
     schemaAdmission: null,
   });
+}
+
+function teardownSimulationGeneration({
+  cohorts,
+  gapObserver,
+  hosts,
+  ids,
+  meter,
+  observer,
+  ownsObserver,
+  rebalancers,
+  seedId,
+}) {
+  for (const nodeId of ids) {
+    gapObserver.stop(nodeId);
+  }
+  for (const [nodeId, node] of hosts) {
+    runOnExecutionNode(nodeId, () => {
+      node.heartbeatService.stop();
+      node.rebalanceCoordinator.isShuttingDown = true;
+      node.stopIntervals();
+    });
+  }
+  for (const rebalancer of rebalancers.values()) {
+    runOnExecutionNode(seedId, () => rebalancer.shutdown());
+  }
+  // Every replica is closed through its port's own lifecycle before the
+  // generation seals, so no runtime this scenario opened outlives it.
+  for (const cohort of cohorts.values()) cohort.end();
+  meter.stop();
+  // Owners stopped, scheduler quiescent, meter closed: only now is the
+  // generation sealed, so a later callback rooted in it is an escape.
+  observer.seal();
+  if (ownsObserver) observer.disable();
 }
 
 function reportUnboundProvenance(meter) {

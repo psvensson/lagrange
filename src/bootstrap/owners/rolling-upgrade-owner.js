@@ -95,6 +95,7 @@ function findPreflightFailure(owner, params, snap) {
     [!owner.checkVersionCompatible(tVer), L4_CODE.RELEASE_VERSION_INCOMPATIBLE],
     [Boolean(tDig && !owner.checkArtifactDigest(tVer, tDig)), L4_CODE.ARTIFACT_DIGEST_MISMATCH],
     [isClusterNotReady(snap), L4_CODE.CLUSTER_NOT_READY],
+    [snap.hasPartitionQuorum === false, L4_CODE.QUORUM_SAFETY_HALT],
     [snap.underReplicatedPartitionCount > 0, L4_CODE.UNDER_REPLICATED_PARTITIONS],
     [snap.capacityState === FACTS.CAPACITY_PRESSURED, L4_CODE.STORAGE_CAPACITY_PRESSURED],
   ].find(([failed]) => failed);

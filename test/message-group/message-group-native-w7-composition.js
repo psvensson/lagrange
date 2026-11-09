@@ -30,7 +30,7 @@ import {PARTICIPANT_CUTOVER_OUTCOME} from
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from '../partition/partition-release-fixture.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
-import {recordOf, json, payloadOf, cdcEvents} from
+import {recordOf, json, payloadOf, cdcEvents, driveWithPump as driveFixtureWithPump} from
   './message-group-native-provisional-route-fixture.js';
 
 const NODE_A = 'mg-w7-source-node';
@@ -213,38 +213,8 @@ async function pumpMulti(f, rounds = 16) {
   }
 }
 
-async function driveWithPump(f, startPromiseFn, maxRounds = 400) {
-  let settled = false;
-  let outcome = null;
-  const clearRetryTimer = () => {
-    const lane = f.producerLeader?.cdcDelivery?.obligationLane;
-    if (lane?.retryTimer?.handle) {
-      f.producerLeader.timeSource.clearTimeout(lane.retryTimer.handle);
-      lane.retryTimer = {state: 'idle', handle: null};
-    }
-  };
-  const promise = Promise.resolve()
-    .then(startPromiseFn)
-    .then(
-      (value) => {
-        clearRetryTimer();
-        settled = true;
-        outcome = {status: 'fulfilled', value};
-      },
-      (reason) => {
-        clearRetryTimer();
-        settled = true;
-        outcome = {status: 'rejected', reason};
-      },
-    );
-  for (let round = 0; round < maxRounds && !settled; round += 1) {
-    await pumpMulti(f, 2);
-  }
-  assert.equal(settled, true, `driveWithPump exceeded ${maxRounds} rounds`);
-  await promise;
-  clearRetryTimer();
-  if (outcome.status === 'rejected') throw outcome.reason;
-  return outcome.value;
+function driveWithPump(f, startPromiseFn, maxRounds = 400) {
+  return driveFixtureWithPump(f, startPromiseFn, maxRounds, () => pumpMulti(f, 2));
 }
 
 async function openMultiReplica(

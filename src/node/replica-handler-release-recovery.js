@@ -181,6 +181,12 @@ function createParticipantReleaseRecovery(handler) {
     }
   }
 
+  function isActiveHostedLeader(leader) {
+    if (stopped || handler.shuttingDown) return false;
+    if (leader.isShutdown === true) return false;
+    return handler.localServices.get(leader.replicaId) === leader;
+  }
+
   async function reconcile(partitionId) {
     const services = hosted(partitionId);
     const observed = observeHostedServices(services);
@@ -202,13 +208,21 @@ function createParticipantReleaseRecovery(handler) {
         missingFact: RELEASE_RECOVERY_FACT.BUILD, reason: build.reason});
       return;
     }
-    if (stopped || handler.shuttingDown ||
-        handler.localServices.get(leader.replicaId) !== leader) return;
+    if (!isActiveHostedLeader(leader)) return;
     const answer = await runParticipantCutover(handler, {partitionId,
       targetBuildDigest: build.digest, trigger: TRIGGER.EXISTING_ORIGIN,
       deadlineAtMs: now() + BOUND.DRAIN_DEADLINE_MS});
+    if (answer.outcome !== OUTCOME.CUT_OVER) {
+      report(partitionId, answer);
+      enqueue(partitionId, BOUND.RECOVERY_RETRY_MS);
+      return;
+    }
+    if (!isActiveHostedLeader(leader)) return;
+    if (participantCutoverPauseOf(leader) !== null) {
+      enqueue(partitionId);
+      return;
+    }
     report(partitionId, answer);
-    if (answer.outcome !== OUTCOME.CUT_OVER) enqueue(partitionId, BOUND.RECOVERY_RETRY_MS);
   }
 
   function dispatch() {

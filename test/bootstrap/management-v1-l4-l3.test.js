@@ -208,6 +208,25 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
     recovered.isFeatureGateEnabled('0.5.0') && !recovered.getReleaseFacts().versionSkew);
 });
 
+async function assertStreamBackupRejectsMissingQuorum(t, validOwner) {
+  for (const missingQuorumSnap of [
+    null,
+    undefined,
+    {ready: true},
+    {ready: true, hasPartitionQuorum: null},
+    {ready: true, hasPartitionQuorum: false},
+  ]) {
+    await t.rejects(
+      () => validOwner.streamBackup(
+        {backupId: 'bkp-missing-quorum', destinationUri: 'memory://cluster-data/missing-q'},
+        missingQuorumSnap,
+        1000,
+      ),
+      /PARTITION_QUORUM_UNAVAILABLE/,
+    );
+  }
+}
+
 test('L3 Backup and Restore: 11 reason codes, cut, Rule 6 proof, restore', async (t) => {
   const bSnap = READY_BACKUP_SNAPSHOT;
   const bParams = {backupId: 'bkp-test-1', destinationUri: 'memory://test/bkp-1'};
@@ -284,6 +303,7 @@ test('L3 Backup and Restore: 11 reason codes, cut, Rule 6 proof, restore', async
   t.equal(partialRes.reasonCode, L3_BACKUP_RESTORE_REASON_CODE.BACKUP_VERIFICATION_FAILED);
 
   const validOwner = new BackupRestoreOwner(backupPorts());
+  await assertStreamBackupRejectsMissingQuorum(t, validOwner);
   const backupRes = await backup(validOwner,
     {backupId: 'bkp-cut-1', destinationUri: 'memory://cluster-data/backup-cut'},
     {operationId: 'op-valid-111111111111'});
@@ -411,6 +431,10 @@ test('ManagementV1Owner: facts, idempotency, conflicts, and decommission', async
       L6_DECOMMISSION_REASON_CODE.NODE_NOT_FOUND],
     [{getClusterSnapshot: snapshotPort({underReplicatedPartitionCount: 3})}, 'node-1',
       L6_DECOMMISSION_REASON_CODE.UNDER_REPLICATED_PARTITIONS],
+    [{getClusterSnapshot: snapshotPort({hasPartitionQuorum: undefined})}, 'node-1',
+      L6_DECOMMISSION_REASON_CODE.QUORUM_SAFETY_VIOLATION],
+    [{getClusterSnapshot: snapshotPort({hasPartitionQuorum: false})}, 'node-1',
+      L6_DECOMMISSION_REASON_CODE.QUORUM_SAFETY_VIOLATION],
     [{getClusterSnapshot: snapshotPort({nodeCount: 2, readyNodeCount: 2,
       nodeIds: ['node-1', 'node-2']})}, 'node-1',
     L6_DECOMMISSION_REASON_CODE.QUORUM_SAFETY_VIOLATION],

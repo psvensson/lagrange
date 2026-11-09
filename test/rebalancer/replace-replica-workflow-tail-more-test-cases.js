@@ -166,6 +166,14 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         enableTimeouts: false,
         messageRouter,
         cacheData: {
+          nodes: [SOURCE_NODE_ID, 'node-b', 'node-c', TARGET_NODE_ID].map(
+            (nodeId) => ({
+              node_id: nodeId,
+              status: 'active',
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60_000,
+            }),
+          ),
           services: [
             {
               service_id: SOURCE_REPLICA_ID,
@@ -303,6 +311,14 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         enableTimeouts: false,
         messageRouter,
         cacheData: {
+          nodes: [SOURCE_NODE_ID, 'node-b', 'node-c', TARGET_NODE_ID].map(
+            (nodeId) => ({
+              node_id: nodeId,
+              status: 'active',
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60_000,
+            }),
+          ),
           services: [
             {
               service_id: SOURCE_REPLICA_ID,
@@ -441,6 +457,14 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         enableTimeouts: false,
         messageRouter,
         cacheData: {
+          nodes: [SOURCE_NODE_ID, 'node-b', 'node-c', TARGET_NODE_ID].map(
+            (nodeId) => ({
+              node_id: nodeId,
+              status: 'active',
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60_000,
+            }),
+          ),
           services: [
             {
               service_id: SOURCE_REPLICA_ID,

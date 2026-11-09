@@ -6,22 +6,42 @@ import {tmpdir} from 'node:os';
 import {join, dirname} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
+import {CENSUS_COVERAGE_DIR_ENV} from '../../scripts/checks/fallback-branch-census-constants.js';
+import {isolatedCensusNodeOptions} from '../test-helpers/census-pre-kill-flush.js';
+
 // The loader mutates process.env and resolves `.env` against the working
 // directory, so every case runs in a child process with its own cwd — an
 // in-process import would leak variables into sibling tests sharing this
 // process.
 
+const COVERAGE_ENV = 'NODE_V8_COVERAGE';
+const NODE_OPTIONS_ENV = 'NODE_OPTIONS';
 const LOAD_ENV_URL = pathToFileURL(join(
   dirname(fileURLToPath(import.meta.url)),
   '..', '..', 'src', 'boot', 'load-env.js',
 )).href;
+
+function buildChildEnv(env) {
+  const childEnv = {...env, PATH: process.env.PATH};
+  if (process.env[COVERAGE_ENV]) {
+    childEnv[COVERAGE_ENV] = process.env[COVERAGE_ENV];
+  }
+  if (process.env[CENSUS_COVERAGE_DIR_ENV]) {
+    childEnv[CENSUS_COVERAGE_DIR_ENV] = process.env[CENSUS_COVERAGE_DIR_ENV];
+  }
+  const nodeOptions = isolatedCensusNodeOptions(process.env);
+  if (nodeOptions) {
+    childEnv[NODE_OPTIONS_ENV] = nodeOptions;
+  }
+  return childEnv;
+}
 
 function runWithLoader({cwd, env, expression}) {
   return execFileSync(process.execPath, [
     '--input-type=module',
     '-e',
     `await import(${JSON.stringify(LOAD_ENV_URL)}); console.log(${expression});`,
-  ], {cwd, env: {...env, PATH: process.env.PATH}, encoding: 'utf8'}).trim();
+  ], {cwd, env: buildChildEnv(env), encoding: 'utf8'}).trim();
 }
 
 describe('boot/load-env', () => {

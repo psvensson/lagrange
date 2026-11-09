@@ -75,8 +75,12 @@ test('Binding Cell placement keeps compilation two-phase and owner-controlled',
       /hasRequestBindingServiceDefinitionLineage/u,
     );
     assert.match(
-      SOURCE.planner,
+      SOURCE.runtimePolicy,
       /getBindingServiceDefinitionSourceKind/u,
+    );
+    assert.match(
+      SOURCE.planner,
+      /resolveRuntimeServiceDefinitionPolicy/u,
     );
     assert.match(
       SOURCE.planner,

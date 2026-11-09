@@ -9,7 +9,7 @@ import {
   buildTransitionHistoryEntry,
   hasPublicationTimedOut,
   normalizeNodeIdList,
-  normalizePositiveInteger,
+  resolveNowMs,
 } from './membership-publication-row-helpers.js';
 import {
   buildMembershipPublicationAcknowledgementDecision,
@@ -21,7 +21,7 @@ function acknowledgeMembershipPublication(options = {}) {
   const publicationRow = options.publicationRow || {};
   const normalizedPublication = normalizeControlPlanePublicationRow(publicationRow);
   const nodeId = String(options.nodeId || '').trim();
-  const nowMs = normalizePositiveInteger(options.nowMs, Date.now());
+  const nowMs = resolveNowMs(options.nowMs);
   const requiredAckNodeIds = normalizedPublication.requiredAckNodeIds;
   if (nodeId && !requiredAckNodeIds.includes(nodeId)) {
     return {

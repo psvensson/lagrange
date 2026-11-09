@@ -173,8 +173,10 @@ async function deliverApplication(f, address, envelope, options) {
 // names it, at the address the committed configuration places it.
 async function releaseFollower(f) {
   f.unheardPeer = null;
+  const leader = f.services.get(LEADER);
   for (let round = 0; round < SETUP_ROUNDS; round += 1) {
-    await tick(f);
+    await turnChainValue(leader.raft.tick());
+    await pump(f, 4);
     if (f.follower.raft.readStatus().leaderId === LEADER) return;
   }
 }
@@ -182,6 +184,61 @@ async function releaseFollower(f) {
 function releaseB(f) {
   f.holdB = false;
   for (const held of f.heldApplications.splice(0)) held.resolve();
+}
+
+function disarmProducerRetryTimer(f) {
+  const lane = f.producerLeader?.cdcDelivery?.obligationLane;
+  if (lane?.retryTimer?.handle) {
+    f.producerLeader.timeSource.clearTimeout(lane.retryTimer.handle);
+    lane.retryTimer = {state: 'idle', handle: null};
+  }
+}
+
+async function driveWithPump(f, startPromiseFn, maxRounds = 400, pumpStep = () => pump(f, 2)) {
+  let settled = false;
+  let outcome = null;
+  const promise = Promise.resolve()
+    .then(startPromiseFn)
+    .then(
+      (value) => {
+        disarmProducerRetryTimer(f);
+        settled = true;
+        outcome = {status: 'fulfilled', value};
+      },
+      (reason) => {
+        disarmProducerRetryTimer(f);
+        settled = true;
+        outcome = {status: 'rejected', reason};
+      },
+    );
+  await yieldTurn();
+  for (let round = 0; round < maxRounds && !settled; round += 1) {
+    if (f.native.length > 0) {
+      await pumpStep();
+    } else {
+      for (const service of f.services.values()) {
+        if (service.peerReconciliationScheduled) {
+          service.providedTimeSource.advance(0);
+        }
+      }
+      let idleTimer = null;
+      try {
+        await Promise.race([
+          promise,
+          new Promise((resolve) => {
+            idleTimer = setTimeout(resolve, 2);
+          }),
+        ]);
+      } finally {
+        if (idleTimer !== null) clearTimeout(idleTimer);
+      }
+    }
+  }
+  assert.equal(settled, true, `driveWithPump exceeded ${maxRounds} rounds`);
+  await promise;
+  disarmProducerRetryTimer(f);
+  if (outcome.status === 'rejected') throw outcome.reason;
+  return outcome.value;
 }
 
 async function openReplica(f, groupId, replicaId, replicas, rows, hints) {
@@ -196,7 +253,7 @@ async function openReplica(f, groupId, replicaId, replicas, rows, hints) {
   f.services.set(replicaId, service);
   registerMessageGroupTransportHandler(service, {messageRouter: f.router,
     address: service.unifiedAddress, onEnvelope: (envelope) => {
-      if (!isRaftRsTransportEnvelope(envelope)) {
+      if (!isRaftRsTransportEnvelope(payloadOf(envelope))) {
         note(f, 'registered-handler', {replicaId, envelope: structuredClone(envelope),
           status: service.raft.readStatus(), record: recordOf(service), source: sourceView(f)});
       }
@@ -395,6 +452,6 @@ function registrationInsert(service, entryId) {
 }
 
 export {provisionalRouteFixture, registrationInsert, sourceView, targetView, recordOf,
-  json, note, pump, tick, releaseB, releaseFollower, addressOf, payloadOf, cdcEvents,
-  NODE_ID, SOURCE_GROUP, TARGET_GROUP, SOURCE_REPLICA, TARGET_REPLICAS,
-  LEADER, FIRST_HOP, FOLLOWER, PARTITION_ID};
+  json, note, pump, tick, releaseB, releaseFollower, disarmProducerRetryTimer, driveWithPump,
+  addressOf, payloadOf, cdcEvents, NODE_ID, SOURCE_GROUP, TARGET_GROUP, SOURCE_REPLICA,
+  TARGET_REPLICAS, LEADER, FIRST_HOP, FOLLOWER, PARTITION_ID};

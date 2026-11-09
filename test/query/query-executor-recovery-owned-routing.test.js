@@ -12,6 +12,7 @@ import {
   createMockMessageRouter,
 } from './query-executor-test-support.js';
 import {
+  ERRORS,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
@@ -894,6 +895,161 @@ test('QueryExecutor - executeOnPartition retries reads with ' +
     result.success,
     true,
     'read should succeed after routing repair discovers candidates',
+  );
+  t.end();
+});
+
+test('QueryExecutor - executeOnPartition widens user-table and system-table ' +
+  'writes when a candidate replica is fenced for removal', async (t) => {
+  const userPartitionId = 'ratings-p1';
+  const systemPartitionId = 'tables-p1';
+  const fencedAddress = 'node-a/partition/fenced';
+  const activeAddress = 'node-b/partition/active';
+  const systemCache = {
+    get(tableName, key) {
+      if (tableName === TABLES.PARTITIONS && key === userPartitionId) {
+        return {
+          partition_id: userPartitionId,
+          table_name: 'ratings',
+          leader_node_id: 'node-a',
+        };
+      }
+      if (tableName === TABLES.PARTITIONS && key === systemPartitionId) {
+        return {
+          partition_id: systemPartitionId,
+          table_name: TABLES.TABLES,
+          leader_node_id: 'node-a',
+        };
+      }
+      return null;
+    },
+    filter(tableName, predicate) {
+      if (tableName === TABLES.PARTITIONS) {
+        return [
+          {
+            partition_id: userPartitionId,
+            table_name: 'ratings',
+            leader_node_id: 'node-a',
+          },
+          {
+            partition_id: systemPartitionId,
+            table_name: TABLES.TABLES,
+            leader_node_id: 'node-a',
+          },
+        ].filter(predicate);
+      }
+      if (tableName === TABLES.SERVICES) {
+        return [
+          {
+            service_id: 'ratings-r1',
+            service_type: SERVICE_TYPE.PARTITION,
+            partition_id: userPartitionId,
+            node_id: 'node-a',
+            raft_role: 'leader',
+            address: fencedAddress,
+            status: SERVICE_STATUS.ACTIVE,
+          },
+          {
+            service_id: 'ratings-r2',
+            service_type: SERVICE_TYPE.PARTITION,
+            partition_id: userPartitionId,
+            node_id: 'node-b',
+            raft_role: 'follower',
+            address: activeAddress,
+            status: SERVICE_STATUS.ACTIVE,
+          },
+          {
+            service_id: 'tables-r1',
+            service_type: SERVICE_TYPE.PARTITION,
+            partition_id: systemPartitionId,
+            node_id: 'node-a',
+            raft_role: 'leader',
+            address: fencedAddress,
+            status: SERVICE_STATUS.ACTIVE,
+          },
+          {
+            service_id: 'tables-r2',
+            service_type: SERVICE_TYPE.PARTITION,
+            partition_id: systemPartitionId,
+            node_id: 'node-b',
+            raft_role: 'follower',
+            address: activeAddress,
+            status: SERVICE_STATUS.ACTIVE,
+          },
+        ].filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const deliveries = [];
+  const messageRouter = {
+    async deliver(address) {
+      deliveries.push(address);
+      if (address === fencedAddress) {
+        return buildDeliveryEnvelope(
+          {acknowledged: true},
+          {
+            success: false,
+            error: ERRORS.SERVING_ADMISSION_FENCED_FOR_REMOVAL,
+            deferRetry: true,
+          },
+        );
+      }
+      return buildDeliveryEnvelope(
+        {acknowledged: true},
+        {
+          success: true,
+          rows: [],
+          changes: 1,
+        },
+      );
+    },
+  };
+
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    messageRouter,
+    systemCache,
+  });
+
+  const userWriteResult = await executor.executeOnPartition(
+    userPartitionId,
+    'INSERT INTO ratings (userId, movieId, rating) VALUES (?, ?, ?)',
+    [1, 10, 4.5],
+    false,
+    false,
+    false,
+  );
+  t.equal(
+    userWriteResult.success,
+    true,
+    'user-table write should reroute to the remaining replica when the first candidate is fenced for removal',
+  );
+  t.same(
+    deliveries,
+    [fencedAddress, activeAddress],
+    'user-table write should widen immediately to the active replica',
+  );
+
+  deliveries.length = 0;
+  const systemWriteResult = await executor.executeOnPartition(
+    systemPartitionId,
+    'INSERT INTO tables (table_name) VALUES (?)',
+    ['ratings'],
+    false,
+    false,
+    false,
+  );
+  t.equal(
+    systemWriteResult.success,
+    true,
+    'system-table write should widen to the remaining replica when the first candidate is fenced for removal',
+  );
+  t.same(
+    deliveries,
+    [fencedAddress, activeAddress],
+    'system-table write should widen immediately instead of deferring partition retry on the fenced replica',
   );
   t.end();
 });

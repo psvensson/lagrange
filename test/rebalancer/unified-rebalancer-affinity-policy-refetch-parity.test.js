@@ -40,6 +40,8 @@ const NODE_IDS = ['node-0', 'node-1', 'node-2', 'node-3', 'node-4'];
 const INCUMBENT_NODE_IDS = ['node-0', 'node-1'];
 const DATA_NODE_IDS = ['node-2', 'node-3', 'node-4'];
 const STALL_WEIGHTS = {'node-2': 3, 'node-3': 2, 'node-4': 2};
+const READY_LEASE_EXTENSION_MS = 60_000;
+const STALL_REPLICA_COUNT = 2;
 
 function buildAffinityPolicy(nodeWeights) {
   return {
@@ -71,7 +73,14 @@ function buildStallScenario({policyByFetch}) {
   const nodes = NODE_IDS.map((nodeId) => ({
     node_id: nodeId,
     status: 'active',
+    connection_state: 'ready',
+    ready_lease_expires_at: Date.now() + READY_LEASE_EXTENSION_MS,
   }));
+  const serviceDefinitions = [{
+    service_id: SERVICE_ID,
+    status: 'active',
+    replica_count: STALL_REPLICA_COUNT,
+  }];
   const services = INCUMBENT_NODE_IDS.map((nodeId, index) => ({
     service_id: `${SERVICE_ID}-r${index + 1}`,
     replica_id: `${SERVICE_ID}-r${index + 1}`,
@@ -94,7 +103,7 @@ function buildStallScenario({policyByFetch}) {
       status: ReplicaStatus.ACTIVE,
     });
   }
-  const cache = createMockCache({nodes, services});
+  const cache = createMockCache({nodes, services, serviceDefinitions});
   const controlPlaneReadinessService = createMockControlPlaneReadinessService({
     systemTableCache: cache,
   });

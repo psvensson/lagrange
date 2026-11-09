@@ -13,6 +13,7 @@ import {
 } from '../../src/rebalancer/replica-operation-progress.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {installReplaceWitnesses} from '../rebalancer/replace-witness-fixture.js';
+import {buildMockPolicyAuthorityWitness} from '../rebalancer/test-helpers.js';
 import {
   createTimeoutTestCoordinator,
 } from '../rebalancer/timeout-test-coordinator.js';
@@ -135,6 +136,8 @@ function serveServicesReadFromCache(cache, sql, params) {
     success: true,
     source: 'owner_rpc_lane',
     rows: matched.map((row) => ({...row})),
+    rowSetComplete: true,
+    readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
   };
 }
 

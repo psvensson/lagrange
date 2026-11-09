@@ -21,7 +21,12 @@ import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {
   getAuthoritativeOperationLedgerPlacementObservation,
 } from '../../src/rebalancer/operation-ledger-quorum-concentration.js';
-import {createMockControlPlaneReadinessService, createTestCoordinator} from './test-helpers.js';
+import {
+  buildMockPolicyAuthorityWitness,
+  createMockControlPlaneReadinessService,
+  createMockPolicyService,
+  createTestCoordinator,
+} from './test-helpers.js';
 
 const TEST_LEDGER_PARTITION_ID = 'replica_operations-p1';
 const TEST_SEED_NODE_ID = 'seed-node';
@@ -226,6 +231,8 @@ function installAuthoritativeServicesRead(coordinator, rowsProvider) {
         success: true,
         source: TEST_AUTHORITATIVE_SOURCE,
         rows: Array.isArray(rows) ? rows.map((row) => ({...row})) : [],
+        rowSetComplete: true,
+        readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
       };
     }
     return originalReadAuthoritativeRows(tableName, sql, params, options);
@@ -245,12 +252,12 @@ function createWedgeCoordinator({denialReasonCodesByNodeId, committedJoinersRead
     controlPlaneReadinessService: createColdFormationReadinessService({
       denialReasonCodesByNodeId, nodeRows,
     }),
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       getPolicyForPartition: () => ({
         minReplicaCount: TEST_MIN_REPLICA_COUNT,
         targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
       }),
-    },
+    }),
     cacheData: {
       nodes: [
         createSeedReadyNodeRow(),

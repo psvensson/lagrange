@@ -34,8 +34,11 @@ import {
   arrayFlatMap,
   arrayMap,
   stringIndexOf,
-  stringReplace,
+  stringLastIndexOf,
   stringPadStart,
+  stringReplace,
+  stringStartsWith,
+  stringTrim,
 } from './real-product-captured-intrinsics.js';
 import {
   DEPLOYMENT_FAILURE,
@@ -89,6 +92,7 @@ const PG_WIRE_DESIRED_STATE = Object.freeze({replicaCount: 1,
 const NODE_ID_PREFIX = '00000000-0000-4000-8000-';
 const NODE_ID_WIDTH = 12;
 const SEMVER_TAG = /:(\d+\.\d+\.\d+)$/u;
+const SHA256_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const SYSTEM_TABLE_QUERIES = Object.freeze({
   nodes: 'SELECT * FROM nodes',
   endpoints: 'SELECT * FROM service_endpoints',
@@ -128,6 +132,73 @@ function storageArgs(opts, campaignId, index) {
     ['-v', `${opts.storageRoot}/${campaignId}/lagrange-${index + 1}:${DATA_DIR}`] : [];
 }
 
+function normalizeImageDigest(digest, image) {
+  const text = stringTrim(String(digest ?? ''));
+  const normalized = stringStartsWith(text, '@') ? text.slice(1) : text;
+  if (!SHA256_DIGEST_PATTERN.test(normalized)) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `Lagrange image digest must be sha256:<64 hex>, got ${digest}`, {image, digest});
+  }
+  return normalized;
+}
+
+function imageRepositoryOf(imageRef) {
+  const text = stringTrim(String(imageRef || ''));
+  const digestAt = stringIndexOf(text, '@');
+  const name = digestAt === -1 ? text : text.slice(0, digestAt);
+  const tagAt = stringLastIndexOf(name, ':');
+  return tagAt > stringLastIndexOf(name, '/') ? name.slice(0, tagAt) : name;
+}
+
+function semverTagOf(imageRef) {
+  const text = stringTrim(String(imageRef || ''));
+  const digestAt = stringIndexOf(text, '@');
+  const name = digestAt === -1 ? text : text.slice(0, digestAt);
+  const match = SEMVER_TAG.exec(name);
+  return match ? match[1] : null;
+}
+
+function rawImageOf(opts) {
+  return stringTrim(String(opts.lagrangeImage || opts.image || LAGRANGE_IMAGE_DEFAULT));
+}
+
+function digestOptionOf(opts) {
+  return opts.lagrangeImageDigest || opts.imageDigest || null;
+}
+
+function requiresImagePin(opts) {
+  const targetNeedsPin = Boolean(opts.storageRoot || opts.requireImagePin ||
+    opts.remoteComparative || opts.executionTarget === 'gcp');
+  return targetNeedsPin && !opts.localBuild && !opts.lagrangeImageContent &&
+    !opts.lagrangeImageByHost;
+}
+
+function resolveInlineDigestImage(rawImage, digestAt, digestOpt) {
+  const inlineDigest = normalizeImageDigest(rawImage.slice(digestAt + 1), rawImage);
+  if (digestOpt !== null && normalizeImageDigest(digestOpt, rawImage) !== inlineDigest) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `Lagrange image digest ${inlineDigest} conflicts with pinned ${digestOpt}`,
+      {image: rawImage, digest: digestOpt});
+  }
+  return `${imageRepositoryOf(rawImage)}@${inlineDigest}`;
+}
+
+function resolveLagrangeContainerImage(opts = {}) {
+  const rawImage = rawImageOf(opts);
+  const digestOpt = digestOptionOf(opts);
+  const digestAt = stringIndexOf(rawImage, '@');
+  if (digestAt !== -1) return resolveInlineDigestImage(rawImage, digestAt, digestOpt);
+  if (digestOpt !== null) {
+    return `${imageRepositoryOf(rawImage)}@${normalizeImageDigest(digestOpt, rawImage)}`;
+  }
+  if (requiresImagePin(opts)) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `Lagrange image must be pinned by @sha256 digest or content identity, got ${rawImage}`,
+      {image: rawImage});
+  }
+  return rawImage;
+}
+
 // A digest reference pins the artifact but not a version string: the expected
 // product version then comes from the campaign (opts.lagrangeVersion).
 function versionPatternOf(imageRef, expectedVersion) {
@@ -138,6 +209,11 @@ function versionPatternOf(imageRef, expectedVersion) {
 
 async function getJson(ctx, url) {
   return httpFromHost({sshRun: ctx.sshRun, opts: ctx.opts, from: ctx.clientIp, url});
+}
+
+function getFacts(ctx, host) {
+  return httpFromHost({sshRun: ctx.sshRun, opts: ctx.opts, from: ctx.clientIp,
+    url: `http://${host}:${PORT.REST}/management/v1/facts`, basicAuth: ctx.connection});
 }
 
 function readinessOf(ctx, component, probe, stablePolls = 1) {
@@ -155,8 +231,8 @@ function nodeReady(ctx, host) {
 
 function membershipReady(ctx, seedHost, nodeCount) {
   return readinessOf(ctx, 'lagrange-membership', async () => {
-    const answer = await getJson(ctx, `http://${seedHost}:${PORT.REST}/management/v1/facts`);
-    return {ready: answer.json?.topology?.readyNodeCount === nodeCount,
+    const answer = await getFacts(ctx, seedHost);
+    return {ready: answer.json?.facts?.topology?.readyNodeCount === nodeCount,
       diagnostic: answer};
   });
 }
@@ -371,14 +447,17 @@ function bootLogField(parsed, key) {
 
 // The boot provenance the node logged, or {unavailable: why}: the explicit
 // state of a node whose log does not carry it.
-async function bootProvenance(ctx, product) {
+async function bootProvenance(ctx, product, facts = null) {
   try {
     const line = String(await ctx.sshRun(product.host, ctx.opts,
       `docker logs ${shellWord(product.containerId)} 2>&1 | grep -m 1 ${BOOT_PROVENANCE_MARKER}`));
     const parsed = JSON.parse(line.slice(stringIndexOf(line, '{')));
+    const release = facts?.status === HTTP_OK ? facts.json?.facts?.release : null;
+    const gitCommit = parsed.gitCommit ?? release?.gitCommit ?? null;
     return {version: bootLogField(parsed, 'version'),
       bootedSrcFingerprint: bootLogField(parsed, 'bootedSrcFingerprint'),
-      subsystem: bootLogField(parsed, 'subsystem')};
+      subsystem: bootLogField(parsed, 'subsystem'),
+      ...(typeof gitCommit === 'string' && gitCommit !== '' ? {gitCommit} : {})};
   } catch (error) {
     return {unavailable: errorText(error)};
   }
@@ -387,7 +466,7 @@ async function bootProvenance(ctx, product) {
 // The version the node reports in its facts, or null with the reason: a node
 // that did not answer it has no reported version (an empty string is none).
 function reportedVersionOf(facts) {
-  const version = facts.status === HTTP_OK ? facts.json?.release?.version : undefined;
+  const version = facts.status === HTTP_OK ? facts.json?.facts?.release?.version : undefined;
   if (typeof version === 'string' && version !== '') {
     return {reportedVersion: version, reportedVersionError: null};
   }
@@ -398,9 +477,9 @@ function reportedVersionOf(facts) {
 
 async function reportedVersions(ctx, products) {
   for (const product of products) {
-    const facts = await getJson(ctx, `http://${product.host}:${PORT.REST}/management/v1/facts`);
+    const facts = await getFacts(ctx, product.host);
     Object.assign(product, reportedVersionOf(facts));
-    product.bootProvenance = await bootProvenance(ctx, product);
+    product.bootProvenance = await bootProvenance(ctx, product, facts);
   }
   return products;
 }
@@ -413,17 +492,13 @@ async function reportedVersions(ctx, products) {
  */
 async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId, sleep}) {
   requireCampaignId(campaignId);
-  const image = opts.lagrangeImage || LAGRANGE_IMAGE_DEFAULT;
-  // A publishable run (explicit host volumes) needs the artifact pinned by
-  // digest: one tag resolved to four different images across the lab (D18).
-  if (opts.storageRoot && !opts.lagrangeImageContent) {
-    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
-      `a publishable run needs the Lagrange image pinned by content identity, got ${image}`,
-      {image});
-  }
-  const ctx = {sshRun, opts, clientIp, sleep, budget: resolveReadinessBudget(opts)};
+  const rawImage = opts.lagrangeImage || opts.image || LAGRANGE_IMAGE_DEFAULT;
+  const image = resolveLagrangeContainerImage(opts);
+  const expectedVersion = opts.lagrangeVersion || semverTagOf(rawImage);
   const connection = {user: REQUEST_CELL_AUTH.USER, password: REQUEST_CELL_AUTH.PASSWORD,
     database: REQUEST_CELL_AUTH.DATABASE};
+  const ctx = {sshRun, opts, clientIp, sleep, budget: resolveReadinessBudget(opts), connection,
+    expectedVersion};
   const roles = [];
   const nodeReadiness = [];
   const formed = {listener: null};
@@ -480,7 +555,9 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
   const products = verifyProductIdentity(
     await reportedVersions(ctx, await inspectProducts({sshRun, opts, roles})),
     {[NODE_ROLE]: {imageRef: image, contentIdentity: opts.lagrangeImageContent ?? null,
-      versionPattern: versionPatternOf(image, opts.lagrangeVersion)}});
+      versionPattern: versionPatternOf(image, ctx.expectedVersion),
+      expectedSrcFingerprint: opts.lagrangeSrcFingerprint || opts.expectedSrcFingerprint || null,
+      expectedGitCommit: opts.expectedGitCommit || null}});
   if (opts.lagrangeRevision) {
     const wrong = arrayFilter(products, (product) =>
       revisionLabelOf(product) !== opts.lagrangeRevision);
@@ -530,4 +607,4 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
   };
 }
 
-export {deployLagrangeCluster};
+export {deployLagrangeCluster, resolveLagrangeContainerImage};

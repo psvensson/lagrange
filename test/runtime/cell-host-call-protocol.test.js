@@ -37,40 +37,8 @@ import {
 const PROTOCOL_MODULE_URL =
   new URL('../../src/runtime/cell-host-call-protocol.js', import.meta.url)
     .href;
-
-// Inline CommonJS eval fixture: drives the production blocking client on
-// a worker thread. Instructions arrive over parentPort; each client call
-// blocks the worker (Atomics.wait) until the main-thread responder
-// answers through the shared buffer or the client deadline expires.
-const CLIENT_WORKER_SOURCE = `
-const {parentPort, workerData} = require('node:worker_threads');
-const protocolPromise = import(workerData.protocolModuleUrl);
-let client = null;
-parentPort.on('message', (instruction) => {
-  void protocolPromise.then((protocol) => {
-    if (instruction.op === 'create-client') {
-      client = protocol.createWorkerHostCallClient({
-        deadlineMs: Date.now() + instruction.waitBudgetMs,
-        descriptor: workerData.descriptor,
-        maxCalls: instruction.maxCalls,
-        postToParent: (request) => parentPort.postMessage(request),
-      });
-      parentPort.postMessage({kind: 'created'});
-      return;
-    }
-    try {
-      const ok = client.call(instruction.name, instruction.argumentsJson);
-      parentPort.postMessage({kind: 'call-result', ok});
-    } catch (error) {
-      parentPort.postMessage({
-        kind: 'call-result',
-        payload: error.payload ?? {message: error.message},
-      });
-    }
-  });
-});
-parentPort.postMessage({kind: 'online'});
-`;
+const CLIENT_WORKER_URL =
+  new URL('./helpers/cell-host-call-protocol-worker.js', import.meta.url);
 
 const GENEROUS_WAIT_BUDGET_MS = 5000;
 const SHORT_WAIT_BUDGET_MS = 250;
@@ -82,8 +50,7 @@ class ClientHarness {
     this.descriptor = createHostCallDescriptor();
     this.received = [];
     this.waiters = [];
-    this.worker = new Worker(CLIENT_WORKER_SOURCE, {
-      eval: true,
+    this.worker = new Worker(CLIENT_WORKER_URL, {
       workerData: {
         descriptor: this.descriptor,
         protocolModuleUrl: PROTOCOL_MODULE_URL,

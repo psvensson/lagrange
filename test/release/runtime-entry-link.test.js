@@ -20,6 +20,7 @@ import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {test} from '../../src/test-helpers/tap.js';
+import {isolatedCensusNodeOptions} from '../test-helpers/census-pre-kill-flush.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const UTF8 = 'utf8';
@@ -73,7 +74,7 @@ function runEntry(args) {
     cwd: ROOT,
     encoding: UTF8,
     timeout: ENTRY_TIMEOUT_MS,
-    env: {...process.env, NODE_OPTIONS: ''},
+    env: {...process.env, NODE_OPTIONS: isolatedCensusNodeOptions(process.env)},
   });
   return {
     status: result.status,

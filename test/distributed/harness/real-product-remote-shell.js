@@ -55,9 +55,13 @@ function errorText(error) {
  * load-generator host) with curl. Never throws: a transport failure is a
  * `{status: null, error}` answer the caller decides on.
  */
-async function httpFromHost({sshRun, opts, from, url, method = 'GET', body = undefined}) {
+async function httpFromHost({sshRun, opts, from, url, method = 'GET', body = undefined,
+  basicAuth = undefined}) {
   const words = ['curl', '-sS', '--max-time', String(HTTP_TIMEOUT_SECONDS)];
   if (method !== 'GET') words.push('-X', method);
+  if (basicAuth !== undefined) {
+    words.push('-u', shellQuote(`${basicAuth.user}:${basicAuth.password}`));
+  }
   if (body !== undefined) {
     words.push('-H', shellQuote('content-type: application/json'),
       '--data', shellQuote(JSON.stringify(body)));

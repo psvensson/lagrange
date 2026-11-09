@@ -1,4 +1,7 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+} from '../control-plane/control-plane-system-table-gateway-constants.js';
 import {selectCurrentEndpointRows} from
   '../control-plane/owners/endpoint-incarnation-currentness.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
@@ -506,6 +509,9 @@ class UnifiedRebalancerCriticalTopologyMethods {
       sql,
       params,
       {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+            .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
         owner: CRITICAL_SYSTEM_ENDPOINT_VISIBILITY_AUTHORITATIVE_READ.OWNER,
         queryTimeoutMs: this.criticalCheckDelayMs,
         routingReadinessDimension:

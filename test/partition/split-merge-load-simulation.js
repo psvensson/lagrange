@@ -37,6 +37,17 @@ import {
 import {
   createManagedSplitMetricsProvider,
 } from '../../src/partition/managed-split-metrics-provider.js';
+import {
+  DEFAULT_TABLE_POLICY,
+} from '../../src/policy/policy-constants.js';
+
+const DEFAULT_POLICY_SERVICE = Object.freeze({
+  getPolicyForPartition: async () => ({
+    ...DEFAULT_TABLE_POLICY,
+    targetReplicaCount: 3,
+    minReplicaCount: 2,
+  }),
+});
 
 const KEY_SPACE = 1000;
 const TABLE_ID = 'tbl-sim';
@@ -163,6 +174,7 @@ function createSplitMergeSimulation(options = {}) {
     nodeId: 'sim-node',
     now,
     pressureGovernor: ALLOW_PRESSURE_GOVERNOR,
+    tablePolicyService: DEFAULT_POLICY_SERVICE,
     listPartitions: () => sortedRows(),
     getPartitionMetrics: createManagedSplitMetricsProvider({
       partitionServices: services,

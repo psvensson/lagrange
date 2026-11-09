@@ -215,7 +215,7 @@ documentClass: generated
 - [service-data-affinity-weights.js](service-data-affinity-weights.js) - Data-affinity weights for a runtime service at TWO granularities (service<->data affinity placement epic - the... (importers: few)
 - [spread-cure-transition-authorization.js](spread-cure-transition-authorization.js) - Spread-cure transition authorization - the single owner of the durable-to-semantic decode, the evaluation and the... (importers: many)
 - [steps-history-parse-memo.js](steps-history-parse-memo.js) - Pure-function memo for `steps_history` JSON parsing. (importers: many)
-- [storage-admission-constants.js](storage-admission-constants.js) - No leading comment; first export: STORAGE_ADMISSION_DECISION_TYPE. (importers: many)
+- [storage-admission-constants.js](storage-admission-constants.js) - No leading comment; first export: STORAGE_ADMISSION_DECISION_TYPE. (importers: hub)
 - [storage-admission-preflight.js](storage-admission-preflight.js) - No leading comment; first export: STORAGE_ADMISSION_PREFLIGHT_ACTION. (importers: one)
 - [storage-admission-result.js](storage-admission-result.js) - No leading comment; first export: buildStorageAdmissionResult. (importers: few)
 - [storage-admission-service.js](storage-admission-service.js) - Storage Admission Service - single gate for storage-increasing operations. (importers: many)

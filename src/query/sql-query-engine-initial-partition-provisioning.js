@@ -4,9 +4,6 @@ import {
   createSQLQueryEngineProvisioningAdmissionMethods,
 } from './sql-query-engine-provisioning-admission-methods.js';
 import {
-  createSQLQueryEngineProvisioningDeadlineMethods,
-} from './sql-query-engine-provisioning-deadline-methods.js';
-import {
   resolveQueryCancellationToken,
   throwIfCancellationRequested,
 } from './query-cancellation.js';
@@ -151,7 +148,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       (provisionTargetNodeIds.length < targetReplicaCount ||
         this.supportsProvisioningAdmissionPrecheck())
     ) {
-      let convergenceResult = await this.waitForProvisionTargetNodeIds({
+      const convergenceResult = await this.waitForProvisionTargetNodeIds({
         partitionId,
         schemaJobId: context?.schemaJobId,
         requiredReplicaCount: targetReplicaCount,
@@ -169,22 +166,6 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         cancellationToken,
       });
       admissionConvergence = convergenceResult.admissionProbe || null;
-      const transientHoldRewaitResult =
-        await this.waitOutWholeClusterTransientProvisioningHold({
-          partitionId,
-          schemaJobId: context?.schemaJobId,
-          requiredReplicaCount: targetReplicaCount,
-          minimumRoutableReplicaCount,
-          timeoutBudget,
-          explicitTargetNodeIds,
-          hasExplicitMinimumRoutableReplicaCount,
-          admissionConvergence,
-          cancellationToken,
-        });
-      if (transientHoldRewaitResult) {
-        convergenceResult = transientHoldRewaitResult;
-        admissionConvergence = convergenceResult.admissionProbe || null;
-      }
       provisionTargetDiagnostics =
         convergenceResult.diagnostics || provisionTargetDiagnostics;
       provisionTargetNodeIds = this.resolveProvisionTargetNodeIdsForContext(
@@ -689,10 +670,6 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
 Object.defineProperties(
   SQLQueryEngineInitialPartitionProvisioning.prototype,
   createSQLQueryEngineProvisioningAdmissionMethods(),
-);
-Object.defineProperties(
-  SQLQueryEngineInitialPartitionProvisioning.prototype,
-  createSQLQueryEngineProvisioningDeadlineMethods(),
 );
 
 export {SQLQueryEngineInitialPartitionProvisioning};

@@ -211,7 +211,8 @@ function releaseRequestIdentityRefusal(service, request, facts) {
 function releaseStatusMatches(service, request, status) {
   const statusMatches = status.term === request.attempt.term &&
     status.leaderId === request.attempt.leaderReplicaId &&
-    status.configurationKey === request.release.configurationKey;
+    status.configurationKey === request.release.configurationKey &&
+    status.membershipGenerationIndex === request.release.membershipGenerationIndex;
   const leaderLifecycleMatches = service.replicaId !== request.attempt.leaderReplicaId ||
     status.lifecycleIncarnation === request.attempt.leaderLifecycleIncarnation;
   return statusMatches && leaderLifecycleMatches;
@@ -272,7 +273,6 @@ function observationStatusDisposition(handler, service, request, context, status
       !objectHasOwn(context, OBSERVATION_FIELD.CONTEXT_LEADER)) return OUTCOME.UNAVAILABLE;
 
   return releaseStatusMatches(service, request, status) &&
-    status.membershipGenerationIndex === request.release.membershipGenerationIndex &&
     status.term === context.term && status.leaderId === context.leaderReplicaId &&
     status.configurationKey === context.configurationKey &&
     status.membershipGenerationIndex === context.membershipGenerationIndex &&
@@ -342,8 +342,6 @@ function canFastPathPausedResume(handler, service, request) {
   try {
     const status = service.raft?.readStatus?.();
     if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK ||
-        status.membershipGenerationIndex !==
-          request.release.membershipGenerationIndex ||
         !releaseStatusMatches(service, request, status)) {
       return false;
     }

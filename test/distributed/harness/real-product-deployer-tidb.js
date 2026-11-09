@@ -227,12 +227,13 @@ async function formTiDbCluster({ctx, hosts, images, formed}) {
   ctx.sqlClient = await start(ctx, ROLE.READINESS_CLIENT, tidb.host, 1, TIDB_SQL_CLIENT_IMAGE,
     ['--entrypoint', 'sleep'], [String(SQL_CLIENT_LIFETIME_SECONDS)]);
   const endpoint = {host: tidb.host, port: P.tidbPort};
-  const sqlReadiness = await typedReadiness('tidb-sql-3-up-stores', () =>
+  const sqlReady = () => typedReadiness('tidb-sql-3-up-stores', () =>
     waitForTiDbReferenceSqlReady(ctx.provider, ctx.sqlClient.containerId, endpoint, {
       timeoutMs: budget.timeoutMs, pollIntervalMs: budget.pollIntervalMs,
       readinessSql: buildTiDbReferenceReadinessSql(STORE_COUNT),
       watchedContainers: arrayMap(roles, (role) => ({role: role.role,
         containerId: role.containerId}))}));
+  const sqlReadiness = await sqlReady();
   const products = await reportedVersions(ctx, endpoint,
     await inspectProducts({sshRun, opts, roles}));
   verifyProductIdentity(products, {
@@ -267,6 +268,10 @@ async function formTiDbCluster({ctx, hosts, images, formed}) {
     endpoint: {protocol: 'mysql', ...endpoint, containerId: binding.containerId, binding},
     access: {connection: {user: 'root', database: databaseName}},
     operations: {
+      awaitReady: () => withReadinessClient(ctx, async () => ({
+        pd: await pdReady(ctx, pdHost),
+        sql: await sqlReady(),
+      })),
       observePlacement: () => withReadinessClient(ctx, async () => ({
         observedAt: new Date().toISOString(),
         source: 'tidb-reference-physical-placement-proof', ...(await placement())})),

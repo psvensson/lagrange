@@ -301,7 +301,7 @@ function resolveExecutorOutcomeRemoteOwnerHandoffMode(
 function buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
   owner,
   operation,
-  now = Date.now(),
+  now = owner.resolveTimeoutCheckNowMs(),
   options = {},
 ) {
   // A decoded operation always carries its step; with no operation there is
@@ -408,7 +408,7 @@ function resolveSnapshotHandoffRetryStop(
   const handoffTimeoutDecision =
     owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
       operationSnapshot,
-      Date.now(),
+      owner.resolveTimeoutCheckNowMs(),
       options,
     );
   if (handoffTimeoutDecision.shouldStop) {
@@ -522,7 +522,7 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
   ) {
     return false;
   }
-  const desiredDeadlineMs = Date.now() + delayMs;
+  const desiredDeadlineMs = owner.resolveTimeoutCheckNowMs() + delayMs;
   const existingDeadlineMs =
     owner.createdOperationHandoffRetryDeadlineMsByOperationId?.get(operationId);
   const replaceExisting =
@@ -576,7 +576,7 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
         const handoffTimeoutDecision =
           owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
             currentOperation,
-            Date.now(),
+            owner.resolveTimeoutCheckNowMs(),
             options,
           );
         if (handoffTimeoutDecision.shouldStop) {
@@ -618,7 +618,7 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
   );
   owner.createdOperationHandoffRetryDeadlineMsByOperationId.set(
     operationId,
-    Date.now() + delayMs,
+    desiredDeadlineMs,
   );
   owner.createdOperationHandoffRetryModeByOperationId.set(
     operationId,

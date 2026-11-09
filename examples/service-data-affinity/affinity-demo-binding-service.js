@@ -8,7 +8,7 @@
  * the authoritative `/api/admin/services/sys-postgres-wire/scale` route).
  */
 
-import {copyFile, mkdir, rm, symlink} from 'node:fs/promises';
+import {copyFile, mkdir, realpath, rm, symlink} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {Client} from 'pg';
@@ -305,10 +305,15 @@ async function openFirstReachablePgSession({
 }
 
 async function prepareMovieLensServiceProject(artifactsBaseDir) {
-  const artifactsRoot = path.resolve(
+  const configuredArtifactsRoot = path.resolve(
     REPO_ROOT,
     artifactsBaseDir || DEFAULT_ARTIFACTS_RELATIVE_PATH,
   );
+  await mkdir(configuredArtifactsRoot, {recursive: true});
+  const [artifactsRoot, realRepoSource] = await Promise.all([
+    realpath(configuredArtifactsRoot),
+    realpath(path.join(REPO_ROOT, SOURCE_SYMLINK_NAME)),
+  ]);
   const scenarioDirectory = path.join(artifactsRoot, SCENARIO_SUBDIR);
   const projectDirectory = path.join(scenarioDirectory, PROJECT_SUBDIR);
   await rm(scenarioDirectory, {force: true, recursive: true});
@@ -316,7 +321,7 @@ async function prepareMovieLensServiceProject(artifactsBaseDir) {
   const sourceLink = path.join(artifactsRoot, SOURCE_SYMLINK_NAME);
   await rm(sourceLink, {force: true});
   await symlink(
-    path.relative(artifactsRoot, path.join(REPO_ROOT, SOURCE_SYMLINK_NAME)),
+    path.relative(artifactsRoot, realRepoSource),
     sourceLink,
   );
   await copyFile(

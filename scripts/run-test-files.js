@@ -26,6 +26,7 @@ import {
   EXECUTION_SECTIONS_ENV, SECTION_KIND, appendExecutionSection, describeCheckout,
   fileResultRecord,
 } from './test-execution-report.js';
+import {flushCoverageBeforeKill} from './checks/census-pre-kill-flush.js';
 
 const DEFAULT_JOBS = 4;
 const DEFAULT_TIMEOUT_MS = 600000;
@@ -761,6 +762,7 @@ function runTestFile(file, options = {}) {
     let spawnError = null;
     const timeout = setTimeout(() => {
       timedOut = true;
+      flushCoverageBeforeKill(child.pid, PROCESS_KILL_SIGNAL, {env: run.env});
       child.kill(PROCESS_KILL_SIGNAL);
     }, run.budgetMs);
     timeout.unref();

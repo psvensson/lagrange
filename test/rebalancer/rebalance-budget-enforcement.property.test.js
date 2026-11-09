@@ -21,6 +21,7 @@ import {
   createMockCache,
   createMockCdcService,
   createMockControlPlaneReadinessService,
+  createMockControlPlaneSystemTableGateway,
   createMockPolicyService,
   createMockMessageRouter,
   createMockCoordinator,
@@ -173,6 +174,8 @@ function createCriticalRebalancer({budget, inFlightCount, neededMoves}) {
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     sqlQueryEngine: sqlEngine,
+    controlPlaneSystemTableGateway:
+      createMockControlPlaneSystemTableGateway(sqlEngine),
     controlPlaneReadinessService,
   });
 
@@ -321,6 +324,8 @@ test('Property 11: Rebalance budget enforcement', async (t) => {
       });
       // Override with empty config engine
       rebalancer.sqlQueryEngine = emptySqlEngine;
+      rebalancer.controlPlaneSystemTableGateway =
+        createMockControlPlaneSystemTableGateway(emptySqlEngine);
 
       const result = await rebalancer.rebalance('periodic');
 
@@ -370,6 +375,8 @@ test('Property 11: Rebalance budget enforcement', async (t) => {
         messageRouter: createMockMessageRouter(),
         rebalanceCoordinator,
         sqlQueryEngine: failingSqlEngine,
+        controlPlaneSystemTableGateway:
+          createMockControlPlaneSystemTableGateway(failingSqlEngine),
         controlPlaneReadinessService,
       });
 

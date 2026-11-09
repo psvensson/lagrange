@@ -498,7 +498,7 @@ function createCohortSqlEngine({authoritativeServices}) {
       const rows = authoritativeServices.filter(
         (row) => row.partition_id === params[1],
       );
-      return {success: true, rows};
+      return {success: true, rowSetComplete: true, rows};
     }
     if (sql.includes('INSERT INTO replica_operations')) {
       const [

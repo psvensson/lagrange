@@ -1,4 +1,7 @@
 import {existsSync} from 'node:fs';
+import {mkdtemp, realpath, rm, symlink} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
 import {once} from 'node:events';
 import net from 'node:net';
 import {WebSocketServer} from 'ws';
@@ -36,6 +39,12 @@ import {isRetryableControlPlaneError} from
 import {
   AdminWsClient,
 } from '../../scripts/examples/admin-ws-client.js';
+import {
+  prepareMovieLensServiceProject,
+} from '../../examples/service-data-affinity/affinity-demo-binding-service.js';
+import {
+  runGenerate,
+} from '../../src/cli/service-pipeline-command.js';
 
 const READY_CREATE_RESULT = Object.freeze({
   contractState: OWNER_CONTRACT_STATE.READY,
@@ -612,5 +621,40 @@ test('obsolete callback demo and orchestration are absent', (t) => {
   t.equal(existsSync(
     'examples/service-data-affinity/run-comparison.js'), true,
   'one surviving comparison entry point replaces both demos');
+  t.end();
+});
+
+test('prepareMovieLensServiceProject canonicalizes symlinked artifactsBaseDir ' +
+  'so runGenerate resolves lagrange.service.js relative src imports',
+async (t) => {
+  const physicalTarget = await mkdtemp(
+    path.join(tmpdir(), 'movielens-artifacts-target-'),
+  );
+  const linkHolder = await mkdtemp(
+    path.join(tmpdir(), 'movielens-artifacts-link-'),
+  );
+  const symlinkedBaseDir = path.join(linkHolder, 'symlinked-artifacts');
+  try {
+    await symlink(physicalTarget, symlinkedBaseDir);
+    const {artifactsRoot, projectDirectory} =
+      await prepareMovieLensServiceProject(symlinkedBaseDir);
+    const realPhysicalTarget = await realpath(physicalTarget);
+    t.equal(
+      artifactsRoot,
+      realPhysicalTarget,
+      'artifactsRoot is canonicalized to the physical directory path',
+    );
+    await runGenerate({projectDirectory, writeOutput: async () => {}});
+    t.equal(
+      existsSync(
+        path.join(projectDirectory, '.lagrange', 'deployment', 'manifest.json'),
+      ),
+      true,
+      'runGenerate emits deployment records from the canonicalized project directory',
+    );
+  } finally {
+    await rm(linkHolder, {recursive: true, force: true});
+    await rm(physicalTarget, {recursive: true, force: true});
+  }
   t.end();
 });

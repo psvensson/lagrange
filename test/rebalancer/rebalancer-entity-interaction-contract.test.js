@@ -35,6 +35,7 @@ import {
   hasObservedCompletedReplicaOperation,
 } from '../../src/rebalancer/replica-operation-observed-completion.js';
 import {
+  buildMockPolicyAuthorityWitness,
   createMockCache,
   createTestCoordinator,
 } from './test-helpers.js';
@@ -275,7 +276,12 @@ test('non-partition remove safety never substitutes cache projection for owner r
       'node-a',
     );
     safety.repository.controlPlaneSystemTableGateway.readAuthoritativeRows =
-      async () => ({success: true, rows: [authoritativeRow]});
+      async () => ({
+        success: true,
+        rows: [authoritativeRow],
+        rowSetComplete: true,
+        readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
+      });
     const available = await safety.getEntityReplicaRowsForSafety(identity);
     t.same(available, {available: true, rows: [authoritativeRow]},
       'a successful owner read is the complete safety evidence');

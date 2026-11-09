@@ -5,7 +5,12 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {ReplicaOperationMessageType, ReplicaOperationResponseStatus} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
-import {createMockCache, createTestCoordinator} from './test-helpers.js';
+import {
+  buildMockPolicyAuthorityWitness,
+  createMockCache,
+  createMockPolicyService,
+  createTestCoordinator,
+} from './test-helpers.js';
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 
 const FLOOR_NOW_MS = 1000;
@@ -127,16 +132,21 @@ async function createCommittedFloorHarness(options = {}) {
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
     },
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-    },
+    }),
   });
   const owner = coordinator.workflowOwner;
   state.effects = [];
   const gateway = coordinator.controlPlaneSystemTableGateway;
   const readRows = gateway.readAuthoritativeRows.bind(gateway);
   gateway.readAuthoritativeRows = (tableName, ...args) => tableName === TABLES.SERVICES ?
-    Promise.resolve({success: true, rows: services}) : readRows(tableName, ...args);
+    Promise.resolve({
+      success: true,
+      rows: services,
+      rowSetComplete: true,
+      readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
+    }) : readRows(tableName, ...args);
   owner.timeSource = {now: () => state.nowMs};
   const operation = await coordinator.createOperation({
     type: options.replace ? OperationType.REPLACE : OperationType.REMOVE,

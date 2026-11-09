@@ -12,14 +12,10 @@ export {
 } from './entrypoint-runtime-join-decision.js';
 
 export {
-  createAdminAPIWithLiveQuery,
   createReadinessStateWithDiagnostics,
-  createServiceDiagnosticsProvider,
-  createSqlCallbackWasmExecutor,
   createSqlRuntimeComposition,
   hydrateBootstrapApiRuntime,
   isEarlyAdminSqlEngineEnabled,
-  resolvePartitionServiceByPartitionId,
   resolveSystemCacheHandles,
   reportStartupRuntimeHandoff,
   startAdminRuntimeComposition,

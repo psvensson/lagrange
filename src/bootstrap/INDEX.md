@@ -90,7 +90,7 @@ documentClass: generated
 - [replica-operation-message-group-membership-schema-constants.js](replica-operation-message-group-membership-schema-constants.js) - No leading comment; first export: REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS. (importers: few)
 - [replication-target-authority.js](replication-target-authority.js) - The desired replication factor for one partition, decoded from that partition's PERSISTED policy row and from... (importers: hub)
 - [retryable-join-resume-policy.js](retryable-join-resume-policy.js) - No leading comment; first export: isLimitedResumeBootstrapNotReadyFailure. (importers: few)
-- [seed-foundation-rows.js](seed-foundation-rows.js) - The registration producer owns the original foundation row identities. (importers: few)
+- [seed-foundation-rows.js](seed-foundation-rows.js) - The registration producer owns the original foundation row identities. (importers: many)
 - [seed-original-allocation-declaration.js](seed-original-allocation-declaration.js) - The seed catalog remains the producer of its original allocation. (importers: many)
 - [seed-original-allocation-startup.js](seed-original-allocation-startup.js) - Original seed startup is an interaction of the existing bootstrap, membership, directory-custody and... (importers: few)
 - [seed-original-registration.js](seed-original-registration.js) - Original publication is a bootstrap interaction: row owners construct the birth, preparation consumes its durable... (importers: few)

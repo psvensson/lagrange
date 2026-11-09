@@ -11,6 +11,7 @@ import {
 } from './logging/logs-persistence-startup.js';
 import {LogsTableService} from './logging/logs-table-service.js';
 import {submitLocalNodeDrainIntent} from './node/local-node-drain.js';
+import {NodeService} from './node/node-service.js';
 import {
   ENTRYPOINT_DEFAULT,
   ENTRYPOINT_LOG_MSG,
@@ -279,6 +280,7 @@ async function timeBoxBestEffortShutdownStep(logger, signal, step, timeoutMs, ru
 
 const LOCAL_STR_EMBEDDED = 'embedded';
 const LOCAL_STR_CLOSEAPPLICATIONDATABASES = 'closeApplicationDatabases';
+const SHUTDOWN_STEP_NODE_SERVICE = 'nodeService.shutdown';
 
 function createRuntimeShutdown(options) {
   let shutdownPromise = null;
@@ -356,6 +358,12 @@ function createRuntimeShutdown(options) {
             adminAPI: options.adminAPI,
             liveQueryWiring: options.liveQueryWiring,
           }),
+      );
+      await timeShutdownStep(
+        options.logger,
+        signal,
+        SHUTDOWN_STEP_NODE_SERVICE,
+        () => NodeService.getInstance().shutdown(),
       );
       options.logger.info(LOCAL_STR_SHUTDOWN_STEP, {
         signal,

@@ -22,6 +22,13 @@ export async function registerReplaceReplicaWorkflowTailTests({
   TEST_VISIBILITY_OBSERVATION_STATE_PRESENT,
   TEST_AUTHORITATIVE_OPERATION_READ_DEFERRED,
 }) {
+  const buildActiveNodes = (nodeIds) =>
+    nodeIds.map((nodeId) => ({
+      node_id: nodeId,
+      status: 'active',
+      connection_state: 'ready',
+      ready_lease_expires_at: Date.now() + 60_000,
+    }));
   await t.test(
     'ADD create ALREADY_EXISTS re-arms observed progress instead of ' +
       'redispatching duplicate create work',
@@ -198,6 +205,11 @@ export async function registerReplaceReplicaWorkflowTailTests({
           return handle;
         },
         clearTimeoutFn() {},
+        cacheData: {
+          nodes: buildActiveNodes([
+            'seed-node', 'node-1', 'node-2', 'node-3', 'node-4',
+          ]),
+        },
       });
 
       const basePersistOperationUpdate =
@@ -319,6 +331,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         nodeId: 'seed-node',
         enableTimeouts: false,
         messageRouter,
+        cacheData: {nodes: buildActiveNodes(['seed-node', 'node-2'])},
         sqlQueryResults: {
           'FROM services WHERE service_id = ?': {
             success: true,
@@ -402,6 +415,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         nodeId: 'seed-node',
         enableTimeouts: false,
         messageRouter,
+        cacheData: {nodes: buildActiveNodes(['seed-node', 'node-2'])},
         sqlQueryResults: {
           'FROM services WHERE service_id = ?': {
             success: true,
@@ -459,6 +473,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         nodeId: 'seed-node',
         enableTimeouts: false,
         messageRouter,
+        cacheData: {nodes: buildActiveNodes(['seed-node', 'node-2'])},
         sqlQueryResults: {
           'FROM services WHERE service_id = ?': {
             success: true,
@@ -550,6 +565,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         nodeId: 'seed-node',
         enableTimeouts: false,
         messageRouter,
+        cacheData: {nodes: buildActiveNodes(['seed-node', 'node-2'])},
         sqlQueryResults: {
           'FROM services WHERE service_id = ?': {
             success: true,
@@ -736,6 +752,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         nodeId: 'seed-node',
         enableTimeouts: false,
         messageRouter,
+        cacheData: {nodes: buildActiveNodes(['seed-node', 'node-2'])},
         sqlQueryResults: {
           'FROM services WHERE service_id = ?': {
             success: true,

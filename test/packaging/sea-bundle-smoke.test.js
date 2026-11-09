@@ -5,6 +5,7 @@ import {Worker} from 'worker_threads';
 import os from 'os';
 import fs from 'fs';
 import {test} from '../../src/test-helpers/tap.js';
+import {isolatedCensusNodeOptions} from '../test-helpers/census-pre-kill-flush.js';
 
 function runEntrypoint(entryPath, opts = {}) {
   const {args = [], env = {}, timeoutMs = 15000} = opts;
@@ -78,7 +79,9 @@ function runSpawnedBundle(args, env,
   {timeoutMs = 15000, bundle = mainBundle} = {}) {
   return new Promise((resolve, reject) => {
     const childEnv = {...process.env, ...env};
-    delete childEnv.NODE_OPTIONS;
+    const nodeOptions = isolatedCensusNodeOptions(process.env);
+    if (nodeOptions) childEnv.NODE_OPTIONS = nodeOptions;
+    else delete childEnv.NODE_OPTIONS;
     const child = spawn(process.execPath, [bundle, ...args], {
       cwd: projectRoot,
       env: childEnv,

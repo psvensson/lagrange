@@ -29,8 +29,12 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {TABLES} from '../../src/constants/index.js';
 import {createMockSystemCache} from './sql-query-engine-test-support.js';
-
-import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {
+  createTransactionPersistenceGateway,
+} from '../test-helpers/transaction-persistence-gateway.js';
+import {
+  createCommittedServeEligibilityOwner,
+} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
@@ -347,7 +351,10 @@ function setupJ2Cluster() {
   const cache = createMockSystemCache(tables, partitions);
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
-    systemCache: cache, messageRouter});
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
+    systemCache: cache,
+    messageRouter,
+  });
 
   return {
     engine,
@@ -714,6 +721,7 @@ test('J2 Journey: partition split, merge, and engine restart transitions', async
   const updatedRouter = createPartitionMessageRouter(partitionDbs);
   const restartedEngine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: updatedCache,
     messageRouter: updatedRouter,
   });
@@ -772,6 +780,7 @@ test('J2 Journey: partition split, merge, and engine restart transitions', async
   const postMergeRouter = createPartitionMessageRouter(partitionDbs);
   const postMergeEngine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: postMergeCache,
     messageRouter: postMergeRouter,
   });

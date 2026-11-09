@@ -47,7 +47,9 @@ import {
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
 import {
+  createMockControlPlaneReadinessService,
   createMockControlPlaneSystemTableGateway,
+  createMockPolicyService,
   withFixtureReplaceWitness,
 } from './test-helpers.js';
 
@@ -239,11 +241,11 @@ function createTestCoordinator(options = {}) {
         return true;
       },
     },
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       async getPolicyForPartition() {
         return {targetReplicaCount: 3, minReplicaCount: 1};
       },
-    },
+    }),
     messageRouter: {
       async deliver() {
         return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
@@ -262,11 +264,23 @@ function createTestCoordinator(options = {}) {
         return {allowed: true, decision: 'allow'};
       },
     },
-    controlPlaneReadinessService: {
-      getNodeReadinessSync() {
-        return null;
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      readNodeRows: () => {
+        const now = Date.now();
+        const nodeIds = new Set([
+          TEST_NODE_ID,
+          TEST_PRIORITY_RECOVERY_SOURCE_NODE_ID,
+          operation?.sourceNodeId,
+          operation?.targetNodeId,
+        ].filter(Boolean));
+        return [...nodeIds].map((nodeId) => ({
+          node_id: nodeId,
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: now + 60000,
+        }));
       },
-    },
+    }),
     operationWorkflowCoordinator: workflowCoordinator,
     executorOutcomeEmitter: emitter,
     setTimeoutFn,

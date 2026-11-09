@@ -48,6 +48,17 @@ import {
 import {CONFIG_KEY} from '../../src/config/config-key-constants.js';
 import {CONFIG_DEFINITIONS} from '../../src/config/config-definitions.js';
 import {
+  DEFAULT_TABLE_POLICY,
+} from '../../src/policy/policy-constants.js';
+
+const DEFAULT_POLICY_SERVICE = Object.freeze({
+  getPolicyForPartition: async () => ({
+    ...DEFAULT_TABLE_POLICY,
+    targetReplicaCount: 3,
+    minReplicaCount: 2,
+  }),
+});
+import {
   createManagedSplitMetricsProvider,
 } from '../../src/partition/managed-split-metrics-provider.js';
 
@@ -218,6 +229,10 @@ async (t) => {
   t.notOk(manager.evaluateSplitCriteria('p',
     {sizeBytes: 1024, queriesPerMinute: null}, {splitTrafficThreshold: 1}),
   'no traffic signal never splits on traffic');
+  t.notOk(manager.evaluateSplitCriteria('logs-p1',
+    {sizeBytes: 10 * 1024 * 1024 * 1024, queriesPerMinute: 100000},
+    {splitStorageThreshold: 1, splitTrafficThreshold: 1}),
+  'system table partitions (e.g. logs-p1) never split on automatic criteria');
   manager.shutdown();
 });
 
@@ -378,6 +393,7 @@ test('W10 (B1): a split table whose children then carry 95 + 95 QPM merges ' +
 function buildAgeManager(rows, executed) {
   return new PartitionSplitMergeManager({
     pressureGovernor: {configure() {}, evaluate: () => ({action: 'allow'})},
+    tablePolicyService: DEFAULT_POLICY_SERVICE,
     now: () => AGE_NOW_MS,
     listPartitions: () => rows,
     getPartitionMetrics: () => ({sizeBytes: 64, queriesPerMinute: 0}),
@@ -517,6 +533,7 @@ function buildBlockedTableRow(retry) {
 function buildProposalManager(proposal, executed) {
   return new PartitionSplitMergeManager({
     pressureGovernor: {configure() {}, evaluate: () => ({action: 'allow'})},
+    tablePolicyService: DEFAULT_POLICY_SERVICE,
     listPartitions: () => [{
       partition_id: SOURCE_ID,
       table_id: 'tbl-x',
@@ -696,6 +713,7 @@ test('R-b: an outstanding split proposal this manager originated on the ' +
   const executed = [];
   const manager = new PartitionSplitMergeManager({
     pressureGovernor: {configure() {}, evaluate: () => ({action: 'allow'})},
+    tablePolicyService: DEFAULT_POLICY_SERVICE,
     listPartitions: () => [{
       partition_id: SOURCE_ID,
       table_id: 'tbl-x',
@@ -728,6 +746,7 @@ test('R-b: an outstanding split proposal this manager originated on the ' +
   const explicitExecuted = [];
   const explicit = new PartitionSplitMergeManager({
     pressureGovernor: {configure() {}, evaluate: () => ({action: 'allow'})},
+    tablePolicyService: DEFAULT_POLICY_SERVICE,
     listPartitions: () => [{
       partition_id: SOURCE_ID, table_id: 'tbl-x', partition_key_start: null,
       partition_key_end: null, size_bytes: 4096, created_at: 1,

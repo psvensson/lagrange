@@ -2,6 +2,7 @@ import {readLowerStateField, readStateField} from '../utils/state-field-read.js'
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
 import {readWiredCollaborator} from './control-plane-readiness-collaborators.js';
 import {
+  CONTROL_PLANE_READ_PURPOSE,
   CONTROL_PLANE_READINESS_COLLABORATOR as COLLABORATOR,
   CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED as UNWIRED,
 } from './control-plane-readiness-constants.js';
@@ -624,7 +625,8 @@ async function readNodeRow(service, nodeId, options = {}) {
     // The single-row owner read's unavailability outcome is its typed
     // throw (NodesOwner.getNode), which the caller receives: the dispatch
     // path defers on it. Its answer is a row or null, never a failure.
-    const result = await nodesOwner.getNode(nodeId, options);
+    const {purpose = CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL} = options;
+    const result = await nodesOwner.getNode(nodeId, {...options, purpose});
     return unwrapRowReadResult(result);
   }
   const result = await nodesOwner.getNodeFromCache(nodeId, options);

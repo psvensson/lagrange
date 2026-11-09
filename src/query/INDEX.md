@@ -102,7 +102,6 @@ documentClass: generated
 - [sql-query-engine-partition-routing-readiness.js](sql-query-engine-partition-routing-readiness.js) - The outstanding durable split proposals: one per tables row whose transition is a retryable split (BLOCKED /... (importers: few)
 - [sql-query-engine-provision-target-methods.js](sql-query-engine-provision-target-methods.js) - Log a provisioning-target wait failure that waitForCondition did not already report as a spent bound (e.g. a budget... (importers: few)
 - [sql-query-engine-provisioning-admission-methods.js](sql-query-engine-provisioning-admission-methods.js) - Return true when one create-operation error was denied by admission. (importers: one)
-- [sql-query-engine-provisioning-deadline-methods.js](sql-query-engine-provisioning-deadline-methods.js) - Owns the one parent-deadline re-wait allowed after initial provisioning admission encounters a whole-cluster... (importers: one)
 - [sql-query-engine-provisioning-methods.js](sql-query-engine-provisioning-methods.js) - Resolve active node IDs eligible for initial replica provisioning. (importers: few)
 - [sql-query-engine-request-dispatch.js](sql-query-engine-request-dispatch.js) - Canonical SqlRequest execution-mode dispatch. (importers: few)
 - [sql-query-engine-routing-metadata-methods.js](sql-query-engine-routing-metadata-methods.js) - Check whether one partition service row is available in local cache. (importers: few)

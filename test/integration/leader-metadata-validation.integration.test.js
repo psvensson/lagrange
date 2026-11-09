@@ -35,6 +35,7 @@ import {
   initializeTestEnvironment,
   cleanupTestEnvironment,
   getUniquePort,
+  gracefulShutdown,
   TEST_CONFIG,
 } from './helpers/cluster-test-helpers.js';
 
@@ -234,60 +235,209 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
     }
   });
 
-  t.beforeEach(() => {
-    initializeTestEnvironment();
+  initializeTestEnvironment();
+
+  const seedNodeId = '550e8400-e29b-41d4-a716-446655440101';
+  const seedWsPort = getUniquePort();
+  const seedNodeAddress = `ws://localhost:${seedWsPort}`;
+
+  const bootstrapService = await createVirginSeedBootstrapService({
+    nodeId: seedNodeId,
+    nodeAddress: seedNodeAddress,
+    wsPort: seedWsPort,
+    config: TEST_CONFIG.bootstrap,
   });
 
-  t.afterEach(async () => {
-    await cleanupTestEnvironment();
-  });
+  let bootstrapResult = null;
 
-  await t.test('join fails with LEADER_METADATA_INCOMPLETE when partition leaders missing',
-    async (t) => {
-      // =========================================================================
-      // PHASE 1: Bootstrap seed node with system tables
-      // =========================================================================
-      const seedNodeId = '550e8400-e29b-41d4-a716-446655440101';
-      const seedWsPort = getUniquePort();
+  try {
+    bootstrapResult = await bootstrapService.bootstrap();
+    t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
 
-      const bootstrapService = await createVirginSeedBootstrapService({
-        nodeId: seedNodeId,
-        nodeAddress: `ws://localhost:${seedWsPort}`,
-        wsPort: seedWsPort,
-        config: TEST_CONFIG.bootstrap,
+    // Wait for services-p1 leader to ensure stable state
+    const servicesLeader = await waitForPartitionLeader(
+      bootstrapResult,
+      'services-p1',
+      scaleByMachineFactor(3000),
+    );
+    t.ok(servicesLeader, 'services partition should elect a leader');
+
+    // Ensure CDC pipeline is fully ready before running the join subtests.
+    await waitForCdcPipelineReadiness(bootstrapResult);
+
+    const realCache = NodeService.getInstance().getSystemTableCache();
+
+    await t.test('join fails with LEADER_METADATA_INCOMPLETE when partition leaders missing',
+      async (t) => {
+        let seedApi;
+        try {
+          // =====================================================================
+          // PHASE 1: Create BootstrapAPI with incomplete leader metadata cache
+          // =====================================================================
+          // Create mock cache that removes leaders for specific partitions.
+          // The authoritative owner view must be degraded the same way: the
+          // join gate confirms cache-observed leader gaps against the owner
+          // before failing the join.
+          const maskOptions = {
+            removePartitionLeaders: ['nodes-p1', 'tables-p1'],
+            removeMessageGroupLeaders: [],
+          };
+          const incompleteCache = createIncompleteLeaderCache(
+            realCache,
+            maskOptions,
+          );
+
+          seedApi = new BootstrapAPI({
+            seedNodeId,
+            seedNodeAddress,
+            seedNodeWsAddress: seedNodeAddress,
+            messageGroupServices: bootstrapResult.messageGroupServices,
+            partitionServices: bootstrapResult.partitionServices,
+            systemTableCache: incompleteCache,
+            messageRouter: bootstrapResult.messageRouter,
+            epochManager: bootstrapResult.epochManager,
+            bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+            runtimeOwner: bootstrapService.runtimeDependencyOwner,
+            assertOriginalSeedPublicAdmission: () =>
+              bootstrapService.assertOriginalSeedPublicAdmission(),
+            authoritativeControlPlaneView: createIncompleteAuthoritativeView(
+              realCache,
+              maskOptions,
+            ),
+          });
+
+          await seedApi.initialize(0, {listen: false});
+          const httpPost = createInProcHttpPost(seedApi);
+
+          // =====================================================================
+          // PHASE 2: Attempt to join - should fail with LEADER_METADATA_INCOMPLETE
+          // =====================================================================
+          const joiningNodeId = '550e8400-e29b-41d4-a716-446655440102';
+
+          const response = await httpPost('http://localhost/bootstrap', {
+            nodeId: joiningNodeId,
+            nodeAddress: `ws://localhost:${getUniquePort()}`,
+          });
+
+          // Verify the response indicates failure
+          t.equal(response.statusCode, 503, 'should return 503 Service Unavailable');
+
+          const body = response.json();
+          t.equal(body.success, false, 'response should indicate failure');
+          t.equal(body.code, BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+            'error code should be LEADER_METADATA_INCOMPLETE');
+
+          // =====================================================================
+          // PHASE 3: Verify error contains missing partition leader details
+          // Validates: Requirement 2.2
+          // =====================================================================
+          t.ok(Array.isArray(body.missingPartitionLeaders),
+            'response should contain missingPartitionLeaders array');
+          t.ok(body.missingPartitionLeaders.includes('nodes-p1'),
+            'missingPartitionLeaders should include nodes-p1');
+          t.ok(body.missingPartitionLeaders.includes('tables-p1'),
+            'missingPartitionLeaders should include tables-p1');
+
+          t.comment(`Missing partition leaders: ${JSON.stringify(body.missingPartitionLeaders)}`);
+        } finally {
+          if (seedApi) {
+            await seedApi.shutdown();
+          }
+        }
       });
 
-      let bootstrapResult;
+    await t.test('join succeeds when only message group leaders are missing',
+      async (t) => {
+        let seedApi;
+        try {
+          // =====================================================================
+          // PHASE 1: Get message group IDs from the real cache
+          // =====================================================================
+          const messageGroups = realCache.getAll(TABLES.MESSAGE_GROUPS) || [];
+          const messageGroupIds = messageGroups.map((mg) => mg[COLUMN.GROUP_ID]).filter(Boolean);
+
+          t.ok(messageGroupIds.length > 0, 'should have at least one message group');
+          t.comment(`Message group IDs: ${JSON.stringify(messageGroupIds)}`);
+
+          // =====================================================================
+          // PHASE 2: Create BootstrapAPI with incomplete message group leaders
+          // =====================================================================
+          const incompleteCache = createIncompleteLeaderCache(realCache, {
+            removePartitionLeaders: [],
+            removeMessageGroupLeaders: messageGroupIds,
+          });
+
+          seedApi = new BootstrapAPI({
+            seedNodeId,
+            seedNodeAddress,
+            seedNodeWsAddress: seedNodeAddress,
+            messageGroupServices: bootstrapResult.messageGroupServices,
+            partitionServices: bootstrapResult.partitionServices,
+            systemTableCache: incompleteCache,
+            messageRouter: bootstrapResult.messageRouter,
+            epochManager: bootstrapResult.epochManager,
+            bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+            runtimeOwner: bootstrapService.runtimeDependencyOwner,
+            assertOriginalSeedPublicAdmission: () =>
+              bootstrapService.assertOriginalSeedPublicAdmission(),
+          });
+
+          await seedApi.initialize(0, {listen: false});
+          const httpPost = createInProcHttpPost(seedApi);
+
+          // =====================================================================
+          // PHASE 3: Attempt to join - message group leaders are non-blocking,
+          // so the join should succeed with non-blocking diagnostics.
+          // =====================================================================
+          const joiningNodeId = '550e8400-e29b-41d4-a716-446655440104';
+
+          const response = await httpPost('http://localhost/bootstrap', {
+            nodeId: joiningNodeId,
+            nodeAddress: `ws://localhost:${getUniquePort()}`,
+          });
+
+          // Message group leaders are non-blocking per
+          // getBlockingLeaderStatusForReadiness — join succeeds.
+          t.equal(response.statusCode, 200,
+            'should return 200 because message group leaders are non-blocking');
+
+          const body = response.json();
+          t.equal(body.success, true,
+            'response should indicate success');
+
+          // =====================================================================
+          // PHASE 4: Verify the join succeeded despite missing message group
+          // leaders (non-blocking).
+          // =====================================================================
+          t.ok(body.seedNodeId,
+            'response should contain seedNodeId');
+          t.ok(body.messageGroupAssignment,
+            'response should contain messageGroupAssignment');
+
+          t.comment('Message group leaders are non-blocking; join succeeded');
+        } finally {
+          if (seedApi) {
+            await seedApi.shutdown();
+          }
+        }
+      });
+
+    await t.test('join fails with both partition and message group leaders missing', async (t) => {
       let seedApi;
-
       try {
-        bootstrapResult = await bootstrapService.bootstrap();
-        t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
+        // =======================================================================
+        // PHASE 1: Get message group IDs from the real cache
+        // =======================================================================
+        const messageGroups = realCache.getAll(TABLES.MESSAGE_GROUPS) || [];
+        const messageGroupIds = messageGroups.map((mg) => mg[COLUMN.GROUP_ID]).filter(Boolean);
 
-        // Wait for services-p1 leader to ensure stable state
-        const servicesLeader = await waitForPartitionLeader(
-          bootstrapResult,
-          'services-p1',
-          scaleByMachineFactor(3000),
-        );
-        t.ok(servicesLeader, 'services partition should elect a leader');
-
-        // Ensure CDC pipeline is fully ready before introducing
-        // incomplete leader metadata into the join path.
-        await waitForCdcPipelineReadiness(bootstrapResult);
-
-        // =========================================================================
-        // PHASE 2: Create BootstrapAPI with incomplete leader metadata cache
-        // =========================================================================
-        const realCache = NodeService.getInstance().getSystemTableCache();
-
-        // Create mock cache that removes leaders for specific partitions.
-        // The authoritative owner view must be degraded the same way: the
-        // join gate confirms cache-observed leader gaps against the owner
-        // before failing the join.
+        // =======================================================================
+        // PHASE 2: Create BootstrapAPI with both partition and message group
+        //          leaders missing
+        // =======================================================================
         const maskOptions = {
-          removePartitionLeaders: ['nodes-p1', 'tables-p1'],
-          removeMessageGroupLeaders: [],
+          removePartitionLeaders: ['partitions-p1', 'services-p1'],
+          removeMessageGroupLeaders: messageGroupIds,
         };
         const incompleteCache = createIncompleteLeaderCache(
           realCache,
@@ -296,8 +446,8 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
 
         seedApi = new BootstrapAPI({
           seedNodeId,
-          seedNodeAddress: `ws://localhost:${seedWsPort}`,
-          seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+          seedNodeAddress,
+          seedNodeWsAddress: seedNodeAddress,
           messageGroupServices: bootstrapResult.messageGroupServices,
           partitionServices: bootstrapResult.partitionServices,
           systemTableCache: incompleteCache,
@@ -316,10 +466,10 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
         await seedApi.initialize(0, {listen: false});
         const httpPost = createInProcHttpPost(seedApi);
 
-        // =========================================================================
+        // =======================================================================
         // PHASE 3: Attempt to join - should fail with LEADER_METADATA_INCOMPLETE
-        // =========================================================================
-        const joiningNodeId = '550e8400-e29b-41d4-a716-446655440102';
+        // =======================================================================
+        const joiningNodeId = '550e8400-e29b-41d4-a716-446655440106';
 
         const response = await httpPost('http://localhost/bootstrap', {
           nodeId: joiningNodeId,
@@ -334,93 +484,58 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
         t.equal(body.code, BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
           'error code should be LEADER_METADATA_INCOMPLETE');
 
-        // =========================================================================
-        // PHASE 4: Verify error contains missing partition leader details
-        // Validates: Requirement 2.2
-        // =========================================================================
+        // =======================================================================
+        // PHASE 4: Verify error contains both missing partition and message group
+        //          leader details
+        // Validates: Requirements 2.2, 2.3
+        // =======================================================================
         t.ok(Array.isArray(body.missingPartitionLeaders),
           'response should contain missingPartitionLeaders array');
-        t.ok(body.missingPartitionLeaders.includes('nodes-p1'),
-          'missingPartitionLeaders should include nodes-p1');
-        t.ok(body.missingPartitionLeaders.includes('tables-p1'),
-          'missingPartitionLeaders should include tables-p1');
+        t.ok(body.missingPartitionLeaders.includes('partitions-p1'),
+          'missingPartitionLeaders should include partitions-p1');
+        t.ok(body.missingPartitionLeaders.includes('services-p1'),
+          'missingPartitionLeaders should include services-p1');
+
+        t.ok(Array.isArray(body.missingMessageGroupLeaders),
+          'response should contain missingMessageGroupLeaders array');
+        t.ok(body.missingMessageGroupLeaders.length > 0,
+          'missingMessageGroupLeaders should not be empty');
 
         t.comment(`Missing partition leaders: ${JSON.stringify(body.missingPartitionLeaders)}`);
+        t.comment('Missing message group leaders: ' +
+          `${JSON.stringify(body.missingMessageGroupLeaders)}`);
       } finally {
-        // =========================================================================
-        // CLEANUP
-        // =========================================================================
         if (seedApi) {
-          await seedApi.shutdown().catch(() => {});
-        }
-        if (bootstrapService?.shutdown) {
-          await bootstrapService.shutdown().catch(() => {});
-        }
-        if (bootstrapResult?.messageRouter) {
-          await bootstrapResult.messageRouter.shutdown().catch(() => {});
+          await seedApi.shutdown();
         }
       }
     });
 
-  await t.test('join succeeds when only message group leaders are missing',
-    async (t) => {
-      // =========================================================================
-      // PHASE 1: Bootstrap seed node with system tables
-      // =========================================================================
-      const seedNodeId = '550e8400-e29b-41d4-a716-446655440103';
-      const seedWsPort = getUniquePort();
-
-      const bootstrapService = await createVirginSeedBootstrapService({
-        nodeId: seedNodeId,
-        nodeAddress: `ws://localhost:${seedWsPort}`,
-        wsPort: seedWsPort,
-        config: TEST_CONFIG.bootstrap,
-      });
-
-      let bootstrapResult;
+    /**
+     * Test: Successful join with complete metadata.
+     *
+     * This test verifies that when all leader metadata is complete,
+     * the join proceeds successfully and the joining node receives
+     * accurate system state.
+     *
+     * Validates: Requirements 2.4, 2.5
+     * - 2.4: WHEN all leader metadata is complete THEN the join SHALL proceed successfully
+     * - 2.5: THE integration tests SHALL complete within 30 seconds
+     */
+    await t.test('join succeeds with complete leader metadata', async (t) => {
       let seedApi;
-
       try {
-        bootstrapResult = await bootstrapService.bootstrap();
-        t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
-
-        // Wait for services-p1 leader to ensure stable state
-        const servicesLeader = await waitForPartitionLeader(
-          bootstrapResult,
-          'services-p1',
-          scaleByMachineFactor(3000),
-        );
-        t.ok(servicesLeader, 'services partition should elect a leader');
-
-        // Ensure CDC pipeline is fully ready before introducing incomplete
-        // message-group leader metadata into the join path.
-        await waitForCdcPipelineReadiness(bootstrapResult);
-
-        // =========================================================================
-        // PHASE 2: Get message group IDs from the real cache
-        // =========================================================================
-        const realCache = NodeService.getInstance().getSystemTableCache();
-        const messageGroups = realCache.getAll(TABLES.MESSAGE_GROUPS) || [];
-        const messageGroupIds = messageGroups.map((mg) => mg[COLUMN.GROUP_ID]).filter(Boolean);
-
-        t.ok(messageGroupIds.length > 0, 'should have at least one message group');
-        t.comment(`Message group IDs: ${JSON.stringify(messageGroupIds)}`);
-
-        // =========================================================================
-        // PHASE 3: Create BootstrapAPI with incomplete message group leader metadata
-        // =========================================================================
-        const incompleteCache = createIncompleteLeaderCache(realCache, {
-          removePartitionLeaders: [],
-          removeMessageGroupLeaders: messageGroupIds,
-        });
-
+        // =======================================================================
+        // PHASE 1: Create BootstrapAPI with complete leader metadata (real cache)
+        // =======================================================================
+        // Use the real cache - no manipulation, all leaders should be present
         seedApi = new BootstrapAPI({
           seedNodeId,
-          seedNodeAddress: `ws://localhost:${seedWsPort}`,
-          seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+          seedNodeAddress,
+          seedNodeWsAddress: seedNodeAddress,
           messageGroupServices: bootstrapResult.messageGroupServices,
           partitionServices: bootstrapResult.partitionServices,
-          systemTableCache: incompleteCache,
+          systemTableCache: realCache,
           messageRouter: bootstrapResult.messageRouter,
           epochManager: bootstrapResult.epochManager,
           bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
@@ -432,356 +547,112 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
         await seedApi.initialize(0, {listen: false});
         const httpPost = createInProcHttpPost(seedApi);
 
-        // =========================================================================
-        // PHASE 4: Attempt to join - message group leaders are non-blocking,
-        // so the join should succeed with non-blocking diagnostics.
-        // =========================================================================
-        const joiningNodeId = '550e8400-e29b-41d4-a716-446655440104';
+        // =======================================================================
+        // PHASE 2: Attempt to join - should succeed with complete metadata
+        // Validates: Requirement 2.4
+        // =======================================================================
+        const joiningNodeId = '550e8400-e29b-41d4-a716-446655440108';
+        const joiningNodeAddress = `ws://localhost:${getUniquePort()}`;
 
         const response = await httpPost('http://localhost/bootstrap', {
           nodeId: joiningNodeId,
-          nodeAddress: `ws://localhost:${getUniquePort()}`,
+          nodeAddress: joiningNodeAddress,
         });
 
-        // Message group leaders are non-blocking per
-        // getBlockingLeaderStatusForReadiness — join succeeds.
-        t.equal(response.statusCode, 200,
-          'should return 200 because message group leaders are non-blocking');
+        // Verify the response indicates success
+        t.equal(response.statusCode, 200, 'should return 200 OK');
 
         const body = response.json();
-        t.equal(body.success, true,
-          'response should indicate success');
+        t.equal(body.success, true, 'join should succeed with complete metadata');
+        t.equal(body.seedNodeId, seedNodeId, 'response should include seed node ID');
+        t.ok(body.seedNodeWsAddress, 'response should include seed node WebSocket address');
 
-        // =========================================================================
-        // PHASE 5: Verify the join succeeded despite missing message group
-        // leaders (non-blocking).
-        // =========================================================================
-        t.ok(body.seedNodeId,
-          'response should contain seedNodeId');
-        t.ok(body.messageGroupAssignment,
-          'response should contain messageGroupAssignment');
+        // =======================================================================
+        // PHASE 3: Verify joining node receives accurate system state
+        // Validates: Requirement 2.4
+        // =======================================================================
 
-        t.comment('Message group leaders are non-blocking; join succeeded');
+        // Verify systemTableSnapshots is present and contains required tables
+        t.ok(body.systemTableSnapshots, 'response should include systemTableSnapshots');
+        t.ok(Array.isArray(body.systemTableSnapshots[TABLES.NODES]),
+          'systemTableSnapshots should include nodes table');
+        t.ok(Array.isArray(body.systemTableSnapshots[TABLES.SERVICES]),
+          'systemTableSnapshots should include services table');
+        t.ok(Array.isArray(body.systemTableSnapshots[TABLES.PARTITIONS]),
+          'systemTableSnapshots should include partitions table');
+        t.ok(Array.isArray(body.systemTableSnapshots[TABLES.MESSAGE_GROUPS]),
+          'systemTableSnapshots should include message_groups table');
+        t.ok(Array.isArray(body.systemTableSnapshots[TABLES.TABLES]),
+          'systemTableSnapshots should include tables table');
+
+        // Verify canonical leader metadata: leadership lives on the owner
+        // record (partitions.leader_node_id); services.raft_role is advisory
+        // follower metadata. Each led partition must expose an ACTIVE,
+        // addressed partition service on its leader node.
+        const servicesSnapshot = body.systemTableSnapshots[TABLES.SERVICES];
+        const partitionsSnapshot = body.systemTableSnapshots[TABLES.PARTITIONS];
+        const ledPartitions = partitionsSnapshot.filter((partition) =>
+          typeof partition[COLUMN.LEADER_NODE_ID] === 'string' &&
+          partition[COLUMN.LEADER_NODE_ID].length > 0,
+        );
+        t.ok(ledPartitions.length > 0,
+          'partitions snapshot should carry canonical leader_node_id owners');
+
+        const partitionsWithCanonicalLeaderService = ledPartitions.filter(
+          (partition) => servicesSnapshot.some((service) =>
+            service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
+            service[COLUMN.PARTITION_ID] === partition[COLUMN.PARTITION_ID] &&
+            service[COLUMN.NODE_ID] === partition[COLUMN.LEADER_NODE_ID] &&
+            service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
+            typeof service[COLUMN.ADDRESS] === 'string' &&
+            service[COLUMN.ADDRESS].length > 0,
+          ),
+        );
+        t.equal(
+          partitionsWithCanonicalLeaderService.length,
+          ledPartitions.length,
+          'every led partition should expose an active addressed service on ' +
+            'its canonical leader node',
+        );
+
+        // Verify message group assignment is present
+        t.ok(body.messageGroupAssignment, 'response should include messageGroupAssignment');
+        t.ok(body.messageGroupAssignment.strategy,
+          'messageGroupAssignment should include strategy');
+
+        // Verify ready nodes list is present and includes seed node
+        t.ok(Array.isArray(body.readyNodes), 'response should include readyNodes array');
+        t.ok(
+          body.readyNodes.every((nodeId) =>
+            typeof nodeId === 'string' && nodeId.length > 0,
+          ),
+          'readyNodes should contain only node ID strings when present',
+        );
+
+        // Verify cluster configuration is present
+        t.ok(body.clusterConfig, 'response should include clusterConfig');
+
+        // Verify timestamp is present and recent
+        t.ok(body.timestamp, 'response should include timestamp');
+        const timeDiff = Date.now() - body.timestamp;
+        t.ok(timeDiff < 5000, 'timestamp should be recent (within 5 seconds)');
+
+        t.comment(
+          `Join succeeded with ${ledPartitions.length} led partitions`,
+        );
+        t.comment(`Message group assignment strategy: ${body.messageGroupAssignment.strategy}`);
+        t.comment(`Ready nodes: ${JSON.stringify(body.readyNodes)}`);
       } finally {
-        // =========================================================================
-        // CLEANUP
-        // =========================================================================
         if (seedApi) {
-          await seedApi.shutdown().catch(() => {});
-        }
-        if (bootstrapService?.shutdown) {
-          await bootstrapService.shutdown().catch(() => {});
-        }
-        if (bootstrapResult?.messageRouter) {
-          await bootstrapResult.messageRouter.shutdown().catch(() => {});
+          await seedApi.shutdown();
         }
       }
     });
-
-  await t.test('join fails with both partition and message group leaders missing', async (t) => {
-    // =========================================================================
-    // PHASE 1: Bootstrap seed node with system tables
-    // =========================================================================
-    const seedNodeId = '550e8400-e29b-41d4-a716-446655440105';
-    const seedWsPort = getUniquePort();
-
-    const bootstrapService = await createVirginSeedBootstrapService({
-      nodeId: seedNodeId,
-      nodeAddress: `ws://localhost:${seedWsPort}`,
-      wsPort: seedWsPort,
-      config: TEST_CONFIG.bootstrap,
-    });
-
-    let bootstrapResult;
-    let seedApi;
-
-    try {
-      bootstrapResult = await bootstrapService.bootstrap();
-      t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
-
-      // Wait for services-p1 leader to ensure stable state
-      const servicesLeader = await waitForPartitionLeader(
-        bootstrapResult,
-        'services-p1',
-        scaleByMachineFactor(3000),
-      );
-      t.ok(servicesLeader, 'services partition should elect a leader');
-
-      // Ensure CDC pipeline is fully ready before reading message groups and
-      // introducing incomplete leader metadata into the join path.
-      await waitForCdcPipelineReadiness(bootstrapResult);
-
-      // =========================================================================
-      // PHASE 2: Get message group IDs from the real cache
-      // =========================================================================
-      const realCache = NodeService.getInstance().getSystemTableCache();
-      const messageGroups = realCache.getAll(TABLES.MESSAGE_GROUPS) || [];
-      const messageGroupIds = messageGroups.map((mg) => mg[COLUMN.GROUP_ID]).filter(Boolean);
-
-      // =========================================================================
-      // PHASE 3: Create BootstrapAPI with both partition and message group
-      //          leaders missing
-      // =========================================================================
-      const maskOptions = {
-        removePartitionLeaders: ['partitions-p1', 'services-p1'],
-        removeMessageGroupLeaders: messageGroupIds,
-      };
-      const incompleteCache = createIncompleteLeaderCache(
-        realCache,
-        maskOptions,
-      );
-
-      seedApi = new BootstrapAPI({
-        seedNodeId,
-        seedNodeAddress: `ws://localhost:${seedWsPort}`,
-        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
-        messageGroupServices: bootstrapResult.messageGroupServices,
-        partitionServices: bootstrapResult.partitionServices,
-        systemTableCache: incompleteCache,
-        messageRouter: bootstrapResult.messageRouter,
-        epochManager: bootstrapResult.epochManager,
-        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
-        runtimeOwner: bootstrapService.runtimeDependencyOwner,
-        assertOriginalSeedPublicAdmission: () =>
-          bootstrapService.assertOriginalSeedPublicAdmission(),
-        authoritativeControlPlaneView: createIncompleteAuthoritativeView(
-          realCache,
-          maskOptions,
-        ),
-      });
-
-      await seedApi.initialize(0, {listen: false});
-      const httpPost = createInProcHttpPost(seedApi);
-
-      // =========================================================================
-      // PHASE 4: Attempt to join - should fail with LEADER_METADATA_INCOMPLETE
-      // =========================================================================
-      const joiningNodeId = '550e8400-e29b-41d4-a716-446655440106';
-
-      const response = await httpPost('http://localhost/bootstrap', {
-        nodeId: joiningNodeId,
-        nodeAddress: `ws://localhost:${getUniquePort()}`,
-      });
-
-      // Verify the response indicates failure
-      t.equal(response.statusCode, 503, 'should return 503 Service Unavailable');
-
-      const body = response.json();
-      t.equal(body.success, false, 'response should indicate failure');
-      t.equal(body.code, BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
-        'error code should be LEADER_METADATA_INCOMPLETE');
-
-      // =========================================================================
-      // PHASE 5: Verify error contains both missing partition and message group
-      //          leader details
-      // Validates: Requirements 2.2, 2.3
-      // =========================================================================
-      t.ok(Array.isArray(body.missingPartitionLeaders),
-        'response should contain missingPartitionLeaders array');
-      t.ok(body.missingPartitionLeaders.includes('partitions-p1'),
-        'missingPartitionLeaders should include partitions-p1');
-      t.ok(body.missingPartitionLeaders.includes('services-p1'),
-        'missingPartitionLeaders should include services-p1');
-
-      t.ok(Array.isArray(body.missingMessageGroupLeaders),
-        'response should contain missingMessageGroupLeaders array');
-      t.ok(body.missingMessageGroupLeaders.length > 0,
-        'missingMessageGroupLeaders should not be empty');
-
-      t.comment(`Missing partition leaders: ${JSON.stringify(body.missingPartitionLeaders)}`);
-      t.comment('Missing message group leaders: ' +
-        `${JSON.stringify(body.missingMessageGroupLeaders)}`);
-    } finally {
-      // =========================================================================
-      // CLEANUP
-      // =========================================================================
-      if (seedApi) {
-        await seedApi.shutdown().catch(() => {});
-      }
-      if (bootstrapService?.shutdown) {
-        await bootstrapService.shutdown().catch(() => {});
-      }
-      if (bootstrapResult?.messageRouter) {
-        await bootstrapResult.messageRouter.shutdown().catch(() => {});
-      }
+  } finally {
+    await gracefulShutdown(bootstrapService, bootstrapResult, null);
+    if (bootstrapResult?.messageRouter) {
+      await bootstrapResult.messageRouter.shutdown();
     }
-  });
-
-  /**
-   * Test: Successful join with complete metadata.
-   *
-   * This test verifies that when all leader metadata is complete,
-   * the join proceeds successfully and the joining node receives
-   * accurate system state.
-   *
-   * Validates: Requirements 2.4, 2.5
-   * - 2.4: WHEN all leader metadata is complete THEN the join SHALL proceed successfully
-   * - 2.5: THE integration tests SHALL complete within 30 seconds
-   */
-  await t.test('join succeeds with complete leader metadata', async (t) => {
-    // =========================================================================
-    // PHASE 1: Bootstrap seed node with system tables
-    // =========================================================================
-    const seedNodeId = '550e8400-e29b-41d4-a716-446655440107';
-    const seedWsPort = getUniquePort();
-
-    const bootstrapService = await createVirginSeedBootstrapService({
-      nodeId: seedNodeId,
-      nodeAddress: `ws://localhost:${seedWsPort}`,
-      wsPort: seedWsPort,
-      config: TEST_CONFIG.bootstrap,
-    });
-
-    let bootstrapResult;
-    let seedApi;
-
-    try {
-      bootstrapResult = await bootstrapService.bootstrap();
-      t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
-
-      // Wait for services-p1 leader to ensure stable state
-      const servicesLeader = await waitForPartitionLeader(
-        bootstrapResult,
-        'services-p1',
-        scaleByMachineFactor(3000),
-      );
-      t.ok(servicesLeader, 'services partition should elect a leader');
-
-      // Ensure CDC pipeline is fully ready before successful metadata assertions.
-      await waitForCdcPipelineReadiness(bootstrapResult);
-
-      // =========================================================================
-      // PHASE 2: Create BootstrapAPI with complete leader metadata (real cache)
-      // =========================================================================
-      const realCache = NodeService.getInstance().getSystemTableCache();
-
-      // Use the real cache - no manipulation, all leaders should be present
-      seedApi = new BootstrapAPI({
-        seedNodeId,
-        seedNodeAddress: `ws://localhost:${seedWsPort}`,
-        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
-        messageGroupServices: bootstrapResult.messageGroupServices,
-        partitionServices: bootstrapResult.partitionServices,
-        systemTableCache: realCache,
-        messageRouter: bootstrapResult.messageRouter,
-        epochManager: bootstrapResult.epochManager,
-        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
-        runtimeOwner: bootstrapService.runtimeDependencyOwner,
-        assertOriginalSeedPublicAdmission: () =>
-          bootstrapService.assertOriginalSeedPublicAdmission(),
-      });
-
-      await seedApi.initialize(0, {listen: false});
-      const httpPost = createInProcHttpPost(seedApi);
-
-      // =========================================================================
-      // PHASE 3: Attempt to join - should succeed with complete metadata
-      // Validates: Requirement 2.4
-      // =========================================================================
-      const joiningNodeId = '550e8400-e29b-41d4-a716-446655440108';
-      const joiningNodeAddress = `ws://localhost:${getUniquePort()}`;
-
-      const response = await httpPost('http://localhost/bootstrap', {
-        nodeId: joiningNodeId,
-        nodeAddress: joiningNodeAddress,
-      });
-
-      // Verify the response indicates success
-      t.equal(response.statusCode, 200, 'should return 200 OK');
-
-      const body = response.json();
-      t.equal(body.success, true, 'join should succeed with complete metadata');
-      t.equal(body.seedNodeId, seedNodeId, 'response should include seed node ID');
-      t.ok(body.seedNodeWsAddress, 'response should include seed node WebSocket address');
-
-      // =========================================================================
-      // PHASE 4: Verify joining node receives accurate system state
-      // Validates: Requirement 2.4
-      // =========================================================================
-
-      // Verify systemTableSnapshots is present and contains required tables
-      t.ok(body.systemTableSnapshots, 'response should include systemTableSnapshots');
-      t.ok(Array.isArray(body.systemTableSnapshots[TABLES.NODES]),
-        'systemTableSnapshots should include nodes table');
-      t.ok(Array.isArray(body.systemTableSnapshots[TABLES.SERVICES]),
-        'systemTableSnapshots should include services table');
-      t.ok(Array.isArray(body.systemTableSnapshots[TABLES.PARTITIONS]),
-        'systemTableSnapshots should include partitions table');
-      t.ok(Array.isArray(body.systemTableSnapshots[TABLES.MESSAGE_GROUPS]),
-        'systemTableSnapshots should include message_groups table');
-      t.ok(Array.isArray(body.systemTableSnapshots[TABLES.TABLES]),
-        'systemTableSnapshots should include tables table');
-
-      // Verify canonical leader metadata: leadership lives on the owner
-      // record (partitions.leader_node_id); services.raft_role is advisory
-      // follower metadata. Each led partition must expose an ACTIVE,
-      // addressed partition service on its leader node.
-      const servicesSnapshot = body.systemTableSnapshots[TABLES.SERVICES];
-      const partitionsSnapshot = body.systemTableSnapshots[TABLES.PARTITIONS];
-      const ledPartitions = partitionsSnapshot.filter((partition) =>
-        typeof partition[COLUMN.LEADER_NODE_ID] === 'string' &&
-        partition[COLUMN.LEADER_NODE_ID].length > 0,
-      );
-      t.ok(ledPartitions.length > 0,
-        'partitions snapshot should carry canonical leader_node_id owners');
-
-      const partitionsWithCanonicalLeaderService = ledPartitions.filter(
-        (partition) => servicesSnapshot.some((service) =>
-          service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-          service[COLUMN.PARTITION_ID] === partition[COLUMN.PARTITION_ID] &&
-          service[COLUMN.NODE_ID] === partition[COLUMN.LEADER_NODE_ID] &&
-          service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
-          typeof service[COLUMN.ADDRESS] === 'string' &&
-          service[COLUMN.ADDRESS].length > 0,
-        ),
-      );
-      t.equal(
-        partitionsWithCanonicalLeaderService.length,
-        ledPartitions.length,
-        'every led partition should expose an active addressed service on ' +
-          'its canonical leader node',
-      );
-
-      // Verify message group assignment is present
-      t.ok(body.messageGroupAssignment, 'response should include messageGroupAssignment');
-      t.ok(body.messageGroupAssignment.strategy,
-        'messageGroupAssignment should include strategy');
-
-      // Verify ready nodes list is present and includes seed node
-      t.ok(Array.isArray(body.readyNodes), 'response should include readyNodes array');
-      t.ok(
-        body.readyNodes.every((nodeId) =>
-          typeof nodeId === 'string' && nodeId.length > 0,
-        ),
-        'readyNodes should contain only node ID strings when present',
-      );
-
-      // Verify cluster configuration is present
-      t.ok(body.clusterConfig, 'response should include clusterConfig');
-
-      // Verify timestamp is present and recent
-      t.ok(body.timestamp, 'response should include timestamp');
-      const timeDiff = Date.now() - body.timestamp;
-      t.ok(timeDiff < 5000, 'timestamp should be recent (within 5 seconds)');
-
-      t.comment(
-        `Join succeeded with ${ledPartitions.length} led partitions`,
-      );
-      t.comment(`Message group assignment strategy: ${body.messageGroupAssignment.strategy}`);
-      t.comment(`Ready nodes: ${JSON.stringify(body.readyNodes)}`);
-    } finally {
-      // =========================================================================
-      // CLEANUP
-      // =========================================================================
-      if (seedApi) {
-        await seedApi.shutdown().catch(() => {});
-      }
-      if (bootstrapService?.shutdown) {
-        await bootstrapService.shutdown().catch(() => {});
-      }
-      if (bootstrapResult?.messageRouter) {
-        await bootstrapResult.messageRouter.shutdown().catch(() => {});
-      }
-    }
-  });
+    await cleanupTestEnvironment();
+  }
 });

@@ -62,3 +62,34 @@ export function sealPlacedCommit(controller) {
   fs.unlinkSync(modules);
   assert.equal(sealed.status, 0, sealed.stderr);
 }
+
+// Waits, bounded, for the witness to create the gate file; writes an initial
+// TAP diagnostic line on JS entry so `.tap` size > 0 proves preload ran.
+export function gateTestSource(gate) {
+  return [
+    'import assert from \'node:assert/strict\';',
+    'import fs from \'node:fs\';',
+    'import {test} from \'node:test\';',
+    'process.stdout.write(\'# started\\n\');',
+    'test(\'waits for the witness\', async () => {',
+    `  for (let poll = 0; poll < 2400 && !fs.existsSync(${JSON.stringify(gate)}); poll += 1) {`,
+    '    await new Promise((resolve) => setTimeout(resolve, 50));',
+    '  }',
+    `  assert.ok(fs.existsSync(${JSON.stringify(gate)}));`,
+    '});',
+    '',
+  ].join('\n');
+}
+
+export function worktreeTap(parent, runId, file) {
+  return path.join(parent, runId, '.tap', 'test-results', `${file}.tap`);
+}
+
+export async function waitForNonEmptyFile(filePath) {
+  for (let poll = 0; poll < 1200; poll += 1) {
+    const stat = fs.statSync(filePath, {throwIfNoEntry: false});
+    if (stat && stat.size > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.fail(`timed out waiting for non-empty ${filePath}`);
+}

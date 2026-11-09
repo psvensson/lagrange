@@ -6,14 +6,20 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
+import {
+  attachSqlRuntimeToStartupOwner,
+} from '../../src/bootstrap/shared/startup-sql-runtime-handoff.js';
+import {
+  hydrateBootstrapApiRuntime,
+} from '../../src/entrypoint-runtime-helpers.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
+  createJoiningNodeFixtureOwner,
   createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
@@ -21,7 +27,6 @@ import {
   getUniquePort,
   TEST_CONFIG,
   waitFor,
-  gracefulJoiningShutdown,
   gracefulShutdown,
 } from './helpers/cluster-test-helpers.js';
 
@@ -43,8 +48,8 @@ const LEDGER_PARTITION_ID = 'replica_operations-p1';
 
 /**
  * Drive the durable CREATE TABLE schema-provisioning job to a terminal
- * outcome. CREATE TABLE returns a durable job envelope: a PENDING outcome
- * ({success: true, contractState: 'pending', nextAction: 'retry'}) asks the
+ * outcome. CREATE TABLE returns a durable job envelope: a non-terminal outcome
+ * (nextAction: 'retry', e.g. contractState 'pending' or 'deferred') asks the
  * caller to retry until the job reaches a terminal contract state.
  * @param {SQLQueryEngine} sqlQueryEngine - Engine owning the schema job.
  * @return {Promise<Object>} Last observed create outcome.
@@ -54,8 +59,7 @@ async function createTableUntilTerminal(sqlQueryEngine) {
   let createResult = null;
   while (Date.now() < deadline) {
     createResult = await sqlQueryEngine.executeQuery(CREATE_TABLE_SQL);
-    if (createResult.success !== true ||
-        createResult.contractState !== 'pending') {
+    if (createResult?.nextAction !== 'retry') {
       return createResult;
     }
     const retryAfterMs = Number.isFinite(createResult.retryAfterMs) &&
@@ -126,7 +130,6 @@ test('Later-created user-table metadata fans out to all node-local system caches
       wsPort: seedWsPort,
       config: {
         ...TEST_CONFIG.bootstrap,
-        leadershipWaitTimeoutMs: 3000,
       },
     });
 
@@ -134,7 +137,9 @@ test('Later-created user-table metadata fans out to all node-local system caches
     let seedApi;
     let seedSqlEngine;
     let rebalancePumpTimer = null;
+    const joiningNodeFixtures = createJoiningNodeFixtureOwner();
     const joiningServices = [];
+    const joiningSqlEngines = [];
 
     try {
       bootstrapResult = await bootstrapService.bootstrap();
@@ -155,22 +160,60 @@ test('Later-created user-table metadata fans out to all node-local system caches
         assertOriginalSeedPublicAdmission: () =>
           bootstrapService.assertOriginalSeedPublicAdmission(),
       });
+      hydrateBootstrapApiRuntime({
+        bootstrapAPI: seedApi,
+        systemTableCache: seedSystemTableCache,
+        messageGroupServices: bootstrapResult.messageGroupServices,
+        partitionServices: bootstrapResult.partitionServices,
+        replicaHandler: bootstrapResult.replicaHandler,
+        cdcIntegrationService: bootstrapService.cdcIntegrationService,
+        controlPlaneReadinessService:
+          bootstrapService.runtimeDependencyOwner.controlPlaneReadinessService,
+        epochManager: bootstrapResult.epochManager,
+        messageRouter: bootstrapResult.messageRouter,
+        startupRecoveryCoordinator:
+          bootstrapService.rebalanceCoordinator?.startupRecoveryCoordinator ||
+          null,
+      });
+      bootstrapService.seedRuntimeBridgeOwner.attachBootstrapTopologySnapshotOwner(
+        seedApi.bootstrapTopologySnapshotOwner,
+      );
       await seedApi.initialize(0, {listen: false});
 
+      // The user table itself needs only one routable replica to converge;
+      // replica_count is a target the rebalancer may fill later. Flip the
+      // default after system-table bootstrap completes and before constructing
+      // the canonical seed SQL runtime (TableCreationService reads the config
+      // default at construction).
+      ConfigurationManager.getInstance()
+        .setByPath('partition.defaultReplicaCount', 1);
       seedSqlEngine = new SQLQueryEngine({
+        autoStartDistributedTransactionRecovery: false,
+        controlPlaneReadinessService:
+          bootstrapService.rebalanceCoordinator.controlPlaneReadinessService,
         systemCache: seedSystemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         cdcIntegrationService: bootstrapService.cdcIntegrationService,
         nodeId: seedNodeId,
         rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
+        partitionServicesProvider: () => bootstrapResult.partitionServices,
+        // Keep individual pending provisioning attempts short so the durable
+        // create-retry loop cycles instead of parking on one long attempt.
+        tablePartitionProvisioningTimeoutMs: 10000,
+      });
+      attachSqlRuntimeToStartupOwner({
+        owner: bootstrapService,
+        sqlQueryEngine: seedSqlEngine,
+        systemTableCache: seedSystemTableCache,
+        messageRouter: bootstrapResult.messageRouter,
+        partitionServicesProvider: () => bootstrapResult.partitionServices,
       });
       seedApi.setSqlQueryEngine(seedSqlEngine);
 
       const httpPost = createInProcHttpPost(seedApi);
       for (const nodeId of joinNodeIds) {
         const joiningWsPort = getUniquePort();
-        const joiningService = new NodeJoiningService({
-          bootIncarnation: 1,
+        const joiningService = joiningNodeFixtures.create({
           nodeId,
           nodeAddress: `ws://localhost:${joiningWsPort}`,
           seedNodeAddress: 'http://localhost:0',
@@ -187,8 +230,31 @@ test('Later-created user-table metadata fans out to all node-local system caches
         });
         const joinResult = await joiningService.join();
         t.equal(joinResult.success, true, `${nodeId} should join successfully`);
+        const joiningSystemTableCache =
+          joiningService.cdcIntegrationService?.systemTableCache || null;
+        const joiningSqlEngine = new SQLQueryEngine({
+          autoStartDistributedTransactionRecovery: false,
+          controlPlaneReadinessService:
+            joiningService.rebalanceCoordinator?.controlPlaneReadinessService ||
+            null,
+          systemCache: joiningSystemTableCache,
+          messageRouter: joiningService.messageRouter,
+          cdcIntegrationService: joiningService.cdcIntegrationService,
+          nodeId,
+          rebalanceCoordinator: joiningService.rebalanceCoordinator,
+          partitionServicesProvider: () => joiningService.partitionServices,
+        });
+        attachSqlRuntimeToStartupOwner({
+          owner: joiningService,
+          sqlQueryEngine: joiningSqlEngine,
+          systemTableCache: joiningSystemTableCache,
+          messageRouter: joiningService.messageRouter,
+          partitionServicesProvider: () => joiningService.partitionServices,
+        });
+        joiningSqlEngines.push(joiningSqlEngine);
         joiningServices.push(joiningService);
       }
+      joiningNodeFixtures.assertDistinctNodePaths();
 
       // With more than one ACTIVE node, the operation-ledger quorum-spread
       // admission contract defers every new provisioning operation until the
@@ -208,6 +274,9 @@ test('Later-created user-table metadata fans out to all node-local system caches
             continue;
           }
           for (const service of serviceMap.values()) {
+            if (service?.partitionId !== LEDGER_PARTITION_ID) {
+              continue;
+            }
             service?.rebalancer?.enqueueRebalanceCheck?.(
               RECONCILE_REASON.PERIODIC_CHECK,
             );
@@ -229,6 +298,8 @@ test('Later-created user-table metadata fans out to all node-local system caches
           );
         return !lastConcentration;
       }, LEDGER_SPREAD_WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
+      clearInterval(rebalancePumpTimer);
+      rebalancePumpTimer = null;
       t.equal(
         ledgerSpreadObserved,
         true,
@@ -236,24 +307,7 @@ test('Later-created user-table metadata fans out to all node-local system caches
           JSON.stringify(lastConcentration),
       );
 
-      // The user table itself needs only one routable replica to converge;
-      // replica_count is a target the rebalancer may fill later. Flip the
-      // default before constructing the schema-owner engine (the service
-      // reads the config default at construction).
-      ConfigurationManager.getInstance()
-        .setByPath('partition.defaultReplicaCount', 1);
-      const createEngine = new SQLQueryEngine({
-        systemCache: seedSystemTableCache,
-        messageRouter: bootstrapResult.messageRouter,
-        cdcIntegrationService: bootstrapService.cdcIntegrationService,
-        nodeId: seedNodeId,
-        rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
-        // Keep individual pending provisioning attempts short so the durable
-        // create-retry loop cycles instead of parking on one long attempt.
-        tablePartitionProvisioningTimeoutMs: 10000,
-      });
-
-      const createResult = await createTableUntilTerminal(createEngine);
+      const createResult = await createTableUntilTerminal(seedSqlEngine);
       t.equal(createResult?.success, true, 'create table should succeed on seed');
       t.equal(
         createResult?.contractState,
@@ -302,8 +356,12 @@ test('Later-created user-table metadata fans out to all node-local system caches
       if (rebalancePumpTimer) {
         clearInterval(rebalancePumpTimer);
       }
-      for (const joiningService of joiningServices.reverse()) {
-        await gracefulJoiningShutdown(joiningService);
+      for (const joiningSqlEngine of joiningSqlEngines.reverse()) {
+        await joiningSqlEngine.shutdown();
+      }
+      await joiningNodeFixtures.shutdownAll();
+      if (seedSqlEngine) {
+        await seedSqlEngine.shutdown();
       }
       await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
       await cleanupTestEnvironment();

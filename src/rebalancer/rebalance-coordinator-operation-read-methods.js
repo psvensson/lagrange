@@ -515,7 +515,7 @@ class RebalanceCoordinatorOperationReadMethods {
     const hasUsableRows =
       result?.success === true &&
       result?.partial !== true &&
-      result?.rowSetComplete !== false &&
+      result?.rowSetComplete === true &&
       Array.isArray(result?.rows);
     const hasCompleteLeaderProvenance =
       hasUsableRows &&

@@ -10,7 +10,9 @@ import {
   ReplicaOperationField,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
+  buildMockPolicyAuthorityWitness,
   createMockControlPlaneReadinessService,
+  createMockPolicyService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 
@@ -49,11 +51,14 @@ test('armCoordinatorCreatedOperation immediately dispatches locally owned ' +
     },
     cdcIntegrationService: {
     },
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       async getPolicyForPartition() {
-        return {targetReplicaCount: 3, minReplicaCount: TEST_CRITICAL_CREATED_MIN_REPLICA_COUNT};
+        return {
+          targetReplicaCount: 3,
+          minReplicaCount: TEST_CRITICAL_CREATED_MIN_REPLICA_COUNT,
+        };
       },
-    },
+    }),
     messageRouter: {
       async deliver() {
         return buildDeliveryEnvelope({acknowledged: true}, {
@@ -180,12 +185,18 @@ async (t) => {
         success: true,
         rows: row ? [{...row}] : [],
         affectedRows: row ? 1 : 0,
+        rowSetComplete: true,
+        readAuthorityWitness: buildMockPolicyAuthorityWitness(
+          `${tableName}-p1`,
+        ),
       };
     }
     return {
       success: true,
       rows: [],
       affectedRows: 0,
+      rowSetComplete: true,
+      readAuthorityWitness: buildMockPolicyAuthorityWitness(`${tableName}-p1`),
     };
   };
   const executeQuery = async (sql, params = []) => {
@@ -285,11 +296,11 @@ async (t) => {
         return executeQuery(sql, params);
       },
     },
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       async getPolicyForPartition() {
         return {targetReplicaCount: 3, minReplicaCount: 1};
       },
-    },
+    }),
     messageRouter: {
       async deliver() {
         return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
@@ -402,6 +413,9 @@ test('createOperation defers retryable participant-pressure failures and ' +
     address: 'node-peer/partition/partition-pressure-retry-test-r2',
   };
   const authoritativeRead = async (tableName, sql, params = []) => {
+    const readAuthorityWitness = buildMockPolicyAuthorityWitness(
+      `${tableName}-p1`,
+    );
     if (tableName === 'replica_operations' &&
         String(sql).includes('WHERE operation_id = ?')) {
       const row = operationRows.get(params[0]) || null;
@@ -409,6 +423,8 @@ test('createOperation defers retryable participant-pressure failures and ' +
         success: true,
         rows: row ? [{...row}] : [],
         affectedRows: row ? 1 : 0,
+        rowSetComplete: true,
+        readAuthorityWitness,
       };
     }
     if (tableName === 'services') {
@@ -416,12 +432,16 @@ test('createOperation defers retryable participant-pressure failures and ' +
         success: true,
         rows: [{...seededSafetyPeerRow}],
         affectedRows: 1,
+        rowSetComplete: true,
+        readAuthorityWitness,
       };
     }
     return {
       success: true,
       rows: [],
       affectedRows: 0,
+      rowSetComplete: true,
+      readAuthorityWitness,
     };
   };
   const executeQuery = async (sql, params = []) => {
@@ -529,11 +549,11 @@ test('createOperation defers retryable participant-pressure failures and ' +
         return executeQuery(sql, params);
       },
     },
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       async getPolicyForPartition() {
         return {targetReplicaCount: 3, minReplicaCount: 1};
       },
-    },
+    }),
     messageRouter: {
       async deliver(target, payload, options) {
         deliveries.push({target, payload, options});
@@ -683,12 +703,18 @@ test('dispatchOperation defers priority claim misses when durable ' +
         success: true,
         rows: row ? [{...row}] : [],
         affectedRows: row ? 1 : 0,
+        rowSetComplete: true,
+        readAuthorityWitness: buildMockPolicyAuthorityWitness(
+          `${tableName}-p1`,
+        ),
       };
     }
     return {
       success: true,
       rows: [],
       affectedRows: 0,
+      rowSetComplete: true,
+      readAuthorityWitness: buildMockPolicyAuthorityWitness(`${tableName}-p1`),
     };
   };
   const executeQuery = async (sql, params = []) => {
@@ -762,11 +788,11 @@ test('dispatchOperation defers priority claim misses when durable ' +
         return executeQuery(sql, params);
       },
     },
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       async getPolicyForPartition() {
         return {targetReplicaCount: 3, minReplicaCount: 1};
       },
-    },
+    }),
     messageRouter: {
       async deliver(target, payload, options) {
         deliveries.push({target, payload, options});
@@ -932,11 +958,11 @@ test('dispatchOperationInternal executes the claimed operation snapshot ' +
         };
       },
     },
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       async getPolicyForPartition() {
         return {targetReplicaCount: 3, minReplicaCount: 1};
       },
-    },
+    }),
     messageRouter: {
       async deliver() {
         return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
@@ -1087,11 +1113,11 @@ test('dispatchOperationInternal rehydrates REPLACE source replica metadata ' +
         };
       },
     },
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       async getPolicyForPartition() {
         return {targetReplicaCount: 3, minReplicaCount: 1};
       },
-    },
+    }),
     messageRouter: {
       async deliver() {
         return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
@@ -1193,12 +1219,18 @@ async (t) => {
         success: true,
         rows: row ? [{...row}] : [],
         affectedRows: row ? 1 : 0,
+        rowSetComplete: true,
+        readAuthorityWitness: buildMockPolicyAuthorityWitness(
+          `${tableName}-p1`,
+        ),
       };
     }
     return {
       success: true,
       rows: [],
       affectedRows: 0,
+      rowSetComplete: true,
+      readAuthorityWitness: buildMockPolicyAuthorityWitness(`${tableName}-p1`),
     };
   };
   const executeQuery = async (sql, params = []) => {
@@ -1272,11 +1304,11 @@ async (t) => {
         return executeQuery(sql, params);
       },
     },
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       async getPolicyForPartition() {
         return {targetReplicaCount: 3, minReplicaCount: 1};
       },
-    },
+    }),
     messageRouter: {
       async deliver(target, payload, options) {
         deliveries.push({target, payload, options});

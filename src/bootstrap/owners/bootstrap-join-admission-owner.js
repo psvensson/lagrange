@@ -470,18 +470,25 @@ class BootstrapJoinAdmissionOwner {
   }
 
   getAuthoritativeControlPlaneView() {
+    const cdcIntegrationService = this.getCdcIntegrationService();
+    const messageRouter = this.getMessageRouter();
     const existingView = this.getAuthoritativeControlPlaneViewInstance();
     if (existingView) {
+      if (cdcIntegrationService) {
+        existingView.syncOwnerDependencies?.({
+          cdcIntegrationService,
+          messageRouter,
+        });
+      }
       return existingView;
     }
-    const cdcIntegrationService = this.getCdcIntegrationService();
     if (!cdcIntegrationService) {
       return null;
     }
     const view = new AuthoritativeControlPlaneView({
       nodeId: this.getSeedNodeId() || BOOTSTRAP_API_SUBSYSTEM,
       cdcIntegrationService,
-      messageRouter: this.getMessageRouter(),
+      messageRouter,
     });
     this.setAuthoritativeControlPlaneViewInstance(view);
     return view;

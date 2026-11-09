@@ -726,3 +726,48 @@ async () => {
   assert.deepEqual(refusedA.updateStates, refusedB.updateStates);
   assert.equal(refusedA.elapsedMs, refusedB.elapsedMs);
 });
+
+test('awaitSplitChildLeadersRoutable triggers repairSplitChildLeaderRoutingEvidence before sleeping when a child leader is unroutable', async () => {
+  const repairedChildIds = [];
+  let rightLeaderRoutable = false;
+  let delayCount = 0;
+  const {workflow} = buildWorkflow({
+    nodeId: NODE_A,
+    resolveSplitChildLeaderRoutingEvidence: (partitionId) => ({
+      leaderNodeId: NODE_A,
+      routableNodeIds:
+        partitionId !== PLAN_ONE.rightPartitionId || rightLeaderRoutable ?
+          [NODE_A] :
+          [],
+    }),
+    repairSplitChildLeaderRoutingEvidence: async (partitionId) => {
+      repairedChildIds.push(partitionId);
+      rightLeaderRoutable = true;
+      return true;
+    },
+    delay: async () => {
+      delayCount += 1;
+    },
+  });
+
+  const decision = await workflow.awaitSplitChildLeadersRoutable({
+    workflowId: 'split-cutover-repair-witness',
+    metadata: {
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]: [
+        PLAN_ONE.leftPartitionId,
+        PLAN_ONE.rightPartitionId,
+      ],
+    },
+  });
+
+  assert.equal(
+    decision.decision,
+    splitAckConstants.SPLIT_CUTOVER_READINESS_DECISION.ROUTABLE,
+  );
+  assert.deepEqual(repairedChildIds, [PLAN_ONE.rightPartitionId]);
+  assert.equal(
+    delayCount,
+    0,
+    'when repairSplitChildLeaderRoutingEvidence resolves the child route, cutover readiness should not sleep on the poll interval',
+  );
+});

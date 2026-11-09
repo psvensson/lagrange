@@ -15,8 +15,10 @@ import {
   getUniquePort,
   createVirginSeedBootstrapService,
   initializeTestEnvironment,
+  TEST_CONFIG,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 
 const TABLE_NAME = 'benchmark_events';
 const CREATE_TABLE_SQL = `
@@ -73,7 +75,9 @@ async function composeSeedWithTableProvisioningEngine({
     nodeAddress: `ws://localhost:${seedWsPort}`,
     wsPort: seedWsPort,
     config: {
-      leadershipWaitTimeoutMs: 3000,
+      leadershipWaitTimeoutMs: scaleByMachineFactor(
+        TEST_CONFIG.bootstrap.leadershipWaitTimeoutMs,
+      ),
       leadershipWaitInitialDelayMs: 10,
       leadershipWaitMaxDelayMs: 100,
       replicaStaggerDelayMs: 20,
@@ -107,7 +111,9 @@ async function composeSeedWithTableProvisioningEngine({
   return {bootstrapService, bootstrapResult, seedApi, sqlQueryEngine, systemTableCache};
 }
 
-test('Create table provisions routable partition replica', {timeout: TEST_TIMEOUT_MS},
+test(
+  'Create table provisions routable partition replica',
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)},
   async (t) => {
     initializeTestEnvironment({
       rebalancer: {
@@ -139,7 +145,7 @@ test('Create table provisions routable partition replica', {timeout: TEST_TIMEOU
       const hasRoutableService = await waitFor(() => {
         const routing = getTableRoutingState(systemTableCache);
         return routing.hasRoutableService;
-      }, CREATE_TIMEOUT_MS, POLL_INTERVAL_MS);
+      }, scaleByMachineFactor(CREATE_TIMEOUT_MS), POLL_INTERVAL_MS);
 
       const routingState = getTableRoutingState(systemTableCache);
       t.equal(
@@ -183,7 +189,9 @@ const SECOND_CREATE_TABLE_SQL = `
 // node's CURRENT planning identity and serve-eligible trust, never refuse
 // with `readiness_planning_identity_unavailable` or an empty
 // candidateTargetNodeIds.
-test('Second table creation admits the sole node under bookkeeping churn', {timeout: TEST_TIMEOUT_MS},
+test(
+  'Second table creation admits the sole node under bookkeeping churn',
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)},
   async (t) => {
     initializeTestEnvironment({
       rebalancer: {
@@ -232,7 +240,7 @@ test('Second table creation admits the sole node under bookkeeping churn', {time
       const hasRoutableService = await waitFor(() => {
         const routing = getTableRoutingState(systemTableCache, SECOND_TABLE_NAME);
         return routing.hasRoutableService;
-      }, CREATE_TIMEOUT_MS, POLL_INTERVAL_MS);
+      }, scaleByMachineFactor(CREATE_TIMEOUT_MS), POLL_INTERVAL_MS);
       const routingState = getTableRoutingState(
         systemTableCache, SECOND_TABLE_NAME);
       t.equal(

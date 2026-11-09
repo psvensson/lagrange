@@ -334,6 +334,41 @@ test('leader_node_id write is not issued without cdcIntegrationService',
     }
   });
 
+test('flushLeaderNodeUpdate awaits an in-flight queued leader_node_id write ' +
+  'before returning', async (t) => {
+  const calls = [];
+  const cdcService = {
+    updateSystemTableRow: async (tableName, whereClause, data, options) => {
+      await new Promise((resolve) => setImmediate(resolve));
+      calls.push({tableName, whereClause, data, options});
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
+  };
+  const cache = createMockSystemTableCache();
+  const partition = createChildPartition(cdcService, cache);
+
+  try {
+    await partition.initialize();
+    const result = await partition.flushLeaderNodeUpdate();
+
+    t.equal(result.applied, true,
+      'flushLeaderNodeUpdate should resolve with the settled in-flight write');
+    t.equal(
+      partition.leaderNodeMutationHelper.persistedValue,
+      CHILD_NODE_ID,
+      'persistedValue should be populated before flushLeaderNodeUpdate returns',
+    );
+    t.equal(
+      calls.some((call) => call.tableName === SYSTEM_TABLE_NAME.PARTITIONS &&
+        call.data?.[COLUMN.LEADER_NODE_ID] === CHILD_NODE_ID),
+      true,
+      'partitions leader_node_id write should complete before flush settles',
+    );
+  } finally {
+    await partition.shutdown();
+  }
+});
+
 test('cleanup child partition leader propagation tests', async (t) => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();

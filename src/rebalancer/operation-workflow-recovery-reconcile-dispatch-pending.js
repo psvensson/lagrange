@@ -29,6 +29,8 @@ const {
   normalizeNodeIdList,
 } = SHARED;
 
+const HAND_BACK_VERDICT_SEPARATOR = '|';
+
 const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE = Object.freeze({
   UNAVAILABLE: 'unavailable',
   NOT_OWNER_ADVANCE: 'not_owner_advance',
@@ -782,22 +784,29 @@ async function buildPriorityRecoveryDispatchPendingDrainSnapshot(
       sourceSnapshot,
     );
   const state =
-    supersededTargetState ||
-    owner.resolvePriorityRecoveryOperationDrainState(
+    await owner.resolvePriorityRecoveryOperationDrainSnapshotState({
+      operation,
       completion,
+      completionState,
       sourceSnapshot,
       releaseEvidence,
-      operation,
-    );
+      supersededTargetState,
+    });
   const action =
     PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE.get(state) ||
     OPERATION_LIFECYCLE_ACTION.NOOP;
-  const ownerState =
+  const ownerState = owner.boundReplaceOwnerHandBack(
+    operation,
+    action,
     owner.resolvePriorityRecoveryOperationDrainOwnerState(
       operation,
       action,
       state,
-    );
+    ),
+    [state, completionState, sourceSnapshot.state].join(
+      HAND_BACK_VERDICT_SEPARATOR,
+    ),
+  );
   return Object.freeze({
     state,
     action,

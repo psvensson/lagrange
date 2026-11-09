@@ -63,38 +63,57 @@ const nodeAddressArb = fc.stringMatching(/^node[0-9]+$/);
  * @return {Object} Mock system cache.
  */
 function createMockSystemCache(tableName, partitions, services) {
+  const tables = [{
+    table_id: tableName,
+    table_name: tableName,
+    primary_key: 'id',
+    partition_key: 'id',
+    partition_key_type: 'TEXT',
+  }];
   const normalizedPartitions = partitions.map((partition) => {
     const leaderService = services.find((service) =>
       service.partition_id === partition.partition_id &&
-      String(service.raft_role || '').toLowerCase() ===
-        String(RAFT_ROLE.LEADER).toLowerCase(),
+      service.raft_role === RAFT_ROLE.LEADER,
     );
     return {
       ...partition,
-      leader_node_id: partition.leader_node_id ||
-        partition.leaderNodeId ||
-        leaderService?.node_id ||
+      table_id: partition.table_id ?? tableName,
+      leader_node_id: partition.leader_node_id ??
+        leaderService?.node_id ??
         null,
     };
   });
+  const rowsByTable = new Map([
+    [TABLES.TABLES, tables],
+    [TABLES.PARTITIONS, normalizedPartitions],
+    [TABLES.SERVICES, services],
+  ]);
+  const rowsOf = (table) => rowsByTable.get(table) || [];
   return {
-    filter: function(table, predicate) {
+    get: function(table, key) {
+      if (table === TABLES.TABLES) {
+        return tables.find(
+          (row) => row.table_id === key || row.table_name === key,
+        ) || null;
+      }
       if (table === TABLES.PARTITIONS) {
-        return normalizedPartitions.filter(predicate);
+        return normalizedPartitions.find(
+          (row) => row.partition_id === key,
+        ) || null;
       }
       if (table === TABLES.SERVICES) {
-        return services.filter(predicate);
+        return services.find((row) => row.service_id === key) || null;
       }
-      return [];
+      return null;
+    },
+    find: function(table, predicate) {
+      return rowsOf(table).find(predicate) || null;
+    },
+    filter: function(table, predicate) {
+      return rowsOf(table).filter(predicate);
     },
     getAll: function(table) {
-      if (table === TABLES.PARTITIONS) {
-        return normalizedPartitions;
-      }
-      if (table === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
+      return rowsOf(table);
     },
   };
 }

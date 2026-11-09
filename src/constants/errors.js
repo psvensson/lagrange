@@ -50,6 +50,8 @@ const ERRORS = Object.freeze({
     'Partition CDC debt is at capacity; this attempt changed no data and may be retried',
   WRITE_CDC_DEMAND_EXCEEDS_CAPACITY:
     'The carried operation batch exceeds the partition CDC capacity; no data changed',
+  SERVING_ADMISSION_FENCED_FOR_REMOVAL:
+    'Serving admission fenced for replica removal',
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
   NO_HANDLER_FOR_ADDRESS: 'No handler registered for address',
 });
@@ -74,6 +76,7 @@ const REROUTABLE_WRITE_ERROR_FRAGMENTS = Object.freeze([
   ERRORS.WRITE_RESERVED,
   ERRORS.WRITE_CUTOVER_PAUSED,
   ERRORS.WRITE_CDC_CAPACITY,
+  ERRORS.SERVING_ADMISSION_FENCED_FOR_REMOVAL,
 ]);
 
 /**

@@ -12,6 +12,7 @@ import {
   isTerminalStep,
 } from '../../src/rebalancer/replica-operation-progress.js';
 import {createReplaceWitness} from '../rebalancer/replace-witness-fixture.js';
+import {buildMockPolicyAuthorityWitness} from '../rebalancer/test-helpers.js';
 import {
   createTimeoutTestCoordinator,
 } from '../rebalancer/timeout-test-coordinator.js';
@@ -399,6 +400,8 @@ t.test(
           success: true,
           source: 'owner_rpc_lane',
           rows: currentLedgerReplicas(cache),
+          rowSetComplete: true,
+          readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
         };
       }
       return baseReadAuthoritativeRows(tableName, sql, params, options);

@@ -64,9 +64,17 @@ const TEST_LOCAL_SYSTEM_OBSERVATION_LANE =
 test('AdminWebSocketAPI - local control snapshot query avoids distributed fanout',
   async (t) => {
     let executeRequestCalls = 0;
+    let routerDeliverCalls = 0;
+    const populatedCache = createPopulatedCache();
     const api = new AdminWebSocketAPI({
       nodeId: 'test-node',
-      systemTableCache: createPopulatedCache(),
+      systemTableCache: populatedCache,
+      messageRouter: {
+        deliver: async () => {
+          routerDeliverCalls += 1;
+          throw new Error('unexpected_remote_fanout');
+        },
+      },
       sqlQueryEngine: {
         executeRequest: async () => {
           executeRequestCalls++;
@@ -78,7 +86,6 @@ test('AdminWebSocketAPI - local control snapshot query avoids distributed fanout
     await api.initialize(0, {listen: false});
     const {ws} = await connectAndReceive(api);
 
-    const startedAt = Date.now();
     ws.send(JSON.stringify({
       type: MessageType.QUERY,
       queryId: 'q-control-snapshot',
@@ -86,18 +93,25 @@ test('AdminWebSocketAPI - local control snapshot query avoids distributed fanout
     }));
 
     const response = await waitForMessage(ws);
-    const elapsedMs = Date.now() - startedAt;
 
     t.equal(response.type, MessageType.QUERY_RESULT, 'should return query_result');
     t.equal(response.queryId, 'q-control-snapshot', 'should preserve query id');
-    t.equal(elapsedMs < 100, true, 'query should complete within local bound');
     t.equal(Array.isArray(response.results), true, 'query result should include rows');
     t.equal(response.results.length, 1, 'query should return one snapshot row');
     t.equal(response.results[0].schemaVersion, 1, 'query should expose snapshot schema');
     t.equal(typeof response.results[0].voterCounts, 'object',
       'query result should include voter-count map');
+    t.equal(
+      response.results[0].nodes.length,
+      populatedCache.getAll(TABLES.NODES).length,
+      'query result should derive node view from local systemTableCache',
+    );
     t.equal(executeRequestCalls, 0,
       'local control snapshot query should not execute distributed SQL requests');
+    t.equal(routerDeliverCalls, 0,
+      'local control snapshot query should not perform remote router fanout');
+    t.equal(api.controlPlaneSystemTableGateway, null,
+      'local control snapshot query should succeed without authoritative gateway reads');
 
     ws.close();
     await api.shutdown();

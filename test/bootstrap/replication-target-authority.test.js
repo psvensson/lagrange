@@ -1135,9 +1135,11 @@ test('absent-scenario-cannot-pass-as-a-receipt', () => {
   // The bare form the receipts used to use still exits 0 on no match, which is
   // why the runner exists. If node ever fixes this, the assertion below fails
   // and the runner can be reconsidered - it must not silently become dead.
+  const bareEnv = {...process.env};
+  delete bareEnv.NODE_TEST_CONTEXT;
   const bare = spawnSync(process.execPath,
     ['--test', '--test-name-pattern=^this-scenario-does-not-exist$', witness],
-    {cwd: REPO_ROOT, encoding: 'utf8'});
+    {cwd: REPO_ROOT, encoding: 'utf8', env: bareEnv});
   assert.equal(bare.status, 0,
     'documented node behaviour: a zero-match pattern run still exits 0');
 

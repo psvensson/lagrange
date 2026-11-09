@@ -8,7 +8,12 @@ import path from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {CLUSTER_ID_CONFIG_KEY} from '../../src/bootstrap/cluster-identity-constants.js';
+import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {TABLES} from '../../src/constants/index.js';
+import {
+  hydrateBootstrapApiRuntime,
+} from '../../src/entrypoint-runtime-admin-composition.js';
 import {
   BACKUP_MANIFEST_CONSTANTS, CLUSTER_FACTS_CONSTANTS, L3_BACKUP_RESTORE_REASON_CODE,
   L4_ROLLING_UPGRADE_REASON_CODE, L6_DECOMMISSION_REASON_CODE, MANAGEMENT_ERROR_CODE,
@@ -20,7 +25,10 @@ import {
 import {BackupRestoreOwner} from '../../src/bootstrap/owners/backup-restore-owner.js';
 import {RollingUpgradeOwner} from '../../src/bootstrap/owners/rolling-upgrade-owner.js';
 import {MemoryBackupStorageAdapter} from '../helpers/management-v1-memory-storage-adapter.js';
-import {initializeTestEnvironment} from './bootstrap-api-test-fixtures.js';
+import {
+  createCanonicalReadinessService,
+  initializeTestEnvironment,
+} from './bootstrap-api-test-fixtures.js';
 
 const GENUINE_CLUSTER_ID = 'cluster-genuine-0001';
 const SEED_NODE_ID = 'mgmt-auth-seed';
@@ -353,4 +361,537 @@ test('the genuine cluster identity survives restart and restore', async (t) => {
     backupId: BACKUP_PARAMS.backupId});
   t.equal(durableIdentityOwner(clean, rec).getClusterId(), restored.clusterIdentity,
     'a clean-cluster identity is durable across restart');
+});
+
+function buildLeaderWitness(partitionId, servingNodeId = NODE_IDS[0], nowMs = Date.now()) {
+  return Object.freeze({
+    state: 'observed',
+    partitionId,
+    role: 'leader',
+    servingNodeId,
+    servingReplicaId: `${partitionId}-${servingNodeId}`,
+    term: 3,
+    appliedIndex: 24,
+    commitIndex: 24,
+    observedAtMs: nowMs,
+  });
+}
+
+function buildCommittedNodeRows(nowMs = Date.now()) {
+  return NODE_IDS.map((nodeId) => ({
+    node_id: nodeId,
+    node_address: `ws://${nodeId}:8082`,
+    status: 'active',
+    connection_state: 'ready',
+    ready_lease_expires_at: nowMs + 60000,
+    last_heartbeat: nowMs,
+  }));
+}
+
+function buildSystemPartitionRows(leaderNodeId = NODE_IDS[0]) {
+  return [TABLES.NODES, TABLES.PARTITIONS, TABLES.SERVICES].map((tableName) => ({
+    partition_id: INITIAL_PARTITION_IDS[tableName],
+    table_id: tableName,
+    table_name: tableName,
+    replica_count: 3,
+    leader_node_id: leaderNodeId,
+  }));
+}
+
+function buildVoterServiceRowsForPartition(partitionId, replicaIdNodes = NODE_IDS) {
+  return replicaIdNodes.map((nodeId) => ({
+    service_id: `${partitionId}-${nodeId}`,
+    service_type: 'partition',
+    partition_id: partitionId,
+    replica_id: `${partitionId}-${nodeId}`,
+    node_id: nodeId,
+    status: 'active',
+    // Production PartitionServiceRowOwner collapses leader -> follower on services rows
+    // while partitions.leader_node_id owns partition leader identity.
+    raft_role: 'follower',
+  }));
+}
+
+function buildLocalPartitionService(partitionId, overrides = {}) {
+  const role = overrides.role ?? 'leader';
+  const hasQuorum = overrides.hasQuorum ?? true;
+  const term = overrides.term ?? 3;
+  const initialized = overrides.initialized ?? true;
+  const getRows = overrides.getRows ?? (() => []);
+  const rowOverrides = overrides.queryResultOverrides ?? (() => ({}));
+  return {
+    partitionId,
+    replicaId: `${partitionId}-${NODE_IDS[0]}`,
+    nodeId: NODE_IDS[0],
+    initialized,
+    role,
+    isLeader: role === 'leader',
+    getRole: () => role,
+    isLeaderReplica: () => role === 'leader',
+    getStatus: () => ({
+      partitionId,
+      role,
+      isLeader: role === 'leader',
+      term,
+      initialized,
+      hasQuorum,
+    }),
+    buildRemoteReadAuthorityWitness: () =>
+      (role === 'leader' ? buildLeaderWitness(partitionId, NODE_IDS[0]) : null),
+    executeLocalQuery: () => ({
+      success: true,
+      rows: getRows(),
+      rowSetComplete: true,
+      readAuthorityWitness: buildLeaderWitness(partitionId, NODE_IDS[0]),
+      ...rowOverrides(),
+    }),
+  };
+}
+
+function buildOwnerRpcSqlEngine(partitionServicesMap) {
+  return {
+    queryExecutor: {
+      executeOnPartition: async (partitionId, sql, params = []) => {
+        const svc = partitionServicesMap.get(partitionId);
+        if (!svc || svc.getRole?.() !== 'leader') {
+          return {success: false, error: 'partition_leader_unavailable', rows: []};
+        }
+        return svc.executeLocalQuery(sql, params);
+      },
+    },
+  };
+}
+
+function physicalCapabilityAdapters() {
+  const effects = {exports: 0, drains: 0, restarts: 0, decommissions: 0};
+  const storage = new MemoryBackupStorageAdapter();
+  const adapters = {
+    storageAdapter: storage,
+    exportPartitionSnapshots: () => {
+      effects.exports += 1;
+      return [{partitionId: 1, raftLogIndex: 10, raftTerm: 3, payload: 'rows-1'}];
+    },
+    hydratePartitionSnapshots: () => {},
+    onDrainNodeLeadership: () => {
+      effects.drains += 1;
+    },
+    onTriggerNodeRestart: () => {
+      effects.restarts += 1;
+    },
+    onDecommissionNode: () => {
+      effects.decommissions += 1;
+    },
+  };
+  const effectCount = () =>
+    effects.exports + effects.drains + effects.restarts + effects.decommissions +
+    storage.writeCount + storage.storage.size;
+  return {adapters, effects, storage, effectCount};
+}
+
+function buildPopulatedProjectionCache(nodeRows, partitionRows, serviceRows) {
+  return {
+    get: (table, key) => (table === TABLES.CONFIG && key === CLUSTER_ID_CONFIG_KEY ?
+      {config_key: CLUSTER_ID_CONFIG_KEY, config_value: GENUINE_CLUSTER_ID} : null),
+    getAll: (table) => {
+      if (table === TABLES.NODES) return nodeRows;
+      if (table === TABLES.PARTITIONS) return partitionRows;
+      if (table === TABLES.SERVICES) return serviceRows;
+      return [];
+    },
+    filter: () => [],
+    find: () => null,
+  };
+}
+
+test('production composition rejects missing ports and stale caches: cached counts never ' +
+  'grant management permission', async (t) => {
+  const now = Date.now();
+  const cachedNodes = buildCommittedNodeRows(now);
+  const cachedPartitions = [
+    ...buildSystemPartitionRows(NODE_IDS[0]),
+    {partition_id: 'p-app', table_id: 'app', table_name: 'app',
+      replica_count: 3, leader_node_id: NODE_IDS[0]},
+  ];
+  const cachedServices = cachedPartitions.flatMap(
+    (p) => buildVoterServiceRowsForPartition(p.partition_id, NODE_IDS),
+  );
+  const populatedCache = buildPopulatedProjectionCache(
+    cachedNodes,
+    cachedPartitions,
+    cachedServices,
+  );
+  const readinessStub = createCanonicalReadinessService(NODE_IDS);
+
+  // 1a. Missing authoritative control-plane read port (populated cache alone).
+  const missingReadPortCaps = physicalCapabilityAdapters();
+  const missingPortRun = await startApi(t, {
+    seedNodeId: NODE_IDS[0],
+    systemTableCache: populatedCache,
+    requestCellEnv: {...CREDS},
+    controlPlaneReadinessService: readinessStub,
+    managementAdapters: missingReadPortCaps.adapters,
+  });
+  t.equal(await missingPortRun.api.getManagementClusterSnapshot(), null,
+    'missing canonical authority port yields unavailable snapshot despite 3/3 cache');
+  const missingPortFacts = await missingPortRun.call('GET', FACTS_URL, {authorization: GOOD_AUTH});
+  t.equal(missingPortFacts.json.facts.topology.state, CLUSTER_FACTS_CONSTANTS.TOPOLOGY_UNKNOWN);
+  for (const [kind, params] of [
+    ['CREATE_BACKUP', BACKUP_PARAMS],
+    ['TRANSITION_RELEASE', RELEASE_PARAMS],
+    ['DECOMMISSION_NODE', {lagrangeNodeId: NODE_IDS[2]}],
+  ]) {
+    const res = await missingPortRun.call('POST', OPERATIONS_URL, {
+      body: envelope(kind, {...params}), authorization: GOOD_AUTH,
+    });
+    t.equal(res.json.state, MANAGEMENT_OPERATION_STATE.REJECTED,
+      `${kind} rejected when canonical authority port is missing`);
+  }
+  t.equal(missingReadPortCaps.effectCount(), 0, 'cached counts caused zero physical effects');
+
+  // 1b. Authoritative read port wired, but local PartitionService port missing for app partition.
+  const systemServicesMap = new Map([
+    [INITIAL_PARTITION_IDS[TABLES.NODES], buildLocalPartitionService(
+      INITIAL_PARTITION_IDS[TABLES.NODES], {getRows: () => cachedNodes})],
+    [INITIAL_PARTITION_IDS[TABLES.PARTITIONS], buildLocalPartitionService(
+      INITIAL_PARTITION_IDS[TABLES.PARTITIONS], {getRows: () => cachedPartitions})],
+    [INITIAL_PARTITION_IDS[TABLES.SERVICES], buildLocalPartitionService(
+      INITIAL_PARTITION_IDS[TABLES.SERVICES], {getRows: () => cachedServices})],
+  ]);
+  const missingLocalRuntimeCdc = new CDCIntegrationService({
+    nodeId: NODE_IDS[0],
+    sqlQueryEngine: buildOwnerRpcSqlEngine(systemServicesMap),
+    partitionServicesProvider: () => systemServicesMap,
+    systemTableCache: populatedCache,
+  });
+  const missingLocalCaps = physicalCapabilityAdapters();
+  const missingLocalRun = await startApi(t, {
+    seedNodeId: NODE_IDS[0],
+    systemTableCache: populatedCache,
+    cdcIntegrationService: missingLocalRuntimeCdc,
+    partitionServices: systemServicesMap, // p-app missing from local partition runtime!
+    requestCellEnv: {...CREDS},
+    controlPlaneReadinessService: readinessStub,
+    managementAdapters: missingLocalCaps.adapters,
+  });
+  const missingLocalSnap = await missingLocalRun.api.getManagementClusterSnapshot();
+  t.equal(missingLocalSnap.hasPartitionQuorum, false,
+    'missing local PartitionService for locally hosted partition rejects quorum');
+  for (const [kind, params, code] of [
+    ['CREATE_BACKUP', BACKUP_PARAMS, L3_BACKUP_RESTORE_REASON_CODE.PARTITION_QUORUM_UNAVAILABLE],
+    ['TRANSITION_RELEASE', RELEASE_PARAMS, L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT],
+    ['DECOMMISSION_NODE', {lagrangeNodeId: NODE_IDS[2]},
+      L6_DECOMMISSION_REASON_CODE.QUORUM_SAFETY_VIOLATION],
+  ]) {
+    const res = await missingLocalRun.call('POST', OPERATIONS_URL, {
+      body: envelope(kind, {...params}), authorization: GOOD_AUTH,
+    });
+    t.equal(res.json.state, MANAGEMENT_OPERATION_STATE.REJECTED);
+    t.equal(res.json.reasonCode, code, `${kind} cites explicit quorum refusal code`);
+  }
+  t.equal(missingLocalCaps.effectCount(), 0);
+
+  // 2. Stale cache says 3/3 active, while canonical owner reports 1/3 minority & cache source.
+  const minorityServices = [
+    ...buildSystemPartitionRows(NODE_IDS[0]).flatMap(
+      (p) => buildVoterServiceRowsForPartition(p.partition_id, NODE_IDS),
+    ),
+    ...buildVoterServiceRowsForPartition('p-app', [NODE_IDS[0]]),
+  ];
+  const staleCacheMap = new Map([
+    ...systemServicesMap.entries(),
+    [INITIAL_PARTITION_IDS[TABLES.SERVICES], buildLocalPartitionService(
+      INITIAL_PARTITION_IDS[TABLES.SERVICES], {getRows: () => minorityServices})],
+    ['p-app', buildLocalPartitionService('p-app')],
+  ]);
+  const staleCacheCdc = new CDCIntegrationService({
+    nodeId: NODE_IDS[0],
+    sqlQueryEngine: buildOwnerRpcSqlEngine(staleCacheMap),
+    partitionServicesProvider: () => staleCacheMap,
+    systemTableCache: populatedCache,
+  });
+  const staleCaps = physicalCapabilityAdapters();
+  const staleRun = await startApi(t, {
+    seedNodeId: NODE_IDS[0],
+    systemTableCache: populatedCache,
+    cdcIntegrationService: staleCacheCdc,
+    partitionServices: staleCacheMap,
+    requestCellEnv: {...CREDS},
+    controlPlaneReadinessService: readinessStub,
+    managementAdapters: staleCaps.adapters,
+  });
+  const staleSnap = await staleRun.api.getManagementClusterSnapshot();
+  t.equal(staleSnap.hasPartitionQuorum, false, 'stale 3/3 cache cannot override 1/3 owner rows');
+  const staleBkp = await staleRun.call('POST', OPERATIONS_URL, {
+    body: envelope('CREATE_BACKUP', {...BACKUP_PARAMS}), authorization: GOOD_AUTH,
+  });
+  t.equal(staleBkp.json.state, MANAGEMENT_OPERATION_STATE.REJECTED);
+  t.equal(staleBkp.json.reasonCode, L3_BACKUP_RESTORE_REASON_CODE.PARTITION_QUORUM_UNAVAILABLE);
+  t.equal(staleCaps.effectCount(), 0);
+
+  // Cache-sourced read on authoritative view is rejected even if rows claim 3/3.
+  const cacheSpoofRun = await startApi(t, {
+    seedNodeId: NODE_IDS[0],
+    systemTableCache: populatedCache,
+    authoritativeControlPlaneView: {
+      canRead: () => true,
+      readReadinessOwnerRows: async (tableName) => ({
+        success: true,
+        rowSetComplete: true,
+        source: 'local_cdc_cache',
+        rows: populatedCache.getAll(tableName),
+        readAuthorityWitness: buildLeaderWitness(INITIAL_PARTITION_IDS[tableName]),
+      }),
+    },
+    partitionServices: staleCacheMap,
+    requestCellEnv: {...CREDS},
+    controlPlaneReadinessService: readinessStub,
+  });
+  t.equal(await cacheSpoofRun.api.getManagementClusterSnapshot(), null,
+    'local_cdc_cache source is rejected at the partition-quorum authority boundary');
+});
+
+test('production composition rejects incomplete inventories, duplicate/learner rows, ' +
+  'missing leader evidence, and admits valid owner-backed quorum', async (t) => {
+  const now = Date.now();
+  const committedNodes = buildCommittedNodeRows(now);
+  let committedPartitions = [
+    ...buildSystemPartitionRows(NODE_IDS[0]),
+    {partition_id: 'p-app', table_id: 'app', table_name: 'app',
+      replica_count: 3, leader_node_id: NODE_IDS[0]},
+  ];
+  let committedServices = committedPartitions.flatMap(
+    (p) => buildVoterServiceRowsForPartition(p.partition_id, NODE_IDS),
+  );
+  let servicesQueryOverride = {};
+  let appLeaderRole = 'leader';
+  let appHasQuorum = true;
+
+  const partitionServices = new Map([
+    [INITIAL_PARTITION_IDS[TABLES.NODES], buildLocalPartitionService(
+      INITIAL_PARTITION_IDS[TABLES.NODES], {getRows: () => committedNodes})],
+    [INITIAL_PARTITION_IDS[TABLES.PARTITIONS], buildLocalPartitionService(
+      INITIAL_PARTITION_IDS[TABLES.PARTITIONS], {getRows: () => committedPartitions})],
+    [INITIAL_PARTITION_IDS[TABLES.SERVICES], buildLocalPartitionService(
+      INITIAL_PARTITION_IDS[TABLES.SERVICES], {
+        getRows: () => committedServices,
+        queryResultOverrides: () => servicesQueryOverride,
+      })],
+    ['p-app', {
+      partitionId: 'p-app',
+      replicaId: `p-app-${NODE_IDS[0]}`,
+      nodeId: NODE_IDS[0],
+      initialized: true,
+      getRole: () => appLeaderRole,
+      isLeaderReplica: () => appLeaderRole === 'leader',
+      getStatus: () => ({
+        partitionId: 'p-app',
+        role: appLeaderRole,
+        isLeader: appLeaderRole === 'leader',
+        term: 3,
+        initialized: true,
+        hasQuorum: appHasQuorum,
+      }),
+    }],
+  ]);
+
+  const identityOnlyCache = durableCache(GENUINE_CLUSTER_ID);
+  const cdcIntegrationService = new CDCIntegrationService({
+    nodeId: NODE_IDS[0],
+    sqlQueryEngine: buildOwnerRpcSqlEngine(partitionServices),
+    partitionServicesProvider: () => partitionServices,
+    systemTableCache: identityOnlyCache,
+  });
+  const readinessService = createCanonicalReadinessService(NODE_IDS);
+  const caps = physicalCapabilityAdapters();
+  const {api, call} = await startApi(t, {
+    seedNodeId: NODE_IDS[0],
+    systemTableCache: durableCache(null),
+    requestCellEnv: {...CREDS},
+    managementAdapters: caps.adapters,
+  });
+  // Wire via real production hydrateBootstrapApiRuntime composition helper.
+  hydrateBootstrapApiRuntime({
+    bootstrapAPI: api,
+    systemTableCache: identityOnlyCache,
+    messageGroupServices: new Map(),
+    partitionServices,
+    replicaHandler: {getPartitionService: (id) => partitionServices.get(id) ?? null},
+    cdcIntegrationService,
+    controlPlaneReadinessService: readinessService,
+    epochManager: null,
+    messageRouter: null,
+    startupRecoveryCoordinator: null,
+  });
+
+  // 3. Incomplete inventories rejected: partial, rowSetComplete: false, invalid witness, empty.
+  for (const override of [
+    {partial: true},
+    {rowSetComplete: false},
+    {readAuthorityWitness: {state: 'observed', partitionId: 'wrong-partition', role: 'leader',
+      servingNodeId: NODE_IDS[0], servingReplicaId: 'r1', term: 3,
+      appliedIndex: 1, commitIndex: 1, observedAtMs: now}},
+    {readAuthorityWitness: null},
+  ]) {
+    servicesQueryOverride = override;
+    t.equal(await api.getManagementClusterSnapshot(), null,
+      `incomplete/unwitnessed read rejected: ${JSON.stringify(override)}`);
+  }
+  servicesQueryOverride = {};
+
+  const savedPartitions = committedPartitions;
+  committedPartitions = [];
+  const emptyPartSnap = await api.getManagementClusterSnapshot();
+  t.equal(emptyPartSnap.hasPartitionQuorum, false, 'empty partitions inventory rejected');
+  committedPartitions = [
+    ...buildSystemPartitionRows(NODE_IDS[0]),
+    {partition_id: 'p-app', table_id: 'app', table_name: 'app',
+      replica_count: 0, leader_node_id: NODE_IDS[0]},
+  ];
+  t.equal((await api.getManagementClusterSnapshot()).hasPartitionQuorum, false,
+    'invalid/zero replica_count rejected');
+  committedPartitions = savedPartitions;
+
+  // 4a. Learner rows never count toward voter majority (1 voter + 2 learners < 2 majority).
+  const systemVoterRows = buildSystemPartitionRows(NODE_IDS[0]).flatMap(
+    (p) => buildVoterServiceRowsForPartition(p.partition_id, NODE_IDS),
+  );
+  committedServices = [
+    ...systemVoterRows,
+    {service_id: 'p-app-n1', service_type: 'partition', partition_id: 'p-app',
+      replica_id: 'p-app-n1', node_id: NODE_IDS[0], status: 'active', raft_role: 'leader'},
+    {service_id: 'p-app-n2-learner', service_type: 'partition', partition_id: 'p-app',
+      replica_id: 'p-app-n2-learner', node_id: NODE_IDS[1], status: 'active',
+      raft_role: 'learner'},
+    {service_id: 'p-app-n3-learner', service_type: 'partition', partition_id: 'p-app',
+      replica_id: 'p-app-n3-learner', node_id: NODE_IDS[2], status: 'active',
+      raft_role: 'learner'},
+  ];
+  const learnerSnap = await api.getManagementClusterSnapshot();
+  t.equal(learnerSnap.hasPartitionQuorum, false, '1 voter + 2 learners fails 3-replica quorum');
+  t.equal(learnerSnap.underReplicatedPartitionCount, 1);
+  const learnerBkp = await call('POST', OPERATIONS_URL, {
+    body: envelope('CREATE_BACKUP', {backupId: 'bkp-lrn', destinationUri: 'memory://auth/lrn'}),
+    authorization: GOOD_AUTH,
+  });
+  t.equal(learnerBkp.json.state, MANAGEMENT_OPERATION_STATE.REJECTED);
+  t.equal(learnerBkp.json.reasonCode, L3_BACKUP_RESTORE_REASON_CODE.PARTITION_QUORUM_UNAVAILABLE);
+
+  // 4b. Duplicate replica_id / service_id rows rejected.
+  committedServices = [
+    ...systemVoterRows,
+    {service_id: 'p-app-dup-1', service_type: 'partition', partition_id: 'p-app',
+      replica_id: 'same-replica', node_id: NODE_IDS[0], status: 'active', raft_role: 'leader'},
+    {service_id: 'p-app-dup-2', service_type: 'partition', partition_id: 'p-app',
+      replica_id: 'same-replica', node_id: NODE_IDS[1], status: 'active', raft_role: 'follower'},
+  ];
+  t.equal((await api.getManagementClusterSnapshot()).hasPartitionQuorum, false,
+    'duplicate (partition_id, replica_id) rows rejected');
+
+  // 4c. Duplicate active voter rows on the same (partition_id, node_id) rejected.
+  committedServices = [
+    ...systemVoterRows,
+    {service_id: 'p-app-n1-a', service_type: 'partition', partition_id: 'p-app',
+      replica_id: 'p-app-n1-a', node_id: NODE_IDS[0], status: 'active', raft_role: 'leader'},
+    {service_id: 'p-app-n1-b', service_type: 'partition', partition_id: 'p-app',
+      replica_id: 'p-app-n1-b', node_id: NODE_IDS[0], status: 'active', raft_role: 'follower'},
+  ];
+  t.equal((await api.getManagementClusterSnapshot()).hasPartitionQuorum, false,
+    'duplicate active voter rows on same node_id rejected');
+
+  // 5a. Missing leader_node_id rejected despite 3 distinct active follower voters.
+  committedServices = savedPartitions.flatMap(
+    (p) => buildVoterServiceRowsForPartition(p.partition_id, NODE_IDS),
+  );
+  committedPartitions = [
+    ...buildSystemPartitionRows(NODE_IDS[0]),
+    {partition_id: 'p-app', table_id: 'app', table_name: 'app',
+      replica_count: 3, leader_node_id: null},
+  ];
+  t.equal((await api.getManagementClusterSnapshot()).hasPartitionQuorum, false,
+    'missing leader_node_id rejected even with 3/3 active follower voters');
+
+  // 5b. leader_node_id naming a learner replica rejected.
+  committedPartitions = [
+    ...buildSystemPartitionRows(NODE_IDS[0]),
+    {partition_id: 'p-app', table_id: 'app', table_name: 'app',
+      replica_count: 3, leader_node_id: NODE_IDS[2]},
+  ];
+  committedServices = [
+    ...systemVoterRows,
+    ...buildVoterServiceRowsForPartition('p-app', [NODE_IDS[0], NODE_IDS[1]]),
+    {service_id: 'p-app-n3-learner', service_type: 'partition', partition_id: 'p-app',
+      replica_id: 'p-app-n3-learner', node_id: NODE_IDS[2], status: 'active',
+      raft_role: 'learner'},
+  ];
+  t.equal((await api.getManagementClusterSnapshot()).hasPartitionQuorum, false,
+    'leader_node_id pointing at learner replica rejected');
+
+  // 5c. Local PartitionService stepped down or lost consensus quorum rejected.
+  committedPartitions = savedPartitions;
+  committedServices = savedPartitions.flatMap(
+    (p) => buildVoterServiceRowsForPartition(p.partition_id, NODE_IDS),
+  );
+  appLeaderRole = 'follower';
+  t.equal((await api.getManagementClusterSnapshot()).hasPartitionQuorum, false,
+    'stepped-down local PartitionService contradicting leader_node_id rejected');
+  appLeaderRole = 'leader';
+  appHasQuorum = false;
+  t.equal((await api.getManagementClusterSnapshot()).hasPartitionQuorum, false,
+    'local PartitionService reporting hasQuorum: false rejected');
+  appHasQuorum = true;
+  t.equal(caps.effectCount(), 0, 'all negative cases produced zero physical effects');
+
+  // 6a. Valid 2/3 voter majority + 1 learner: quorum succeeds, backup succeeds!
+  committedServices = [
+    ...systemVoterRows,
+    ...buildVoterServiceRowsForPartition('p-app', [NODE_IDS[0], NODE_IDS[1]]),
+    {service_id: 'p-app-n3-learner', service_type: 'partition', partition_id: 'p-app',
+      replica_id: 'p-app-n3-learner', node_id: NODE_IDS[2], status: 'active',
+      raft_role: 'learner'},
+  ];
+  const majorityVoterSnap = await api.getManagementClusterSnapshot();
+  t.equal(majorityVoterSnap.hasPartitionQuorum, true, '2/3 voters + 1 learner satisfies quorum');
+  t.equal(majorityVoterSnap.underReplicatedPartitionCount, 1, 'learner does not mask under-RF');
+  const majBackupRes = await call('POST', OPERATIONS_URL, {
+    body: envelope('CREATE_BACKUP', {backupId: 'bkp-maj-ok', destinationUri: 'memory://auth/maj'}),
+    authorization: GOOD_AUTH,
+  });
+  t.equal(majBackupRes.json.state, MANAGEMENT_OPERATION_STATE.SUCCEEDED,
+    'consistent-cut backup succeeds under valid 2/3 owner-backed voter quorum');
+
+  // 6b. Valid 3/3 distinct active voter quorum: facts + all management operations succeed!
+  committedServices = savedPartitions.flatMap(
+    (p) => buildVoterServiceRowsForPartition(p.partition_id, NODE_IDS),
+  );
+  const fullSnap = await api.getManagementClusterSnapshot();
+  t.equal(fullSnap.hasPartitionQuorum, true, '3/3 owner-backed voters satisfy quorum');
+  t.equal(fullSnap.underReplicatedPartitionCount, 0);
+  t.equal(fullSnap.ready, true);
+
+  const factsRes = await call('GET', FACTS_URL, {authorization: GOOD_AUTH});
+  t.equal(factsRes.status, 200);
+  t.equal(factsRes.json.facts.topology.state, CLUSTER_FACTS_CONSTANTS.TOPOLOGY_OBSERVED);
+  t.equal(factsRes.json.facts.topology.nodeCount, 3);
+  t.equal(factsRes.json.facts.topology.readyNodeCount, 3);
+  t.equal(factsRes.json.facts.topology.underReplicatedPartitionCount, 0);
+
+  const fullBkpRes = await call('POST', OPERATIONS_URL, {
+    body: envelope('CREATE_BACKUP', {...BACKUP_PARAMS}), authorization: GOOD_AUTH,
+  });
+  t.equal(fullBkpRes.json.state, MANAGEMENT_OPERATION_STATE.SUCCEEDED);
+
+  const decRes = await call('POST', OPERATIONS_URL, {
+    body: envelope('DECOMMISSION_NODE', {lagrangeNodeId: NODE_IDS[2]}),
+    authorization: GOOD_AUTH,
+  });
+  t.equal(decRes.json.state, MANAGEMENT_OPERATION_STATE.ACCEPTED);
+
+  // Clear decommission record on a fresh hydrated owner check for TRANSITION_RELEASE.
+  api.managementV1Owner.operationsById.clear();
+  const relRes = await call('POST', OPERATIONS_URL, {
+    body: envelope('TRANSITION_RELEASE', {...RELEASE_PARAMS}), authorization: GOOD_AUTH,
+  });
+  t.equal(relRes.json.state, MANAGEMENT_OPERATION_STATE.ACCEPTED);
+  t.ok(caps.storage.writeCount > 0 && caps.effects.drains === 1 && caps.effects.restarts === 1,
+    'valid owner-backed authority grants permission to execute declared capabilities');
 });

@@ -16,6 +16,7 @@
 import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {isolatedCensusNodeOptions} from '../test-helpers/census-pre-kill-flush.js';
 
 const NODE_EXECUTABLE = process.execPath;
 const TEST_FLAG = '--test';
@@ -109,7 +110,9 @@ function runAnchoredScenario(testFile, scenarioName) {
   // report a present scenario as absent, so the child gets a clean env.
   const childEnv = {...process.env};
   delete childEnv[ENV_TEST_CONTEXT];
-  delete childEnv[ENV_NODE_OPTIONS];
+  const nodeOptions = isolatedCensusNodeOptions(process.env);
+  if (nodeOptions) childEnv[ENV_NODE_OPTIONS] = nodeOptions;
+  else delete childEnv[ENV_NODE_OPTIONS];
   const child = spawnSync(
     NODE_EXECUTABLE,
     [TEST_FLAG, pattern, testFile],

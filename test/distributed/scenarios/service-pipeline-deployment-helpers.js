@@ -16,7 +16,14 @@
  * Used by public-path-multinode-baseline and public-seam-durability.
  */
 
-import {copyFile, mkdir, readFile, rm, symlink} from 'node:fs/promises';
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  realpath,
+  rm,
+  symlink,
+} from 'node:fs/promises';
 import path from 'node:path';
 import {
   runBuild,
@@ -80,8 +87,13 @@ const LIFECYCLE_LISTENER = Object.freeze({
  * @return {Promise<{artifactsRoot: string, projectDirectory: string}>}
  */
 async function prepareServiceProject(scenarioSubdirectory) {
-  const artifactsRoot = path.resolve(
+  const configuredArtifactsRoot = path.resolve(
     process.cwd(), SCENARIO_ARTIFACTS.HOST_RELATIVE_PATH);
+  await mkdir(configuredArtifactsRoot, {recursive: true});
+  const [artifactsRoot, realRepoSource] = await Promise.all([
+    realpath(configuredArtifactsRoot),
+    realpath(path.resolve(process.cwd(), SOURCE_SYMLINK_NAME)),
+  ]);
   const scenarioDirectory = path.join(artifactsRoot, scenarioSubdirectory);
   const projectDirectory = path.join(scenarioDirectory, PROJECT_SUBDIR);
   await rm(scenarioDirectory, {force: true, recursive: true});
@@ -95,8 +107,7 @@ async function prepareServiceProject(scenarioSubdirectory) {
   const sourceLink = path.join(artifactsRoot, SOURCE_SYMLINK_NAME);
   await rm(sourceLink, {force: true});
   await symlink(
-    path.relative(
-      artifactsRoot, path.resolve(process.cwd(), SOURCE_SYMLINK_NAME)),
+    path.relative(artifactsRoot, realRepoSource),
     sourceLink);
   await copyFile(
     path.resolve(process.cwd(), SERVICE_MODULE_SOURCE),

@@ -1,8 +1,9 @@
 /**
- * Coverage flush and witness accounting for the fallback-branch census
- * (scripts/checks/fallback-branch-census.js composes it into the lane's
- * NODE_OPTIONS as `--import`, which Node applies to the main thread and to
- * every file-backed worker thread; it is never imported by repository code).
+ * Coverage flush, pre-kill freeze, and expected-participant launch roster
+ * hooks for the fallback-branch census (scripts/checks/fallback-branch-census.js
+ * composes it into the lane's NODE_OPTIONS as `--import`, which Node applies to
+ * the main thread and to every file-backed worker thread; it is never imported
+ * by repository code).
  *
  * NODE_V8_COVERAGE writes a thread's coverage only when the thread ends in an
  * orderly way. A process a signal ends, a process that aborts, a worker that
@@ -11,118 +12,85 @@
  * thread under coverage:
  *
  * - writes a START marker `witness-<pid>-<threadId>.json` (pid, threadId,
- *   ppid, entry script argv[1], cwd, startedAt, isMainThread) into the
- *   coverage directory the moment it loads;
+ *   ppid, entry script argv[1], cwd, startedAt, isMainThread, flushSignal)
+ *   into the coverage directory the moment it loads;
  * - flushes its coverage so far with `v8.takeCoverage()` every
- *   FLUSH_INTERVAL_MS (an unref'd timer: it never keeps a thread alive), so a
- *   thread killed without warning loses only its last interval;
+ *   FLUSH_INTERVAL_MS (an unref'd timer: it never keeps a thread alive);
  * - flushes once more on `beforeExit`, and on SIGTERM or SIGINT in a process
  *   that listens for that signal itself (main thread);
- * - serves a PRE-KILL FLUSH (below);
- * - writes an END marker `witness-<pid>-<threadId>-exit.json` (with `at`,
- *   its Date.now) on `exit`. Node writes the thread's final coverage only
- *   after every `exit` listener has run, so the end marker PRECEDES that
- *   write: the accounting counts a thread complete by its end marker only
- *   when a coverage file of that thread was written at or after it
- *   (fallback-branch-census-witnesses.js). A start marker without that pair
- *   (or a final flush acknowledgement) is a LOST witness: the merge names it,
- *   and the join voids the acquittals its import closure could hold.
+ * - serves a PRE-KILL FLUSH (`SIGURG` / `BroadcastChannel` / `Atomics.wait`
+ *   freeze, `scripts/checks/census-pre-kill-flush.js`);
+ * - writes an END marker `witness-<pid>-<threadId>-exit.json` (with `at`) on
+ *   `exit`, ordered before Node's final at-exit coverage write so accounting
+ *   completes a thread by exit only when a coverage file of that thread was
+ *   written at or after `at` (fallback-branch-census-witnesses.js).
  *
- * Markers are written with primordials captured when this preload loads,
- * before any code of the process runs, and their JSON text is built from the
- * body's own primitive fields: a process that later patches
- * Object.prototype.toJSON, Date.prototype.toISOString, JSON.stringify,
- * fs.writeFileSync or v8.takeCoverage (a test pollution case, a mock) still
- * writes complete markers, and a fake clock (a mocked Date.now) can neither
- * stall a flush's millisecond wait nor misdate a marker. (Before round 4,
- * four unit processes of collection 5 wrote `{}` end markers.)
+ * Markers are serialized with primordials captured at preload load before any
+ * process code runs, immune to Object.prototype.toJSON, Array.prototype.toJSON,
+ * JSON.stringify, Date.now, or Date.prototype.toISOString pollution.
  *
- * Pre-kill flush. A harness about to kill a child on purpose (a process-loss
- * test, a driver's stop deadline) asks it to flush first
- * (test/test-helpers/census-pre-kill-flush.js, only while collect's
- * CENSUS_COVERAGE_DIR_ENV is set): it writes `witness-<pid>-0-flush-request.json`
- * {id, signal} and sends FLUSH_SIGNAL (SIGURG: ignored by default, so a child
- * without this preload is untouched; nothing in the repository, Node or
- * libuv listens for it). The main thread then flushes its coverage, posts the
- * request on the FLUSH_CHANNEL BroadcastChannel every preloaded thread of the
- * process holds (unref'd), waits up to WORKER_ACK_BOUND_MS for the live
- * workers it created to acknowledge (`witness-<pid>-<threadId>-flushed.json`
- * {id}), and writes its own acknowledgement naming the threads that did and
- * did not answer. The flush is FINAL when the signal that follows will end
- * the process without running any of its JavaScript - SIGKILL, or a
- * terminating signal the process has no listener of its own for: then every
- * acknowledging thread stays frozen (Atomics.wait, no JavaScript runs) until
- * the kill lands, so its coverage is complete at the kill, and the code under
- * test sees what it saw before - a process that stops between two
- * instructions, only at the flush instead of a few milliseconds later. A
- * thread still alive FREEZE_BOUND_MS later withdraws its acknowledgement
- * (deletes it) and runs on. A flush followed by a signal the process handles
- * itself is not final: nothing freezes, its handler runs as before, and its
- * completeness rests on its end marker as usual. A process that kills itself
- * emits FLUSH_PROCESS_EVENT synchronously right before (its workers freeze;
- * the caller's own kill follows in the same stack).
- *
- * Node names a coverage file by process id, wall-clock millisecond and thread
- * id, and every write after a `takeCoverage()` holds only what ran since it
- * (the counters reset). A later write in the same millisecond - the next
- * flush, the exit write - would replace the full file with a near-empty one.
- * Each flush therefore waits until the clock has moved past its millisecond
- * (at most about two milliseconds) before anything else runs.
- *
- * Exit semantics are unchanged. Any listener for a terminating signal
- * replaces its default action, and Node drops a signal still pending when the
- * event loop empties - a process that SIGTERMs itself and returns exits 0
- * instead of dying - so this preload never listens for SIGTERM or SIGINT
- * unless the process does itself: it attaches its flush-only listener when
- * the process adds its own first listener for one, and detaches it when the
- * process removes its last one. Its FLUSH_SIGNAL listener replaces only an
- * ignore. A `new Worker(code, {eval: true})` thread does not run `--import`
- * preloads: it writes no marker, never acknowledges (the main thread's
- * acknowledgement lists it unanswered), and its loss is not seen.
- *
- * Outside the accounting, likewise: a process whose environment drops this
- * preload from NODE_OPTIONS while it keeps NODE_V8_COVERAGE. It writes
- * coverage (on an orderly exit, and nothing else), but no marker, so its
- * loss is invisible to the merge. Known sources (round 4 census of
- * `NODE_OPTIONS` in test/, scripts/, src/, examples/):
- * test/bootstrap/run-anchored-scenario-helper.js and
- * test/packaging/sea-bundle-smoke.test.js delete NODE_OPTIONS;
- * test/release/runtime-entry-link.test.js and
- * test/scripts/change-proof-subsystem-participant-safety.test.js blank it.
- * None of these kills such a process on a passing path, and every
- * marker-less writer in collection 5 wrote an orderly-exit file; a new site
- * of this kind must keep the preload or be added here.
+ * Launch owners also record every expected child Node process and Worker
+ * thread in `roster-<pid>-<threadId>.json` inside the coverage directory:
+ * this preload wraps `child_process` (`spawn`, `spawnSync`, `exec`,
+ * `execSync`, `execFile`, `execFileSync`) and `worker_threads.Worker` and
+ * synchronizes builtin ESM exports. A `new Worker(code, {eval: true})` thread
+ * or a child process whose `--import` preload or `NODE_V8_COVERAGE` was
+ * stripped therefore still appears in the expected participant roster and
+ * fails closed as a lost witness (`cause: 'uninstrumented'`).
  */
 
 import fs from 'node:fs';
+import {createRequire, syncBuiltinESMExports} from 'node:module';
 import path from 'node:path';
-import process from 'node:process';
+import util from 'node:util';
 import v8 from 'node:v8';
 import {BroadcastChannel, isMainThread, threadId} from 'node:worker_threads';
 
 import {
+  CENSUS_COVERAGE_DIR_ENV,
   FLUSH_CHANNEL,
   FLUSH_INTERVAL_MS,
   FLUSH_PROCESS_EVENT,
   FLUSH_SIGNAL,
   FREEZE_BOUND_MS,
+  ROSTER_MARKER,
   WITNESS_MARKER,
   WORKER_ACK_BOUND_MS,
 } from './fallback-branch-census-constants.js';
+import {
+  isClauseInstrumented,
+  isNodeLaunchCommand,
+  nowIsoString,
+  serializeFlatJson,
+} from './fallback-branch-census-shell.js';
+import {
+  recordExpectedForkProcess,
+  recordExpectedNodeProcess,
+  recordExpectedWorker,
+} from './fallback-branch-census-witnesses.js';
+
+const {process} = globalThis;
 
 // A test shortens the interval through this variable; a lane never sets it.
 const FLUSH_INTERVAL_ENV = 'LAGRANGE_CENSUS_FLUSH_INTERVAL_MS';
 const FLUSHED_SIGNALS = Object.freeze(['SIGTERM', 'SIGINT']);
-// Signals whose default action ends the process; SIGKILL cannot be handled.
 const UNCATCHABLE_KILL = 'SIGKILL';
 const TERMINATING_SIGNALS = Object.freeze(['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGQUIT']);
-const arrayIncludes = Function.call.bind(Array.prototype.includes);
-const arrayFilter = Function.call.bind(Array.prototype.filter);
-const arrayPush = Function.call.bind(Array.prototype.push);
-const jsonParse = JSON.parse;
+const CHILD_PROCESS_MODULE = 'node:child_process';
+const WORKER_THREADS_MODULE = 'node:worker_threads';
+const DIRECT_NODE_LAUNCH_METHODS = Object.freeze(['spawn', 'spawnSync', 'execFile']);
+const COMMAND_FAILED_PREFIX = 'Command failed: ';
+const OPTION_SEPARATOR = ' ';
+const NEWLINE = '\n';
+const EMPTY = '';
+const EMPTY_ARGS = Object.freeze([]);
+const OBJECT_TYPE = 'object';
+const FUNCTION_TYPE = 'function';
+const CUSTOM_PROMISIFY_SYMBOL = util.promisify.custom;
+
 const BEFORE_EXIT = 'beforeExit';
 const EXIT = 'exit';
-const WORKER_EVENT = 'worker';
+const ERROR_EVENT = 'error';
 const MESSAGE_EVENT = 'message';
 const COVERAGE_ENV = 'NODE_V8_COVERAGE';
 const END_BY_EXIT = 'exit';
@@ -136,70 +104,94 @@ const TEXT_ENCODING = 'utf8';
 // file name.
 const FILE_NAME_MILLISECONDS = 1;
 const ACK_POLL_MS = 2;
+const WORKER_START_POLL_MS = 5;
+const WORKER_START_BOUND_MS = 2000;
 const FREEZE_STEP_MS = 50;
 
-// Primordials: captured before any code of the process can patch them.
-const jsonStringify = JSON.stringify;
-const objectKeys = Object.keys;
+// Primordials captured before any code of the process can patch them.
 const arrayIsArray = Array.isArray;
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayJoin = Function.call.bind(Array.prototype.join);
+const arrayPush = Function.call.bind(Array.prototype.push);
+const atomicsWait = Atomics.wait;
+const toBoolean = Boolean;
+const bufferIsBuffer = Buffer.isBuffer;
+const bufferToString = Function.call.bind(Buffer.prototype.toString);
+const ErrorConstructor = Error;
+const toNumber = Number;
+const numberIsInteger = Number.isInteger;
+const PromiseConstructor = Promise;
+const promiseResolve = Promise.resolve.bind(Promise);
+const promiseThen = Function.call.bind(Promise.prototype.then);
+const reflectApply = Reflect.apply;
+const SetConstructor = Set;
+const setAdd = Function.call.bind(Set.prototype.add);
+const setDelete = Function.call.bind(Set.prototype.delete);
+const setForEach = Function.call.bind(Set.prototype.forEach);
+const setHas = Function.call.bind(Set.prototype.has);
+const setSize = Function.call.bind(Object.getOwnPropertyDescriptor(Set.prototype, 'size').get);
+const toStringValue = String;
+const stringEndsWith = Function.call.bind(String.prototype.endsWith);
+const stringSlice = Function.call.bind(String.prototype.slice);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const WeakMapConstructor = WeakMap;
+const weakMapGet = Function.call.bind(WeakMap.prototype.get);
+const weakMapSet = Function.call.bind(WeakMap.prototype.set);
+const jsonParse = JSON.parse;
+const objectAssign = Object.assign;
+const objectDefineProperty = Object.defineProperty;
 const dateNow = Date.now;
-const DateConstructor = Date;
-const dateToISOString = Function.call.bind(Date.prototype.toISOString);
+const existsSync = fs.existsSync;
+const readdirSync = fs.readdirSync;
 const writeFileSync = fs.writeFileSync;
 const unlinkSync = fs.unlinkSync;
 const readFileSync = fs.readFileSync;
 const pathJoin = path.join;
+const processCwd = process.cwd.bind(process);
+const processListenerCount = process.listenerCount.bind(process);
+const processListeners = process.listeners.bind(process);
+const processOn = process.on.bind(process);
+const processOnce = process.once.bind(process);
+const processRemoveListener = process.removeListener.bind(process);
+const stderrWrite = process.stderr.write.bind(process.stderr);
 const takeCoverage = v8.takeCoverage;
+const rawSetInterval = setInterval;
+const rawClearInterval = clearInterval;
+const requireBuiltin = createRequire(import.meta.url);
 
 const directory = process.env[COVERAGE_ENV];
+const rosterDirectory = directory || process.env[CENSUS_COVERAGE_DIR_ENV];
+const processRosterPrefix = `${ROSTER_MARKER.PREFIX}${process.pid}${ROSTER_MARKER.SEPARATOR}`;
 const sleepCell = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
-const liveWorkers = new Set();
-const servedRequests = new Set();
+const liveWorkers = new SetConstructor();
+const guardedWorkerThreads = new WeakMapConstructor();
+const workerStartupStates = new WeakMapConstructor();
+const servedRequests = new SetConstructor();
 let signalFlushed = false;
 let selfRequests = 0;
 let channel = null;
+
+function isOptionsObject(value) {
+  return typeof value === OBJECT_TYPE && value !== null && !arrayIsArray(value);
+}
+
+function setValues(set) {
+  const values = [];
+  setForEach(set, (item) => {
+    arrayPush(values, item);
+  });
+  return values;
+}
 
 function markerPath(suffix, thread = threadId) {
   return pathJoin(directory, `${WITNESS_MARKER.PREFIX}${process.pid}` +
     `${WITNESS_MARKER.SEPARATOR}${thread}${suffix}`);
 }
 
-// The JSON punctuation markerText writes between the fields it serializes.
-const JSON_TEXT = Object.freeze({
-  NULL: 'null', ARRAY_OPEN: '[', ARRAY_CLOSE: ']', OBJECT_OPEN: '{', OBJECT_CLOSE: '}',
-  ITEM_SEPARATOR: ',', KEY_SEPARATOR: ':', EMPTY: '',
-});
-
-// JSON text of one marker field: a primitive, or an array of primitives.
-// JSON.stringify of a primitive consults no toJSON hook; an array would.
-function fieldText(value) {
-  if (value === undefined) return JSON_TEXT.NULL;
-  if (!arrayIsArray(value)) return jsonStringify(value);
-  let text = JSON_TEXT.ARRAY_OPEN;
-  for (let index = 0; index < value.length; index += 1) {
-    text += `${index === 0 ? JSON_TEXT.EMPTY : JSON_TEXT.ITEM_SEPARATOR}${fieldText(value[index])}`;
-  }
-  return `${text}${JSON_TEXT.ARRAY_CLOSE}`;
-}
-
-// The marker's JSON text, built from the body's own fields in their order.
-function markerText(body) {
-  const keys = objectKeys(body);
-  let text = JSON_TEXT.OBJECT_OPEN;
-  for (let index = 0; index < keys.length; index += 1) {
-    text += `${index === 0 ? JSON_TEXT.EMPTY : JSON_TEXT.ITEM_SEPARATOR}` +
-      `${jsonStringify(keys[index])}${JSON_TEXT.KEY_SEPARATOR}${fieldText(body[keys[index]])}`;
-  }
-  return `${text}${JSON_TEXT.OBJECT_CLOSE}`;
-}
-
-function nowIso() {
-  return dateToISOString(new DateConstructor(dateNow()));
-}
-
-function writeMarker(suffix, body) {
+function writeMarker(suffix, body, thread = threadId) {
   try {
-    writeFileSync(markerPath(suffix), markerText(body));
+    writeFileSync(markerPath(suffix, thread), serializeFlatJson(body));
   } catch (_error) {
     // An unwritable coverage directory loses the marker; the merge then sees
     // coverage without a witness, never a witness claimed complete.
@@ -214,8 +206,334 @@ function readMarker(file) {
   }
 }
 
+function customPromisifyExec(wrapped) {
+  return function promisifiedExec(...callArgs) {
+    let child = null;
+    const promise = new PromiseConstructor((resolve, reject) => {
+      arrayPush(callArgs, (error, stdout, stderr) => {
+        if (error !== null) {
+          error.stdout = stdout;
+          error.stderr = stderr;
+          reject(error);
+        } else {
+          resolve({stdout, stderr});
+        }
+      });
+      child = reflectApply(wrapped, undefined, callArgs);
+    });
+    promise.child = child;
+    return promise;
+  };
+}
+
+function attachCustomPromisify(original, wrapped) {
+  if (typeof original[CUSTOM_PROMISIFY_SYMBOL] === FUNCTION_TYPE) {
+    objectDefineProperty(wrapped, CUSTOM_PROMISIFY_SYMBOL, {
+      configurable: true,
+      enumerable: false,
+      writable: true,
+      value: customPromisifyExec(wrapped),
+    });
+  }
+}
+
+function wrapNodeProcessLaunch(fn, receiver) {
+  const wrapped = function wrappedNodeProcessLaunch(...callArgs) {
+    const result = reflectApply(fn, receiver, callArgs);
+    recordExpectedNodeProcess(callArgs[0], callArgs[1], callArgs[2], result?.pid);
+    return result;
+  };
+  attachCustomPromisify(fn, wrapped);
+  return wrapped;
+}
+
+function wrapExecLaunch(fn, receiver) {
+  const wrapped = function wrappedExecLaunch(...callArgs) {
+    const result = reflectApply(fn, receiver, callArgs);
+    const options = callArgs[1];
+    const launchOptions = isOptionsObject(options) ? options : {};
+    const shellOptions = {...launchOptions, shell: launchOptions.shell || true};
+    recordExpectedNodeProcess(callArgs[0], null, shellOptions, result?.pid);
+    return result;
+  };
+  attachCustomPromisify(fn, wrapped);
+  return wrapped;
+}
+
+function wrapForkProcessLaunch(fn, receiver) {
+  return function wrappedForkProcessLaunch(...callArgs) {
+    const result = reflectApply(fn, receiver, callArgs);
+    recordExpectedForkProcess(callArgs[0], callArgs[1], callArgs[2], result?.pid);
+    return result;
+  };
+}
+
+function formatStderrSuffix(stderr) {
+  if (!stderr || stderr.length === 0) return EMPTY;
+  const text = bufferIsBuffer(stderr) ?
+    bufferToString(stderr, TEXT_ENCODING) :
+    toStringValue(stderr);
+  return `${NEWLINE}${text}`;
+}
+
+function finalizeExecSyncResult(commandLabel, launchOptions, result) {
+  if (!launchOptions?.stdio && result.stderr && result.stderr.length > 0) {
+    stderrWrite(result.stderr);
+  }
+  const resultFields = {
+    status: result.status,
+    signal: result.signal,
+    output: result.output,
+    pid: result.pid,
+    stdout: result.stdout,
+    stderr: result.stderr,
+  };
+  if (result.error) {
+    throw objectAssign(result.error, {error: result.error, ...resultFields});
+  }
+  if (result.status !== 0 || result.signal !== null) {
+    const stderrSuffix = formatStderrSuffix(result.stderr);
+    throw objectAssign(
+      new ErrorConstructor(`${COMMAND_FAILED_PREFIX}${commandLabel}${stderrSuffix}`),
+      resultFields,
+    );
+  }
+  return result.stdout;
+}
+
+function formatExecCommandLabel(head, argList) {
+  const parts = [head];
+  for (let index = 0; index < argList.length; index += 1) {
+    arrayPush(parts, argList[index]);
+  }
+  return arrayJoin(parts, OPTION_SEPARATOR);
+}
+
+function wrapExecFileSyncLaunch(origExecFileSync, origSpawnSync, receiver) {
+  return function wrappedExecFileSync(...callArgs) {
+    const command = callArgs[0];
+    const args = callArgs[1];
+    const options = callArgs[2];
+    if (!isNodeLaunchCommand(command, args, options)) {
+      return reflectApply(origExecFileSync, receiver, callArgs);
+    }
+    const hasArgArray = arrayIsArray(args);
+    const argList = hasArgArray ? args : [];
+    const rawOptions = hasArgArray ? options : args;
+    const launchOptions = isOptionsObject(rawOptions) ? rawOptions : {};
+    const result = origSpawnSync(command, argList, launchOptions);
+    recordExpectedNodeProcess(command, argList, launchOptions, result?.pid);
+    const commandLabel = formatExecCommandLabel(launchOptions.argv0 || command, argList);
+    return finalizeExecSyncResult(commandLabel, launchOptions, result);
+  };
+}
+
+function wrapExecSyncLaunch(origExecSync, origSpawnSync, receiver) {
+  return function wrappedExecSync(...callArgs) {
+    const command = callArgs[0];
+    const options = callArgs[1];
+    const launchOptions = isOptionsObject(options) ? options : {};
+    const shellOptions = {...launchOptions, shell: launchOptions.shell || true};
+    if (!isNodeLaunchCommand(command, null, shellOptions)) {
+      return reflectApply(origExecSync, receiver, callArgs);
+    }
+    const result = origSpawnSync(command, shellOptions);
+    recordExpectedNodeProcess(command, null, shellOptions, result?.pid);
+    return finalizeExecSyncResult(command, launchOptions, result);
+  };
+}
+
+function isWorkerEnvInstrumented(options, shareEnv) {
+  const workerEnv = options?.env === undefined || options?.env === shareEnv ?
+    process.env : options.env;
+  return isClauseInstrumented(workerEnv);
+}
+
+function shouldGuardWorkerStartup(options, isInstrumentedEnv) {
+  return toBoolean(directory) &&
+    !toBoolean(options?.eval) &&
+    isInstrumentedEnv;
+}
+
+function guardWorkerStartup(worker, rawUnref) {
+  const startFile = markerPath(WITNESS_MARKER.START, worker.threadId);
+  if (existsSync(startFile)) return;
+  const deadline = dateNow() + WORKER_START_BOUND_MS;
+  const state = {done: false, wantUnref: false, settled: null};
+  state.settled = new PromiseConstructor((resolve) => {
+    let timer = null;
+    const finish = () => {
+      if (state.done) return;
+      state.done = true;
+      if (timer !== null) rawClearInterval(timer);
+      if (state.wantUnref) reflectApply(rawUnref, worker, EMPTY_ARGS);
+      resolve();
+    };
+    timer = rawSetInterval(() => {
+      if (existsSync(startFile) || dateNow() >= deadline) finish();
+    }, WORKER_START_POLL_MS);
+    worker.once(EXIT, finish);
+    worker.once(ERROR_EVENT, finish);
+  });
+  weakMapSet(workerStartupStates, worker, state);
+}
+
+function isPendingProcessWorkerRosterFile(name) {
+  if (!stringStartsWith(name, processRosterPrefix) ||
+      !stringEndsWith(name, ROSTER_MARKER.SUFFIX)) {
+    return false;
+  }
+  const tidText = stringSlice(
+    name,
+    processRosterPrefix.length,
+    name.length - ROSTER_MARKER.SUFFIX.length,
+  );
+  const tid = toNumber(tidText);
+  if (!numberIsInteger(tid) || tid <= 0) return false;
+  if (existsSync(markerPath(WITNESS_MARKER.START, tid))) return false;
+  const marker = readMarker(pathJoin(directory, name));
+  if (marker === null) return true;
+  return marker.eval !== true && marker.hasStrippedClause !== true;
+}
+
+function hasPendingProcessRosteredWorker() {
+  if (!directory) return false;
+  let names;
+  try {
+    names = readdirSync(directory);
+  } catch (_error) {
+    return false;
+  }
+  for (let index = 0; index < names.length; index += 1) {
+    if (isPendingProcessWorkerRosterFile(names[index])) return true;
+  }
+  return false;
+}
+
+function waitForProcessRosteredWorkers() {
+  if (!hasPendingProcessRosteredWorker()) return promiseResolve();
+  const deadline = dateNow() + WORKER_START_BOUND_MS;
+  return new PromiseConstructor((resolve) => {
+    let done = false;
+    let timer = null;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      if (timer !== null) rawClearInterval(timer);
+      resolve();
+    };
+    timer = rawSetInterval(() => {
+      if (!hasPendingProcessRosteredWorker() || dateNow() >= deadline) finish();
+    }, WORKER_START_POLL_MS);
+  });
+}
+
+function writeTerminatedWorkerEnd(childThreadId, exitCode, terminatedAt) {
+  if (!existsSync(markerPath(WITNESS_MARKER.START, childThreadId))) return;
+  if (existsSync(markerPath(WITNESS_MARKER.END, childThreadId))) return;
+  writeMarker(WITNESS_MARKER.END, {
+    complete: true,
+    by: END_BY_EXIT,
+    exitCode,
+    at: terminatedAt,
+  }, childThreadId);
+}
+
+function invokeGuardedTerminate(rawTerminate, worker) {
+  const childThreadId = weakMapGet(guardedWorkerThreads, worker);
+  const trackEnd = childThreadId !== undefined && setHas(liveWorkers, childThreadId);
+  const terminatedAt = trackEnd ? nowIsoString() : null;
+  const exitPromise = reflectApply(rawTerminate, worker, EMPTY_ARGS);
+  if (!trackEnd) return exitPromise;
+  return promiseThen(exitPromise, (exitCode) => {
+    writeTerminatedWorkerEnd(childThreadId, exitCode, terminatedAt);
+    return exitCode;
+  });
+}
+
+function createRosteredWorkerClass(OriginalWorker, shareEnv) {
+  const rawTerminate = OriginalWorker.prototype.terminate;
+  const rawUnref = OriginalWorker.prototype.unref;
+  const rawRef = OriginalWorker.prototype.ref;
+  return class RosteredWorker extends OriginalWorker {
+    constructor(filename, options) {
+      super(filename, options);
+      const instrumentedEnv = isWorkerEnvInstrumented(options, shareEnv);
+      recordExpectedWorker(
+        process.env[COVERAGE_ENV] || rosterDirectory,
+        this.threadId,
+        filename,
+        options,
+        instrumentedEnv,
+      );
+      if (shouldGuardWorkerStartup(options, instrumentedEnv)) {
+        const childThreadId = this.threadId;
+        weakMapSet(guardedWorkerThreads, this, childThreadId);
+        setAdd(liveWorkers, childThreadId);
+        this.once(EXIT, () => setDelete(liveWorkers, childThreadId));
+        guardWorkerStartup(this, rawUnref);
+      }
+    }
+
+    unref() {
+      const state = weakMapGet(workerStartupStates, this);
+      if (state && !state.done) {
+        state.wantUnref = true;
+        return this;
+      }
+      return reflectApply(rawUnref, this, EMPTY_ARGS);
+    }
+
+    ref() {
+      const state = weakMapGet(workerStartupStates, this);
+      if (state) state.wantUnref = false;
+      return reflectApply(rawRef, this, EMPTY_ARGS);
+    }
+
+    terminate() {
+      const worker = this;
+      const state = weakMapGet(workerStartupStates, worker);
+      const ownStartup = state && !state.done ? state.settled : null;
+      if (ownStartup === null && !hasPendingProcessRosteredWorker()) {
+        return invokeGuardedTerminate(rawTerminate, worker);
+      }
+      const afterOwn = ownStartup !== null ?
+        promiseThen(ownStartup, waitForProcessRosteredWorkers) :
+        waitForProcessRosteredWorkers();
+      return promiseThen(afterOwn, () => invokeGuardedTerminate(rawTerminate, worker));
+    }
+  };
+}
+
+function installLaunchRosterHooks() {
+  const childProcess = requireBuiltin(CHILD_PROCESS_MODULE);
+  const origSpawnSync = childProcess.spawnSync;
+  for (let index = 0; index < DIRECT_NODE_LAUNCH_METHODS.length; index += 1) {
+    const method = DIRECT_NODE_LAUNCH_METHODS[index];
+    childProcess[method] = wrapNodeProcessLaunch(childProcess[method], childProcess);
+  }
+  childProcess.exec = wrapExecLaunch(childProcess.exec, childProcess);
+  childProcess.execFileSync = wrapExecFileSyncLaunch(
+    childProcess.execFileSync,
+    origSpawnSync,
+    childProcess,
+  );
+  childProcess.execSync = wrapExecSyncLaunch(
+    childProcess.execSync,
+    origSpawnSync,
+    childProcess,
+  );
+  childProcess.fork = wrapForkProcessLaunch(childProcess.fork, childProcess);
+  const workerThreads = requireBuiltin(WORKER_THREADS_MODULE);
+  workerThreads.Worker = createRosteredWorkerClass(
+    workerThreads.Worker,
+    workerThreads.SHARE_ENV,
+  );
+  syncBuiltinESMExports();
+}
+
 function sleepMs(milliseconds) {
-  Atomics.wait(sleepCell, 0, 0, milliseconds);
+  atomicsWait(sleepCell, 0, 0, milliseconds);
 }
 
 function flushCoverage() {
@@ -231,8 +549,6 @@ function flushCoverage() {
   }
 }
 
-// Hold this thread still until the kill lands; withdraw the acknowledgement
-// when it does not land within the bound.
 function freezeUntilKilled() {
   const until = dateNow() + FREEZE_BOUND_MS;
   while (dateNow() < until) sleepMs(FREEZE_STEP_MS);
@@ -243,12 +559,42 @@ function freezeUntilKilled() {
   }
 }
 
+function awaitWorkerAcks(id, waited) {
+  const pending = new SetConstructor();
+  for (let index = 0; index < waited.length; index += 1) {
+    setAdd(pending, waited[index]);
+  }
+  const acked = [];
+  const deadline = dateNow() + WORKER_ACK_BOUND_MS;
+  while (setSize(pending) > 0 && dateNow() < deadline) {
+    const snapshot = setValues(pending);
+    for (let index = 0; index < snapshot.length; index += 1) {
+      const thread = snapshot[index];
+      if (readMarker(markerPath(WITNESS_MARKER.FLUSHED, thread))?.id === id) {
+        setDelete(pending, thread);
+        arrayPush(acked, thread);
+      }
+    }
+    if (setSize(pending) > 0) sleepMs(ACK_POLL_MS);
+  }
+  return {acked, unacked: setValues(pending)};
+}
+
 function onChannelMessage(event) {
   const request = event?.data;
   if (request?.kind !== FLUSH_KIND || typeof request.id !== 'string') return;
+  if (setHas(servedRequests, request.id)) return;
+  setAdd(servedRequests, request.id);
   flushCoverage();
-  writeMarker(WITNESS_MARKER.FLUSHED, {id: request.id, final: request.final === true,
-    at: nowIso()});
+  const waited = setValues(liveWorkers);
+  const {acked, unacked} = awaitWorkerAcks(request.id, waited);
+  writeMarker(WITNESS_MARKER.FLUSHED, {
+    id: request.id,
+    final: request.final === true,
+    ackedThreads: acked,
+    unackedThreads: unacked,
+    at: nowIsoString(),
+  });
   if (request.final === true) freezeUntilKilled();
 }
 
@@ -269,46 +615,36 @@ function onSignal() {
 }
 
 function ownListenerCount(signal) {
-  return arrayFilter(process.listeners(signal), (listener) => listener !== onSignal).length;
+  return arrayFilter(processListeners(signal), (listener) => listener !== onSignal).length;
 }
 
-// Final: what follows ends the process before any of its JavaScript runs.
 function isFinal(signal, selfKill) {
   if (selfKill || signal === UNCATCHABLE_KILL) return true;
   return arrayIncludes(TERMINATING_SIGNALS, signal) && ownListenerCount(signal) === 0;
 }
 
-function awaitWorkerAcks(id, waited) {
-  const pending = new Set(waited);
-  const acked = [];
-  const deadline = dateNow() + WORKER_ACK_BOUND_MS;
-  while (pending.size > 0 && dateNow() < deadline) {
-    for (const thread of [...pending]) {
-      if (readMarker(markerPath(WITNESS_MARKER.FLUSHED, thread))?.id === id) {
-        pending.delete(thread);
-        arrayPush(acked, thread);
-      }
-    }
-    if (pending.size > 0) sleepMs(ACK_POLL_MS);
-  }
-  return {acked, unacked: [...pending]};
-}
-
 function serveFlush({id, signal, selfKill}) {
   const final = isFinal(signal, selfKill);
   flushCoverage();
-  const waited = [...liveWorkers];
+  const waited = setValues(liveWorkers);
   if (channel) channel.postMessage({kind: FLUSH_KIND, id, final});
   const {acked, unacked} = awaitWorkerAcks(id, waited);
-  writeMarker(WITNESS_MARKER.FLUSHED, {id, signal: signal ?? null, final, selfKill,
-    ackedThreads: acked, unackedThreads: unacked, at: nowIso()});
+  writeMarker(WITNESS_MARKER.FLUSHED, {
+    id,
+    signal: signal ?? null,
+    final,
+    selfKill,
+    ackedThreads: acked,
+    unackedThreads: unacked,
+    at: nowIsoString(),
+  });
   if (final && !selfKill) freezeUntilKilled();
 }
 
 function onFlushSignal() {
   const request = readMarker(markerPath(WITNESS_MARKER.FLUSH_REQUEST));
-  if (typeof request?.id !== 'string' || servedRequests.has(request.id)) return;
-  servedRequests.add(request.id);
+  if (typeof request?.id !== 'string' || setHas(servedRequests, request.id)) return;
+  setAdd(servedRequests, request.id);
   serveFlush({id: request.id, signal: request.signal, selfKill: false});
 }
 
@@ -317,52 +653,56 @@ function onSelfFlush(signal) {
   serveFlush({id: `${SELF_REQUEST_PREFIX}${selfRequests}`, signal, selfKill: true});
 }
 
-function trackWorkers() {
-  process.on(WORKER_EVENT, (worker) => {
-    // A Worker's threadId reads -1 once it has exited: keep it from now.
-    const thread = worker.threadId;
-    liveWorkers.add(thread);
-    worker.once(EXIT, () => liveWorkers.delete(thread));
+// Follow the process's own signal listeners: flush beside them, never alone.
+function followSignalListeners() {
+  const attached = new SetConstructor();
+  processOn(NEW_LISTENER, (event, listener) => {
+    const followed = arrayIncludes(FLUSHED_SIGNALS, event);
+    if (listener === onSignal || setHas(attached, event) || !followed) return;
+    setAdd(attached, event);
+    processOn(event, onSignal);
+  });
+  processOn(REMOVE_LISTENER, (event, listener) => {
+    if (listener === onSignal || !setHas(attached, event)) return;
+    if (processListenerCount(event) === 1) {
+      setDelete(attached, event);
+      processRemoveListener(event, onSignal);
+    }
   });
 }
 
-// Follow the process's own signal listeners: flush beside them, never alone.
-function followSignalListeners() {
-  const attached = new Set();
-  process.on(NEW_LISTENER, (event, listener) => {
-    const followed = arrayIncludes(FLUSHED_SIGNALS, event);
-    if (listener === onSignal || attached.has(event) || !followed) return;
-    attached.add(event);
-    process.on(event, onSignal);
-  });
-  process.on(REMOVE_LISTENER, (event, listener) => {
-    if (listener === onSignal || !attached.has(event)) return;
-    if (process.listenerCount(event) === 1) {
-      attached.delete(event);
-      process.removeListener(event, onSignal);
-    }
-  });
+if (rosterDirectory) {
+  installLaunchRosterHooks();
 }
 
 if (directory) {
   openChannel();
   if (isMainThread) {
-    trackWorkers();
     followSignalListeners();
-    process.on(FLUSH_SIGNAL, onFlushSignal);
-    process.on(FLUSH_PROCESS_EVENT, onSelfFlush);
+    processOn(FLUSH_SIGNAL, onFlushSignal);
+    processOn(FLUSH_PROCESS_EVENT, onSelfFlush);
+  } else {
+    flushCoverage();
   }
   writeMarker(WITNESS_MARKER.START, {
-    pid: process.pid, threadId, ppid: process.ppid,
-    entry: process.argv[ENTRY_ARGUMENT] ?? null, cwd: process.cwd(),
-    startedAt: nowIso(), isMainThread,
+    pid: process.pid,
+    threadId,
+    ppid: process.ppid,
+    entry: process.argv[ENTRY_ARGUMENT] ?? null,
+    cwd: processCwd(),
+    startedAt: nowIsoString(),
+    isMainThread,
     flushSignal: isMainThread ? FLUSH_SIGNAL : null,
   });
-  const interval = Number(process.env[FLUSH_INTERVAL_ENV]) || FLUSH_INTERVAL_MS;
-  setInterval(flushCoverage, interval).unref();
-  process.once(BEFORE_EXIT, flushCoverage);
-  process.once(EXIT, (code) => {
-    writeMarker(WITNESS_MARKER.END, {complete: true, by: END_BY_EXIT, exitCode: code,
-      at: nowIso()});
+  const interval = toNumber(process.env[FLUSH_INTERVAL_ENV]) || FLUSH_INTERVAL_MS;
+  rawSetInterval(flushCoverage, interval).unref();
+  processOnce(BEFORE_EXIT, flushCoverage);
+  processOnce(EXIT, (code) => {
+    writeMarker(WITNESS_MARKER.END, {
+      complete: true,
+      by: END_BY_EXIT,
+      exitCode: code,
+      at: nowIsoString(),
+    });
   });
 }

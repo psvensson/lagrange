@@ -4,7 +4,7 @@ import {fork} from 'node:child_process';
 import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {flushCoverageBeforeKill} from '../test-helpers/census-pre-kill-flush.js';
+import {flushCoverageBeforeKill} from '../../scripts/checks/census-pre-kill-flush.js';
 const CHILD = new URL('./service-consensus-creation-recovery-child.js', import.meta.url);
 
 function child(children, args) {

@@ -18,6 +18,12 @@ import {
 } from './sql-query-engine-participant-wire.js';
 import {IndexService} from '../index-management/index-service.js';
 import {QueryOptimizer} from '../index-management/query-optimizer.js';
+import {
+  CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED,
+} from '../control-plane/control-plane-readiness-constants.js';
+import {
+  readCacheApplyChangeChannel,
+} from '../control-plane/control-plane-readiness-collaborators.js';
 
 const LOCAL_STR_SQL_CONTROL_PLANE = 'sql_control_plane';
 const LOCAL_STR_FUNCTION = 'function';
@@ -96,6 +102,25 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
       null;
   engine.authoritativeRoutingOverlayEntries = new Map();
   engine.bootstrapRoutingOverlayEntries = new Map();
+  const cacheApplyChannel = readCacheApplyChangeChannel(engine.systemCache);
+  if (cacheApplyChannel !== CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED) {
+    engine.authoritativeRoutingOverlayCacheApplyListener = (
+      tableName,
+      operation,
+      record,
+    ) => {
+      engine.handleAuthoritativeRoutingOverlayCacheApplyChange(
+        tableName,
+        operation,
+        record,
+      );
+    };
+    cacheApplyChannel.onCacheApplyChange(
+      engine.authoritativeRoutingOverlayCacheApplyListener,
+    );
+  } else {
+    engine.authoritativeRoutingOverlayCacheApplyListener = null;
+  }
   engine.localRuntimeRoutingOverlay = {
     getServicesForPartition: (partitionId) =>
       engine.getLocalRuntimeRoutingOverlayServices(partitionId),

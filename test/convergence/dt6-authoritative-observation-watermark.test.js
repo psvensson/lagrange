@@ -39,6 +39,7 @@ function withLeaderWitness(
   observedAtMs = AUTHORITATIVE_OBSERVED_AT_MS,
 ) {
   return {
+    rowSetComplete: true,
     ...result,
     readAuthorityWitness: {
       state: 'observed',

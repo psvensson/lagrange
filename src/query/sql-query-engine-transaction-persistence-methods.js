@@ -23,7 +23,10 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {resolveMutationCompletionState} from
   '../control-plane/control-plane-system-table-gateway-mutation-contracts.js';
-import {CONTROL_PLANE_MUTATION_OUTCOME} from
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_MUTATION_OUTCOME,
+} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {TRANSACTION_ID_COLLISION_CODE} from
   './distributed/distributed-transaction-coordinator-constants.js';
@@ -316,7 +319,12 @@ const sqlQueryEngineTransactionPersistenceMethods = {
       TABLES.SQL_TRANSACTIONS,
       SQL_TRANSACTION_ROW_READ_SQL,
       [trimmedString(transactionId)],
-      {workClass: PRESSURE_WORK_CLASS.CRITICAL},
+      {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+            .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+      },
     );
     if (read?.success !== true || !Array.isArray(read.rows)) {
       return null;

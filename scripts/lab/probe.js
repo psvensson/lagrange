@@ -1878,7 +1878,7 @@ const PLACEMENT_SCRIPT_HEAD = [
   // install no TERM handler, so the wait ends with them.
   'stop() {',
   '  if [ -n "$pid" ]; then',
-  '    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null',
+  '    kill -s TERM -- "-$pid" 2>/dev/null || kill -s TERM -- "$pid" 2>/dev/null',
   '    wait "$pid"',
   '  fi',
   `  exit ${PLACEMENT_EXIT.TERMINATED}`,

@@ -6,6 +6,7 @@ import {
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {
+  buildMockPolicyAuthorityWitness,
   createTestCoordinator,
 } from '../rebalancer/test-helpers.js';
 
@@ -79,15 +80,21 @@ async function runDependentAdmission({
           rows: [],
         };
       }
+      const source = authoritativeSources[partitionId] || 'owner_rpc_lane';
+      const rows = malformed.has(partitionId) ?
+        {} :
+        buildLedgerRows(
+          partitionId,
+          authoritativePlacements[partitionId] || [],
+        );
       return {
         success: true,
-        source: authoritativeSources[partitionId] || 'owner_rpc_lane',
-        rows: malformed.has(partitionId) ?
-          {} :
-          buildLedgerRows(
-            partitionId,
-            authoritativePlacements[partitionId] || [],
-          ),
+        source,
+        rows,
+        ...(Array.isArray(rows) ? {rowSetComplete: true} : {}),
+        ...(source === 'owner_rpc_lane' && Array.isArray(rows) ? {
+          readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
+        } : {}),
       };
     },
     async readRows(tableName, sql, params = [], options = {}) {

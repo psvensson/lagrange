@@ -1,26 +1,27 @@
 /**
  * Quest provisioning-admission-ledger-hold-transient-wait (run-24 head).
  *
- * Run-24: the MovieLens demo's FIRST CREATE TABLE arrived ~6s after
- * formation, while the run-20 operation-ledger self-move hold was
- * legitimately engaged (ledger replicas spreading off the seed). EVERY
- * target node was deferred with the transient reason
- * operation_ledger_self_move_in_flight, so provisionable=0 — and the create
- * failed the CLIENT after only the short target-node convergence window
- * (1s default / 10s adaptive), even though the governing client-facing
- * provisioning budget (TABLE_CREATE_PROVISION_TIMEOUT_MS = 30s) had ~24s
- * left and the hold clears in seconds. Internal pacing must not rely on
- * client fidelity (ARCH-0016: load may slow the system, not break it).
- *
- * The contract under test: when the convergence wait expires with ZERO
- * provisionable targets and EVERY rejection is a transient ledger-hold
- * reason, provisioning keeps waiting the hold out under the EXISTING
- * provisioning budget (no raised timeouts — honest budget attribution);
- * a hold that never clears still fails within that budget, and a
- * non-transient whole-cluster rejection still fails fast.
+ * R09 supersession alignment: sealed quest
+ * `serve-eligibility-committed-epoch-read`
+ * (`solve/quests/serve-eligibility-committed-epoch-read/quest.json`, commit
+ * `2f83f97fdc48`) explicitly deleted internal `SQLQueryEngine` provisioning
+ * admission-convergence polling (`waitForProvisionTargetNodeIds` sleep loop
+ * and `isWholeClusterTransientProvisioningHold`), delegating retry pacing to
+ * `SchemaProvisioningJobOwner`. Under the sealed F10/C6 contract:
+ *  - While a whole-cluster transient ledger hold is active (`nowMs < holdUntilMs`),
+ *    `provisionInitialTablePartition` performs zero internal sleep/polling
+ *    (`sleepCalls === 0`) and fails immediately with
+ *    `TABLE_PARTITION_PROVISIONING_RETRYABLE` so `SchemaProvisioningJobOwner`
+ *    paces the retry.
+ *  - Once the caller/`SchemaProvisioningJobOwner` retries at
+ *    `nowMs >= holdUntilMs`, `provisionInitialTablePartition` succeeds in one
+ *    pass (`resolvedReplicaCount: 3`, dispatching all three target nodes).
+ *  - Permanent/hard rejections and coordinator interlock precheck fidelity
+ *    (Subtests 2-5) remain enforced unchanged.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
   applyRebalanceCoordinatorLedgerInterlockAdmissionMethods,
@@ -137,21 +138,21 @@ function createEngineFixture(t, {rebalanceCoordinator, cache, localNodeId}) {
   return {clock, engine};
 }
 
-test('run-24: CREATE TABLE survives a whole-cluster transient ' +
-  'operation-ledger hold that outlasts the convergence window but clears ' +
-  'inside the provisioning budget (RED on the unfixed head)', async (t) => {
+test('run-24 (R09 F10/C6): whole-cluster transient operation-ledger hold ' +
+  'fails fast with TABLE_PARTITION_PROVISIONING_RETRYABLE and zero internal ' +
+  'polling, then caller retry after hold clears succeeds', async (t) => {
   const partitionId = 'tbl-run24-ledger-hold-p1';
   const localNodeId = 'node-a';
+  const holdUntilMs = 40;
   const createdTargetNodeIds = [];
   const {services, cache} = createClusterFixture({
     nodeIds: ['node-a', 'node-b', 'node-c'],
   });
 
-  // The hold clears only after MANY sleep ticks — far past the 10ms
-  // convergence window at 1ms polls, well inside the 400ms budget.
   let sleepCalls = 0;
+  let clockRef = null;
   const rebalanceCoordinator = createHoldingRebalanceCoordinator({
-    isHoldEngaged: () => sleepCalls < 40,
+    isHoldEngaged: () => clockRef.nowMs < holdUntilMs,
     createdTargetNodeIds,
     services,
     localNodeId,
@@ -161,38 +162,49 @@ test('run-24: CREATE TABLE survives a whole-cluster transient ' +
     cache,
     localNodeId,
   });
+  clockRef = clock;
   const originalSleep = engine.sleep.bind(engine);
   engine.sleep = async (durationMs) => {
     sleepCalls += 1;
     return originalSleep(durationMs);
   };
 
-  // The REAL CREATE TABLE geometry (table-creation-service): a defaulted
-  // QUORUM minimum below the target count — the shape that skipped the
-  // convergence wait entirely in run-24 (enforceEveryProvisioningOperation
-  // false), so the create fail-fasted in one admission pass.
-  await engine.provisionInitialTablePartition({
+  await t.rejects(
+    engine.provisionInitialTablePartition({
+      partitionId,
+      replicaCount: 3,
+      minimumRoutableReplicaCount: 2,
+      minimumRoutableReplicaCountWasDefaulted: true,
+    }),
+    {
+      code: QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE,
+      message: /minimum routable provisioning cohort/,
+    },
+    'active whole-cluster ledger hold fails immediately as retryable',
+  );
+  t.equal(sleepCalls, 0, 'zero internal query-engine polling while hold is active');
+  t.same(createdTargetNodeIds, [], 'nothing was planned while hold is active');
+
+  // SchemaProvisioningJobOwner / caller retries once the ledger hold clears.
+  clock.nowMs = holdUntilMs;
+  const summary = await engine.provisionInitialTablePartition({
     partitionId,
     replicaCount: 3,
     minimumRoutableReplicaCount: 2,
     minimumRoutableReplicaCountWasDefaulted: true,
   });
 
-  t.ok(
-    sleepCalls >= 40,
-    'provisioning waited out the whole-cluster transient hold internally ' +
-      `(${sleepCalls} polls)`,
+  t.equal(sleepCalls, 0, 'retry succeeds in one pass with zero internal polling');
+  t.equal(summary.resolvedReplicaCount, 3, 'all three replicas resolved');
+  t.same(
+    createdTargetNodeIds.slice().sort(),
+    ['node-a', 'node-b', 'node-c'],
+    'all three target nodes planned on retry',
   );
   t.same(
-    createdTargetNodeIds.sort(),
+    services.map((service) => service.node_id).sort(),
     ['node-a', 'node-b', 'node-c'],
-    'all three replicas provisioned once the ledger hold cleared — the ' +
-      'client never saw the transient',
-  );
-  t.ok(
-    clock.nowMs > 10 && clock.nowMs < 400,
-    'the hold outlasted the inner convergence window and cleared before the ' +
-      `parent deadline (${clock.nowMs}ms)`,
+    'all three replicas dispatched once the ledger hold cleared',
   );
 });
 

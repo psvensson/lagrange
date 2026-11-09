@@ -101,7 +101,8 @@ describe('acceptance proof manifest runner', () => {
   it('fails closed on timeout', () => {
     const fixture = setup(manifest([
       command('timeout', {
-        argv: ['-e', 'setTimeout(() => {}, 5000)'],
+        executable: 'sleep',
+        argv: ['5'],
         timeoutMs: 20,
       }),
     ]));

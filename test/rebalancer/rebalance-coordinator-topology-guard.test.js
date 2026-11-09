@@ -84,6 +84,7 @@ function createSqlEngine(options = {}) {
       const [, partitionId] = params;
       return {
         success: true,
+        rowSetComplete: true,
         rows: authoritativeServices.filter(
           (row) => row.partition_id === partitionId,
         ),
@@ -144,10 +145,11 @@ function createSqlEngine(options = {}) {
       const [operationId] = params;
       return {
         success: true,
+        rowSetComplete: true,
         rows: operations.has(operationId) ? [operations.get(operationId)] : [],
       };
     }
-    return {success: true, rows: []};
+    return {success: true, rowSetComplete: true, rows: []};
   };
 
   return {
@@ -350,12 +352,20 @@ test(
       readAuthoritativeRows: async (tableName) => {
         nowMs += 1_500;
         if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-          return {success: true, rows: []};
+          return {success: true, rowSetComplete: true, rows: []};
         }
-        return {success: true, rows: authoritativeServices};
+        return {
+          success: true,
+          rowSetComplete: true,
+          rows: authoritativeServices,
+        };
       },
-      readRows: async () => ({success: true, rows: authoritativeServices}),
-      executeQuery: async () => ({success: true, rows: []}),
+      readRows: async () => ({
+        success: true,
+        rowSetComplete: true,
+        rows: authoritativeServices,
+      }),
+      executeQuery: async () => ({success: true, rowSetComplete: true, rows: []}),
     };
     const {coordinator} = createCoordinator({
       cacheServices: authoritativeServices,

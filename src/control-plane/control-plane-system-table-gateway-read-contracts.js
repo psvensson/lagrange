@@ -134,7 +134,18 @@ function resolveAuthoritativeReadMode(options = {}) {
   const explicitMode = normalizeAuthoritativeReadMode(
     options?.authoritativeReadMode,
   );
-  return explicitMode || CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY;
+  if (explicitMode) {
+    return explicitMode;
+  }
+  const strategy = normalizeReadStrategy(options?.strategy);
+  if (
+    strategy === CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE ||
+    strategy === CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED
+  ) {
+    return CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+      .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK;
+  }
+  return CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY;
 }
 
 function resolveAuthoritativeReadModeContract(options = {}) {
@@ -396,10 +407,15 @@ function applyReadWorkloadProfileDefaults(resolvedOptions = {}, options = {}) {
 function resolveReadProfileOptions(options = {}) {
   const readProfile = normalizeReadProfile(options?.readProfile);
   if (!readProfile) {
+    const hasExplicitOrStrategyMode =
+      Boolean(normalizeAuthoritativeReadMode(options?.authoritativeReadMode)) ||
+      Boolean(normalizeReadStrategy(options?.strategy));
     return applyReadWorkloadProfileDefaults(
       {
         ...options,
-        authoritativeReadMode: resolveAuthoritativeReadMode(options),
+        ...(hasExplicitOrStrategyMode ?
+          {authoritativeReadMode: resolveAuthoritativeReadMode(options)} :
+          {}),
       },
       options,
     );

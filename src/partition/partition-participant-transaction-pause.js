@@ -246,7 +246,8 @@ function refuseStaleResume(handler, service) {
 function finalResumeFactsMatch(handler, service, facts, request, status) {
   return sameReplicaGeneration(facts.generation, replicaGenerationOf(handler, service, status)) &&
     status.term === facts.membership.term && status.leaderId === facts.leaderReplicaId &&
-    status.configurationKey === request.release.configurationKey;
+    status.configurationKey === request.release.configurationKey &&
+    status.membershipGenerationIndex === request.release.membershipGenerationIndex;
 }
 
 async function resumeParticipantCutoverAdmission(handler, service, request) {

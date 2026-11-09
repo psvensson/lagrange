@@ -129,6 +129,10 @@ test('TiDB: the readiness client runs on the TiDB host and is exited before meas
     assert.ok(arraySome(later, (command) =>
       command === `docker stop -t 0 ${client.containerId}`));
     assert.equal(ledger.containers.get(client.containerId).running, false);
+    const rechecked = await deployment.operations.awaitReady();
+    assert.equal(rechecked.pd.state, 'ready');
+    assert.equal(rechecked.sql.clientContainerId, client.containerId);
+    assert.equal(ledger.containers.get(client.containerId).running, false);
   });
 
 // Live campaign bench-live-20261101-b-r2: the Lagrange seed exited in seconds
@@ -200,4 +204,11 @@ test('Lagrange: starts all joining nodes before polling joiner /readyz so 3-node
     assert.ok(thirdNodeStartIndex > 0, 'third lagrange-node container must be started');
     assert.ok(firstJoinerReadyPollIndex > thirdNodeStartIndex,
       'joiner /readyz must not be polled before all joining node containers are started');
+    const factsCalls = arrayFilter(calls, (call) =>
+      stringIncludes(call.command, ':8080/management/v1/facts'));
+    assert.ok(factsCalls.length > 0, 'must poll /management/v1/facts');
+    for (const call of factsCalls) {
+      assert.match(call.command, /-u 'lagrange-harness-user:lagrange-harness-password'/u,
+        'facts endpoint requires HTTP Basic auth');
+    }
   });

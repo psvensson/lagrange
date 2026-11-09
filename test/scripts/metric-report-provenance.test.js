@@ -4,6 +4,8 @@ import path from 'node:path';
 import {test} from 'node:test';
 import {collectLiveInputs, refreshImportGraphReport} from
   '../../scripts/generate-global-owner-debt-inventory.js';
+import {buildInventory as buildPriorityRecoveryInventory} from
+  '../../scripts/generate-priority-recovery-owner-inventory.js';
 import {listJavaScriptFiles} from
   '../../scripts/global-owner-debt-inventory/helpers.js';
 import {METRIC_REPORTS} from '../../scripts/metric-report-constants.js';
@@ -111,3 +113,43 @@ test('invalid report custody cannot be reused and changed measurement inputs ref
   assert.throws(() => ensureMetricReports(root), /metric report refresh failed: complexity/,
     'partial unsealed output followed by exit 1 cannot authorize inventory');
 });
+
+test('import-graph and priority-recovery generators cruise sibling roots sharing an ancestor',
+  async () => {
+    const templateRoot = createMetricFixture();
+    const siblingRoot = fs.mkdtempSync(
+      path.join(path.dirname(process.cwd()), '.tmp-metric-prov-'),
+    );
+    try {
+      for (const targetRoot of [templateRoot, siblingRoot]) {
+        if (targetRoot !== templateRoot) {
+          fs.cpSync(templateRoot, siblingRoot, {recursive: true, verbatimSymlinks: true});
+        }
+        fs.mkdirSync(path.join(targetRoot, 'src/admin'), {recursive: true});
+        fs.writeFileSync(path.join(targetRoot, 'src/admin/priority-recovery-evidence.js'),
+          'export const buildEvidence = () => ({ok: true});\n');
+        fs.writeFileSync(path.join(targetRoot, 'src/admin/priority-recovery-snapshot.js'),
+          'import {buildEvidence} from \'./priority-recovery-evidence.js\';\n' +
+          'export const buildSnapshot = () => buildEvidence();\n');
+      }
+      assert.notEqual(process.cwd(), siblingRoot);
+
+      const templateGraph = await refreshImportGraphReport(
+        templateRoot, listJavaScriptFiles(templateRoot),
+      );
+      const siblingGraph = await refreshImportGraphReport(
+        siblingRoot, listJavaScriptFiles(siblingRoot),
+      );
+      assert.equal(siblingGraph.snapshotDigest, templateGraph.snapshotDigest);
+      assert.deepEqual(siblingGraph.importers['src/admin/priority-recovery-evidence.js'],
+        ['src/admin/priority-recovery-snapshot.js']);
+
+      const priorityInventory = await buildPriorityRecoveryInventory(siblingRoot);
+      assert.equal(priorityInventory.closure.unparsedImportEdgeCount, 0);
+      assert.equal(priorityInventory.metrics.moduleCount, 2);
+      assert.equal(priorityInventory.metrics.importEdgeCount, 1);
+    } finally {
+      fs.rmSync(templateRoot, {recursive: true, force: true});
+      fs.rmSync(siblingRoot, {recursive: true, force: true});
+    }
+  });

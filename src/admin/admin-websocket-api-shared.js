@@ -216,6 +216,21 @@ function buildLoadLaneRuntimeAuthoritySummary(runtimeAuthority) {
   });
 }
 
+const EMPTY_REASON_CODES = Object.freeze([]);
+
+function extractServeEligibilityReasonCodes(serveEligibility) {
+  if (Array.isArray(serveEligibility?.reasons)) {
+    return serveEligibility.reasons
+      .map((code) => String(code || EMPTY_STRING).trim())
+      .filter((code) => code.length > 0);
+  }
+  if (typeof serveEligibility?.reason === 'string') {
+    const trimmed = serveEligibility.reason.trim();
+    return trimmed.length > 0 ? [trimmed] : EMPTY_REASON_CODES;
+  }
+  return EMPTY_REASON_CODES;
+}
+
 function buildLoadLaneQueryAdmissionSnapshot(readiness) {
   const hasDimensions = Boolean(
     readiness &&
@@ -223,11 +238,14 @@ function buildLoadLaneQueryAdmissionSnapshot(readiness) {
     readiness.dimensions &&
     typeof readiness.dimensions === 'object',
   );
-  const reasonCodes = Array.isArray(readiness?.reasons) ?
+  const projectionReasonCodes = Array.isArray(readiness?.reasons) ?
     readiness.reasons
       .map((reason) => String(reason?.code || EMPTY_STRING).trim())
       .filter((code) => code.length > 0) :
     [];
+  const reasonCodes = projectionReasonCodes.length > 0 ?
+    projectionReasonCodes :
+    extractServeEligibilityReasonCodes(readiness?.serveEligibility);
   return Object.freeze({
     serveEligible:
       hasDimensions &&

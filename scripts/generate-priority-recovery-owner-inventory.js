@@ -310,8 +310,8 @@ function candidatesFor(duplicates, classifications) {
 export async function buildInventory(root = ROOT) {
   const targets = sourceFiles(root);
   const classifications = new Map(targets.map((file) => [file, classifyModule(file)]));
-  const cruiseResult = await cruise(targets.map((file) => path.join(root, file)), {
-    baseDir: root,
+  const cruiseResult = await cruise(targets, {
+    baseDir: path.resolve(root),
     exclude: 'node_modules',
     doNotFollow: {path: 'node_modules'},
   });

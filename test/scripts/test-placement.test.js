@@ -20,7 +20,8 @@ import {
 } from '../../scripts/lab/probe.js';
 import {runClassifiedTestFiles} from '../../scripts/run-classified-test-files.js';
 import {
-  CONTROLLER, IMPORT_GRAPH_PRODUCER, LANE, PRODUCER_STUB, fakeInventory, lab, sealPlacedCommit,
+  CONTROLLER, IMPORT_GRAPH_PRODUCER, LANE, PRODUCER_STUB, fakeInventory, gateTestSource, lab,
+  sealPlacedCommit, waitForNonEmptyFile, worktreeTap,
 } from './test-placement-fixtures.js';
 import {spawnGit} from '../../scripts/checks/git-invocation.js';
 
@@ -58,6 +59,7 @@ function runnerFixture(t) {
   git(scratch, 'clone', '-q', '--shared', process.cwd(), root);
   fs.symlinkSync(path.join(process.cwd(), 'node_modules'), path.join(root, 'node_modules'));
   fs.writeFileSync(path.join(root, RUNNER_SLOW_FIXTURE), `${RUNNER_FIXTURE_HEAD}` +
+    'process.stdout.write(\'# started\\n\');\n' +
     'test(\'runs until stopped\', async () => {\n' +
     '  await new Promise((resolve) => setTimeout(resolve, 60000));\n  assert.ok(true);\n});\n');
   fs.writeFileSync(path.join(root, RUNNER_FAST_FIXTURE),
@@ -593,7 +595,7 @@ test('an interrupted placed run stops every machine at once', async (t) => {
   for (let poll = 0; poll < 600 && !out.includes('local-started'); poll += 1) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  await waitForNonEmptyFile(fixture.tap(RUNNER_SLOW_FIXTURE));
   // The runner leads a live group of its own - or the check below that the
   // group is gone would pass without it ever having existed (verifier round 4).
   const localGroup = Number(/^local-group=(\d+)$/mu.exec(out)[1]);
@@ -694,11 +696,14 @@ async function runnerPidFrom(logFile) {
   return assert.fail('the runner never started');
 }
 
+const GATE_TEST = 'test/scripts/lab-stream-gate.test.js';
+
 test('an aborted lab shard cleans up before it is cut', async (t) => {
-  const {node, controller, start} = labFixture(t);
-  const running = start([SLOW_TEST], {runId: 'aborted'});
+  const {node, parent, controller, start} = labFixture(t);
+  const running = start([GATE_TEST], {runId: 'aborted'});
   const runner = await runnerPidFrom(
     path.join(controller, 'test-output', 'placement', 'aborted-lab.log'));
+  await waitForNonEmptyFile(worktreeTap(parent, 'aborted', GATE_TEST));
   running.abort();
   const outcome = await running.done;
   assert.equal(outcome.reason, 'interrupted');
@@ -724,9 +729,7 @@ test('the controller child runs with placement switched off', async (t) => {
   const local = placementDeps({root: fixture.root, env: gitProcessEnvironment()})
     .runLocalChild([RUNNER_SLOW_FIXTURE]);
   t.after(() => local.abort());
-  for (let poll = 0; poll < 1200 && !fs.existsSync(fixture.tap(RUNNER_SLOW_FIXTURE)); poll += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
+  await waitForNonEmptyFile(fixture.tap(RUNNER_SLOW_FIXTURE));
   assert.ok(fs.existsSync(fixture.tap(RUNNER_SLOW_FIXTURE)), 'the fixture root holds the result');
   assert.doesNotThrow(() => process.kill(-local.group, 0), 'it leads its own group');
   if (fs.existsSync(`/proc/${local.group}/environ`)) {
@@ -739,7 +742,6 @@ test('the controller child runs with placement switched off', async (t) => {
     'the worktree\'s results root is untouched');
 });
 
-const GATE_TEST = 'test/scripts/lab-stream-gate.test.js';
 // push-gate-change-proof's precondition, as a file a fixture commit carries:
 // the sealed import graph loads in the checkout the file runs in.
 const SEALED_GRAPH_TEST = 'test/scripts/lab-sealed-graph.test.js';
@@ -769,22 +771,6 @@ const LINK_UNIVERSE_TEST_SOURCE = [
 ].join('\n');
 const RESULTS_FILE = 'test-output/reports/test-results.ndjson';
 const RESULTS_TEXT = '{"file":"a","ok":true}\n{"file":"b","ok":false}\n';
-
-// Waits, bounded, for the witness to create the gate file.
-function gateTestSource(gate) {
-  return [
-    'import assert from \'node:assert/strict\';',
-    'import fs from \'node:fs\';',
-    'import {test} from \'node:test\';',
-    'test(\'waits for the witness\', async () => {',
-    `  for (let poll = 0; poll < 2400 && !fs.existsSync(${JSON.stringify(gate)}); poll += 1) {`,
-    '    await new Promise((resolve) => setTimeout(resolve, 50));',
-    '  }',
-    `  assert.ok(fs.existsSync(${JSON.stringify(gate)}));`,
-    '});',
-    '',
-  ].join('\n');
-}
 
 test('the controller child gets its file list even while this process is busy', async (t) => {
   // Its list used to go down a socket written from this event loop; a child
@@ -1031,11 +1017,12 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
     // still cleans up.
     // Stopped once its runner is running - the same stop a deadline makes,
     // which the stalled upload above already exercised on its timer.
-    const running = start([SLOW_TEST], {runId: 'deadline-run'});
+    const running = start([GATE_TEST], {runId: 'deadline-run'});
     // While it runs, the machine lock is held by the shell alone: the runner
     // and its tests do not carry it (Linux, where /proc shows descriptors).
     await assertRunnerFreeOfLock(
       path.join(controller, 'test-output', 'placement', 'deadline-run-lab.log'));
+    await waitForNonEmptyFile(worktreeTap(parent, 'deadline-run', GATE_TEST));
     running.stop();
     const stopped = await running.done;
     assert.equal(stopped.reason, 'interrupted');
@@ -1043,7 +1030,7 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
     assert.ok(runner, 'the stop fell while the runner ran');
     assert.throws(() => process.kill(Number(runner), 0),
       'the shell waited for its runner before cleaning up');
-    assert.doesNotMatch(stopped.log, new RegExp(`^ok ${SLOW_TEST} `, 'mu'),
+    assert.doesNotMatch(stopped.log, new RegExp(`^ok ${GATE_TEST} `, 'mu'),
       'and stopped it before its file finished');
     let groupAlive = true;
     for (let poll = 0; poll < 100 && groupAlive; poll += 1) {
@@ -1139,8 +1126,8 @@ function lockIsFree(lock) {
 
 test('a lab shard takes the machine-wide lock for its budget and records who holds it',
   async (t) => {
-    const {start, controller, sha, labLock} = labFixture(t);
-    const running = start([SLOW_TEST], {runId: 'held',
+    const {start, parent, controller, sha, labLock} = labFixture(t);
+    const running = start([GATE_TEST], {runId: 'held',
       holder: {purpose: 'test:cpu-heavy', expectedMs: 90 * SECOND}});
     const logFile = path.join(controller, 'test-output', 'placement', 'held-lab.log');
     await assertRunnerFreeOfLock(logFile);
@@ -1156,6 +1143,7 @@ test('a lab shard takes the machine-wide lock for its budget and records who hol
     'written by the lab shell that holds the lock, from the shard\'s own estimate');
     assert.match(record.startedAt, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/u);
     assert.equal(lockIsFree(labLock.lock), false, 'held while the shard runs');
+    await waitForNonEmptyFile(worktreeTap(parent, 'held', GATE_TEST));
     running.stop();
     assert.equal((await running.done).reason, 'interrupted');
     assert.equal(fs.existsSync(labLock.holder), false, 'a stopped shard removes its record');

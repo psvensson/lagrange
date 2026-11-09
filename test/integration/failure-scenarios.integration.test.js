@@ -62,10 +62,26 @@ function createCacheBackedControlPlaneGateway(systemTableCache) {
 
   return {
     async readAuthoritativeRows(tableName) {
+      const partitionId = `${tableName}-p1`;
+      const readAuthorityWitness = Object.freeze({
+        state: 'observed',
+        partitionId,
+        role: 'leader',
+        servingNodeId: 'seed-node',
+        servingReplicaId: `${partitionId}-seed`,
+        term: 1,
+        commitIndex: 1,
+        appliedIndex: 1,
+        observedAtMs: Date.now(),
+      });
       return {
         success: true,
+        source: 'owner_rpc_lane',
         tableName,
+        rowSetComplete: true,
         rows: cloneRows(systemTableCache.getAll(tableName)),
+        readAuthorityWitness,
+        readAuthorityWitnesses: Object.freeze([readAuthorityWitness]),
       };
     },
     async submitMutation(mutation = {}) {

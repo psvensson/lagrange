@@ -10,6 +10,8 @@ import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
 
 import * as deployers from '../real-product-cluster-deployers.js';
+import {pinProductIdentity} from '../comparative-benchmark-product-pins.js';
+import {resolveLagrangeContainerImage} from '../real-product-deployer-lagrange.js';
 import {
   classifyStorage,
   contentIdentityOf,
@@ -20,6 +22,7 @@ import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js
 import {
   LAGRANGE_IMAGE,
   LAGRANGE_IMAGE_ID,
+  LAGRANGE_SRC_FINGERPRINT,
   createContainerLedger,
   dockerRules,
   lagrangeHealthyRules,
@@ -331,4 +334,45 @@ test('after the window a product keeps its version and the reason it was unanswe
     assert.equal(after.reportedVersion, null);
     assert.equal(after.reportedVersionError,
       'facts answered {"status":200,"error":null,"version":"absent"}');
+  });
+
+test('resolveLagrangeContainerImage pins by @sha256 digest and refuses unpinned remote GCP tags',
+  () => {
+    const digest = `sha256:${'d'.repeat(64)}`;
+    assert.equal(resolveLagrangeContainerImage({lagrangeImage: 'psvensson/lagrange:0.4.0',
+      lagrangeImageDigest: digest}), `psvensson/lagrange@${digest}`);
+    assert.equal(resolveLagrangeContainerImage({
+      lagrangeImage: `psvensson/lagrange:0.4.0@${digest}`}), `psvensson/lagrange@${digest}`);
+    assert.throws(() => resolveLagrangeContainerImage({
+      lagrangeImage: 'psvensson/lagrange:0.4.0', executionTarget: 'gcp'}),
+    (error) => error.code === 'identity_unverified');
+    assert.throws(() => resolveLagrangeContainerImage({
+      lagrangeImage: 'psvensson/lagrange:0.4.0', lagrangeImageDigest: 'sha256:bad'}),
+    (error) => error.code === 'identity_unverified');
+  });
+
+test('bootProvenance is preserved after the window and verified against expectedSrcFingerprint',
+  async () => {
+    const ledger = createContainerLedger();
+    const {sshRun} = createScriptedSsh(lagrangeHealthyRules(ledger, {hosts: HOSTS}));
+    const deployment = await deployers.deployLagrangeCluster(input(sshRun, {
+      opts: {...OPTS, expectedSrcFingerprint: LAGRANGE_SRC_FINGERPRINT}}));
+    const after = await observeProductsAfterWindow({sshRun, opts: {},
+      products: deployment.identity.products});
+    for (const product of after) {
+      assert.equal(product.bootProvenance?.bootedSrcFingerprint, LAGRANGE_SRC_FINGERPRINT);
+    }
+    const pins = pinProductIdentity({targetId: 'lagrange', product: 'lagrange',
+      products: deployment.identity.products});
+    assert.equal(pins[0].bootProvenance?.bootedSrcFingerprint, LAGRANGE_SRC_FINGERPRINT);
+    assert.throws(() => pinProductIdentity({targetId: 'lagrange', product: 'lagrange',
+      products: [deployment.identity.products[0], {...deployment.identity.products[1],
+        bootProvenance: {...deployment.identity.products[1].bootProvenance,
+          bootedSrcFingerprint: `sha256:${'0'.repeat(64)}`}}]}),
+    (error) => error.code === 'identity_unverified');
+    const wrongLedger = createContainerLedger();
+    const wrongSsh = createScriptedSsh(lagrangeHealthyRules(wrongLedger, {hosts: HOSTS}));
+    await assert.rejects(deployers.deployLagrangeCluster(input(wrongSsh.sshRun, {
+      opts: {...OPTS, expectedSrcFingerprint: `sha256:${'0'.repeat(64)}`}})),
+    (error) => error.code === 'identity_unverified');
   });

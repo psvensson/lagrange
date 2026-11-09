@@ -135,6 +135,10 @@ function arrayModule(name, params, count, element) {
     `${repeated(count, () => `    ${element},`)}\n  ];\n}\n`;
 }
 
+const CENSUS_LANES = Object.freeze([
+  'unit', 'packaging', 'integration', 'bootstrap', 'formation',
+]);
+
 // The census record of the nth occurrence of `slice` in `file`, whose text
 // is `text`: the hash is the detector's site identity, sha256(file\nslice).
 function censusSite(file, text, slice, occurrence, row, siteClass) {
@@ -148,7 +152,19 @@ function censusSite(file, text, slice, occurrence, row, siteClass) {
     hash: sha256(`${file}\n${slice}`), occurrence, class: siteClass,
     sidesExecuted: {primary: siteClass !== 'never' && siteClass !== 'fallback-only',
       fallback: siteClass === 'fallback-only' || siteClass === 'both'},
-    runs: ['corpus-1'],
+    runs: ['unit-1'],
+  };
+}
+
+function censusRun(lane) {
+  return {
+    id: `${lane}-1`,
+    lane,
+    host: 'fixture',
+    commit: '0'.repeat(40),
+    startedAt: '2026-11-08T00:00:00.000Z',
+    coverageDigest: '0'.repeat(64),
+    witnesses: {started: 1, complete: 1, lost: 0, external: 0},
   };
 }
 
@@ -156,8 +172,7 @@ function census(sites) {
   return {
     schema: CENSUS_SCHEMA, generatedAt: '2026-11-08T00:00:00.000Z',
     head: '0'.repeat(40),
-    runs: [{id: 'corpus-1', lane: 'corpus', host: 'fixture', commit: '0'.repeat(40),
-      startedAt: '2026-11-08T00:00:00.000Z', coverageDigest: '0'.repeat(64)}],
+    runs: CENSUS_LANES.map((lane) => censusRun(lane)),
     sites,
   };
 }

@@ -141,14 +141,24 @@ function evictAuthoritativeAbsentSystemTableRowsFromCache(
   });
 }
 
+function resolveCommittedCdcObservedAtMs(observedAtMs, nowFn) {
+  if (Number.isFinite(observedAtMs)) {
+    return observedAtMs;
+  }
+  if (typeof nowFn !== 'function') {
+    return Date.now();
+  }
+  return nowFn();
+}
+
 function applyCommittedPartitionCdcEventToCache(
-  systemTableCache, cdcEvent, observedAtMs = Date.now(),
+  systemTableCache, cdcEvent, observedAtMs, nowFn,
 ) {
   if (!isWritableCacheTarget(systemTableCache) || !cdcEvent?.tableName ||
       !cdcEvent?.operation || !cdcEvent?.data) return;
   applyCacheRow(systemTableCache, cdcEvent.tableName, cdcEvent.operation, cdcEvent.data, {
     causeId: cdcEvent.causeId,
-    cdcObservedAtMs: observedAtMs,
+    cdcObservedAtMs: resolveCommittedCdcObservedAtMs(observedAtMs, nowFn),
   });
 }
 
@@ -750,6 +760,19 @@ const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
     }
 
     return buildReconciliationSuccess(context, mutationCount, publication);
+  },
+
+  applyCommittedPartitionCdcEventToCache(
+    systemTableCache,
+    cdcEvent,
+    observedAtMs,
+  ) {
+    applyCommittedPartitionCdcEventToCache(
+      systemTableCache,
+      cdcEvent,
+      observedAtMs,
+      this.now,
+    );
   },
 };
 

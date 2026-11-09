@@ -23,6 +23,7 @@ import {
   armTerminalTransitionRepair,
   runTerminalTransitionRepairAttempt,
 } from '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
+import {buildMockPolicyAuthorityWitness} from '../rebalancer/test-helpers.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
@@ -371,6 +372,8 @@ function armAuthoritativeServicesOwnerRead({coordinator, serviceRows}) {
         success: true,
         source: 'owner_rpc_lane',
         rows: serviceRows.map((row) => ({...row})),
+        rowSetComplete: true,
+        readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
       };
     }
     return originalReadAuthoritativeRows(tableName, sql, params, queryOptions);

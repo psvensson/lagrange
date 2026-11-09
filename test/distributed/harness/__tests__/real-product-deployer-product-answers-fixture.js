@@ -21,6 +21,7 @@ import {
 const HEX = '0123456789abcdef';
 const LAGRANGE_IMAGE = 'psvensson/lagrange:0.4.0';
 const LAGRANGE_IMAGE_ID = `sha256:${'a'.repeat(64)}`;
+const LAGRANGE_SRC_FINGERPRINT = 'sha256:feed';
 const TIDB_IMAGE_ID = `sha256:${'b'.repeat(64)}`;
 const POSTGRES_IMAGE_ID = `sha256:${'c'.repeat(64)}`;
 
@@ -217,8 +218,8 @@ function lagrangeHealthyRules(ledger, {hosts = ['10.0.0.1', '10.0.0.2', '10.0.0.
       return http(200, {ready: true, phase: 'ready', state: 'ready', reasons: []});
     }],
     [/\/health/u, '{"status":"healthy","ready":true}'],
-    [/\/management\/v1\/facts/u, http(200, {release: {version: '0.4.0'},
-      topology: {nodeCount: hosts.length, readyNodeCount: hosts.length}})],
+    [/\/management\/v1\/facts/u, http(200, {facts: {release: {version: '0.4.0'},
+      topology: {nodeCount: hosts.length, readyNodeCount: hosts.length}}})],
     [/sys-postgres-wire\/scale/u, http(200, {success: true, outcome: 'applied'})],
     [/\/api\/admin\/discovery\/services/u, http(200, {services: [{serviceIds: ['sys-postgres-wire'],
       replicas: [{serviceId: 'sys-postgres-wire', nodeId: LAGRANGE_NODE_IDS[0],
@@ -277,6 +278,7 @@ function tidbHealthyRules(ledger) {
 export {
   LAGRANGE_IMAGE,
   LAGRANGE_IMAGE_ID,
+  LAGRANGE_SRC_FINGERPRINT,
   postgresHealthyRules,
   tidbHealthyRules,
   createContainerLedger,

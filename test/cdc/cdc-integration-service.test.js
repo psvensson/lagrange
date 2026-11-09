@@ -907,3 +907,82 @@ test('CDCIntegrationService - local system table writes do not require SQL engin
       'local partition service should carry the write without routed SQL',
     );
   });
+
+test('CDCIntegrationService - local system table routing ignores un-cut-over child partitions and bounded key ranges on unrouted writes',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const childWrites = [];
+    const childService = {
+      partitionId: 'logs_p_7cd6bb21_left',
+      replicaId: 'logs_p_7cd6bb21_left-r1',
+      nodeId: 'test-node',
+      role: 'leader',
+      leaderId: 'logs_p_7cd6bb21_left-r1',
+      status: 'READY',
+      keyRange: {start: null, end: '7e530709'},
+      isLeaderReplica: () => true,
+      async executeQuery(sql, params) {
+        childWrites.push({sql, params});
+        return {success: true, changes: 1};
+      },
+    };
+    const services = new Map([['logs_p_7cd6bb21_left', childService]]);
+    const systemTableCache = {
+      get: (tableName, key) =>
+        tableName === SYSTEM_TABLE_NAME.TABLES && key === SYSTEM_TABLE_NAME.LOGS ?
+          {table_id: 'logs', table_name: 'logs', active_partition_version: 1} :
+          null,
+      getAll: (tableName) => {
+        if (tableName === SYSTEM_TABLE_NAME.TABLES) {
+          return [{table_id: 'logs', table_name: 'logs', active_partition_version: 1}];
+        }
+        if (tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
+          return [
+            {
+              partition_id: 'logs-p1',
+              table_id: 'logs',
+              table_name: 'logs',
+              partition_version: 1,
+              state: 'NORMAL',
+            },
+            {
+              partition_id: 'logs_p_7cd6bb21_left',
+              table_id: 'logs',
+              table_name: 'logs',
+              partition_version: 2,
+              state: 'NORMAL',
+            },
+          ];
+        }
+        return [];
+      },
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+      systemTableCache,
+      partitionServicesProvider: () => services,
+    });
+    service.initialize();
+
+    const resolvedServices = service.resolveLocalSystemTableServices(
+      SYSTEM_TABLE_NAME.LOGS,
+      {consistency: 'local_leader'},
+    );
+    t.equal(
+      resolvedServices.length,
+      0,
+      'must not resolve v2 child partition while active_partition_version is 1',
+    );
+
+    const writeOutcome = await service.tryExecuteLocalSystemTableWrite(
+      'INSERT INTO logs (log_id, message) VALUES (?, ?)',
+      ['bd453ef1', 'test'],
+    );
+    t.equal(
+      writeOutcome.handled,
+      false,
+      'must not execute unrouted system-table write on a bounded child partition',
+    );
+    t.equal(childWrites.length, 0, 'child partition must receive zero unrouted writes');
+  });

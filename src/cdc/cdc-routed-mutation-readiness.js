@@ -180,9 +180,7 @@ class CDCRoutedMutationReadiness {
         tableNameResult.tableName :
         null;
     if (!tableName || !VALID_SYSTEM_TABLES.includes(tableName)) {
-      return {
-        handled: false,
-      };
+      return {handled: false};
     }
     if (this.hasActiveSystemTableWriteMirror(tableName)) {
       return {handled: false};
@@ -191,15 +189,15 @@ class CDCRoutedMutationReadiness {
       consistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
     });
     if (localServices.length === 0) {
-      return {
-        handled: false,
-      };
+      return {handled: false};
     }
     // The answer of the last leg issued: a later hop of this write carries it
     // to the terminal gate, since that leg's outcome is not known here.
     const issued = {};
     for (const partitionService of localServices) {
-      if (typeof partitionService?.executeQuery !== 'function') {
+      if (typeof partitionService?.executeQuery !== 'function' ||
+          partitionService.keyRange?.start != null ||
+          partitionService.keyRange?.end != null) {
         continue;
       }
       try {

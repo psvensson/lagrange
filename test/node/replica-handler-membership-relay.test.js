@@ -75,6 +75,23 @@ test('consensus relay: a committed RemoveNode reaches the registry\'s ' +
     assert.deepEqual(last.confState.voters.map(String).sort(),
       cluster.coreConfState(watched).voters.map(String).sort(),
       'the relayed configuration is the one the core applied');
+
+    const statusBeforeNoop = cluster.node(watched).readStatus();
+    observed.length = 0;
+    cluster.node(leader).proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
+      replicaIdentity: retiring,
+    });
+    assert.ok(cluster.settle(() => observed.some((event) =>
+      event.confChangeEntries === 1 &&
+      event.appliedIndex > statusBeforeNoop.membershipGenerationIndex),
+    {rounds: SETTLE_ROUNDS}),
+    'an idempotent RemoveNode relays CONF_CHANGE_APPLIED when ConfState key is unchanged');
+    const statusAfterNoop = cluster.node(watched).readStatus();
+    assert.equal(statusAfterNoop.configurationKey, statusBeforeNoop.configurationKey);
+    assert.ok(statusAfterNoop.membershipGenerationIndex >
+      statusBeforeNoop.membershipGenerationIndex,
+    'idempotent conf-change advances membershipGenerationIndex');
   } finally {
     registry.clear();
     cluster.dispose();

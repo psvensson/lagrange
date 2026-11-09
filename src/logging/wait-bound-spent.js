@@ -224,6 +224,14 @@ function emit(logger, sink, payload) {
   consoleSink.logConsoleOnly(ERROR_LEVEL, WAIT_BOUND_SPENT_MESSAGE, payload);
 }
 
+function readDefaultWaitBoundClock() {
+  const loggingNow = LoggingService.getInstance().now;
+  if (typeof loggingNow !== 'function') {
+    return Date.now();
+  }
+  return loggingNow();
+}
+
 class WaitBoundSpentReporter {
   /**
    * @param {Object} [options]
@@ -232,7 +240,9 @@ class WaitBoundSpentReporter {
    * @param {number} [options.maxSubjects] - Bound on remembered subjects.
    */
   constructor(options = {}) {
-    this._now = typeof options.now === 'function' ? options.now : Date.now;
+    this._now = typeof options.now === 'function' ?
+      options.now :
+      readDefaultWaitBoundClock;
     this._maxSubjects = Number.isInteger(options.maxSubjects) &&
       options.maxSubjects > NO_REPEATS ?
       options.maxSubjects :
@@ -312,12 +322,12 @@ const DEFAULT_REPORTER = new WaitBoundSpentReporter();
  */
 function readWaitClock(owner) {
   if (typeof owner?.now !== 'function') {
-    return Date.now();
+    return readDefaultWaitBoundClock();
   }
   try {
     return owner.now();
   } catch {
-    return Date.now();
+    return readDefaultWaitBoundClock();
   }
 }
 

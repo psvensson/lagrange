@@ -10,11 +10,12 @@ export const DEFAULT_CENSUS_PATH = 'data/fallback-census/census.json';
 export const RUN_RECORD_FILE = 'run.json';
 export const V8_DIRECTORY = 'v8';
 export const SOURCE_PREFIX = 'src/';
+export const PRELOAD_MODULE_RELATIVE = 'scripts/checks/fallback-branch-census-preload.js';
 // How often every thread under the census preload flushes its coverage.
 export const FLUSH_INTERVAL_MS = 10_000;
 
 // The pre-kill flush (fallback-branch-census-preload.js serves it,
-// test/test-helpers/census-pre-kill-flush.js requests it). collect sets
+// scripts/checks/census-pre-kill-flush.js requests it). collect sets
 // CENSUS_COVERAGE_DIR_ENV to the lane's coverage directory: a harness flushes
 // a child before killing it only when it is set, never on NODE_V8_COVERAGE
 // alone. The request travels as FLUSH_SIGNAL, whose default action is to be
@@ -25,10 +26,22 @@ export const CENSUS_COVERAGE_DIR_ENV = 'LAGRANGE_CENSUS_COVERAGE_DIR';
 export const FLUSH_SIGNAL = 'SIGURG';
 export const FLUSH_PROCESS_EVENT = 'lagrange:census-flush-before-kill';
 export const FLUSH_CHANNEL = 'lagrange-census-flush';
-// Marker files of one thread: `witness-<pid>-<threadId><suffix>`.
+// Marker files of one thread: `witness-<pid>-<threadId><suffix>` and
+// parent-written expected-participant roster `roster-<pid>-<threadId>.json`.
 export const WITNESS_MARKER = Object.freeze({
   PREFIX: 'witness-', SEPARATOR: '-', START: '.json', END: '-exit.json',
   FLUSH_REQUEST: '-flush-request.json', FLUSHED: '-flushed.json',
+});
+export const ROSTER_MARKER = Object.freeze({
+  PREFIX: 'roster-', SEPARATOR: '-', SUFFIX: '.json',
+});
+export const WITNESS_LOST_CAUSE = Object.freeze({
+  UNKNOWN: 'unknown',
+  FLUSH_UNANSWERED: 'pre-kill-flush-unanswered',
+  FINAL_WRITE_MISSING: 'final-write-missing',
+  UNINSTRUMENTED: 'uninstrumented',
+  NO_COVERAGE: 'no-coverage',
+  UNREADABLE_COVERAGE: 'unreadable-coverage',
 });
 // The main thread waits this long for its workers' flush acknowledgements.
 export const WORKER_ACK_BOUND_MS = 1500;
@@ -75,3 +88,5 @@ export const CENSUS_LANE = Object.freeze({
   UNIT: 'unit', PACKAGING: 'packaging', INTEGRATION: 'integration',
   BOOTSTRAP: 'bootstrap', FORMATION: 'formation',
 });
+
+export const REQUIRED_CENSUS_LANES = Object.freeze(Object.values(CENSUS_LANE));

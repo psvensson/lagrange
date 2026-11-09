@@ -1,3 +1,6 @@
+import {
+  isServeEligibilityAnswerEligible,
+} from '../control-plane/serve-eligibility-owner.js';
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {AdminWebSocketAPIBase} from './admin-websocket-api-base.js';
 import {
@@ -15,6 +18,8 @@ const LOCAL_STR_BENCHMARKREADY_FALSE_REASONS = ', benchmarkReady=false, reasons=
 const LOCAL_STR_TIMEOUT = 'timeout';
 const LOCAL_STR_TIMED_OUT = 'timed out';
 const LOCAL_STR_DEADLINE_EXCEEDED = 'deadline exceeded';
+const LOCAL_STR_SERVE_ELIGIBILITY_REFRESH_FAILED =
+  'load-lane serve eligibility refresh failed';
 
 const {
   ADMIN_CACHE_DUMP,
@@ -44,6 +49,32 @@ const {
   resolveRequestedQueryTimeoutMs,
 } = ADMIN_WEBSOCKET_API_SHARED;
 
+async function refreshServeEligibilityWhenIneligible(
+  readinessService,
+  nodeId,
+  logger,
+) {
+  if (
+    !readinessService.answerServeEligibility ||
+    !readinessService.readServeEligibility
+  ) {
+    return false;
+  }
+  const serveAnswer = readinessService.answerServeEligibility(nodeId);
+  if (isServeEligibilityAnswerEligible(serveAnswer)) {
+    return false;
+  }
+  try {
+    await readinessService.readServeEligibility();
+  } catch (error) {
+    logger?.debug?.(LOCAL_STR_SERVE_ELIGIBILITY_REFRESH_FAILED, {
+      nodeId,
+      error: error?.message || String(error),
+    });
+  }
+  return true;
+}
+
 class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
   async resolveLoadLaneReadinessSnapshot() {
     if (
@@ -53,6 +84,12 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
     ) {
       return null;
     }
+    const refreshedServeEligibility =
+      await refreshServeEligibilityWhenIneligible(
+        this.controlPlaneReadinessService,
+        this.nodeId,
+        this.logger,
+      );
     if (
       typeof this.controlPlaneReadinessService.getNodeReadiness ===
       'function'
@@ -61,7 +98,9 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
         allowAuthoritativeRefresh: true,
         requireFreshOnIneligible: true,
         decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
-        maxCachedAgeMs: this.loadLaneReadinessCacheMaxAgeMs,
+        maxCachedAgeMs: refreshedServeEligibility ?
+          0 :
+          this.loadLaneReadinessCacheMaxAgeMs,
       });
     }
     if (

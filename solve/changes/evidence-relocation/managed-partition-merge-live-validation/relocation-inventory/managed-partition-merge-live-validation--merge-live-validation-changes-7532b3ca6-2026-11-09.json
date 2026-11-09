@@ -1,0 +1,27 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "managed-partition-merge-live-validation--merge-live-validation-changes-7532b3ca6-2026-11-09.tar.gz",
+  "bundleSha256": "9556775ad357382bc42223c1732e2ba85d300bcc4188c7355d37198b9863bd8f",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/managed-partition-merge-live-validation--merge-live-validation-changes-7532b3ca6-2026-11-09.tar.gz",
+  "sourceCommit": "7532b3ca6333ec063ae0c9db04a160ddc6f65038",
+  "root": "solve/quests/managed-partition-merge-live-validation/evidence/changes/",
+  "files": [
+    ["run2-2026-07-12T20-16-blocked/analyze-distributed-failure.txt","abb2e4768c9a100d9f9367f42c528098f763776396e871f56f95be1c4c6c9bfd",4889],
+    ["run2-2026-07-12T20-16-blocked/playback/failure-bundle.md","997afa2120f5051363f510ceacfcc7176e2de04ce1417d4ab641971a2094b4da",60194],
+    ["run2-2026-07-12T20-16-blocked/playback/playback-manifest.json","90ff69744387c09d57e8bdd8820043e805f8b1e3f11ebfa7d5a4a921fe159ddb",708],
+    ["run2-2026-07-12T20-16-blocked/playback/playback-viewer.html","56000dcf05983cf70ab114e051be2dbb58817aac1fe0f1e783659762004e993c",67692],
+    ["run2-2026-07-12T20-16-blocked/playback/samples.ndjson","793a56b7c0d8fc27e6d66abf99ea401b43c4db163e1a3913303a14b54667f444",47202],
+    ["run2-2026-07-12T20-16-blocked/playback/triage-summary.json","8d8fbeb4af69e930ae8521d1aa96bda983f0ef866da7c60edc719b0d5dde0d81",86905],
+    ["run2-2026-07-12T20-16-blocked/playback/triage-summary.md","6ef4d2a585bf92bcf411e7f180e751cfe7edb21e3f547f8f04e8fe65ac80205e",3250],
+    ["run3-2026-07-12T20-26-blocked/analyze-distributed-failure.txt","0962ad0d8ec4ced11cd19869c973b76289c24e77a8951be44fa1b30edc8ebf76",4240],
+    ["run3-2026-07-12T20-26-blocked/playback/failure-bundle.md","d62d327e4a013c49736e30f8a4496ae49c2efcc934771490f1685516427ea529",58211],
+    ["run3-2026-07-12T20-26-blocked/playback/playback-manifest.json","edb8b6ccafb8fb5d33f535e8101c767f673d1f4ff602c87c709b76492840cd34",10029],
+    ["run3-2026-07-12T20-26-blocked/playback/playback-viewer.html","56000dcf05983cf70ab114e051be2dbb58817aac1fe0f1e783659762004e993c",67692],
+    ["run3-2026-07-12T20-26-blocked/playback/samples.ndjson","bc7bdc6cada556debc882bd88a9d3efa7a5c849ac5a2b3efd66dbaed1006bb22",27260],
+    ["run3-2026-07-12T20-26-blocked/playback/triage-summary.json","9b2688ff4ac5729567f949f81257d05d38627940b52c3aaf8e5af6f53b877d81",81450],
+    ["run3-2026-07-12T20-26-blocked/playback/triage-summary.md","fefed7bacb9d9869ac6c680ad8f31dcecc24adfd06cbaedd0ec7977644660359",2839],
+    ["run5-2026-07-12T20-39-split-stall/analyze-distributed-failure.txt","28d7ab32baae06acffcc922db8ac90258a19a479f655c0d08be1920912a36f97",5494],
+    ["run6-2026-07-12T20-45-split-stall/analyze-distributed-failure.txt","97571bd868ee5246c2ae4c243282ee0c02ea3145c72700453e37c37356c747ae",5770],
+    ["run6-2026-07-12T20-45-split-stall/storm-counts.txt","a367798fa67297950f69fe59bbf7e0e4f4097bfc8716c70db09a9f5e04678bcd",232]
+  ]
+}

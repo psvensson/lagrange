@@ -475,7 +475,10 @@ test('RebalanceCoordinator retires remote-owned stale priority ADD ' +
     enableTimeouts: false,
     messageRouter: initiatedDeliveryRouter(deliveries),
     controlPlaneReadinessService:
-      buildPriorityDrainReadinessService(TEST_PARTITION_ID),
+      buildPriorityDrainOwnerUnavailableReadinessService(
+        TEST_PARTITION_ID,
+        PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+      ),
     cacheData: {
       services: [
         {
@@ -824,5 +827,204 @@ test('RebalanceCoordinator preserves pre-sync priority REPLACE progress ' +
     );
   } finally {
     await coordinator.shutdown();
+  }
+});
+
+async function runPriorityAddAuthoritativeDrainProbe(options) {
+  const partitionId = 'sql_transactions-p1';
+  const replicaId = partitionId + '-r6';
+  const operationId = 'priority-drain-add-auth-probe';
+  const stepTimestampMs = Date.now() - PRIORITY_DRAIN_TEST_STALE_STEP_AGE_MS;
+  const cachedActiveTarget = {
+    service_id: replicaId,
+    replica_id: replicaId,
+    service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+    node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+    partition_id: partitionId,
+    status: ReplicaStatus.ACTIVE,
+    raft_role: RAFT_ROLE.FOLLOWER,
+    address: PRIORITY_DRAIN_TEST_TARGET_NODE_ID + '/partition/' + replicaId,
+    created_at: stepTimestampMs,
+    state_entered_at: stepTimestampMs,
+  };
+  const deliveries = [];
+  const coordinator = createTestCoordinator({
+    nodeId: options.localOwner ?
+      PRIORITY_DRAIN_TEST_SOURCE_NODE_ID :
+      PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+    enableTimeouts: false,
+    messageRouter: initiatedDeliveryRouter(deliveries),
+    controlPlaneReadinessService: options.ownerUnavailable ?
+      buildPriorityDrainOwnerUnavailableReadinessService(
+        partitionId, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID) :
+      buildPriorityDrainReadinessService(partitionId),
+    cacheData: {
+      services: [cachedActiveTarget],
+      replicaOperations: [{
+        operation_id: operationId,
+        type: OperationType.ADD,
+        partition_id: partitionId,
+        replica_id: replicaId,
+        source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+        target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+        status: ReplicaStatus.PENDING,
+        workflow_step: WORKFLOW_STEP.SENDING,
+        created_at: stepTimestampMs,
+        updated_at: stepTimestampMs,
+        completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+        error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+        entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+        entity_id: partitionId,
+        steps_history: JSON.stringify([
+          {step: WORKFLOW_STEP.PENDING, timestamp: stepTimestampMs},
+          {
+            step: WORKFLOW_STEP.SENDING,
+            timestamp: stepTimestampMs,
+            previousStep: WORKFLOW_STEP.PENDING,
+          },
+        ]),
+      }],
+    },
+  });
+  try {
+    const completion = Object.freeze({state: options.completionState});
+    coordinator.workflowOwner.buildPriorityRecoveryCompletionForOperation =
+      () => completion;
+    coordinator.workflowOwner.buildPriorityRecoveryAssessmentContextForOperation =
+      () => Object.freeze({completion});
+    const baseRead = coordinator.controlPlaneSystemTableGateway
+      .readAuthoritativeRows.bind(coordinator.controlPlaneSystemTableGateway);
+    coordinator.controlPlaneSystemTableGateway.readAuthoritativeRows =
+      async (tableName, sql, params) => {
+        if (sql.includes('FROM services')) {
+          return options.readServices({cachedActiveTarget, replicaId, partitionId});
+        }
+        return baseRead(tableName, sql, params);
+      };
+    const operation = await coordinator.getOperation(operationId);
+    const snapshot = await coordinator.workflowOwner
+      .buildPriorityRecoveryOperationDrainSnapshot(operation);
+    const settled = await coordinator.workflowOwner
+      .reconcilePriorityRecoveryOperationDrain(operation, snapshot);
+    const persisted = await coordinator.getOperation(operationId);
+    return {snapshot, settled, persisted};
+  } finally {
+    await coordinator.shutdown();
+  }
+}
+
+test('priority ADD drain refuses cache fallback across CONVERGED and dead-owner ' +
+  'paths and completes only on authoritative exact-target ACTIVE under valid ownership',
+async (t) => {
+  const nonCompletingAuthoritativeCases = [
+    {
+      label: 'authoritative failure',
+      readServices: async () => ({success: false, error: 'authority_unavailable'}),
+    },
+    {
+      label: 'authoritative throw',
+      readServices: async () => {
+        throw new Error('services authority unreachable');
+      },
+    },
+    {
+      label: 'authoritative CREATING',
+      readServices: async ({cachedActiveTarget}) => ({
+        success: true,
+        rows: [{...cachedActiveTarget, status: ReplicaStatus.CREATING}],
+      }),
+    },
+    {
+      label: 'authoritative ACTIVE on wrong node_id',
+      readServices: async ({cachedActiveTarget}) => ({
+        success: true,
+        rows: [{...cachedActiveTarget, node_id: 'other-node-99'}],
+      }),
+    },
+    {
+      label: 'authoritative ACTIVE on wrong partition_id',
+      readServices: async ({cachedActiveTarget}) => ({
+        success: true,
+        rows: [{...cachedActiveTarget, partition_id: 'other-partition-p1'}],
+      }),
+    },
+    {
+      label: 'authoritative ACTIVE on wrong replica_id',
+      readServices: async ({cachedActiveTarget}) => ({
+        success: true,
+        rows: [{
+          ...cachedActiveTarget,
+          service_id: 'other-replica-r99',
+          replica_id: 'other-replica-r99',
+        }],
+      }),
+    },
+  ];
+
+  for (const completionState of [
+    PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED,
+    PRIORITY_RECOVERY_COMPLETION_STATE.BLOCKED,
+  ]) {
+    for (const testCase of nonCompletingAuthoritativeCases) {
+      const out = await runPriorityAddAuthoritativeDrainProbe({
+        completionState,
+        localOwner: false,
+        ownerUnavailable: true,
+        readServices: testCase.readServices,
+      });
+      t.equal(out.settled, false,
+        `${completionState} + ${testCase.label} must not settle off cached ACTIVE`);
+      t.equal(out.persisted?.workflowStep, WORKFLOW_STEP.SENDING,
+        `${completionState} + ${testCase.label} retains ADD in-flight`);
+      t.equal(out.persisted?.completedAt, null,
+        `${completionState} + ${testCase.label} neither completes nor fails ADD`);
+    }
+  }
+
+  const exactActiveRead = async ({cachedActiveTarget}) => ({
+    success: true,
+    rows: [{...cachedActiveTarget}],
+  });
+
+  // Live remote owner refuses non-owner completion even with authoritative ACTIVE.
+  for (const completionState of [
+    PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED,
+    PRIORITY_RECOVERY_COMPLETION_STATE.BLOCKED,
+  ]) {
+    const liveRemote = await runPriorityAddAuthoritativeDrainProbe({
+      completionState,
+      localOwner: false,
+      ownerUnavailable: false,
+      readServices: exactActiveRead,
+    });
+    t.equal(liveRemote.settled, false,
+      `${completionState} with live remote owner must not complete on non-owner`);
+    t.equal(liveRemote.persisted?.workflowStep, WORKFLOW_STEP.SENDING);
+  }
+
+  // Local owner completes when CONVERGED.
+  const localConverged = await runPriorityAddAuthoritativeDrainProbe({
+    completionState: PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED,
+    localOwner: true,
+    ownerUnavailable: false,
+    readServices: exactActiveRead,
+  });
+  t.equal(localConverged.settled, true, 'local owner completes converged ADD');
+  t.equal(localConverged.persisted?.workflowStep, WORKFLOW_STEP.ACTIVE);
+
+  // Remote node completes when owner is unavailable across both paths.
+  for (const completionState of [
+    PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED,
+    PRIORITY_RECOVERY_COMPLETION_STATE.BLOCKED,
+  ]) {
+    const deadOwner = await runPriorityAddAuthoritativeDrainProbe({
+      completionState,
+      localOwner: false,
+      ownerUnavailable: true,
+      readServices: exactActiveRead,
+    });
+    t.equal(deadOwner.settled, true,
+      `${completionState} with unavailable owner completes on authoritative ACTIVE`);
+    t.equal(deadOwner.persisted?.workflowStep, WORKFLOW_STEP.ACTIVE);
   }
 });

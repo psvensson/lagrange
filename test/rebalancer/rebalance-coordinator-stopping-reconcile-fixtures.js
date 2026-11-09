@@ -80,14 +80,17 @@ export const PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STEP_ASSERTION =
 export const PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STATUS_ASSERTION =
   'stale direct priority transition should not overwrite terminal status';
 
-export function buildPriorityDrainConvergedPlanningSnapshot(partitionId) {
+export function buildPriorityDrainConvergedPlanningSnapshot(
+  partitionId,
+  readyNodeIds = PRIORITY_DRAIN_TEST_READY_NODE_IDS,
+) {
   return Object.freeze({
     publicationStatus: PRIORITY_DRAIN_TEST_PUBLICATION_STATUS,
     publishedActiveNodeIdsPresent: true,
-    publishedActiveNodeIds: PRIORITY_DRAIN_TEST_READY_NODE_IDS,
-    recoveryActiveNodeIds: PRIORITY_DRAIN_TEST_READY_NODE_IDS,
-    projectedServingNodeIds: PRIORITY_DRAIN_TEST_READY_NODE_IDS,
-    locallyEligibleNodeIds: PRIORITY_DRAIN_TEST_READY_NODE_IDS,
+    publishedActiveNodeIds: readyNodeIds,
+    recoveryActiveNodeIds: readyNodeIds,
+    projectedServingNodeIds: readyNodeIds,
+    locallyEligibleNodeIds: readyNodeIds,
     priorityPartitionSummary: Object.freeze({
       satisfied: true,
       requiredDistinctNodeCount:
@@ -161,18 +164,28 @@ export function buildPriorityDrainSupersededPlanningSnapshot(
   });
 }
 
-function buildPriorityDrainCommittedNodeRows(unavailableNodeId = null) {
-  const nowMs = Date.now();
-  return PRIORITY_DRAIN_TEST_READY_NODE_IDS.map((nodeId) => ({
+function buildPriorityDrainCommittedNodeRows(
+  unavailableNodeId = null,
+  {
+    readyNodeIds = PRIORITY_DRAIN_TEST_READY_NODE_IDS,
+    now = Date.now,
+  } = {},
+) {
+  const nowMs = now();
+  return readyNodeIds.map((nodeId) => ({
     node_id: nodeId,
     status: nodeId === unavailableNodeId ? 'failed' : 'active',
     ready_lease_expires_at: nodeId === unavailableNodeId ? 0 : nowMs + 60000,
   }));
 }
 
-export function buildPriorityDrainReadinessService(partitionId) {
+export function buildPriorityDrainReadinessService(partitionId, options = {}) {
+  const {
+    readyNodeIds = PRIORITY_DRAIN_TEST_READY_NODE_IDS,
+    now = Date.now,
+  } = options;
   const planningSnapshot =
-    buildPriorityDrainConvergedPlanningSnapshot(partitionId);
+    buildPriorityDrainConvergedPlanningSnapshot(partitionId, readyNodeIds);
   return Object.freeze({
     async readServeEligibility() {},
     // The committed record never changes in this fixture: no wake.
@@ -185,9 +198,12 @@ export function buildPriorityDrainReadinessService(partitionId) {
         epoch: {
           publicationEpoch: 1,
           publicationId: 'cluster_membership-1',
-          readAtMs: Date.now(),
+          readAtMs: now(),
         },
-        nodeRows: buildPriorityDrainCommittedNodeRows(),
+        nodeRows: buildPriorityDrainCommittedNodeRows(null, {
+          readyNodeIds,
+          now,
+        }),
       };
     },
     getNodeReadinessSync(nodeId) {
@@ -219,9 +235,14 @@ export function buildPriorityDrainReadinessService(partitionId) {
 export function buildPriorityDrainOwnerUnavailableReadinessService(
   partitionId,
   unavailableNodeId,
+  options = {},
 ) {
+  const {
+    readyNodeIds = PRIORITY_DRAIN_TEST_READY_NODE_IDS,
+    now = Date.now,
+  } = options;
   const planningSnapshot =
-    buildPriorityDrainConvergedPlanningSnapshot(partitionId);
+    buildPriorityDrainConvergedPlanningSnapshot(partitionId, readyNodeIds);
   return Object.freeze({
     async readServeEligibility() {},
     // The committed record never changes in this fixture: no wake.
@@ -234,9 +255,12 @@ export function buildPriorityDrainOwnerUnavailableReadinessService(
         epoch: {
           publicationEpoch: 1,
           publicationId: 'cluster_membership-1',
-          readAtMs: Date.now(),
+          readAtMs: now(),
         },
-        nodeRows: buildPriorityDrainCommittedNodeRows(unavailableNodeId),
+        nodeRows: buildPriorityDrainCommittedNodeRows(unavailableNodeId, {
+          readyNodeIds,
+          now,
+        }),
       };
     },
     getNodeReadinessSync(nodeId) {

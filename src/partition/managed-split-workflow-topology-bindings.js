@@ -32,6 +32,8 @@ const LOCAL_STR_READCOMMITTEDGROUPMEMBERS = 'readCommittedGroupMembers';
 const LOCAL_STR_OBSERVESYSTEMROWS = 'observeSystemRows';
 const LOCAL_STR_RESOLVESPLITCHILDLEADERROUTINGEVIDENCE =
   'resolveSplitChildLeaderRoutingEvidence';
+const LOCAL_STR_REPAIRSPLITCHILDLEADERROUTINGEVIDENCE =
+  'repairSplitChildLeaderRoutingEvidence';
 const LOCAL_STR_RESOLVEROUTINGWAITPOLLINTERVALMS =
   'resolveRoutingWaitPollIntervalMs';
 const LOCAL_STR_DELAY = 'delay';
@@ -48,69 +50,73 @@ const absent = () => null;
  * Topology collaborators the ManagedSplitWorkflow owner observes, in
  * binding order. Each resolves to the topology adapter's method when
  * one is wired, else the explicit option of the same name, else the
- * typed inert default built by `fallback(options, workflow)`.
- * @type {ReadonlyArray<{property: string, fallback: Function}>}
+ * typed inert default built by `inertBinding(options, workflow)`.
+ * @type {ReadonlyArray<{property: string, inertBinding: Function}>}
  */
 const TOPOLOGY_METHOD_BINDINGS = Object.freeze([
   {
     property: LOCAL_STR_GETCDCINTEGRATIONSERVICE,
-    fallback: (options) => () => options.cdcIntegrationService || null,
+    inertBinding: (options) => () => options.cdcIntegrationService || null,
   },
-  {property: LOCAL_STR_GETPARTITIONINFO, fallback: returnsNull},
-  {property: LOCAL_STR_GETTABLEINFO, fallback: returnsNull},
-  {property: LOCAL_STR_LISTTABLEINFOS, fallback: returnsEmptyList},
-  {property: LOCAL_STR_PARSEPARTITIONTRANSITION, fallback: returnsNull},
-  {property: LOCAL_STR_ISLOCALMANAGEDSPLITLEADER, fallback: returnsFalse},
-  {property: LOCAL_STR_RESOLVEACTIVEPARTITIONVERSION, fallback: () => () => 1},
+  {property: LOCAL_STR_GETPARTITIONINFO, inertBinding: returnsNull},
+  {property: LOCAL_STR_GETTABLEINFO, inertBinding: returnsNull},
+  {property: LOCAL_STR_LISTTABLEINFOS, inertBinding: returnsEmptyList},
+  {property: LOCAL_STR_PARSEPARTITIONTRANSITION, inertBinding: returnsNull},
+  {property: LOCAL_STR_ISLOCALMANAGEDSPLITLEADER, inertBinding: returnsFalse},
+  {property: LOCAL_STR_RESOLVEACTIVEPARTITIONVERSION, inertBinding: () => () => 1},
   {
     property: LOCAL_STR_BUILDMANAGEDSPLITPLAN,
-    fallback: () => async () => {
+    inertBinding: () => async () => {
       throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
     },
   },
-  {property: LOCAL_STR_RESOLVEPROVISIONTARGETNODEIDS, fallback: returnsEmptyList},
+  {property: LOCAL_STR_RESOLVEPROVISIONTARGETNODEIDS, inertBinding: returnsEmptyList},
   {
     property: LOCAL_STR_GETROUTABLEPARTITIONSERVICENODEIDS,
-    fallback: returnsEmptyList,
+    inertBinding: returnsEmptyList,
   },
-  {property: LOCAL_STR_ISSYSTEMTABLEPARTITIONID, fallback: returnsFalse},
-  {property: LOCAL_STR_CAPTURETOPOLOGYSNAPSHOT, fallback: absent},
+  {property: LOCAL_STR_ISSYSTEMTABLEPARTITIONID, inertBinding: returnsFalse},
+  {property: LOCAL_STR_CAPTURETOPOLOGYSNAPSHOT, inertBinding: absent},
   {
     property: LOCAL_STR_CALCULATEQUORUMREPLICACOUNT,
-    fallback: () => () => DEFAULT_QUORUM_REPLICA_COUNT,
+    inertBinding: () => () => DEFAULT_QUORUM_REPLICA_COUNT,
   },
-  {property: LOCAL_STR_CREATEEXECUTIONTIMEOUTBUDGET, fallback: absent},
+  {property: LOCAL_STR_CREATEEXECUTIONTIMEOUTBUDGET, inertBinding: absent},
   {
     property: LOCAL_STR_ESTIMATESPLITADMISSIONBYTES,
-    fallback: (_options, workflow) =>
+    inertBinding: (_options, workflow) =>
       (partitionInfo) => workflow.defaultEstimateSplitAdmissionBytes(partitionInfo),
   },
-  {property: LOCAL_STR_WAITFORTABLEPARTITIONMETADATA, fallback: resolvesVoid},
-  {property: LOCAL_STR_PROBEINITIALTABLEPARTITIONPROVISIONING, fallback: absent},
-  {property: LOCAL_STR_PROVISIONINITIALTABLEPARTITION, fallback: resolvesVoid},
+  {property: LOCAL_STR_WAITFORTABLEPARTITIONMETADATA, inertBinding: resolvesVoid},
+  {property: LOCAL_STR_PROBEINITIALTABLEPARTITIONPROVISIONING, inertBinding: absent},
+  {property: LOCAL_STR_PROVISIONINITIALTABLEPARTITION, inertBinding: resolvesVoid},
   {
     property: LOCAL_STR_STARTSPLITREPLICATIONONSOURCEPARTITION,
-    fallback: resolvesVoid,
+    inertBinding: resolvesVoid,
   },
-  {property: LOCAL_STR_LISTTABLEPARTITIONROWS, fallback: returnsEmptyList},
-  {property: LOCAL_STR_LISTPARTITIONSERVICEROWS, fallback: returnsEmptyList},
-  {property: LOCAL_STR_DELIVERREPLICAREMOVAL, fallback: () => async () => null},
+  {property: LOCAL_STR_LISTTABLEPARTITIONROWS, inertBinding: returnsEmptyList},
+  {property: LOCAL_STR_LISTPARTITIONSERVICEROWS, inertBinding: returnsEmptyList},
+  {property: LOCAL_STR_DELIVERREPLICAREMOVAL, inertBinding: () => async () => null},
   // No reader: membership unavailable, never "no members".
-  {property: LOCAL_STR_READCOMMITTEDGROUPMEMBERS, fallback: () => async () => []},
-  {property: LOCAL_STR_OBSERVESYSTEMROWS, fallback: () => () => null},
+  {property: LOCAL_STR_READCOMMITTEDGROUPMEMBERS, inertBinding: () => async () => []},
+  {property: LOCAL_STR_OBSERVESYSTEMROWS, inertBinding: () => () => null},
   // Cutover readiness evidence (child canonical leader + serve-routable
   // node ids) is observed from the query plane; the owner decides.
   {
     property: LOCAL_STR_RESOLVESPLITCHILDLEADERROUTINGEVIDENCE,
-    fallback: () => () => ({leaderNodeId: '', routableNodeIds: []}),
+    inertBinding: () => () => ({leaderNodeId: '', routableNodeIds: []}),
+  },
+  {
+    property: LOCAL_STR_REPAIRSPLITCHILDLEADERROUTINGEVIDENCE,
+    inertBinding: () => async () => false,
   },
   {
     property: LOCAL_STR_RESOLVEROUTINGWAITPOLLINTERVALMS,
-    fallback: () => defaultRoutingWaitPollIntervalMs,
+    inertBinding: () => defaultRoutingWaitPollIntervalMs,
   },
   {
     property: LOCAL_STR_DELAY,
-    fallback: () =>
+    inertBinding: () =>
       (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   },
 ]);
@@ -133,11 +139,11 @@ function bindTopologyMethod(topologyAdapter, methodName) {
  * @return {void}
  */
 function applyManagedSplitTopologyBindings(workflow, options) {
-  for (const {property, fallback} of TOPOLOGY_METHOD_BINDINGS) {
+  for (const {property, inertBinding} of TOPOLOGY_METHOD_BINDINGS) {
     workflow[property] =
       bindTopologyMethod(workflow.topologyAdapter, property) ||
       options[property] ||
-      fallback(options, workflow);
+      inertBinding(options, workflow);
   }
   workflow.storageAdmissionService =
     options.storageAdmissionService ||
