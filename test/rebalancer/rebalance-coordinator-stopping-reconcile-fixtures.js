@@ -175,6 +175,10 @@ export function buildPriorityDrainReadinessService(partitionId) {
     buildPriorityDrainConvergedPlanningSnapshot(partitionId);
   return Object.freeze({
     async readServeEligibility() {},
+    // The committed record never changes in this fixture: no wake.
+    subscribeServeEligibility() {
+      return () => {};
+    },
     answerCommittedNodes() {
       return {
         state: 'ready',
@@ -220,6 +224,10 @@ export function buildPriorityDrainOwnerUnavailableReadinessService(
     buildPriorityDrainConvergedPlanningSnapshot(partitionId);
   return Object.freeze({
     async readServeEligibility() {},
+    // The committed record never changes in this fixture: no wake.
+    subscribeServeEligibility() {
+      return () => {};
+    },
     answerCommittedNodes() {
       return {
         state: 'ready',
@@ -270,6 +278,10 @@ export function buildPriorityDrainSupersededReadinessService(
     buildPriorityDrainSupersededPlanningSnapshot(partitionId, operationId);
   return Object.freeze({
     async readServeEligibility() {},
+    // The committed record never changes in this fixture: no wake.
+    subscribeServeEligibility() {
+      return () => {};
+    },
     answerCommittedNodes() {
       return {
         state: 'ready',

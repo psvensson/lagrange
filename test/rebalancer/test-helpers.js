@@ -347,8 +347,7 @@ function createMockControlPlaneReadinessService(options = {}) {
     },
     ...callbacks,
   };
-  // The one hand-written readiness fake completer (stream fixture): any
-  // consumer member the port does not state answers as an absent one did.
+  // The one completer: an unstated consumer member answers as absent.
   return readinessServiceFake(port, now);
 }
 
@@ -1258,8 +1257,11 @@ function createTestCoordinator(options = {}) {
     messageRouter: mockMessageRouter,
     sqlQueryEngine: mockSqlEngine,
     transactionCoordinator,
+    // Named: completed by the one fixture completer (frozen ports kept).
     controlPlaneReadinessService: Object.hasOwn(options, 'controlPlaneReadinessService') ?
-      options.controlPlaneReadinessService :
+      (options.controlPlaneReadinessService ?
+        readinessServiceFake(options.controlPlaneReadinessService) :
+        options.controlPlaneReadinessService) :
       createMockControlPlaneReadinessService({
         ...options.readinessFixture,
         systemTableCache: mockCache,
@@ -1328,8 +1330,7 @@ function createTestRebalancer(options = {}) {
     createMockPolicyService(mergedCacheData);
   const mockMessageRouter = options.messageRouter ||
     createMockMessageRouter({connectionState});
-  // A named or coordinator-held service is completed by the one fixture
-  // completer on the rebalancer's clock; otherwise the declared world port.
+  // Named/coordinator-held: completed on the rebalancer's clock.
   const ownerClock = typeof options.nowFn === 'function' ? options.nowFn : undefined;
   const namedReadinessService = Object.hasOwn(options, 'controlPlaneReadinessService') ?
     options.controlPlaneReadinessService :

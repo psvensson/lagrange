@@ -9,6 +9,7 @@ import {createMockPolicyService} from './test-helpers.js';
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
 
@@ -35,7 +36,7 @@ export function createPublishedPlanningReadinessService({
       missingPartitionIds: [],
     }),
   });
-  return {
+  return partialReadinessFake({
     getNodeReadinessSync(nodeId) {
       return {
         nodeId,
@@ -57,7 +58,7 @@ export function createPublishedPlanningReadinessService({
     getPriorityRecoveryPlanningAnswerSync(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
-  };
+  });
 }
 
 /**

@@ -14,6 +14,7 @@ import {
 } from '../../src/control-plane/serve-eligibility-owner.js';
 import {withRegisteredIncarnations} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 const SEED_NODE_ID = 'seed-node';
 const NODE_B = 'node-b';
@@ -139,7 +140,9 @@ function createRebalancer(overrides = {}) {
         return {success: true, rows: []};
       },
     },
-    controlPlaneReadinessService: {
+    // The one fixture completer: members the fake does not state answer as
+    // absent ones did, on the rebalancer's clock.
+    controlPlaneReadinessService: partialReadinessFake({
       // This fixture substitutes the committed reader, not its lease decision.
       answerCommittedNodes() {
         return {
@@ -172,7 +175,7 @@ function createRebalancer(overrides = {}) {
         };
       },
       ...overrides.controlPlaneReadinessService,
-    },
+    }, overrides.nowFn),
   });
   return rebalancer;
 }

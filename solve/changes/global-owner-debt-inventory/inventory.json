@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "e33b6d7dcd9c2e1ded6d7a1541f0f9cfb353eac75a2c6e80b2b3df27c74a9f66"
+        "sha256": "b7e0f6e89d3af6f97b7ef270e20d5f02da37fe6ab94c7709ce3baf8bf35b1d1b"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3486351,
-        "sha256": "1eca44ad7bbdb32005fd50ed71a8a919623101ceedcf04ff90065205ff2613d6"
+        "bytes": 3486411,
+        "sha256": "a63b1fb2dcd0d4f42a79a9d16a13873f5b4fe72eada5385aa3bd00f27ba4e0e8"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "d28776efb53f79b83aec44dfefc4fe37ebe532827fda6edf4c74e8aa1c4563ba"
+        "sha256": "c5f3388280ee15a99dea07aeb17af40d93deaf2e6c38968bac7092cc509cfdbd"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "a127b7bf490dc94100ad9e2e58b17d59e6d386da567da47e4c6a6b8f55b44ebe"
+    "inputDigest": "88416db88954d893bbc702604da3d267c5dbb3177b2327373fe76720b6902c19"
   },
   "reconciliation": {
     "complexity": {
@@ -73,7 +73,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "e33b6d7dcd9c2e1ded6d7a1541f0f9cfb353eac75a2c6e80b2b3df27c74a9f66"
+        "sha256": "b7e0f6e89d3af6f97b7ef270e20d5f02da37fe6ab94c7709ce3baf8bf35b1d1b"
       },
       "declaredCount": 1713,
       "observedCount": 1713,
@@ -135,12 +135,12 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "d28776efb53f79b83aec44dfefc4fe37ebe532827fda6edf4c74e8aa1c4563ba"
+          "sha256": "c5f3388280ee15a99dea07aeb17af40d93deaf2e6c38968bac7092cc509cfdbd"
         },
         "cloneGroups": 629,
-        "duplicatedLines": 23629,
+        "duplicatedLines": 23633,
         "sourceCloneTouches": 1258,
-        "sourceDuplicatedLineTouches": 47258,
+        "sourceDuplicatedLineTouches": 47266,
         "nonzeroSourceCount": 405,
         "touchMultiplicity": 2
       }
@@ -173,17 +173,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3486351,
-        "sha256": "1eca44ad7bbdb32005fd50ed71a8a919623101ceedcf04ff90065205ff2613d6"
+        "bytes": 3486411,
+        "sha256": "a63b1fb2dcd0d4f42a79a9d16a13873f5b4fe72eada5385aa3bd00f27ba4e0e8"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "c925a034740d074547f3eafd002738dd4136ac07a7822346303148dcf63fd7c2",
+      "sourceDigest": "14fdcc56b1fe2164e01331db68706d7a7548e4a8ef4ee742dbd8fcac3ccc7b0d",
       "moduleCount": 6115,
-      "edgeCount": 34287,
+      "edgeCount": 34288,
       "unresolvedCount": 46
     }
   },
@@ -191,7 +191,7 @@
     "sourceSignalCount": 2395,
     "assignedSignalCount": 2395,
     "uniqueAssignmentCount": 2395,
-    "digest": "39ec018f963c8c2195acc168f99ed31294f2cebf008cef9098e45d3e630c08a6"
+    "digest": "4ccc673bc17574502bfdb9665bb6e5929aa158ad84fbb497107b7ab61576c90c"
   },
   "signalCounts": {
     "cognitive": 145,
@@ -249,13 +249,13 @@
       "complexity": 56,
       "cognitive": 0,
       "oversizedFiles": 5,
-      "duplicatedLines": 11850,
+      "duplicatedLines": 11858,
       "cloneTouches": 282,
       "cycleGroups": 0,
       "lintExclusions": 15,
       "importIn": 239,
       "importOut": 817,
-      "score": 1479.6,
+      "score": 1480.4,
       "topPaths": [
         "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
         "test/rebalancer/rebalance-coordinator-operation-ownership-priority-admission-test-cases.js",
@@ -2443,7 +2443,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 132,
+      "importIn": 133,
       "importOut": 4,
       "score": 8,
       "topPaths": [
@@ -3643,11 +3643,11 @@
           }
         ],
         "baseline": {
-          "score": 1479.6,
+          "score": 1480.4,
           "complexity": 56,
           "cognitive": 0,
           "oversizedFiles": 5,
-          "duplicatedLines": 11850,
+          "duplicatedLines": 11858,
           "lintExclusions": 15
         },
         "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"

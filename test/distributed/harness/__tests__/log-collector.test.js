@@ -666,16 +666,18 @@ test('retainContainerLogLines preserves full pre-teardown logs and skips fallbac
       '{"level":30,"time":"2026-11-06T18:55:00.000Z","msg":"second full line"}',
     ]);
     await collector.collectContainerFallback([
+      // The fallback reads each node's bounded log window (stream:
+      // failure-bundle-evidence-completeness).
       {
         id: 'node-1',
-        getLogs: async () => {
+        getLogWindow: async () => {
           fallbackCalledForNode1 = true;
-          return 'truncated tail line\n';
+          return {lines: ['truncated tail line']};
         },
       },
       {
         id: 'node-2',
-        getLogs: async () => 'node-2 fallback line\n',
+        getLogWindow: async () => ({lines: ['node-2 fallback line']}),
       },
     ]);
     const buffer = collector.getBuffer();
