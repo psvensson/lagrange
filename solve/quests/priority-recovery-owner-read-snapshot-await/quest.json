@@ -22,5 +22,6 @@
       "id": "independent-verification",
       "statement": "The src/ change lands only behind an approving verification newer than the last attempt."
     }
-  ]
+  ],
+  "sealedAt": "8d792cca5fc8d9ae797fccd509a9b7f1858476b7"
 }
