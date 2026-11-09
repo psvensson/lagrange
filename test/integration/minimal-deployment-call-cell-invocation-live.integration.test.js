@@ -83,6 +83,7 @@ import {CALL_CELL_INVOCATION_ID_PREFIX} from
 import {createCallCellRoutingSurface} from
   '../../src/service/call-cell-routing-surface.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {readinessCollaboratorFake} from '../helpers/readiness-service-fixture.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const NODE_ID = 'call-cell-live-node';
@@ -714,7 +715,8 @@ describe('minimal deployment call-cell invocation live wiring', () => {
     'layers to exactly one reduced snapshot', async (testContext) => {
     const systemTableCache = new SystemTableCache();
     const partitionStores = createPartitionStores();
-    const messageRouter = createLiveMessageRouter(partitionStores);
+    const messageRouter = readinessCollaboratorFake('messageRouter',
+      createLiveMessageRouter(partitionStores));
     const engine = new SQLQueryEngine({
       controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       autoStartDistributedTransactionRecovery: false,
