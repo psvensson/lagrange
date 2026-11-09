@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawn, spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {flushCoverageBeforeKill} from '../test-helpers/census-pre-kill-flush.js';
 
 import {
   POST_MERGE_REFUSAL,
@@ -603,6 +604,9 @@ tap.test('the post-merge arm runs one local corpus at a time', (t) => {
   const children = [];
   t.teardown(() => {
     for (const child of children) {
+      if (child.exitCode === null && child.signalCode === null) {
+        flushCoverageBeforeKill(child.pid, 'SIGKILL');
+      }
       try {
         process.kill(-child.pid, 'SIGKILL');
       } catch {

@@ -10,12 +10,16 @@ import {fork} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
+import {flushCoverageBeforeKill} from '../test-helpers/census-pre-kill-flush.js';
 
 refuseUnderProbe('learner process-loss integration');
 const worker = fileURLToPath(new URL('../test-helpers/learner-process-loss-worker.js', import.meta.url));
 const DEADLINE_MS = 8000;
 const OUTPUT_LIMIT = 1000000;
 function killOwnedGroup(child) {
+  if (child.exitCode === null && child.signalCode === null) {
+    flushCoverageBeforeKill(child.pid, 'SIGKILL');
+  }
   try {
     process.kill(-child.pid, 'SIGKILL');
   } catch (error) {

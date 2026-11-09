@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+import {flushCoverageBeforeKill} from '../test-helpers/census-pre-kill-flush.js';
 
 const M1 = fileURLToPath(new URL('./seed-migration-cutover-persisted.integration.test.js',
   import.meta.url));
@@ -84,6 +85,7 @@ test('TX1 M1: SIGKILL with RF3 SQLite handles open, then read and reconstruct ' 
     assert.equal(marker.coordinatorRestarted, false);
     assert.ok(marker.requests.every((request) =>
       request.dbPath.startsWith(marker.dataDir + path.sep)));
+    flushCoverageBeforeKill(child.pid, 'SIGKILL');
     assert.equal(child.kill('SIGKILL'), true, 'must kill the live seed process');
     const death = await completion;
     assert.equal(death.signal, 'SIGKILL', 'the child must not exit gracefully');
@@ -141,6 +143,7 @@ test('TX1 M1: SIGKILL with RF3 SQLite handles open, then read and reconstruct ' 
     throw error;
   } finally {
     if (exited.value === null) {
+      flushCoverageBeforeKill(child.pid, 'SIGKILL');
       child.kill('SIGKILL');
       await completion;
     }

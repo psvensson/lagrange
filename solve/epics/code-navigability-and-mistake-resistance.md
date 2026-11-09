@@ -39,8 +39,10 @@ authorizes:
   - docs/steering/tool-descriptions.json
   - .githooks
   - .gitattributes
+  - .gitignore
   - src
   - data/fallback-census
+  - examples/service-data-affinity/run-affinity-demo.js
 ---
 
 # Code navigability and mistake resistance
@@ -300,3 +302,31 @@ They are recorded, not in scope (R17); the readiness chain is the pilot.
   replace its `readStateField` reads on these tables with decoded named
   states, and the `row_field_alias_reads` cap arithmetic starts from the
   post-merge value, not 745.
+- 2026-11-08: `authorizes` widened (R16, recorded) with `.gitignore`: `data/` is
+  ignored, so committing `data/fallback-census/census.json` needs the same
+  exception shape `data/storage-load` already has. Census taken at the stream
+  head 6521d5027 (src unchanged from 1ad04d21a) over the unit, packaging,
+  integration and bootstrap lanes and one fresh-formation run on tv-dator:
+  2803 sites, 0 unloaded, 162 `never`, 1201 `primary-only`, 41 `fallback-only`,
+  1399 `both`, 0 `unobserved` (corrected 2026-11-09 to the committed census,
+  collection 5; 158 / 1403 were the first collection's counts). The first
+  formation run lost the seed's coverage (force-killed during shutdown, V8 writes coverage only on exit); `collect` now imports an
+  environment preload that flushes coverage on SIGTERM/SIGINT and the formation
+  lane was rerun. The census is hash-bound: the source quests landing after it
+  make their files' sites uncensused again and a re-collection follows them.
+- 2026-11-08 owner decision (census residual rule): eliminate the coverage
+  losses rather than accept them - flush before the deliberate kills, let the
+  formation seed drain in census mode, take the SIGABRT apart - then
+  re-collect all five lanes. `unobserved` stays the honest accounting of any
+  residual loss and is never a licence to delete. The concurrent
+  `roster-reconciled-witnesses` / `hasUnboundedClosure` attempts (17:45Z,
+  19:28Z) were recorded by another agent system and are outside this quest.
+  `authorizes` widened (R16, recorded) with
+  `examples/service-data-affinity/run-affinity-demo.js` only: its node stop
+  deadline becomes configurable (default unchanged, 15 s) so the census
+  formation lane can wait for the seed's own exit; the seed's drain overrun
+  itself is routed to the formation/demo owner (R17), not fixed here.
+- 2026-11-09 (routed from the state-read-named-defaults round-3 verification): the if-statement copy of readLowerStateField at
+  src/rebalancer/priority-recovery-operation-context-state.js:94-98 and the pre-existing `typeof x.status === 'string' ?
+  x.status.toUpperCase() : null` form (21 sites) are the next state_read_defaults detector and ESLint extension; fresh-seed-activation
+  stalled once in 9 local candidate runs vs 0/9 at HEAD under concurrent load (unattributed; include in the next repeat batch).

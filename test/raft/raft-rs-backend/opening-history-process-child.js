@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import {historyDb, openHistory, applicationRows, lifecycle} from './opening-history-native-fixture.js';
 import {setActualCoreEntryObserver} from '../../../src/raft/raft-rs-runtime-owner.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
+import {flushCoverageBeforeKill} from '../../test-helpers/census-pre-kill-flush.js';
 const [file, marker, crashAt] = process.argv.slice(2);
 const db = historyDb(file); let port; const entries = [];
 const receipt = {pid: process.pid, entries, marker};
@@ -12,6 +13,7 @@ try {
     if ((crashAt === 'before-bootstrap' && entry.operation === 'conf_state') ||
         (crashAt === 'after-bootstrap' && entry.operation === 'status')) {
       fs.writeSync(1, `HISTORY_CRASH ${crashAt}\n`);
+      flushCoverageBeforeKill(process.pid, 'SIGKILL');
       process.kill(process.pid, 'SIGKILL');
     }
   });

@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 217,
     "storage-raft": 151,
-    "test-infrastructure": 162,
+    "test-infrastructure": 163,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2621,
-  "digest": "fnv1a32-09d707a2",
+  "censusSize": 2622,
+  "digest": "fnv1a32-a8a3dc1e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-22aeac30",
+  "observationDigest": "fnv1a32-fd440848",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2305,6 +2305,7 @@
     "test/scripts/evidence-relocation-acceptance.test.js": "test-infrastructure",
     "test/scripts/evidence-relocation.test.js": "test-infrastructure",
     "test/scripts/exact-election-evidence-same-turn-model-contract.test.js": "test-infrastructure",
+    "test/scripts/fallback-branch-census.test.js": "test-infrastructure",
     "test/scripts/formation-health.test.js": "test-infrastructure",
     "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": "test-infrastructure",
     "test/scripts/gen-solve-commands-index.test.js": "test-infrastructure",
@@ -19088,6 +19089,7 @@
     },
     "test/scripts/code-navigability-budget.test.js": {
       "files": [
+        "data/fallback-census/census.json",
         "package.json",
         "scripts/check-guideline-ambient-intrinsics.js",
         "scripts/check-guideline-decision-boundaries.js",
@@ -19333,6 +19335,32 @@
     "test/scripts/exact-election-evidence-same-turn-model-contract.test.js": {
       "files": [
         "scripts/model-tlc.js"
+      ]
+    },
+    "test/scripts/fallback-branch-census.test.js": {
+      "files": [
+        "scripts/checks/code-navigability-budget.js",
+        "scripts/checks/code-navigability-detectors.js",
+        "scripts/checks/fallback-branch-census-constants.js",
+        "scripts/checks/fallback-branch-census-preload.js",
+        "scripts/checks/formation-health.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/test-machine-factor.js",
+        "src/index.js",
+        "test/test-helpers/census-pre-kill-flush.js"
+      ],
+      "directories": [
+        "src",
+        "src/test-helpers",
+        "test"
+      ],
+      "env": [
+        "LAGRANGE_AFFINITY_DEMO_STOP_DEADLINE_MS",
+        "LAGRANGE_CENSUS_COVERAGE_DIR",
+        "LAGRANGE_PLACEMENT",
+        "LAGRANGE_TEST_MAX_OLD_SPACE_MB",
+        "NODE_OPTIONS",
+        "NODE_V8_COVERAGE"
       ]
     },
     "test/scripts/formation-health.test.js": {

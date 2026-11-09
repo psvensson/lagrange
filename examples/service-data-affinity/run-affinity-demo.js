@@ -671,24 +671,46 @@ function isNodeProcessRunning(node) {
   return Boolean(node?.process && node.process.exitCode === null);
 }
 
-async function awaitNodeProcessStop(node, deadline) {
+// How long stopNodes waits after SIGTERM before it SIGKILLs a node. The
+// fallback-branch census (scripts/checks/fallback-branch-census.js, formation
+// lane) lengthens it so every node's shutdown drain completes and its
+// coverage is written; a node still SIGKILLed is reported on stderr.
+const NODE_STOP_DEADLINE_ENV = 'LAGRANGE_AFFINITY_DEMO_STOP_DEADLINE_MS';
+const FORCED_STOP_PREFIX = 'FORCED STOP: ';
+
+/**
+ * The stop deadline: NODE_STOP_DEADLINE_ENV when it is a positive integer,
+ * else ADMIN_QUERY_TIMEOUT_MS.
+ * @param {Object} [env]
+ * @return {number}
+ */
+function nodeStopDeadlineMs(env = process.env) {
+  const configured = Number(env[NODE_STOP_DEADLINE_ENV]);
+  return Number.isInteger(configured) && configured > 0 ?
+    configured : DEMO_CONSTANTS.ADMIN_QUERY_TIMEOUT_MS;
+}
+
+async function awaitNodeProcessStop(node, deadline, deadlineMs) {
   while (isNodeProcessRunning(node) && Date.now() < deadline) {
     await sleep(DEMO_CONSTANTS.NODE_STOP_POLL_MS);
   }
   if (isNodeProcessRunning(node)) {
+    console.error(`${FORCED_STOP_PREFIX}node-${node.index} (pid ` +
+      `${node.process.pid}) still running ${deadlineMs} ms after ` +
+      `${DEMO_CONSTANTS.GRACEFUL_STOP_SIGNAL}; sending ${DEMO_CONSTANTS.FORCE_STOP_SIGNAL}`);
     node.process.kill(DEMO_CONSTANTS.FORCE_STOP_SIGNAL);
   }
 }
 
-async function stopNodes(nodes) {
+async function stopNodes(nodes, {deadlineMs = nodeStopDeadlineMs()} = {}) {
   for (const node of nodes) {
     if (isNodeProcessRunning(node)) {
       node.process.kill(DEMO_CONSTANTS.GRACEFUL_STOP_SIGNAL);
     }
   }
-  const deadline = Date.now() + DEMO_CONSTANTS.ADMIN_QUERY_TIMEOUT_MS;
+  const deadline = Date.now() + deadlineMs;
   for (const node of nodes) {
-    await awaitNodeProcessStop(node, deadline);
+    await awaitNodeProcessStop(node, deadline, deadlineMs);
   }
 }
 
@@ -1065,4 +1087,11 @@ if (isMainModule) {
     });
 }
 
-export {retainObservedDemoResult, runAffinityDemo, summarizePhase};
+export {
+  NODE_STOP_DEADLINE_ENV,
+  nodeStopDeadlineMs,
+  retainObservedDemoResult,
+  runAffinityDemo,
+  stopNodes,
+  summarizePhase,
+};

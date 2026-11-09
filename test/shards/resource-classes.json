@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2595,
+    "ordinary": 2596,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2621,
-  "digest": "fnv1a32-5863e602",
+  "censusSize": 2622,
+  "digest": "fnv1a32-7c7f0dc8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2285,6 +2285,7 @@
     "test/scripts/evidence-relocation-acceptance.test.js": "ordinary",
     "test/scripts/evidence-relocation.test.js": "ordinary",
     "test/scripts/exact-election-evidence-same-turn-model-contract.test.js": "exclusive",
+    "test/scripts/fallback-branch-census.test.js": "ordinary",
     "test/scripts/formation-health.test.js": "ordinary",
     "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": "ordinary",
     "test/scripts/gen-solve-commands-index.test.js": "ordinary",

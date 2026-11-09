@@ -7,6 +7,10 @@ try {
   f.db.pragma('journal_mode = WAL');
   f.db.pragma('synchronous = FULL');
   const interrupted = () => {
+    // Held until the parent's SIGKILL. A pending Promise alone lets the event
+    // loop empty (the IPC channel is unref'd), and the child exits 13 on its
+    // own unless the kill lands first - a race any delay before the kill loses.
+    setInterval(() => {}, 60000);
     process.send({kind: 'interrupted', mode, pid: process.pid, row: f.row(),
       resource: f.state().selected.resources[0]});
     return new Promise(() => {});

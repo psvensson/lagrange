@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+import {flushCoverageBeforeKill} from '../test-helpers/census-pre-kill-flush.js';
 
 const SOURCE = fileURLToPath(new URL('./seed-migration-cutover-persisted.integration.test.js',
   import.meta.url));
@@ -60,6 +61,7 @@ test('TX1 M1: a real COMMIT decision and held prepared participants survive seed
       assert.equal(marker.neverDeliveredCommitCalls, 1);
       assert.equal(marker.persistedDecision.decision, 'COMMIT');
       assert.equal(marker.effectRowsNotApplied, true);
+      flushCoverageBeforeKill(child.pid, 'SIGKILL');
       child.kill('SIGKILL');
       assert.deepEqual(await completion, {code: null, signal: 'SIGKILL'});
       const read = spawnSync(process.execPath, [DISK], {input: JSON.stringify(
@@ -136,6 +138,7 @@ test('TX1 M1: a real COMMIT decision and held prepared participants survive seed
         fanoutReplayCertified: false}));
     } finally {
       if (ended === null) {
+        flushCoverageBeforeKill(child.pid, 'SIGKILL');
         child.kill('SIGKILL');
         await completion;
       }

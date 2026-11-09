@@ -32,6 +32,7 @@ import {
   managedTimeout,
 } from '../../../src/test-helpers/managed-timers.js';
 import {refuseUnderProbe} from '../../../src/test-helpers/probe-guard.js';
+import {flushCoverageBeforeKill} from '../../test-helpers/census-pre-kill-flush.js';
 import {getUniqueListenerPorts} from './cluster-test-helpers.js';
 import {
   EMBEDDED_STEP_OUTCOME,
@@ -233,6 +234,7 @@ async function stopNode(t, node) {
   }
   if (node.channel.exitState()) return;
   const exited = new Promise((resolve) => node.child.once('exit', resolve));
+  flushCoverageBeforeKill(node.child.pid, SIGTERM);
   node.child.kill(SIGTERM);
   const graceful = await Promise.race([
     exited.then(() => true),
@@ -240,6 +242,7 @@ async function stopNode(t, node) {
       .then(() => false),
   ]);
   if (!graceful && !node.channel.exitState()) {
+    flushCoverageBeforeKill(node.child.pid, SIGKILL);
     node.child.kill(SIGKILL);
     await exited;
   }
