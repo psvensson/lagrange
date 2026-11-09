@@ -53,7 +53,7 @@ import {
 } from './operation-workflow-replace-surviving-membership.js';
 import {isPartitionReplaceOwnerPhase} from './replica-operation-step-policy.js';
 import {
-  deliverToReplaceWitness,
+  deliverToReplaceWitness, deliveryUnavailableReason, replaceAnswerStatus,
   readReplaceWitnessMembership,
   replaceReplicaIdsOf,
 } from './operation-workflow-replace-witness.js';
@@ -382,13 +382,13 @@ async function redriveReplaceSourceRetirement(owner, operation, observation) {
   };
   state.nextAttemptSeq += 1;
   state.retirementAttemptByOperationId.set(operation.operationId, issued);
-  const {response, reason} = await deliverToReplaceWitness(
+  const delivery = await deliverToReplaceWitness(
     owner, operation, ReplicaOperationMessageType.RETIRE_REPLICA_PEER,
     replaceRetirementRouteOf(owner, operation, observation));
   if (state.retirementAttemptByOperationId.get(operation.operationId) ===
       issued) {
-    issued.answer = response?.[ReplicaOperationField.PROPOSAL] ||
-      {reason: reason || response?.status || null};
+    issued.answer = delivery.response?.[ReplicaOperationField.PROPOSAL] ||
+      {reason: deliveryUnavailableReason(delivery)};
     issued.answeredAtMs = nowMsOf(owner);
   }
   return true;
@@ -406,7 +406,7 @@ async function redriveReplaceSourceRetirement(owner, operation, observation) {
 function recordReplaceSourceRemovalEffect(owner, operation, response) {
   readOwnerState(owner).removalEffectByOperationId.set(operation.operationId, {
     sentAtMs: nowMsOf(owner),
-    status: response?.status ?? null,
+    status: replaceAnswerStatus(response),
   });
 }
 

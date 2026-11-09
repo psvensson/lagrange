@@ -1,3 +1,5 @@
+import {readStateField} from '../utils/state-field-read.js';
+import {readParticipantCurrentStatus} from '../workflow/workflow-constants.js';
 /**
  * The change functions of a split or merge workflow's durable record
  * (managed-workflow-record-store.js, owner decision 2026-10-05 option A):
@@ -320,7 +322,7 @@ function transitionChange(owner, transition, change, isTerminal) {
       step: transition.nextStep,
       fenceToken: transition.fenceToken,
       transitionHistory: [...(workflow.transitionHistory ?? []), {
-        [WORKFLOW_TRANSITION_FIELD.PREVIOUS_STEP]: workflow.step ?? null,
+        [WORKFLOW_TRANSITION_FIELD.PREVIOUS_STEP]: readStateField(workflow.step),
         [WORKFLOW_TRANSITION_FIELD.NEXT_STEP]: transition.nextStep,
         [WORKFLOW_TRANSITION_FIELD.REASON]: transition.reason,
         [WORKFLOW_TRANSITION_FIELD.TIMESTAMP]: now,
@@ -446,7 +448,7 @@ function validateSourceStartAuthorization(workflow, ack, authorization,
     return {refusal: refuseRecordChange(
       PARTICIPANT_ACK_RESULT.INVALID_TRANSITION,
       {participant: participant ? {...participant} : null, key, status,
-        fence, currentStatus: participant?.status ?? null,
+        fence, currentStatus: readParticipantCurrentStatus(participant),
         authorizationRefused: true})};
   }
   return {participant};
@@ -455,7 +457,7 @@ function validateSourceStartAuthorization(workflow, ack, authorization,
 function refuseSourceStart(participant, key, status, fence) {
   return refuseRecordChange(PARTICIPANT_ACK_RESULT.INVALID_TRANSITION,
     {participant: {...participant}, key, status, fence,
-      currentStatus: participant.status ?? null,
+      currentStatus: participant.status,
       authorizationRefused: true});
 }
 
@@ -472,16 +474,16 @@ function applySourceStartAuthorization(owner, ack, authorization, ordinary,
     workflow, ack, authorization, key, status, fence);
   if (validation.refusal) return validation.refusal;
   const {participant} = validation;
-  const alreadyStarted = authorization.startedStatuses.has(
-    String(participant.status || ''));
+  // An absent participant status is NOT_YET_ACKNOWLEDGED, never started.
+  const alreadyStarted = authorization.startedStatuses.has(participant.status);
   const executableState = authorization.executableStates?.has(
-    String(workflow.status || '')) === true;
+    String(workflow.status)) === true;
   if (alreadyStarted &&
       (authorization.confirmationOnly === true || executableState)) {
     return confirmSourceStart(owner, workflow, participant, key);
   }
   if (authorization.confirmationOnly === true ||
-      !authorization.initialStates.has(String(workflow.status || ''))) {
+      !authorization.initialStates.has(String(workflow.status))) {
     return refuseSourceStart(participant, key, status, fence);
   }
   return ordinary(workflow);
@@ -532,7 +534,7 @@ function acknowledgementRejectionOf(participant, key, status, fence,
     return PARTICIPANT_ACK_RESULT.DUPLICATE;
   }
   if (typeof isAllowed === 'function' &&
-      !isAllowed(key, participant.status || null, status)) {
+      !isAllowed(key, participant.status, status)) {
     return PARTICIPANT_ACK_RESULT.INVALID_TRANSITION;
   }
   return null;

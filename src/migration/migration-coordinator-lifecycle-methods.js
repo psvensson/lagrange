@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
@@ -165,7 +166,8 @@ function createMigrationCoordinatorLifecycleMethods(deps = {}) {
               );
             }
 
-            if (MIGRATION_TERMINAL_STATUSES.has(String(activeMigration.status || ''))) {
+            // schema_migrations.status is NOT NULL.
+            if (MIGRATION_TERMINAL_STATUSES.has(String(activeMigration.status))) {
               return {
                 result: {
                   migrationId: normalizedMigrationId,
@@ -173,7 +175,7 @@ function createMigrationCoordinatorLifecycleMethods(deps = {}) {
                 },
               };
             }
-            if (String(activeMigration.status || '') === MIGRATION_STATUS.CANCELLING) {
+            if (String(activeMigration.status) === MIGRATION_STATUS.CANCELLING) {
               return {
                 result: {
                   migrationId: normalizedMigrationId,
@@ -203,8 +205,8 @@ function createMigrationCoordinatorLifecycleMethods(deps = {}) {
             } catch (error) {
               const latestMigration = await this.getMigrationById(normalizedMigrationId);
               if (latestMigration &&
-                  String(latestMigration.status || '') !== MIGRATION_STATUS.CANCELLING &&
-                  !MIGRATION_TERMINAL_STATUSES.has(String(latestMigration.status || ''))) {
+                  String(latestMigration.status) !== MIGRATION_STATUS.CANCELLING &&
+                  !MIGRATION_TERMINAL_STATUSES.has(String(latestMigration.status))) {
                 await this.transitionMigrationStage(
                   normalizedMigrationId,
                   MIGRATION_STATUS.FAILED,
@@ -220,7 +222,7 @@ function createMigrationCoordinatorLifecycleMethods(deps = {}) {
             return {
               result: {
                 migrationId: normalizedMigrationId,
-                status: activeMigration?.status || null,
+                status: readStateField(activeMigration?.status),
               },
             };
           },
@@ -244,11 +246,9 @@ function createMigrationCoordinatorLifecycleMethods(deps = {}) {
       if (!migrationRow) {
         throw new Error(`${MIGRATION_ERROR_MSG.MIGRATION_NOT_FOUND}: ${normalizedMigrationId}`);
       }
-      const currentStage = String(
-        migrationRow.current_stage ||
-        migrationRow.status ||
-        '',
-      );
+      // migrations.current_stage is NOT NULL
+      // (system-table-workflow-schema-definitions.js).
+      const currentStage = migrationRow.current_stage;
       if (!MIGRATION_CANCELLABLE_STAGES.has(currentStage)) {
         throw new Error(`${MIGRATION_ERROR_MSG.NOT_CANCELLABLE_PREFIX}${currentStage}`);
       }

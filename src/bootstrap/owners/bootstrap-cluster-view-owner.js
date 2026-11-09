@@ -245,7 +245,7 @@ class BootstrapClusterViewOwner {
         nodeAddress: node.node_address,
         status: activeNodeIds.has(node.node_id) ?
           SERVICE_STATUS.ACTIVE :
-          (node.status || BOOTSTRAP_API_CLUSTER_STATE.UNKNOWN),
+          node.status, // nodes.status is NOT NULL DEFAULT 'active'
         isSeed: false,
       });
     }

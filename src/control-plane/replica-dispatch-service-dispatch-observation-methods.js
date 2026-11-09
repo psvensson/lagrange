@@ -60,7 +60,7 @@ class ReplicaDispatchServiceDispatchObservationMethods {
     const eventPayload = {
       operationId,
       targetNodeId: payload.targetNodeId || null,
-      workflowStep: payload.workflowStep || null,
+      workflowStep: payload.workflowStep,
       skipped: payload.skipped === true,
       reason: payload.reason || null,
       error: payload.error || null,

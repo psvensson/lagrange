@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../../utils/state-field-read.js';
 import {HTTP_STATUS} from '../../constants/index.js';
 import {ORIGINAL_ALLOCATION} from '../../raft/raft-rs-original-allocation-constants.js';
 import {
@@ -84,12 +85,12 @@ class BootstrapReadinessOwner {
       HTTP_STATUS.OK :
       HTTP_STATUS.SERVICE_UNAVAILABLE;
     const reasons = this.getStartupProbeReasons(snapshot, started);
+    // A snapshot that states no phase has not left the lifecycle's birth
+    // phase.
+    const phase = readStateField(snapshot.phase);
     const response = {
       started,
-      phase:
-        typeof snapshot.phase === 'string' ?
-          snapshot.phase :
-          LIFECYCLE_PHASE.INIT,
+      phase: phase === STATE_ABSENT ? LIFECYCLE_PHASE.INIT : phase,
       state: snapshot.state,
       reasons,
       timestamp: snapshot.timestamp,

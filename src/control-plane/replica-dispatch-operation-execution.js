@@ -197,8 +197,9 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
     }
 
     const targetNodeId = row.target_node_id;
-    // The row's step every dispatch-failure record of this attempt names.
-    const rowWorkflowStep = row.workflow_step || null;
+    // The row's step every dispatch-failure record of this attempt names
+    // (replica_operations.workflow_step NOT NULL: a replayed row states it).
+    const rowWorkflowStep = row.workflow_step;
     const rowOperation = this.buildOperationFromRow(row);
     const dispatchReadiness = await this.captureDispatchReadiness(
       rowOperation,

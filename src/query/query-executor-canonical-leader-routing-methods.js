@@ -111,10 +111,7 @@ class QueryExecutorCanonicalLeaderRoutingMethods
         service?.node_id ??
         service?.nodeId ??
         null;
-      const serviceStatus =
-        service?.[COLUMN.STATUS] ??
-        service?.status ??
-        null;
+      const serviceStatus = service?.[COLUMN.STATUS];
       return serviceNodeId === leaderNodeId &&
         serviceStatus === SERVICE_STATUS.ACTIVE;
     });

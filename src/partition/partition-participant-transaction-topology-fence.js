@@ -68,10 +68,10 @@ function transitionPartitions(state, raw) {
 function handleTransitionOf(service) {
   if (service.splitReplication) {
     return {kind: TOPOLOGY_TRANSITION_KIND.SPLIT_HANDLE,
-      state: service.splitReplication.phase ?? null};
+      state: service.splitReplication.phase}; // split replication state always carries phase
   } else if (service.mergeReplication) {
     return {kind: TOPOLOGY_TRANSITION_KIND.MERGE_HANDLE,
-      state: service.mergeReplication.phase ?? null};
+      state: service.mergeReplication.phase}; // merge replication state always carries phase
   }
   return null;
 }

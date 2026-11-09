@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from './control-plane-publication-merge.js';
@@ -624,13 +625,11 @@ function buildMembershipPublicationActiveSnapshot(
       Object.freeze({...membershipLifecycleSummary.projectionDiagnostics}) :
       null;
   const publicationStatus =
-    typeof membershipPublication.status === 'string' ?
-      membershipPublication.status :
-      normalizedPublication.status || null;
+    readStateField(membershipPublication.status, normalizedPublication.status);
   // Read (a): a list is published membership only on a PUBLISHED row that
   // carries it (an empty one: nobody); an OPEN or ACK_PENDING list never is,
   // it is read (b), the pending candidate, under its own name.
-  const normalizedStatus = String(publicationStatus || '').toUpperCase();
+  const normalizedStatus = publicationStatus === null ? null : publicationStatus.toUpperCase();
   const publishedActiveNodeIdsPresent =
     normalizedStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED && (
       membershipPublication.publishedActiveNodeIdsPresent === true ||

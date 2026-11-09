@@ -13,7 +13,6 @@ import {
 
 const LOCAL_STR_BREAKPOINT = 'breakpoint';
 const LOCAL_STR_PAUSE = 'pause';
-const LOCAL_STR_RUNNING = 'running';
 
 /**
  * Manages breakpoints and step control for debug sessions.
@@ -334,7 +333,9 @@ class BreakpointManager {
     return {
       sessionId: request.sessionId,
       action: stepAction,
-      status: resumeResult?.status || LOCAL_STR_RUNNING,
+      // Every runtime adapter's resume answers its status
+      // (wasm-runtime-adapter, replay-runtime; the base adapter throws).
+      status: resumeResult.status,
       instanceHandle: request.instanceHandle,
     };
   }

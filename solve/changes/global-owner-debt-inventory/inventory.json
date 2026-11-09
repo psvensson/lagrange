@@ -7,13 +7,13 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "4405622dd8ea709575163ce4f5fdb2cde16ac6028688cbd63f088a9611397364"
+        "sha256": "f0de6fa71a33f0ee19433df56fe4140f9e357a5154bca1d0144fab2e3dbe9c30"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "3989f7feaee001a560d283b4b225fb4d012366189f44c8e0f310d329e2c191cc"
+        "sha256": "bb3c55c650130342992e5fba92cc847c4df5bf7c6543c744786202669eb538ac"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3491078,
-        "sha256": "d325a22a9368a12893c93ecb503c95410e7c9e55a19b5236694c9f1f0582b409"
+        "bytes": 3502370,
+        "sha256": "bd44812ea448ef6cc7317d0ed314886b890c8f0f8ae91addb76ff5d013e95ce7"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "2d4626217c782f2a577fc5dad73f02a138dce6d57593e78e7396378bf8718d69"
+        "sha256": "2f6c481b3f5ad114813fb29d94733dfed402bda152460730829f821e95432418"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "406429435ab171caa22c5bcc69df0eb0cd7a55b3a04deec6c2ba3b196aa7c9c5"
+        "sha256": "8e1cb5461200ce48739a763634fc53884aaf4f3f935cbc7cad09094e82fddb19"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -51,8 +51,8 @@
       },
       {
         "path": "eslint.config.js",
-        "bytes": 6203,
-        "sha256": "3b957b552962398b93b5253d7a168a8e97d045cd62f7a2e04e2f40fd6e9a25aa"
+        "bytes": 10545,
+        "sha256": "1c25b912f086cfbb38d5d9d57ea33329c77a6a54f595bbb0c4e5a81e773b176c"
       },
       {
         "path": "dependency-cruiser.config.cjs",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "06fb4bed76b81204011e17963a44000f255576cfd72a509de70284dd6e3f5d86"
+    "inputDigest": "3894a17ef1b259bb8adc837e3cd196546a6e101d3cb7ac1834a582720e881465"
   },
   "reconciliation": {
     "complexity": {
@@ -73,18 +73,18 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "4405622dd8ea709575163ce4f5fdb2cde16ac6028688cbd63f088a9611397364"
+        "sha256": "f0de6fa71a33f0ee19433df56fe4140f9e357a5154bca1d0144fab2e3dbe9c30"
       },
-      "declaredCount": 1713,
-      "observedCount": 1713,
-      "assignedCount": 1713
+      "declaredCount": 1699,
+      "observedCount": 1699,
+      "assignedCount": 1699
     },
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "3989f7feaee001a560d283b4b225fb4d012366189f44c8e0f310d329e2c191cc"
+        "sha256": "bb3c55c650130342992e5fba92cc847c4df5bf7c6543c744786202669eb538ac"
       },
       "declaredCount": 145,
       "observedCount": 145,
@@ -117,13 +117,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "2d4626217c782f2a577fc5dad73f02a138dce6d57593e78e7396378bf8718d69"
+          "sha256": "2f6c481b3f5ad114813fb29d94733dfed402bda152460730829f821e95432418"
         },
-        "cloneGroups": 37,
-        "duplicatedLines": 1187,
-        "sourceCloneTouches": 74,
-        "sourceDuplicatedLineTouches": 2374,
-        "nonzeroSourceCount": 51,
+        "cloneGroups": 35,
+        "duplicatedLines": 1109,
+        "sourceCloneTouches": 70,
+        "sourceDuplicatedLineTouches": 2218,
+        "nonzeroSourceCount": 50,
         "touchMultiplicity": 2
       },
       {
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "406429435ab171caa22c5bcc69df0eb0cd7a55b3a04deec6c2ba3b196aa7c9c5"
+          "sha256": "8e1cb5461200ce48739a763634fc53884aaf4f3f935cbc7cad09094e82fddb19"
         },
         "cloneGroups": 629,
         "duplicatedLines": 23624,
@@ -158,8 +158,8 @@
     "lintExclusions": {
       "identity": {
         "path": "eslint.config.js",
-        "bytes": 6203,
-        "sha256": "3b957b552962398b93b5253d7a168a8e97d045cd62f7a2e04e2f40fd6e9a25aa"
+        "bytes": 10545,
+        "sha256": "1c25b912f086cfbb38d5d9d57ea33329c77a6a54f595bbb0c4e5a81e773b176c"
       },
       "patterns": [
         "test/**/*-part-*.js",
@@ -173,35 +173,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3491078,
-        "sha256": "d325a22a9368a12893c93ecb503c95410e7c9e55a19b5236694c9f1f0582b409"
+        "bytes": 3502370,
+        "sha256": "bd44812ea448ef6cc7317d0ed314886b890c8f0f8ae91addb76ff5d013e95ce7"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "b3d709b65fc93e9e7bf2058e196105cb8854877008e942485089454c75e5f682",
-      "moduleCount": 6123,
-      "edgeCount": 34344,
+      "sourceDigest": "2b966c9469e8f30ff04c04269308b597c865ff634b73602e672112b18c2e681e",
+      "moduleCount": 6128,
+      "edgeCount": 34523,
       "unresolvedCount": 46
     }
   },
   "assignment": {
-    "sourceSignalCount": 2395,
-    "assignedSignalCount": 2395,
-    "uniqueAssignmentCount": 2395,
-    "digest": "a2253f87b7a7d512d79f3818c441ea001218151db04b0dc88481791121f9db86"
+    "sourceSignalCount": 2380,
+    "assignedSignalCount": 2380,
+    "uniqueAssignmentCount": 2380,
+    "digest": "f2b9e3fc624c8f78bfa72d4ab1547cfb787a1c3abfeccf2aa24303188f7baf1b"
   },
   "signalCounts": {
     "cognitive": 145,
-    "complexity": 1713,
-    "duplication": 456,
+    "complexity": 1699,
+    "duplication": 455,
     "fileSize": 42,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1239,
+    "filesWithDebt": 1237,
     "rankedBoundaryCount": 110,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 90,
@@ -272,24 +272,24 @@
       "ownerAreas": [
         "src/control-plane"
       ],
-      "fileCount": 90,
-      "signalCount": 240,
-      "complexity": 199,
+      "fileCount": 89,
+      "signalCount": 238,
+      "complexity": 197,
       "cognitive": 35,
       "oversizedFiles": 2,
       "duplicatedLines": 136,
       "cloneTouches": 4,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 716,
-      "importOut": 434,
-      "score": 1113.6,
+      "importIn": 715,
+      "importOut": 451,
+      "score": 1105.6,
       "topPaths": [
         "src/control-plane/control-plane-kernel-ingress.js",
-        "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
         "src/control-plane/invariant-engine.js",
         "src/control-plane/active-node-publication-snapshots.js",
-        "src/control-plane/control-plane-mutation-readiness.js"
+        "src/control-plane/control-plane-mutation-readiness.js",
+        "src/control-plane/control-plane-readiness-priority-recovery-planning.js"
       ]
     },
     {
@@ -329,8 +329,8 @@
         "src/bootstrap"
       ],
       "fileCount": 65,
-      "signalCount": 136,
-      "complexity": 114,
+      "signalCount": 135,
+      "complexity": 113,
       "cognitive": 18,
       "oversizedFiles": 3,
       "duplicatedLines": 64,
@@ -338,8 +338,8 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 362,
-      "importOut": 471,
-      "score": 642.4,
+      "importOut": 483,
+      "score": 638.4,
       "topPaths": [
         "src/bootstrap/bootstrap-api-control-plane-methods.js",
         "src/bootstrap/node-joining-admission-readiness.js",
@@ -357,17 +357,17 @@
         "src/rebalancer"
       ],
       "fileCount": 62,
-      "signalCount": 132,
-      "complexity": 114,
+      "signalCount": 131,
+      "complexity": 113,
       "cognitive": 11,
       "oversizedFiles": 6,
       "duplicatedLines": 48,
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 299,
-      "importOut": 323,
-      "score": 620.8,
+      "importIn": 300,
+      "importOut": 349,
+      "score": 616.8,
       "topPaths": [
         "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
         "src/rebalancer/replica-operation-liveness.js",
@@ -524,24 +524,24 @@
       "ownerAreas": [
         "src/admin"
       ],
-      "fileCount": 14,
-      "signalCount": 43,
-      "complexity": 30,
+      "fileCount": 13,
+      "signalCount": 41,
+      "complexity": 29,
       "cognitive": 7,
       "oversizedFiles": 2,
-      "duplicatedLines": 254,
-      "cloneTouches": 8,
+      "duplicatedLines": 98,
+      "cloneTouches": 4,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 45,
-      "importOut": 93,
-      "score": 225.4,
+      "importIn": 18,
+      "importOut": 78,
+      "score": 205.8,
       "topPaths": [
         "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
         "src/admin/admin-control-snapshot-local-build-base.js",
         "src/admin/admin-control-snapshot-coverage-gap-evaluation.js",
-        "src/admin/admin-control-snapshot-leadership-summary.js",
-        "src/admin/admin-control-snapshot-node-view-projection.js"
+        "src/admin/admin-control-snapshot-node-view-projection.js",
+        "src/admin/admin-control-snapshot-repair-orchestration.js"
       ]
     },
     {
@@ -562,7 +562,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 30,
-      "importOut": 63,
+      "importOut": 64,
       "score": 200,
       "topPaths": [
         "src/query/query-executor-join-execution.js",
@@ -581,8 +581,8 @@
         "src/rebalancer"
       ],
       "fileCount": 14,
-      "signalCount": 42,
-      "complexity": 36,
+      "signalCount": 41,
+      "complexity": 35,
       "cognitive": 4,
       "oversizedFiles": 2,
       "duplicatedLines": 0,
@@ -590,8 +590,8 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 98,
-      "importOut": 91,
-      "score": 200,
+      "importOut": 97,
+      "score": 196,
       "topPaths": [
         "src/rebalancer/rebalance-coordinator-operation-creation.js",
         "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
@@ -618,7 +618,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 142,
-      "importOut": 80,
+      "importOut": 82,
       "score": 192,
       "topPaths": [
         "src/query/sql-query-engine-provisioning-admission-methods.js",
@@ -646,7 +646,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 55,
-      "importOut": 82,
+      "importOut": 85,
       "score": 171.6,
       "topPaths": [
         "src/admin/admin-websocket-message-dispatch-methods.js",
@@ -693,8 +693,8 @@
         "src/query"
       ],
       "fileCount": 19,
-      "signalCount": 39,
-      "complexity": 36,
+      "signalCount": 38,
+      "complexity": 35,
       "cognitive": 3,
       "oversizedFiles": 0,
       "duplicatedLines": 0,
@@ -702,8 +702,8 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 103,
-      "importOut": 106,
-      "score": 168,
+      "importOut": 108,
+      "score": 164,
       "topPaths": [
         "src/query/distributed/distributed-transaction-settlement.js",
         "src/query/distributed/distributed-write-coordinator.js",
@@ -730,7 +730,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 111,
-      "importOut": 156,
+      "importOut": 158,
       "score": 133,
       "topPaths": [
         "src/partition/partition-sql-parser.js",
@@ -945,8 +945,8 @@
         "src/node"
       ],
       "fileCount": 11,
-      "signalCount": 22,
-      "complexity": 21,
+      "signalCount": 21,
+      "complexity": 20,
       "cognitive": 1,
       "oversizedFiles": 0,
       "duplicatedLines": 0,
@@ -954,11 +954,11 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 240,
-      "importOut": 116,
-      "score": 92,
+      "importOut": 117,
+      "score": 88,
       "topPaths": [
-        "src/node/runtime-service-bound-creation-route.js",
         "src/node/runtime-service-handler.js",
+        "src/node/runtime-service-bound-creation-route.js",
         "src/node/failure-detector.js",
         "src/node/replica-state-machine-recovery.js",
         "src/node/node-reintegration-reconciliation.js"
@@ -982,7 +982,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 23,
-      "importOut": 126,
+      "importOut": 129,
       "score": 80,
       "topPaths": [
         "src/node/replica-handler-runtime-methods.js",
@@ -1021,34 +1021,6 @@
       ]
     },
     {
-      "key": "semantic:rebalancer_planning_owner/placement_rebalance_planning",
-      "owner": "rebalancer_planning_owner",
-      "boundary": "placement_rebalance_planning",
-      "classification": "declared-owner-rule",
-      "ownerAreas": [
-        "src/rebalancer"
-      ],
-      "fileCount": 7,
-      "signalCount": 18,
-      "complexity": 17,
-      "cognitive": 1,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 7,
-      "importOut": 44,
-      "score": 76,
-      "topPaths": [
-        "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js",
-        "src/rebalancer/unified-rebalancer-rebalance-loop.js",
-        "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-        "src/rebalancer/unified-rebalancer-replica-state.js",
-        "src/rebalancer/unified-rebalancer-follow-up-augmentation-methods.js"
-      ]
-    },
-    {
       "key": "area:src/diagnostics",
       "owner": null,
       "boundary": "src/diagnostics",
@@ -1077,6 +1049,34 @@
       ]
     },
     {
+      "key": "semantic:rebalancer_planning_owner/placement_rebalance_planning",
+      "owner": "rebalancer_planning_owner",
+      "boundary": "placement_rebalance_planning",
+      "classification": "declared-owner-rule",
+      "ownerAreas": [
+        "src/rebalancer"
+      ],
+      "fileCount": 7,
+      "signalCount": 17,
+      "complexity": 16,
+      "cognitive": 1,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 7,
+      "importOut": 46,
+      "score": 72,
+      "topPaths": [
+        "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js",
+        "src/rebalancer/unified-rebalancer-rebalance-loop.js",
+        "src/rebalancer/unified-rebalancer-lifecycle-base.js",
+        "src/rebalancer/unified-rebalancer-follow-up-augmentation-methods.js",
+        "src/rebalancer/unified-rebalancer-priority-recovery-coordination.js"
+      ]
+    },
+    {
       "key": "semantic:partition_service_owner/partition_service_workflow",
       "owner": "partition_service_owner",
       "boundary": "partition_service_workflow",
@@ -1094,7 +1094,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 19,
-      "importOut": 78,
+      "importOut": 79,
       "score": 70.1,
       "topPaths": [
         "src/partition/partition-service-raft-init-base.js",
@@ -1122,7 +1122,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 18,
-      "importOut": 43,
+      "importOut": 44,
       "score": 64,
       "topPaths": [
         "src/control-plane/priority-recovery-snapshot-burndown.js",
@@ -1178,7 +1178,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 19,
-      "importOut": 75,
+      "importOut": 76,
       "score": 62,
       "topPaths": [
         "src/message-group/message-group-service-cdc-propagation-runtime-methods.js",
@@ -1206,7 +1206,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 71,
-      "importOut": 67,
+      "importOut": 68,
       "score": 60.1,
       "topPaths": [
         "src/wasm-service/module-manifest-models.js",
@@ -1318,7 +1318,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 216,
-      "importOut": 22,
+      "importOut": 24,
       "score": 48.6,
       "topPaths": [
         "src/cache/leader-readiness-gate.js",
@@ -1372,7 +1372,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 22,
-      "importOut": 51,
+      "importOut": 54,
       "score": 48,
       "topPaths": [
         "src/control-plane/membership-publication-coordinator-persist.js",
@@ -1407,34 +1407,6 @@
         "test/runtime/native-js-driver.test.js",
         "test/runtime/oci-container-driver.test.js",
         "test/runtime/service-runtime-lifecycle-idempotency.test.js"
-      ]
-    },
-    {
-      "key": "area:src/migration",
-      "owner": null,
-      "boundary": "src/migration",
-      "classification": "owner-area-fallback",
-      "ownerAreas": [
-        "src/migration"
-      ],
-      "fileCount": 5,
-      "signalCount": 11,
-      "complexity": 11,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 15,
-      "importOut": 17,
-      "score": 44,
-      "topPaths": [
-        "src/migration/migration-coordinator-stage-methods.js",
-        "src/migration/migration-coordinator.js",
-        "src/migration/migration-coordinator-lifecycle-methods.js",
-        "src/migration/migration-pipeline.js",
-        "src/migration/migration-recovery-trigger.js"
       ]
     },
     {
@@ -1481,13 +1453,41 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 267,
-      "importOut": 46,
+      "importIn": 266,
+      "importOut": 47,
       "score": 40,
       "topPaths": [
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/constants.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js"
+      ]
+    },
+    {
+      "key": "area:src/migration",
+      "owner": null,
+      "boundary": "src/migration",
+      "classification": "owner-area-fallback",
+      "ownerAreas": [
+        "src/migration"
+      ],
+      "fileCount": 5,
+      "signalCount": 9,
+      "complexity": 9,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 15,
+      "importOut": 19,
+      "score": 36,
+      "topPaths": [
+        "src/migration/migration-coordinator-stage-methods.js",
+        "src/migration/migration-coordinator-lifecycle-methods.js",
+        "src/migration/migration-coordinator.js",
+        "src/migration/migration-pipeline.js",
+        "src/migration/migration-recovery-trigger.js"
       ]
     },
     {
@@ -1499,8 +1499,8 @@
         "src/rebalancer"
       ],
       "fileCount": 4,
-      "signalCount": 8,
-      "complexity": 7,
+      "signalCount": 7,
+      "complexity": 6,
       "cognitive": 0,
       "oversizedFiles": 1,
       "duplicatedLines": 0,
@@ -1508,11 +1508,11 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 79,
-      "importOut": 49,
-      "score": 40,
+      "importOut": 54,
+      "score": 36,
       "topPaths": [
-        "src/rebalancer/operation-workflow-owner-handoff-state.js",
         "src/rebalancer/operation-workflow-owner-ports.js",
+        "src/rebalancer/operation-workflow-owner-handoff-state.js",
         "src/rebalancer/operation-workflow-owner-execution-lane.js",
         "src/rebalancer/operation-workflow-owner-shared.js"
       ]
@@ -1671,7 +1671,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 23,
-      "importOut": 20,
+      "importOut": 21,
       "score": 28,
       "topPaths": [
         "src/debug-runtime/vscode-dwarf-parser-backend.js",
@@ -1679,32 +1679,6 @@
         "src/debug-runtime/dap-server.js",
         "src/debug-runtime/debug-coordinator.js",
         "src/debug-runtime/debug-metadata-service.js"
-      ]
-    },
-    {
-      "key": "semantic:replica_dispatch_owner/replica_dispatch_workflow",
-      "owner": "replica_dispatch_owner",
-      "boundary": "replica_dispatch_workflow",
-      "classification": "declared-owner-rule",
-      "ownerAreas": [
-        "src/control-plane"
-      ],
-      "fileCount": 3,
-      "signalCount": 7,
-      "complexity": 7,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 25,
-      "importOut": 18,
-      "score": 28,
-      "topPaths": [
-        "src/control-plane/replica-dispatch-service-dispatch-observation-methods.js",
-        "src/control-plane/replica-dispatch-service-lifecycle.js",
-        "src/control-plane/replica-dispatch-service.js"
       ]
     },
     {
@@ -1729,6 +1703,32 @@
       "score": 24,
       "topPaths": [
         "src/policy/table-policy-validation.js"
+      ]
+    },
+    {
+      "key": "semantic:replica_dispatch_owner/replica_dispatch_workflow",
+      "owner": "replica_dispatch_owner",
+      "boundary": "replica_dispatch_workflow",
+      "classification": "declared-owner-rule",
+      "ownerAreas": [
+        "src/control-plane"
+      ],
+      "fileCount": 3,
+      "signalCount": 6,
+      "complexity": 6,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 25,
+      "importOut": 18,
+      "score": 24,
+      "topPaths": [
+        "src/control-plane/replica-dispatch-service-dispatch-observation-methods.js",
+        "src/control-plane/replica-dispatch-service-lifecycle.js",
+        "src/control-plane/replica-dispatch-service.js"
       ]
     },
     {
@@ -1889,30 +1889,6 @@
       ]
     },
     {
-      "key": "area:src/entrypoint-runtime-admin-composition.js",
-      "owner": null,
-      "boundary": "src/entrypoint-runtime-admin-composition.js",
-      "classification": "owner-area-fallback",
-      "ownerAreas": [
-        "src/entrypoint-runtime-admin-composition.js"
-      ],
-      "fileCount": 1,
-      "signalCount": 4,
-      "complexity": 4,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 6,
-      "importOut": 25,
-      "score": 16,
-      "topPaths": [
-        "src/entrypoint-runtime-admin-composition.js"
-      ]
-    },
-    {
       "key": "semantic:table_creation_service_owner/table_creation_workflow",
       "owner": "table_creation_service_owner",
       "boundary": "table_creation_workflow",
@@ -1986,6 +1962,30 @@
       "score": 14.2,
       "topPaths": [
         "scripts/check-cure-typing-owner.js"
+      ]
+    },
+    {
+      "key": "area:src/entrypoint-runtime-admin-composition.js",
+      "owner": null,
+      "boundary": "src/entrypoint-runtime-admin-composition.js",
+      "classification": "owner-area-fallback",
+      "ownerAreas": [
+        "src/entrypoint-runtime-admin-composition.js"
+      ],
+      "fileCount": 1,
+      "signalCount": 3,
+      "complexity": 3,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 6,
+      "importOut": 26,
+      "score": 12,
+      "topPaths": [
+        "src/entrypoint-runtime-admin-composition.js"
       ]
     },
     {
@@ -2078,7 +2078,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 2,
-      "importOut": 5,
+      "importOut": 6,
       "score": 12,
       "topPaths": [
         "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js"
@@ -2395,7 +2395,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 12,
-      "importOut": 1,
+      "importOut": 2,
       "score": 8,
       "topPaths": [
         "src/workflow/operation-lane.js",
@@ -3129,8 +3129,8 @@
         ],
         "engagementTargets": [],
         "baseline": {
-          "score": 200,
-          "complexity": 36,
+          "score": 196,
+          "complexity": 35,
           "cognitive": 4,
           "oversizedFiles": 2,
           "duplicatedLines": 0,
@@ -3197,9 +3197,9 @@
           "solve/quests/owner-complexity-rebalancer-planning-owner-placement-rebalance-planning.json",
           "src/rebalancer/unified-rebalancer-follow-up-augmentation-methods.js",
           "src/rebalancer/unified-rebalancer-lifecycle-base.js",
+          "src/rebalancer/unified-rebalancer-priority-recovery-coordination.js",
           "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js",
-          "src/rebalancer/unified-rebalancer-rebalance-loop.js",
-          "src/rebalancer/unified-rebalancer-replica-state.js"
+          "src/rebalancer/unified-rebalancer-rebalance-loop.js"
         ],
         "ownerAreas": [
           "scripts/run-owner-complexity-rebalancer-planning-owner-placement-rebalance-planning-scenarios.js",
@@ -3210,13 +3210,13 @@
           "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js",
           "src/rebalancer/unified-rebalancer-rebalance-loop.js",
           "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-          "src/rebalancer/unified-rebalancer-replica-state.js",
-          "src/rebalancer/unified-rebalancer-follow-up-augmentation-methods.js"
+          "src/rebalancer/unified-rebalancer-follow-up-augmentation-methods.js",
+          "src/rebalancer/unified-rebalancer-priority-recovery-coordination.js"
         ],
         "engagementTargets": [],
         "baseline": {
-          "score": 76,
-          "complexity": 17,
+          "score": 72,
+          "complexity": 16,
           "cognitive": 1,
           "oversizedFiles": 0,
           "duplicatedLines": 0,
@@ -3342,15 +3342,15 @@
           "test/raft"
         ],
         "engagementPaths": [
-          "src/rebalancer/operation-workflow-owner-handoff-state.js",
           "src/rebalancer/operation-workflow-owner-ports.js",
+          "src/rebalancer/operation-workflow-owner-handoff-state.js",
           "src/rebalancer/operation-workflow-owner-execution-lane.js",
           "src/rebalancer/operation-workflow-owner-shared.js"
         ],
         "engagementTargets": [],
         "baseline": {
-          "score": 40,
-          "complexity": 7,
+          "score": 36,
+          "complexity": 6,
           "cognitive": 0,
           "oversizedFiles": 1,
           "duplicatedLines": 0,

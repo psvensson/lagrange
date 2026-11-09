@@ -1,3 +1,4 @@
+import {readParticipantCurrentStatus} from '../workflow/workflow-constants.js';
 /**
  * Owner contract:
  * Owner: whether one REMOVE retires its replica's WHOLE group as a unit
@@ -97,7 +98,7 @@ const STRING_TYPE = 'string';
 function sourceParticipantOf(metadata, participantKey) {
   const participants =
     metadata?.[PARTITION_TRANSITION_METADATA_FIELD.PARTICIPANTS];
-  return String(participants?.[participantKey]?.status || '');
+  return readParticipantCurrentStatus(participants?.[participantKey]);
 }
 
 function listOf(metadata, field) {

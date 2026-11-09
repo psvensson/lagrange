@@ -238,7 +238,7 @@ class DistributedWriteCoordinator {
       );
       participantResults.push({
         partitionId,
-        role: participant.role || PARTICIPANT_ROLE_PRIMARY,
+        role: participant.role, // every partitionStatements entry sets role
         ...result,
       });
     } else {
@@ -257,7 +257,7 @@ class DistributedWriteCoordinator {
           ),
         ).then((result) => ({
           partitionId,
-          role: participant.role || PARTICIPANT_ROLE_PRIMARY,
+          role: participant.role, // every partitionStatements entry sets role
           ...result,
         }));
       });

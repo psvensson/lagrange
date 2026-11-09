@@ -311,10 +311,14 @@ test(
     // exercised through the production harness everywhere else; this shim
     // keeps the loader mapping test focused on row translation.
     const restoredWorkflowIds = new Set();
+    const loadedSteps = new Map();
     const recoverHost = {
       recover({workflows, loadWorkflow, isTerminalWorkflow}) {
         for (const row of workflows) {
           const record = loadWorkflow(row);
+          if (record) {
+            loadedSteps.set(record.workflowId, record.step);
+          }
           if (record && !isTerminalWorkflow(record)) {
             restoredWorkflowIds.add(record.workflowId);
           }
@@ -330,6 +334,11 @@ test(
       restoredWorkflowIds.has(operation.operationId),
       true,
       'the live raw row restores into the store',
+    );
+    t.equal(
+      loadedSteps.get(operation.operationId),
+      operation.workflowStep,
+      'the raw row\'s workflow_step is the recovered record\'s step',
     );
     t.equal(
       restoredWorkflowIds.has(terminalRow.operation_id),

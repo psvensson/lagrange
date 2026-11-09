@@ -252,11 +252,9 @@ function resolveLeaderRole(partitionService) {
   ) {
     return true;
   }
-  const role = String(
-    partitionService.role ||
-      partitionService.raftRole ||
-      '',
-  ).toLowerCase();
+  // PartitionService constructs its role (FOLLOWER) and keeps it current; no
+  // live service exposes a separate raftRole spelling.
+  const role = String(partitionService.role).toLowerCase();
   if (role === CDC_INTEGRATION_SERVICE_LITERAL.LEADER) {
     return true;
   }

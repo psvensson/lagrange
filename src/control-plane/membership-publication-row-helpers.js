@@ -1,3 +1,4 @@
+import {readUpperStateField} from '../utils/state-field-read.js';
 import {
   DISPATCH_PENDING_WORKFLOW_STEPS,
   isActiveReplaceSourceRemovalPhase,
@@ -337,9 +338,7 @@ function resolveAcknowledgementBaselinePublicationRow(options = {}) {
   const latestPublishedPublicationRow = normalizeLatestPublicationRow(
     options.latestPublishedPublicationRow,
   );
-  const latestPublicationStatus = String(
-    latestPublicationRow?.status || MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY,
-  ).toUpperCase();
+  const latestPublicationStatus = readUpperStateField(latestPublicationRow?.status);
   if (
     latestPublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.ABANDONED ||
     latestPublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.SUPERSEDED

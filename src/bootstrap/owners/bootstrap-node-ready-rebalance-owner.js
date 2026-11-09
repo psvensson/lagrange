@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../../utils/state-field-read.js';
 import {
   BOOTSTRAP_LOG_MSG,
   BOOTSTRAP_NODE_READY_REBALANCE_TABLES,
@@ -19,6 +20,16 @@ const LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_LO = 'Skipping node-ready 
 const LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_ST = 'Skipping node-ready rebalance trigger: stale node liveness regression';
 const LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_NO = 'Skipping node-ready rebalance trigger: node not ready';
 const LOCAL_STR_1VMEF = 'Skipping node-ready rebalance trigger: no not-ready to ready transition';
+
+// nodes.status is NOT NULL: a partial CDC change without it keeps the
+// previous row's status; a row with neither carries no status (null), which
+// isNodeRecordReady never reads as ACTIVE.
+function resolveMergedNodeStatus(incomingRow, previousRow) {
+  const incomingStatus = readStateField(incomingRow.status);
+  return incomingStatus === STATE_ABSENT ?
+    readStateField(previousRow.status) :
+    incomingStatus;
+}
 const LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_AL = 'Skipping node-ready rebalance trigger: already scheduled';
 const LOCAL_STR_SCHEDULING_NODE_READY_REBALANCE_TRIGGER = 'Scheduling node-ready rebalance trigger';
 
@@ -140,18 +151,7 @@ class BootstrapNodeReadyRebalanceOwner {
         previousRow.node_id ??
         previousRow.nodeId ??
         null,
-      status:
-        incomingRow.status ??
-        incomingRow.nodeStatus ??
-        incomingRow.state ??
-        incomingRow.lifecycle_state ??
-        incomingRow.lifecycleState ??
-        previousRow.status ??
-        previousRow.nodeStatus ??
-        previousRow.state ??
-        previousRow.lifecycle_state ??
-        previousRow.lifecycleState ??
-        null,
+      status: resolveMergedNodeStatus(incomingRow, previousRow),
       ready_lease_expires_at:
         incomingRow.ready_lease_expires_at ??
         incomingRow.readyLeaseExpiresAt ??
@@ -290,7 +290,7 @@ class BootstrapNodeReadyRebalanceOwner {
       logger.info(LOCAL_STR_SKIPPING_NODE_READY_REBALANCE_TRIGGER_NO, {
         readyNodeId: nodeId,
         localNodeId,
-        status: nextObservedRow.status || null,
+        status: nextObservedRow.status,
         readyLeaseExpiresAt: nextObservedRow.ready_lease_expires_at || null,
         operation: cdcEvent?.operation || null,
       });
@@ -309,7 +309,7 @@ class BootstrapNodeReadyRebalanceOwner {
         {
           readyNodeId: nodeId,
           localNodeId,
-          status: nextObservedRow.status || null,
+          status: nextObservedRow.status,
           readyLeaseExpiresAt: nextObservedRow.ready_lease_expires_at || null,
           operation: cdcEvent?.operation || null,
         },
@@ -335,7 +335,7 @@ class BootstrapNodeReadyRebalanceOwner {
       localNodeId,
       reason: BOOTSTRAP_REBALANCE_REASON.NODE_READY,
       delayMs: this.getNodeReadyRebalanceDelayMs(),
-      status: nextObservedRow.status || null,
+      status: nextObservedRow.status,
       readyLeaseExpiresAt: nextObservedRow.ready_lease_expires_at || null,
     });
 

@@ -100,8 +100,8 @@ function reportOperationStepTimeoutSpent(owner, operation, spent) {
     elapsedMs: spent.elapsed,
     lastObserved: {
       type: operation.type || null,
-      workflowStep: operation.workflowStep || null,
-      status: operation.status || null,
+      workflowStep: operation.workflowStep,
+      status: operation.status,
       targetNodeId: operation.targetNodeId || null,
       stepExceeded: spent.stepExceeded,
       budgetExhausted: spent.budgetExhausted,
@@ -722,7 +722,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       minimumBudgetMs: TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS,
       classification: TIMEOUT_BUDGET_CLASSIFICATION.REBALANCE_OPERATION_TIMEOUT,
       nestedOperation: `rebalance:${String(
-        operation.workflowStep || 'unknown',
+        operation.workflowStep,
       ).toLowerCase()}`,
       now: () => now,
     });
@@ -752,7 +752,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
           classification:
               TIMEOUT_BUDGET_CLASSIFICATION.REBALANCE_OPERATION_TIMEOUT,
           nestedOperation: `rebalance:${String(
-            operation.workflowStep || 'unknown',
+            operation.workflowStep,
           ).toLowerCase()}`,
           now: () => now,
         });

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T06:33:39.122Z",
+  "generatedAt": "2026-11-09T14:28:56.728Z",
   "rawViolationCount": 38,
   "violations": [
     {
@@ -14,7 +14,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 606,
+      "line": 612,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "alias_exports",
@@ -50,7 +50,7 @@
     },
     {
       "filePath": "src/cli/views/services-view.js",
-      "line": 784,
+      "line": 789,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "alias_exports",

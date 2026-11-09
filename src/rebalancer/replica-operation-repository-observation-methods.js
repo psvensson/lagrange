@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {isUnclaimedPreRuntimeFailedCreateRow} from
   './failed-create-cleanup-token.js';
@@ -622,7 +623,7 @@ function assignReplicaOperationRepositoryObservationMethods(
         return;
       }
       const cachedRow = this.systemTableCache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
-      const cachedStatus = cachedRow?.status || null;
+      const cachedStatus = readStateField(cachedRow?.status);
       if (cachedStatus === authoritativeStatus) {
         return;
       }

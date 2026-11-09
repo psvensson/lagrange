@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../../utils/state-field-read.js';
 import {
   COLUMN,
   HTTP_STATUS,
@@ -155,10 +156,11 @@ const moveReplicaAssignmentLeaseValidationMethods = {
 
     const now = Number.isFinite(options.now) ? Math.floor(options.now) : Date.now();
     const force = options.force === true;
-    const phase = typeof options.phase === 'string' &&
-      options.phase.length > 0 ?
-      options.phase :
-      MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE.LEASE_RENEWED;
+    // A renewal that names no history phase is recorded as a lease renewal.
+    const statedPhase = readStateField(options.phase);
+    const phase = statedPhase === STATE_ABSENT ?
+      MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE.LEASE_RENEWED :
+      statedPhase;
     if (force) {
       if (!this.canReviveExpiredMoveReplicaAssignmentReservation(
         reservation,
@@ -173,7 +175,8 @@ const moveReplicaAssignmentLeaseValidationMethods = {
       return reservation;
     }
 
-    const status = reservation.status || BOOTSTRAP_API_HANDOFF_STATUS.PREPARING;
+    // The reservation decoder always yields a status (UNKNOWN when absent).
+    const status = reservation.status;
     const step = WORKFLOW_STEP.PENDING;
     const leaseExpiresAt = now + this.getMoveReplicaAssignmentLeaseMs();
     const existingStepsHistory = Array.isArray(reservation.stepsHistory) ?

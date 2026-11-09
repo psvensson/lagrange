@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {OperationWorkflowRecoveryStatusReconcile} from './operation-workflow-recovery-status-reconcile.js';
 import {
   applyOperationWorkflowExecutorOutcomeReconcileMethods,
@@ -546,7 +547,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     if (
       this.deferTransitionRetry(operation.operationId, error, {
         boundary,
-        workflowStep: operation?.workflowStep || null,
+        workflowStep: readStateField(operation?.workflowStep),
         partitionId: operation?.partitionId || null,
         updatedAt: operation?.updatedAt,
         createdAt: operation?.createdAt,

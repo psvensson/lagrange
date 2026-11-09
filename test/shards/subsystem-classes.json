@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 120,
     "architecture-governance": 21,
-    "bootstrap-membership": 341,
+    "bootstrap-membership": 342,
     "cdc-metadata": 70,
     "cli-tooling": 99,
     "control-plane": 236,
@@ -12,23 +12,23 @@
     "distributed-harness": 214,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 278,
+    "placement-rebalance": 279,
     "query-sql": 192,
     "release-packaging": 15,
-    "runtime-primitives": 22,
+    "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
     "storage-partition": 217,
     "storage-raft": 151,
-    "test-infrastructure": 163,
+    "test-infrastructure": 164,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2622,
-  "digest": "fnv1a32-a8a3dc1e",
+  "censusSize": 2626,
+  "digest": "fnv1a32-9d6106b9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-fd440848",
+  "observationDigest": "fnv1a32-465c0d17",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -269,6 +269,7 @@
     "test/bootstrap/readiness-service-sync-reads.test.js": "bootstrap-membership",
     "test/bootstrap/register-node-in-cluster.test.js": "bootstrap-membership",
     "test/bootstrap/register-service-move-handoff-refused.test.js": "bootstrap-membership",
+    "test/bootstrap/registered-service-row-raft-role.test.js": "bootstrap-membership",
     "test/bootstrap/rejoin-hints.test.js": "bootstrap-membership",
     "test/bootstrap/replica-evidence-conflict.test.js": "bootstrap-membership",
     "test/bootstrap/replica-runtime-attachment-authority.test.js": "bootstrap-membership",
@@ -1940,6 +1941,7 @@
     "test/rebalancer/operation-progress-store-persistence.test.js": "placement-rebalance",
     "test/rebalancer/operation-progress-store.test.js": "placement-rebalance",
     "test/rebalancer/operation-record-completeness.property.test.js": "placement-rebalance",
+    "test/rebalancer/operation-record-step-shape.test.js": "placement-rebalance",
     "test/rebalancer/operation-step-staleness-anchor.test.js": "placement-rebalance",
     "test/rebalancer/operation-workflow-active-cache-handoff.test.js": "placement-rebalance",
     "test/rebalancer/operation-workflow-deferred-retry-uninitialized-rearm.test.js": "placement-rebalance",
@@ -2382,6 +2384,7 @@
     "test/scripts/service-portability-static-gate.test.js": "test-infrastructure",
     "test/scripts/solve-footprint-accounting.test.js": "test-infrastructure",
     "test/scripts/spec-led-runtime-legacy-deletion-guard.test.js": "test-infrastructure",
+    "test/scripts/state-read-named-defaults.test.js": "test-infrastructure",
     "test/scripts/static-audit-input-triggers.test.js": "test-infrastructure",
     "test/scripts/steering-diet.test.js": "test-infrastructure",
     "test/scripts/stop-distributed-harness-containers.test.js": "test-infrastructure",
@@ -2566,6 +2569,7 @@
     "test/utils/phase-lifecycle-events.property.test.js": "runtime-primitives",
     "test/utils/phase-state-machine-transitions.property.test.js": "runtime-primitives",
     "test/utils/phase-state-machine.test.js": "runtime-primitives",
+    "test/utils/state-field-read.test.js": "runtime-primitives",
     "test/wasm-service/backward-compat-serialization.test.js": "wasm-toolchain",
     "test/wasm-service/bound-creation-handler-embedding.integration.test.js": "wasm-toolchain",
     "test/wasm-service/bound-creation-physical-custody.integration.test.js": "wasm-toolchain",
@@ -3580,6 +3584,11 @@
         "src/bootstrap/rejoin-hints-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/bootstrap/registered-service-row-raft-role.test.js": {
+      "files": [
+        "src/bootstrap/bootstrap-api-registration-methods.js"
       ]
     },
     "test/bootstrap/replica-runtime-attachment-authority.test.js": {
@@ -16626,6 +16635,13 @@
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
+    "test/rebalancer/operation-record-step-shape.test.js": {
+      "files": [
+        "src/rebalancer/operation-ledger-hold-policy.js",
+        "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
+        "src/rebalancer/replica-operation-repository-row-methods.js"
+      ]
+    },
     "test/rebalancer/operation-step-staleness-anchor.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -20843,6 +20859,11 @@
         "src/diagnostics",
         "src/rebalancer",
         "test/distributed/harness"
+      ]
+    },
+    "test/scripts/state-read-named-defaults.test.js": {
+      "files": [
+        "scripts/checks/code-navigability-detectors.js"
       ]
     },
     "test/scripts/static-audit-input-triggers.test.js": {

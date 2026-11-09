@@ -182,8 +182,10 @@ class NodeStorageBudgetService {
    * @private
    */
   buildBudgetRow(nodeRow, resolution) {
+    // A valid budget keeps the status the registration row builder set
+    // (always JOINING at birth); it never invents ACTIVE for an absent one.
     const status = resolution.isValid ?
-      (nodeRow[COLUMN.STATUS] || NODE_STATE.ACTIVE) :
+      nodeRow[COLUMN.STATUS] :
       NODE_STATE.JOINING;
 
     return {

@@ -107,7 +107,9 @@ function applyUpdatedOperationStatus(record, updated) {
 }
 
 function sendErrorReply(reply, error, defaultStatus = HTTP_STATUS.BAD_REQUEST) {
-  const status = error.statusCode || error.status || defaultStatus;
+  // ManagementV1ValidationError (management-v1-request-validator.js) carries
+  // statusCode; any other error answers the handler's declared status.
+  const status = error.statusCode ?? defaultStatus;
   const payload = {
     error: error.message,
     code: error.code || MANAGEMENT_ERROR_CODE.OPERATION_VALUE_INVALID,

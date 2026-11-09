@@ -156,7 +156,7 @@ export function createRuntimeServiceRow(definition, endpoint) {
   const serviceId = resolveServiceId(definition);
   const endpointId = resolveEndpointId(endpoint);
   const endpointAddress = formatEndpointAddress(endpoint);
-  const status = resolveRuntimeStatus(definition, endpoint);
+  const status = resolveRuntimeStatus(endpoint);
   const nodeId = resolveNodeId(endpoint);
 
   return {
@@ -251,17 +251,18 @@ export function resolveNodeAddress(row) {
 }
 
 /**
- * Resolve runtime service status from endpoint health or definition status.
- * @param {Object} definition
+ * Resolve a runtime service row's status: its endpoint's health. Every
+ * runtime row has an endpoint row, whose health_status column is NOT NULL
+ * DEFAULT 'healthy' (SERVICE_ENDPOINTS_SCHEMA in
+ * src/bootstrap/system-table-runtime-schema-definitions.js); service_endpoints
+ * has no status column. A dump row carrying neither health spelling shows
+ * the named UNKNOWN.
  * @param {Object|null|undefined} endpoint
  * @return {string}
  */
-export function resolveRuntimeStatus(definition, endpoint) {
+export function resolveRuntimeStatus(endpoint) {
   return endpoint?.health_status ||
     endpoint?.healthStatus ||
-    endpoint?.status ||
-    definition?.status ||
-    definition?.state ||
     LOCAL_STR_UNKNOWN;
 }
 
@@ -317,7 +318,7 @@ export function collectEndpointNodeIds(endpoints) {
  */
 export function countHealthyEndpoints(endpoints) {
   return endpoints.reduce((count, endpoint) => {
-    const status = resolveRuntimeStatus(null, endpoint);
+    const status = resolveRuntimeStatus(endpoint);
     return HEALTHY_RUNTIME_STATUS.has(String(status).toLowerCase()) ?
       count + 1 :
       count;

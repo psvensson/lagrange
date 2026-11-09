@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../utils/state-field-read.js';
 // Pure record, row and decision evaluation for ServeEligibilityOwner (quest
 // serve-eligibility-committed-epoch-read). ServeEligibilityOwner owns the
 // runtime memo, refresh lifecycle and waiter coordination; this module holds
@@ -83,12 +84,10 @@ function readBootIncarnation(row) {
   return Number.isFinite(value) ? value : null;
 }
 
-// The row's status, lowercased; a row without a string status has the named
-// NO_STATUS (it matches no status the decision accepts).
-const NO_STATUS = '';
+// The row's status, lowercased; a row without one is STATE_ABSENT (it matches
+// no status the decision accepts, and two absent statuses are equal).
 function readStatus(row) {
-  const status = row?.[COLUMN.STATUS];
-  return typeof status === 'string' ? status.toLowerCase() : NO_STATUS;
+  return readLowerStateField(row?.[COLUMN.STATUS]);
 }
 
 function isMembershipPublication(publication) {

@@ -1,3 +1,4 @@
+import {readUpperStateField} from '../utils/state-field-read.js';
 /**
  * Control snapshot building for the admin WebSocket API.
  *
@@ -157,13 +158,11 @@ function buildControlSnapshotPriorityRecoveryPressureDiagnostics(
 const CONTROL_SNAPSHOT_PUBLICATION_OBSERVATION_STATE = Object.freeze({
   AVAILABLE: 'available',
 });
+// The publication diagnostics owner (resolvePublicationConvergence-
+// Diagnostics) sets publicationStatus whenever a publication is observed;
+// diagnostics with none are STATE_ABSENT, never PUBLISHED.
 function resolveObservedPublicationStatus(publicationDiagnostics) {
-  return String(
-    publicationDiagnostics?.status ||
-      publicationDiagnostics?.publicationStatus ||
-      publicationDiagnostics?.publicationObservation?.status ||
-      ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
-  ).toUpperCase();
+  return readUpperStateField(publicationDiagnostics?.publicationStatus);
 }
 function hasDurablePublishedMembershipObservation(
   publicationDiagnostics = null,

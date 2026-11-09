@@ -1,3 +1,4 @@
+import {readStateField} from './utils/state-field-read.js';
 import {LIFECYCLE_REASON} from
   './bootstrap/lifecycle-controller-constants.js';
 import {createDynamicConfigStartupWiring} from
@@ -306,7 +307,7 @@ function createRuntimeShutdown(options) {
       );
       options.logger.info(ENTRYPOINT_LOG_MSG.READINESS_DRAINING, {
         nodeId: options.nodeId,
-        phase: drainingSnapshot?.phase || null,
+        phase: readStateField(drainingSnapshot?.phase),
         reasons: drainingSnapshot?.reasons || [],
         drainDeadlineMs,
       });
@@ -489,7 +490,7 @@ function scheduleStartupLivenessPulse(options) {
         options.bootstrapAPI?.fastify?.server?.listening === true,
       bootstrapApiHasSqlQueryEngine: Boolean(options.bootstrapAPI?.sqlQueryEngine),
       bootstrapApiHasMessageRouter: Boolean(options.bootstrapAPI?.messageRouter),
-      startupPhase: options.startupOwner?.phase || null,
+      startupPhase: readStateField(options.startupOwner?.phase),
       pid: process.pid,
     });
     if (pulseCount >= 10) {

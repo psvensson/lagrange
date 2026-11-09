@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
@@ -157,7 +158,7 @@ function deferCoordinatorCreatedRemoteHandoffRetry(
         operationId,
         partitionId: operation?.partitionId || null,
         ...diagnosticDestination.logFields,
-        workflowStep: operation?.workflowStep || null,
+        workflowStep: readStateField(operation?.workflowStep),
         activeRetriesPerTarget:
           context.countActiveCreatedOperationHandoffRetriesByTargetNode(
             ownerNodeId,
@@ -195,7 +196,7 @@ function deferCoordinatorCreatedRemoteHandoffRetry(
       operationId,
       partitionId: operation?.partitionId || null,
       ...diagnosticDestination.logFields,
-      workflowStep: operation?.workflowStep || null,
+      workflowStep: readStateField(operation?.workflowStep),
       delayMs,
       errorMessage,
       boundary:

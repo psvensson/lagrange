@@ -231,7 +231,8 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       return [];
     }
     if (cacheOperation !== OPERATION_WORKFLOW_OWNER_LITERAL.DELETE) {
-      const status = String(serviceRow.status || '').toLowerCase();
+      // services.status is NOT NULL; no relevant status is ever absent.
+      const status = String(serviceRow.status).toLowerCase();
       if (!OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES.has(status)) return [];
     }
     const targetNodeId = String(serviceRow.node_id || serviceRow.nodeId || '');
@@ -590,7 +591,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       this.buildStoppingObservationRetryableError(operation),
       {
         boundary: OPERATION_LIFECYCLE_ACTION.RECONCILE_STOPPING,
-        workflowStep: operation.workflowStep || null,
+        workflowStep: operation.workflowStep,
         partitionId: operation.partitionId || null,
         updatedAt: operation.updatedAt,
         createdAt: operation.createdAt,

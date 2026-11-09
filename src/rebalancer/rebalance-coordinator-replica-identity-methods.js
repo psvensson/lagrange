@@ -1,3 +1,5 @@
+import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   isEngagedLedgerQuorumSpreadCureMove,
@@ -90,7 +92,7 @@ function hasReplicaWithLifecycleStatus(
       row?.serviceId ||
       '',
     ).trim();
-    const status = String(row?.status || '').trim().toLowerCase();
+    const status = readLowerStateField(row?.status);
     return replicaId === sourceReplicaId && settledStatuses.has(status);
   });
 }
@@ -218,13 +220,13 @@ class RebalanceCoordinatorReplicaIdentityMethods {
     const operationType = this.normalizeMoveType(
       operation.type || operation.operation_type || operation.operationType,
     );
-    const workflowStep =
-      operation.workflowStep ?? operation.workflow_step ?? null;
     return (
       operationType === OperationType.REPLACE &&
       (
         RETIRED_REPLACE_SOURCE_OPERATION_STATUSES.has(operation.status) ||
-        RETIRED_REPLACE_SOURCE_WORKFLOW_STEPS.has(workflowStep)
+        RETIRED_REPLACE_SOURCE_WORKFLOW_STEPS.has(
+          readOperationRecordWorkflowStep(operation),
+        )
       )
     );
   }

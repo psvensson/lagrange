@@ -358,9 +358,25 @@ function readUpperText(...values) {
   return readText(...values).toUpperCase();
 }
 
+/**
+ * The publication status of a membership-publication record in either of
+ * its two owned shapes: publication diagnostics, convergence and gate
+ * records name it publicationStatus; a row decoded by
+ * normalizeControlPlanePublicationRow names it status. The one reader of
+ * that shape difference. An absent record, or one carrying neither field,
+ * yields undefined or null; a decoded row with no status yields '' (readText).
+ * The caller decides on each.
+ * @param {Object|null|undefined} record - publication record of either shape
+ * @return {string|null|undefined}
+ */
+function readPublicationRecordStatus(record) {
+  return record?.publicationStatus ?? record?.status;
+}
+
 export {
   canonicalizeSystemTableRow,
   normalizeControlPlanePublicationRow,
+  readPublicationRecordStatus,
   normalizeNodeEndpointRow,
   normalizeNodeRow,
   normalizeServiceEndpointRow,

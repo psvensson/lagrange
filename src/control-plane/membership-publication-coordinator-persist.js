@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
   isControlPlaneWriterShutDown,
@@ -49,7 +50,7 @@ function reportPublicationWriteUnconfirmed(coordinator, spent) {
     lastObserved: () => ({
       attempts: spent.maxAttempts,
       outcome: PUBLICATION_WRITE_UNCONFIRMED_OUTCOME,
-      status: spent.row?.status ?? null,
+      status: readStateField(spent.row?.status),
       publicationEpoch: spent.row?.publication_epoch ?? null,
       acknowledgedCount: Array.isArray(spent.row?.acknowledged_node_ids) ?
         spent.row.acknowledged_node_ids.length :

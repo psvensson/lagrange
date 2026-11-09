@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {TIME_MS} from '../constants/index.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
@@ -325,7 +326,7 @@ function adoptConfirmedWinningTerminalIntoRepair(
     REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ABANDONED,
     {
       operationId,
-      workflowStep: winningOperation?.workflowStep || null,
+      workflowStep: readStateField(winningOperation?.workflowStep),
       partitionId: winningOperation?.partitionId || null,
       attempt: heldState.attempt,
     },
@@ -400,7 +401,7 @@ function logTerminalTransitionRepairArmed(
     REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ARMED,
     {
       operationId,
-      workflowStep: projectedOperation?.workflowStep || null,
+      workflowStep: readStateField(projectedOperation?.workflowStep),
       partitionId: projectedOperation?.partitionId || null,
       cause,
       attempt,
@@ -477,7 +478,7 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
         owner.logger.warn(
           REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ABANDONED,
           {operationId, workflowStep:
-            heldState.projectedOperation?.workflowStep || null,
+            readStateField(heldState.projectedOperation?.workflowStep),
           partitionId: heldState.projectedOperation?.partitionId || null,
           attempt: heldState.attempt},
         );
@@ -514,7 +515,7 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
           REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ABANDONED,
           {
             operationId,
-            workflowStep: heldState.projectedOperation?.workflowStep || null,
+            workflowStep: readStateField(heldState.projectedOperation?.workflowStep),
             partitionId: heldState.projectedOperation?.partitionId || null,
             attempt: heldState.attempt,
           },
@@ -567,7 +568,7 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
           REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_SUCCEEDED,
           {
             operationId,
-            workflowStep: heldState.projectedOperation?.workflowStep || null,
+            workflowStep: readStateField(heldState.projectedOperation?.workflowStep),
             partitionId: heldState.projectedOperation?.partitionId || null,
             attempt: heldState.attempt,
           },
@@ -646,7 +647,7 @@ async function resolveRefusedTerminalTransitionRepairPersist(
       REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ABANDONED,
       {
         operationId,
-        workflowStep: authoritativeOperation.workflowStep || null,
+        workflowStep: authoritativeOperation.workflowStep,
         partitionId: heldState.projectedOperation?.partitionId || null,
         attempt: heldState.attempt,
       },

@@ -1,3 +1,4 @@
+import {readOperationRecordWorkflowStep} from '../../rebalancer/replica-operation-progress.js';
 import {assertCritical} from '../../utils/assert.js';
 import {
   SERVICE_STATUS,
@@ -117,7 +118,7 @@ function hasActiveReplicaOperationOwner(systemTableCache, partitionId) {
         row?.type,
       ).toUpperCase();
       const workflowStep = normalizeJoinMetadataString(
-        row?.workflow_step || row?.workflowStep,
+        readOperationRecordWorkflowStep(row),
       ).toUpperCase();
       if (operationType.length > 0 &&
           workflowStep.length > 0 &&

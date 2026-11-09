@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T06:33:39.106Z",
+  "generatedAt": "2026-11-09T14:28:56.718Z",
   "rawViolationCount": 59,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
-      "line": 670,
+      "line": 671,
       "column": 27,
       "functionName": "assignAdminControlSnapshotLocalDiagnosticsMethods",
       "kind": "prototype_copy_bags",
@@ -104,7 +104,7 @@
     },
     {
       "filePath": "src/migration/migration-coordinator-stage-methods.js",
-      "line": 637,
+      "line": 634,
       "column": 4,
       "functionName": "createMigrationCoordinatorStageMethods",
       "kind": "prototype_copy_bags",
@@ -203,7 +203,7 @@
     },
     {
       "filePath": "src/node/replica-handler-remove-execution-methods.js",
-      "line": 787,
+      "line": 782,
       "column": 27,
       "functionName": "assignReplicaHandlerRemoveExecutionMethods",
       "kind": "prototype_copy_bags",
@@ -230,7 +230,7 @@
     },
     {
       "filePath": "src/node/replica-handler-runtime-methods.js",
-      "line": 714,
+      "line": 719,
       "column": 27,
       "functionName": "assignReplicaHandlerRuntimeMethods",
       "kind": "prototype_copy_bags",
@@ -248,7 +248,7 @@
     },
     {
       "filePath": "src/node/replica-handler-voter-readiness-methods.js",
-      "line": 272,
+      "line": 273,
       "column": 27,
       "functionName": "assignReplicaHandlerVoterReadinessMethods",
       "kind": "prototype_copy_bags",
@@ -266,7 +266,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-count-check-methods.js",
-      "line": 326,
+      "line": 327,
       "column": 25,
       "functionName": "createPartitionServiceLearnerPromotionCountCheckMethods",
       "kind": "prototype_copy_bags",
@@ -275,7 +275,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 640,
+      "line": 633,
       "column": 4,
       "functionName": "createPartitionServiceLearnerPromotionMethods",
       "kind": "prototype_copy_bags",
@@ -455,7 +455,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
-      "line": 750,
+      "line": 752,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryMutationPersistenceMethods",
       "kind": "prototype_copy_bags",
@@ -491,7 +491,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 653,
+      "line": 654,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryObservationMethods",
       "kind": "prototype_copy_bags",
@@ -509,7 +509,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
-      "line": 469,
+      "line": 474,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryRowMethods",
       "kind": "prototype_copy_bags",
@@ -518,7 +518,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-visibility-methods.js",
-      "line": 743,
+      "line": 741,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryVisibilityMethods",
       "kind": "prototype_copy_bags",

@@ -10,6 +10,9 @@ import {
 } from './partition-constants.js';
 import {SPLIT_PARTICIPANT_PREFIX} from './split-ack-constants.js';
 import {
+  PARTICIPANT_STATUS_NOT_YET_ACKNOWLEDGED,
+} from '../workflow/workflow-constants.js';
+import {
   isRetryableManagedSplitTransition,
 } from './managed-split-retry-policy.js';
 import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
@@ -68,7 +71,7 @@ function canonicalSplitParticipantSpecsOf(workflow) {
 }
 
 // A canonical participant no acknowledgement has reached yet.
-const NOT_YET_ACKNOWLEDGED = null;
+const NOT_YET_ACKNOWLEDGED = PARTICIPANT_STATUS_NOT_YET_ACKNOWLEDGED;
 
 class ManagedSplitWorkflowStateMethods {
   /**

@@ -1,3 +1,4 @@
+import {readUpperStateField} from '../utils/state-field-read.js';
 import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_ABSENT_INTEGER,
   PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
@@ -149,16 +150,11 @@ function resolvePublicationActiveGateHandoffPublicationRevision(
 function resolvePublicationActiveGateHandoffPublicationStatus(
   publicationConvergence = null,
 ) {
-  return String(
-    publicationConvergence?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.STATUS] ||
-      publicationConvergence?.[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_STATUS
-      ] ||
-      publicationConvergence?.[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_OBSERVATION
-      ]?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.STATUS] ||
-      PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_TEXT,
-  ).toUpperCase();
+  // Both convergence producers (publication-recovery-convergence-builder,
+  // admin convergence diagnostics) set publicationStatus with any status.
+  return readUpperStateField(publicationConvergence?.[
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_STATUS
+  ]);
 }
 
 function resolvePublicationActiveGateHandoffQuorumCount(targetNodeIds = []) {

@@ -153,13 +153,6 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
         operation.entity_id ||
         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
-    const normalizedNewStep = String(
-      payload?.newStep ||
-        payload?.new_step ||
-        operation.workflowStep ||
-        operation.workflow_step ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).toUpperCase();
     // Runtime grammar: isPriorityControlPlanePartition remains the decision
     // axis; its value now comes directly from the canonical outcome below.
     const operationPriorityPartition =
@@ -171,9 +164,14 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
           operationPartitionId,
         ),
       }).priorityControlPlane;
+    // The step matters only for STEP_CHANGED, whose two emitters
+    // (operation-workflow-transition-persistence.js, -orchestration.js)
+    // always carry newStep.
     const stepProgress =
       eventName === REBALANCE_COORDINATOR_EVENT.STEP_CHANGED &&
-      PRIORITY_RECOVERY_COORDINATOR_STEP_PROGRESS_SET.has(normalizedNewStep);
+      PRIORITY_RECOVERY_COORDINATOR_STEP_PROGRESS_SET.has(
+        String(payload.newStep).toUpperCase(),
+      );
     const terminalProgress =
       PRIORITY_RECOVERY_COORDINATOR_TERMINAL_EVENT_SET.has(eventName);
     const evidence = {

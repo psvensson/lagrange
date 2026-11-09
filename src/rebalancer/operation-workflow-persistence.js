@@ -1,3 +1,5 @@
+import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Real persistence binding for the rebalancer's operation-workflow
  * DurableWorkflowCoordinator (verified-audit findings 15+18, quest
@@ -140,7 +142,7 @@ async function persistOperationWorkflowTransitionToDurableRow(workflow) {
 function toWorkflowTransitionEntry(entry, workflowId) {
   return {
     [WORKFLOW_TRANSITION_FIELD.PREVIOUS_STEP]: entry?.previousStep ?? null,
-    [WORKFLOW_TRANSITION_FIELD.NEXT_STEP]: entry?.step ?? null,
+    [WORKFLOW_TRANSITION_FIELD.NEXT_STEP]: readStateField(entry?.step),
     [WORKFLOW_TRANSITION_FIELD.REASON]: entry?.reason ?? null,
     [WORKFLOW_TRANSITION_FIELD.TIMESTAMP]: entry?.timestamp ?? null,
     [WORKFLOW_TRANSITION_FIELD.OWNER_KEY]: workflowId,
@@ -165,7 +167,9 @@ function isDurableOperationTerminal(operation) {
 /**
  * Map one replica_operations row (or an already-translated operation)
  * into the coordinator workflow record the in-memory store recovers
- * from; null when the row carries no usable workflow id.
+ * from; null when the row carries no usable workflow id. Both shapes carry
+ * their step: it is read by the one shape reader
+ * (readOperationRecordWorkflowStep).
  * @param {Object} operation
  * @return {Object|null}
  */
@@ -182,9 +186,7 @@ function operationToRecoveredWorkflow(operation) {
     workflowId,
     ownerKey: workflowId,
     step:
-      normalizeOperationWorkflowStep(
-        operation?.workflowStep || operation?.workflow_step,
-      ) || null,
+      normalizeOperationWorkflowStep(readOperationRecordWorkflowStep(operation)),
     transitionHistory: durableStepsHistory.map((entry) =>
       toWorkflowTransitionEntry(entry, workflowId)),
     // The durable basis the persist callback checks every candidate

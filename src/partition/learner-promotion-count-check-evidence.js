@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * The log payload of one learner-side count check: the inputs the decision
  * was actually made on.
@@ -53,7 +54,7 @@ function buildNodeReadinessEvidence(nodeReadiness) {
   const reasons = capList(nodeReadiness?.reasons);
   return Object.freeze({
     present: nodeReadiness?.snapshotPresent === true,
-    phase: nodeReadiness?.phase ?? null,
+    phase: readStateField(nodeReadiness?.phase),
     reasons: reasons.entries,
     reasonsWithheld: reasons.withheld,
     draining: nodeReadiness?.draining === true,
@@ -119,8 +120,8 @@ function buildCountedOperationsEvidence(activeOperationContexts, completion) {
     (operationContext) => Object.freeze({
       operationId: operationContext?.operationId ?? null,
       type: operationContext?.type ?? null,
-      status: operationContext?.status ?? null,
-      workflowStep: operationContext?.workflowStep ?? null,
+      status: readStateField(operationContext?.status),
+      workflowStep: readStateField(operationContext?.workflowStep),
     }),
   ));
   return Object.freeze({

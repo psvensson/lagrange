@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SERVICE_READ_LOCALITY} from '../constants/index.js';
 import {SD_COL} from '../wasm-service/wasm-service-models.js';
@@ -301,11 +302,9 @@ class SQLQueryEngineTableRoutingMethods {
   getActiveDualWriteMigration(tableInfo) {
     const rows = this.getTableMigrationsFromCache(tableInfo);
     for (const row of rows) {
-      const status = String(
-        row?.status ||
-        row?.current_stage ||
-        '',
-      ).trim();
+      // schema_migrations.status is NOT NULL; current_stage is a different
+      // field and never stands in for it.
+      const status = readStateField(row?.status);
       if (DUAL_WRITE_ACTIVE_STATUSES.has(status)) {
         return row;
       }

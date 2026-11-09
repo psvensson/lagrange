@@ -1,3 +1,4 @@
+import {readStateField} from '../../utils/state-field-read.js';
 import {resolveAdvertisedWebSocketAddress} from
   '../../transport/node-address-resolution.js';
 import {
@@ -668,10 +669,7 @@ class BootstrapRequestOwner {
     if (!bootstrapJoinAdmissionReady && !startupComplete) {
       admissionDecision.decision =
         BOOTSTRAP_REQUEST_ADMISSION_DECISION.DEFER_STARTUP_INCOMPLETE;
-      admissionDecision.phase =
-        typeof bootstrapService?.phase === 'string' ?
-          bootstrapService.phase :
-          null;
+      admissionDecision.phase = readStateField(bootstrapService?.phase);
       admissionDecision.reasonCode =
         BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE;
     } else if (
@@ -681,9 +679,7 @@ class BootstrapRequestOwner {
       admissionDecision.decision =
         BOOTSTRAP_REQUEST_ADMISSION_DECISION.DEFER_BOOTSTRAP_JOIN_BLOCKED;
       admissionDecision.phase =
-        typeof bootstrapJoinAdmissionSnapshot?.phase === 'string' ?
-          bootstrapJoinAdmissionSnapshot.phase :
-          null;
+        readStateField(bootstrapJoinAdmissionSnapshot?.phase);
     }
     return admissionDecision;
   }

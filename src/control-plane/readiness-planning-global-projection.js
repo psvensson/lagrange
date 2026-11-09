@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {COLUMN, FIELD, TABLES} from '../constants/index.js';
 import {classifySystemPartition} from
   '../bootstrap/system-partition-classification.js';
@@ -209,7 +210,7 @@ function buildPriorityOperationSemanticRecord(record) {
       SEMANTIC_RECORD_COLUMN.SOURCE_NODE_ID,
       FIELD.SOURCE_NODE_ID,
     ),
-    status: record?.[COLUMN.STATUS] ?? null,
+    status: readStateField(record?.[COLUMN.STATUS]),
     targetNodeId: readAliasedValue(
       record,
       COLUMN.TARGET_NODE_ID,

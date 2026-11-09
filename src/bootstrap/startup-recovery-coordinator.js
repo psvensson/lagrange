@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {NUM} from '../constants/index.js';
 import {
   classifySystemPartition,
@@ -398,12 +399,7 @@ class StartupRecoveryCoordinator {
     const readinessSnapshot = buildReadinessSnapshotDetail(
       managed ? snapshot : null,
     );
-    const phaseDetail = buildOptionalPhaseDetail(
-      typeof snapshot?.phase === 'string' &&
-        snapshot.phase.length > 0 ?
-        snapshot.phase :
-        null,
-    );
+    const phaseDetail = buildOptionalPhaseDetail(readStateField(snapshot?.phase));
     const retryAfter = buildOptionalRetryAfterDetail(
       Number.isFinite(snapshot?.retryAfterMs) &&
         snapshot.retryAfterMs > 0 ?

@@ -28,7 +28,7 @@ function reportMergeCutoverWaitSpent(service, metadata, spent) {
       transitionAborted: false,
       polls: spent.polls,
       targetPartitionVersion: metadata?.targetPartitionVersion ?? null,
-      role: service.role ?? null,
+      role: service.role, // set in the PartitionService constructor
     },
     scope: {
       partitionId: service.partitionId,

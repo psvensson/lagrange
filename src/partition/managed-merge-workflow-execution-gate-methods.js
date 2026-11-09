@@ -446,7 +446,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
     if (this.isMergeWorkflowStateUnavailable(workflow)) {
       throw new Error(MANAGED_MERGE_ERROR_MSG.WORKFLOW_NOT_FOUND);
     }
-    const ackStatus = String(ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '');
+    const ackStatus = ack?.[PARTICIPANT_ACK_FIELD.STATUS]; // absent: no status branch matches
     const ackResult = await acknowledgeSourceStartAtRecordTurn(
       this.workflowCoordinator, workflowId, ack, startContext, ackStatus,
       MERGE_ACK_STATUS.SNAPSHOT_STARTED, mergeStartAuthorization);

@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
   PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION,
@@ -293,6 +294,7 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_HANDLER =
     ],
   ]));
 
+
 function selectPriorityRecoveryDispatchPendingReentryOperation(
   snapshot,
   operations = [],
@@ -325,39 +327,24 @@ function selectPriorityRecoveryDispatchPendingReentryOperation(
     snapshot?.[
       PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD.CONDITIONS
     ] || {};
-  const workflowStep = String(
-    snapshotOperation[
-      PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD.WORKFLOW_STEP
-    ] ||
-      snapshotOperation[
-        PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD
-          .LATEST_TIMELINE_STEP
-      ] ||
-      snapshotConditions[
-        PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD
-          .LATEST_OPERATION_WORKFLOW_STEP
-      ] ||
-      OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
-  ).trim();
-  const status = String(
-    snapshotOperation[
-      PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD.STATUS
-    ] ||
-      snapshotOperation[
-        PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD
-          .LATEST_TIMELINE_STATUS
-      ] ||
-      snapshotConditions[
-        PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD
-          .LATEST_OPERATION_STATUS
-      ] ||
-      OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
-  ).trim();
+  const field = PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD;
+  // The snapshot's named sources in authority order; a state none of them
+  // carries is left off the operation.
+  const workflowStep = readStateField(
+    snapshotOperation[field.WORKFLOW_STEP],
+    snapshotOperation[field.LATEST_TIMELINE_STEP],
+    snapshotConditions[field.LATEST_OPERATION_WORKFLOW_STEP],
+  );
+  const status = readStateField(
+    snapshotOperation[field.STATUS],
+    snapshotOperation[field.LATEST_TIMELINE_STATUS],
+    snapshotConditions[field.LATEST_OPERATION_STATUS],
+  );
   return Object.freeze({
     ...snapshotOperation,
     operationId: snapshotOperationId,
-    ...(workflowStep.length > 0 ? {workflowStep} : {}),
-    ...(status.length > 0 ? {status} : {}),
+    ...(workflowStep === STATE_ABSENT ? {} : {workflowStep: workflowStep.trim()}),
+    ...(status === STATE_ABSENT ? {} : {status: status.trim()}),
     createdAt: snapshotOperation.createdAtMs,
     updatedAt: snapshotOperation.updatedAtMs,
     completedAt: snapshotOperation.completedAtMs,

@@ -65,7 +65,7 @@ class ServiceRegistrationVisibilityOwner {
       [COLUMN.SERVICE_ID]: serviceRow[COLUMN.SERVICE_ID] || null,
       [COLUMN.NODE_ID]: serviceRow[COLUMN.NODE_ID] || null,
       [COLUMN.SERVICE_TYPE]: serviceRow[COLUMN.SERVICE_TYPE] || null,
-      [COLUMN.STATUS]: serviceRow[COLUMN.STATUS] || null,
+      [COLUMN.STATUS]: serviceRow[COLUMN.STATUS], // services.status NOT NULL; decoded requests require it
       [COLUMN.GROUP_ID]: serviceRow[COLUMN.GROUP_ID] || null,
       [COLUMN.REPLICA_ID]: serviceRow[COLUMN.REPLICA_ID] || null,
       [COLUMN.ADDRESS]: serviceRow[COLUMN.ADDRESS] || null,

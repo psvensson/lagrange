@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T06:33:39.105Z",
+  "generatedAt": "2026-11-09T14:28:56.717Z",
   "rawViolationCount": 87,
   "violations": [
     {
@@ -590,7 +590,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 159,
+      "line": 160,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -599,7 +599,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 161,
+      "line": 162,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -662,7 +662,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-owner-wake.js",
-      "line": 90,
+      "line": 91,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",

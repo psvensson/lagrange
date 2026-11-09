@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {retireNodeTransportHandler} from './replica-transport-handler-identity.js';
 import {settlePendingReplicaRuntimeCleanup, fenceFailedReplicaCreateRuntime,
   shutdownReplicaHandler} from './replica-runtime-cleanup-custody.js';
@@ -353,7 +354,9 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
           replicaId,
           partitionId: cacheEntry.partition_id,
           tableName: tracked?.tableName || null,
-          status: tracked?.status || cacheEntry.status,
+          // A tracked replica reports the handler's lifecycle status; an
+          // untracked one its services row's (NOT NULL).
+          status: tracked ? tracked.status : cacheEntry.status,
           service: this.getTrackedService(replicaId),
         });
       }
@@ -363,7 +366,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
             replicaId: trackedReplica?.replicaId || replicaId,
             partitionId: trackedReplica?.partitionId || null,
             tableName: trackedReplica?.tableName || null,
-            status: trackedReplica?.status || null,
+            status: readStateField(trackedReplica?.status),
             service: this.getTrackedService(replicaId),
           });
         }
@@ -378,7 +381,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      * @param {string} replicaInfo.replicaId - Unique replica identifier.
      * @param {string} replicaInfo.partitionId - Partition identifier.
      * @param {string} replicaInfo.tableName - Table name.
-     * @param {string} [replicaInfo.status] - Replica status (default: 'active').
+     * @param {string} replicaInfo.status - Replica status the caller states.
      * @param {Object} [replicaInfo.service] - Partition service instance.
      */
     registerExistingReplica(replicaInfo) {
@@ -395,7 +398,9 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         replicaId,
         partitionId: replicaInfo.partitionId || null,
         tableName: replicaInfo.tableName || null,
-        status: replicaInfo.status || ReplicaStatus.ACTIVE,
+        // The one caller (bootstrap-service-replica-registration-methods.js)
+        // passes SERVICE_STATUS.ACTIVE.
+        status: replicaInfo.status,
         service: service || null,
       });
       // Store service reference when provided

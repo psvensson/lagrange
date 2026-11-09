@@ -1,3 +1,4 @@
+import {readLowerStateField, readStateField} from '../utils/state-field-read.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
 import {readWiredCollaborator} from './control-plane-readiness-collaborators.js';
 import {
@@ -573,7 +574,7 @@ function buildPriorityControlPlaneRecoveryProjection(service, context = {}) {
     publicationStatus:
       publicationRecoveryGate.publicationStatus ??
       planningSnapshot?.publicationStatus ??
-      (membershipPublication?.status || null),
+      readStateField(membershipPublication?.status),
     publicationRecoveryGate,
     priorityRecoveryObservation,
     priorityPartitionSummary,
@@ -588,7 +589,7 @@ function shouldPreferLocalSelfNodeEvidence(service, context = {}) {
   }
 
   const nodeRow = context?.nodeRow || null;
-  const status = String(nodeRow?.[COLUMN.STATUS] || '').toLowerCase();
+  const status = readLowerStateField(nodeRow?.[COLUMN.STATUS]);
   const serviceRows = Array.isArray(context?.serviceRows) ?
     context.serviceRows :
     [];

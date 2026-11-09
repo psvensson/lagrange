@@ -45,6 +45,10 @@ import {assignAdminControlSnapshotReadinessDiagnosticsMethods} from './admin-con
 import {assignAdminControlSnapshotLocalDiagnosticsMethods} from './admin-control-snapshot-local-diagnostics-methods.js';
 import {AdminControlSnapshot} from './admin-control-snapshot-leadership-summary.js';
 import {
+  resolveLatestMembershipPublicationRow,
+  resolvePublicationOrderingValue,
+} from './admin-control-snapshot-membership-publication-reconcile.js';
+import {
   attachAuthoritativeRepairDiagnostics,
   hasPressureOrTimeoutRepairCause,
 } from './admin-control-snapshot-repair-diagnostics.js';
@@ -124,84 +128,6 @@ function buildMembershipPublicationReadOptions(options = {}) {
       deliveryPriority: CONTROL_PLANE_DELIVERY_PRIORITY.READINESS,
     } :
     {readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS};
-}
-function resolvePublicationOrderingValue(row, keys = []) {
-  for (const key of keys) {
-    const value = Number(row?.[key]);
-    if (Number.isFinite(value)) {
-      return value;
-    }
-  }
-  return 0;
-}
-function isMembershipPublicationRow(row) {
-  const normalizedRow = normalizeControlPlanePublicationRow(row);
-  const publicationKind = String(
-    normalizedRow.publicationKind || '',
-  ).toLowerCase();
-  return (
-    publicationKind.length === 0 ||
-    publicationKind === MEMBERSHIP_PUBLICATION_KIND
-  );
-}
-function resolveLatestMembershipPublicationRow(
-  publicationRows = [],
-  options = {},
-) {
-  const expectedStatus =
-    typeof options.status === 'string' ?
-      options.status.toUpperCase() :
-      null;
-  const normalizedRows = (Array.isArray(publicationRows) ? publicationRows : [])
-    .filter((row) => row && typeof row === 'object')
-    .filter((row) => isMembershipPublicationRow(row))
-    .map((row) => normalizeControlPlanePublicationRow(row))
-    .filter((row) => {
-      if (expectedStatus && row.status !== expectedStatus) {
-        return false;
-      }
-      return Boolean(
-        row.publicationId ||
-        row.publicationEpoch ||
-        row.status ||
-        (Array.isArray(row.publishedActiveNodeIds) &&
-          row.publishedActiveNodeIds.length > 0),
-      );
-    });
-  if (normalizedRows.length === 0) {
-    return null;
-  }
-  normalizedRows.sort((left, right) => {
-    const publicationEpochDelta =
-      resolvePublicationOrderingValue(right, [
-        'publicationEpoch',
-        'publication_epoch',
-      ]) -
-      resolvePublicationOrderingValue(left, [
-        'publicationEpoch',
-        'publication_epoch',
-      ]);
-    if (publicationEpochDelta !== 0) {
-      return publicationEpochDelta;
-    }
-    const publishedAtDelta =
-      resolvePublicationOrderingValue(right, ['publishedAt', 'published_at']) -
-      resolvePublicationOrderingValue(left, ['publishedAt', 'published_at']);
-    if (publishedAtDelta !== 0) {
-      return publishedAtDelta;
-    }
-    return (
-      resolvePublicationOrderingValue(right, [
-        ADMIN_CONTROL_SNAPSHOT_LITERAL.UPDATEDAT,
-        ADMIN_CONTROL_SNAPSHOT_LITERAL.UPDATED_AT,
-      ]) -
-      resolvePublicationOrderingValue(left, [
-        ADMIN_CONTROL_SNAPSHOT_LITERAL.UPDATEDAT,
-        ADMIN_CONTROL_SNAPSHOT_LITERAL.UPDATED_AT,
-      ])
-    );
-  });
-  return normalizedRows[0] || null;
 }
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**

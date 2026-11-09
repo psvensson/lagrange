@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Replica admission from the committed replica operation (quest
  * replica-admission-from-committed-operation; R2 request owner shape,
@@ -303,7 +304,7 @@ async function admitFromCommittedOperation(service, request) {
   const refusal = operationRefusal(read.row, service, replicaIdentity);
   return settleAnswer(service, replicaIdentity, refusal !== null ?
     answer(REPLICA_ADMISSION_OUTCOME.OPERATION_NOT_ADMITTING, {
-      reason: refusal, workflowStep: read.row?.workflow_step ?? null}) :
+      reason: refusal, workflowStep: readStateField(read.row?.workflow_step)}) :
     admissionAnswer(service, replicaIdentity, read.row));
 }
 

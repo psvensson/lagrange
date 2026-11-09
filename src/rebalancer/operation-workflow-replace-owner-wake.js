@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {committedNodeFloorLevel} from './operation-workflow-committed-node-floor.js';
 /**
  * Owner contract:
@@ -514,7 +515,7 @@ function reportReplaceOwnerWakeRunsSpent(
     startedAtMs,
     lastObserved: {
       runs: REPLACE_OWNER_WAKE_MAX_RUNS,
-      workflowStep: waiter.operation?.workflowStep || null,
+      workflowStep: readStateField(waiter.operation?.workflowStep),
       waitedNodeIds: waiter.nodeIds || null,
       waitedLevelKey: waiter.levelKey || null,
     },
