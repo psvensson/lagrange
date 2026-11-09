@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {buildReadinessByNodeId} from './active-node-projection.js';
 import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
 import {
@@ -122,14 +123,16 @@ function buildPriorityRecoveryDecisionPublicationConvergence(options = {}, helpe
       latestPublishedPublicationRow?.publicationEpoch,
     null,
   );
-  const publicationStatus =
-    typeof latestPublicationRow?.status === 'string' &&
-      latestPublicationRow.status.length > 0 ?
-      latestPublicationRow.status :
-      typeof latestPublishedPublicationRow?.status === 'string' &&
-        latestPublishedPublicationRow.status.length > 0 ?
-        latestPublishedPublicationRow.status :
-        MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
+  // The latest row's stated status, else the latest published row's; with
+  // neither stated the convergence reports PUBLISHED (HEAD's decision, kept;
+  // recorded for the publication owner).
+  const latestStatus = readStateField(latestPublicationRow?.status);
+  const latestPublishedStatus = readStateField(latestPublishedPublicationRow?.status);
+  const publicationStatus = latestStatus !== STATE_ABSENT ?
+    latestStatus :
+    latestPublishedStatus !== STATE_ABSENT ?
+      latestPublishedStatus :
+      MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
   return {
     publicationEpoch,
     publicationStatus,

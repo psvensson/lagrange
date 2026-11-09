@@ -55,8 +55,8 @@ function reportDeliveredCreateProgressSpent(owner, retryEntry, now) {
     lastObserved: {
       kind: retryEntry.kind,
       tableName: retryEntry.tableName || null,
-      workflowStep: operation.workflowStep || null,
-      status: operation.status || null,
+      workflowStep: operation.workflowStep,
+      status: operation.status,
       targetNodeId: operation.targetNodeId || null,
     },
     scope: {

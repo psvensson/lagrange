@@ -1,3 +1,4 @@
+import {readUpperStateField} from '../utils/state-field-read.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {UnifiedRebalancerLifecycleBase} from './unified-rebalancer-lifecycle-base.js';
 import {
@@ -142,9 +143,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
             'object' ?
           latestPublicationRow.priority_partition_summary :
           null;
-    const publicationStatus = String(
-      latestPublicationRow?.status || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).toUpperCase();
+    const publicationStatus = readUpperStateField(latestPublicationRow?.status);
     return Object.freeze({
       priorityPartition: this.isControlPlanePriorityPartition(),
       formationLivenessDependency:

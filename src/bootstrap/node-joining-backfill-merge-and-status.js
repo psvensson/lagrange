@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {NodeJoiningPublicationActivation} from './node-joining-publication-activation.js';
@@ -33,7 +34,6 @@ const {
   RAFT_ROLE,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  STRING,
   TABLES,
   TIME_MS,
   canonicalizeSystemTableRow,
@@ -778,7 +778,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     }
     return services.some((service) => {
       return (
-        String(service?.[COLUMN.RAFT_ROLE] || STRING.EMPTY).toLowerCase() ===
+        readLowerStateField(service?.[COLUMN.RAFT_ROLE]) ===
         String(RAFT_ROLE.LEADER).toLowerCase()
       );
     });

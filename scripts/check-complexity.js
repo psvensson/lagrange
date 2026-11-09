@@ -137,7 +137,9 @@ const TARGET_THRESHOLD = 12;
 // 2026-11-01 (comparative-benchmark-evidence-repair): tightened 1735 -> 1731 on
 // the checker's hint after restoring ownership in the benchmark chain (campaign
 // runner, workload call site, identity inspection, readiness, durability proof).
-const BASELINE_COUNT = 1731;
+// 2026-11-08 (state-read-named-defaults): tightened 1731 -> 1714 on the
+// checker's hint after state-field defaults moved into the one reader.
+const BASELINE_COUNT = 1714;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "02e62cab21be4fbe1f7d86c0f617515746bbbe7adb7e81611b27a38701a4034e"
+    "sourceSha256": "1bb1494ed793743bf5bd41fff73de40c1e9150b28bcc719e9476c1dadc956d64"
   },
   "layerDirection": [
     "raw_observation",
@@ -19,7 +19,7 @@
   "metrics": {
     "moduleCount": 68,
     "publicExportCount": 775,
-    "importEdgeCount": 313,
+    "importEdgeCount": 322,
     "crossLayerEdgeCount": 96,
     "layerDirectionViolationCount": 48,
     "largestStronglyConnectedComponent": 1,
@@ -2099,6 +2099,16 @@
     },
     {
       "from": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+      "specifier": "../utils/state-field-read.js",
+      "to": "src/utils/state-field-read.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
       "specifier": "./control-plane-readiness-constants.js",
       "to": "src/control-plane/control-plane-readiness-constants.js",
       "targetModule": false,
@@ -2131,6 +2141,16 @@
       "from": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
       "specifier": "./readiness-planning-semantic-generation.js",
       "to": "src/control-plane/readiness-planning-semantic-generation.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+      "specifier": "./system-row-normalizers.js",
+      "to": "src/control-plane/system-row-normalizers.js",
       "targetModule": false,
       "sourceLayer": "owner_decision",
       "targetLayer": null,
@@ -2381,6 +2401,16 @@
       "from": "src/control-plane/priority-recovery-dispatch-pending-diagnostic-owner.js",
       "specifier": "../rebalancer/replica-status.js",
       "to": "src/rebalancer/replica-status.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/priority-recovery-dispatch-pending-diagnostic-owner.js",
+      "specifier": "../utils/state-field-read.js",
+      "to": "src/utils/state-field-read.js",
       "targetModule": false,
       "sourceLayer": "owner_decision",
       "targetLayer": null,
@@ -2861,6 +2891,16 @@
       "from": "src/control-plane/priority-recovery-partition-assessment.js",
       "specifier": "../rebalancer/replica-status.js",
       "to": "src/rebalancer/replica-status.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/priority-recovery-partition-assessment.js",
+      "specifier": "../utils/state-field-read.js",
+      "to": "src/utils/state-field-read.js",
       "targetModule": false,
       "sourceLayer": "owner_decision",
       "targetLayer": null,
@@ -3579,6 +3619,16 @@
     },
     {
       "from": "src/control-plane/priority-recovery-snapshot-ingress.js",
+      "specifier": "../utils/state-field-read.js",
+      "to": "src/utils/state-field-read.js",
+      "targetModule": false,
+      "sourceLayer": "canonical_snapshot_reducer",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/priority-recovery-snapshot-ingress.js",
       "specifier": "./priority-recovery-diagnostics-constants.js",
       "to": "src/control-plane/priority-recovery-diagnostics-constants.js",
       "targetModule": true,
@@ -3661,6 +3711,16 @@
       "from": "src/control-plane/priority-recovery-snapshot-observation.js",
       "specifier": "../rebalancer/replica-status.js",
       "to": "src/rebalancer/replica-status.js",
+      "targetModule": false,
+      "sourceLayer": "raw_observation",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/priority-recovery-snapshot-observation.js",
+      "specifier": "../utils/state-field-read.js",
+      "to": "src/utils/state-field-read.js",
       "targetModule": false,
       "sourceLayer": "raw_observation",
       "targetLayer": null,
@@ -3791,6 +3851,16 @@
       "from": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
       "specifier": "../rebalancer/steps-history-parse-memo.js",
       "to": "src/rebalancer/steps-history-parse-memo.js",
+      "targetModule": false,
+      "sourceLayer": "canonical_snapshot_reducer",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+      "specifier": "../utils/state-field-read.js",
+      "to": "src/utils/state-field-read.js",
       "targetModule": false,
       "sourceLayer": "canonical_snapshot_reducer",
       "targetLayer": null,
@@ -5071,6 +5141,26 @@
       "from": "src/rebalancer/priority-recovery-superseded-target.js",
       "specifier": "./rebalancer-entity-identity.js",
       "to": "src/rebalancer/rebalancer-entity-identity.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/rebalancer/priority-recovery-superseded-target.js",
+      "specifier": "./replica-operation-progress.js",
+      "to": "src/rebalancer/replica-operation-progress.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/rebalancer/priority-recovery-visibility-decision.js",
+      "specifier": "./replica-operation-progress.js",
+      "to": "src/rebalancer/replica-operation-progress.js",
       "targetModule": false,
       "sourceLayer": "owner_decision",
       "targetLayer": null,

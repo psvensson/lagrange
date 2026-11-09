@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {buildReplicaInventorySnapshot} from './replica-inventory.js';
 
 const PRIORITY_SURPLUS_REMOVE_FENCE_SOURCE = 'owner_rpc_lane';
@@ -37,6 +38,10 @@ function rowServiceType(row) {
   return text(row?.service_type ?? row?.serviceType).toLowerCase();
 }
 
+function rowRaftRole(row) {
+  return text(readStateField(row?.raft_role)); // raw services rows (RPC result.rows)
+}
+
 function completePartitionReplicaRow(row, partitionId) {
   return (
     row &&
@@ -46,7 +51,7 @@ function completePartitionReplicaRow(row, partitionId) {
     rowPartitionId(row) === partitionId &&
     rowServiceType(row) === PRIORITY_SURPLUS_REMOVE_ENTITY_TYPE &&
     text(row.status).length > 0 &&
-    text(row.raft_role ?? row.raftRole).length > 0
+    rowRaftRole(row).length > 0
   );
 }
 

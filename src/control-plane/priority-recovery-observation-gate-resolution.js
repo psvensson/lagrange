@@ -127,7 +127,6 @@ function resolveObservationPublicationConvergenceGate(
     publicationStatus:
       providedPublicationConvergenceGate?.publicationStatus ||
       publicationConvergence?.publicationStatus ||
-      publicationConvergence?.status ||
       null,
     publicationObservationState:
       providedPublicationConvergenceGate?.publicationObservationState ||

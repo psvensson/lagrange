@@ -1,3 +1,4 @@
+import {readUpperStateField} from '../utils/state-field-read.js';
 /**
  * Control snapshot building for the admin WebSocket API.
  *
@@ -190,7 +191,8 @@ function resolveLatestMembershipPublicationRow(
       return Boolean(
         row.publicationId ||
         row.publicationEpoch ||
-        row.status ||
+        // normalizeControlPlanePublicationRow decodes status to a string.
+        row.status.length > 0 ||
         (Array.isArray(row.publishedActiveNodeIds) &&
           row.publishedActiveNodeIds.length > 0),
       );
@@ -254,12 +256,11 @@ function hasDurablePublishedMembershipObservation(
   ) {
     return true;
   }
-  const publicationStatus = String(
-    publicationDiagnostics?.status ||
-      publicationDiagnostics?.publicationStatus ||
-      publicationDiagnostics?.publicationObservation?.status ||
-      ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
-  ).toUpperCase();
+  // The publication diagnostics owner (resolvePublicationConvergence-
+  // Diagnostics) sets publicationStatus whenever a publication is observed;
+  // diagnostics with none are STATE_ABSENT, never PUBLISHED.
+  const publicationStatus =
+    readUpperStateField(publicationDiagnostics?.publicationStatus);
   return publicationStatus === ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED;
 }
 function selectDurablePublishedMembershipObservation(

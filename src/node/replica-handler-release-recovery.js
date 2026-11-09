@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 // One bounded lifecycle wake path for current hosted partitions. Wakes and
 // retries carry no phase authority: every run reads current durable origin,
 // membership, build and live service facts through the release algorithm.
@@ -79,7 +80,7 @@ function statusReportOf(observation) {
     reason: statusReason(status),
     blockedGroupId: status?.groupId || service.partitionId,
     blockedReplicaId: status?.replicaIdentity || service.replicaId,
-    recoveryPhase: status?.phase ?? null,
+    recoveryPhase: readStateField(status?.phase),
     statusOutcome: status?.outcome ?? null,
     failure: status?.failure ?? null};
 }

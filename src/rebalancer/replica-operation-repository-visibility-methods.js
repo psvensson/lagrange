@@ -1,3 +1,4 @@
+import {readPublicationRecordStatus} from '../control-plane/system-row-normalizers.js';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 function assignReplicaOperationRepositoryVisibilityMethods(
@@ -412,14 +413,11 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       if (!planningSnapshot || typeof planningSnapshot !== 'object') {
         return false;
       }
-      const publicationStatus = String(
-        planningSnapshot.publicationStatus || planningSnapshot.status || '',
-      )
-        .trim()
-        .toUpperCase();
+      // An absent status decides nothing here; a present non-PUBLISHED one does.
+      const publicationStatus = readPublicationRecordStatus(planningSnapshot);
       if (
-        publicationStatus.length > 0 &&
-      publicationStatus !== CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
+        typeof publicationStatus === 'string' && publicationStatus.trim().length > 0 &&
+      publicationStatus.trim().toUpperCase() !== CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
       ) {
         return true;
       }

@@ -1,3 +1,5 @@
+import {readUpperStateField} from '../utils/state-field-read.js';
+import {readPublicationRecordStatus} from './system-row-normalizers.js';
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {readWiredCollaborator} from './control-plane-readiness-collaborators.js';
 import {
@@ -545,8 +547,7 @@ function isPriorityControlPlaneRecoveryActive(
       providedPublicationRecoveryGate?.publicationEpoch ??
       null,
     publicationStatus:
-      membershipPublicationPlanningSnapshot.publicationStatus ??
-      membershipPublicationPlanningSnapshot.status ??
+      readPublicationRecordStatus(membershipPublicationPlanningSnapshot) ??
       providedPublicationRecoveryGate?.publicationStatus ??
       null,
     publicationObservationState:
@@ -658,7 +659,7 @@ function isControlPlanePublished(service, membershipPublication) {
     return true;
   }
   return (
-    String(membershipPublication.status || '').toUpperCase() ===
+    readUpperStateField(membershipPublication.status) ===
     CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
   );
 }

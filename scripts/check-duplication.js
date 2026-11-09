@@ -95,9 +95,10 @@ const RATCHET_TARGETS = [
     // Callback axis retirement: tightened 44/1383 -> 43/1358 on the checker's
     // hint after deleting the legacy partition_callback axis.
     // Publisher and corpus-ratchet speedups: tightened 43/1358 -> 42/1331
-    // on the checker's hint.
+    // on the checker's hint. State-read named defaults: 1331 -> 1330 on the
+    // checker's hint.
     baselineCloneGroupCount: 42,
-    baselineDuplicatedLineCount: 1331,
+    baselineDuplicatedLineCount: 1330,
     strictEligible: true,
   },
   {

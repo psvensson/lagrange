@@ -6,7 +6,6 @@ import {
   HTTP_STATUS,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  STRING,
   TABLES,
   WORKFLOW_STEP,
 } from '../../constants/index.js';
@@ -146,9 +145,8 @@ class MoveReplicaHandoffOwner {
     }
 
     const existingNodeId = existingRow[COLUMN.NODE_ID] || null;
-    const existingStatus = String(
-      existingRow[COLUMN.STATUS] || STRING.UNKNOWN,
-    ).toLowerCase();
+    // services.status is NOT NULL on every cache row.
+    const existingStatus = String(existingRow[COLUMN.STATUS]).toLowerCase();
     if (!existingNodeId ||
         existingNodeId === targetNodeId ||
         existingStatus !== SERVICE_STATUS.ACTIVE) {
@@ -235,7 +233,7 @@ class MoveReplicaHandoffOwner {
       replicaId: assignmentContext.replicaId,
       sourceNodeId: assignmentContext.sourceNodeId || this.getSeedNodeId(),
       targetNodeId: assignmentContext.targetNodeId,
-      status: assignmentContext.status || BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
+      status: assignmentContext.status, // every reservation carries a status (lifecycle or decoder)
       workflowStep: WORKFLOW_STEP.PENDING,
       createdAt: now,
       updatedAt: now,

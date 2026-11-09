@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * ReplicaHandler voter-readiness gating methods.
  *
@@ -43,8 +44,8 @@ function observeVoterReadyActivation(handler, spent) {
   return {
     trackedRaftRole: handler.getTrackedReplicaRole?.(spent.replicaId) ?? null,
     serviceRowPresent: serviceRow !== null,
-    serviceRowStatus: serviceRow?.status ?? null,
-    serviceRowRaftRole: serviceRow?.raft_role ?? null,
+    serviceRowStatus: readStateField(serviceRow?.status),
+    serviceRowRaftRole: readStateField(serviceRow?.raft_role),
     serviceRowHasAddress: Boolean(serviceRow?.address),
     polls: spent.polls,
   };

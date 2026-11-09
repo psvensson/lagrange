@@ -1,3 +1,4 @@
+import {readLowerStateField, readUpperStateField} from '../utils/state-field-read.js';
 import {
   WORKFLOW_STEP,
 } from '../constants/index.js';
@@ -239,12 +240,8 @@ function buildPriorityRecoveryDispatchPendingDiagnosticOwnerEvidence(
   snapshot,
   operationContext,
 ) {
-  const workflowStep = String(
-    operationContext?.workflowStep || PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
-  ).toUpperCase();
-  const operationStatus = String(
-    operationContext?.status || PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
-  ).toLowerCase();
+  const workflowStep = readUpperStateField(operationContext?.workflowStep);
+  const operationStatus = readLowerStateField(operationContext?.status);
   const targetVisibilityState = normalizePriorityRecoveryDiagnosticOwnerText(
     operationContext?.targetVisibilityState,
     PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,

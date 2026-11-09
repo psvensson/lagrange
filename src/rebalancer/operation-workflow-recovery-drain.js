@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {
   admitReplaceOwnerHandBack,
 } from './operation-workflow-replace-owner-state.js';
@@ -664,7 +665,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         operationId: operation?.operationId || null,
         partitionId: operation?.partitionId || null,
         operationType: operation?.type || null,
-        workflowStep: operation?.workflowStep || null,
+        workflowStep: readStateField(operation?.workflowStep),
         action: drainSnapshot?.action || null,
         drainState: drainSnapshot?.state || null,
         completionState: drainSnapshot?.completionState || null,

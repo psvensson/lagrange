@@ -164,10 +164,9 @@ const BOOTSTRAP_CONTROL_PLANE_RECOVERY_HEALTH_METHODS = Object.freeze({
     const planningSnapshot = this.buildMembershipPublicationPlanningSnapshot(
       membershipPublication,
     );
-    const publicationStatus =
-      planningSnapshot?.publicationStatus ??
-      membershipPublication?.status ??
-      null;
+    // The planning snapshot owner derives publicationStatus from this same
+    // publication; a snapshot without one is the incomplete case below.
+    const publicationStatus = planningSnapshot?.publicationStatus;
     if (
       typeof publicationStatus !== 'string' ||
       publicationStatus.length === 0

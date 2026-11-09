@@ -53,7 +53,7 @@ documentClass: generated
 - [wasm-service-consensus-port.js](wasm-service-consensus-port.js) - How a WASM service replica runs on its raft-rs semantic operation port (design R4 S2(b)): one durable database holds... (importers: few)
 - [wasm-service-constants.js](wasm-service-constants.js) - No leading comment; first export: WASM_CREATION_CURRENT. (importers: hub)
 - [wasm-service-lifecycle.js](wasm-service-lifecycle.js) - WasmServiceLifecycle - manages creation, startup, and shutdown of WasmServiceReplica instances from service definitions. (importers: many)
-- [wasm-service-metadata-mutation-helpers.js](wasm-service-metadata-mutation-helpers.js) - How a WASM service replica publishes its role and its group's leader node to its services row: each value flows... (importers: one)
+- [wasm-service-metadata-mutation-helpers.js](wasm-service-metadata-mutation-helpers.js) - The replica's services row as cached. (importers: one)
 - [wasm-service-models.js](wasm-service-models.js) - Column name constants for service_definitions table. (importers: hub)
 - [wasm-service-replica-lifecycle.js](wasm-service-replica-lifecycle.js) - Join a later failure to the failure custody already owed. (importers: few)
 - [wasm-service-replica.js](wasm-service-replica.js) - WasmServiceReplica - the WASM service group's replica on its raft-rs semantic operation port (design R4 S2(b)):... (importers: many)

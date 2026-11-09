@@ -204,7 +204,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
       this.recordDispatchFailure({
         operationId,
         targetNodeId,
-        workflowStep: row.workflow_step || null,
+        workflowStep: row.workflow_step,
         skipped: true,
         reason:
           DISPATCH_READINESS_ERROR_REASON.TARGET_NODE_READINESS_REFRESH_FAILED,
@@ -231,7 +231,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
       this.recordDispatchFailure({
         operationId,
         targetNodeId,
-        workflowStep: row.workflow_step || null,
+        workflowStep: row.workflow_step,
         skipped: true,
         reason: REPLICA_DISPATCH_SERVICE_LITERAL.TARGET_NODE_NOT_READY,
         error: readinessError.message,
@@ -367,7 +367,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
         this.recordDispatchFailure({
           operationId,
           targetNodeId,
-          workflowStep: row.workflow_step || null,
+          workflowStep: row.workflow_step,
           skipped: dispatchResult?.skipped === true,
           reason:
             dispatchResult?.reason ||

@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Owner contract:
  * Owner: the post-intent admission of terminal writes of a create (quest
@@ -109,7 +110,8 @@ async function readReplaceDurableStep(owner, operation) {
       OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
     await owner.repository.queryReplicaOperationPersistenceAuthorityOperation(
       operation) : null;
-  return authoritative?.workflowStep || operation.workflowStep;
+  // The persistence authority's step, else the operation's own.
+  return readStateField(authoritative?.workflowStep, operation.workflowStep);
 }
 
 async function observeCreateTarget(owner, operation) {

@@ -502,10 +502,9 @@ class AdminControlSnapshotControlPlaneDiagnostics
       options.preferAuthoritativePublicationRead !== true &&
       observedMembershipPublication &&
       typeof observedMembershipPublication === 'object' &&
-      String(
-        observedMembershipPublication.status ||
-          ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
-      ).toUpperCase() !== ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED
+      // control_plane_publications.status is NOT NULL.
+      String(observedMembershipPublication.status).toUpperCase() !==
+        ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED
     ) {
       observedPublishedMembership =
         await this.ensurePublishedMembershipObservation(

@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OPERATION_RESERVATION_RECOVERY_OUTCOME} from
   './operation-reservation-attempt-outcome.js';
@@ -371,7 +372,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
       } catch (error) {
         if (this.deferTransitionRetry(op.operationId, error, {
           boundary: OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY,
-          workflowStep: op?.workflowStep || null,
+          workflowStep: readStateField(op?.workflowStep),
           partitionId: op?.partitionId || null,
           updatedAt: op?.updatedAt,
           createdAt: op?.createdAt,

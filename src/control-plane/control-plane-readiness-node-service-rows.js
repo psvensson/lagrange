@@ -1,3 +1,4 @@
+import {readLowerStateField, readStateField} from '../utils/state-field-read.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
 import {isAuthoritativeControlPlaneRowReadSuccessful} from
   './control-plane-system-table-gateway.js';
@@ -141,7 +142,7 @@ function getLifecycleState(service, nodeId, nodeRow) {
   if (nodeId === service.nodeId && lifecycle !== UNWIRED) {
     return lifecycle.getState();
   }
-  return nodeRow?.[COLUMN.STATUS] || null;
+  return readStateField(nodeRow?.[COLUMN.STATUS]);
 }
 
 async function getCapacitySnapshot(service, nodeId, _nodeRow) {
@@ -179,7 +180,7 @@ function hasRoutableService(service, serviceRows) {
   }
   return serviceRows.some((serviceRow) => {
     return (
-      String(serviceRow?.[COLUMN.STATUS] || LOCAL_STR_EMPTY).toLowerCase() ===
+      readLowerStateField(serviceRow?.[COLUMN.STATUS]) ===
         SERVICE_STATUS.ACTIVE &&
       service.hasAddressedService(serviceRow)
     );
@@ -219,7 +220,7 @@ function hasActiveAddressedMessageGroupService(service, serviceRows) {
   return serviceRows.some((serviceRow) => {
     return (
       serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
-      String(serviceRow?.[COLUMN.STATUS] || LOCAL_STR_EMPTY).toLowerCase() ===
+      readLowerStateField(serviceRow?.[COLUMN.STATUS]) ===
         SERVICE_STATUS.ACTIVE &&
       service.hasAddressedService(serviceRow)
     );
@@ -268,7 +269,7 @@ function hasAddressedMessageGroupServiceWithStatuses(service, serviceRows, allow
     return (
       serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
       allowedStatuses.includes(
-        String(serviceRow?.[COLUMN.STATUS] || LOCAL_STR_EMPTY).toLowerCase(),
+        readLowerStateField(serviceRow?.[COLUMN.STATUS]),
       ) &&
       service.hasAddressedService(serviceRow)
     );
@@ -279,7 +280,7 @@ function hasActiveAddressedNonMessageGroupService(service, serviceRows) {
   return serviceRows.some((serviceRow) => {
     return (
       serviceRow?.[COLUMN.SERVICE_TYPE] !== SERVICE_TYPE.MESSAGE_GROUP &&
-      String(serviceRow?.[COLUMN.STATUS] || LOCAL_STR_EMPTY).toLowerCase() ===
+      readLowerStateField(serviceRow?.[COLUMN.STATUS]) ===
         SERVICE_STATUS.ACTIVE &&
       service.hasAddressedService(serviceRow)
     );

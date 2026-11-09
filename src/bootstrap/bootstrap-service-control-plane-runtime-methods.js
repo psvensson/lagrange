@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {NodeService} from '../node/node-service.js';
 import {replicaConsensusEventsOf} from '../node/replica-handler-membership-relay.js';
 import {
@@ -105,7 +106,7 @@ function assertSeedReadyPublicationContract(service) {
   if (!isSeedRowReadyInCache(seedNodeRow)) {
     throw new Error(
       `${SEED_READY_CONTRACT_ERROR_PREFIX}: nodeId=${service.nodeId} ` +
-      `status=${seedNodeRow?.[COLUMN.STATUS] ?? null} ` +
+      `status=${readStateField(seedNodeRow?.[COLUMN.STATUS])} ` +
       `connectionState=${seedNodeRow?.[COLUMN.CONNECTION_STATE] ?? null}`,
     );
   }

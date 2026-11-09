@@ -337,12 +337,10 @@ function frozenInFlightAddLikeReplicaIds(operationRows, local) {
       operationRow?.partition_id === local.partitionId &&
         FROZEN_ADD_LIKE_TYPES.has(operationRow?.type) &&
         !FROZEN_TERMINAL_STATUSES.includes(
-          String(
-            operationRow?.status ??
-              operationRow?.operation_status ??
-              operationRow?.operationStatus ??
-              FROZEN_EMPTY,
-          ).toLowerCase(),
+          // Quest state-read-named-defaults: replica_operations.status is the
+          // one status field (NOT NULL); the operation_status/operationStatus
+          // spellings had no producer and were deleted from main.
+          String(operationRow?.status).toLowerCase(),
         )
     );
   });
@@ -393,8 +391,7 @@ function buildRandomOperationRow(random, host, partitionId) {
     target_node_id: pick(
       [host.LEARNER_NODE_ID, 'node-9', '', undefined]),
   };
-  const statusField = pick(['status', 'operation_status', 'operationStatus']);
-  row[statusField] = pick([
+  row.status = pick([
     'in_progress', 'pending', 'syncing', 'completed', 'COMPLETED',
     'failed', 'removed', 'cancelled', undefined,
   ]);

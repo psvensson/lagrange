@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {
   CREATE_ADMISSION_ERROR_CODE,
   CREATE_ADMISSION_STATE,
@@ -23,7 +24,7 @@ async function recoverRetainedCreateAdmissionRow(
     const evidence = await owner.takeoverRetained(row);
     if (!evidence) return;
     const reconciled = await reconcileLifecycle(handler, evidence);
-    const lifecycleStatus = reconciled.row?.status || null;
+    const lifecycleStatus = readStateField(reconciled.row?.status);
     if (lifecycleStatus === ReplicaStatus.ACTIVE ||
         lifecycleStatus === ReplicaStatus.FAILED) {
       const settledState = lifecycleStatus === ReplicaStatus.ACTIVE ?

@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
   COORDINATOR_CREATED_REMOTE_HANDOFF_MODE,
@@ -706,7 +707,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         failureState === EXECUTOR_FAILURE_RECONCILE_STATE.DEFER_RETRY &&
         this.deferTransitionRetry(operationId, errorLike, {
           boundary: OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTOR_OUTCOME,
-          workflowStep: operation?.workflowStep || null,
+          workflowStep: readStateField(operation?.workflowStep),
           partitionId: operation?.partitionId || null,
           updatedAt: operation?.updatedAt,
           createdAt: operation?.createdAt,

@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {NUM, TIME_MS} from '../constants/index.js';
 import {LIFECYCLE_EVENT, LIFECYCLE_PHASE} from './lifecycle-controller-constants.js';
 import {LIFECYCLE_REASON} from './lifecycle-controller-constants.js';
@@ -60,7 +61,7 @@ function reportLifecycleReadinessSpent(options, spent) {
     elapsedMs: spent.now() - spent.startedAtMs,
     lastObserved: {
       attempts: spent.attempt,
-      phase: snapshot.phase ?? null,
+      phase: readStateField(snapshot.phase),
       ready: snapshot.ready ?? null,
       reasons: Array.isArray(snapshot.reasons) ? snapshot.reasons : [],
       retryAfterMs: snapshot.retryAfterMs ?? null,
@@ -176,9 +177,7 @@ function isMetadataPublicationReady(readinessState) {
 }
 
 function buildLifecycleReadinessNotReadyError(snapshot, options = {}) {
-  const phase = typeof snapshot?.phase === 'string' ?
-    snapshot.phase :
-    null;
+  const phase = readStateField(snapshot?.phase);
   const label =
     typeof options.label === 'string' &&
     options.label.length > 0 ?

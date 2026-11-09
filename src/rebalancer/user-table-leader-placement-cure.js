@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 /**
  * User-table leader-placement cure — the single owner of the
@@ -373,7 +374,7 @@ function buildHandoffResponseLogContext(rebalancer, response, extra) {
     entityId: rebalancer.entityId,
     handoffBranch: response?.handoffBranch || null,
     handoffTrackedRole: response?.handoffTrackedRole || null,
-    responseStatus: response?.status || null,
+    responseStatus: readStateField(response?.status),
     ...extra,
   };
 }

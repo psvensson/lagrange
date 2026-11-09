@@ -13,6 +13,7 @@
  * observation.
  */
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {readStateField} from '../utils/state-field-read.js';
 import {
   ReplaceWitnessDeliveryOutcome,
   ReplicaOperationField,
@@ -197,10 +198,10 @@ async function readReplaceWitnessMembership(owner, operation, member = null) {
   const delivery = await deliverToReplaceWitness(
     owner, operation, ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP,
     member);
-  const {response, reason} = delivery;
+  const {response} = delivery;
   const membership = response?.[ReplicaOperationField.MEMBERSHIP];
   if (!isCompletedReplicaOperationAnswer(response) || !membership) {
-    return unavailableWitness(reason || response?.status || null, delivery);
+    return unavailableWitness(deliveryUnavailableReason(delivery), delivery);
   }
   const canonical = canonicalReplaceMembershipObservation(membership, {
     replicaId: readReplicaId,
@@ -210,8 +211,32 @@ async function readReplaceWitnessMembership(owner, operation, member = null) {
     COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE, delivery);
 }
 
+/**
+ * The status a replica's answer names, or STATE_ABSENT.
+ * @param {Object|null|undefined} response - the replica's answer
+ * @return {string|null}
+ */
+function replaceAnswerStatus(response) {
+  return readStateField(response?.status);
+}
+
+/**
+ * Why a witness delivery yielded no completed answer: a delivered answer
+ * names its own status; every other delivery outcome carries its reason
+ * (classifyReplaceWitnessResponse, classifyReplaceWitnessError).
+ * @param {Object} delivery - a deliverToReplaceWitness result
+ * @return {string|null}
+ */
+function deliveryUnavailableReason(delivery) {
+  return delivery.outcome === ReplaceWitnessDeliveryOutcome.DELIVERED ?
+    replaceAnswerStatus(delivery.response) :
+    delivery.reason;
+}
+
 export {
   deliverToReplaceWitness,
+  deliveryUnavailableReason,
+  replaceAnswerStatus,
   readReplaceWitnessMembership,
   replaceReplicaIdsOf,
 };

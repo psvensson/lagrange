@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * The inputs of the learner-side count check, and how the guard states them.
  *
@@ -73,7 +74,7 @@ class PartitionServiceLearnerPromotionCountCheckMethods {
     const draining = readinessSnapshot?.draining === true;
     return Object.freeze({
       snapshotPresent: Boolean(readinessSnapshot),
-      phase: readinessSnapshot?.phase ?? null,
+      phase: readStateField(readinessSnapshot?.phase),
       reasons,
       draining,
       recoveryPending:

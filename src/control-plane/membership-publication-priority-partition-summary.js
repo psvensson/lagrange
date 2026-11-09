@@ -396,6 +396,9 @@ function buildCanonicalPartitionRowByPartitionId(partitionRows) {
   return partitionRowByPartitionId;
 }
 
+// The census decoder yields '' for a row without a status column value.
+const SERVICE_STATUS_ABSENT_EXCLUSION_REASON = 'status_missing';
+
 /**
  * CL-021 witness: name WHY a priority service row is excluded from the
  * spread-ready count. The mode=load wedge presented as
@@ -412,8 +415,11 @@ function resolvePrioritySpreadReplicaExclusionReason(normalizedService) {
   if (normalizedService.serviceType !== SERVICE_TYPE.PARTITION) {
     return 'not_partition_service';
   }
+  if (normalizedService.status === '') {
+    return SERVICE_STATUS_ABSENT_EXCLUSION_REASON;
+  }
   if (normalizedService.status !== SERVICE_STATUS.ACTIVE) {
-    return `status_${normalizedService.status || 'missing'}`;
+    return `status_${normalizedService.status}`;
   }
   if (!normalizedService.raftRole) {
     return 'raft_role_missing';

@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Lease-freshness and publication-fence resolution for the operation
  * workflow owner ports (verified-audit findings 15+18, quest
@@ -96,7 +97,7 @@ function basisPrefixDiverges(persistedHistory, durableHistory, basisCount) {
     index += 1
   ) {
     if (resolveTransitionStep(persistedHistory[index]) !==
-        (durableHistory[index]?.step ?? null)) {
+        readStateField(durableHistory[index]?.step)) {
       return true;
     }
   }

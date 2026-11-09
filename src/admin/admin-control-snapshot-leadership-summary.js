@@ -11,6 +11,7 @@
  * admin-helpers.js.
  */
 import {COLUMN, TABLES} from '../constants/index.js';
+import {readUpperStateField} from '../utils/state-field-read.js';
 import {isLoadReadyReplicaRaftRole} from '../node/replica-state-machine-constants.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {
@@ -212,12 +213,10 @@ function isPostPublicationPriorityRecoveryClosed(
     typeof controlPlaneDiagnostics.publicationConvergence === 'object' ?
       controlPlaneDiagnostics.publicationConvergence :
       controlPlaneDiagnostics;
-  const publicationStatus = String(
-    publicationConvergence?.publicationStatus ||
-      publicationConvergence?.status ||
-      publicationConvergence?.publicationObservation?.status ||
-      ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
-  ).toUpperCase();
+  // The convergence owners set publicationStatus whenever a publication is
+  // observed; none is STATE_ABSENT, never PUBLISHED.
+  const publicationStatus =
+    readUpperStateField(publicationConvergence?.publicationStatus);
   const priorityPartitionSummary =
     publicationConvergence?.priorityPartitionSummary &&
     typeof publicationConvergence.priorityPartitionSummary === 'object' ?

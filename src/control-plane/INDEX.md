@@ -264,6 +264,6 @@ documentClass: generated
 - [startup-authority-snapshot-contract.js](startup-authority-snapshot-contract.js) - No leading comment; first export: STARTUP_AUTHORITY_ADMISSION_STATE. (importers: one)
 - [startup-authority-snapshot-owner.js](startup-authority-snapshot-owner.js) - No leading comment; first export: STARTUP_AUTHORITY_ADMISSION_STATE. (importers: many)
 - [system-metadata-access-error.js](system-metadata-access-error.js) - No leading comment; first export: SYSTEM_METADATA_ACCESS_ERROR_CODE. (importers: many)
-- [system-row-normalizers.js](system-row-normalizers.js) - No leading comment; first export: canonicalizeSystemTableRow. (importers: hub)
+- [system-row-normalizers.js](system-row-normalizers.js) - The publication status of a membership-publication record in either of its two owned shapes: publication... (importers: hub)
 - [timeout-budget.js](timeout-budget.js) - No leading comment; first export: CONTROL_PLANE_TIMEOUT_DEFAULT. (importers: hub)
 - [topology-operator-witness.js](topology-operator-witness.js) - No leading comment; first export: TOPOLOGY_OPERATOR_WITNESS_CURRENT_STEP_STATE. (importers: few)

@@ -13,7 +13,10 @@
  *
  * state_read_defaults counts one site per state-read TERM of a maximal
  * `||`/`??` chain that has a term after it (any position); its site is the
- * term. row_field_alias_reads counts one site per ADJACENT PAIR of chain
+ * term. It also counts the same default written as a conditional: a branch
+ * of `test ? a : b` that is a state read, when the test reads a state field
+ * (`typeof r.status === 'string' ? r.status : null`, `r.step === undefined
+ * ? null : r.step`); its site is the branch. row_field_alias_reads counts one site per ADJACENT PAIR of chain
  * terms reading one field of one object (structural object key) in two
  * spellings that normalise equal; its site spans the pair. Both flatten
  * chains with the one shared fallbackChainTerms.
@@ -309,13 +312,38 @@ function stateReadName(member) {
   return STATE_PROPERTIES.has(field) ? field : undefined;
 }
 
+// Whether a node is, or contains, a state-field read.
+function readsStateField(node) {
+  let found = false;
+  walkNodes(node, (child) => {
+    if (!found && child.type === NODE.MEMBER && stateReadName(child)) found = true;
+  });
+  return found;
+}
+
+// The state-read branches of a conditional whose test reads a state field:
+// the reader's absent-or-present decision written inline at the use site.
+function conditionalStateDefaultSites(node, parsed, sites) {
+  if (!readsStateField(node.test)) return;
+  for (const branch of [node.consequent, node.alternate]) {
+    const member = memberOf(branch);
+    const name = member && stateReadName(member);
+    if (name) sites.push(makeSite(parsed, ROW.STATE_DEFAULTS, branch, name));
+  }
+}
+
 // Counted once per state-read TERM of a `||`/`??` chain that has a term
 // after it (a default), at any position: `x || row.status || d` counts
 // `row.status`; a state read in last position is the default, not
-// defaulted.
+// defaulted. Counted once per state-read branch of a conditional whose test
+// reads a state field: `typeof row.status === 'string' ? row.status : d`.
 const stateReadDefaults = Object.freeze({
   row: ROW.STATE_DEFAULTS,
   visit(node, parent, parsed, sites) {
+    if (node.type === NODE_TYPE.CONDITIONAL) {
+      conditionalStateDefaultSites(node, parsed, sites);
+      return;
+    }
     const terms = fallbackChainTerms(node, parent);
     if (!terms) return;
     for (let index = 0; index + 1 < terms.length; index += 1) {

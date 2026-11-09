@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 
 const LOCAL_STR_STRING = 'string';
@@ -17,7 +18,7 @@ class SQLQueryEngineProvisioningMethods {
   ) {
     const currentServices = this.getPartitionServiceRows(partitionId);
     const currentLeaderService = currentServices.find(
-      (service) => String(service?.raft_role || '').toLowerCase() === 'leader',
+      (service) => readLowerStateField(service?.raft_role) === 'leader',
     );
     const currentLeaderNodeId =
       currentLeaderService?.node_id || currentLeaderService?.nodeId || null;

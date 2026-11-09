@@ -1,3 +1,5 @@
+import {STATE_ABSENT} from '../utils/state-field-read.js';
+import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
@@ -336,14 +338,10 @@ function arePriorityPartitionAddBudgetOperationsPastWorkflowTimeout(
 }
 
 function isAddBudgetOperationPastWorkflowTimeout(coordinator, operation = null) {
-  const workflowStep = String(
-    operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.WORKFLOW_STEP] ||
-      operation?.[
-        REBALANCE_COORDINATOR_OPERATION_FIELD.WORKFLOW_STEP_SNAKE
-      ] ||
-      '',
-  ).trim();
-  if (workflowStep.length === 0) {
+  // Decoded operations and raw replica_operations rows both reach here (the
+  // same function reads partition_id/updated_at): the one shape reader decides.
+  const workflowStep = readOperationRecordWorkflowStep(operation);
+  if (workflowStep === STATE_ABSENT) {
     return false;
   }
   const operationId = operation?.operationId || operation?.operation_id;

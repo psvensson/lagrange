@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {
   buildProjectionReadinessState,
 } from '../control-plane/projection-readiness-state.js';
@@ -258,8 +259,7 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
           .filter(
             (entry) =>
               entry.nodeId &&
-              String(entry.status || EMPTY_STRING).toLowerCase() ===
-                STATUS_ACTIVE,
+              readLowerStateField(entry.status) === STATUS_ACTIVE,
           )
           .map((entry) => entry.nodeId),
       );

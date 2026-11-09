@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {
   phaseChange,
   refusedStepAs,
@@ -370,7 +371,7 @@ class ManagedSplitWorkflowExecutionGateMethods {
         QUERY_ERROR_MSG.TABLE_SPLIT_WORKFLOW_NOT_FOUND,
       );
     }
-    const ackStatus = String(ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '');
+    const ackStatus = readStateField(ack?.[PARTICIPANT_ACK_FIELD.STATUS]);
     const ackResult = await acknowledgeSourceStartAtRecordTurn(
       this.workflowCoordinator, workflowId, ack, startContext, ackStatus,
       SPLIT_ACK_STATUS.SNAPSHOT_STARTED, splitStartAuthorization);

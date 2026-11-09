@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Semantic admin operations over the authoritative system-table owners.
  *
@@ -251,7 +252,7 @@ class AdminOwnerOperations {
       });
       return applied({
         nodeId,
-        phase: snapshot?.phase || null,
+        phase: readStateField(snapshot?.phase),
         reasons: Array.isArray(snapshot?.reasons) ? snapshot.reasons : [],
       });
     } catch (error) {

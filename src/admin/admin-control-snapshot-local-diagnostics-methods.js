@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
@@ -440,7 +441,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
           replicasByPartitionId[partitionId] || ADMIN_CACHE_DUMP.EMPTY;
         const activeReplicaCount = replicas.filter(
           (replica) =>
-            String(replica?.status || '').toLowerCase() === STATUS_ACTIVE,
+            readLowerStateField(replica?.status) === STATUS_ACTIVE,
         ).length;
         partitionsById[partitionId] = {
           partitionId,

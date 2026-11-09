@@ -560,7 +560,7 @@ function assignAdminServiceDiscoveryReplicaReadinessMethods(
         detail:
           reasonDetail +
           SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR +
-          String(normalizedOperation.workflowStep || EMPTY_STRING) +
+          normalizedOperation.workflowStep +
           SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR +
           LOCAL_STR_AGEMS +
           String(normalizedOperation.ageMs) +

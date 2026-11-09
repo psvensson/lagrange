@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Control-Plane Invariant Engine — evaluates a canonical set of
  * control-plane correctness invariants against a state snapshot.
@@ -517,7 +518,7 @@ function checkSplitResumeCompleteness(state) {
     if (missingFields.length > 0) {
       violations.push(Object.freeze({
         workflowId: typeof workflowId === LOCAL_STR_STRING ? workflowId : null,
-        status: typeof entry?.status === LOCAL_STR_STRING ? entry.status : null,
+        status: readStateField(entry?.status),
         missingFields: Object.freeze(missingFields),
       }));
     }

@@ -1,3 +1,4 @@
+import {readUpperStateField} from '../utils/state-field-read.js';
 import {
   buildActiveMembershipSnapshot,
   buildReadinessByNodeId,
@@ -106,7 +107,8 @@ function shouldAllowRecoveryEligibleProjection(options = {}, helperFns = {}) {
     options.latestPublishedPublicationRow,
   );
   const latestVisiblePublicationRow = latestPublicationRow || latestPublishedPublicationRow;
-  const latestPublicationStatus = String(latestVisiblePublicationRow?.status || '').toUpperCase();
+  const latestPublicationStatus =
+    readUpperStateField(latestVisiblePublicationRow?.status);
   if (
     !latestVisiblePublicationRow ||
     latestPublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.ABANDONED ||
@@ -176,7 +178,8 @@ function shouldPreferAuthoritativeMembershipState(options = {}, helperFns = {}) 
     if (!row || typeof row !== 'object') {
       return false;
     }
-    const publicationStatus = String(row.status || '').toUpperCase();
+    // control_plane_publications.status is NOT NULL; the decoder keeps it.
+    const publicationStatus = String(row.status).toUpperCase();
     if (publicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED) {
       return (
         hasPriorityRecoverySpreadGap(row.priorityPartitionSummary) ||
@@ -205,9 +208,10 @@ function resolveCandidatePublicationStatus(options = {}) {
   if (options.changed === true) {
     return MEMBERSHIP_PUBLICATION_STATUS.OPEN;
   }
-  return String(
-    options.latestPublicationRow?.status || MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
-  ).toUpperCase();
+  // An unchanged candidate restates the latest row's status: a candidate
+  // with no latest row is always changed (OPEN above), and
+  // control_plane_publications.status is NOT NULL.
+  return String(options.latestPublicationRow.status).toUpperCase();
 }
 
 function resolveCandidatePublicationLifecycleState(publicationStatus) {
@@ -257,7 +261,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   const latestPublishedPublicationRow = helperFns.normalizeLatestPublicationRow(
     planningSnapshot.latestPublishedPublicationRow,
   );
-  const latestPublicationStatus = String(latestPublicationRow?.status || '').toUpperCase();
+  const latestPublicationStatus = readUpperStateField(latestPublicationRow?.status);
   const carryForwardLatestPublicationBaseline =
     latestPublicationRow &&
     latestPublicationStatus !== MEMBERSHIP_PUBLICATION_STATUS.ABANDONED &&

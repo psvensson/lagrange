@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
   classifySystemPartition,
@@ -243,7 +244,7 @@ function createRoleMutationHelper(owner) {
         TABLES.SERVICES,
         owner.replicaId,
       );
-      return cached?.raft_role || null;
+      return readStateField(cached?.raft_role);
     },
     isWriteReady: () => owner.isServicesLeaderAvailable(),
     systemTableCache: owner.systemTableCache,

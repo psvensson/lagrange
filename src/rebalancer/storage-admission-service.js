@@ -566,7 +566,7 @@ class StorageAdmissionService {
     }
 
     return Object.freeze({
-      status: nodeRow.status ?? null,
+      status: nodeRow.status,
       connectionState: nodeRow.connection_state ?? nodeRow.connectionState ?? null,
       lastHeartbeat: nodeRow.last_heartbeat ?? nodeRow.lastHeartbeat ?? null,
       readyLeaseExpiresAt: nodeRow.ready_lease_expires_at ?? nodeRow.readyLeaseExpiresAt ?? null,

@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {
   NodeJoiningReadySignalReadiness,
@@ -89,11 +90,7 @@ function buildSeedContactFailureDiagnostics(error) {
       bootstrapResponse.code.length > 0 ?
         bootstrapResponse.code :
         null,
-    bootstrapResponsePhase:
-      typeof bootstrapResponse?.phase === 'string' &&
-      bootstrapResponse.phase.length > 0 ?
-        bootstrapResponse.phase :
-        null,
+    bootstrapResponsePhase: readStateField(bootstrapResponse?.phase),
     bootstrapResponseState:
       typeof bootstrapResponse?.state === 'string' &&
       bootstrapResponse.state.length > 0 ?
@@ -626,7 +623,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
       failureMessage.startsWith(bootstrapNotReadyPrefix);
   }
   resolveRetryableJoinResumeFailureProfile(error, failureResult) {
-    const phase = failureResult?.phase || this.getPhase();
+    // The failure record (handleJoiningFailure) owns the phase that failed;
+    // after it the join's own phase is FAILED, so it is never substituted.
+    const phase = readStateField(failureResult?.phase);
     if (
       phase === JoiningPhase.CONTACTING_SEED &&
       this.isRetryableJoinResumeBootstrapNotReadyFailure(error, failureResult)
@@ -706,7 +705,7 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
         failureProfile,
         exhaustionReason:
           RETRYABLE_JOIN_RESUME_STOP_REASON.ELAPSED_BUDGET_EXHAUSTED,
-        phase: failureResult?.phase || this.getPhase(),
+        phase: readStateField(failureResult?.phase),
         error: failureResult?.error || error?.message || null,
       });
       return {
@@ -730,7 +729,7 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
         failureProfile,
         exhaustionReason:
           RETRYABLE_JOIN_RESUME_STOP_REASON.ATTEMPT_BUDGET_EXHAUSTED,
-        phase: failureResult?.phase || this.getPhase(),
+        phase: readStateField(failureResult?.phase),
         error: failureResult?.error || error?.message || null,
       });
       return {

@@ -25,6 +25,7 @@ import {
 import {
   pickProjectionReadinessEvidenceSource,
 } from './projection-readiness-evidence-source.js';
+import {readPublicationRecordStatus} from './system-row-normalizers.js';
 
 const ArrayConstructor = Array;
 const arrayIsArray = Array.isArray;
@@ -382,8 +383,7 @@ function buildProjectionPublicationOwnerStreamFromSource(source = null) {
     source.publicationEpoch ??
     publicationRecoveryGate.publicationEpoch;
   const publicationStatus =
-    source.publicationStatus ??
-    source.status ??
+    readPublicationRecordStatus(source) ??
     publicationRecoveryGate.publicationStatus;
   return buildPublicationOwnerStreamState({
     publicationRevision: publicationEpoch,

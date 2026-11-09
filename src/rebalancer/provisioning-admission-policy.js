@@ -372,7 +372,7 @@ class ProvisioningAdmissionPolicy {
           nodeSummary: firstIneligibleNode.nodeSummary &&
             typeof firstIneligibleNode.nodeSummary === LOCAL_STR_OBJECT ?
             {
-              status: firstIneligibleNode.nodeSummary.status ?? null,
+              status: firstIneligibleNode.nodeSummary.status,
               connectionState:
                 firstIneligibleNode.nodeSummary.connectionState ??
                 null,

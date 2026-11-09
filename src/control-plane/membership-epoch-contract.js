@@ -1,3 +1,4 @@
+import {readUpperStateField} from '../utils/state-field-read.js';
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from './publication-owner-constants.js';
@@ -282,7 +283,7 @@ function readPublicationRowEpochValue(row) {
 }
 
 function isPublishedPublicationRow(row) {
-  return String(row?.status ?? MEMBERSHIP_EPOCH_EMPTY_TEXT).toUpperCase() ===
+  return readUpperStateField(row?.status) ===
     CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
 }
 

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-08T12:15:36.618Z",
-  "rawViolationCount": 1789,
+  "generatedAt": "2026-11-08T21:59:26.557Z",
+  "rawViolationCount": 1691,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -14,36 +14,9 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 506,
-      "column": 8,
-      "functionName": "buildControlPlaneDiagnosticsSnapshot",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 634,
+      "line": 633,
       "column": 6,
       "functionName": "buildControlPlaneDiagnosticsSnapshot",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/admin/admin-control-snapshot-leadership-summary.js",
-      "line": 216,
-      "column": 4,
-      "functionName": "isPostPublicationPriorityRecoveryClosed",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/admin/admin-control-snapshot-local-build-base.js",
-      "line": 201,
-      "column": 4,
-      "functionName": "hasDurablePublishedMembershipObservation",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -77,7 +50,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
-      "line": 440,
+      "line": 441,
       "column": 10,
       "functionName": "buildLocalPartitionDiagnostics",
       "kind": "two_source_fallback_reads",
@@ -85,35 +58,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
-      "line": 726,
-      "column": 8,
-      "functionName": "ensurePublishedMembershipObservation",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/admin/admin-control-snapshot-node-view-projection.js",
-      "line": 249,
-      "column": 4,
-      "functionName": "hasDurablePublishedMembershipObservation",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/admin/admin-control-snapshot-node-view-projection.js",
-      "line": 278,
-      "column": 4,
-      "functionName": "buildControlSnapshotPublicationOwnerTruthEvidence",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/admin/admin-control-snapshot-node-view-projection.js",
-      "line": 560,
+      "line": 558,
       "column": 8,
       "functionName": "resolvePublicationActiveGateHandoffContract",
       "kind": "two_source_fallback_reads",
@@ -122,7 +68,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-node-view-projection.js",
-      "line": 564,
+      "line": 562,
       "column": 8,
       "functionName": "resolvePublicationActiveGateHandoffContract",
       "kind": "two_source_fallback_reads",
@@ -131,7 +77,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-node-view-projection.js",
-      "line": 573,
+      "line": 571,
       "column": 8,
       "functionName": "resolveActiveGateOwnerCohortSnapshot",
       "kind": "two_source_fallback_reads",
@@ -140,7 +86,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-node-view-projection.js",
-      "line": 584,
+      "line": 582,
       "column": 8,
       "functionName": "resolveActiveGateOwnerCohortSnapshot",
       "kind": "two_source_fallback_reads",
@@ -149,7 +95,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-node-view-projection.js",
-      "line": 588,
+      "line": 586,
       "column": 8,
       "functionName": "resolveActiveGateOwnerCohortSnapshot",
       "kind": "two_source_fallback_reads",
@@ -158,7 +104,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-node-view-projection.js",
-      "line": 704,
+      "line": 702,
       "column": 8,
       "functionName": "evaluateAuthoritativeControlSnapshotRepair",
       "kind": "two_source_fallback_reads",
@@ -211,17 +157,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/admin/admin-control-snapshot.js",
-      "line": 258,
-      "column": 4,
-      "functionName": "hasDurablePublishedMembershipObservation",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/admin/admin-owner-operations.js",
-      "line": 125,
+      "line": 126,
       "column": 15,
       "functionName": "ownerNotReady",
       "kind": "two_source_fallback_reads",
@@ -230,7 +167,7 @@
     },
     {
       "filePath": "src/admin/admin-owner-operations.js",
-      "line": 126,
+      "line": 127,
       "column": 11,
       "functionName": "ownerNotReady",
       "kind": "two_source_fallback_reads",
@@ -464,7 +401,7 @@
     },
     {
       "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 102,
+      "line": 103,
       "column": 13,
       "functionName": "startRun",
       "kind": "two_source_fallback_reads",
@@ -473,25 +410,7 @@
     },
     {
       "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 331,
-      "column": 13,
-      "functionName": "buildProgressPayload",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 351,
-      "column": 13,
-      "functionName": "updateRunProgress",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 352,
+      "line": 356,
       "column": 15,
       "functionName": "updateRunProgress",
       "kind": "two_source_fallback_reads",
@@ -500,7 +419,7 @@
     },
     {
       "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 353,
+      "line": 357,
       "column": 15,
       "functionName": "updateRunProgress",
       "kind": "two_source_fallback_reads",
@@ -509,7 +428,7 @@
     },
     {
       "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 476,
+      "line": 480,
       "column": 31,
       "functionName": "finalizeRun",
       "kind": "two_source_fallback_reads",
@@ -518,17 +437,8 @@
     },
     {
       "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 479,
+      "line": 483,
       "column": 30,
-      "functionName": "finalizeRun",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 482,
-      "column": 28,
       "functionName": "finalizeRun",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -537,33 +447,6 @@
     {
       "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
       "line": 486,
-      "column": 29,
-      "functionName": "finalizeRun",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 489,
-      "column": 30,
-      "functionName": "finalizeRun",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 492,
-      "column": 32,
-      "functionName": "finalizeRun",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 495,
       "column": 28,
       "functionName": "finalizeRun",
       "kind": "two_source_fallback_reads",
@@ -572,7 +455,7 @@
     },
     {
       "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 498,
+      "line": 490,
       "column": 29,
       "functionName": "finalizeRun",
       "kind": "two_source_fallback_reads",
@@ -581,8 +464,8 @@
     },
     {
       "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 501,
-      "column": 31,
+      "line": 493,
+      "column": 30,
       "functionName": "finalizeRun",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -590,8 +473,26 @@
     },
     {
       "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 504,
-      "column": 18,
+      "line": 496,
+      "column": 32,
+      "functionName": "finalizeRun",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
+      "line": 499,
+      "column": 28,
+      "functionName": "finalizeRun",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
+      "line": 502,
+      "column": 29,
       "functionName": "finalizeRun",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -600,15 +501,6 @@
     {
       "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
       "line": 505,
-      "column": 26,
-      "functionName": "finalizeRun",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 508,
       "column": 31,
       "functionName": "finalizeRun",
       "kind": "two_source_fallback_reads",
@@ -617,7 +509,34 @@
     },
     {
       "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
-      "line": 511,
+      "line": 508,
+      "column": 18,
+      "functionName": "finalizeRun",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
+      "line": 509,
+      "column": 26,
+      "functionName": "finalizeRun",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
+      "line": 512,
+      "column": 31,
+      "functionName": "finalizeRun",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/admin/admin-test-run-lifecycle-methods.js",
+      "line": 515,
       "column": 30,
       "functionName": "finalizeRun",
       "kind": "two_source_fallback_reads",
@@ -634,17 +553,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/admin/admin-test-run-progress.js",
-      "line": 162,
-      "column": 11,
-      "functionName": "inferProgressFromLog",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/admin/admin-test-run-report.js",
-      "line": 172,
+      "line": 173,
       "column": 20,
       "functionName": "extractReportSummary",
       "kind": "two_source_fallback_reads",
@@ -832,42 +742,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/bootstrap/bootstrap-api-registration-methods.js",
-      "line": 94,
-      "column": 26,
-      "functionName": "buildExpectedRegisteredServiceData",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/bootstrap-api-registration-methods.js",
-      "line": 95,
-      "column": 23,
-      "functionName": "buildExpectedRegisteredServiceData",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/bootstrap-api-registration-methods.js",
-      "line": 115,
-      "column": 26,
-      "functionName": "buildRegisteredServiceMutationRow",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/bootstrap-api-registration-methods.js",
-      "line": 116,
-      "column": 23,
-      "functionName": "buildRegisteredServiceMutationRow",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/bootstrap/bootstrap-api-server-methods.js",
       "line": 277,
       "column": 10,
@@ -1004,7 +878,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
-      "line": 309,
+      "line": 310,
       "column": 16,
       "functionName": "onRetry",
       "kind": "two_source_fallback_reads",
@@ -1130,7 +1004,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-admission-readiness.js",
-      "line": 710,
+      "line": 709,
       "column": 15,
       "functionName": "resolveRetryableJoinResumeDecision",
       "kind": "two_source_fallback_reads",
@@ -1139,7 +1013,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-admission-readiness.js",
-      "line": 734,
+      "line": 733,
       "column": 15,
       "functionName": "resolveRetryableJoinResumeDecision",
       "kind": "two_source_fallback_reads",
@@ -1187,15 +1061,6 @@
       "line": 279,
       "column": 15,
       "functionName": "queryBackfillReplicaAddress",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/node-joining-backfill-merge-and-status.js",
-      "line": 781,
-      "column": 15,
-      "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -1283,7 +1148,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 390,
+      "line": 384,
       "column": 12,
       "functionName": "getBootstrapTopologySnapshotActiveNodeIds",
       "kind": "two_source_fallback_reads",
@@ -1292,7 +1157,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 399,
+      "line": 393,
       "column": 12,
       "functionName": "getBootstrapTopologySnapshotEpoch",
       "kind": "two_source_fallback_reads",
@@ -1301,7 +1166,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 472,
+      "line": 466,
       "column": 25,
       "functionName": "getWsPort",
       "kind": "two_source_fallback_reads",
@@ -1310,7 +1175,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 547,
+      "line": 541,
       "column": 25,
       "functionName": "getWsPort",
       "kind": "two_source_fallback_reads",
@@ -1363,26 +1228,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/bootstrap/owners/bootstrap-cluster-view-owner.js",
-      "line": 248,
-      "column": 11,
-      "functionName": "getClusterState",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/bootstrap/owners/bootstrap-control-plane-recovery-health.js",
-      "line": 168,
-      "column": 6,
-      "functionName": "buildPriorityControlPlaneRecoveryHealthFromDiagnostics",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/bootstrap-control-plane-recovery-health.js",
-      "line": 216,
+      "line": 215,
       "column": 16,
       "functionName": "buildPriorityControlPlaneRecoveryHealthFromDiagnostics",
       "kind": "two_source_fallback_reads",
@@ -1391,16 +1238,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-node-ready-rebalance-owner.js",
-      "line": 138,
-      "column": 8,
-      "functionName": "handleNodeReadyRebalanceTrigger",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/bootstrap-node-ready-rebalance-owner.js",
-      "line": 144,
+      "line": 149,
       "column": 8,
       "functionName": "handleNodeReadyRebalanceTrigger",
       "kind": "two_source_fallback_reads",
@@ -1454,7 +1292,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-snapshot-evaluator.js",
-      "line": 234,
+      "line": 235,
       "column": 8,
       "functionName": "evaluateReadinessSnapshotWithPriorityRecoveryHealth",
       "kind": "two_source_fallback_reads",
@@ -1463,7 +1301,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-snapshot-evaluator.js",
-      "line": 255,
+      "line": 256,
       "column": 8,
       "functionName": "evaluateReadinessSnapshotWithPriorityRecoveryHealth",
       "kind": "two_source_fallback_reads",
@@ -1480,17 +1318,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/bootstrap/owners/join-message-group-runtime-owner.js",
-      "line": 46,
-      "column": 13,
-      "functionName": "assertReplicaStartupOwnership",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 66,
+      "line": 68,
       "column": 10,
       "functionName": "sendErrorReply",
       "kind": "two_source_fallback_reads",
@@ -1499,7 +1328,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 97,
+      "line": 99,
       "column": 11,
       "functionName": "buildHealth",
       "kind": "two_source_fallback_reads",
@@ -1508,7 +1337,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 106,
+      "line": 108,
       "column": 11,
       "functionName": "buildCapacity",
       "kind": "two_source_fallback_reads",
@@ -1517,7 +1346,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 120,
+      "line": 122,
       "column": 13,
       "functionName": "buildReleaseSection",
       "kind": "two_source_fallback_reads",
@@ -1526,7 +1355,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 121,
+      "line": 123,
       "column": 20,
       "functionName": "buildReleaseSection",
       "kind": "two_source_fallback_reads",
@@ -1535,7 +1364,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 271,
+      "line": 273,
       "column": 21,
       "functionName": "getClusterSnapshot",
       "kind": "two_source_fallback_reads",
@@ -1544,7 +1373,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 399,
+      "line": 401,
       "column": 27,
       "functionName": "getClusterFacts",
       "kind": "two_source_fallback_reads",
@@ -1553,7 +1382,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/move-replica-assignment-lease-validation.js",
-      "line": 71,
+      "line": 72,
       "column": 14,
       "functionName": "validateMoveReplicaAssignmentToken",
       "kind": "two_source_fallback_reads",
@@ -1561,17 +1390,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/bootstrap/owners/move-replica-assignment-lease-validation.js",
-      "line": 176,
-      "column": 19,
-      "functionName": "renewMoveReplicaAssignmentReservation",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/bootstrap/owners/move-replica-assignment-reservation-persistence.js",
-      "line": 208,
+      "line": 209,
       "column": 10,
       "functionName": "getMoveReplicaAssignmentReservationById",
       "kind": "two_source_fallback_reads",
@@ -1579,35 +1399,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/bootstrap/owners/move-replica-assignment-reservation-persistence.js",
-      "line": 240,
-      "column": 26,
-      "functionName": "normalizeMoveReplicaAssignmentReservationRow",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/move-replica-assignment-visibility-policy.js",
-      "line": 161,
-      "column": 6,
-      "functionName": "evaluateMoveReplicaAssignmentReservationOwnership",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/bootstrap/owners/move-replica-handoff-owner.js",
-      "line": 150,
-      "column": 6,
-      "functionName": "assertSingleOwnerReplicaRegistration",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/move-replica-handoff-owner.js",
-      "line": 197,
+      "line": 195,
       "column": 6,
       "functionName": "buildMoveReplicaHandoffContext",
       "kind": "two_source_fallback_reads",
@@ -1616,7 +1409,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/move-replica-handoff-owner.js",
-      "line": 225,
+      "line": 223,
       "column": 20,
       "functionName": "buildMoveReplicaHandoffContextFromAssignment",
       "kind": "two_source_fallback_reads",
@@ -1625,16 +1418,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/move-replica-handoff-owner.js",
-      "line": 238,
-      "column": 14,
-      "functionName": "buildMoveReplicaHandoffContextFromAssignment",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/move-replica-handoff-owner.js",
-      "line": 482,
+      "line": 480,
       "column": 25,
       "functionName": "removeLocalSourceReplicaForMoveReplica",
       "kind": "two_source_fallback_reads",
@@ -2093,7 +1877,7 @@
     },
     {
       "filePath": "src/bootstrap/startup-recovery-coordinator.js",
-      "line": 323,
+      "line": 324,
       "column": 4,
       "functionName": "normalizeStartupAuthoritySnapshot",
       "kind": "two_source_fallback_reads",
@@ -2102,7 +1886,7 @@
     },
     {
       "filePath": "src/bootstrap/startup-recovery-coordinator.js",
-      "line": 326,
+      "line": 327,
       "column": 4,
       "functionName": "normalizeStartupAuthoritySnapshot",
       "kind": "two_source_fallback_reads",
@@ -2111,7 +1895,7 @@
     },
     {
       "filePath": "src/bootstrap/startup-recovery-coordinator.js",
-      "line": 389,
+      "line": 390,
       "column": 8,
       "functionName": "evaluate",
       "kind": "two_source_fallback_reads",
@@ -2120,7 +1904,7 @@
     },
     {
       "filePath": "src/bootstrap/startup-recovery-coordinator.js",
-      "line": 393,
+      "line": 394,
       "column": 6,
       "functionName": "evaluate",
       "kind": "two_source_fallback_reads",
@@ -2138,7 +1922,7 @@
     },
     {
       "filePath": "src/bootstrap/traffic-readiness-utils.js",
-      "line": 58,
+      "line": 59,
       "column": 8,
       "functionName": "reportLifecycleReadinessSpent",
       "kind": "two_source_fallback_reads",
@@ -2255,7 +2039,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-local-system-table-routing.js",
-      "line": 159,
+      "line": 157,
       "column": 4,
       "functionName": "resolvePartitionServicesForTable",
       "kind": "two_source_fallback_reads",
@@ -2452,15 +2236,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/cli/core/remote-cache-service-rows.js",
-      "line": 260,
-      "column": 9,
-      "functionName": "resolveRuntimeStatus",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/cli/service-lifecycle-sql-client.js",
       "line": 52,
       "column": 23,
@@ -2534,35 +2309,8 @@
     },
     {
       "filePath": "src/cli/views/logical-services-view.js",
-      "line": 89,
-      "column": 6,
-      "functionName": "formatRow",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cli/views/logical-services-view.js",
-      "line": 106,
-      "column": 19,
-      "functionName": "getRowStatus",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cli/views/logical-services-view.js",
-      "line": 203,
+      "line": 207,
       "column": 46,
-      "functionName": "getSelectedDetails",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cli/views/logical-services-view.js",
-      "line": 204,
-      "column": 35,
       "functionName": "getSelectedDetails",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2678,8 +2426,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 202,
-      "column": 19,
+      "line": 203,
+      "column": 17,
       "functionName": "shouldGraceTimedOutLocalReporterFailure",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2687,8 +2435,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 475,
-      "column": 6,
+      "line": 474,
+      "column": 4,
       "functionName": "isControlPlaneRecoveryEligible",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2697,7 +2445,7 @@
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
       "line": 541,
-      "column": 10,
+      "column": 8,
       "functionName": "isPriorityControlPlaneRecoveryActive",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2706,7 +2454,7 @@
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
       "line": 546,
-      "column": 8,
+      "column": 6,
       "functionName": "isPriorityControlPlaneRecoveryActive",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2714,8 +2462,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 550,
-      "column": 8,
+      "line": 554,
+      "column": 6,
       "functionName": "isPriorityControlPlaneRecoveryActive",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2723,8 +2471,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 555,
-      "column": 8,
+      "line": 558,
+      "column": 6,
       "functionName": "isPriorityControlPlaneRecoveryActive",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2732,8 +2480,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 559,
-      "column": 8,
+      "line": 568,
+      "column": 6,
       "functionName": "isPriorityControlPlaneRecoveryActive",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2741,8 +2489,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 569,
-      "column": 8,
+      "line": 572,
+      "column": 6,
       "functionName": "isPriorityControlPlaneRecoveryActive",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2750,8 +2498,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 573,
-      "column": 8,
+      "line": 576,
+      "column": 6,
       "functionName": "isPriorityControlPlaneRecoveryActive",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2759,8 +2507,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 577,
-      "column": 8,
+      "line": 580,
+      "column": 6,
       "functionName": "isPriorityControlPlaneRecoveryActive",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2768,8 +2516,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 581,
-      "column": 8,
+      "line": 584,
+      "column": 6,
       "functionName": "isPriorityControlPlaneRecoveryActive",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2777,8 +2525,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 585,
-      "column": 8,
+      "line": 588,
+      "column": 6,
       "functionName": "isPriorityControlPlaneRecoveryActive",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2786,17 +2534,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 589,
-      "column": 8,
-      "functionName": "isPriorityControlPlaneRecoveryActive",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 594,
-      "column": 8,
+      "line": 593,
+      "column": 6,
       "functionName": "isPriorityControlPlaneRecoveryActive",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2804,7 +2543,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-evidence-reasons.js",
-      "line": 60,
+      "line": 63,
       "column": 17,
       "functionName": "recordPriorityRecoveryTransportGrace",
       "kind": "two_source_fallback_reads",
@@ -2822,8 +2561,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
-      "line": 402,
-      "column": 8,
+      "line": 409,
+      "column": 6,
       "functionName": "hasAckDebtEvidence",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2831,17 +2570,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
-      "line": 437,
-      "column": 6,
-      "functionName": "shouldUseProvidedReadyGateForMembershipPublicationPlanningMerge",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
-      "line": 685,
-      "column": 6,
+      "line": 691,
+      "column": 4,
       "functionName": "buildPriorityRecoveryPlanningProjection",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2849,8 +2579,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
-      "line": 941,
-      "column": 10,
+      "line": 942,
+      "column": 8,
       "functionName": "buildPriorityRecoveryPlanningProjectionUntracked",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2859,7 +2589,7 @@
     {
       "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
       "line": 1045,
-      "column": 8,
+      "column": 6,
       "functionName": "buildPriorityRecoveryPlanningProjectionUntracked",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2868,7 +2598,7 @@
     {
       "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
       "line": 1048,
-      "column": 8,
+      "column": 6,
       "functionName": "buildPriorityRecoveryPlanningProjectionUntracked",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2876,8 +2606,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 75,
-      "column": 6,
+      "line": 78,
+      "column": 4,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2885,8 +2615,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 93,
-      "column": 6,
+      "line": 96,
+      "column": 4,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2894,8 +2624,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 155,
-      "column": 25,
+      "line": 158,
+      "column": 23,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2903,7 +2633,16 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 227,
+      "line": 230,
+      "column": 4,
+      "functionName": "resolveMembershipPublicationPlanningSnapshot",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "line": 254,
       "column": 6,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2912,7 +2651,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 251,
+      "line": 266,
       "column": 8,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2921,7 +2660,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 263,
+      "line": 277,
       "column": 10,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2930,8 +2669,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 274,
-      "column": 12,
+      "line": 290,
+      "column": 4,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -2939,7 +2678,16 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 287,
+      "line": 301,
+      "column": 4,
+      "functionName": "resolveMembershipPublicationPlanningSnapshot",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "line": 342,
       "column": 6,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2948,7 +2696,25 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 298,
+      "line": 358,
+      "column": 8,
+      "functionName": "resolveMembershipPublicationPlanningSnapshot",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "line": 362,
+      "column": 8,
+      "functionName": "resolveMembershipPublicationPlanningSnapshot",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "line": 367,
       "column": 6,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2957,7 +2723,34 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 339,
+      "line": 372,
+      "column": 6,
+      "functionName": "resolveMembershipPublicationPlanningSnapshot",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "line": 378,
+      "column": 6,
+      "functionName": "resolveMembershipPublicationPlanningSnapshot",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "line": 384,
+      "column": 6,
+      "functionName": "resolveMembershipPublicationPlanningSnapshot",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "line": 394,
       "column": 8,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2966,89 +2759,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 345,
-      "column": 10,
-      "functionName": "resolveMembershipPublicationPlanningSnapshot",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 351,
-      "column": 10,
-      "functionName": "resolveMembershipPublicationPlanningSnapshot",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 359,
-      "column": 10,
-      "functionName": "resolveMembershipPublicationPlanningSnapshot",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 363,
-      "column": 10,
-      "functionName": "resolveMembershipPublicationPlanningSnapshot",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 368,
-      "column": 8,
-      "functionName": "resolveMembershipPublicationPlanningSnapshot",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 373,
-      "column": 8,
-      "functionName": "resolveMembershipPublicationPlanningSnapshot",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 379,
-      "column": 8,
-      "functionName": "resolveMembershipPublicationPlanningSnapshot",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 385,
-      "column": 8,
-      "functionName": "resolveMembershipPublicationPlanningSnapshot",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 395,
-      "column": 10,
-      "functionName": "resolveMembershipPublicationPlanningSnapshot",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 399,
-      "column": 8,
+      "line": 398,
+      "column": 6,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -3056,8 +2768,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 121,
-      "column": 11,
+      "line": 134,
+      "column": 9,
       "functionName": "buildRetainedPriorityRecoveryPlanningGate",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -3065,8 +2777,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 135,
-      "column": 16,
+      "line": 139,
+      "column": 8,
       "functionName": "buildRetainedPriorityRecoveryPlanningGate",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -3074,8 +2786,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 146,
-      "column": 12,
+      "line": 149,
+      "column": 10,
       "functionName": "buildRetainedPriorityRecoveryPlanningGate",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -3083,8 +2795,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 155,
-      "column": 12,
+      "line": 158,
+      "column": 10,
       "functionName": "buildRetainedPriorityRecoveryPlanningGate",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -3092,17 +2804,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 162,
-      "column": 12,
-      "functionName": "buildRetainedPriorityRecoveryPlanningGate",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 169,
-      "column": 12,
+      "line": 165,
+      "column": 10,
       "functionName": "buildRetainedPriorityRecoveryPlanningGate",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -3111,7 +2814,7 @@
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
       "line": 172,
-      "column": 8,
+      "column": 10,
       "functionName": "buildRetainedPriorityRecoveryPlanningGate",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -3119,8 +2822,17 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 201,
-      "column": 18,
+      "line": 175,
+      "column": 6,
+      "functionName": "buildRetainedPriorityRecoveryPlanningGate",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+      "line": 204,
+      "column": 16,
       "functionName": "buildRetainedPriorityRecoveryPlanningGate",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -3146,16 +2858,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-runtime-authority-methods.js",
-      "line": 298,
-      "column": 6,
-      "functionName": "buildRuntimeAuthoritySnapshot",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-runtime-authority-methods.js",
-      "line": 302,
+      "line": 299,
       "column": 6,
       "functionName": "buildRuntimeAuthoritySnapshot",
       "kind": "two_source_fallback_reads",
@@ -3164,7 +2867,25 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
-      "line": 433,
+      "line": 420,
+      "column": 4,
+      "functionName": "buildPriorityControlPlaneRecoveryProjection",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
+      "line": 507,
+      "column": 4,
+      "functionName": "buildPriorityControlPlaneRecoveryProjection",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
+      "line": 570,
       "column": 6,
       "functionName": "buildPriorityControlPlaneRecoveryProjection",
       "kind": "two_source_fallback_reads",
@@ -3173,26 +2894,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
-      "line": 520,
+      "line": 575,
       "column": 6,
-      "functionName": "buildPriorityControlPlaneRecoveryProjection",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
-      "line": 583,
-      "column": 8,
-      "functionName": "buildPriorityControlPlaneRecoveryProjection",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
-      "line": 588,
-      "column": 8,
       "functionName": "buildPriorityControlPlaneRecoveryProjection",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -3731,7 +3434,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-active-gate-reconcile.js",
-      "line": 586,
+      "line": 587,
       "column": 6,
       "functionName": "buildActiveGateMembershipPublicationOwnerRecoveryWakeConvergence",
       "kind": "two_source_fallback_reads",
@@ -3740,7 +3443,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 74,
+      "line": 75,
       "column": 4,
       "functionName": "buildPublicationMetadataRefreshRow",
       "kind": "two_source_fallback_reads",
@@ -3749,7 +3452,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 121,
+      "line": 123,
       "column": 4,
       "functionName": "shouldAllowRecoveryEligibleProjection",
       "kind": "two_source_fallback_reads",
@@ -3758,25 +3461,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 209,
-      "column": 4,
-      "functionName": "resolveCandidatePublicationStatus",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 308,
-      "column": 8,
-      "functionName": "deriveMembershipPublicationCandidate",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 311,
+      "line": 312,
       "column": 8,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "two_source_fallback_reads",
@@ -3794,7 +3479,16 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 329,
+      "line": 319,
+      "column": 8,
+      "functionName": "deriveMembershipPublicationCandidate",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
+      "line": 333,
       "column": 16,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "two_source_fallback_reads",
@@ -3803,7 +3497,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 341,
+      "line": 345,
       "column": 14,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "two_source_fallback_reads",
@@ -3812,7 +3506,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 583,
+      "line": 587,
       "column": 4,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "two_source_fallback_reads",
@@ -3830,7 +3524,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-persist.js",
-      "line": 113,
+      "line": 114,
       "column": 10,
       "functionName": "persistPublicationRow",
       "kind": "two_source_fallback_reads",
@@ -3839,7 +3533,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 155,
+      "line": 156,
       "column": 14,
       "functionName": "readPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -3848,7 +3542,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 173,
+      "line": 174,
       "column": 23,
       "functionName": "readPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -3857,7 +3551,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 244,
+      "line": 245,
       "column": 23,
       "functionName": "readPublicationPlanningSnapshotSync",
       "kind": "two_source_fallback_reads",
@@ -3883,17 +3577,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 582,
-      "column": 18,
-      "functionName": "<anonymous>",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/control-plane/membership-publication-planning-evidence.js",
-      "line": 91,
+      "line": 92,
       "column": 6,
       "functionName": "resolvePlanningEvidenceRowKey",
       "kind": "two_source_fallback_reads",
@@ -3902,7 +3587,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-planning-evidence.js",
-      "line": 398,
+      "line": 399,
       "column": 6,
       "functionName": "buildMembershipPublicationEvidenceSnapshot",
       "kind": "two_source_fallback_reads",
@@ -3911,7 +3596,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-planning-evidence.js",
-      "line": 400,
+      "line": 401,
       "column": 24,
       "functionName": "buildMembershipPublicationEvidenceSnapshot",
       "kind": "two_source_fallback_reads",
@@ -3920,7 +3605,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-planning-evidence.js",
-      "line": 420,
+      "line": 421,
       "column": 12,
       "functionName": "resolveObservedActiveNodeIds",
       "kind": "two_source_fallback_reads",
@@ -3929,16 +3614,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-planning-evidence.js",
-      "line": 602,
-      "column": 4,
-      "functionName": "buildMembershipPublicationRow",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-planning-evidence.js",
-      "line": 622,
+      "line": 631,
       "column": 6,
       "functionName": "buildMembershipPublicationRow",
       "kind": "two_source_fallback_reads",
@@ -3947,7 +3623,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-planning-evidence.js",
-      "line": 646,
+      "line": 655,
       "column": 24,
       "functionName": "buildMembershipPublicationRow",
       "kind": "two_source_fallback_reads",
@@ -3965,18 +3641,9 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-readiness-repair.js",
-      "line": 121,
+      "line": 122,
       "column": 4,
       "functionName": "buildPriorityRecoveryDecisionPublicationConvergence",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 341,
-      "column": 4,
-      "functionName": "resolveAcknowledgementBaselinePublicationRow",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -4009,17 +3676,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/control-plane/node-liveness-semantic-projection.js",
-      "line": 532,
-      "column": 13,
-      "functionName": "buildNodeLivenessProjection",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/control-plane/node-trust-state.js",
-      "line": 150,
+      "line": 151,
       "column": 4,
       "functionName": "buildTransportEvidence",
       "kind": "two_source_fallback_reads",
@@ -4028,7 +3686,7 @@
     },
     {
       "filePath": "src/control-plane/node-trust-state.js",
-      "line": 152,
+      "line": 153,
       "column": 16,
       "functionName": "buildTransportEvidence",
       "kind": "two_source_fallback_reads",
@@ -4037,7 +3695,7 @@
     },
     {
       "filePath": "src/control-plane/node-trust-state.js",
-      "line": 168,
+      "line": 169,
       "column": 9,
       "functionName": "resolveTrustHeartbeatState",
       "kind": "two_source_fallback_reads",
@@ -4280,27 +3938,9 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-dispatch-pending-diagnostic-owner.js",
-      "line": 229,
+      "line": 230,
       "column": 4,
       "functionName": "resolvePriorityRecoveryDiagnosticOwnerRevision",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-dispatch-pending-diagnostic-owner.js",
-      "line": 243,
-      "column": 4,
-      "functionName": "buildPriorityRecoveryDispatchPendingDiagnosticOwnerEvidence",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-dispatch-pending-diagnostic-owner.js",
-      "line": 246,
-      "column": 4,
-      "functionName": "buildPriorityRecoveryDispatchPendingDiagnosticOwnerEvidence",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -4361,7 +4001,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-gate-resolution.js",
-      "line": 133,
+      "line": 132,
       "column": 6,
       "functionName": "resolveObservationPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -4370,7 +4010,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-gate-resolution.js",
-      "line": 137,
+      "line": 136,
       "column": 6,
       "functionName": "resolveObservationPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -4379,7 +4019,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-gate-resolution.js",
-      "line": 141,
+      "line": 140,
       "column": 6,
       "functionName": "resolveObservationPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -4388,7 +4028,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-gate-resolution.js",
-      "line": 146,
+      "line": 145,
       "column": 6,
       "functionName": "resolveObservationPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -4397,7 +4037,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-gate-resolution.js",
-      "line": 153,
+      "line": 152,
       "column": 6,
       "functionName": "resolveObservationPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -4406,7 +4046,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-gate-resolution.js",
-      "line": 156,
+      "line": 155,
       "column": 6,
       "functionName": "resolveObservationPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -4415,7 +4055,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-gate-resolution.js",
-      "line": 317,
+      "line": 316,
       "column": 4,
       "functionName": "resolveObservationClosureField",
       "kind": "two_source_fallback_reads",
@@ -4469,7 +4109,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-snapshot.js",
-      "line": 43,
+      "line": 42,
       "column": 9,
       "functionName": "resolveObservationRecoveryProtocolState",
       "kind": "two_source_fallback_reads",
@@ -4478,7 +4118,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-snapshot.js",
-      "line": 257,
+      "line": 256,
       "column": 8,
       "functionName": "buildPriorityRecoveryObservationSnapshot",
       "kind": "two_source_fallback_reads",
@@ -4487,7 +4127,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-snapshot.js",
-      "line": 261,
+      "line": 260,
       "column": 6,
       "functionName": "buildPriorityRecoveryObservationSnapshot",
       "kind": "two_source_fallback_reads",
@@ -4595,7 +4235,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-snapshot-ingress.js",
-      "line": 283,
+      "line": 284,
       "column": 4,
       "functionName": "resolvePriorityRecoveryOperationContextPartitionId",
       "kind": "two_source_fallback_reads",
@@ -4622,7 +4262,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-snapshot-observation.js",
-      "line": 490,
+      "line": 489,
       "column": 4,
       "functionName": "buildPriorityRecoveryConditionsContract",
       "kind": "two_source_fallback_reads",
@@ -4631,7 +4271,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
-      "line": 154,
+      "line": 153,
       "column": 6,
       "functionName": "buildPriorityRecoveryReplicaOperationContext",
       "kind": "two_source_fallback_reads",
@@ -4640,7 +4280,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
-      "line": 161,
+      "line": 160,
       "column": 6,
       "functionName": "buildPriorityRecoveryReplicaOperationContext",
       "kind": "two_source_fallback_reads",
@@ -4649,7 +4289,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
-      "line": 168,
+      "line": 167,
       "column": 6,
       "functionName": "buildPriorityRecoveryReplicaOperationContext",
       "kind": "two_source_fallback_reads",
@@ -4658,7 +4298,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
-      "line": 687,
+      "line": 686,
       "column": 6,
       "functionName": "buildPriorityRecoveryOperationContextFromRecord",
       "kind": "two_source_fallback_reads",
@@ -4667,7 +4307,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
-      "line": 692,
+      "line": 691,
       "column": 6,
       "functionName": "buildPriorityRecoveryOperationContextFromRecord",
       "kind": "two_source_fallback_reads",
@@ -4676,26 +4316,8 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
-      "line": 697,
+      "line": 696,
       "column": 6,
-      "functionName": "buildPriorityRecoveryOperationContextFromRecord",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
-      "line": 711,
-      "column": 8,
-      "functionName": "buildPriorityRecoveryOperationContextFromRecord",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
-      "line": 717,
-      "column": 8,
       "functionName": "buildPriorityRecoveryOperationContextFromRecord",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -4712,7 +4334,7 @@
     },
     {
       "filePath": "src/control-plane/projection-readiness-evidence.js",
-      "line": 267,
+      "line": 268,
       "column": 6,
       "functionName": "normalizeProjectionReadinessNodeIds",
       "kind": "two_source_fallback_reads",
@@ -4721,16 +4343,7 @@
     },
     {
       "filePath": "src/control-plane/projection-readiness-evidence.js",
-      "line": 381,
-      "column": 4,
-      "functionName": "buildProjectionPublicationOwnerStreamFromSource",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/projection-readiness-evidence.js",
-      "line": 385,
+      "line": 382,
       "column": 4,
       "functionName": "buildProjectionPublicationOwnerStreamFromSource",
       "kind": "two_source_fallback_reads",
@@ -4901,16 +4514,7 @@
     },
     {
       "filePath": "src/control-plane/publication-active-gate-handoff-contract-helpers.js",
-      "line": 153,
-      "column": 4,
-      "functionName": "resolvePublicationActiveGateHandoffPublicationStatus",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/publication-active-gate-handoff-contract-helpers.js",
-      "line": 185,
+      "line": 181,
       "column": 6,
       "functionName": "buildPublicationActiveGateMembershipConvergence",
       "kind": "two_source_fallback_reads",
@@ -5144,7 +4748,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-convergence-gate-builder.js",
-      "line": 229,
+      "line": 228,
       "column": 4,
       "functionName": "buildCanonicalPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -5153,7 +4757,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-convergence-gate-builder.js",
-      "line": 236,
+      "line": 234,
       "column": 4,
       "functionName": "buildCanonicalPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -5162,7 +4766,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-convergence-gate-builder.js",
-      "line": 244,
+      "line": 242,
       "column": 4,
       "functionName": "buildCanonicalPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -5171,7 +4775,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-convergence-gate-builder.js",
-      "line": 458,
+      "line": 456,
       "column": 6,
       "functionName": "buildCanonicalPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -5180,7 +4784,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-convergence-gate-builder.js",
-      "line": 463,
+      "line": 461,
       "column": 6,
       "functionName": "buildCanonicalPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -5189,7 +4793,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-convergence-gate-builder.js",
-      "line": 471,
+      "line": 469,
       "column": 6,
       "functionName": "buildCanonicalPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -5198,7 +4802,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-convergence-gate-builder.js",
-      "line": 488,
+      "line": 486,
       "column": 6,
       "functionName": "buildCanonicalPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -5207,7 +4811,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-convergence-gate-builder.js",
-      "line": 492,
+      "line": 490,
       "column": 6,
       "functionName": "buildCanonicalPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -5216,7 +4820,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-convergence-gate-builder.js",
-      "line": 496,
+      "line": 494,
       "column": 6,
       "functionName": "buildCanonicalPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -5225,7 +4829,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-convergence-gate-builder.js",
-      "line": 500,
+      "line": 498,
       "column": 6,
       "functionName": "buildCanonicalPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -5234,7 +4838,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-convergence-gate-builder.js",
-      "line": 504,
+      "line": 502,
       "column": 6,
       "functionName": "buildCanonicalPublicationConvergenceGate",
       "kind": "two_source_fallback_reads",
@@ -5711,17 +5315,8 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-service-lifecycle.js",
-      "line": 67,
+      "line": 71,
       "column": 7,
-      "functionName": "constructor",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/replica-dispatch-service-lifecycle.js",
-      "line": 85,
-      "column": 6,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -5738,7 +5333,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-service-lifecycle.js",
-      "line": 96,
+      "line": 93,
       "column": 6,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -5747,7 +5342,7 @@
     },
     {
       "filePath": "src/control-plane/startup-authority-snapshot-owner.js",
-      "line": 267,
+      "line": 264,
       "column": 4,
       "functionName": "buildStartupAuthoritySnapshotFromPlanningAnswerUncached",
       "kind": "two_source_fallback_reads",
@@ -5873,16 +5468,7 @@
     },
     {
       "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 154,
-      "column": 20,
-      "functionName": "createSession",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 191,
+      "line": 204,
       "column": 26,
       "functionName": "updateSession",
       "kind": "two_source_fallback_reads",
@@ -5891,16 +5477,7 @@
     },
     {
       "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 204,
-      "column": 20,
-      "functionName": "updateSession",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 365,
+      "line": 381,
       "column": 24,
       "functionName": "writeBreakpoints",
       "kind": "two_source_fallback_reads",
@@ -5909,7 +5486,7 @@
     },
     {
       "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 367,
+      "line": 383,
       "column": 8,
       "functionName": "writeBreakpoints",
       "kind": "two_source_fallback_reads",
@@ -5918,7 +5495,7 @@
     },
     {
       "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 464,
+      "line": 480,
       "column": 8,
       "functionName": "writeSnapshot",
       "kind": "two_source_fallback_reads",
@@ -5927,7 +5504,7 @@
     },
     {
       "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 469,
+      "line": 485,
       "column": 8,
       "functionName": "writeSnapshot",
       "kind": "two_source_fallback_reads",
@@ -5936,7 +5513,7 @@
     },
     {
       "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 471,
+      "line": 487,
       "column": 8,
       "functionName": "writeSnapshot",
       "kind": "two_source_fallback_reads",
@@ -5945,7 +5522,7 @@
     },
     {
       "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 476,
+      "line": 492,
       "column": 8,
       "functionName": "writeSnapshot",
       "kind": "two_source_fallback_reads",
@@ -5954,7 +5531,7 @@
     },
     {
       "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 481,
+      "line": 497,
       "column": 8,
       "functionName": "writeSnapshot",
       "kind": "two_source_fallback_reads",
@@ -5963,7 +5540,7 @@
     },
     {
       "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 488,
+      "line": 504,
       "column": 8,
       "functionName": "writeSnapshot",
       "kind": "two_source_fallback_reads",
@@ -5972,7 +5549,7 @@
     },
     {
       "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 493,
+      "line": 509,
       "column": 8,
       "functionName": "writeSnapshot",
       "kind": "two_source_fallback_reads",
@@ -5981,7 +5558,7 @@
     },
     {
       "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 498,
+      "line": 514,
       "column": 8,
       "functionName": "writeSnapshot",
       "kind": "two_source_fallback_reads",
@@ -5990,7 +5567,7 @@
     },
     {
       "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 602,
+      "line": 618,
       "column": 8,
       "functionName": "authorizeRequest",
       "kind": "two_source_fallback_reads",
@@ -5999,7 +5576,7 @@
     },
     {
       "filePath": "src/debug-runtime/debug-metadata-service.js",
-      "line": 611,
+      "line": 627,
       "column": 8,
       "functionName": "authorizeRequest",
       "kind": "two_source_fallback_reads",
@@ -6146,15 +5723,6 @@
       "line": 39,
       "column": 27,
       "functionName": "constructor",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/debug/debug-session-resolver.js",
-      "line": 244,
-      "column": 4,
-      "functionName": "normalizeSessionRow",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -6629,18 +6197,9 @@
     },
     {
       "filePath": "src/entrypoint-runtime-admin-composition.js",
-      "line": 67,
+      "line": 68,
       "column": 9,
       "functionName": "resolveOwnerControlPlaneReadinessService",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/entrypoint-runtime-admin-composition.js",
-      "line": 247,
-      "column": 6,
-      "functionName": "reportStartupRuntimeHandoff",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -6683,7 +6242,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-join-startup-policy.js",
-      "line": 138,
+      "line": 139,
       "column": 6,
       "functionName": "resolveFailedJoinReattempt",
       "kind": "two_source_fallback_reads",
@@ -7466,7 +7025,7 @@
     },
     {
       "filePath": "src/message-group/message-group-service-metadata-publication.js",
-      "line": 186,
+      "line": 187,
       "column": 18,
       "functionName": "onAsyncError",
       "kind": "two_source_fallback_reads",
@@ -7475,7 +7034,7 @@
     },
     {
       "filePath": "src/message-group/message-group-service-metadata-publication.js",
-      "line": 251,
+      "line": 252,
       "column": 26,
       "functionName": "onAsyncError",
       "kind": "two_source_fallback_reads",
@@ -7547,7 +7106,7 @@
     },
     {
       "filePath": "src/migration/migration-coordinator-lifecycle-methods.js",
-      "line": 213,
+      "line": 215,
       "column": 34,
       "functionName": "execute",
       "kind": "two_source_fallback_reads",
@@ -7556,7 +7115,7 @@
     },
     {
       "filePath": "src/migration/migration-coordinator-stage-methods.js",
-      "line": 285,
+      "line": 282,
       "column": 24,
       "functionName": "executeCutoverStage",
       "kind": "two_source_fallback_reads",
@@ -7565,7 +7124,7 @@
     },
     {
       "filePath": "src/migration/migration-coordinator-stage-methods.js",
-      "line": 352,
+      "line": 349,
       "column": 30,
       "functionName": "runPartitionOperationWithRetry",
       "kind": "two_source_fallback_reads",
@@ -7574,18 +7133,9 @@
     },
     {
       "filePath": "src/migration/migration-coordinator.js",
-      "line": 355,
+      "line": 357,
       "column": 22,
       "functionName": "executeSql",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/migration/migration-coordinator.js",
-      "line": 552,
-      "column": 19,
-      "functionName": "updatePartitionMigration",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -7763,7 +7313,7 @@
     },
     {
       "filePath": "src/node/replica-handler-release-recovery.js",
-      "line": 80,
+      "line": 81,
       "column": 20,
       "functionName": "statusReportOf",
       "kind": "two_source_fallback_reads",
@@ -7772,7 +7322,7 @@
     },
     {
       "filePath": "src/node/replica-handler-release-recovery.js",
-      "line": 81,
+      "line": 82,
       "column": 22,
       "functionName": "statusReportOf",
       "kind": "two_source_fallback_reads",
@@ -7781,7 +7331,7 @@
     },
     {
       "filePath": "src/node/replica-handler-remove-execution-methods.js",
-      "line": 607,
+      "line": 602,
       "column": 16,
       "functionName": "deferReplicaRemovalWithoutDurableRow",
       "kind": "two_source_fallback_reads",
@@ -7817,25 +7367,7 @@
     },
     {
       "filePath": "src/node/replica-handler-runtime-methods.js",
-      "line": 356,
-      "column": 18,
-      "functionName": "getAllLocalReplicas",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/node/replica-handler-runtime-methods.js",
-      "line": 398,
-      "column": 16,
-      "functionName": "registerExistingReplica",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/node/replica-handler-runtime-methods.js",
-      "line": 433,
+      "line": 438,
       "column": 10,
       "functionName": "replaceLocalReplicaService",
       "kind": "two_source_fallback_reads",
@@ -7844,7 +7376,7 @@
     },
     {
       "filePath": "src/node/replica-handler-runtime-methods.js",
-      "line": 437,
+      "line": 442,
       "column": 10,
       "functionName": "replaceLocalReplicaService",
       "kind": "two_source_fallback_reads",
@@ -7853,7 +7385,7 @@
     },
     {
       "filePath": "src/node/replica-handler-runtime-methods.js",
-      "line": 708,
+      "line": 713,
       "column": 19,
       "functionName": "setLocalReplica",
       "kind": "two_source_fallback_reads",
@@ -7925,7 +7457,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-create-persistence.js",
-      "line": 88,
+      "line": 89,
       "column": 24,
       "functionName": "createReplicaRowInCdc",
       "kind": "two_source_fallback_reads",
@@ -7934,7 +7466,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-recovery.js",
-      "line": 74,
+      "line": 75,
       "column": 13,
       "functionName": "rowMatchesRemovingContext",
       "kind": "two_source_fallback_reads",
@@ -7943,7 +7475,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-recovery.js",
-      "line": 421,
+      "line": 422,
       "column": 17,
       "functionName": "handleNodeRecovery",
       "kind": "two_source_fallback_reads",
@@ -7952,7 +7484,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-recovery.js",
-      "line": 622,
+      "line": 623,
       "column": 12,
       "functionName": "buildRecoveryRegistrationContext",
       "kind": "two_source_fallback_reads",
@@ -7961,7 +7493,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-recovery.js",
-      "line": 625,
+      "line": 626,
       "column": 17,
       "functionName": "buildRecoveryRegistrationContext",
       "kind": "two_source_fallback_reads",
@@ -7970,7 +7502,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-recovery.js",
-      "line": 633,
+      "line": 634,
       "column": 19,
       "functionName": "buildRecoveryRegistrationContext",
       "kind": "two_source_fallback_reads",
@@ -7979,7 +7511,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-recovery.js",
-      "line": 693,
+      "line": 694,
       "column": 16,
       "functionName": "registerReplicaSnapshot",
       "kind": "two_source_fallback_reads",
@@ -7988,7 +7520,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-recovery.js",
-      "line": 749,
+      "line": 746,
       "column": 12,
       "functionName": "registerReplicaForRecovery",
       "kind": "two_source_fallback_reads",
@@ -7997,7 +7529,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-recovery.js",
-      "line": 758,
+      "line": 755,
       "column": 19,
       "functionName": "registerReplicaForRecovery",
       "kind": "two_source_fallback_reads",
@@ -8006,7 +7538,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-recovery.js",
-      "line": 763,
+      "line": 760,
       "column": 17,
       "functionName": "registerReplicaForRecovery",
       "kind": "two_source_fallback_reads",
@@ -8015,34 +7547,16 @@
     },
     {
       "filePath": "src/node/replica-state-machine.js",
-      "line": 220,
-      "column": 30,
-      "functionName": "constructor",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/node/replica-state-machine.js",
-      "line": 222,
-      "column": 31,
-      "functionName": "constructor",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/node/replica-state-machine.js",
-      "line": 224,
-      "column": 30,
-      "functionName": "constructor",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/node/replica-state-machine.js",
       "line": 226,
+      "column": 30,
+      "functionName": "constructor",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-state-machine.js",
+      "line": 228,
       "column": 31,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -8052,7 +7566,7 @@
     {
       "filePath": "src/node/replica-state-machine.js",
       "line": 230,
-      "column": 34,
+      "column": 30,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -8060,8 +7574,8 @@
     },
     {
       "filePath": "src/node/replica-state-machine.js",
-      "line": 234,
-      "column": 25,
+      "line": 232,
+      "column": 31,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -8070,6 +7584,24 @@
     {
       "filePath": "src/node/replica-state-machine.js",
       "line": 236,
+      "column": 34,
+      "functionName": "constructor",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-state-machine.js",
+      "line": 240,
+      "column": 25,
+      "functionName": "constructor",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-state-machine.js",
+      "line": 242,
       "column": 28,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -8078,7 +7610,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine.js",
-      "line": 630,
+      "line": 644,
       "column": 6,
       "functionName": "_armLocalOnlyServiceRowRetry",
       "kind": "two_source_fallback_reads",
@@ -8087,7 +7619,7 @@
     },
     {
       "filePath": "src/node/runtime-service-bound-creation-route.js",
-      "line": 94,
+      "line": 95,
       "column": 9,
       "functionName": "resumeCode",
       "kind": "two_source_fallback_reads",
@@ -8096,7 +7628,7 @@
     },
     {
       "filePath": "src/node/runtime-service-bound-creation-route.js",
-      "line": 174,
+      "line": 175,
       "column": 39,
       "functionName": "finishCreationPlan",
       "kind": "two_source_fallback_reads",
@@ -8105,7 +7637,7 @@
     },
     {
       "filePath": "src/node/runtime-service-bound-creation-route.js",
-      "line": 283,
+      "line": 284,
       "column": 52,
       "functionName": "routeRuntimeServiceCreate",
       "kind": "two_source_fallback_reads",
@@ -8114,16 +7646,7 @@
     },
     {
       "filePath": "src/node/runtime-service-bound-creation-route.js",
-      "line": 489,
-      "column": 4,
-      "functionName": "decideRetirement",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/node/runtime-service-bound-creation-route.js",
-      "line": 619,
+      "line": 637,
       "column": 48,
       "functionName": "routeBoundRemoval",
       "kind": "two_source_fallback_reads",
@@ -8132,7 +7655,7 @@
     },
     {
       "filePath": "src/node/runtime-service-bound-creation-route.js",
-      "line": 635,
+      "line": 653,
       "column": 67,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -8141,7 +7664,7 @@
     },
     {
       "filePath": "src/node/runtime-service-bound-creation-route.js",
-      "line": 665,
+      "line": 683,
       "column": 13,
       "functionName": "admitBoundRemoval",
       "kind": "two_source_fallback_reads",
@@ -8162,15 +7685,6 @@
       "line": 166,
       "column": 20,
       "functionName": "handleMessage",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/node/runtime-service-handler.js",
-      "line": 437,
-      "column": 14,
-      "functionName": "recoverLocalReplicaForRemoval",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -8204,7 +7718,7 @@
     },
     {
       "filePath": "src/partition/learner-promotion-count-check-evidence.js",
-      "line": 218,
+      "line": 219,
       "column": 16,
       "functionName": "renderTransitionAuthorizationEvidence",
       "kind": "two_source_fallback_reads",
@@ -8213,7 +7727,7 @@
     },
     {
       "filePath": "src/partition/learner-promotion-count-check-evidence.js",
-      "line": 225,
+      "line": 226,
       "column": 13,
       "functionName": "renderTransitionAuthorizationEvidence",
       "kind": "two_source_fallback_reads",
@@ -8222,7 +7736,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow-dissolution-methods.js",
-      "line": 154,
+      "line": 155,
       "column": 6,
       "functionName": "isDissolutionWitnessPersisted",
       "kind": "two_source_fallback_reads",
@@ -8348,7 +7862,7 @@
     },
     {
       "filePath": "src/partition/managed-split-workflow-dissolution-methods.js",
-      "line": 145,
+      "line": 146,
       "column": 8,
       "functionName": "resolveCutoverSiblingPartitionIds",
       "kind": "two_source_fallback_reads",
@@ -8357,7 +7871,7 @@
     },
     {
       "filePath": "src/partition/managed-split-workflow-dissolution-methods.js",
-      "line": 278,
+      "line": 279,
       "column": 6,
       "functionName": "isDissolutionWitnessPersisted",
       "kind": "two_source_fallback_reads",
@@ -8366,7 +7880,7 @@
     },
     {
       "filePath": "src/partition/managed-split-workflow-dissolution-methods.js",
-      "line": 302,
+      "line": 303,
       "column": 6,
       "functionName": "dissolveSplitSourcePartition",
       "kind": "two_source_fallback_reads",
@@ -8375,7 +7889,7 @@
     },
     {
       "filePath": "src/partition/managed-split-workflow-execution-gate-methods.js",
-      "line": 195,
+      "line": 196,
       "column": 17,
       "functionName": "evaluatePressure",
       "kind": "two_source_fallback_reads",
@@ -8438,7 +7952,7 @@
     },
     {
       "filePath": "src/partition/managed-split-workflow-state-methods.js",
-      "line": 56,
+      "line": 59,
       "column": 24,
       "functionName": "canonicalSplitParticipantSpecsOf",
       "kind": "two_source_fallback_reads",
@@ -8447,7 +7961,7 @@
     },
     {
       "filePath": "src/partition/managed-split-workflow-state-methods.js",
-      "line": 689,
+      "line": 692,
       "column": 10,
       "functionName": "handleRetryableSplitPlanningFailure",
       "kind": "two_source_fallback_reads",
@@ -8456,7 +7970,7 @@
     },
     {
       "filePath": "src/partition/managed-split-workflow-state-methods.js",
-      "line": 714,
+      "line": 717,
       "column": 8,
       "functionName": "handleRetryableSplitPlanningFailure",
       "kind": "two_source_fallback_reads",
@@ -8528,7 +8042,7 @@
     },
     {
       "filePath": "src/partition/managed-workflow-record-coordinator.js",
-      "line": 120,
+      "line": 122,
       "column": 9,
       "functionName": "claimResultOf",
       "kind": "two_source_fallback_reads",
@@ -8537,7 +8051,7 @@
     },
     {
       "filePath": "src/partition/managed-workflow-record-coordinator.js",
-      "line": 165,
+      "line": 167,
       "column": 33,
       "functionName": "transitionRefusedError",
       "kind": "two_source_fallback_reads",
@@ -8600,7 +8114,7 @@
     },
     {
       "filePath": "src/partition/partition-consensus-hold-log.js",
-      "line": 93,
+      "line": 94,
       "column": 16,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -8726,7 +8240,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-count-check-methods.js",
-      "line": 133,
+      "line": 134,
       "column": 17,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -8735,7 +8249,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 44,
+      "line": 45,
       "column": 6,
       "functionName": "readAddLikeOperationRowIdentity",
       "kind": "two_source_fallback_reads",
@@ -8744,7 +8258,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 47,
+      "line": 48,
       "column": 6,
       "functionName": "readAddLikeOperationRowIdentity",
       "kind": "two_source_fallback_reads",
@@ -8753,25 +8267,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 243,
-      "column": 10,
-      "functionName": "<anonymous>",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 276,
-      "column": 11,
-      "functionName": "getReplicaServiceStatusForPromotion",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 287,
+      "line": 246,
       "column": 34,
       "functionName": "isLocalReplicaServiceRowForPromotion",
       "kind": "two_source_fallback_reads",
@@ -8780,7 +8276,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 289,
+      "line": 248,
       "column": 6,
       "functionName": "isLocalReplicaServiceRowForPromotion",
       "kind": "two_source_fallback_reads",
@@ -8789,7 +8285,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 293,
+      "line": 252,
       "column": 31,
       "functionName": "isLocalReplicaServiceRowForPromotion",
       "kind": "two_source_fallback_reads",
@@ -8798,7 +8294,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 295,
+      "line": 254,
       "column": 6,
       "functionName": "isLocalReplicaServiceRowForPromotion",
       "kind": "two_source_fallback_reads",
@@ -8807,7 +8303,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 305,
+      "line": 264,
       "column": 6,
       "functionName": "getReplicaServiceRowReplicaIdForPromotion",
       "kind": "two_source_fallback_reads",
@@ -8816,7 +8312,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 348,
+      "line": 307,
       "column": 34,
       "functionName": "resolveOperationScopedLearnerCountForPromotion",
       "kind": "two_source_fallback_reads",
@@ -8825,7 +8321,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 406,
+      "line": 365,
       "column": 31,
       "functionName": "resolveActiveLearnerNodeIdsForPromotion",
       "kind": "two_source_fallback_reads",
@@ -8834,16 +8330,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 576,
-      "column": 16,
-      "functionName": "<anonymous>",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 599,
+      "line": 553,
       "column": 26,
       "functionName": "collectInFlightAddLikeOperationsForPromotion",
       "kind": "two_source_fallback_reads",
@@ -8852,7 +8339,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 600,
+      "line": 554,
       "column": 29,
       "functionName": "collectInFlightAddLikeOperationsForPromotion",
       "kind": "two_source_fallback_reads",
@@ -8861,7 +8348,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 654,
+      "line": 608,
       "column": 12,
       "functionName": "collectActiveVoterCensusForPromotion",
       "kind": "two_source_fallback_reads",
@@ -8870,7 +8357,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-proof-methods.js",
-      "line": 71,
+      "line": 72,
       "column": 6,
       "functionName": "handleLearnerPromotionProofRequest",
       "kind": "two_source_fallback_reads",
@@ -8879,7 +8366,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-proof-methods.js",
-      "line": 286,
+      "line": 287,
       "column": 11,
       "functionName": "resolveLearnerPromotionProofDeliveryTimeoutMs",
       "kind": "two_source_fallback_reads",
@@ -8924,7 +8411,7 @@
     },
     {
       "filePath": "src/partition/partition-service-metadata-mutation-helpers.js",
-      "line": 264,
+      "line": 265,
       "column": 16,
       "functionName": "onObservedStateChanged",
       "kind": "two_source_fallback_reads",
@@ -8933,7 +8420,7 @@
     },
     {
       "filePath": "src/partition/partition-service-metadata-mutation-helpers.js",
-      "line": 275,
+      "line": 276,
       "column": 16,
       "functionName": "onAsyncError",
       "kind": "two_source_fallback_reads",
@@ -8942,7 +8429,7 @@
     },
     {
       "filePath": "src/partition/partition-service-metadata-mutation-helpers.js",
-      "line": 353,
+      "line": 354,
       "column": 24,
       "functionName": "onObservedStateChanged",
       "kind": "two_source_fallback_reads",
@@ -8951,7 +8438,7 @@
     },
     {
       "filePath": "src/partition/partition-service-metadata-mutation-helpers.js",
-      "line": 364,
+      "line": 365,
       "column": 24,
       "functionName": "onAsyncError",
       "kind": "two_source_fallback_reads",
@@ -9472,17 +8959,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/query/distributed/distributed-transaction-recovery-validation.js",
-      "line": 196,
-      "column": 19,
-      "functionName": "validateRecoveryRowsBeforeMutation",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 124,
+      "line": 125,
       "column": 27,
       "functionName": "recoveryObligationStageRefusal",
       "kind": "two_source_fallback_reads",
@@ -9491,34 +8969,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 569,
-      "column": 23,
-      "functionName": "loadWorkflow",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 637,
-      "column": 18,
-      "functionName": "loadParticipant",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 684,
-      "column": 16,
-      "functionName": "recoverFromSystemTables",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 687,
+      "line": 702,
       "column": 19,
       "functionName": "recoverFromSystemTables",
       "kind": "two_source_fallback_reads",
@@ -9527,7 +8978,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 688,
+      "line": 703,
       "column": 19,
       "functionName": "recoverFromSystemTables",
       "kind": "two_source_fallback_reads",
@@ -9547,15 +8998,6 @@
       "filePath": "src/query/distributed/distributed-transaction-telemetry.js",
       "line": 81,
       "column": 15,
-      "functionName": "snapshotTransactionTelemetry",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-transaction-telemetry.js",
-      "line": 98,
-      "column": 13,
       "functionName": "snapshotTransactionTelemetry",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -9869,26 +9311,8 @@
     },
     {
       "filePath": "src/query/query-executor-shared.js",
-      "line": 198,
+      "line": 207,
       "column": 6,
-      "functionName": "buildPartitionServiceWitnessFingerprint",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/query-executor-shared.js",
-      "line": 201,
-      "column": 6,
-      "functionName": "buildPartitionServiceWitnessFingerprint",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/query-executor-shared.js",
-      "line": 205,
-      "column": 11,
       "functionName": "buildPartitionServiceWitnessFingerprint",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -10031,7 +9455,7 @@
     },
     {
       "filePath": "src/query/schema-provisioning-job-repository.js",
-      "line": 131,
+      "line": 133,
       "column": 4,
       "functionName": "resolveAffectedRows",
       "kind": "two_source_fallback_reads",
@@ -10040,7 +9464,7 @@
     },
     {
       "filePath": "src/query/schema-provisioning-job-repository.js",
-      "line": 217,
+      "line": 219,
       "column": 8,
       "functionName": "insertIntent",
       "kind": "two_source_fallback_reads",
@@ -10832,7 +10256,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-group-membership-admission.js",
-      "line": 288,
+      "line": 289,
       "column": 4,
       "functionName": "refusedLearnerAuthorization",
       "kind": "two_source_fallback_reads",
@@ -10841,7 +10265,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-group-membership-admission.js",
-      "line": 447,
+      "line": 451,
       "column": 9,
       "functionName": "removalPeerAddress",
       "kind": "two_source_fallback_reads",
@@ -10850,7 +10274,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-membership-transition-runtime.js",
-      "line": 277,
+      "line": 278,
       "column": 28,
       "functionName": "anchoredProposal",
       "kind": "two_source_fallback_reads",
@@ -10859,7 +10283,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-operation-port.js",
-      "line": 446,
+      "line": 493,
       "column": 17,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -10868,7 +10292,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-peer-delivery.js",
-      "line": 56,
+      "line": 58,
       "column": 24,
       "functionName": "recordInboundStepRefusal",
       "kind": "two_source_fallback_reads",
@@ -10877,7 +10301,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-peer-delivery.js",
-      "line": 79,
+      "line": 81,
       "column": 19,
       "functionName": "peerDeliveryFailed",
       "kind": "two_source_fallback_reads",
@@ -10886,7 +10310,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-peer-delivery.js",
-      "line": 107,
+      "line": 109,
       "column": 4,
       "functionName": "resolveSnapshotIndex",
       "kind": "two_source_fallback_reads",
@@ -10895,7 +10319,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-replica-lifecycle-owner.js",
-      "line": 273,
+      "line": 274,
       "column": 8,
       "functionName": "admission",
       "kind": "two_source_fallback_reads",
@@ -10904,7 +10328,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 379,
+      "line": 386,
       "column": 23,
       "functionName": "coreCallFailure",
       "kind": "two_source_fallback_reads",
@@ -10913,7 +10337,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 606,
+      "line": 614,
       "column": 12,
       "functionName": "runtimeRecoveryOutcome",
       "kind": "two_source_fallback_reads",
@@ -10922,16 +10346,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 608,
-      "column": 11,
-      "functionName": "runtimeRecoveryOutcome",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 864,
+      "line": 874,
       "column": 29,
       "functionName": "triggerAnswerAfterReplacement",
       "kind": "two_source_fallback_reads",
@@ -10940,7 +10355,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 927,
+      "line": 937,
       "column": 27,
       "functionName": "settleReconstruction",
       "kind": "two_source_fallback_reads",
@@ -10949,7 +10364,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1903,
+      "line": 1928,
       "column": 11,
       "functionName": "estimateInboundEnvelopeBytes",
       "kind": "two_source_fallback_reads",
@@ -11065,24 +10480,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/move-planner-move-calculation-methods.js",
-      "line": 220,
-      "column": 21,
-      "functionName": "<anonymous>",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/move-planner-move-calculation-methods.js",
-      "line": 303,
-      "column": 21,
-      "functionName": "calculateMoves",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
       "line": 198,
       "column": 23,
@@ -11174,16 +10571,7 @@
     },
     {
       "filePath": "src/rebalancer/node-storage-budget-service.js",
-      "line": 186,
-      "column": 7,
-      "functionName": "buildBudgetRow",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/node-storage-budget-service.js",
-      "line": 232,
+      "line": 234,
       "column": 19,
       "functionName": "registerNodeBudget",
       "kind": "two_source_fallback_reads",
@@ -11300,25 +10688,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js",
-      "line": 303,
-      "column": 23,
-      "functionName": "buildCoordinatorCreatedRemoteHandoffTimeoutDecision",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js",
-      "line": 453,
-      "column": 6,
-      "functionName": "buildSnapshotHandoffRetryLogFields",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js",
-      "line": 603,
+      "line": 609,
       "column": 4,
       "functionName": "scheduleCoordinatorCreatedRemoteHandoffFollowUp",
       "kind": "two_source_fallback_reads",
@@ -11327,7 +10697,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-coordinator-handoff-retry.js",
-      "line": 101,
+      "line": 102,
       "column": 4,
       "functionName": "resolveCoordinatorCreatedRemoteHandoffRetryAction",
       "kind": "two_source_fallback_reads",
@@ -11336,7 +10706,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-execution.js",
-      "line": 106,
+      "line": 107,
       "column": 11,
       "functionName": "resolveRemoveSafetyHandoffFailureError",
       "kind": "two_source_fallback_reads",
@@ -11345,7 +10715,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 374,
+      "line": 376,
       "column": 4,
       "functionName": "resolveDispatchRearmFromProgressReconcileState",
       "kind": "two_source_fallback_reads",
@@ -11372,7 +10742,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
-      "line": 236,
+      "line": 237,
       "column": 6,
       "functionName": "resolveExecutorFailureReconcileState",
       "kind": "two_source_fallback_reads",
@@ -11471,7 +10841,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-execution-lane.js",
-      "line": 392,
+      "line": 408,
       "column": 12,
       "functionName": "runOperationOwnerAction",
       "kind": "two_source_fallback_reads",
@@ -11480,16 +10850,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-execution-lane.js",
-      "line": 394,
-      "column": 12,
-      "functionName": "runOperationOwnerAction",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-execution-lane.js",
-      "line": 395,
+      "line": 409,
       "column": 21,
       "functionName": "runOperationOwnerAction",
       "kind": "two_source_fallback_reads",
@@ -11498,7 +10859,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-execution-lane.js",
-      "line": 396,
+      "line": 410,
       "column": 21,
       "functionName": "runOperationOwnerAction",
       "kind": "two_source_fallback_reads",
@@ -11507,7 +10868,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-handoff-state.js",
-      "line": 183,
+      "line": 184,
       "column": 21,
       "functionName": "deferCoordinatorCreatedOperationTransitionRetry",
       "kind": "two_source_fallback_reads",
@@ -11516,7 +10877,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-handoff-state.js",
-      "line": 292,
+      "line": 293,
       "column": 14,
       "functionName": "wakeCoordinatorCreatedRemoteOwner",
       "kind": "two_source_fallback_reads",
@@ -11525,7 +10886,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-ports.js",
-      "line": 346,
+      "line": 343,
       "column": 6,
       "functionName": "buildOperationWorkflowOwnerPortDurableOperation",
       "kind": "two_source_fallback_reads",
@@ -11534,7 +10895,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-ports.js",
-      "line": 367,
+      "line": 364,
       "column": 6,
       "functionName": "buildOperationWorkflowOwnerPortWorkflowHistory",
       "kind": "two_source_fallback_reads",
@@ -11543,7 +10904,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-ports.js",
-      "line": 398,
+      "line": 395,
       "column": 6,
       "functionName": "buildOperationWorkflowOwnerPortOwnerLease",
       "kind": "two_source_fallback_reads",
@@ -11552,7 +10913,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-ports.js",
-      "line": 455,
+      "line": 452,
       "column": 6,
       "functionName": "buildOperationWorkflowOwnerPortRetryBudget",
       "kind": "two_source_fallback_reads",
@@ -11561,7 +10922,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-ports.js",
-      "line": 507,
+      "line": 504,
       "column": 6,
       "functionName": "buildOperationWorkflowOwnerPortPublicationFence",
       "kind": "two_source_fallback_reads",
@@ -11570,7 +10931,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-ports.js",
-      "line": 512,
+      "line": 509,
       "column": 6,
       "functionName": "buildOperationWorkflowOwnerPortPublicationFence",
       "kind": "two_source_fallback_reads",
@@ -11579,7 +10940,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-ports.js",
-      "line": 538,
+      "line": 535,
       "column": 6,
       "functionName": "buildOperationWorkflowOwnerPortDispatchObservation",
       "kind": "two_source_fallback_reads",
@@ -11624,7 +10985,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-drain.js",
-      "line": 145,
+      "line": 146,
       "column": 6,
       "functionName": "resolvePriorityRecoveryRemoteSupersededTargetDrainError",
       "kind": "two_source_fallback_reads",
@@ -11633,7 +10994,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-drain.js",
-      "line": 324,
+      "line": 325,
       "column": 6,
       "functionName": "resolvePriorityRecoveryPreSyncReplaceDrainDecision",
       "kind": "two_source_fallback_reads",
@@ -11642,7 +11003,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-drain.js",
-      "line": 536,
+      "line": 537,
       "column": 6,
       "functionName": "wakePriorityRecoveryRemoteOwnerFromDrainSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11687,7 +11048,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
-      "line": 208,
+      "line": 209,
       "column": 4,
       "functionName": "resolvePriorityRecoveryDispatchPendingDecisionSnapshotCapturedAt",
       "kind": "two_source_fallback_reads",
@@ -11696,7 +11057,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
-      "line": 223,
+      "line": 224,
       "column": 4,
       "functionName": "applyPriorityRecoveryDispatchPendingAdvanceExistingOperationEffect",
       "kind": "two_source_fallback_reads",
@@ -11705,7 +11066,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
-      "line": 301,
+      "line": 303,
       "column": 4,
       "functionName": "selectPriorityRecoveryDispatchPendingReentryOperation",
       "kind": "two_source_fallback_reads",
@@ -11714,25 +11075,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
-      "line": 329,
-      "column": 4,
-      "functionName": "selectPriorityRecoveryDispatchPendingReentryOperation",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
-      "line": 343,
-      "column": 4,
-      "functionName": "selectPriorityRecoveryDispatchPendingReentryOperation",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
-      "line": 374,
+      "line": 361,
       "column": 4,
       "functionName": "buildPriorityRecoveryDispatchPendingReentryEvidence",
       "kind": "two_source_fallback_reads",
@@ -11741,7 +11084,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
-      "line": 425,
+      "line": 412,
       "column": 4,
       "functionName": "resolvePriorityRecoveryDispatchPendingReentryState",
       "kind": "two_source_fallback_reads",
@@ -11750,7 +11093,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
-      "line": 693,
+      "line": 680,
       "column": 4,
       "functionName": "shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry",
       "kind": "two_source_fallback_reads",
@@ -11759,7 +11102,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
-      "line": 697,
+      "line": 684,
       "column": 4,
       "functionName": "shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry",
       "kind": "two_source_fallback_reads",
@@ -11804,7 +11147,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 180,
+      "line": 181,
       "column": 6,
       "functionName": "resolveTimeoutIncompleteVisibilitySupplementMode",
       "kind": "two_source_fallback_reads",
@@ -11813,7 +11156,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 788,
+      "line": 789,
       "column": 6,
       "functionName": "resolvePriorityRecoveryOperationDrainSettleState",
       "kind": "two_source_fallback_reads",
@@ -11822,7 +11165,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 914,
+      "line": 915,
       "column": 8,
       "functionName": "decidePriorityRecoveryOperationDrainRelease",
       "kind": "two_source_fallback_reads",
@@ -11831,7 +11174,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 983,
+      "line": 984,
       "column": 6,
       "functionName": "buildPriorityRecoveryOperationDrainReleaseEvidence",
       "kind": "two_source_fallback_reads",
@@ -11866,17 +11209,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/operation-workflow-replace-terminal-admission.js",
-      "line": 112,
-      "column": 9,
-      "functionName": "readReplaceDurableStep",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/operation-workflow-replace-witness.js",
-      "line": 97,
+      "line": 98,
       "column": 24,
       "functionName": "replaceWitnessDestination",
       "kind": "two_source_fallback_reads",
@@ -11885,7 +11219,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-witness.js",
-      "line": 98,
+      "line": 99,
       "column": 23,
       "functionName": "replaceWitnessDestination",
       "kind": "two_source_fallback_reads",
@@ -11894,7 +11228,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-witness.js",
-      "line": 110,
+      "line": 111,
       "column": 9,
       "functionName": "replaceWitnessReadReplicaId",
       "kind": "two_source_fallback_reads",
@@ -11903,7 +11237,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-witness.js",
-      "line": 123,
+      "line": 124,
       "column": 14,
       "functionName": "classifyReplaceWitnessResponse",
       "kind": "two_source_fallback_reads",
@@ -11912,7 +11246,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-witness.js",
-      "line": 131,
+      "line": 132,
       "column": 14,
       "functionName": "classifyReplaceWitnessResponse",
       "kind": "two_source_fallback_reads",
@@ -11921,7 +11255,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-witness.js",
-      "line": 145,
+      "line": 146,
       "column": 12,
       "functionName": "classifyReplaceWitnessError",
       "kind": "two_source_fallback_reads",
@@ -11951,15 +11285,6 @@
       "line": 568,
       "column": 22,
       "functionName": "admitOperationFailure",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-transition-retry.js",
-      "line": 56,
-      "column": 4,
-      "functionName": "shouldRetainTransitionRetryWhileUninitialized",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -12065,7 +11390,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
-      "line": 73,
+      "line": 74,
       "column": 6,
       "functionName": "buildPriorityRecoveryAssessmentContextForOperation",
       "kind": "two_source_fallback_reads",
@@ -12074,7 +11399,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
-      "line": 308,
+      "line": 309,
       "column": 8,
       "functionName": "buildDeferredRemoveSafetyEvaluation",
       "kind": "two_source_fallback_reads",
@@ -12083,7 +11408,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
-      "line": 410,
+      "line": 411,
       "column": 8,
       "functionName": "evaluateRemoveSafety",
       "kind": "two_source_fallback_reads",
@@ -12092,7 +11417,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-visibility-decision.js",
-      "line": 173,
+      "line": 172,
       "column": 4,
       "functionName": "buildPriorityRecoveryVisibilityRebalanceDecision",
       "kind": "two_source_fallback_reads",
@@ -12101,7 +11426,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-visibility-decision.js",
-      "line": 180,
+      "line": 179,
       "column": 4,
       "functionName": "buildPriorityRecoveryVisibilityRebalanceDecision",
       "kind": "two_source_fallback_reads",
@@ -12110,7 +11435,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-visibility-decision.js",
-      "line": 186,
+      "line": 189,
       "column": 4,
       "functionName": "buildPriorityRecoveryVisibilityRebalanceDecision",
       "kind": "two_source_fallback_reads",
@@ -12119,34 +11444,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-visibility-decision.js",
-      "line": 191,
-      "column": 4,
-      "functionName": "buildPriorityRecoveryVisibilityRebalanceDecision",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/priority-recovery-visibility-decision.js",
-      "line": 198,
-      "column": 4,
-      "functionName": "buildPriorityRecoveryVisibilityRebalanceDecision",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/priority-recovery-visibility-decision.js",
-      "line": 203,
-      "column": 4,
-      "functionName": "buildPriorityRecoveryVisibilityRebalanceDecision",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/priority-recovery-visibility-decision.js",
-      "line": 208,
+      "line": 200,
       "column": 4,
       "functionName": "buildPriorityRecoveryVisibilityRebalanceDecision",
       "kind": "two_source_fallback_reads",
@@ -12191,7 +11489,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-helper-common.js",
-      "line": 99,
+      "line": 97,
       "column": 4,
       "functionName": "resolvePriorityAddAdmissionPressureState",
       "kind": "two_source_fallback_reads",
@@ -12200,7 +11498,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-helper-common.js",
-      "line": 107,
+      "line": 105,
       "column": 4,
       "functionName": "resolvePriorityDeferredObservationPressureState",
       "kind": "two_source_fallback_reads",
@@ -12236,7 +11534,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-lifecycle.js",
-      "line": 148,
+      "line": 151,
       "column": 6,
       "functionName": "initializeCoordinatorState",
       "kind": "two_source_fallback_reads",
@@ -12245,7 +11543,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-lifecycle.js",
-      "line": 357,
+      "line": 352,
       "column": 10,
       "functionName": "initializeCoordinatorState",
       "kind": "two_source_fallback_reads",
@@ -12327,15 +11625,6 @@
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-intent-methods.js",
       "line": 556,
-      "column": 6,
-      "functionName": "resolveRecentOperationMissReuseSnapshot",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/rebalance-coordinator-operation-intent-methods.js",
-      "line": 559,
       "column": 6,
       "functionName": "resolveRecentOperationMissReuseSnapshot",
       "kind": "two_source_fallback_reads",
@@ -12470,7 +11759,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-helper.js",
-      "line": 41,
+      "line": 43,
       "column": 4,
       "functionName": "getAddBudgetOperationPartitionId",
       "kind": "two_source_fallback_reads",
@@ -12479,7 +11768,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-helper.js",
-      "line": 320,
+      "line": 322,
       "column": 4,
       "functionName": "resolveRequestedPriorityAddBudgetPartitionId",
       "kind": "two_source_fallback_reads",
@@ -12488,7 +11777,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-helper.js",
-      "line": 395,
+      "line": 393,
       "column": 4,
       "functionName": "isConcurrentAddBudgetOperation",
       "kind": "two_source_fallback_reads",
@@ -12497,7 +11786,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-replica-identity-methods.js",
-      "line": 296,
+      "line": 298,
       "column": 8,
       "functionName": "buildReplaceSourceRetirementEvidence",
       "kind": "two_source_fallback_reads",
@@ -12506,7 +11795,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-replica-identity-methods.js",
-      "line": 298,
+      "line": 300,
       "column": 8,
       "functionName": "buildReplaceSourceRetirementEvidence",
       "kind": "two_source_fallback_reads",
@@ -12587,7 +11876,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 389,
+      "line": 390,
       "column": 6,
       "functionName": "buildTopologySettlingPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -12596,7 +11885,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 394,
+      "line": 395,
       "column": 6,
       "functionName": "buildTopologySettlingPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -12605,7 +11894,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 511,
+      "line": 512,
       "column": 16,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -12614,7 +11903,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 542,
+      "line": 543,
       "column": 6,
       "functionName": "buildLocalMutationReadinessPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -12623,7 +11912,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 547,
+      "line": 548,
       "column": 6,
       "functionName": "buildLocalMutationReadinessPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -12632,7 +11921,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 554,
+      "line": 555,
       "column": 8,
       "functionName": "buildLocalMutationReadinessPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -12641,7 +11930,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 557,
+      "line": 558,
       "column": 8,
       "functionName": "buildLocalMutationReadinessPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -12680,15 +11969,6 @@
       "line": 397,
       "column": 10,
       "functionName": "<anonymous>",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 416,
-      "column": 6,
-      "functionName": "buildPriorityRecoveryPublicationEventSchedulingSnapshot",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -12749,7 +12029,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-liveness.js",
-      "line": 739,
+      "line": 758,
       "column": 6,
       "functionName": "summarizeReplicaOperationLiveness",
       "kind": "two_source_fallback_reads",
@@ -12758,7 +12038,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-progress.js",
-      "line": 673,
+      "line": 686,
       "column": 9,
       "functionName": "resolveReplicaOperationSemanticPhase",
       "kind": "two_source_fallback_reads",
@@ -12875,7 +12155,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-visibility-methods.js",
-      "line": 188,
+      "line": 189,
       "column": 10,
       "functionName": "getOwnerPersistedTransitionVisibilityFallbackOperationsForEntity",
       "kind": "two_source_fallback_reads",
@@ -12884,7 +12164,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-visibility-methods.js",
-      "line": 191,
+      "line": 192,
       "column": 10,
       "functionName": "getOwnerPersistedTransitionVisibilityFallbackOperationsForEntity",
       "kind": "two_source_fallback_reads",
@@ -12893,7 +12173,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-visibility-methods.js",
-      "line": 680,
+      "line": 655,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -12902,7 +12182,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-visibility-methods.js",
-      "line": 682,
+      "line": 657,
       "column": 17,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -12923,33 +12203,6 @@
       "line": 415,
       "column": 9,
       "functionName": "resolveAuthorizationOutcome",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/storage-admission-service.js",
-      "line": 67,
-      "column": 10,
-      "functionName": "constructor",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/storage-admission-service.js",
-      "line": 69,
-      "column": 10,
-      "functionName": "constructor",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/storage-capacity-accounting-service.js",
-      "line": 64,
-      "column": 17,
-      "functionName": "readFutureCapacityReservationExpiry",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -12977,15 +12230,6 @@
       "line": 399,
       "column": 25,
       "functionName": "calculateUsedBytes",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/storage-capacity-accounting-service.js",
-      "line": 452,
-      "column": 21,
-      "functionName": "calculateReservedBytes",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -13055,16 +12299,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 144,
-      "column": 6,
-      "functionName": "buildAvailableNodeMembershipConstraintEvidence",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 167,
+      "line": 168,
       "column": 6,
       "functionName": "resolveAvailableNodeMembershipConstraintState",
       "kind": "two_source_fallback_reads",
@@ -13076,60 +12311,6 @@
       "line": 172,
       "column": 6,
       "functionName": "resolvePriorityRecoveryBudgetPartitionId",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-budget-planning.js",
-      "line": 362,
-      "column": 21,
-      "functionName": "<anonymous>",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-budget-planning.js",
-      "line": 409,
-      "column": 21,
-      "functionName": "<anonymous>",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 324,
-      "column": 8,
-      "functionName": "<anonymous>",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 327,
-      "column": 8,
-      "functionName": "<anonymous>",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 385,
-      "column": 8,
-      "functionName": "shouldRequireFullControlPlanePublicationEndpointVisibility",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 486,
-      "column": 6,
-      "functionName": "selectPublishedMembershipRow",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -13262,16 +12443,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 88,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 250,
+      "line": 92,
       "column": 6,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -13289,7 +12461,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 266,
+      "line": 258,
       "column": 6,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -13316,7 +12488,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 292,
+      "line": 278,
       "column": 6,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -13423,15 +12595,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-coordination.js",
-      "line": 157,
-      "column": 6,
-      "functionName": "buildCoordinatorProgressRebalanceDecision",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js",
       "line": 347,
       "column": 6,
@@ -13478,7 +12641,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 389,
+      "line": 390,
       "column": 8,
       "functionName": "projectPriorityTerminalCreateTargets",
       "kind": "two_source_fallback_reads",
@@ -13526,15 +12689,6 @@
       "line": 713,
       "column": 6,
       "functionName": "getNormalizedOperationType",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 727,
-      "column": 6,
-      "functionName": "getNormalizedOperationWorkflowStep",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -15710,7 +14864,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-metadata-mutation-helpers.js",
-      "line": 82,
+      "line": 83,
       "column": 14,
       "functionName": "onAsyncError",
       "kind": "two_source_fallback_reads",
@@ -15719,7 +14873,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-metadata-mutation-helpers.js",
-      "line": 130,
+      "line": 131,
       "column": 22,
       "functionName": "onAsyncError",
       "kind": "two_source_fallback_reads",
@@ -15728,7 +14882,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 103,
+      "line": 104,
       "column": 6,
       "functionName": "serializeResourceBudget",
       "kind": "two_source_fallback_reads",
@@ -15737,7 +14891,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 106,
+      "line": 107,
       "column": 6,
       "functionName": "serializeResourceBudget",
       "kind": "two_source_fallback_reads",
@@ -15746,7 +14900,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 109,
+      "line": 110,
       "column": 6,
       "functionName": "serializeResourceBudget",
       "kind": "two_source_fallback_reads",
@@ -15755,7 +14909,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 112,
+      "line": 113,
       "column": 6,
       "functionName": "serializeResourceBudget",
       "kind": "two_source_fallback_reads",
@@ -15764,7 +14918,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 127,
+      "line": 128,
       "column": 6,
       "functionName": "deserializeResourceBudget",
       "kind": "two_source_fallback_reads",
@@ -15773,7 +14927,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 130,
+      "line": 131,
       "column": 6,
       "functionName": "deserializeResourceBudget",
       "kind": "two_source_fallback_reads",
@@ -15782,7 +14936,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 133,
+      "line": 134,
       "column": 6,
       "functionName": "deserializeResourceBudget",
       "kind": "two_source_fallback_reads",
@@ -15791,27 +14945,9 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 136,
+      "line": 137,
       "column": 6,
       "functionName": "deserializeResourceBudget",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 156,
-      "column": 6,
-      "functionName": "serializeServiceDefinition",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 160,
-      "column": 6,
-      "functionName": "serializeServiceDefinition",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -15827,7 +14963,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 166,
+      "line": 167,
       "column": 6,
       "functionName": "serializeServiceDefinition",
       "kind": "two_source_fallback_reads",
@@ -15836,7 +14972,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 169,
+      "line": 170,
       "column": 6,
       "functionName": "serializeServiceDefinition",
       "kind": "two_source_fallback_reads",
@@ -15845,7 +14981,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 172,
+      "line": 173,
       "column": 6,
       "functionName": "serializeServiceDefinition",
       "kind": "two_source_fallback_reads",
@@ -15854,7 +14990,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 178,
+      "line": 176,
       "column": 6,
       "functionName": "serializeServiceDefinition",
       "kind": "two_source_fallback_reads",
@@ -15863,7 +14999,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 187,
+      "line": 179,
       "column": 6,
       "functionName": "serializeServiceDefinition",
       "kind": "two_source_fallback_reads",
@@ -15872,26 +15008,17 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 201,
+      "line": 185,
+      "column": 6,
+      "functionName": "serializeServiceDefinition",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/wasm-service/wasm-service-models.js",
+      "line": 208,
       "column": 21,
-      "functionName": "deserializeServiceDefinition",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 207,
-      "column": 6,
-      "functionName": "deserializeServiceDefinition",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 211,
-      "column": 6,
       "functionName": "deserializeServiceDefinition",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -15908,7 +15035,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 217,
+      "line": 218,
       "column": 6,
       "functionName": "deserializeServiceDefinition",
       "kind": "two_source_fallback_reads",
@@ -15917,7 +15044,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 220,
+      "line": 221,
       "column": 6,
       "functionName": "deserializeServiceDefinition",
       "kind": "two_source_fallback_reads",
@@ -15926,7 +15053,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 223,
+      "line": 224,
       "column": 6,
       "functionName": "deserializeServiceDefinition",
       "kind": "two_source_fallback_reads",
@@ -15944,7 +15071,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 236,
+      "line": 230,
       "column": 6,
       "functionName": "deserializeServiceDefinition",
       "kind": "two_source_fallback_reads",
@@ -15953,25 +15080,16 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 258,
+      "line": 234,
       "column": 6,
-      "functionName": "serializeTimerEntry",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/wasm-service/wasm-service-models.js",
-      "line": 282,
-      "column": 6,
-      "functionName": "deserializeTimerEntry",
+      "functionName": "deserializeServiceDefinition",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
       "filePath": "src/wasm-service/wasm-service-replica.js",
-      "line": 149,
+      "line": 150,
       "column": 27,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -15980,7 +15098,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-replica.js",
-      "line": 151,
+      "line": 152,
       "column": 28,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",

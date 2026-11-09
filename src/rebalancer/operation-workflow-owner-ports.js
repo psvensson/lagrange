@@ -1,3 +1,5 @@
+import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {readStateField} from '../utils/state-field-read.js';
 import {
   REBALANCER_SKIP_REASON,
 } from './rebalancer-constants.js';
@@ -60,9 +62,6 @@ const OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE = Object.freeze({
 const OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE = 'function';
 const OPERATION_WORKFLOW_OWNER_PORT_OPERATION_ID_UNDERSCORE =
   'operation_id';
-const OPERATION_WORKFLOW_OWNER_PORT_WORKFLOW_STEP_UNDERSCORE =
-  'workflow_step';
-const OPERATION_WORKFLOW_OWNER_PORT_STATUS_UNDERSCORE = 'status';
 const OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_STATE =
   Object.freeze({
     COORDINATOR_MODE_UNAVAILABLE: 'coordinator_mode_unavailable',
@@ -214,16 +213,14 @@ function resolveOperationWorkflowOwnerProgressStore(owner) {
 
 function getOperationWorkflowOwnerPortWorkflowStep(operation) {
   return normalizeOperationWorkflowOwnerPortText(
-    operation?.workflowStep ||
-      operation?.[OPERATION_WORKFLOW_OWNER_PORT_WORKFLOW_STEP_UNDERSCORE],
+    readOperationRecordWorkflowStep(operation),
     OPERATION_WORKFLOW_IDENTIFIER_VARIANTS.OPERATION_KEY_UNAVAILABLE,
   );
 }
 
 function getOperationWorkflowOwnerPortStatus(operation) {
   return normalizeOperationWorkflowOwnerPortText(
-    operation?.status ||
-      operation?.[OPERATION_WORKFLOW_OWNER_PORT_STATUS_UNDERSCORE],
+    readStateField(operation?.status),
     OPERATION_WORKFLOW_IDENTIFIER_VARIANTS.OPERATION_KEY_UNAVAILABLE,
   );
 }

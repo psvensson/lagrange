@@ -1,3 +1,4 @@
+import {readStateField} from '../../utils/state-field-read.js';
 import {validate as uuidValidate} from 'uuid';
 import {assertCritical} from '../../utils/assert.js';
 import {
@@ -347,7 +348,7 @@ class BootstrapJoinAdmissionOwner {
     }
     this.getLogger().info(BOOTSTRAP_API_LOG_MSG.STALE_NODE_REJOIN_ALLOWED, {
       nodeId,
-      existingStatus: effectiveExistingNode?.[COLUMN.STATUS] ?? null,
+      existingStatus: readStateField(effectiveExistingNode?.[COLUMN.STATUS]),
       existingLease:
         effectiveExistingNode?.[COLUMN.READY_LEASE_EXPIRES_AT] ?? null,
       authoritativeOverride: authoritativeExistingNode.available === true,

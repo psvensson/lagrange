@@ -1,3 +1,4 @@
+import {readStateField} from '../../utils/state-field-read.js';
 import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
@@ -164,7 +165,7 @@ const BOOTSTRAP_READINESS_SNAPSHOT_EVALUATOR_METHODS = Object.freeze({
       {
         reasonCode: BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
         details: {
-          phase: this.getBootstrapService()?.phase || null,
+          phase: readStateField(this.getBootstrapService()?.phase),
         },
       },
     );

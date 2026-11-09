@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../../utils/state-field-read.js';
 import {
   PARTICIPANT_SET_STATE,
   isCanonicalTransactionEpoch,
@@ -8,6 +9,7 @@ import {
 import {
   buildTransactionRecoveryIncompleteError,
   buildRecoveredTransactionDecisionState,
+  readRecoveredRowStatus,
 } from './distributed-transaction-recovery-validation.js';
 import {redriveAuthoritativeRecovery, TRANSACTION_AUTHORITY_STATE} from
   './distributed-transaction-recovery-authority.js';
@@ -26,7 +28,6 @@ import {
   RECOVERY_SWEEP_LOG_MSG,
   TERMINAL_TRANSACTION_STATUS,
   TRANSACTION_RECOVERY_OWNER_KEY,
-  TRANSACTION_STATUS,
   WRITE_OPERATION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
 
@@ -179,9 +180,12 @@ const distributedTransactionRecoveryMethods = {
         const participants = Array.isArray(row.participants) ?
           row.participants :
           [];
+        // A payload names only the participant partitions, never their
+        // outcome: recovered as FAILED, the fail-closed reading.
         return participants.map((partitionId) => ({
           transaction_id: transactionId,
           partition_id: partitionId,
+          status: PARTICIPANT_STATUS.FAILED,
         }));
       }),
       writeOperations: rows.flatMap((row) => {
@@ -189,10 +193,17 @@ const distributedTransactionRecoveryMethods = {
         const writeOperations = Array.isArray(row.writeOperations) ?
           row.writeOperations :
           [];
-        return writeOperations.map((operation) => ({
-          ...operation,
-          transaction_id: transactionId,
-        }));
+        // A payload write that states no status has not been applied: PENDING.
+        return writeOperations.map((operation) => {
+          const statedStatus = readStateField(operation.status);
+          return {
+            ...operation,
+            status: statedStatus === STATE_ABSENT ?
+              WRITE_OPERATION_STATUS.PENDING :
+              statedStatus,
+            transaction_id: transactionId,
+          };
+        });
       }),
     });
   },
@@ -553,6 +564,10 @@ const distributedTransactionRecoveryMethods = {
         });
       }
     }
+    // Every recovered row states its status before any state is restored.
+    for (const rows of [transactionRows, participantRows, writeOperationRows]) {
+      rows.forEach(readRecoveredRowStatus);
+    }
 
     // A discovered obligation is owned by recovery under its own key and
     // retained by transaction ID only: it never occupies the session map, so
@@ -566,7 +581,7 @@ const distributedTransactionRecoveryMethods = {
       loadWorkflow: (row) => {
         const sessionId = row.session_id || row.sessionId;
         const transactionId = row.transaction_id || row.transactionId;
-        const status = row.status || TRANSACTION_STATUS.FAILED;
+        const status = readRecoveredRowStatus(row);
         if (!sessionId || !transactionId) {
           return null;
         }
@@ -634,7 +649,7 @@ const distributedTransactionRecoveryMethods = {
             this.createParticipantId(transactionId, partitionId),
           participantKey: partitionId,
           partitionId,
-          status: row.status || PARTICIPANT_STATUS.FAILED,
+          status: readRecoveredRowStatus(row),
           lastError: row.last_error || row.lastError || null,
           ...recoveredPrepareEvidenceOf(this, row),
           createdAt: row.created_at || row.createdAt || this.now(),
@@ -681,7 +696,7 @@ const distributedTransactionRecoveryMethods = {
         ),
         idempotencyKey: row.idempotency_key || row.idempotencyKey,
         payloadHash: row.payload_hash || row.payloadHash,
-        status: row.status || WRITE_OPERATION_STATUS.PENDING,
+        status: readRecoveredRowStatus(row),
         retryCount: row.retry_count || row.retryCount || 0,
         lastError: row.last_error || row.lastError || null,
         createdAt: row.created_at || row.createdAt || tx.createdAt,

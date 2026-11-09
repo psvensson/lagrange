@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {
   DISPATCH_PENDING_WORKFLOW_STEPS,
   REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
@@ -666,7 +667,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
       operation,
       {
         boundary: OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTE,
-        workflowStep: operation?.workflowStep || null,
+        workflowStep: readStateField(operation?.workflowStep),
         partitionId: operation?.partitionId || null,
         skipWhenOwnerLaneHeld: true,
         ownerTurnPolicy: OPERATION_OWNER_TURN_POLICY.RETAIN,

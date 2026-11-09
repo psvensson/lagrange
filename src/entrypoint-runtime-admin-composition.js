@@ -1,3 +1,4 @@
+import {readStateField} from './utils/state-field-read.js';
 import {AdminWebSocketAPI} from './admin/admin-websocket-api.js';
 import {ADMIN_DEFAULT} from './admin/admin-constants.js';
 import {ConfigurationManager} from './config/configuration-manager.js';
@@ -243,10 +244,9 @@ function reportStartupRuntimeHandoff(options) {
   options.logger.info(ENTRYPOINT_LOG_MSG.STARTUP_RUNTIME_HANDOFF, {
     nodeId: options.nodeId,
     startupBranch: options.startupBranch,
-    startupPhase:
-      options.startupOwner?.phase ||
-      options.bootstrapAPI?.bootstrapService?.phase ||
-      null,
+    // The startup branch's owner (nodeJoiningService or bootstrapService,
+    // lagrange-runtime-startup.js) owns the phase; no owner is STATE_ABSENT.
+    startupPhase: readStateField(options.startupOwner?.phase),
     bootstrapApiHasSqlQueryEngine:
       Boolean(options.bootstrapAPI?.sqlQueryEngine),
     bootstrapApiHasMessageRouter:

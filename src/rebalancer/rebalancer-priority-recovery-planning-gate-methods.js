@@ -412,9 +412,9 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
   ) {
     const publicationRow =
       event?.data && typeof event.data === 'object' ? event.data : {};
+    // control_plane_publications.status is NOT NULL on every event row.
     const publicationStatus = String(
-      publicationRow[PRIORITY_RECOVERY_PUBLICATION_EVENT_FIELD.STATUS] ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      publicationRow[PRIORITY_RECOVERY_PUBLICATION_EVENT_FIELD.STATUS],
     ).toUpperCase();
     const priorityPartition = this.isControlPlanePriorityPartition() === true;
     const publicationEvent =

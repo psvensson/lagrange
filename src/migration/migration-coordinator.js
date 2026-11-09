@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {randomUUID} from 'node:crypto';
 import {TABLES} from '../constants/index.js';
 import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
@@ -320,7 +321,8 @@ class MigrationCoordinator {
       true,
     );
     return result.rows.find((row) => {
-      return !MIGRATION_TERMINAL_STATUSES.has(String(row.status || LOCAL_STR_EMPTY));
+      // schema_migrations.status is NOT NULL.
+      return !MIGRATION_TERMINAL_STATUSES.has(String(row.status));
     }) || null;
   }
 
@@ -488,11 +490,9 @@ class MigrationCoordinator {
       throw new Error(`${MIGRATION_ERROR_MSG.MIGRATION_NOT_FOUND}: ${migrationId}`);
     }
 
-    const previousStage = String(
-      migrationRow[MIGRATION_COLUMN.CURRENT_STAGE] ||
-      migrationRow[MIGRATION_COLUMN.STATUS] ||
-      '',
-    );
+    // migrations.current_stage is NOT NULL
+    // (system-table-workflow-schema-definitions.js).
+    const previousStage = migrationRow[MIGRATION_COLUMN.CURRENT_STAGE];
     if (!this.isMonotonicTransitionAllowed(previousStage, nextStage)) {
       throw new Error(
         `${MIGRATION_ERROR_MSG.INVALID_STAGE_TRANSITION_PREFIX}` +
@@ -549,19 +549,26 @@ class MigrationCoordinator {
 
   async updatePartitionMigration(migrationId, partitionId, updates = {}) {
     const row = await this.getPartitionMigrationRow(migrationId, partitionId);
-    const status = updates.status || row?.status || MIGRATION_STATUS.PENDING;
+    if (!row) {
+      // No partition migration row: the update by primary key has nothing
+      // to change, and no status is invented for it.
+      return;
+    }
+    // An update without a status keeps the row's (NOT NULL) status.
+    const requestedStatus = readStateField(updates.status);
+    const status = requestedStatus === STATE_ABSENT ? row.status : requestedStatus;
     const backfillCursor = Object.prototype.hasOwnProperty.call(
       updates,
       'backfill_cursor',
-    ) ? updates.backfill_cursor : (row?.backfill_cursor || null);
+    ) ? updates.backfill_cursor : (row.backfill_cursor || null);
     const retryCount = Object.prototype.hasOwnProperty.call(
       updates,
       'retry_count',
-    ) ? updates.retry_count : normalizeInteger(row?.retry_count, 0);
+    ) ? updates.retry_count : normalizeInteger(row.retry_count, 0);
     const errorMessage = Object.prototype.hasOwnProperty.call(
       updates,
       'error_message',
-    ) ? updates.error_message : (row?.error_message || null);
+    ) ? updates.error_message : (row.error_message || null);
 
     await this.executeSql(
       MIGRATION_SQL.UPDATE_PARTITION_MIGRATION_BY_PK,

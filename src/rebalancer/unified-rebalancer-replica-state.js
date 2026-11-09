@@ -1,3 +1,4 @@
+import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {
   UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS,
@@ -477,8 +478,7 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     ) {
       return true;
     }
-    const workflowStep =
-      operation?.workflowStep ?? operation?.workflow_step ?? null;
+    const workflowStep = readOperationRecordWorkflowStep(operation);
     if (
       typeof operationType === 'string' &&
       typeof workflowStep === 'string' &&
@@ -713,19 +713,6 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
       operation?.type ||
         operation?.operation_type ||
         operation?.operationType ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).toUpperCase();
-  }
-
-  /**
-   * @param {Object} operation
-   * @return {string}
-   * @private
-   */
-  getNormalizedOperationWorkflowStep(operation) {
-    return String(
-      operation?.workflowStep ??
-        operation?.workflow_step ??
         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).toUpperCase();
   }

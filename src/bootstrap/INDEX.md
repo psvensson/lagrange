@@ -22,7 +22,7 @@ documentClass: generated
 - [bootstrap-api-leader-readiness-methods.js](bootstrap-api-leader-readiness-methods.js) - No leading comment; first export: installBootstrapApiLeaderReadinessMethods. (importers: one)
 - [bootstrap-api-method-installer.js](bootstrap-api-method-installer.js) - No leading comment; first export: installBootstrapApiMethods. (importers: few)
 - [bootstrap-api-readiness-methods.js](bootstrap-api-readiness-methods.js) - Handle process liveness probe. (importers: few)
-- [bootstrap-api-registration-methods.js](bootstrap-api-registration-methods.js) - Handle bootstrap request from a new node. (importers: one)
+- [bootstrap-api-registration-methods.js](bootstrap-api-registration-methods.js) - Handle bootstrap request from a new node. (importers: few)
 - [bootstrap-api-runtime-methods.js](bootstrap-api-runtime-methods.js) - No leading comment; first export: createBootstrapApiRuntimeMethods. (importers: one)
 - [bootstrap-api-server-methods.js](bootstrap-api-server-methods.js) - Initialize and start the API server. (importers: few)
 - [bootstrap-api.js](bootstrap-api.js) - Bootstrap API - REST API for node bootstrap and discovery. (importers: hub)

@@ -1,3 +1,4 @@
+import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {isReplaceRemovalIntentDurable} from './operation-workflow-replace-intent.js';
@@ -481,8 +482,7 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
    */
   getOperationWorkflowStepRank(operation) {
     const steps = getWorkflowSteps(operation?.type);
-    const workflowStep =
-      operation?.workflowStep ?? operation?.workflow_step ?? null;
+    const workflowStep = readOperationRecordWorkflowStep(operation);
     if (
       !Array.isArray(steps) ||
       steps.length === 0 ||

@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {TABLES} from '../constants/tables.js';
 import {COLUMN} from '../constants/columns.js';
 import {
@@ -87,6 +88,11 @@ function resolvePartitionRowLeadership(systemTableCache, nodeId) {
   return LEADERSHIP_RESOLUTION_UNAVAILABLE;
 }
 
+// services.raft_role is nullable: a row without a role is not a leader.
+function isLeaderRaftRole(raftRole) {
+  return readLowerStateField(raftRole) === RAFT_ROLE_LEADER;
+}
+
 function resolveServicesWitnessLeadership(systemTableCache, nodeId) {
   try {
     const witness = systemTableCache.find?.(
@@ -95,7 +101,7 @@ function resolveServicesWitnessLeadership(systemTableCache, nodeId) {
         row &&
         row[COLUMN.PARTITION_ID] === CONTROL_PLANE_PUBLICATIONS_PARTITION_ID &&
         row[COLUMN.NODE_ID] === nodeId &&
-        String(row[COLUMN.RAFT_ROLE] || '').toLowerCase() === RAFT_ROLE_LEADER,
+        isLeaderRaftRole(row[COLUMN.RAFT_ROLE]),
     );
     if (witness) {
       return buildLeadershipResolution(true, LEADERSHIP_TIER.SERVICES_WITNESS);

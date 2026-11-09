@@ -61,8 +61,8 @@ function readFutureCapacityReservationExpiry(
   nowMs,
 ) {
   if (reservation?.[COLUMN.TARGET_NODE_ID] !== nodeId) return null;
-  const status = reservation?.[COLUMN.STATUS] || RESERVATION_STATUS.ACTIVE;
-  if (status !== RESERVATION_STATUS.ACTIVE) return null;
+  // storage_reservations.status is NOT NULL: only an explicit ACTIVE counts.
+  if (reservation?.[COLUMN.STATUS] !== RESERVATION_STATUS.ACTIVE) return null;
   const expiresAt = Number(reservation?.[COLUMN.EXPIRES_AT]);
   if (!isFutureCapacityDeadline(expiresAt, nowMs)) return null;
   const operationId = reservation?.[COLUMN.OPERATION_ID];
@@ -449,8 +449,7 @@ class StorageCapacityAccountingService {
     const reservedByNode = new Map();
 
     for (const reservation of reservations) {
-      const status = reservation?.[COLUMN.STATUS] || RESERVATION_STATUS.ACTIVE;
-      if (status !== RESERVATION_STATUS.ACTIVE) {
+      if (reservation?.[COLUMN.STATUS] !== RESERVATION_STATUS.ACTIVE) {
         continue;
       }
 

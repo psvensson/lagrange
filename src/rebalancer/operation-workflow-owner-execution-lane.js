@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {resolveOperationTransitionReason} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {OperationWorkflowOwnerRetryRegistry} from './operation-workflow-owner-retry-registry.js';
@@ -41,6 +42,17 @@ const LOCAL_PRIORITY_EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS =
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
     allowCacheFallback: false,
   });
+
+// The step a deferred transition retry records: the caller's explicit step,
+// else the operation snapshot's (replica_operations.workflow_step NOT NULL);
+// null names a deferral with no operation to read a step from.
+function resolveDeferredWorkflowStep(options, operationSnapshot) {
+  const explicitStep = readStateField(options.workflowStep);
+  if (explicitStep !== STATE_ABSENT) {
+    return explicitStep;
+  }
+  return operationSnapshot ? operationSnapshot.workflowStep : null;
+}
 
 class OperationWorkflowOwnerExecutionLane
   extends withOwnerHandoffState(OperationWorkflowOwnerRetryRegistry) {
@@ -388,8 +400,10 @@ class OperationWorkflowOwnerExecutionLane
       if (
         this.deferTransitionRetry(operationId, error, {
           boundary: options.boundary || action,
-          workflowStep:
-            options.workflowStep || operationSnapshot?.workflowStep || null,
+          workflowStep: resolveDeferredWorkflowStep(
+            options,
+            operationSnapshot,
+          ),
           partitionId:
             options.partitionId || operationSnapshot?.partitionId || null,
           updatedAt: options.updatedAt || operationSnapshot?.updatedAt,
@@ -521,7 +535,7 @@ class OperationWorkflowOwnerExecutionLane
     const record = {
       workflowId,
       ownerKey: workflowId,
-      step: operation.workflowStep || null,
+      step: operation.workflowStep,
       transitionHistory: [],
       // Never recovered from a durable row: the persist callback treats
       // the first in-memory transition as the basis and still rejects
@@ -628,8 +642,8 @@ class OperationWorkflowOwnerExecutionLane
       OPERATION_WORKFLOW_OWNER_LITERAL.COMMITTED_REPLICA_OPERATION_TRANSITION_NOT_YET_AUTHORITATIVELY_VISIBLE,
       {
         operationId: operation?.operationId || null,
-        workflowStep: operation?.workflowStep || null,
-        status: operation?.status || null,
+        workflowStep: readStateField(operation?.workflowStep),
+        status: readStateField(operation?.status),
         error: error?.message || String(error),
       },
     );

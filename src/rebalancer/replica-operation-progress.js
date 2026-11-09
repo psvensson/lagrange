@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {WORKFLOW_STEP} from '../constants/index.js';
 
 const LOCAL_STR_STRING = 'string';
@@ -515,17 +516,29 @@ function readReplicaOperationRecordType(record) {
   );
 }
 
+/**
+ * The one reader of an operation record's workflow step across its two
+ * shapes: a raw replica_operations cache row names it workflow_step, an
+ * operation decoded by rowToOperation names it workflowStep. The shape is
+ * decided by which key the record holds, never by trying one then the other.
+ * @param {Object|null|undefined} record - raw row or decoded operation
+ * @return {string|null} The step, or STATE_ABSENT.
+ */
+function readOperationRecordWorkflowStep(record) {
+  const rawRow = Boolean(record) &&
+    Object.hasOwn(record, REPLICA_OPERATION_RECORD_FIELD.WORKFLOW_STEP_SNAKE);
+  return readStateField(rawRow ?
+    record[REPLICA_OPERATION_RECORD_FIELD.WORKFLOW_STEP_SNAKE] :
+    record?.[REPLICA_OPERATION_RECORD_FIELD.WORKFLOW_STEP]);
+}
+
 function readReplicaOperationRecordWorkflowStep(record) {
-  return normalizeWorkflowStepIdentifier(
-    record?.[REPLICA_OPERATION_RECORD_FIELD.WORKFLOW_STEP] ??
-    record?.[REPLICA_OPERATION_RECORD_FIELD.WORKFLOW_STEP_SNAKE] ??
-    '',
-  );
+  return normalizeWorkflowStepIdentifier(readOperationRecordWorkflowStep(record));
 }
 
 function readReplicaOperationRecordStatus(record) {
   return normalizeReplicaStatusIdentifier(
-    record?.[REPLICA_OPERATION_RECORD_FIELD.STATUS] || '',
+    record?.[REPLICA_OPERATION_RECORD_FIELD.STATUS],
   );
 }
 
@@ -738,6 +751,7 @@ function isReplaceRemoveDispatchPhase(operation) {
 }
 
 export {
+  readOperationRecordWorkflowStep,
   ReplicaStatus,
   TERMINAL_STATUSES,
   TERMINAL_STATUS_SQL_CLAUSE,

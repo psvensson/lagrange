@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {WORKFLOW_STEP} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
@@ -515,14 +516,8 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
       const cachedServiceRow =
         this.systemTableCache?.get?.(SYSTEM_TABLE_NAME.SERVICES, replicaId) ||
         null;
-      const cachedStatus =
-        typeof cachedServiceRow?.status === REPLICA_HANDLER_TYPEOF.STRING ?
-          cachedServiceRow.status :
-          null;
-      const localStatus =
-        typeof localReplica?.status === REPLICA_HANDLER_TYPEOF.STRING ?
-          localReplica.status :
-          null;
+      const cachedStatus = readStateField(cachedServiceRow?.status);
+      const localStatus = readStateField(localReplica?.status);
       const currentStatus =
         trackedStatus ||
         localStatus ||

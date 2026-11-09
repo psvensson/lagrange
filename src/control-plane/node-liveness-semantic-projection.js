@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {COLUMN, SERVICE_STATUS, STATE} from
   '../constants/index.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
@@ -525,11 +526,14 @@ function buildNodeLivenessProjection(context, facts, clusterMembershipState) {
   const connectionState = facts.transportConnected ?
     NODE_LIVENESS_SEMANTIC_STATE.CONNECTED :
     NODE_LIVENESS_SEMANTIC_STATE.DISCONNECTED;
+  const observedStatus = readStateField(facts.status);
   return objectFreeze({
     nodeId: context.nodeId,
     projectedAtMs: context.nowMs,
     statusSemantics: objectFreeze({
-      state: facts.status || NODE_LIVENESS_SEMANTIC_STATE.UNKNOWN,
+      state: observedStatus === STATE_ABSENT ?
+        NODE_LIVENESS_SEMANTIC_STATE.UNKNOWN :
+        observedStatus,
       active: facts.statusActive,
     }),
     connectionSemantics: objectFreeze({

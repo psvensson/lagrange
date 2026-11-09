@@ -1,3 +1,4 @@
+import {readLowerStateField, readStateField, readUpperStateField} from '../utils/state-field-read.js';
 import {
   inferPriorityRecoveryTableNameFromPartitionId,
   normalizePriorityRecoveryInteger,
@@ -123,7 +124,7 @@ function buildPriorityRecoveryReplicaOperationContext(
     operationId,
   );
   const timelineSteps = normalizePriorityRecoveryStringList(
-    timeline.map((entry) => String(entry?.step || '').trim()),
+    timeline.map((entry) => readStateField(entry?.step)),
   );
   const latestTimelineEntry =
     timeline.length > 0 ? timeline[timeline.length - 1] : null;
@@ -143,10 +144,8 @@ function buildPriorityRecoveryReplicaOperationContext(
     partitionId,
     tableName: inferPriorityRecoveryTableNameFromPartitionId(partitionId),
     type: String(normalizedReplicaOperation.type || '').toUpperCase(),
-    status: String(normalizedReplicaOperation.status || '').toLowerCase(),
-    workflowStep: String(
-      normalizedReplicaOperation.workflowStep || '',
-    ).toUpperCase(),
+    status: normalizedReplicaOperation.status,
+    workflowStep: normalizedReplicaOperation.workflowStep,
     sourceNodeId: normalizedReplicaOperation.sourceNodeId || null,
     targetNodeId: normalizedReplicaOperation.targetNodeId || null,
     replicaId: normalizedReplicaOperation.replicaId || null,
@@ -179,10 +178,8 @@ function buildPriorityRecoveryReplicaOperationContext(
     ),
     timelineLength: timeline.length,
     timelineStepCount: timelineSteps.length,
-    latestTimelineStep:
-      String(latestTimelineEntry?.step || '').toUpperCase() || null,
-    latestTimelineStatus:
-      String(latestTimelineEntry?.status || '').toLowerCase() || null,
+    latestTimelineStep: readUpperStateField(latestTimelineEntry?.step),
+    latestTimelineStatus: readLowerStateField(latestTimelineEntry?.status),
     latestTimelineInFlight: latestTimelineEntry?.inFlight === true,
     currentStepEnteredAtMs,
     stepAgeMs,
@@ -664,7 +661,9 @@ function buildPriorityRecoveryOperationContextFromRecord(record, options = {}) {
   );
   const timelineSteps = normalizePriorityRecoveryStringList(
     stepsHistory.map((entry) =>
-      String(entry?.step || entry?.workflowStep || '').trim(),
+      // Every steps_history writer records `step` (replica-status.js,
+      // operation-workflow-transition-*.js, move-replica-handoff-owner.js).
+      readStateField(entry?.step),
     ),
   );
   const latestTimelineEntry =
@@ -678,8 +677,8 @@ function buildPriorityRecoveryOperationContextFromRecord(record, options = {}) {
     partitionId,
     tableName: inferPriorityRecoveryTableNameFromPartitionId(partitionId),
     type: String(normalizedRecord.type || LOCAL_STR_EMPTY).toUpperCase(),
-    status: String(normalizedRecord.status || LOCAL_STR_EMPTY).toLowerCase(),
-    workflowStep: String(normalizedRecord.workflowStep || LOCAL_STR_EMPTY).toUpperCase(),
+    status: normalizedRecord.status,
+    workflowStep: normalizedRecord.workflowStep,
     sourceNodeId: normalizedRecord.sourceNodeId || null,
     targetNodeId: normalizedRecord.targetNodeId || null,
     replicaId: normalizedRecord.replicaId || null,
@@ -706,18 +705,8 @@ function buildPriorityRecoveryOperationContextFromRecord(record, options = {}) {
     ),
     timelineLength: stepsHistory.length,
     timelineStepCount: timelineSteps.length,
-    latestTimelineStep:
-      String(
-        latestTimelineEntry?.step ||
-          latestTimelineEntry?.workflowStep ||
-          PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
-      ).toUpperCase() || null,
-    latestTimelineStatus:
-      String(
-        latestTimelineEntry?.status ||
-          latestTimelineEntry?.state ||
-          PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
-      ).toLowerCase() || null,
+    latestTimelineStep: readUpperStateField(latestTimelineEntry?.step),
+    latestTimelineStatus: readLowerStateField(latestTimelineEntry?.status),
     latestTimelineInFlight: latestTimelineEntry?.inFlight === true,
     currentStepEnteredAtMs,
     stepAgeMs,

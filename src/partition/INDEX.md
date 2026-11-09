@@ -64,7 +64,7 @@ documentClass: generated
 - [partition-committed-log.js](partition-committed-log.js) - The partition's committed log, as the rs-raft durable store holds it. (importers: few)
 - [partition-committed-statement-outcome-constants.js](partition-committed-statement-outcome-constants.js) - The vocabulary of the committed-statement outcome owner (partition-committed-statement-outcome.js): its durable... (importers: hub)
 - [partition-committed-statement-outcome.js](partition-committed-statement-outcome.js) - The terminal outcome of every committed statement: the one owner of what a committed statement's result is, for the... (importers: many)
-- [partition-consensus-hold-log.js](partition-consensus-hold-log.js) - The partition's log of its consensus group's hold on a contained programming error. (importers: one)
+- [partition-consensus-hold-log.js](partition-consensus-hold-log.js) - The partition's observer of its group's hold: called on each leadership announcement, it reads the port's status and... (importers: one)
 - [partition-consensus-port-opening.js](partition-consensus-port-opening.js) - How a partition replica opens its consensus operation port, and the typed startup refusal of a port its runtime... (importers: one)
 - [partition-constants.js](partition-constants.js) - Set of split lifecycle phases that only ManagedSplitWorkflow may persist as durable partition_transition_state values. (importers: hub)
 - [partition-coordinator-settlement-command.js](partition-coordinator-settlement-command.js) - No leading comment; first export: buildCoordinatorSettlementCommand. (importers: few)

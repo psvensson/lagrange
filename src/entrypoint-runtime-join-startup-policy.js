@@ -1,3 +1,4 @@
+import {readStateField} from './utils/state-field-read.js';
 import {MembershipLifecycleController} from
   './control-plane/membership-lifecycle-controller.js';
 import {STARTUP_JOIN_MODE} from './bootstrap/rejoin-hints-constants.js';
@@ -41,7 +42,7 @@ function reportJoinReattemptsSpent(options, joinAttempt) {
     lastObserved: () => ({
       attempts: joinAttempt + LOCAL_NUM_ONE,
       maxAttempts: options.reattemptPolicy.maxAttempts,
-      phase: options.joinResult.phase ?? null,
+      phase: readStateField(options.joinResult.phase),
       lastError: options.joinResult.error ?? null,
     }),
     scope: {nodeId: options.nodeId},

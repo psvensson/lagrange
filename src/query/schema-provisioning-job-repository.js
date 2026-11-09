@@ -109,7 +109,9 @@ function serializeNullableJson(value) {
 function buildWorkflowMutationData(nextWorkflow, nextRowVersion) {
   return {
     row_version: nextRowVersion,
-    status: nextWorkflow.status ?? nextWorkflow.step,
+    // schema_operations.status is NOT NULL and every owner-built workflow
+    // sets it; step is a different vocabulary and never stands in for it.
+    status: nextWorkflow.status,
     current_step: nextWorkflow.step,
     reason_codes: JSON.stringify(nextWorkflow.reasonCodes ?? []),
     retry_after_ms: nextWorkflow.retryAfterMs ?? 0,

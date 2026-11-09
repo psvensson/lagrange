@@ -7,7 +7,12 @@
  * Requirements: 4.4, 9.3
  */
 
-import {BaseView, ROW_STATUS} from '../core/base-view.js';
+import {
+  BaseView,
+  DISPLAY_STATE,
+  ROW_STATUS,
+  displayState,
+} from '../core/base-view.js';
 
 const LOCAL_STR_PENDING = 'pending';
 const LOCAL_STR_CREATING = 'creating';
@@ -44,7 +49,6 @@ const LOCAL_STR_UPDATED_AT = 'updated_at';
 const LOCAL_STR_UPDATED = 'Updated';
 const LOCAL_NUM_TWENTY = 20;
 const LOCAL_STR_N_A = 'N/A';
-const LOCAL_STR_UNKNOWN = 'unknown';
 const LOCAL_STR_DOT_DOT_DOT = '...';
 const LOCAL_STR_T = 'T';
 const LOCAL_STR_SPACE = ' ';
@@ -131,8 +135,8 @@ export class OperationsView extends BaseView {
       operation.type || LOCAL_STR_N_A,
       this.truncateId(operation.partition_id),
       this.truncateId(operation.target_node_id),
-      operation.status || LOCAL_STR_UNKNOWN,
-      operation.workflow_step || LOCAL_STR_N_A,
+      displayState(operation.status, DISPLAY_STATE.UNKNOWN),
+      displayState(operation.workflow_step, DISPLAY_STATE.NOT_APPLICABLE),
       this.formatTimestamp(operation.updated_at),
     ];
   }

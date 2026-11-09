@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {
   WORKFLOW_CLAIM_RESULT,
   WORKFLOW_ERROR_MSG,
@@ -128,7 +129,8 @@ function buildTransitionHistoryEntry(workflow, transition, fenceToken, now) {
   const metadata = transition.metadata &&
     typeof transition.metadata === 'object' ? transition.metadata : {};
   return {
-    [WORKFLOW_TRANSITION_FIELD.PREVIOUS_STEP]: workflow.step ?? null,
+    // A workflow's first transition has no previous step (null).
+    [WORKFLOW_TRANSITION_FIELD.PREVIOUS_STEP]: readStateField(workflow.step),
     [WORKFLOW_TRANSITION_FIELD.NEXT_STEP]: transition.nextStep,
     [WORKFLOW_TRANSITION_FIELD.REASON]: transition.reason,
     [WORKFLOW_TRANSITION_FIELD.TIMESTAMP]: now,

@@ -1,3 +1,4 @@
+import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
 /**
  * OperationWorkflowOwner — single-flight owner keys, transition/claim
  * progression, and observed-progress reconciliation entry.
@@ -445,7 +446,7 @@ function resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence(
   evidence = {},
 ) {
   const operation = evidence.operation;
-  const workflowStep = operation?.workflowStep ?? operation?.workflow_step;
+  const workflowStep = readOperationRecordWorkflowStep(operation);
   const targetLifecycleStatus = evidence.targetLifecycleStatus;
   if (!isPriorityRecoveryPreSyncReplaceOperation(operation, workflowStep)) {
     return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.NOT_APPLICABLE;

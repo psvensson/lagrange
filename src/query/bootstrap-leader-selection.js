@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 
 const LOCAL_STR_LEADER_ROLE = 'leader_role';
@@ -22,8 +23,8 @@ function resolveBootstrapLeaderSelection(options = {}) {
     '',
   );
   const leaderServices = visibleServices.filter((service) => {
-    return String(service?.raft_role || '')
-      .toLowerCase() === String(RAFT_ROLE.LEADER).toLowerCase();
+    return readLowerStateField(service?.raft_role) ===
+      String(RAFT_ROLE.LEADER).toLowerCase();
   });
 
   if (leaderServices.length === 1) {

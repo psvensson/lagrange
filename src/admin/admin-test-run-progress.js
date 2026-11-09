@@ -158,9 +158,10 @@ function inferProgressFromLog(
     return null;
   }
 
+  // A stderr line below the threshold keeps the run's phase (run.progress,
+  // its only input, always carries one).
   return {
-    phase: currentProgress?.phase ||
-      RUN_PROGRESS_PHASE.SCENARIO_RUNNING,
+    phase: currentProgress.phase,
     message: text,
     percent: Math.max(STDERR_FALLBACK_PERCENT, currentPercent),
   };

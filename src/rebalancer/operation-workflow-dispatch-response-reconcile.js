@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
@@ -134,7 +135,7 @@ const REFUSED_CREATE_DISPATCH_AUTHORITY = Object.freeze({
  */
 function logSendOperationAttempt(owner, operation, payload) {
   const sendOperationLogKey =
-    `${operation.operationId}:${operation.workflowStep || ''}`;
+    `${operation.operationId}:${operation.workflowStep}`;
   if (!owner.sendOperationInfoLoggedKeys) {
     owner.sendOperationInfoLoggedKeys = new Set();
   }
@@ -327,7 +328,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       operation,
       {
         boundary: OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTE,
-        workflowStep: operation?.workflowStep || null,
+        workflowStep: readStateField(operation?.workflowStep),
         partitionId: operation?.partitionId || null,
         skipWhenOwnerLaneHeld: true,
       },
@@ -339,7 +340,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       operation,
       {
         boundary: OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTE_RECONCILE,
-        workflowStep: operation?.workflowStep || null,
+        workflowStep: readStateField(operation?.workflowStep),
         partitionId: operation?.partitionId || null,
         runInlineWhenOwnerLaneHeld: true,
       },
@@ -1088,7 +1089,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
               boundary:
                 OPERATION_WORKFLOW_OWNER_LITERAL
                   .PRIORITY_ACTIVE_REPLACE_RESUME,
-              workflowStep: currentOperation.workflowStep || null,
+              workflowStep: currentOperation.workflowStep,
               partitionId: currentOperation.partitionId || null,
               runInlineWhenOwnerLaneHeld: true,
             },
@@ -1100,7 +1101,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
             boundary:
               OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_ACTIVE_REPLACE_RESUME,
             partitionId: operation?.partitionId || null,
-            workflowStep: operation?.workflowStep || null,
+            workflowStep: readStateField(operation?.workflowStep),
             updatedAt: operation?.updatedAt,
             createdAt: operation?.createdAt,
             operationSnapshot: operation,
@@ -1113,7 +1114,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
           {
             operationId,
             partitionId: operation?.partitionId || null,
-            workflowStep: operation?.workflowStep || null,
+            workflowStep: readStateField(operation?.workflowStep),
             boundary:
               OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_ACTIVE_REPLACE_RESUME,
             error:

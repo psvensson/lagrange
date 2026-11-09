@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {
   REPLICA_OPERATION_INSERT_DISPOSITION,
 } from './replica-operation-insert-disposition.js';
@@ -38,8 +39,8 @@ function reportReplicaOperationVisibilitySpent(repository, operation, spent) {
     boundMs: repository.replicaOperationAuthoritativeVisibilityTimeoutMs,
     elapsedMs: repository.timeSource.now() - spent.startedAtMs,
     lastObserved: {
-      expectedWorkflowStep: operation?.workflowStep || null,
-      expectedStatus: operation?.status || null,
+      expectedWorkflowStep: readStateField(operation?.workflowStep),
+      expectedStatus: readStateField(operation?.status),
       polls: spent.polls,
       sawVisibilityMismatch: spent.sawVisibilityMismatch,
       deferredOutcome: Boolean(spent.deferredOutcome),
@@ -655,8 +656,8 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         {
           operation_id: cachedRow.operation_id || null,
           replica_id: cachedRow.replica_id || null,
-          status: cachedRow.status || null,
-          workflow_step: cachedRow.workflow_step || null,
+          status: cachedRow.status,
+          workflow_step: cachedRow.workflow_step,
           updated_at: Number(cachedRow.updated_at) || null,
           completed_at: Number(cachedRow.completed_at) || null,
           error_message: cachedRow.error_message || null,
@@ -707,8 +708,8 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       return {
         operation_id: operation.operationId,
         replica_id: operation.replicaId ?? null,
-        status: operation.status ?? null,
-        workflow_step: operation.workflowStep ?? null,
+        status: operation.status,
+        workflow_step: operation.workflowStep,
         updated_at: Number.isFinite(operation.updatedAt) ?
           operation.updatedAt :
           null,

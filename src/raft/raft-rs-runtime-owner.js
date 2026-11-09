@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from './raft-committed-membership-constants.js';
 import {instantiateRaftRsCore, verifyRaftRsBinding} from './raft-rs-binding-owner.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
@@ -612,7 +613,8 @@ function runtimeRecoveryOutcome(group) {
   return outcome(HOST_FAILURE, {
     reason: recovery?.failure?.reason ??
       RUNTIME_REASON.REPLACEMENT_IN_PROGRESS,
-    phase: recovery?.failure?.phase ?? RUNTIME_PHASE.RUNTIME_REPLACEMENT,
+    // No recorded failure: the replacement in progress is the phase.
+    phase: recovery?.failure ? recovery.failure.phase : RUNTIME_PHASE.RUNTIME_REPLACEMENT,
     failure: recovery?.failure ?? null,
     retryAfterMs: recovery === null ? 0 :
       Math.max(0, recovery.retryNotBefore - recovery.clock.now()),
@@ -889,7 +891,7 @@ function recoveryOutcome(group, reason, retryAfterMs = retryAfterMsOf(group)) {
     durableProgress: {state: DURABLE_PROGRESS_OBSERVATION.NOT_READ}};
   return outcome(HOST_FAILURE, {
     reason,
-    phase: recovery.failure?.phase ?? null,
+    phase: readStateField(recovery.failure?.phase),
     failure: recovery.failure,
     retryAfterMs,
     attempts: recovery.attempts,

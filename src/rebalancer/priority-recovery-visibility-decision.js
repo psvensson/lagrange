@@ -1,3 +1,4 @@
+import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
 /**
  * Evidence normalizer for priority-recovery visibility cache events.
  */
@@ -30,8 +31,6 @@ const PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD = Object.freeze({
   PARTITION_ID_SNAKE: 'partition_id',
   STATUS: 'status',
   TYPE: 'type',
-  WORKFLOW_STEP: 'workflowStep',
-  WORKFLOW_STEP_SNAKE: 'workflow_step',
 });
 
 const PRIORITY_RECOVERY_VISIBILITY_SERVICE_TYPE = Object.freeze({
@@ -183,8 +182,7 @@ function buildPriorityRecoveryVisibilityRebalanceDecision(
     (value) => value.toLowerCase(),
   );
   const serviceStatus = toVisibilityString(
-    visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.STATUS] ||
-      UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.STATUS],
     (value) => value.toLowerCase(),
   );
   const operationPartitionId = toVisibilityString(
@@ -195,8 +193,7 @@ function buildPriorityRecoveryVisibilityRebalanceDecision(
       UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
   );
   const operationStatus = toVisibilityString(
-    visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.STATUS] ||
-      UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.STATUS],
     (value) => value.toLowerCase(),
   );
   const operationType = toVisibilityString(
@@ -205,9 +202,7 @@ function buildPriorityRecoveryVisibilityRebalanceDecision(
     (value) => value.toUpperCase(),
   );
   const operationWorkflowStep = toVisibilityString(
-    visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.WORKFLOW_STEP] ||
-      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.WORKFLOW_STEP_SNAKE] ||
-      UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    readOperationRecordWorkflowStep(visibilityRow),
     (value) => value.toUpperCase(),
   );
 

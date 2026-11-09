@@ -300,3 +300,13 @@ They are recorded, not in scope (R17); the readiness chain is the pilot.
   replace its `readStateField` reads on these tables with decoded named
   states, and the `row_field_alias_reads` cap arithmetic starts from the
   post-merge value, not 745.
+- 2026-11-08 (lead ruling, state-read-named-defaults): an explicit shape
+  dispatch that ends in a named state (a reader choosing `publicationStatus`
+  versus `status`, or `workflowStep` versus `workflow_step`, by the shape the
+  record declares) is not a silent default and may stay; it is still two
+  shapes for one fact (R08), so collapsing them into one decoded row belongs to
+  `system-table-row-decoders`, recorded there as the quest's starting findings.
+  The ESLint promotion of `state_read_defaults` lands with the last deletion
+  and is proven by a parity test against the detector over every shape and
+  chain position (the predecessor's head-only selector is the pinned
+  counterexample).

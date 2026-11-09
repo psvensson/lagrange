@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readLowerStateField, readStateField} from '../utils/state-field-read.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
@@ -199,12 +200,8 @@ class PartitionServiceLearnerPromotionMethods {
         if (!operationRow || operationRow.partition_id !== this.partitionId) {
           return false;
         }
-        const operationStatus = String(
-          operationRow.status ??
-            operationRow.operation_status ??
-            operationRow.operationStatus ??
-            STRING.EMPTY,
-        ).toLowerCase();
+        // replica_operations.status is NOT NULL on every cache row.
+        const operationStatus = String(operationRow.status).toLowerCase();
         return !TERMINAL_STATUSES.includes(operationStatus);
       },
     );
@@ -233,11 +230,13 @@ class PartitionServiceLearnerPromotionMethods {
     );
   }
   getReplicaServiceStatusForPromotion(serviceRow) {
-    return serviceRow?.[COLUMN.STATUS] || ReplicaStatus.ACTIVE;
+    return readStateField(serviceRow?.[COLUMN.STATUS]);
   }
   isLiveReplicaServiceRowForPromotion(serviceRow) {
+    // services.status is NOT NULL: a row without one is no live evidence.
     const status = this.getReplicaServiceStatusForPromotion(serviceRow);
     return (
+      status !== STATE_ABSENT &&
       status !== ReplicaStatus.FAILED &&
       status !== ReplicaStatus.REMOVING &&
       status !== ReplicaStatus.REMOVED
@@ -532,12 +531,7 @@ class PartitionServiceLearnerPromotionMethods {
           operationRow?.[COLUMN.PARTITION_ID] === this.partitionId &&
             ADD_LIKE_REPLICA_OPERATION_TYPES.has(operationRow?.type) &&
             !TERMINAL_STATUSES.includes(
-              String(
-                operationRow?.[COLUMN.STATUS] ??
-                  operationRow?.operation_status ??
-                  operationRow?.operationStatus ??
-                  STRING.EMPTY,
-              ).toLowerCase(),
+              readLowerStateField(operationRow?.[COLUMN.STATUS]),
             )
         );
       },
