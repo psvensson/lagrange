@@ -16,9 +16,9 @@ import {readLog, readQuest} from '../../scripts/solve/store.js';
 import {
   ALTITUDE_BUDGET, LAND_LOCK_FILENAME, LAND_LOCK_TIMEOUT_REFUSAL,
   LANDING_MARKER_ENV, LANDING_MARKER_VALUE,
-  SolveError, acquireLandingLock, board, isLockStale, isPidAlive, land,
+  SolveError, acquireLandingLock, board, isKernelThreadPid, isLockStale, isPidAlive, land,
   landChangeProofEnvironment, note, probe, requiresInventoryRefresh,
-  runChangeProof, stageGeneratedArtifacts, start,
+  runChangeProof, stageGeneratedArtifacts, start, tryCreateLandingLock,
 } from '../../scripts/solve/commands.js';
 import {gitCommonDir} from '../../scripts/solve/guards.js';
 import {
@@ -86,6 +86,27 @@ function refuses(fn, pattern) {
 function goGreen(root) {
   write(root, ORACLE, JSON.stringify({metric: 0, target: 0}));
 }
+
+test('a receipt epic seals a red quest and keeps every required receipt in its probe', (t) => {
+  const root = repo(t);
+  const receipt = 'solve/quests/demo/evidence/receipt.json';
+  write(root, 'solve/epics/demo-epic.md', ['---', `id: ${EPIC_ID}`, 'status: open',
+    'proof: deterministic', 'doneWhen:', '  probe: test-receipt', '  args:',
+    `    file: ${receipt}`, '    requiredReceipts:', '      - cause-repaired',
+    '      - independent-review', 'quests:', `  - ${QUEST_ID}`,
+    'authorizes:', '  - src/**', '---'].join('\n'));
+  write(root, receipt, JSON.stringify({schema: 'test-receipt/1', status: 'pass',
+    receipts: [{id: 'cause-repaired', passed: true}]}));
+  assert.match(start(root, {id: QUEST_ID}).sealedAt, /^[0-9a-f]{40}$/u);
+  const result = probe(root, {epic: EPIC_ID});
+  assert.equal(result.probe.measuring, true);
+  assert.equal(result.probe.done, false, 'missing review cannot become success');
+  assert.deepEqual(result.probe.outstanding, ['independent-review']);
+  write(root, receipt, JSON.stringify({schema: 'test-receipt/1', status: 'pass',
+    receipts: [{id: 'cause-repaired', passed: true},
+      {id: 'independent-review', passed: true}]}));
+  assert.equal(probe(root, {epic: EPIC_ID}).probe.done, true);
+});
 
 test('start refuses a green or non-measuring probe; a red one seals', (t) => {
   refuses(() => start(repo(t, {metric: 0}), {id: QUEST_ID}), /green probe/u);
@@ -500,6 +521,200 @@ test('acquireLandingLock detects held locks and clears stale locks', (t) => {
   assert.equal(fs.existsSync(lockPath), true);
   reacquired.release();
   assert.equal(fs.existsSync(lockPath), false);
+});
+
+test('tryCreateLandingLock and acquireLandingLock record pidStartTime and pidNamespace', (t) => {
+  const root = repo(t, {legacy: true});
+  const common = gitCommonDir(root);
+  const lockPath = path.join(common, LAND_LOCK_FILENAME);
+
+  const lock = acquireLandingLock(root, {id: 'q-live-inspect'});
+  assert.equal(fs.existsSync(lockPath), true);
+  const content = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+  assert.equal(content.pid, process.pid);
+  assert.equal(content.questId, 'q-live-inspect');
+  assert.equal(typeof content.createdAt, 'number');
+  if (process.platform === 'linux' && fs.existsSync('/proc/self/stat')) {
+    assert.equal(typeof content.pidStartTime, 'string');
+    assert.equal(typeof content.pidNamespace, 'string');
+  }
+  lock.release();
+  assert.equal(fs.existsSync(lockPath), false);
+
+  const injectedLock = acquireLandingLock(root, {
+    id: 'q-injected-inspect',
+    inspectPid: () => ({
+      alive: true,
+      pidStartTime: '98765',
+      pidNamespace: 'pid:[4026532000]',
+      isKernelThread: false,
+    }),
+  });
+  const injectedContent = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+  assert.equal(injectedContent.pid, process.pid);
+  assert.equal(injectedContent.pidStartTime, '98765');
+  assert.equal(injectedContent.pidNamespace, 'pid:[4026532000]');
+  injectedLock.release();
+  assert.equal(fs.existsSync(lockPath), false);
+
+  const created = tryCreateLandingLock(lockPath, 'q-direct', () => 123456, () => ({
+    alive: true,
+    pidStartTime: '54321',
+    pidNamespace: 'pid:[4026531111]',
+    isKernelThread: false,
+  }));
+  assert.equal(created, true);
+  const directContent = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+  assert.equal(directContent.pidStartTime, '54321');
+  assert.equal(directContent.pidNamespace, 'pid:[4026531111]');
+  assert.equal(directContent.createdAt, 123456);
+  fs.unlinkSync(lockPath);
+});
+
+test('isLockStale and acquireLandingLock clear stale locks with recycled PID or isolated PID namespace mismatch', (t) => {
+  const root = repo(t, {legacy: true});
+  const common = gitCommonDir(root);
+  const lockPath = path.join(common, LAND_LOCK_FILENAME);
+
+  const startTimeMismatchRecord = {
+    pid: process.pid,
+    pidStartTime: '100',
+    pidNamespace: 'pid:[4026531836]',
+    createdAt: Date.now(),
+  };
+  const mockCurrentIdentity = () => ({
+    alive: true,
+    pidStartTime: '200',
+    pidNamespace: 'pid:[4026531836]',
+    isKernelThread: false,
+  });
+  assert.equal(isLockStale(startTimeMismatchRecord, Date.now(), mockCurrentIdentity), true);
+
+  const nsMismatchRecord = {
+    pid: process.pid,
+    pidStartTime: '100',
+    pidNamespace: 'pid:[4026531836]',
+    createdAt: Date.now(),
+  };
+  const mockOtherNsIdentity = () => ({
+    alive: true,
+    pidStartTime: '100',
+    pidNamespace: 'pid:[4026539999]',
+    isKernelThread: false,
+  });
+  assert.equal(isLockStale(nsMismatchRecord, Date.now(), mockOtherNsIdentity), true);
+
+  fs.writeFileSync(lockPath, JSON.stringify(startTimeMismatchRecord));
+  assert.equal(fs.existsSync(lockPath), true);
+  const acquired = acquireLandingLock(root, {
+    id: 'q-cleared-starttime',
+    lockTimeoutMs: 50,
+    lockPollMs: 10,
+    inspectPid: mockCurrentIdentity,
+  });
+  assert.equal(fs.existsSync(lockPath), true);
+  const newContent = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+  assert.equal(newContent.pidStartTime, '200');
+  acquired.release();
+  assert.equal(fs.existsSync(lockPath), false);
+
+  fs.writeFileSync(lockPath, JSON.stringify(nsMismatchRecord));
+  assert.equal(fs.existsSync(lockPath), true);
+  const acquiredNs = acquireLandingLock(root, {
+    id: 'q-cleared-ns',
+    lockTimeoutMs: 50,
+    lockPollMs: 10,
+    inspectPid: mockOtherNsIdentity,
+  });
+  assert.equal(fs.existsSync(lockPath), true);
+  acquiredNs.release();
+  assert.equal(fs.existsSync(lockPath), false);
+});
+
+test('isLockStale and acquireLandingLock clear lock when PID is a kernel thread (PID 2)', (t) => {
+  const root = repo(t, {legacy: true});
+  const common = gitCommonDir(root);
+  const lockPath = path.join(common, LAND_LOCK_FILENAME);
+
+  const legacyRecord = {pid: 2, createdAt: Date.now()};
+  const mockKernelThread = (pid) => ({
+    alive: true,
+    pidStartTime: null,
+    pidNamespace: null,
+    isKernelThread: pid === 2,
+  });
+  assert.equal(isLockStale(legacyRecord, Date.now(), mockKernelThread), true);
+
+  fs.writeFileSync(lockPath, JSON.stringify(legacyRecord));
+  assert.equal(fs.existsSync(lockPath), true);
+  const acquired = acquireLandingLock(root, {
+    id: 'q-cleared-kthread',
+    lockTimeoutMs: 50,
+    lockPollMs: 10,
+    inspectPid: mockKernelThread,
+  });
+  assert.equal(fs.existsSync(lockPath), true);
+  acquired.release();
+  assert.equal(fs.existsSync(lockPath), false);
+
+  if (process.platform === 'linux' && isKernelThreadPid(2)) {
+    assert.equal(isLockStale(legacyRecord, Date.now()), true);
+    fs.writeFileSync(lockPath, JSON.stringify(legacyRecord));
+    const realAcquired = acquireLandingLock(root, {
+      id: 'q-cleared-real-kthread',
+      lockTimeoutMs: 50,
+      lockPollMs: 10,
+    });
+    assert.equal(fs.existsSync(lockPath), true);
+    realAcquired.release();
+    assert.equal(fs.existsSync(lockPath), false);
+  }
+});
+
+test('isLockStale returns false and acquireLandingLock refuses when lock is actively held with matching identity', (t) => {
+  const root = repo(t, {legacy: true});
+  const common = gitCommonDir(root);
+  const lockPath = path.join(common, LAND_LOCK_FILENAME);
+
+  const matchingInspect = () => ({
+    alive: true,
+    pidStartTime: '55555',
+    pidNamespace: 'pid:[4026531836]',
+    isKernelThread: false,
+  });
+  const activeRecord = {
+    pid: process.pid,
+    pidStartTime: '55555',
+    pidNamespace: 'pid:[4026531836]',
+    createdAt: Date.now(),
+  };
+  assert.equal(isLockStale(activeRecord, Date.now(), matchingInspect), false);
+
+  fs.writeFileSync(lockPath, JSON.stringify(activeRecord));
+  refuses(
+    () => acquireLandingLock(root, {
+      id: 'q-blocked',
+      lockTimeoutMs: 20,
+      lockPollMs: 5,
+      inspectPid: matchingInspect,
+    }),
+    new RegExp(LAND_LOCK_TIMEOUT_REFUSAL, 'u'),
+  );
+  fs.unlinkSync(lockPath);
+
+  const lock = acquireLandingLock(root, {
+    id: 'q-check-release',
+    lockTimeoutMs: 20,
+    inspectPid: matchingInspect,
+  });
+  fs.writeFileSync(lockPath, JSON.stringify({
+    pid: process.pid,
+    pidStartTime: 'different-starttime',
+    createdAt: Date.now(),
+  }));
+  lock.release();
+  assert.equal(fs.existsSync(lockPath), true, 'did not unlink lock owned by different start-time');
+  fs.unlinkSync(lockPath);
 });
 
 test('staged landing index synthesizes a candidate commit for lab placement without moving HEAD', (t) => {

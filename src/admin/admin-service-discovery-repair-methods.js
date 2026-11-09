@@ -158,6 +158,8 @@ function assignAdminServiceDiscoveryRepairMethods(
         repairedTableCount: 0,
         repairedRowCount: 0,
         repairedTableNames: [],
+        changedRowIds: [],
+        changedRowIdsByTable: {},
         authoritativeRowsByTable: new Map(),
         failedTables: [],
         errors: [],
@@ -220,6 +222,51 @@ function assignAdminServiceDiscoveryRepairMethods(
       }
     }
 
+    consumeSupersededAuthoritativeDiscoveryTableInput(tableInput, cacheOwner) {
+      const incomingObservedAtMs = Math.floor(
+        Number(tableInput.authoritativeObservation?.observedAtMs),
+      );
+      const currentObservedAtMs =
+        cacheOwner?.systemTableCache?.getLastAuthoritativeObservedAtMs?.(
+          tableInput.targetTableName,
+        );
+      if (
+        !Number.isFinite(incomingObservedAtMs) ||
+        !Number.isFinite(currentObservedAtMs) ||
+        currentObservedAtMs < incomingObservedAtMs
+      ) {
+        return false;
+      }
+      this.controlPlaneSystemTableGateway
+        ?.consumeAuthoritativeObservationReceipt?.(
+          tableInput.authoritativeObservation,
+          tableInput.targetTableName,
+          tableInput.rows,
+        );
+      return true;
+    }
+
+    buildAuthoritativeDiscoveryRepairTableInput(repairState, tableName) {
+      const result = repairState.authoritativeRowsByTable.get(tableName);
+      return {
+        targetTableName: result?.tableName || tableName,
+        rows: result?.rows || ADMIN_CACHE_DUMP.EMPTY,
+        authoritativeObservation: result?.authoritativeObservation || null,
+      };
+    }
+
+    recordAuthoritativeDiscoveryRepairTableChangedRows(
+      repairState,
+      tableName,
+      tableChangedRowIds,
+    ) {
+      if (tableChangedRowIds.length === 0) return;
+      repairState.changedRowIdsByTable[tableName] = [...tableChangedRowIds];
+      for (const rowId of tableChangedRowIds) {
+        repairState.changedRowIds.push(`${tableName}:${rowId}`);
+      }
+    }
+
     async applyAuthoritativeDiscoveryRepairRowsIntoState(
       repairState,
       repairTableNames,
@@ -231,23 +278,42 @@ function assignAdminServiceDiscoveryRepairMethods(
           repairState.staleOwner = true;
           return;
         }
-        const result = repairState.authoritativeRowsByTable.get(tableName);
+        const tableInput = this.buildAuthoritativeDiscoveryRepairTableInput(
+          repairState,
+          tableName,
+        );
+        if (
+          this.consumeSupersededAuthoritativeDiscoveryTableInput(
+            tableInput,
+            cacheOwner,
+          )
+        ) {
+          repairState.repairedTableCount += 1;
+          repairState.repairedTableNames.push(tableName);
+          continue;
+        }
         try {
+          const tableChangedRowIds = [];
           repairState.repairedRowCount +=
             await this.applyAuthoritativeSystemTableRows(
-              result?.tableName || tableName,
-              result?.rows || ADMIN_CACHE_DUMP.EMPTY,
+              tableInput.targetTableName,
+              tableInput.rows,
               causeId,
               {
-                authoritativeObservation:
-                  result?.authoritativeObservation || null,
+                authoritativeObservation: tableInput.authoritativeObservation,
                 cacheOwner,
+                changedRowIdsSink: tableChangedRowIds,
               },
             );
           if (!this.isCurrentCacheOwner(cacheOwner)) {
             repairState.staleOwner = true;
             return;
           }
+          this.recordAuthoritativeDiscoveryRepairTableChangedRows(
+            repairState,
+            tableName,
+            tableChangedRowIds,
+          );
           repairState.repairedTableCount += 1;
           repairState.repairedTableNames.push(tableName);
         } catch (error) {
@@ -322,11 +388,8 @@ function assignAdminServiceDiscoveryRepairMethods(
       return result;
     }
 
-    resolveAuthoritativeDiscoveryRepairOutcome(repairState, repairTableNames) {
-      const repairApplied =
-        repairState.failedTables.length === 0 &&
-        repairState.repairedTableCount === repairTableNames.length;
-      const causeChain = repairState.errorSummaries
+    extractAuthoritativeDiscoveryRepairErrorMetadata(errorSummaries) {
+      const causeChain = errorSummaries
         .flatMap((summary) =>
           Array.isArray(summary?.causeChain) ?
             summary.causeChain :
@@ -334,23 +397,36 @@ function assignAdminServiceDiscoveryRepairMethods(
         )
         .filter((value, index, values) => values.indexOf(value) === index);
       const readSource =
-        repairState.errorSummaries.find((summary) => summary?.readSource)
-          ?.readSource || null;
+        errorSummaries.find((summary) => summary?.readSource)?.readSource ||
+        null;
       const localQueryTransport =
-        repairState.errorSummaries.find(
-          (summary) => summary?.localQueryTransport,
-        )?.localQueryTransport || null;
+        errorSummaries.find((summary) => summary?.localQueryTransport)
+          ?.localQueryTransport || null;
       const firstFailedParticipant =
-        repairState.errorSummaries.find(
-          (summary) => summary?.firstFailedParticipant,
-        )?.firstFailedParticipant || null;
+        errorSummaries.find((summary) => summary?.firstFailedParticipant)
+          ?.firstFailedParticipant || null;
+      return {
+        causeChain,
+        readSource,
+        localQueryTransport,
+        firstFailedParticipant,
+      };
+    }
+
+    resolveAuthoritativeDiscoveryRepairOutcome(repairState, repairTableNames) {
+      const repairApplied =
+        repairState.failedTables.length === 0 &&
+        repairState.repairedTableCount === repairTableNames.length;
+      const metadata = this.extractAuthoritativeDiscoveryRepairErrorMetadata(
+        repairState.errorSummaries,
+      );
       const errorCodes = this.buildAuthoritativeDiscoveryRepairErrorCodes(
         repairState.errorSummaries,
         repairState.errors,
       );
       const failureClass = repairApplied ?
         null :
-        resolveAuthoritativeRepairFailureClass(causeChain);
+        resolveAuthoritativeRepairFailureClass(metadata.causeChain);
       const failureCount = repairApplied ?
         0 :
         this.resolveAuthoritativeDiscoveryRepairFailureCount(
@@ -378,10 +454,7 @@ function assignAdminServiceDiscoveryRepairMethods(
         );
       return {
         repairApplied,
-        causeChain,
-        readSource,
-        localQueryTransport,
-        firstFailedParticipant,
+        ...metadata,
         errorCodes,
         failureClass,
         failureCount,
@@ -429,6 +502,8 @@ function assignAdminServiceDiscoveryRepairMethods(
         tableCount: repairState.repairedTableCount,
         tableNames: [...repairState.repairedTableNames],
         repairedRowCount: repairState.repairedRowCount,
+        changedRowIds: [...repairState.changedRowIds],
+        changedRowIdsByTable: {...repairState.changedRowIdsByTable},
         completedAtMs,
         reused: false,
       };
@@ -473,6 +548,8 @@ function assignAdminServiceDiscoveryRepairMethods(
         requestedTableCount: repairTableNames.length,
         requestedTableNames: [...repairTableNames],
         repairedRowCount: repairState.repairedRowCount,
+        changedRowIds: [...repairState.changedRowIds],
+        changedRowIdsByTable: {...repairState.changedRowIdsByTable},
         failedTables: [...repairState.failedTables],
         errorCount: repairState.errors.length,
         errors: repairState.errors,

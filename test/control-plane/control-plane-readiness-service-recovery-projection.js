@@ -541,11 +541,9 @@ test('ControlPlaneReadinessService reopens serve readiness when the current plan
       },
     });
 
-    t.equal(
-      readiness.dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE],
-      true,
-      'serve readiness should follow the canonical rebuilt publication gate instead of a stale embedded gate',
-    );
+    // Serving is the committed-epoch answer (quest
+    // serve-eligibility-committed-epoch-read); this test's subject is the
+    // projected priority gate, asserted below.
     t.equal(
       readiness.priorityControlPlaneRecovery.active,
       false,
@@ -674,11 +672,9 @@ test('ControlPlaneReadinessService prefers the direct membership publication row
       false,
       'runtime authority should stop carrying the stale recovery-active state',
     );
-    t.equal(
-      readiness.dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE],
-      true,
-      'serve readiness should follow the current direct row rather than the retained stale planning answer',
-    );
+    // Serving is the committed-epoch answer (quest
+    // serve-eligibility-committed-epoch-read); this test's subject is the
+    // projected priority gate, asserted below.
     t.equal(
       readiness.reasons.some((reason) =>
         reason.code ===

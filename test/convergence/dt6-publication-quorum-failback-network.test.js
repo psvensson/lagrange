@@ -1,4 +1,5 @@
 import t from 'tap';
+import assert from 'node:assert/strict';
 import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 import {connectRaftRsNetwork} from '../test-helpers/raft-rs-network-host.js';
 import {buildMembershipPublicationRow} from
@@ -136,7 +137,25 @@ function hostQuorumPublisher(net, host, nodeId, required) {
 const PHASE_B_DEADLINE_MS = 5000;
 const HEAL_WINDOW_MS = 800;
 
-async function runQuorumFailback(seed) {
+// Group committed entries by index; differing term/command fingerprints at
+// one committed index violate the same agreement assertion used after heal.
+function divergentCommittedIndexesOf(host) {
+  const committedByIndex = new Map();
+  for (const id of IDS) {
+    for (const {index, term, command} of host.committedEntries(id)) {
+      const fingerprint = JSON.stringify({term, command});
+      if (!committedByIndex.has(index)) {
+        committedByIndex.set(index, new Set());
+      }
+      committedByIndex.get(index).add(fingerprint);
+    }
+  }
+  return [...committedByIndex.entries()]
+    .filter(([, fingerprints]) => fingerprints.size > 1)
+    .map(([index]) => index);
+}
+
+async function runQuorumFailback(seed, {withholdOwnerWake = false} = {}) {
   const required = {version: 1};
   const net = createVirtualNetwork();
   const host = connectRaftRsNetwork(net, IDS, {partitionId: PARTITION_ID, seed});
@@ -156,6 +175,12 @@ async function runQuorumFailback(seed) {
     versions: committedVersions(),
     leaderRow: pubs.get(leaderA).state.committedRow,
   };
+
+  // Controlled negative: remove only the production owner's continuation
+  // after v1 really committed. Consensus and network delivery keep running.
+  if (withholdOwnerWake) {
+    for (const {coordinator} of pubs.values()) coordinator.stopOwnerMembershipDriver();
+  }
 
   // Phase B — a membership change requires v2 AND the leader is partitioned. The new leader must
   // re-publish v2 and commit it via real quorum (fail-back); the partitioned old leader cannot.
@@ -183,34 +208,52 @@ async function runQuorumFailback(seed) {
     net.heal(leaderA, other);
   }
   await host.runUntil(net.now() + HEAL_WINDOW_MS);
-  // Committed-log agreement: group every committed entry by index; any index with >1 distinct
-  // {term, command} across nodes is a Raft safety violation (this is what CL-040 used to expose).
-  const committedByIndex = new Map();
-  for (const id of IDS) {
-    for (const {index, term, command} of host.committedEntries(id)) {
-      const fingerprint = JSON.stringify({term, command});
-      if (!committedByIndex.has(index)) {
-        committedByIndex.set(index, new Set());
-      }
-      committedByIndex.get(index).add(fingerprint);
-    }
-  }
-  const divergentCommittedIndexes = [...committedByIndex.entries()]
-    .filter(([, fingerprints]) => fingerprints.size > 1)
-    .map(([index]) => index);
   const afterHeal = {
     versions: committedVersions(),
     oldLeaderLeads: host.isLeader(leaderA),
-    divergentCommittedIndexes,
+    divergentCommittedIndexes: divergentCommittedIndexesOf(host),
   };
+
+  let afterWakeRestored = null;
+  if (withholdOwnerWake) {
+    for (const [nodeId, {coordinator}] of pubs) {
+      coordinator.startOwnerMembershipDriver({
+        enabled: true, intervalMs: 20, timeSource: net.networkTimeSource(nodeId),
+      });
+    }
+    await host.runUntilTrue(() => IDS.every((id) =>
+      pubs.get(id).state.committedVersion === 2),
+    {deadlineMs: net.now() + PHASE_B_DEADLINE_MS});
+    afterWakeRestored = committedVersions();
+  }
 
   assertMembershipPublicationOwnerDriverHostsHealthy(
     [...pubs.values()].map(({coordinator}) => coordinator),
   );
   IDS.forEach((id) => pubs.get(id).coordinator.stopOwnerMembershipDriver());
   host.dispose();
-  return {leaderA, leaderB, afterPublishV1, afterFailback, afterHeal};
+  return {leaderA, leaderB, afterPublishV1, afterFailback, afterHeal, afterWakeRestored};
 }
+
+function assertUsefulPublicationProgress(measurement) {
+  assert.ok(IDS.every((id) => measurement.afterHeal.versions[id] === 2),
+    'OWNER_WAKE_REQUIRED: every node must commit publication v2 after heal');
+}
+
+t.test('publication useful-progress assertion rejects a withheld owner wake', async (t) => {
+  const control = await runQuorumFailback(3);
+  t.doesNotThrow(() => assertUsefulPublicationProgress(control),
+    'production owner continuation commits the required v2');
+  const withheld = await runQuorumFailback(3, {withholdOwnerWake: true});
+  t.same(withheld.afterPublishV1.versions, {N1: 1, N2: 1, N3: 1},
+    'negative control reached the same real committed v1 before withholding the wake');
+  t.throws(() => assertUsefulPublicationProgress(withheld), /OWNER_WAKE_REQUIRED/,
+    'the named useful-progress assertion is red with only the owner wake removed');
+  t.same(withheld.afterHeal.versions, {N1: 1, N2: 1, N3: 1},
+    'network healing and live Raft cannot manufacture publication progress');
+  t.same(withheld.afterWakeRestored, {N1: 2, N2: 2, N3: 2},
+    'restoring the canonical wake completes the retained obligation');
+});
 
 t.test('Phase A: the elected leader commits membership v1 through the REAL raft log', async (t) => {
   const m = await runQuorumFailback(3);

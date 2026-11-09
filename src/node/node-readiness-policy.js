@@ -1,6 +1,11 @@
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {SERVICE_STATUS, STATE} from '../constants/index.js';
 
+const numberCoerce = Number;
+const numberIsFinite = Number.isFinite;
+const objectFreeze = Object.freeze;
+const stringPrototypeToLowerCase = Function.call.bind(String.prototype.toLowerCase);
+
 const LOCAL_STR_READY_LEASE_EXPIRES_AT = 'ready_lease_expires_at';
 const LOCAL_STR_READYLEASEEXPIRESAT = 'readyLeaseExpiresAt';
 const LOCAL_STR_READYLEASEEXPIRESATMS = 'readyLeaseExpiresAtMs';
@@ -16,13 +21,13 @@ function normalizeConnectionState(nodeRow) {
     return null;
   }
 
-  const normalizedState = rawState.toLowerCase();
+  const normalizedState = stringPrototypeToLowerCase(rawState);
   return normalizedState.length > 0 ? normalizedState : null;
 }
 
 function getFiniteNumber(value) {
-  const normalized = Number(value);
-  return Number.isFinite(normalized) ? normalized : null;
+  const normalized = numberCoerce(value);
+  return numberIsFinite(normalized) ? normalized : null;
 }
 
 function hasOwnField(target, fieldName) {
@@ -45,7 +50,7 @@ function getNodeHeartbeatWatermark(nodeRow) {
     return null;
   }
 
-  return Object.freeze({
+  return objectFreeze({
     lastHeartbeat: getFiniteNumber(
       nodeRow.last_heartbeat ??
       nodeRow.lastHeartbeat ??

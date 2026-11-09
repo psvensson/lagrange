@@ -10,6 +10,10 @@ const {
   STORAGE_CAPACITY_DEFAULT,
 } = SQL_QUERY_ENGINE_SHARED;
 
+function extractCohortStrictNodeIds(engine, cohort) {
+  return engine.orderProvisionTargetNodeIds(cohort?.eligibleNodeIds || []);
+}
+
 class SQLQueryEngineProvisioningMethods {
   resolveInitialPartitionBootstrapLeaderNodeId(
     partitionId,
@@ -147,7 +151,7 @@ class SQLQueryEngineProvisioningMethods {
 
   /**
    * Resolve provision-target diagnostics from the readiness owner's
-   * observer-local trust view.
+   * committed serving cohort.
    * @param {number} requestedReplicaCount
    * @return {Object}
    * @private
@@ -158,11 +162,7 @@ class SQLQueryEngineProvisioningMethods {
         requestedReplicaCount :
         1;
     const readinessService = this.controlPlaneReadinessService;
-    if (
-      !readinessService ||
-      typeof readinessService.getProvisioningNodeTrustViewSync !==
-        LOCAL_STR_FUNCTION
-    ) {
+    if (!readinessService) {
       return {
         requestedReplicaCount: desiredReplicaCount,
         activeNodeRowCount: 0,
@@ -171,56 +171,27 @@ class SQLQueryEngineProvisioningMethods {
         degradedFallbackNodeIds: [],
         selectedNodeIds: [],
         usedDegradedFallback: false,
+        epoch: null,
       };
     }
-    const trustView = readinessService.getProvisioningNodeTrustViewSync();
-    const normalizedTrustView = Array.isArray(trustView) ? trustView : [];
-    const strictNodeIds = this.orderProvisionTargetNodeIds(
-      normalizedTrustView
-        .filter((entry) => entry?.serveEligible === true)
-        .map((entry) => entry.nodeId)
-        .filter(Boolean),
-    );
-    const strictNodeIdSet = new Set(strictNodeIds);
-    const degradedFallbackNodeIds = this.orderProvisionTargetNodeIds(
-      normalizedTrustView
-        .filter(
-          (entry) =>
-            entry?.repairEligible === true &&
-            entry?.serveEligible !== true &&
-            !strictNodeIdSet.has(entry.nodeId),
-        )
-        .map((entry) => entry.nodeId)
-        .filter(Boolean),
-    );
-    let selectedNodeIds = strictNodeIds;
-    let usedDegradedFallback = false;
-    if (
-      selectedNodeIds.length < desiredReplicaCount &&
-      degradedFallbackNodeIds.length > 0
-    ) {
-      selectedNodeIds = this.orderProvisionTargetNodeIds([
-        ...selectedNodeIds,
-        ...degradedFallbackNodeIds,
-      ]);
-      usedDegradedFallback = true;
-    }
+    const cohort = typeof readinessService.answerServeCohort === LOCAL_STR_FUNCTION ?
+      readinessService.answerServeCohort() :
+      null;
+    const strictNodeIds = extractCohortStrictNodeIds(this, cohort);
+    const selectedNodeIds = strictNodeIds;
 
     return {
       requestedReplicaCount: desiredReplicaCount,
-      activeNodeRowCount: normalizedTrustView.filter(
-        (entry) => entry?.observerEvidence?.activeNodeRow === true,
-      ).length,
-      activeServiceRowCount: normalizedTrustView.reduce(
-        (count, entry) =>
-          count + (Number(entry?.observerEvidence?.activeServiceCount) || 0),
-        0,
-      ),
+      activeNodeRowCount: cohort ?
+        Object.keys(cohort.answers || {}).length :
+        selectedNodeIds.length,
+      activeServiceRowCount: 0,
       strictNodeIds,
-      degradedFallbackNodeIds,
+      degradedFallbackNodeIds: [],
       selectedNodeIds,
-      usedDegradedFallback,
-      nodeTrustStates: normalizedTrustView,
+      usedDegradedFallback: false,
+      epoch: cohort?.epoch || null,
+      cohort,
     };
   }
 

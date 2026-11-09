@@ -1,3 +1,7 @@
+import {buildStorageAdmissionResult} from '../../src/rebalancer/storage-admission-result.js';
+import {STORAGE_ADMISSION_DECISION_TYPE} from '../../src/rebalancer/storage-admission-constants.js';
+import {projectNodeLivenessSemantics} from '../../src/control-plane/node-liveness-semantic-projection.js';
+import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 /**
  * Shared test helpers for rebalancer tests.
  * Provides mock factories for all required dependencies.
@@ -10,7 +14,7 @@ import {
 } from './committed-membership-fixture.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
-import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
@@ -20,7 +24,6 @@ import {
   DistributedTransactionCoordinator,
 } from '../../src/query/distributed/distributed-transaction-coordinator.js';
 import {
-  DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
   EntityType,
   MoveType,
@@ -37,6 +40,8 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {buildFailedCreateCleanupToken} from
+  '../../src/rebalancer/failed-create-cleanup-token.js';
 
 const SYSTEM_TABLE_PRIMARY_KEY_FIELD = {
   [SYSTEM_TABLE_NAME.NODES]: 'node_id',
@@ -202,7 +207,9 @@ function createMockCache(options = {}) {
     services: new Map(services.map((s) => [s.service_id, s])),
     partitions: new Map(partitions.map((p) => [p.partition_id, p])),
     tables: new Map(tables.map((t) => [t.table_id, t])),
-    message_groups: new Map(messageGroups.map((mg) => [mg.message_group_id, mg])),
+    message_groups: new Map(
+      messageGroups.map((mg) => [mg.group_id ?? mg.message_group_id, mg]),
+    ),
     replica_operations: new Map(
       normalizedReplicaOperations
         .filter((operation) => operation.operation_id)
@@ -233,7 +240,10 @@ function createMockCache(options = {}) {
       if (!table) return [];
       return Array.from(table.values());
     },
-    upsert: (tableName, row) => {
+    upsert: (tableName, rowOrKey, maybeRow) => {
+      const row = typeof rowOrKey === 'object' && rowOrKey !== null ?
+        rowOrKey :
+        maybeRow;
       const table = getTable(tableName);
       if (!table || !row || typeof row !== 'object') {
         return null;
@@ -241,7 +251,12 @@ function createMockCache(options = {}) {
 
       const normalizedRow = normalizeCacheRow(tableName, row);
       const keyField = getSystemTablePrimaryKeyField(tableName);
-      const key = keyField ? normalizedRow[keyField] : null;
+      const key =
+        tableName === SYSTEM_TABLE_NAME.MESSAGE_GROUPS ?
+          normalizedRow.group_id ?? normalizedRow.message_group_id :
+          keyField ?
+            normalizedRow[keyField] :
+            null;
       if (key === null || key === undefined) {
         return null;
       }
@@ -273,109 +288,68 @@ function createMockCache(options = {}) {
   };
 }
 
-function isNodeRepairEligible(node) {
-  if (!node || typeof node !== 'object') {
-    return false;
-  }
-  if (typeof node.repair_eligible === 'boolean') {
-    return node.repair_eligible;
-  }
-
-  const status = typeof node.status === 'string' ?
-    node.status.toLowerCase() : 'active';
-  const connectionState = typeof node.connection_state === 'string' ?
-    node.connection_state.toLowerCase() : 'ready';
-  const readyLeaseExpiresAt = typeof node.ready_lease_expires_at === 'number' ?
-    node.ready_lease_expires_at :
-    Date.now() + 10000;
-
-  if (status === 'failed' || status === 'stopped' || status === 'shutting_down') {
-    return false;
-  }
-  if (connectionState !== 'ready') {
-    return false;
-  }
-  return readyLeaseExpiresAt > Date.now();
-}
-
+/**
+ * Construct a controlled readiness port over one declared fixture world.
+ * The node rows stand in for a committed reader; this does not execute consensus.
+ * Explicit callbacks model scenario answers. Caller-owned ports are never adapted.
+ */
 function createMockControlPlaneReadinessService(options = {}) {
   const {
     systemTableCache = null,
-    defaultRepairEligible = true,
+    readNodeRows = () => systemTableCache?.getAll(SYSTEM_TABLE_NAME.NODES) ?? [],
+    now = () => Date.now(),
+    defaultRepairEligible = false,
     readinessByNodeId = {},
     livenessProjectionByNodeId = null,
     membershipPublicationPlanningSnapshot = null,
-    clock = null,
+    callbacks = {},
   } = options;
-
-  return partialReadinessFake({
-    ...(livenessProjectionByNodeId &&
-      typeof livenessProjectionByNodeId === 'object' ? {
-        projectNodeLiveness(nodeId) {
-          return livenessProjectionByNodeId[nodeId] || null;
-        },
-      } : {}),
-    getNodeReadinessSync(nodeId) {
-      const explicit = readinessByNodeId[nodeId];
-      if (explicit) {
-        return explicit;
-      }
-
-      const nodeRow = systemTableCache &&
-        typeof systemTableCache.get === 'function' ?
-        systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId) :
-        null;
-      const repairEligible = nodeRow ?
-        isNodeRepairEligible(nodeRow) :
-        defaultRepairEligible;
-      const dimensions = {
-        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: repairEligible,
-        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: repairEligible,
+  const project = (nodeRow) => projectNodeLivenessSemantics({nodeRow, nowMs: now()}).projection;
+  const buildPlanningSnapshot = (nodeId, observedAt) =>
+    typeof membershipPublicationPlanningSnapshot === 'function' ?
+      membershipPublicationPlanningSnapshot(nodeId, observedAt) :
+      membershipPublicationPlanningSnapshot;
+  const port = {
+    async readServeEligibility() {},
+    answerCommittedNodes() {
+      return {
+        state: 'ready',
+        epoch: {publicationEpoch: 1, publicationId: 'cluster_membership-1', readAtMs: now()},
+        nodeRows: readNodeRows(),
       };
-
-      for (const dimensionName of Object.values(CONTROL_PLANE_READINESS_DIMENSION)) {
-        if (typeof dimensionName === 'string' &&
-            dimensionName.toLowerCase().endsWith('eligible') &&
-            !Object.hasOwn(dimensions, dimensionName)) {
-          dimensions[dimensionName] = repairEligible;
-        }
-      }
-
+    },
+    getNodeReadinessSync(nodeId) {
+      if (readinessByNodeId[nodeId]) return readinessByNodeId[nodeId];
+      const nodeRow = readNodeRows().find((row) => row.node_id === nodeId);
+      const eligible = nodeRow ? project(nodeRow).readyNow : defaultRepairEligible;
       return {
         nodeId,
-        dimensions,
-      };
-    },
-    getPriorityRecoveryPlanningAnswerSync(nodeId) {
-      if (typeof membershipPublicationPlanningSnapshot === 'function') {
-        return membershipPublicationPlanningSnapshot(nodeId);
-      }
-      if (membershipPublicationPlanningSnapshot &&
-          typeof membershipPublicationPlanningSnapshot === 'object') {
-        return membershipPublicationPlanningSnapshot;
-      }
-
-      const nodeRows = systemTableCache &&
-        typeof systemTableCache.getAll === 'function' ?
-        systemTableCache.getAll(SYSTEM_TABLE_NAME.NODES) :
-        [];
-      const publishedActiveNodeIds = nodeRows
-        .filter((nodeRow) => isNodeRepairEligible(nodeRow))
-        .map((nodeRow) => nodeRow.node_id)
-        .filter((candidate) => typeof candidate === 'string');
-      return {
-        publishedActiveNodeIdsPresent: true,
-        publishedActiveNodeIds,
-        publishedMembershipIncludesTargetNode:
-          typeof nodeId === 'string' ?
-            publishedActiveNodeIds.includes(nodeId) :
-            null,
-        priorityPartitionSummary: {
-          satisfied: true,
+        dimensions: {
+          ...Object.fromEntries(Object.values(CONTROL_PLANE_READINESS_DIMENSION)
+            .map((dimension) => [dimension, eligible])),
+          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: Boolean(nodeRow),
         },
+        reasons: [],
       };
     },
-  }, clock);
+    async getNodeReadiness(nodeId, options) {
+      return port.getNodeReadinessSync(nodeId, options);
+    },
+    projectNodeLiveness(nodeId) {
+      if (livenessProjectionByNodeId) return livenessProjectionByNodeId[nodeId] ?? null;
+      return project(readNodeRows().find((row) => row.node_id === nodeId));
+    },
+    getPriorityRecoveryPlanningAnswerSync(nodeId = null, observedAt = Date.now()) {
+      return buildPlanningSnapshot(nodeId, observedAt);
+    },
+    async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId = null, observedAt = Date.now()) {
+      return this.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt);
+    },
+    ...callbacks,
+  };
+  // The one hand-written readiness fake completer (stream fixture): any
+  // consumer member the port does not state answers as an absent one did.
+  return readinessServiceFake(port, now);
 }
 
 /**
@@ -395,7 +369,7 @@ function createMockControlPlaneSystemTableGateway(sqlQueryEngine = null) {
     async executeQuery(sql, params = [], _queryOptions = {}) {
       if (sqlQueryEngine &&
           typeof sqlQueryEngine.executeQuery === 'function') {
-        return sqlQueryEngine.executeQuery(sql, params);
+        return sqlQueryEngine.executeQuery(sql, params, _queryOptions);
       }
       return {success: true, rows: []};
     },
@@ -417,23 +391,113 @@ function createMockTransactionCoordinator() {
   };
 }
 
+function buildMockPolicyAuthorityWitness(partitionId) {
+  return Object.freeze({
+    state: 'observed',
+    partitionId,
+    servingNodeId: 'test-node-1',
+    servingReplicaId: `${partitionId}-r1`,
+    role: 'leader',
+    leaderNodeId: 'test-node-1',
+    term: 1,
+    commitIndex: 1,
+    appliedIndex: 1,
+    observedAtMs: 1_000_000,
+  });
+}
+
 /**
  * Create a mock table policy service.
  * @param {Object} options - Policy options.
  * @return {Object} Mock policy service.
  */
 function createMockPolicyService(options = {}) {
-  const {partitions = [], tables = []} = options;
+  const {
+    partitions = [],
+    tables = [],
+    getPolicyForPartition = null,
+    getMessageGroupPolicy = null,
+  } = options;
+  const resolvePartitionPolicy = typeof getPolicyForPartition === 'function' ?
+    getPolicyForPartition :
+    (partitionId) => {
+      const partition = partitions.find((p) => p.partition_id === partitionId);
+      if (!partition) return {...DEFAULT_TABLE_POLICY, targetReplicaCount: 3};
+      const table = tables.find((t) => t.table_id === partition.table_id);
+      if (!table || !table.table_policies) return {...DEFAULT_TABLE_POLICY, targetReplicaCount: 3};
+      return {...DEFAULT_TABLE_POLICY, ...JSON.parse(table.table_policies),
+        targetReplicaCount: partition.replica_count ?? 3};
+    };
+  const resolveMessageGroupPolicy = typeof getMessageGroupPolicy === 'function' ?
+    getMessageGroupPolicy :
+    () => ({...DEFAULT_MESSAGE_GROUP_POLICY});
 
   return {
-    getPolicyForPartition: (partitionId) => {
-      const partition = partitions.find((p) => p.partition_id === partitionId);
-      if (!partition) return {...DEFAULT_TABLE_POLICY};
-      const table = tables.find((t) => t.table_id === partition.table_id);
-      if (!table || !table.table_policies) return {...DEFAULT_TABLE_POLICY};
-      return {...DEFAULT_TABLE_POLICY, ...JSON.parse(table.table_policies)};
+    getPolicyForPartition: resolvePartitionPolicy,
+    getMessageGroupPolicy: async (groupId) => resolveMessageGroupPolicy(groupId),
+    resolvePartitionPolicyFact: async (partitionId) => {
+      const policy = await resolvePartitionPolicy(partitionId);
+      if (!policy || typeof policy !== 'object') {
+        return Object.freeze({
+          state: 'unavailable_or_stale',
+          reason: 'policy_read_unavailable',
+          partitionId: partitionId || null,
+          tableId: null,
+          policy: null,
+          targetReplicaCount: null,
+          minReplicaCount: null,
+          maxReplicaCount: null,
+          partitionReadAuthorityWitness: null,
+          tableReadAuthorityWitness: null,
+          readAuthorityWitness: null,
+          rowSetComplete: false,
+        });
+      }
+      const partitionWitness = buildMockPolicyAuthorityWitness('partitions-p1');
+      const tableWitness = buildMockPolicyAuthorityWitness('tables-p1');
+      return Object.freeze({
+        state: 'authoritative_policy',
+        reason: null,
+        partitionId: partitionId || null,
+        tableId: null,
+        policy,
+        targetReplicaCount: policy.targetReplicaCount,
+        minReplicaCount: policy.minReplicaCount ?? policy.targetReplicaCount,
+        maxReplicaCount: policy.maxReplicaCount ?? null,
+        partitionReadAuthorityWitness: partitionWitness,
+        tableReadAuthorityWitness: tableWitness,
+        readAuthorityWitness: partitionWitness,
+        rowSetComplete: true,
+      });
     },
-    getMessageGroupPolicy: async () => ({...DEFAULT_MESSAGE_GROUP_POLICY}),
+    resolveMessageGroupPolicyFact: async (groupId) => {
+      const policy = await resolveMessageGroupPolicy(groupId);
+      if (!policy || typeof policy !== 'object') {
+        return Object.freeze({
+          state: 'unavailable_or_stale',
+          reason: 'policy_read_unavailable',
+          groupId: groupId || null,
+          policy: null,
+          targetReplicaCount: null,
+          minReplicaCount: null,
+          maxReplicaCount: null,
+          readAuthorityWitness: null,
+          rowSetComplete: false,
+        });
+      }
+      const witness = buildMockPolicyAuthorityWitness('message_groups-p1');
+      return Object.freeze({
+        state: 'authoritative_policy',
+        reason: null,
+        groupId: groupId || null,
+        policy,
+        targetReplicaCount: policy.targetReplicaCount,
+        minReplicaCount: policy.minReplicaCount ?? policy.targetReplicaCount,
+        maxReplicaCount: policy.maxReplicaCount ?? null,
+        readAuthorityWitness: witness,
+        rowSetComplete: true,
+      });
+    },
   };
 }
 
@@ -525,8 +589,82 @@ function trackFixtureServiceDeletions(cache) {
   }
 }
 
+function findFixtureClaimOperation(cache, operationId) {
+  const operations = typeof cache?.getAll === 'function' ?
+    cache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) : [];
+  return operations.find((candidate) =>
+    (candidate?.operation_id ?? candidate?.operationId) === operationId) || null;
+}
+
+function findFixtureClaimServiceRow(cache, replicaId, precondition) {
+  const serviceRows = typeof cache?.getAll === 'function' ?
+    cache.getAll(SYSTEM_TABLE_NAME.SERVICES) : [];
+  return serviceRows.find((candidate) =>
+    candidate?.service_id === replicaId ||
+    candidate?.replica_id === replicaId ||
+    candidate?.service_id === precondition?.service_id) || null;
+}
+
+function matchesFixtureClaimOperationTarget(operation, payload) {
+  return Boolean(operation && payload) &&
+    operation.type === payload[ReplicaOperationField.OPERATION_TYPE] &&
+    operation.partition_id === payload[ReplicaOperationField.PARTITION_ID] &&
+    operation.replica_id === payload[ReplicaOperationField.REPLICA_ID];
+}
+
+function isFixtureClaimOperationTerminalFailed(operation, payload, precondition) {
+  if (!matchesFixtureClaimOperationTarget(operation, payload) || !precondition) {
+    return false;
+  }
+  const hasCompletedTimestamp =
+    operation.completed_at !== null && operation.completed_at !== undefined;
+  return hasCompletedTimestamp &&
+    String(operation.workflow_step || '').toUpperCase() ===
+      WORKFLOW_STEP.FAILED &&
+    String(operation.status || '').toLowerCase() === ReplicaStatus.FAILED &&
+    operation.create_admission_attempt_token ===
+      precondition.create_attempt_token;
+}
+
+function matchesFixtureClaimServicePrecondition(serviceRow, precondition) {
+  return Boolean(serviceRow && precondition) &&
+    serviceRow.status === ReplicaStatus.FAILED &&
+    serviceRow.cleanup_token === null &&
+    serviceRow.create_attempt_token === precondition.create_attempt_token &&
+    serviceRow.created_at === precondition.created_at &&
+    serviceRow.state_entered_at === precondition.state_entered_at;
+}
+
+function answerFixtureClaimFailedCreateCleanup(cache, payload) {
+  const operationId = payload?.[ReplicaOperationField.OPERATION_ID];
+  const replicaId = payload?.[ReplicaOperationField.REPLICA_ID];
+  const precondition = payload?.[
+    ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+  ];
+  const operation = findFixtureClaimOperation(cache, operationId);
+  const serviceRow = findFixtureClaimServiceRow(cache, replicaId, precondition);
+  if (!isFixtureClaimOperationTerminalFailed(operation, payload, precondition) ||
+      !matchesFixtureClaimServicePrecondition(serviceRow, precondition)) {
+    return {
+      status: ReplicaOperationResponseStatus.ERROR,
+      error: 'fixture failed-create cleanup claim precondition mismatch',
+    };
+  }
+  serviceRow.cleanup_token = buildFailedCreateCleanupToken(operationId);
+  serviceRow.state_entered_at = Number(serviceRow.state_entered_at) + 1;
+  cache.upsert?.(SYSTEM_TABLE_NAME.SERVICES, replicaId, serviceRow);
+  return {
+    status: ReplicaOperationResponseStatus.COMPLETED,
+    operationId,
+    replicaId,
+  };
+}
+
 function answerFixtureReplaceWitness(cache, payload) {
   const type = payload?.type;
+  if (type === ReplicaOperationMessageType.CLAIM_FAILED_CREATE_CLEANUP) {
+    return answerFixtureClaimFailedCreateCleanup(cache, payload);
+  }
   if (type === ReplicaOperationMessageType.RETIRE_REPLICA_PEER) {
     return {
       status: ReplicaOperationResponseStatus.INITIATED,
@@ -619,29 +757,42 @@ function createMockSqlQueryEngine(options = {}) {
   };
 }
 
+function createMockStorageAdmissionService() {
+  const admission = buildStorageAdmissionResult({
+    allowed: true,
+    decisionType: STORAGE_ADMISSION_DECISION_TYPE.ADMITTED,
+  });
+  return {
+    checkAdd: async () => admission,
+    checkReplace: async () => admission,
+    checkSplit: async () => admission,
+  };
+}
+
 /**
  * Create a mock rebalance coordinator.
  * @return {Object} Mock coordinator.
  */
-function createMockCoordinator() {
+function createMockCoordinator({controlPlaneReadinessService = null,
+  readOperationsByEntity = async () => []} = {}) {
   const storageAccountingService = {
     estimateReplicaBytes: () => 1,
   };
-  const storageAdmissionService = {
-    checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
-    checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
-    checkSplit: async () => ({allowed: true, decisionType: 'admitted'}),
-  };
-  const controlPlaneReadinessService = createMockControlPlaneReadinessService();
+  const storageAdmissionService = createMockStorageAdmissionService();
   return {
+    // This controlled owner models an empty operation ledger unless the test
+    // supplies its entity reader. It is not a cache fallback or a real read.
+    getOperationsByEntity(entityType, entityId, options) {
+      return readOperationsByEntity(entityType, entityId, options);
+    },
     getMoveSafetyError: () => null,
     createOperation: async (move) => ({
       operationId: 'op-' + Date.now(),
       type: move.type,
       partitionId: move.partitionId,
       targetNodeId: move.nodeId,
-      status: 'pending',
-      workflowStep: 'pending',
+      status: ReplicaStatus.PENDING,
+      workflowStep: WORKFLOW_STEP.PENDING,
     }),
     executeOperation: async () => ({success: true}),
     canStartAddOperation: async () => true,
@@ -1043,7 +1194,12 @@ function createTestCoordinator(options = {}) {
           serviceRows = serviceRows.filter((row) =>
             String(row.service_id || '').startsWith(serviceIdPrefix));
         }
-        return {success: true, rows: serviceRows};
+        return {
+          success: true,
+          rows: serviceRows,
+          rowSetComplete: true,
+          readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
+        };
       }
 
       return {success: true, rows: []};
@@ -1102,17 +1258,13 @@ function createTestCoordinator(options = {}) {
     messageRouter: mockMessageRouter,
     sqlQueryEngine: mockSqlEngine,
     transactionCoordinator,
-    controlPlaneReadinessService:
-      options.controlPlaneReadinessService ||
+    controlPlaneReadinessService: Object.hasOwn(options, 'controlPlaneReadinessService') ?
+      options.controlPlaneReadinessService :
       createMockControlPlaneReadinessService({
+        ...options.readinessFixture,
         systemTableCache: mockCache,
-        defaultRepairEligible: true,
       }),
-    storageAdmissionService: options.storageAdmissionService || {
-      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
-      checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
-      checkSplit: async () => ({allowed: true, decisionType: 'admitted'}),
-    },
+    storageAdmissionService: options.storageAdmissionService || createMockStorageAdmissionService(),
     storageAccountingService: options.storageAccountingService || {
       estimateReplicaBytes: () => 1,
     },
@@ -1176,31 +1328,27 @@ function createTestRebalancer(options = {}) {
     createMockPolicyService(mergedCacheData);
   const mockMessageRouter = options.messageRouter ||
     createMockMessageRouter({connectionState});
-  const mockCoordinator = options.rebalanceCoordinator || createMockCoordinator();
+  // A named or coordinator-held service is completed by the one fixture
+  // completer on the rebalancer's clock; otherwise the declared world port.
+  const ownerClock = typeof options.nowFn === 'function' ? options.nowFn : undefined;
+  const namedReadinessService = Object.hasOwn(options, 'controlPlaneReadinessService') ?
+    options.controlPlaneReadinessService :
+    options.rebalanceCoordinator?.controlPlaneReadinessService ?? null;
+  const controlPlaneReadinessService = namedReadinessService ?
+    readinessServiceFake(namedReadinessService, ownerClock) :
+    createMockControlPlaneReadinessService({
+      ...(ownerClock ? {now: ownerClock} : {}),
+      ...options.readinessFixture,
+      systemTableCache: mockCache,
+    });
+  const mockCoordinator = options.rebalanceCoordinator ||
+    createMockCoordinator({controlPlaneReadinessService});
   const storageAdmissionService = options.storageAdmissionService ||
-    mockCoordinator.storageAdmissionService || {
-    checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
-    checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
-    checkSplit: async () => ({allowed: true, decisionType: 'admitted'}),
-  };
+    mockCoordinator.storageAdmissionService || createMockStorageAdmissionService();
   const storageAccountingService = options.storageAccountingService ||
     mockCoordinator.storageAccountingService || {
     estimateReplicaBytes: () => 1,
   };
-  const controlPlaneReadinessService = options.controlPlaneReadinessService ||
-    (options.livenessProjectionByNodeId ?
-      createMockControlPlaneReadinessService({
-        systemTableCache: mockCache,
-        livenessProjectionByNodeId: options.livenessProjectionByNodeId,
-      }) :
-      mockCoordinator.controlPlaneReadinessService) ||
-    createMockControlPlaneReadinessService({
-      systemTableCache: mockCache,
-      defaultRepairEligible: true,
-    });
-  mockCoordinator.controlPlaneReadinessService =
-    controlPlaneReadinessService;
-
   return new UnifiedRebalancer({
     entityId,
     entityType,

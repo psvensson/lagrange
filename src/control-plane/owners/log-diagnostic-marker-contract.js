@@ -55,7 +55,7 @@ function compileDiagnosticMarker(request, nodeId, now) {
 
 function diagnosticMarkerWasApplied(result) {
   const effect = classifyControlPlaneMutationResult(result);
-  return effect.applied && !effect.deferred && !effect.visibilityPending &&
+  return effect.applied && !effect.deferred &&
     effect.affectedRowsPresent && effect.affectedRows === 1;
 }
 

@@ -135,7 +135,7 @@ class MockMessageGroupService extends EventEmitter {
     return this._isLeader ? this.replicaId : 'other-replica';
   }
 
-  buildPeerAddress(replicaId) {
+  resolveCommittedPeerAddress(replicaId) {
     return `${this.nodeId}/message-group/${replicaId}`;
   }
 

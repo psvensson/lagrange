@@ -279,7 +279,10 @@ function statementEnvironmentFailure(error) {
  * reached the application. An APPLIED row answers the applied statement's
  * result it retained (settledAppliedResult), with the durable commit witness
  * this replica attests (the entry and the term and index it was applied at);
- * a STATEMENT_FAILED row answers the original failure.
+ * a STATEMENT_FAILED row answers the original failure. A replay carries no
+ * origin HLC: the asking command's timestamp is not the applied statement's
+ * (no change event carries it), and the outcome row retains no origin, so a
+ * replay cannot prove a projection position.
  * @param {Object} service - The partition (its identity).
  * @param {Object} settled - {recorded, command}: the SETTLED record and the
  *   command asking.
@@ -290,8 +293,6 @@ function answerSettledStatement(service, {recorded, command}) {
     partitionId: service.partitionId,
     logIndex: recorded.logIndex,
     replayOfLogIndex: recorded.logIndex,
-    ...(typeof command?.timestamp === 'string' && command.timestamp.length > 0 ?
-      {originHlc: command.timestamp} : {}),
   };
   if (recorded.outcome === PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED) {
     return {

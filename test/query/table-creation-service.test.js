@@ -15,11 +15,8 @@ if (!config.isInitialized()) {
 }
 
 const TABLE_CREATION_TEST_COMPLETION_STATE = Object.freeze({
+  ACTIVE: 'active',
   PENDING_CREATION: 'pending_creation',
-});
-const TABLE_CREATION_TEST_COMPLETION_REASON = Object.freeze({
-  METADATA_VISIBILITY_PENDING: 'metadata_visibility_pending',
-  REPLICA_CONVERGENCE_PENDING: 'replica_convergence_pending',
 });
 
 function createCreateTableAst() {
@@ -717,14 +714,14 @@ test('TableCreationService - CREATE TABLE IF NOT EXISTS restores missing ' +
   t.equal(result.partitionMetadataCreated, true);
   t.equal(
     result.completionState,
-    TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
+    TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
   );
   t.equal(
     result.completionReason,
-    TABLE_CREATION_TEST_COMPLETION_REASON.REPLICA_CONVERGENCE_PENDING,
+    null,
   );
-  t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
-  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
+  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.PROCEED);
   t.equal(submittedMutations.length, 1);
   t.equal(submittedMutations[0].tableName, 'partitions');
   t.equal(submittedMutations[0].row.partition_id, 'tbl-users-p1');
@@ -732,150 +729,122 @@ test('TableCreationService - CREATE TABLE IF NOT EXISTS restores missing ' +
   t.equal(provisionCalls[0].partitionId, 'tbl-users-p1');
 });
 
-test('TableCreationService - CREATE TABLE opts metadata writes into pending visibility semantics',
-  async (t) => {
-    const submittedMutations = [];
-    const service = new TableCreationService({
-      systemCache: {
-        find() {
-          return null;
-        },
-      },
-      cdcIntegrationService: {},
-      controlPlaneSystemTableGateway: {
-        async submitMutation(mutation, options) {
-          submittedMutations.push({mutation, options});
-          return {
-            success: true,
-            visibilityState:
-              CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY,
-          };
-        },
-      },
-      partitionProvisioner: async () => {},
-    });
-
-    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
-
-    t.equal(submittedMutations.length, 2);
-    t.equal(
-      submittedMutations[0].options.allowPendingVisibility,
-      true,
-      'table metadata writes should tolerate pending cache visibility after authoritative commit',
-    );
-    t.equal(
-      submittedMutations[1].options.allowPendingVisibility,
-      true,
-      'partition metadata writes should tolerate pending cache visibility after authoritative commit',
-    );
-    t.equal(
-      result.visibilityState,
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY,
-      'create table should surface that metadata commit succeeded while visibility is still converging',
-    );
-    t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
-    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
-    t.equal(result.visibilityPending, true);
-    t.equal(
-      result.completionState,
-      TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
-      'create table should not claim full convergence when provisioning exposes no replica evidence',
-    );
-    t.equal(
-      result.completionReason,
-      TABLE_CREATION_TEST_COMPLETION_REASON.METADATA_VISIBILITY_PENDING,
-    );
-  });
-
-
-test('TableCreationService - CREATE TABLE preserves authoritative confirmation pending visibility state',
-  async (t) => {
-    const submittedMutations = [];
-    const service = new TableCreationService({
-      systemCache: {
-        find() {
-          return null;
-        },
-      },
-      cdcIntegrationService: {},
-      controlPlaneSystemTableGateway: {
-        async submitMutation(mutation, options) {
-          submittedMutations.push({mutation, options});
-          return {
-            success: true,
-            visibilityState:
-              mutation.tableName === 'tables' ?
-                CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE
-                  .AUTHORITATIVE_CONFIRMATION_PENDING :
-                CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
-          };
-        },
-      },
-      partitionProvisioner: async () => {},
-    });
-
-    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
-
-    t.equal(submittedMutations.length, 2);
-    t.equal(
-      result.visibilityState,
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE
-        .AUTHORITATIVE_CONFIRMATION_PENDING,
-      'create table should preserve the strongest pending metadata visibility state',
-    );
-    t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
-    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
-    t.equal(result.visibilityPending, true);
-    t.equal(
-      result.completionState,
-      TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
-    );
-    t.equal(
-      result.completionReason,
-      TABLE_CREATION_TEST_COMPLETION_REASON.METADATA_VISIBILITY_PENDING,
-    );
-  });
-
-test('TableCreationService - CREATE TABLE preserves deferred metadata ' +
-  'visibility as a retryable contract',
-async (t) => {
+// Re-derived for answers at commit (quest
+// replica-admission-from-committed-operation, attempt 2; lead decision D1):
+// metadata committed = metadata done. The routed metadata writes answer at
+// their commit with a position and carry no visibility opt-out; CREATE TABLE
+// is pending only on provisioning convergence and success otherwise, and
+// neither answer reads the projection after the writes. The client words are
+// unchanged until Group A's F10 vocabulary replaces them.
+function commitAnsweringTableCreation(provisioning, answerExtra = {}) {
+  const submittedMutations = [];
+  const counts = {projectionReads: 0, readsAfterFirstWrite: 0};
   const service = new TableCreationService({
     systemCache: {
       find() {
+        counts.projectionReads += 1;
+        if (submittedMutations.length > 0) counts.readsAfterFirstWrite += 1;
         return null;
       },
     },
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
-      async submitMutation() {
+      async submitMutation(mutation, options) {
+        submittedMutations.push({mutation, options});
         return {
           success: true,
-          visibilityState:
-            CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE
-              .DEFERRED_BY_PRESSURE,
+          committed: true,
+          position: Object.freeze({
+            tableName: mutation.tableName,
+            key: 'committed-key',
+            originHlc: '1793615397288-1-seam-node',
+          }),
+          ...answerExtra,
         };
       },
     },
-    partitionProvisioner: async () => {},
+    partitionProvisioner: async () => provisioning,
+  });
+  return {service, submittedMutations, counts};
+}
+
+test('TableCreationService - CREATE TABLE metadata answers at its commit: ' +
+  'no visibility opt-out, pending only on provisioning, no projection read',
+async (t) => {
+  const {service, submittedMutations, counts} =
+    commitAnsweringTableCreation(undefined);
+
+  const result = await service.executeCreateTableProvisioning(
+    createCreateTableAst());
+
+  t.equal(submittedMutations.length, 2);
+  for (const {options} of submittedMutations) {
+    t.equal('allowPendingVisibility' in options, false,
+      'metadata writes carry no pending-visibility opt-out');
+  }
+  t.equal('visibilityState' in result, false, 'no visibility state remnant');
+  t.equal('visibilityPending' in result, false,
+    'no visibility pending remnant');
+  t.equal(result.completionState,
+    TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
+    'quorum minimum proceeds as active under_replicated');
+  t.equal(result.completionReason, null);
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
+  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.PROCEED);
+  t.equal(counts.readsAfterFirstWrite, 0,
+    'the answer itself reads no projection after the metadata writes');
+});
+
+test('TableCreationService - CREATE TABLE with a converged cohort answers ' +
+  'active from the commit with no projection read', async (t) => {
+  const {service, counts} = commitAnsweringTableCreation({
+    requestedReplicaCount: 3,
+    resolvedReplicaCount: 3,
+    minimumRoutableReplicaCount: 2,
+    routableReplicaCount: 3,
   });
 
-  const result = await service.executeCreateTableProvisioning(createCreateTableAst());
+  const result = await service.executeCreateTableProvisioning(
+    createCreateTableAst());
 
-  t.equal(
-    result.visibilityState,
+  t.equal(result.success, true);
+  t.equal(result.completionState, TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE);
+  t.equal(result.completionReason, null);
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.READY,
+    'a provisioned table answers ready, not merely not-pending');
+  t.equal(result.provisioningSummary.fullReplicaCountConverged, true,
+    'on the converged cohort');
+  t.equal('visibilityState' in result, false, 'no visibility state remnant');
+  t.equal(counts.readsAfterFirstWrite, 0,
+    'the answer itself reads no projection after the metadata writes');
+});
+
+// The reachable remnant of the deleted visibility states: an answer that
+// still carries a legacy visibility field does not make committed metadata
+// pending or deferred.
+test('TableCreationService - CREATE TABLE ignores a legacy visibility field ' +
+  'on a committed metadata answer', async (t) => {
+  for (const legacy of [
+    CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY,
+    CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE
+      .AUTHORITATIVE_CONFIRMATION_PENDING,
     CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE,
-  );
-  t.equal(result.contractState, OWNER_CONTRACT_STATE.DEFERRED);
-  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.RETRY);
-  t.equal(result.visibilityPending, true);
-  t.equal(
-    result.completionState,
-    TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
-  );
-  t.equal(
-    result.completionReason,
-    TABLE_CREATION_TEST_COMPLETION_REASON.METADATA_VISIBILITY_PENDING,
-  );
+  ]) {
+    const {service} = commitAnsweringTableCreation({
+      requestedReplicaCount: 3,
+      resolvedReplicaCount: 3,
+      minimumRoutableReplicaCount: 2,
+      routableReplicaCount: 3,
+    }, {visibilityState: legacy});
+
+    const result = await service.executeCreateTableProvisioning(
+      createCreateTableAst());
+
+    t.equal(result.completionState,
+      TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
+      `${legacy} on a committed answer is not a pending metadata answer`);
+    t.equal('visibilityState' in result, false);
+  }
 });
 
 test('TableCreationService - CREATE TABLE stays pending when only the minimum routable cohort is converged',
@@ -905,19 +874,16 @@ test('TableCreationService - CREATE TABLE stays pending when only the minimum ro
 
     t.equal(
       result.completionState,
-      TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
+      TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
     );
     t.equal(
       result.completionReason,
-      TABLE_CREATION_TEST_COMPLETION_REASON.REPLICA_CONVERGENCE_PENDING,
+      null,
     );
-    t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
-    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
-    t.equal(
-      result.visibilityState,
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
-    );
-    t.equal(result.visibilityPending, false);
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
+    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.PROCEED);
+    t.equal('visibilityState' in result, false);
+    t.equal('visibilityPending' in result, false);
     t.same(
       result.provisioningSummary,
       {
@@ -925,9 +891,12 @@ test('TableCreationService - CREATE TABLE stays pending when only the minimum ro
         resolvedReplicaCount: 3,
         minimumRoutableReplicaCount: 2,
         routableReplicaCount: 2,
+        committedReplicaCount: 2,
+        missingReplicaCount: 1,
+        epoch: null,
         fullReplicaCountConverged: false,
-        contractState: OWNER_CONTRACT_STATE.PENDING,
-        nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
+        contractState: OWNER_CONTRACT_STATE.UNDER_REPLICATED,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
         reasonCodes: [],
         retryAfterMs: 0,
       },
@@ -955,14 +924,14 @@ test('TableCreationService - CREATE TABLE without provisioning detail stays pend
 
     t.equal(
       result.completionState,
-      TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
+      TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
     );
     t.equal(
       result.completionReason,
-      TABLE_CREATION_TEST_COMPLETION_REASON.REPLICA_CONVERGENCE_PENDING,
+      null,
     );
-    t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
-    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
+    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.PROCEED);
     t.same(
       result.provisioningSummary,
       {
@@ -970,9 +939,12 @@ test('TableCreationService - CREATE TABLE without provisioning detail stays pend
         resolvedReplicaCount: 3,
         minimumRoutableReplicaCount: 2,
         routableReplicaCount: 2,
+        committedReplicaCount: 2,
+        missingReplicaCount: 1,
+        epoch: null,
         fullReplicaCountConverged: false,
-        contractState: OWNER_CONTRACT_STATE.PENDING,
-        nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
+        contractState: OWNER_CONTRACT_STATE.UNDER_REPLICATED,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
         reasonCodes: [],
         retryAfterMs: 0,
       },

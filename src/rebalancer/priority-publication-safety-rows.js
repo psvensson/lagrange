@@ -1,4 +1,15 @@
 import {PriorityPublicationSafetyTopology} from './priority-publication-safety-topology.js';
+import {policyRefusalReason} from '../policy/table-policy-validation.js';
+import {
+  POLICY_AUTHORITY_STATE,
+  POLICY_READ_REASON,
+} from '../policy/policy-constants.js';
+import {
+  policyReadUnavailable,
+  requirePolicyMinimumReplicaCount,
+  resolveMessageGroupPolicyFactFromOwner,
+  resolvePartitionPolicyFactFromOwner,
+} from '../policy/table-policy-resolution.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {UNIFIED_SERVICE_TYPE} from
@@ -7,6 +18,10 @@ import {REBALANCER_DEFAULT_POLICY} from './rebalancer-constants.js';
 import {
   readAuthoritativeEntityServiceRows,
 } from './entity-service-row-read.js';
+import {isValidLeaderReadAuthorityWitness} from
+  '../control-plane/control-plane-authoritative-read-witness.js';
+import {INITIAL_PARTITION_IDS} from
+  '../bootstrap/system-table-schemas-constants.js';
 
 import {
   hasAuthoritativeRemoveSafetyPlanningProvider,
@@ -17,8 +32,6 @@ import {
 } from './priority-recovery-planning-read.js';
 
 const {
-  DEFAULT_MIN_REPLICA_COUNT,
-  OPERATION_WORKFLOW_OWNER_LITERAL,
   REMOVE_SAFETY_READ_QUERY_OPTIONS,
   REMOVE_SAFETY_SQL,
   SERVICE_TYPE,
@@ -27,53 +40,40 @@ const {
   readAuthoritativeControlPlaneRows,
 } = SHARED;
 
-class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
-  mergeReplicaRowsForSafety(authoritativeRows, cachedRows) {
-    const mergedRowsById = new Map();
-    const mergeDefinedReplicaRowFields = (baseRow, incomingRow) => {
-      const mergedRow = {
-        ...(baseRow || {}),
-      };
-      for (const [fieldName, fieldValue] of Object.entries(incomingRow || {})) {
-        if (fieldValue === null || fieldValue === undefined) {
-          continue;
-        }
-        mergedRow[fieldName] = fieldValue;
-      }
-      return mergedRow;
-    };
-    const appendRow = (row, preferIncoming = false) => {
-      if (!row || typeof row !== 'object') {
-        return;
-      }
-      const rowId = this.getReplicaRowIdentity(row);
-      if (!rowId) {
-        mergedRowsById.set(Symbol('service_row'), {...row});
-        return;
-      }
-      if (!preferIncoming || !mergedRowsById.has(rowId)) {
-        mergedRowsById.set(rowId, {...row});
-        return;
-      }
-      mergedRowsById.set(
-        rowId,
-        mergeDefinedReplicaRowFields(mergedRowsById.get(rowId), row),
-      );
-    };
-    for (const cachedRow of cachedRows) {
-      appendRow(cachedRow, false);
-    }
-    for (const authoritativeRow of authoritativeRows) {
-      appendRow(authoritativeRow, true);
-    }
-    return [...mergedRowsById.values()];
-  }
+const AUTHORITATIVE_READ_AVAILABLE_PROP = 'authoritativeReadAvailable';
 
+function createCriticalReplicaRowsList(
+  rows = [],
+  authoritativeReadAvailable = true,
+) {
+  const list = [...rows];
+  Object.defineProperty(list, AUTHORITATIVE_READ_AVAILABLE_PROP, {
+    value: Boolean(authoritativeReadAvailable),
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return list;
+}
+
+function isCompleteAuthoritativeServicesResult(result) {
+  return Boolean(
+    result?.success === true &&
+      result?.partial !== true &&
+      result?.rowSetComplete === true &&
+      Array.isArray(result?.rows) &&
+      isValidLeaderReadAuthorityWitness(
+        result?.readAuthorityWitness,
+        INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES],
+      ),
+  );
+}
+
+class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
   async getCriticalReplicaRowsForSafety(partitionId) {
-    const cachedRows = this.getCachedCriticalReplicaRows(partitionId);
     const gateway = this.repository?.controlPlaneSystemTableGateway;
     if (!gateway) {
-      return cachedRows;
+      return createCriticalReplicaRowsList([], false);
     }
     try {
       const result = await readAuthoritativeControlPlaneRows(
@@ -83,16 +83,20 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
         [SERVICE_TYPE.PARTITION, partitionId],
         REMOVE_SAFETY_READ_QUERY_OPTIONS,
       );
-      if (
-        !result?.success ||
-        !Array.isArray(result.rows) ||
-        result.rows.length === 0
-      ) {
-        return cachedRows;
+      if (!isCompleteAuthoritativeServicesResult(result)) {
+        return createCriticalReplicaRowsList([], false);
       }
-      return this.mergeReplicaRowsForSafety(result.rows, cachedRows);
+      if (result.rows.length === 0) {
+        return createCriticalReplicaRowsList([], true);
+      }
+      return createCriticalReplicaRowsList(
+        result.rows
+          .filter((row) => row && typeof row === 'object')
+          .map((row) => ({...row})),
+        true,
+      );
     } catch {
-      return cachedRows;
+      return createCriticalReplicaRowsList([], false);
     }
   }
 
@@ -117,7 +121,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
         identity,
         REMOVE_SAFETY_READ_QUERY_OPTIONS,
       );
-      if (!result?.success || !Array.isArray(result.rows)) {
+      if (!isCompleteAuthoritativeServicesResult(result)) {
         return Object.freeze({
           available: false,
           rows: [],
@@ -135,10 +139,38 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     }
   }
 
+  async resolveEntityRemoveSafetyPolicyFact(entityType, entityId) {
+    if (entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE) {
+      const minReplicaCount =
+        REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE.minReplicaCount;
+      return Object.freeze({
+        state: POLICY_AUTHORITY_STATE.AUTHORITATIVE_POLICY,
+        minReplicaCount,
+        targetReplicaCount: minReplicaCount,
+        reason: null,
+      });
+    }
+    if (entityType !== SERVICE_TYPE.MESSAGE_GROUP) {
+      return Object.freeze({
+        state: POLICY_AUTHORITY_STATE.AUTHORITATIVE_ABSENCE,
+        minReplicaCount: null,
+        targetReplicaCount: null,
+        reason: POLICY_READ_REASON.UNSUPPORTED_ENTITY_TYPE,
+      });
+    }
+    return resolveMessageGroupPolicyFactFromOwner(
+      this.tablePolicyService,
+      entityId,
+      {requireAuthoritative: true},
+    );
+  }
+
   /**
    * Resolve the minimum live-replica floor from the policy owner for the
    * entity type. Runtime services own an availability floor; message groups
-   * own a replicated-group target floor. Unknown types fail closed.
+   * own a replicated-group target floor. Destructive REMOVE authorization
+   * requires an accepted authoritative policy fact and never substitutes a
+   * caller default when policy is absent, stale, or unavailable.
    * @param {string} entityType
    * @param {string} entityId
    * @return {Promise<number|null>}
@@ -150,27 +182,21 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     if (entityType !== SERVICE_TYPE.MESSAGE_GROUP) {
       return null;
     }
-    const defaultCount =
-      REBALANCER_DEFAULT_POLICY.MESSAGE_GROUP.targetReplicaCount;
-    if (
-      !this.tablePolicyService ||
-      typeof this.tablePolicyService.getMessageGroupPolicy !== 'function'
-    ) {
-      return defaultCount;
-    }
-    try {
-      const policy = await this.tablePolicyService.getMessageGroupPolicy(
-        entityId,
+    const decision = await this.resolveEntityRemoveSafetyPolicyFact(
+      entityType,
+      entityId,
+    );
+    if (decision?.state !== POLICY_AUTHORITY_STATE.AUTHORITATIVE_POLICY) {
+      throw policyReadUnavailable(
+        policyRefusalReason(decision, POLICY_READ_REASON.POLICY_READ_UNAVAILABLE),
+        {
+          groupId: entityId,
+          authorityState:
+            decision?.state || POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE,
+        },
       );
-      const count = Number(
-        policy?.minReplicaCount ?? policy?.targetReplicaCount,
-      );
-      return Number.isFinite(count) && count > 0 ?
-        Math.floor(count) :
-        defaultCount;
-    } catch {
-      return defaultCount;
     }
+    return requirePolicyMinimumReplicaCount(decision);
   }
 
   getCachedCriticalPartitionRow(partitionId) {
@@ -188,12 +214,11 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
   }
 
   mergePartitionRowForSafety(authoritativeRow, cachedRow) {
-    if (!cachedRow && !authoritativeRow) {
+    if (!authoritativeRow) {
       return null;
     }
     const mergedRow = {
-      ...(cachedRow || {}),
-      ...(authoritativeRow || {}),
+      ...authoritativeRow,
     };
     // The owner-local canonical leader seed (the PARTITIONS-row sibling of
     // CL-035, partition-service-metadata-delivery-methods.js) makes an
@@ -235,10 +260,9 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
   }
 
   async getCriticalPartitionRowForSafety(partitionId) {
-    const cachedRow = this.getCachedCriticalPartitionRow(partitionId);
     const gateway = this.repository?.controlPlaneSystemTableGateway;
     if (!partitionId || !gateway) {
-      return cachedRow;
+      return null;
     }
     try {
       const result = await readAuthoritativeControlPlaneRows(
@@ -248,6 +272,13 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
         [partitionId],
         REMOVE_SAFETY_READ_QUERY_OPTIONS,
       );
+      if (
+        !result?.success ||
+        !Array.isArray(result.rows) ||
+        result.rows.length === 0
+      ) {
+        return null;
+      }
       // Revalidate AFTER the await: a demotion (or successor publication)
       // landing while the authoritative read was in flight clears or
       // replaces the cached leader projection, and a pre-await capture must
@@ -256,50 +287,38 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
       // freshest local truth the preference may consult.
       const postAwaitCachedRow =
         this.getCachedCriticalPartitionRow(partitionId);
-      if (
-        !result?.success ||
-        !Array.isArray(result.rows) ||
-        result.rows.length === 0
-      ) {
-        return postAwaitCachedRow;
-      }
       return this.mergePartitionRowForSafety(
         result.rows[0],
         postAwaitCachedRow,
       );
     } catch {
-      return this.getCachedCriticalPartitionRow(partitionId) || cachedRow;
+      return null;
     }
   }
 
-  async getCriticalMinReplicaCount(partitionId) {
-    if (
-      !this.tablePolicyService ||
-      typeof this.tablePolicyService.getPolicyForPartition !==
-        OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION
-    ) {
-      return DEFAULT_MIN_REPLICA_COUNT;
-    }
+  async resolvePartitionRemoveSafetyPolicyFact(partitionId) {
+    return resolvePartitionPolicyFactFromOwner(
+      this.tablePolicyService,
+      partitionId,
+      {requireAuthoritative: true},
+    );
+  }
 
-    try {
-      const policy =
-        await this.tablePolicyService.getPolicyForPartition(partitionId);
-      const minReplicaCount = Number(policy?.minReplicaCount);
-      if (Number.isFinite(minReplicaCount) && minReplicaCount > 0) {
-        return Math.floor(minReplicaCount);
-      }
-    } catch (error) {
-      this.logger.warn(
-        OPERATION_WORKFLOW_OWNER_LITERAL.FAILED_TO_RESOLVE_MINREPLICACOUNT_FOR_CRITICAL +
-          OPERATION_WORKFLOW_OWNER_LITERAL.PARTITION_SAFETY_CHECK,
+  async getCriticalMinReplicaCount(partitionId) {
+    const decision = await this.resolvePartitionRemoveSafetyPolicyFact(
+      partitionId,
+    );
+    if (decision?.state !== POLICY_AUTHORITY_STATE.AUTHORITATIVE_POLICY) {
+      throw policyReadUnavailable(
+        policyRefusalReason(decision, POLICY_READ_REASON.POLICY_READ_UNAVAILABLE),
         {
           partitionId,
-          error: error.message,
+          authorityState:
+            decision?.state || POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE,
         },
       );
     }
-
-    return DEFAULT_MIN_REPLICA_COUNT;
+    return requirePolicyMinimumReplicaCount(decision);
   }
 
   isNodeReadyForRouting(nodeId, options = {}) {

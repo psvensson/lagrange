@@ -35,6 +35,7 @@ import {
 } from '../../src/partition/partition-locking-read-reservation.js';
 import {checkWriteStatementReservations} from '../../src/query/sql-locking-read-execution.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 ConfigurationManager.getInstance().initialize();
 
 /**
@@ -117,6 +118,7 @@ function createJourneyHarness(options = {}) {
   const gateway = createTransactionPersistenceGateway();
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache,
     controlPlaneSystemTableGateway: gateway,
     partitionServicesProvider: () => partitionServices,

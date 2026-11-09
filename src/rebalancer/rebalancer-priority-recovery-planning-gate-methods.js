@@ -160,23 +160,6 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
   },
 
   /**
-   * Advance the shared ordinary-work release fence for one evaluation
-   * that observed no priority spread blocker, then resolve the
-   * stabilizing defer decision for non-priority entities. Priority
-   * partitions never defer on the shared fence, but they DO advance it
-   * here: their evaluations are already event-driven (the
-   * priority-recovery visibility cache and node-edge listeners
-   * re-enqueue them on placement-eligibility and operation-terminal
-   * edges), so they observe the clear that starts the stability window
-   * and resolve the stable release that wakes parked ordinary entities.
-   * The window law itself is unchanged — release still requires the full
-   * continuous-clear interval, and any blocked or in-flight observation
-   * still rearms it.
-   * @param {boolean} priorityPartition
-   * @return {Object|null}
-   * @private
-   */
-  /**
    * A runtime service below its desired replica count is actuating desired
    * state the operator asked for (a service_definitions replica_count), not
    * spreading in the background. The formation-quiescence fence that holds
@@ -199,6 +182,34 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     return healthyReplicaCount < targetReplicaCount;
   },
 
+  /**
+   * Whether this entity uses the short priority reconcile cadence.
+   * @return {boolean}
+   */
+  usesPriorityRebalanceCadence() {
+    return (
+      this.isControlPlanePriorityPartition() ||
+      this.isRuntimeServiceDesiredStateDeficit()
+    );
+  },
+
+  /**
+   * Advance the shared ordinary-work release fence for one evaluation
+   * that observed no priority spread blocker, then resolve the
+   * stabilizing defer decision for non-priority entities. Priority
+   * partitions never defer on the shared fence, but they DO advance it
+   * here: their evaluations are already event-driven (the
+   * priority-recovery visibility cache and node-edge listeners
+   * re-enqueue them on placement-eligibility and operation-terminal
+   * edges), so they observe the clear that starts the stability window
+   * and resolve the stable release that wakes parked ordinary entities.
+   * The window law itself is unchanged — release still requires the full
+   * continuous-clear interval, and any blocked or in-flight observation
+   * still rearms it.
+   * @param {boolean} priorityPartition
+   * @return {Object|null}
+   * @private
+   */
   resolveClearedPrioritySpreadFenceDecision(priorityPartition) {
     const observedAt = this.nowFn();
     let globalTopologyBlockingOperationCount = 0;

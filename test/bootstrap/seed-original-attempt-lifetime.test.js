@@ -115,11 +115,10 @@ function replicaOptions(f, serviceType) {
   const replicaIds = messageGroup ? [...INITIAL_MESSAGE_GROUP_REPLICA_IDS] :
     getInitialReplicaIds(tableName);
   const replicaId = replicaIds[0];
-  const entity = messageGroup ? ENTITY_TYPE.MESSAGE_GROUP : ENTITY_TYPE.PARTITION;
   return {serviceType, replicaId, replicaIds, replicaIndex: 0,
-    peerAddresses: replicaIds.map((id) => [NODE_ID, entity, id].join(ADDRESS.SEPARATOR)),
     deferElection: true, createDelayMs: 0,
     ...(messageGroup ? {groupId,
+      founderNodeIds: Object.fromEntries(replicaIds.map((id) => [id, NODE_ID])),
       dbPath: getMessageGroupDbPath(f.dataDir, groupId, replicaId)} :
       {partitionId: groupId, tableName,
         schema: SYSTEM_TABLE_SCHEMAS.find((schema) => schema.tableName === tableName),
@@ -182,7 +181,6 @@ test('BootstrapService prepares one live original attempt before either creation
     const admitted = f.service.bootstrapReplicaOptionsByServiceId.get(options.replicaId);
     assert.ok(Object.isFrozen(admitted));
     assert.ok(Object.isFrozen(admitted.replicaIds));
-    assert.ok(Object.isFrozen(admitted.peerAddresses));
     assert.equal(admitted.originalAllocationOpening, preparation.openingFor(options.replicaId));
     assert.deepEqual(f.entries, [], 'queue admission alone performs no native work');
   });
@@ -196,7 +194,6 @@ async (t) => {
   for (const changed of [
     {groupId: 'unrelated-group'}, {serviceType: SERVICE_TYPE.PARTITION},
     {dbPath: path.join(f.dataDir, 'other.db')}, {replicaIds: [options.replicaId]},
-    {peerAddresses: options.peerAddresses.map((address) => `wrong-${address}`)},
     {originalAllocationOpening: {}},
   ]) {
     assert.throws(() => queueReplica(f, {...options, ...changed}), hold(REASON.IDENTITY));

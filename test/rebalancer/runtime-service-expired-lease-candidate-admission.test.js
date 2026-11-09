@@ -1,3 +1,4 @@
+import {createMockCoordinator} from './test-helpers.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   EntityType,
@@ -10,7 +11,6 @@ import {
 import {
   createMockCache,
   createMockCdcService,
-  createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
   initializeTestEnvironment,
@@ -21,7 +21,7 @@ const OWNER_NODE_ID = 'owner-node';
 const EXPIRED_NODE_ID = 'expired-preferred-node';
 const HEALTHY_NODE_ID = 'healthy-alternative-node';
 
-function createRepairEligibleReadinessService(nodeIds) {
+function createRepairEligibleReadinessService(nodeIds, systemTableCache) {
   const publishedRow = Object.freeze({
     status: 'PUBLISHED',
     publicationEpoch: 7,
@@ -44,6 +44,17 @@ function createRepairEligibleReadinessService(nodeIds) {
     [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
   });
   return {
+    answerCommittedNodes() {
+      return {
+        state: 'ready',
+        epoch: {
+          publicationEpoch: 7,
+          publicationId: 'cluster_membership-7',
+          readAtMs: 0,
+        },
+        nodeRows: systemTableCache.getAll('nodes'),
+      };
+    },
     membershipPublicationService: {
       getLatestClusterPublicationSync() {
         return publishedRow;
@@ -101,6 +112,7 @@ test('ordinary runtime-service placement excludes an expired-lease ' +
   const systemTableCache = createMockCache(nodes, services);
   const readinessService = createRepairEligibleReadinessService(
     nodes.map((node) => node.node_id),
+    systemTableCache,
   );
   const createdOperations = [];
   const rebalanceCoordinator = createMockCoordinator();

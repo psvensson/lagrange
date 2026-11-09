@@ -190,11 +190,13 @@ function createMockCoordinatorDeps(sqlEngine) {
         sqlEngine.executeQuery(sql, params, queryOptions),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({replicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
     },
     sqlQueryEngine: sqlEngine,
     transactionCoordinator: createMockTransactionCoordinator(),
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     storageAdmissionService: {
       checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
       checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),

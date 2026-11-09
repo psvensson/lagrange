@@ -63,8 +63,14 @@ function requestTableMatches(service, payload) {
 
 function forwardSplitStartIfFollower(service, payload, transitionMetadata) {
   if (service.role === RaftRole.LEADER) return null;
-  const leaderAddress = service.resolveLeaderAddress();
-  if (leaderAddress && service.transport) {
+  let leaderAddress;
+  try {
+    leaderAddress = service.resolveLeaderAddress();
+  } catch {
+    // No live leader at a committed address: the typed no-leader answer.
+    return rejected(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
+  }
+  if (service.transport) {
     // A forwarding hop answers with the leader's answer (or its refusal).
     return forwardSourceReplicationStart(service.transport, leaderAddress, {
       type: PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION,

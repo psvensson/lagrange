@@ -13,21 +13,20 @@ function groupedSourceMismatch(grouped, sourceGroupId) {
 
 function captureDurablePropagationPlan(owner, source) {
   owner.refreshConfig();
-  const safeTargets = buildSafeTargets({sourceGroupId: source.groupId,
-    systemTableCache: owner.systemTableCache,
-    messageGroupReplicaSuffix: CDC_MESSAGE_GROUP_REPLICA_SUFFIX});
-  const grouped = owner.propagationMode === LATENCY_PROPAGATION_MODE.GROUPED ?
-    buildGroupedContext(owner) : null;
+  const isGroupedMode = owner.propagationMode === LATENCY_PROPAGATION_MODE.GROUPED;
+  const grouped = isGroupedMode ? buildGroupedContext(owner, source.groupId) : null;
   const sourceMismatch = groupedSourceMismatch(grouped, source.groupId);
   const fallbackReason = sourceMismatch ? CDC_GROUP_PROPAGATION_REASON.SOURCE_GROUP_MISMATCH :
     grouped?.fallbackReason ?? (grouped === null ?
       CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE : null);
-  const useGrouped = fallbackReason === null;
-  const byGroup = new Map(safeTargets.map((target) => [target.groupId, target]));
-  if (useGrouped) {
-    for (const target of grouped.targets) byGroup.set(target.groupId, target);
-  }
-  return {targets: [...byGroup.values()], safeTargets, fallbackReason, useGrouped, sourceMismatch};
+  const useGrouped = isGroupedMode && fallbackReason === null;
+  const targets = isGroupedMode ? [...grouped.targets] :
+    buildSafeTargets({sourceGroupId: source.groupId,
+      latencyTreeService: owner.latencyTreeService,
+      systemTableCache: owner.systemTableCache,
+      messageGroupReplicaSuffix: owner.messageGroupReplicaSuffix ??
+        CDC_MESSAGE_GROUP_REPLICA_SUFFIX});
+  return {targets, fallbackReason, useGrouped, sourceMismatch};
 }
 
 export {captureDurablePropagationPlan};

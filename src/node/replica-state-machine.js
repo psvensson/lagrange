@@ -138,6 +138,10 @@ function defineReplicaLifecycleOwnerIncarnation(target, ownerIncarnation) {
  * Enforces valid transitions and emits events for all state changes.
  *
  */
+function resolveOptionalFunction(candidate) {
+  return typeof candidate === 'function' ? candidate : null;
+}
+
 class ReplicaStateMachine extends EventEmitter {
   /**
    * Create a new ReplicaStateMachine.
@@ -179,6 +183,9 @@ class ReplicaStateMachine extends EventEmitter {
       options.now :
       options.timeSource ? () => this.timeSource.now() : REPLICA_STATE_MACHINE_NOW;
     this.systemTableCache = options.systemTableCache || null;
+    this.resolveLiveReplicaRole = resolveOptionalFunction(
+      options.resolveLiveReplicaRole,
+    );
 
     // CL-016: service rows seeded into the LOCAL cache by the priority
     // create fallback, whose durable write is still unconfirmed. Their
@@ -473,7 +480,7 @@ class ReplicaStateMachine extends EventEmitter {
   }
 
   _buildUpdateCdcData(replicaState, previousState) {
-    return buildUpdateCdcData(replicaState, previousState);
+    return buildUpdateCdcData(replicaState, previousState, this);
   }
 
   _buildCreateCdcData(replicaState, serviceId, serviceType, address) {
@@ -571,20 +578,6 @@ class ReplicaStateMachine extends EventEmitter {
 
   checkTimeoutsNow() {
     return this._checkTimeouts();
-  }
-
-  /**
-   * CL-021 deferred durable services-row retry, on demand: the same
-   * reconcile pass the timeout-checker tick runs, for an owner that has
-   * evidence the row is still missing remotely (a partition learner whose
-   * promotion proof was refused learner_address_unresolvable). The pass's
-   * own bounds apply unchanged — per-row backoff, the in-flight guard and
-   * the transition-persist race guard — so a kick can never write more
-   * often than the tick would.
-   * @return {Promise<number>} Rows durably converged this pass.
-   */
-  reconcileLocalOnlyServiceRowsNow() {
-    return this._reconcileLocalOnlyServiceRows();
   }
 
   /**

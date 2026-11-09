@@ -106,7 +106,6 @@ function createMockCDCService(cache) {
       cache.applySystemTableChange(tableName, 'UPDATE', merged);
       return {success: true};
     },
-    async waitForCacheUpdate() {},
   };
 }
 
@@ -173,7 +172,7 @@ test('executor-side replica creation succeeds but owner-side ' +
     cdcIntegrationService: cdcService,
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -191,7 +190,9 @@ test('executor-side replica creation succeeds but owner-side ' +
       },
     },
     transactionCoordinator: createMockTransactionCoordinator(),
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      systemTableCache: cache, defaultRepairEligible: true,
+    }),
     enableTimeouts: false,
   });
   coordinator.initialize();

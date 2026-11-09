@@ -37,7 +37,8 @@ function query(request) {
   return {purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION, groupId: GROUP,
     action: {operationId: O, transitionIdentity: identity.transitionIdentity,
       permitSequence: permit.permitSequence, stage: permit.permitStage,
-      replicaIdentity: TARGET, peerId: identity.targetPeerId}};
+      replicaIdentity: TARGET, peerId: identity.targetPeerId,
+      nodeId: identity.targetNodeId}};
 }
 function ordinaryAndDebt(row) {
   const result = {...row};
@@ -114,7 +115,7 @@ function openOperations(file, clock, nodeId) {
   const repository = new ReplicaOperationRepository({nodeId, membershipOwnerBootIncarnation: 1,
     timeSource: clock, controlPlaneSystemTableGateway: gateway, logger: noLog,
     systemTableCache: {get: () => null, getAll: () => [], filter: () => []},
-    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+    cdcIntegrationService: {},
     authoritativeVisibilityTimeoutMs: 0, authoritativeVisibilityRetryDelayMs: 0});
   return {db, repository, mutations: () => mutations,
     row: () => db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?').get(O)};

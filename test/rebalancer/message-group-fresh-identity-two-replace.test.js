@@ -164,7 +164,7 @@ function buildSecondReplaceOperation(f, sourceReplicaId) {
   };
 }
 
-async function proposeRemovalForRow(f, operationId, leaderReplicaId, targetReplicaId) {
+async function proposeRemovalForRow(f, operationId, leaderReplicaId) {
   const row = f.db
     .prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
     .get(operationId);
@@ -185,7 +185,6 @@ async function proposeRemovalForRow(f, operationId, leaderReplicaId, targetRepli
       localReplicaIdentity: leaderReplicaId,
       senderNodeId: NODE,
       senderBootIncarnation: 1,
-      peerAddress: f.cluster.addressOf(targetReplicaId),
     },
     request,
     (req, receiver) =>
@@ -292,7 +291,6 @@ test('two serial fresh-identity REPLACE operations enforce single-lane ' +
     f,
     O,
     handoffLeader,
-    r1SourceReplicaId,
   );
   assert.equal(r1RemoveProposed.reason, REASON.PROPOSED);
   assert.equal(
@@ -396,7 +394,6 @@ test('two serial fresh-identity REPLACE operations enforce single-lane ' +
       localReplicaIdentity: handoffLeader,
       senderNodeId: NODE,
       senderBootIncarnation: 1,
-      peerAddress: f.cluster.addressOf(R2_TARGET_REPLICA),
     },
     {
       operationId: R2_OPERATION_ID,
@@ -576,7 +573,7 @@ test('separated membership obligation and terminal settlement: ordinary FAILED '
   );
 
   // 4. Propose RemoveNode(TARGET) for the orphan learner and record TARGET_REMOVED.
-  const abortProposed = await proposeRemovalForRow(f, O, leaderId, TARGET);
+  const abortProposed = await proposeRemovalForRow(f, O, leaderId);
   assert.equal(abortProposed.reason, REASON.PROPOSED);
   const targetPeerId = deriveRaftRsPeerId(TARGET);
   assert.equal(

@@ -187,3 +187,66 @@ test(TEST_NAME_STARTUP_REPLAYS_CACHED_PENDING,
 
     service.stop();
   });
+
+test(
+  'ReplicaDispatchService buildOperationFromRow preserves ' +
+    'failedCreateTargetLifecyclePrecondition from steps_history',
+  (t) => {
+    initEnv();
+    const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
+      nodeId: TEST_NODE_ID,
+      messageRouter: {},
+      cdcIntegrationService: {},
+      systemTableCache: {
+        get: () => null,
+        getAll: () => [],
+        onCacheChange: () => {},
+        offCacheChange: () => {},
+      },
+      rebalanceCoordinator: {
+        on: () => {},
+        off: () => {},
+      },
+    }));
+    const precondition = {
+      service_id: 'schema_operations-p1-r5',
+      replica_id: 'schema_operations-p1-r5',
+      partition_id: 'schema_operations-p1',
+      node_id: TEST_NODE_ID,
+      service_type: SERVICE_TYPE.PARTITION,
+      status: 'failed',
+      cleanup_token: 'failed-create:add-op-1',
+      create_attempt_token: 'attempt-1',
+      state_entered_at: 1000,
+    };
+    const operation = service.buildOperationFromRow({
+      operation_id: 'cleanup-remove-op-1',
+      type: OperationType.REMOVE,
+      partition_id: 'schema_operations-p1',
+      entity_type: SERVICE_TYPE.PARTITION,
+      entity_id: 'schema_operations-p1',
+      replica_id: 'schema_operations-p1-r5',
+      source_node_id: TEST_NODE_ID,
+      target_node_id: TEST_NODE_ID,
+      status: TEST_OPERATION_STATUS,
+      workflow_step: WORKFLOW_STEP.PENDING,
+      created_at: 1000,
+      updated_at: 1000,
+      membership_publication_epoch: 1,
+      steps_history: JSON.stringify([
+        {
+          step: WORKFLOW_STEP.PENDING,
+          timestamp: 1000,
+          failedCreateTargetLifecyclePrecondition: precondition,
+        },
+      ]),
+    });
+
+    t.same(
+      operation.failedCreateTargetLifecyclePrecondition,
+      precondition,
+      'buildOperationFromRow must preserve failedCreateTargetLifecyclePrecondition for REMOVE_REPLICA admission',
+    );
+    t.end();
+  },
+);

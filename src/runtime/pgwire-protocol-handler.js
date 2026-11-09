@@ -36,6 +36,7 @@ import {
   buildBackendKeyData,
   buildReadyForQuery,
   buildErrorResponse,
+  buildNoticeResponse,
   buildRowDescription,
   buildDataRow,
   buildCommandComplete,
@@ -64,8 +65,8 @@ import {
   extractRowValues,
   isEmptyStatementResult,
 } from './pgwire-result-mapper.js';
-import {readExecutedStatementType} from
-  '../query/application-database-result.js';
+import {readExecutedStatementType} from '../query/application-database-result.js';
+import {OWNER_CONTRACT_STATE} from '../control-plane/owner-contract-outcome.js';
 import {AST_TYPE} from '../query/parser-constants.js';
 import {
   writeCString,
@@ -134,6 +135,9 @@ class PgWireProtocolHandler {
     this._pendingAuth = null;
     this._buffer = Buffer.alloc(0);
     this._processing = Promise.resolve();
+    // Aborted when the connection is destroyed: ends a lifecycle command's
+    // projection wait; the session's write stays committed.
+    this._disconnected = new AbortController();
     this._pid = (Math.random() * LOCAL_NUM_INT32_MAX) | 0;
     this._secretKey = (Math.random() * LOCAL_NUM_INT32_MAX) | 0;
 
@@ -164,6 +168,7 @@ class PgWireProtocolHandler {
    */
   destroy() {
     this._phase = HANDLER_PHASE.CLOSED;
+    this._disconnected.abort();
     this._socket.removeListener(LOCAL_STR_DATA, this._onData);
     this._socket.removeListener(LOCAL_STR_ERROR, this._onError);
     this._socket.removeListener(LOCAL_STR_CLOSE, this._onClose);
@@ -664,6 +669,15 @@ class PgWireProtocolHandler {
       }
 
       const statementType = readExecutedStatementType(result);
+      if (result?.contractState === OWNER_CONTRACT_STATE.UNDER_REPLICATED) {
+        const ep = result.epoch?.publicationEpoch != null ?
+          ` at epoch ${result.epoch.publicationEpoch}` : '';
+        const msg =
+          `Table created under_replicated: ${result.missingReplicaCount ?? 1} replica(s) missing${ep}`;
+        this._socket.write(buildNoticeResponse(
+          PG_SEVERITY.NOTICE, PG_ERROR_CODE.SUCCESSFUL_COMPLETION, msg,
+        ));
+      }
       const notice = takeTransactionEndNotice(this._session, statementType);
       if (notice) this._socket.write(notice);
       this._socket.write(buildCommandComplete(tag));
@@ -683,7 +697,10 @@ class PgWireProtocolHandler {
    */
   _executionOptions() {
     const transactionId = this._session.transactionId;
-    return transactionId ? {expectedTransactionId: transactionId} : {};
+    return {
+      abortSignal: this._disconnected.signal,
+      ...(transactionId ? {expectedTransactionId: transactionId} : {}),
+    };
   }
 
   /**

@@ -3,6 +3,7 @@ import {createPartitionServiceMetadataDeliveryMethods} from './partition-service
 import {createPartitionServiceLearnerPromotionMethods} from './partition-service-learner-promotion-methods.js';
 import {createPartitionServiceLearnerPromotionProofMethods} from './partition-service-learner-promotion-proof-methods.js';
 import {createPartitionServiceLearnerPromotionWakeMethods} from './partition-service-learner-promotion-wake-methods.js';
+import * as replicaAdmission from './partition-replica-admission.js';
 import {createPartitionServiceDurabilityFitnessMethods} from './partition-service-durability-fitness.js';
 import {PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS} from
   './partition-service-participant-transaction-cadence-methods.js';
@@ -34,6 +35,19 @@ class PartitionService extends PartitionServiceSplitAccessorBase {
     // option transactionDeterminismSelfCheck, else the classifier owner's.
     configureParticipantDeterminismSelfCheck(this,
       options.transactionDeterminismSelfCheck);
+  }
+  // Replica admission (partition-replica-admission.js, explicit context).
+  handleReplicaAdmissionRequest(payload) {
+    return replicaAdmission.handleReplicaAdmissionRequest(this, payload);
+  }
+  requestReplicaAdmission(operationId) {
+    return replicaAdmission.requestReplicaAdmission(this, operationId);
+  }
+  driveReplicaAdmission() {
+    return replicaAdmission.driveReplicaAdmission(this);
+  }
+  sendReplicaAdmissionRequest(request) {
+    return replicaAdmission.sendReplicaAdmissionRequest(this, request);
   }
 }
 

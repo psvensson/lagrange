@@ -16,6 +16,7 @@ import {createTransactionPersistenceGateway} from
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -44,6 +45,7 @@ function getParticipantIds(txState) {
 
 test('Transaction - BEGIN TRANSACTION starts a transaction', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: createMockSystemCache([], []),
@@ -60,6 +62,7 @@ test('Transaction - BEGIN TRANSACTION starts a transaction', async (t) => {
 
 test('Transaction - COMMIT without active transaction returns error', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: createMockSystemCache([], []),
@@ -75,6 +78,7 @@ test('Transaction - COMMIT without active transaction returns error', async (t) 
 
 test('Transaction - ROLLBACK without active transaction returns error', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: createMockSystemCache([], []),
@@ -90,6 +94,7 @@ test('Transaction - ROLLBACK without active transaction returns error', async (t
 
 test('Transaction - double BEGIN returns error', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: createMockSystemCache([], []),
@@ -117,6 +122,7 @@ test('Transaction - cross-partition INSERT enlists all touched participants', as
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: cache,
@@ -154,6 +160,7 @@ test('Transaction - cross-partition UPDATE enlists all touched participants', as
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: cache,
@@ -194,6 +201,7 @@ test('Transaction - single-partition operations succeed', async (t) => {
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: cache,
@@ -234,6 +242,7 @@ test('Transaction - ROLLBACK reverts changes', async (t) => {
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: cache,
@@ -262,6 +271,7 @@ test('Transaction - ROLLBACK reverts changes', async (t) => {
 
 test('Transaction - different sessions have independent transactions', async (t) => {
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: createMockSystemCache([], []),
@@ -296,6 +306,7 @@ test('Transaction - concurrent transactions on same partition use SQLite locking
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: cache,
@@ -342,6 +353,7 @@ test('Transaction - getTransactionPartition returns bound partition', async (t) 
   );
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: cache,

@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {drivePendingReplicaAdmission} from './partition-replica-admission.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   validateLearnerPromotionProofResponse,
@@ -11,6 +12,9 @@ import {
 import {
   evaluateLearnerPromotionCountCheck,
 } from './learner-promotion-count-check.js';
+import {
+  readPriorityRecoveryPlanningAnswerSync,
+} from '../control-plane/priority-recovery-planning-answer-origin.js';
 import {
   createPartitionServiceLearnerPromotionCountCheckMethods,
 } from './partition-service-learner-promotion-count-check-methods.js';
@@ -178,11 +182,10 @@ class PartitionServiceLearnerPromotionMethods {
     if (!readinessService) {
       return null;
     }
-    return (
-      readinessService.getPriorityRecoveryPlanningAnswerSync(
-        this.nodeId,
-        Date.now(),
-      ) || null
+    return readPriorityRecoveryPlanningAnswerSync(
+      readinessService,
+      this.nodeId,
+      Date.now(),
     );
   }
   getPriorityRecoveryOperationContextsForLearnerPromotion() {
@@ -233,11 +236,12 @@ class PartitionServiceLearnerPromotionMethods {
     );
   }
   getReplicaServiceStatusForPromotion(serviceRow) {
-    return serviceRow?.[COLUMN.STATUS] || ReplicaStatus.ACTIVE;
+    return serviceRow?.[COLUMN.STATUS] ?? null;
   }
   isLiveReplicaServiceRowForPromotion(serviceRow) {
     const status = this.getReplicaServiceStatusForPromotion(serviceRow);
     return (
+      status !== null &&
       status !== ReplicaStatus.FAILED &&
       status !== ReplicaStatus.REMOVING &&
       status !== ReplicaStatus.REMOVED
@@ -418,11 +422,16 @@ class PartitionServiceLearnerPromotionMethods {
     if (!isCatchupLearnerRaftRole(this.role)) {
       return;
     }
+    // A pending admission request rides this existing cadence: the
+    // learner asks its leader again until an admitting answer (quest
+    // replica-admission-from-committed-operation; no timer of its own). It
+    // runs before the leader gate: a replica not yet admitted hears no raft
+    // leader and asks the leader its committed-membership stamp names.
+    await drivePendingReplicaAdmission(this);
+    // The leader a learner proves itself to is the live raft leader its
+    // own status names (C4): never a cached row or a leader-address hint.
     if (!this.leaderId) {
-      this.leaderId =
-        this.resolveLeaderIdFromMetadata() ||
-        this.resolveLeaderIdFromHint() ||
-        null;
+      this.leaderId = this.readLiveRaftLeaderId();
     }
     if (!this.leaderId) {
       this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {

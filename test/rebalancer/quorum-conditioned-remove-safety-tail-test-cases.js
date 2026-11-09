@@ -1,9 +1,7 @@
+import {createMockPolicyService} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {registerQuorumConditionedRemoveSafetyTailReplacementElection} from './quorum-conditioned-remove-safety-tail-replacement-election.js';
-import {
-  withOwnerReadPlanningEvidence,
-} from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
 
 export function registerQuorumConditionedRemoveSafetyTailTests({
   test,
@@ -50,7 +48,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -61,53 +59,11 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               },
             };
           },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
-            return {
-              publishedActiveNodeIdsPresent: true,
-              publishedActiveNodeIds: Object.freeze(['node-a', 'node-b', 'node-c']),
-              recoveryActiveNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              projectedServingNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              publishedMembershipIncludesTargetNode: nodeId === 'node-d',
-              priorityPartitionSummary: Object.freeze({
-                satisfied: false,
-                requiredDistinctNodeCount: 2,
-                missingPartitionIds: ['replica_operations-p1'],
-              }),
-            };
+          async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
+            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
-          async getMembershipPublicationPlanningSnapshot(nodeId) {
-            return {
-              publishedActiveNodeIdsPresent: true,
-              publishedActiveNodeIds: Object.freeze(['node-a', 'node-b', 'node-c']),
-              recoveryActiveNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              projectedServingNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              publishedMembershipIncludesTargetNode: nodeId === 'node-d',
-              priorityPartitionSummary: Object.freeze({
-                satisfied: false,
-                requiredDistinctNodeCount: 2,
-                missingPartitionIds: ['replica_operations-p1'],
-              }),
-            };
+          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
+            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
           getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
@@ -133,10 +89,10 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               }),
             };
           },
+        }},
+        tablePolicyService: createMockPolicyService({
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         }),
-        tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
-        },
         cacheData: {
           nodes: [
             createReadyNode('node-a'),
@@ -238,7 +194,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -249,41 +205,11 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               },
             };
           },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
-            return {
-              publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
-              publishedActiveNodeIdsPresent: true,
-              publishedActiveNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              recoveryActiveNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              projectedServingNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              publishedMembershipIncludesTargetNode:
-              nodeId === TEST_REPLACEMENT_NODE_ID,
-              priorityPartitionSummary: Object.freeze({
-                satisfied: true,
-                requiredDistinctNodeCount: 2,
-                missingPartitionIds: [],
-              }),
-            };
+          async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
+            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
-          async getMembershipPublicationPlanningSnapshot(nodeId) {
-            return this.getMembershipPublicationPlanningSnapshotBestEffort(
-              nodeId,
-            );
+          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
+            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
           getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
@@ -316,10 +242,10 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               }),
             };
           },
+        }},
+        tablePolicyService: createMockPolicyService({
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         }),
-        tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
-        },
         cacheData: {
           nodes: [
             createReadyNode(TEST_SOURCE_NODE_ID),
@@ -455,7 +381,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -466,33 +392,11 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               },
             };
           },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
-            return {
-              publicationStatus,
-              publishedActiveNodeIdsPresent: true,
-              publishedActiveNodeIds: Object.freeze(['node-a', 'node-b', 'node-c', 'node-d']),
-              recoveryActiveNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              projectedServingNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              publishedMembershipIncludesTargetNode: nodeId === 'node-d',
-              priorityPartitionSummary: Object.freeze({
-                satisfied: false,
-                requiredDistinctNodeCount: 2,
-                missingPartitionIds: ['replica_operations-p1'],
-              }),
-            };
+          async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
+            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
-          async getMembershipPublicationPlanningSnapshot(nodeId) {
-            return this.getMembershipPublicationPlanningSnapshotBestEffort(nodeId);
+          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
+            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
           getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
@@ -519,10 +423,10 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               }),
             };
           },
+        }},
+        tablePolicyService: createMockPolicyService({
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         }),
-        tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
-        },
         cacheData: {
           nodes: [
             createReadyNode('node-a'),
@@ -687,7 +591,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -698,33 +602,11 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               },
             };
           },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
-            return {
-              publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
-              publishedActiveNodeIdsPresent: true,
-              publishedActiveNodeIds: Object.freeze(['node-a', 'node-b', 'node-c', 'node-d']),
-              recoveryActiveNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              projectedServingNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              publishedMembershipIncludesTargetNode: nodeId === 'node-d',
-              priorityPartitionSummary: Object.freeze({
-                satisfied: true,
-                requiredDistinctNodeCount: 2,
-                missingPartitionIds: [],
-              }),
-            };
+          async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
+            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
-          async getMembershipPublicationPlanningSnapshot(nodeId) {
-            return this.getMembershipPublicationPlanningSnapshotBestEffort(nodeId);
+          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
+            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
           getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
@@ -751,10 +633,10 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               }),
             };
           },
+        }},
+        tablePolicyService: createMockPolicyService({
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         }),
-        tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
-        },
         cacheData: {
           nodes: [
             createReadyNode('node-a'),
@@ -906,7 +788,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -939,10 +821,10 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               priorityPartitionSummary: TEST_STALE_PRIORITY_PARTITION_SUMMARY,
             };
           },
-        },
-        tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
-        },
+        }},
+        tablePolicyService: createMockPolicyService({
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),
@@ -1064,7 +946,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: readinessServiceFake({
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -1086,10 +968,10 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               priorityPartitionSummary: TEST_STALE_PRIORITY_PARTITION_SUMMARY,
             };
           },
+        }},
+        tablePolicyService: createMockPolicyService({
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
         }),
-        tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
-        },
         cacheData: {
           nodes: [
             createReadyNode('node-a'),

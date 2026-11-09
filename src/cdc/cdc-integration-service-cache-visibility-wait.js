@@ -20,71 +20,24 @@ import {
 } from './cdc-integration-service-cache-visibility-authority.js';
 import {isDeletedRowObservationSatisfied, repairDeletedRowVisibility} from
   './cdc-cache-deletion-visibility.js';
-import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const {
-  AUTHORITATIVE_FALLBACK_OUTCOME,
   AUTHORITATIVE_FALLBACK_PHASE,
-  CDC_ERROR_MSG,
   CDC_OPERATION,
   PRESSURE_GOVERNOR_ACTION,
   READ_MODEL_DIVERGENCE_TYPE,
   SYSTEM_TABLE_NAME,
   SYSTEM_TABLE_VISIBILITY_STATE,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  buildPendingVisibilityTimeoutResult,
   buildSystemTableVisibilityResult,
   canonicalizeSystemTableRow,
-  createTimeoutBudget,
-  createTimeoutBudgetError,
   getControlPlaneRetryAfterMs,
-  getRemainingBudgetMs,
-  isRetryableControlPlaneError,
   isTableInternalCachePropagationEnabled,
+  isRetryableControlPlaneError,
   normalizeAuthoritativeFallbackPhase,
-  normalizeSystemTableVisibilityResult,
   resolveAuthoritativeFallbackOutcome,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
 const CDC_INTEGRATION_SERVICE_CACHE_VISIBILITY_CONSTRUCTOR = 'constructor';
-const buildCacheWaitTimeoutMessage = CDC_ERROR_MSG.CACHE_WAIT_TIMEOUT;
-const CACHE_VISIBILITY_WAIT = Object.freeze({
-  wait: 'CACHE_WAIT_TIMEOUT_MS',
-  awaited: 'routed system-table write visible in the local cache',
-});
-
-// The cache-wait bound is spent: the write did not arrive through CDC in
-// time, and the authoritative repair fallback starts next.
-function reportCacheVisibilityWaitSpent(service, spent) {
-  reportWaitBoundSpent(service.logger, {...CACHE_VISIBILITY_WAIT, ...spent});
-}
-
-const AUTHORITATIVE_VISIBILITY_REPAIR_WAIT = Object.freeze({
-  wait: 'authoritative_visibility_repair_attempts',
-  awaited: 'authoritative confirmation of the cache visibility hole',
-});
-
-// The bounded authoritative repair is spent (its attempts or the remaining
-// visibility budget) without a confirmation; the caller's timeout answer
-// follows.
-function reportVisibilityRepairSpent(service, spent) {
-  const budget = spent.timeoutBudget;
-  reportWaitBoundSpent(service.logger, {
-    ...AUTHORITATIVE_VISIBILITY_REPAIR_WAIT,
-    boundMs: budget?.configuredBudgetMs ?? null,
-    elapsedMs: Number.isFinite(budget?.startedAtMs) ?
-      service.timeSource.now() - budget.startedAtMs :
-      undefined,
-    lastObserved: {
-      attempts: spent.attempt,
-      maxAttempts: spent.maxAttempts,
-      remainingBudgetMs: spent.remainingBudgetMs,
-      visibilityState: spent.lastResult?.visibilityState ?? null,
-    },
-    scope: {nodeId: service.nodeId, tableName: spent.tableName, key: spent.key},
-  });
-}
-
 /**
  * Post-write cache visibility methods for the CDC integration service. Owns
  * the deterministic cache-wait protocol, authoritative cache-visibility-hole
@@ -95,310 +48,6 @@ class CDCIntegrationServiceCacheVisibilityWait {
   /** @return {Object|null} Atomic pre-read table snapshot. */
   captureAuthoritativeCacheSweepSnapshot(tableName) {
     return captureAuthoritativeCacheSweepSnapshot(this, tableName);
-  }
-
-  /**
-   * Determine whether a table write should wait for cache visibility.
-   * Only CDC-propagated tables are guaranteed to appear in SystemTableCache.
-   * @param {string} tableName - System table name.
-   * @return {boolean} True when cache wait semantics apply.
-   * @private
-   */
-  shouldWaitForCacheUpdate(tableName) {
-    return isTableInternalCachePropagationEnabled(tableName);
-  }
-
-  /**
-   * Wait for a system table cache update matching a primary key.
-   * Used to make post-write cache visibility deterministic for callers.
-   * @param {string} tableName - System table name.
-   * @param {string} key - Primary key value.
-   * @param {boolean} expectPresent - True if record should exist after write.
-   * @param {Object} [options] - Cache wait options.
-   * @param {Object} [options.expectedFields] - Exact field-value matches.
-   * @param {Object} [options.minimumFields] - Minimum field thresholds.
-   * @return {Promise<void>}
-   * @private
-   */
-  async waitForCacheUpdate(tableName, key, expectPresent, options = {}) {
-    // Seed bootstrap registration writes before cache hydration: waiting for
-    // visibility here adds per-write timeouts and can stall readiness.
-    if (this.bootstrapMode) {
-      return buildSystemTableVisibilityResult();
-    }
-    if (!this.shouldWaitForCacheUpdate(tableName)) {
-      return buildSystemTableVisibilityResult();
-    }
-    const cache = this.systemTableCache;
-    if (!cache || typeof cache.onCacheChange !== 'function') {
-      return buildSystemTableVisibilityResult();
-    }
-    const expectedFields =
-      options?.expectedFields && typeof options.expectedFields === 'object' ?
-        options.expectedFields :
-        null;
-    const minimumFields =
-      options?.minimumFields && typeof options.minimumFields === 'object' ?
-        options.minimumFields :
-        null;
-    const normalizedExpectedFields = this.normalizeExpectedFieldsForMinimums(
-      expectedFields,
-      minimumFields,
-    );
-    const timeoutMs =
-      Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0 ?
-        Math.floor(options.timeoutMs) :
-        this.cacheWaitTimeoutMs;
-    const fallbackPhase = this.resolveAuthoritativeFallbackPhase(
-      options?.fallbackPhase,
-    );
-    const authoritativeRepairBudgetMs = Math.max(
-      1,
-      Math.min(
-        this.authoritativeFallbackRepairBudgetMs,
-        Math.max(1, Math.floor(timeoutMs / 2)),
-      ),
-    );
-    const cacheWaitBudgetMs = Math.max(
-      1,
-      timeoutMs - authoritativeRepairBudgetMs,
-    );
-    const isSatisfied = () =>
-      this.isCacheExpectationSatisfied(
-        tableName,
-        key,
-        expectPresent,
-        normalizedExpectedFields,
-        minimumFields,
-      );
-    if (isSatisfied()) {
-      return buildSystemTableVisibilityResult();
-    }
-    const timeSource = this.timeSource;
-    return new Promise((resolve, reject) => {
-      let settled = false;
-      let stopHoldingUntilShutdown = null; // shutdown ends the wait at once
-      const timeoutBudget = createTimeoutBudget({
-        configuredBudgetMs: timeoutMs,
-        now: () => timeSource.now(),
-      });
-      const listener = (changedTable) => {
-        if (changedTable !== tableName) {
-          return;
-        }
-        if (isSatisfied()) {
-          cleanup(null, buildSystemTableVisibilityResult());
-        }
-      };
-      const timer = timeSource.setTimeout(() => {
-        void (async () => {
-          if (isSatisfied()) {
-            cleanup();
-            return;
-          }
-          reportCacheVisibilityWaitSpent(this, {
-            boundMs: cacheWaitBudgetMs,
-            elapsedMs: timeSource.now() - timeoutBudget.startedAtMs,
-            lastObserved: () => ({
-              recordPresent: this.hasCacheRecord(tableName, key),
-              expectPresent,
-              fallbackPhase,
-            }),
-            scope: {nodeId: this.nodeId, tableName, key},
-          });
-          let visibilityResult = buildSystemTableVisibilityResult({
-            visibilityState: null,
-          });
-          try {
-            visibilityResult =
-              await this.confirmCacheVisibilityHoleWithinBudget(
-                tableName,
-                key,
-                expectPresent,
-                normalizedExpectedFields,
-                minimumFields,
-                {
-                  fallbackPhase,
-                  timeoutBudget,
-                  originHlc: options.originHlc,
-                },
-              );
-            const normalizedVisibilityResult =
-              normalizeSystemTableVisibilityResult(visibilityResult, null);
-            if (isSatisfied() || normalizedVisibilityResult.visible === true) {
-              cleanup(
-                null,
-                buildSystemTableVisibilityResult({
-                  ...normalizedVisibilityResult,
-                  visibilityState: SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
-                }),
-              );
-              return;
-            }
-            if (
-              options?.allowPendingVisibility === true &&
-              normalizedVisibilityResult.visibilityState ===
-                SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY
-            ) {
-              cleanup(null, normalizedVisibilityResult);
-              return;
-            }
-            if (
-              options?.allowPendingVisibility === true &&
-              normalizedVisibilityResult.visibilityState ===
-                SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE
-            ) {
-              cleanup(null, normalizedVisibilityResult);
-              return;
-            }
-            this.recordAuthoritativeFallbackSignal({
-              tableName,
-              key,
-              expectPresent,
-              phase: fallbackPhase,
-              outcome: AUTHORITATIVE_FALLBACK_OUTCOME.FAILED,
-            });
-          } catch (repairError) {
-            this.recordAuthoritativeFallbackSignal({
-              tableName,
-              key,
-              expectPresent,
-              phase: fallbackPhase,
-              outcome: AUTHORITATIVE_FALLBACK_OUTCOME.FAILED,
-            });
-            this.logger.warn(
-              'Authoritative cache repair failed after cache wait timeout',
-              {
-                tableName,
-                key,
-                expectPresent,
-                error: repairError?.message || String(repairError),
-                nodeId: this.nodeId,
-              },
-            );
-          }
-          if (options?.allowPendingVisibility === true) {
-            cleanup(
-              null,
-              buildPendingVisibilityTimeoutResult(visibilityResult),
-            );
-            return;
-          }
-          const timeoutMessage =
-            buildCacheWaitTimeoutMessage(tableName, key, timeoutMs);
-          const timeoutError = createTimeoutBudgetError({
-            message: timeoutMessage,
-            budget: timeoutBudget,
-            classification:
-              TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
-            nestedOperation: `cache_wait:${tableName}`,
-            now: () => timeSource.now(),
-          });
-          if (typeof visibilityResult?.visibilityState === 'string') {
-            timeoutError.visibilityState = visibilityResult.visibilityState;
-          }
-          if (typeof visibilityResult?.contractState === 'string') {
-            timeoutError.contractState = visibilityResult.contractState;
-          }
-          if (typeof visibilityResult?.nextAction === 'string') {
-            timeoutError.nextAction = visibilityResult.nextAction;
-          }
-          if (visibilityResult?.authoritativeVisibilityConfirmed === true) {
-            timeoutError.authoritativeVisibilityConfirmed = true;
-          }
-          if (typeof visibilityResult?.pressureAction === 'string') {
-            timeoutError.pressureAction = visibilityResult.pressureAction;
-          }
-          if (typeof visibilityResult?.pressureReason === 'string') {
-            timeoutError.pressureReason = visibilityResult.pressureReason;
-          }
-          if (Number.isFinite(visibilityResult?.retryAfterMs)) {
-            timeoutError.retryAfterMs = visibilityResult.retryAfterMs;
-            if (timeoutError.retryAfterMs > 0) {
-              timeoutError.deferRetry = true;
-            }
-          }
-          cleanup(timeoutError);
-        })();
-      }, cacheWaitBudgetMs);
-      function cleanup(
-        error = null,
-        result = buildSystemTableVisibilityResult(),
-      ) {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        stopHoldingUntilShutdown?.();
-        if (typeof cache.offCacheChange === 'function') {
-          cache.offCacheChange(listener);
-        }
-        if (timer) {
-          timeSource.clearTimeout(timer);
-        }
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve(result);
-      }
-      cache.onCacheChange(listener);
-      stopHoldingUntilShutdown = this.holdUntilShutdown(() =>
-        cleanup(this.buildUnconfirmedWriteShutDownAnswer()));
-    });
-  }
-  async confirmCacheVisibilityHoleWithinBudget(
-    tableName,
-    key,
-    expectPresent,
-    expectedFields = null,
-    minimumFields = null,
-    options = {},
-  ) {
-    let lastResult = buildSystemTableVisibilityResult({
-      visibilityState: null,
-    });
-    const maxAttempts = 2;
-    // Held until shutdown: shutdown ends the retry delay and the repair.
-    for (let attempt = 1; attempt <= maxAttempts &&
-      this.isShuttingDown !== true; attempt += 1) {
-      lastResult = normalizeSystemTableVisibilityResult(
-        await this.repairCacheVisibilityHole(
-          tableName,
-          key,
-          expectPresent,
-          expectedFields,
-          minimumFields,
-          options,
-        ),
-        null,
-      );
-      if (
-        lastResult.authoritativeVisibilityConfirmed === true ||
-        lastResult.visibilityState ===
-          SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE
-      ) {
-        return lastResult;
-      }
-      const remainingBudgetMs = getRemainingBudgetMs(options?.timeoutBudget, {
-        now: () => this.timeSource.now(),
-      });
-      if (attempt >= maxAttempts || remainingBudgetMs <= 0) {
-        reportVisibilityRepairSpent(this, {
-          tableName,
-          key,
-          attempt,
-          maxAttempts,
-          remainingBudgetMs,
-          lastResult,
-          timeoutBudget: options?.timeoutBudget,
-        });
-        break;
-      }
-      await this.delayUntilShutdown(
-        Math.min(this.authoritativeFallbackRetryDelayMs, remainingBudgetMs));
-    }
-    return lastResult;
   }
 
   /**
@@ -487,7 +136,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
    *   authoritative row and still satisfies the caller's postcondition.
    */
   async refreshAuthoritativeCacheRow(tableName, key, options = {}) {
-    if (!this.shouldWaitForCacheUpdate(tableName)) {
+    if (!isTableInternalCachePropagationEnabled(tableName)) {
       return false;
     }
     const primaryKeyField = this.getPrimaryKeyField(tableName);
@@ -559,7 +208,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
     minimumFields = null,
     options = {},
   ) {
-    if (!this.shouldWaitForCacheUpdate(tableName)) {
+    if (!isTableInternalCachePropagationEnabled(tableName)) {
       return buildSystemTableVisibilityResult();
     }
     const primaryKeyField = this.getPrimaryKeyField(tableName);

@@ -149,9 +149,9 @@ class MembershipPublicationCoordinatorPlanning extends
         null :
         this.controlPlaneReadinessService &&
             typeof this.controlPlaneReadinessService
-              .getMembershipPublicationPlanningSnapshotBestEffort === 'function' ?
+              .getPriorityRecoveryPlanningSnapshotBestEffort === 'function' ?
           await this.controlPlaneReadinessService
-            .getMembershipPublicationPlanningSnapshotBestEffort(
+            .getPriorityRecoveryPlanningSnapshotBestEffort(
               options.publisherNodeId || this.nodeId,
               normalizePositiveInteger(options.nowMs, this.now()),
             ) :
@@ -216,7 +216,6 @@ class MembershipPublicationCoordinatorPlanning extends
       this.controlPlaneReadinessService &&
           typeof this.controlPlaneReadinessService.getAllNodeReadinessSync === 'function' ?
         this.controlPlaneReadinessService.getAllNodeReadinessSync({
-          allowStaleOnCacheChange: true,
           membershipPublicationPlanningSource:
               MEMBERSHIP_PUBLICATION_PLANNING_SOURCE.DIRECT_PUBLICATION_ROW,
         }) :

@@ -41,10 +41,13 @@ class CancellationToken {
     }
     this._cancelled = true;
     this._reason = reason ?? ERR.CANCELLED;
-    for (const cb of this._callbacks) {
+    const callbacks = [...this._callbacks];
+    const children = [...this._children];
+    this._callbacks = [];
+    for (const cb of callbacks) {
       cb(this._reason);
     }
-    for (const child of this._children) {
+    for (const child of children) {
       child.cancel(this._reason);
     }
   }
@@ -72,13 +75,29 @@ class CancellationToken {
    * cancelled, the callback fires immediately.
    *
    * @param {Function} callback - Cancellation handler.
+   * @return {Function} Unsubscribe callback.
    */
   onCancel(callback) {
     if (this._cancelled) {
       callback(this._reason);
-      return;
+      return () => {};
     }
     this._callbacks.push(callback);
+    return () => {
+      this.offCancel(callback);
+    };
+  }
+
+  /**
+   * Unregister a previously registered cancellation callback.
+   *
+   * @param {Function} callback - Cancellation handler to remove.
+   */
+  offCancel(callback) {
+    const index = this._callbacks.indexOf(callback);
+    if (index >= 0) {
+      this._callbacks.splice(index, 1);
+    }
   }
 
   /**

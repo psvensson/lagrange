@@ -47,6 +47,8 @@ const DOCKER_PORT = DOCKER_DEFAULTS.remotePort;
 const DOCKER_PORT_PROTOCOL = 'tcp';
 const NODE_COMM_PORT_START = 8080;
 const NODE_COMM_PORT_END = 9090;
+const PG_WIRE_PORT_START = 5432;
+const PG_WIRE_PORT_END = 5442;
 const VPC_INTERNAL_RANGE = '10.128.0.0/9';
 const GCP_HARNESS_IMAGE_FAMILY = 'lagrange-distributed-harness';
 const DISK_SIZE_GB = 50;
@@ -313,7 +315,10 @@ class GCPProvisioner {
         network: network.selfLink,
         allows: [{
           protocol: DOCKER_PORT_PROTOCOL,
-          ports: [`${NODE_COMM_PORT_START}-${NODE_COMM_PORT_END}`],
+          ports: [
+            `${PG_WIRE_PORT_START}-${PG_WIRE_PORT_END}`,
+            `${NODE_COMM_PORT_START}-${NODE_COMM_PORT_END}`,
+          ],
         }],
         sourceRanges: dockerSourceRanges,
         targetTags: [NETWORK_TAG],

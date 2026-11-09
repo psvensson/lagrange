@@ -130,7 +130,7 @@ test('anchor: a GENESIS stamp reaching a founder that holds a durable ' +
     const logBefore = durableLog(model.replica(founder).dbFile, PARTITION_ID);
     const restarted = restartWith(model, founder,
       {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
-        genesisStamp([founder])});
+        genesisStamp([founder], {})});
     assert.equal(restarted.refused, undefined,
       `the founder restores (${restarted.refused?.message})`);
     assert.equal(model.node(founder).readStatus().gateOpen, true,
@@ -224,7 +224,7 @@ test('anchor: a joint configuration is refused to a bootstrap read and as ' +
       reserveIdentity(model, member, 'jnt-t');
     }
     const whileJoint = settledResult(model.node(leader).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: 'jnt-t'}));
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: 'jnt-t', nodeId: 'node-test'}));
     assert.equal(whileJoint.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE,
       `an AddNode while joint is deferred (${JSON.stringify(whileJoint)})`);
     assert.equal(whileJoint.reason, RUNTIME_REASON.CONF_CHANGE_PENDING);
@@ -238,7 +238,7 @@ test('anchor: a joint configuration is refused to a bootstrap read and as ' +
       durableOf(model, leader).applied.voters.length === 2, [leader]),
     'setup: the group left the joint state');
     const afterLeave = settledResult(model.node(leader).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: 'jnt-t'}));
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: 'jnt-t', nodeId: 'node-test'}));
     assert.equal(afterLeave.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       'the deferred AddNode is taken once the group left the joint state');
     assert.ok(settle(model, () => durableOf(model, leader).applied.voters
@@ -284,7 +284,7 @@ const PORT_DEFECT_CASES = Object.freeze({
   [COMMITTED_MEMBERSHIP_STAMP_DEFECT.IDENTITY_UNRESOLVED]: (stamp) =>
     ({...stamp, identities: {...stamp.identities, [stamp.voters[0]]: null}}),
   [COMMITTED_MEMBERSHIP_STAMP_DEFECT.NO_FOUNDERS]: () =>
-    genesisStamp([]),
+    genesisStamp([], {}),
 });
 
 test('anchor (port stamp validation): the port refuses every stamp defect ' +

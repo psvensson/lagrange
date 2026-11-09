@@ -36,6 +36,8 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {serveAnswerFromMock} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -103,6 +105,7 @@ async (t) => {
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     transactionCoordinator,
@@ -155,6 +158,7 @@ test('SQLQueryEngine - failed recovery replay preserves typed poison-row ' +
     startRecoverySweep() {},
   };
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache([], []),
     messageRouter: createMockMessageRouter(),
     transactionCoordinator,
@@ -190,6 +194,7 @@ test('SQLQueryEngine - EXPLAIN DISTRIBUTED returns canonical plan output',
       ],
     );
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
     });
@@ -230,6 +235,7 @@ test('SQLQueryEngine - distributed diagnostics schema is stable for SELECT',
       }],
     );
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
     });
@@ -317,6 +323,7 @@ test('SQLQueryEngine - transactional UPDATE forwards sessionId to distributed wr
     };
 
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
       transactionCoordinator,
@@ -391,6 +398,9 @@ async (t) => {
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     controlPlaneReadinessService: {
+      answerServeEligibility(id) {
+        return serveAnswerFromMock(this, id);
+      },
       getNodeReadinessSync() {
         return {
           dimensions: {
@@ -592,6 +602,7 @@ test('SQLQueryEngine preserves the underlying retryable failure when transaction
     },
   };
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'node-a',
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -651,6 +662,9 @@ test('SQLQueryEngine preserves lower-path retryable failures for critical ' +
     systemCache: createMockSystemCache([], [], []),
     messageRouter: createMockMessageRouter(),
     controlPlaneReadinessService: {
+      answerServeEligibility(id) {
+        return serveAnswerFromMock(this, id);
+      },
       getNodeReadinessSync() {
         return {
           dimensions: CONTROL_PLANE_READY_DIMENSIONS,
@@ -801,6 +815,9 @@ async (t) => {
   const ROUTING_READINESS_DIMENSION =
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: 'routing-gap-node',
     systemCache: createMockSystemCache([], [], []),
     messageRouter: createMockMessageRouter(),
@@ -887,6 +904,7 @@ test('SQLQueryEngine - remains correct before and after partition split updates'
       }],
     );
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
     });
@@ -981,6 +999,7 @@ test('SQLQueryEngine - hides pending split children until active version flips',
       ],
     );
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
     });
@@ -1027,6 +1046,7 @@ test('SQLQueryEngine - successful non-transactional INSERT does not persist ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     cdcIntegrationService,
@@ -1091,6 +1111,7 @@ test('SQLQueryEngine - successful non-transactional UPDATE does not persist ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     cdcIntegrationService,
@@ -1149,6 +1170,7 @@ test('SQLQueryEngine - successful non-transactional DELETE does not persist ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     cdcIntegrationService,
@@ -1207,6 +1229,7 @@ test('SQLQueryEngine - failed non-transactional INSERT persists one ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     cdcIntegrationService,
@@ -1276,6 +1299,7 @@ test('SQLQueryEngine - retryable control-plane deferred non-transactional ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     cdcIntegrationService,

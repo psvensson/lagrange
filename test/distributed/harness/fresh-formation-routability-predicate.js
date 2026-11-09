@@ -25,14 +25,13 @@
  *      row was durably committed before the refusal;
  *   g. the class (owner rule 2026-11-01): no serve-gating projection disagrees
  *      with its authoritative committed state for longer than the owner-stated
- *      cache-visibility bound (CDC_DEFAULTS.CACHE_WAIT_TIMEOUT_MS,
- *      src/cdc/cdc-constants.js);
+ *      cache-visibility bound (PROJECTION_PERSISTENCE_BOUND_MS below);
  *   integrity: every read the evaluation needed succeeded. A failed or absent
  *      read is a named unmet reason, never a default (no count defaults to 0,
  *      an absent projection summary is never "satisfied").
  *
  * Reused owners (no parallel logic): PRIORITY_CONTROL_PLANE_TABLE_IDS,
- * isTerminalReplicaOperationRecord, CDC_DEFAULTS from src; the projection
+ * isTerminalReplicaOperationRecord from src; the projection
  * summary normaliser normalizePriorityPartitionSummaryForDiagnostics from
  * priority-recovery-summary-normalization.js. The sealed formation quests'
  * own scenarios (formation-joining-ready-phase-fence,
@@ -43,10 +42,19 @@
 import {
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
 } from '../../../src/bootstrap/system-partition-classification.js';
-import {CDC_DEFAULTS} from '../../../src/cdc/cdc-constants.js';
 import {
   isTerminalReplicaOperationRecord,
 } from '../../../src/rebalancer/replica-operation-progress.js';
+import {
+  buildLedgerDisagreementEvidence,
+  buildPersistentDisagreementEntry,
+  buildSpreadDisagreementEvidence,
+  evaluateRevisionSkew,
+  extractAuthorityProvenance,
+  extractAuthorityTableRevision,
+  extractObserverTableRevision,
+  readyPriorityPartitionServiceNodeIds,
+} from './fresh-formation-disagreement-evidence.js';
 import {
   normalizePriorityPartitionSummaryForDiagnostics,
 } from './priority-recovery-summary-normalization.js';
@@ -58,6 +66,13 @@ const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringIndexOf = Function.call.bind(String.prototype.indexOf);
 
 const ZERO = 0;
+// Predicate (g)'s preregistered bound, 1000 ms: the value of the deleted
+// CDC_DEFAULTS.CACHE_WAIT_TIMEOUT_MS this predicate was sealed against
+// (R09 supersession by reference only, lead approval 2026-11-02, quest
+// replica-admission-from-committed-operation attempt 2). The bound is not
+// changed; only its source moves here because the write-path cache wait
+// it was read from is deleted.
+const PROJECTION_PERSISTENCE_BOUND_MS = 1000;
 const ONE = 1;
 const TWO = 2;
 const SERVICE_TYPE_PARTITION = 'partition';
@@ -67,6 +82,8 @@ const SERVE_LANE_PREFIX = 'serve_lane_';
 const JSON_OPEN_BRACE = '{';
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
+const TABLE_SERVICES = 'services';
+const TABLE_REPLICA_OPERATIONS = 'replica_operations';
 
 const PREDICATE = Object.freeze({
   SERVE_LANE: 'a-serve-lane-open',
@@ -102,9 +119,16 @@ const LOG_OBSERVATION = Object.freeze({
   LEARNER_ADDRESS_UNRESOLVABLE: Object.freeze({
     key: 'learner_address_unresolvable',
     needle: '"cause":"learner_address_unresolvable"'}),
+  // Kept after attempt 2 deleted the wait: expected count zero.
   CACHE_WAIT_TIMEOUT: Object.freeze({
     key: 'CACHE_WAIT_TIMEOUT_MS',
     needle: '"wait":"CACHE_WAIT_TIMEOUT_MS"'}),
+  // A routed write that cannot reach its commit is answered typed by the
+  // existing partition delivery deadline; attempt 2 introduced no new wait
+  // name for commit unavailability.
+  PARTITION_EXECUTION_DEADLINE: Object.freeze({
+    key: 'partition_execution_deadline',
+    needle: '"wait":"partition_execution_deadline"'}),
   CDC_ACCEPTANCE_UNKNOWN: Object.freeze({
     key: 'cdc_committed_acceptance_unknown',
     needle: 'cdc_committed_acceptance_unknown'}),
@@ -251,7 +275,7 @@ function authoritativePrioritySpread(partitionRows, serviceRows, reasons) {
   }
   return arrayMap(rows, (row) => {
     const required = Number(row.replica_count);
-    const nodeIds = activePartitionServiceNodeIds(serviceRows,
+    const nodeIds = readyPriorityPartitionServiceNodeIds(serviceRows,
       row.partition_id);
     if (!Number.isSafeInteger(required) || required < ONE) {
       reasons.push(`replica_count_invalid:${row.partition_id}`);
@@ -303,22 +327,68 @@ function readAuthorityRows(authority, labels, reasons) {
   return rowsByLabel;
 }
 
-function compareObserverSpread(observerNodeId, summary, authoritative, sink) {
+function resolveProjectionRevision(observerRevision) {
+  const rev = observerRevision?.watermark?.tableMutationRevision;
+  return Number.isSafeInteger(rev) ? rev : null;
+}
+
+function compareObserverSpread(context, authoritative, sink) {
+  const {
+    authorityRevision,
+    observerNodeId,
+    observerRevision,
+    revisionSkew,
+    summary,
+  } = context;
   const blocked = projectionBlockedById(summary);
   const satisfied = summary.satisfied === true && blocked.size === ZERO;
   sink.projections.push({blockedPartitions: [...blocked.values()],
     observerNodeId, satisfied});
   if (!satisfied) sink.reasons.push(`projection_not_spread:${observerNodeId}`);
+  const projectionRevision = resolveProjectionRevision(observerRevision);
   for (const entry of authoritative) {
     const projected = blocked.get(entry.partitionId) || null;
     if (entry.satisfied === (projected === null)) continue;
+    const projection = projected === null ? {satisfied: true} :
+      {satisfied: false, ...projected};
+    const evidence = buildSpreadDisagreementEvidence(
+      context,
+      entry,
+      projection,
+    );
     sink.disagreements.push({
+      ...evidence,
       authority: entry,
+      authorityRevision,
+      authorityWatermark: authorityRevision,
       key: `priority_spread:${observerNodeId}:${entry.partitionId}`,
       observerNodeId,
-      projection: projected === null ? {satisfied: true} :
-        {satisfied: false, ...projected},
+      observerRevision,
+      projection,
+      projectionRevision,
+      revisionSkew,
     });
+  }
+}
+
+function isAuthorityReadObservationComplete(read, tableName) {
+  if (!isRecord(read)) return false;
+  if (read.complete === false || read.rowSetComplete === false) return false;
+  const provenance = extractAuthorityProvenance(
+    {
+      ...read,
+      complete: read.complete ?? true,
+    },
+    tableName,
+  );
+  return provenance.complete && provenance.validReceipt;
+}
+
+function recordIncompleteAuthorityObservations(authority, tables, reasons) {
+  for (const tableName of tables) {
+    if (!isAuthorityReadObservationComplete(authority?.[tableName], tableName)) {
+      reasons.push(`${tableName}_observation_incomplete`);
+    }
   }
 }
 
@@ -330,20 +400,46 @@ function evaluatePrioritySpread(observation) {
     return {disagreements: [], result: unmet(PREDICATE.PRIORITY_SPREAD,
       reasons)};
   }
+  recordIncompleteAuthorityObservations(
+    observation.authority,
+    ['partitions', TABLE_SERVICES],
+    reasons,
+  );
   const authoritative = authoritativePrioritySpread(rows.partitions,
     rows.services, reasons);
   for (const entry of arrayFilter(authoritative, (item) => !item.satisfied)) {
     reasons.push(`authority_not_spread:${entry.partitionId}:` +
       `${entry.readyDistinctNodeCount}/${entry.requiredDistinctNodeCount}`);
   }
+  const authorityRevision = extractAuthorityTableRevision(
+    observation.authority?.services, rows.services);
+  const authorityProvenance = extractAuthorityProvenance(
+    observation.authority?.services,
+    TABLE_SERVICES,
+  );
   const sink = {disagreements: [], projections: [], reasons};
   for (const observerNodeId of observation.clusterNodeIds) {
-    const summary = projectionSummaryOf(observation.snapshots?.[observerNodeId]);
+    const snapshot = observation.snapshots?.[observerNodeId];
+    const summary = projectionSummaryOf(snapshot);
     if (summary === null) {
       reasons.push(`projection_priority_summary_absent:${observerNodeId}`);
       continue;
     }
-    compareObserverSpread(observerNodeId, summary, authoritative, sink);
+    const observerRevision = extractObserverTableRevision(snapshot,
+      TABLE_SERVICES);
+    const revisionSkew = evaluateRevisionSkew(authorityRevision,
+      observerRevision);
+    compareObserverSpread({
+      authorityPartitionsRows: rows.partitions,
+      authorityProvenance,
+      authorityRevision,
+      authorityServicesRows: rows.services,
+      observerNodeId,
+      observerRevision,
+      revisionSkew,
+      snapshot,
+      summary,
+    }, authoritative, sink);
   }
   const {disagreements, projections} = sink;
   const detail = {authoritative, projections};
@@ -355,12 +451,23 @@ function evaluatePrioritySpread(observation) {
   };
 }
 
-function compareProjectedInFlight(observation, authorityCount, reasons) {
+function compareProjectedInFlight(
+  observation,
+  authorityLedger,
+  authorityRevision,
+  reasons,
+) {
+  const {
+    authorityCount,
+    authorityInFlightRows,
+    authorityProvenance,
+    authorityRowsList,
+  } = authorityLedger;
   const disagreements = [];
   const projected = [];
   for (const observerNodeId of observation.clusterNodeIds) {
-    const count = observation.snapshots?.[observerNodeId]?.payload
-      ?.replicaOperations?.inFlightCount;
+    const snapshot = observation.snapshots?.[observerNodeId];
+    const count = snapshot?.payload?.replicaOperations?.inFlightCount;
     if (!Number.isSafeInteger(count) || count < ZERO) {
       reasons.push(`projection_in_flight_count_absent:${observerNodeId}`);
       continue;
@@ -368,11 +475,31 @@ function compareProjectedInFlight(observation, authorityCount, reasons) {
     projected.push({count, observerNodeId});
     if (count > ZERO) reasons.push(`projection_in_flight:${observerNodeId}`);
     if ((count === ZERO) === (authorityCount === ZERO)) continue;
+    const observerRevision = extractObserverTableRevision(snapshot,
+      TABLE_REPLICA_OPERATIONS);
+    const revisionSkew = evaluateRevisionSkew(authorityRevision,
+      observerRevision);
+    const evidence = buildLedgerDisagreementEvidence({
+      authorityCount,
+      authorityInFlightRows,
+      authorityProvenance,
+      authorityRowsList,
+      observerRevision,
+      projectedCount: count,
+      revisionSkew,
+      snapshot,
+    });
     disagreements.push({
+      ...evidence,
       authority: {inFlightCount: authorityCount},
+      authorityRevision,
+      authorityWatermark: authorityRevision,
       key: `ledger_in_flight:${observerNodeId}`,
       observerNodeId,
+      observerRevision,
       projection: {inFlightCount: count},
+      projectionRevision: resolveProjectionRevision(observerRevision),
+      revisionSkew,
     });
   }
   return {disagreements, projected};
@@ -397,14 +524,30 @@ function evaluateLedgerQuiet(observation) {
   const inFlightIds = arrayMap(inFlight, (row) =>
     `${row.operation_id}:${row.type}:${row.partition_id}:${row.status}`);
   if (inFlight.length > ZERO) reasons.push('replica_operations_in_flight');
-  if (read.complete !== true) {
+  const rowsComplete = read.complete === true &&
+    isAuthorityReadObservationComplete(read, TABLE_REPLICA_OPERATIONS);
+  if (!rowsComplete) {
     reasons.push('replica_operations_observation_incomplete');
   }
-  const {disagreements, projected} = compareProjectedInFlight(observation,
-    inFlight.length, reasons);
+  const authorityRevision = extractAuthorityTableRevision(read, rows);
+  const authorityProvenance = extractAuthorityProvenance(
+    read,
+    TABLE_REPLICA_OPERATIONS,
+  );
+  const {disagreements, projected} = compareProjectedInFlight(
+    observation,
+    {
+      authorityCount: inFlight.length,
+      authorityInFlightRows: inFlight,
+      authorityProvenance,
+      authorityRowsList: rows,
+    },
+    authorityRevision,
+    reasons,
+  );
   const detail = {authoritativeInFlight: inFlightIds,
     authoritativeInFlightCount: inFlight.length, projected,
-    rowsComplete: read.complete === true};
+    rowsComplete};
   return {
     disagreements,
     result: reasons.length === ZERO ?
@@ -434,6 +577,92 @@ function evaluateFormationObservation(observation) {
   };
 }
 
+function resolveObserverCapturedAtMs(obsRev) {
+  return Number.isFinite(obsRev?.capturedAtMs) && obsRev.capturedAtMs > ZERO ?
+    obsRev.capturedAtMs :
+    null;
+}
+
+function resolveEpisodeObserverSpanMs(episode) {
+  if (
+    !Number.isFinite(episode?.firstObserverCapturedAtMs) ||
+    !Number.isFinite(episode?.latestObserverCapturedAtMs)
+  ) {
+    return null;
+  }
+  return Math.max(
+    ZERO,
+    episode.latestObserverCapturedAtMs - episode.firstObserverCapturedAtMs,
+  );
+}
+
+function createDisagreementEpisode(context) {
+  const {
+    authRev,
+    capturedAtMs,
+    obsRev,
+    projectionRevision,
+    skew,
+  } = context;
+  const observerCapturedAtMs = resolveObserverCapturedAtMs(obsRev);
+  return {
+    authorityWatermark: authRev,
+    firstAuthorityRevision: authRev,
+    firstObserverCapturedAtMs: observerCapturedAtMs,
+    firstObserverRevision: obsRev,
+    firstProjectionRevision: projectionRevision,
+    firstSeenAtMs: capturedAtMs,
+    latestAuthorityRevision: authRev,
+    latestObserverCapturedAtMs: observerCapturedAtMs,
+    latestObserverRevision: obsRev,
+    latestProjectionRevision: projectionRevision,
+    observerSpanMs: observerCapturedAtMs !== null ? ZERO : null,
+    projectionRevision,
+    revisionSkewObserved: skew,
+  };
+}
+
+function updateDisagreementEpisodeWindow(episode, context) {
+  const {authRev, obsRev, projectionRevision, skew} = context;
+  const observerCapturedAtMs = resolveObserverCapturedAtMs(obsRev);
+  episode.authorityWatermark = authRev;
+  episode.latestAuthorityRevision = authRev;
+  if (observerCapturedAtMs !== null) {
+    if (episode.firstObserverCapturedAtMs === null) {
+      episode.firstObserverCapturedAtMs = observerCapturedAtMs;
+    }
+    episode.latestObserverCapturedAtMs = observerCapturedAtMs;
+  }
+  episode.latestObserverRevision = obsRev;
+  episode.latestProjectionRevision = projectionRevision;
+  episode.observerSpanMs = resolveEpisodeObserverSpanMs(episode);
+  episode.projectionRevision = projectionRevision;
+  episode.revisionSkewObserved = episode.revisionSkewObserved || skew;
+}
+
+function advanceDisagreementEpisode(episodes, previousKeys, evaluation, entry) {
+  const authRev = entry.authorityRevision || entry.authorityWatermark || null;
+  const obsRev = entry.observerRevision || null;
+  const projectionRevision = entry.projectionRevision ??
+    resolveProjectionRevision(obsRev);
+  const skew = entry.revisionSkew === true;
+  const context = {
+    authRev,
+    capturedAtMs: evaluation.capturedAtMs,
+    obsRev,
+    projectionRevision,
+    skew,
+  };
+  if (!previousKeys.has(entry.key) || !episodes.has(entry.key)) {
+    const created = createDisagreementEpisode(context);
+    episodes.set(entry.key, created);
+    return created;
+  }
+  const episode = episodes.get(entry.key);
+  updateDisagreementEpisodeWindow(episode, context);
+  return episode;
+}
+
 /**
  * Predicate (g) over the poll history: a disagreement key seen on two
  * consecutive polls spanning more than the cache-visibility bound is a
@@ -443,26 +672,23 @@ function evaluateFormationObservation(observation) {
  * @return {Object} predicate result
  */
 function evaluateProjectionAgreement(evaluations,
-  boundMs = CDC_DEFAULTS.CACHE_WAIT_TIMEOUT_MS) {
-  const firstSeenAtMs = new Map();
+  boundMs = PROJECTION_PERSISTENCE_BOUND_MS) {
+  const episodes = new Map();
   const persistent = new Map();
   let previousKeys = new Set();
   for (const evaluation of evaluations) {
     const keys = new Set();
     for (const entry of evaluation.disagreements) {
       keys.add(entry.key);
-      if (!previousKeys.has(entry.key)) {
-        firstSeenAtMs.set(entry.key, evaluation.capturedAtMs);
-      }
-      const spanMs = evaluation.capturedAtMs - firstSeenAtMs.get(entry.key);
+      const episode = advanceDisagreementEpisode(episodes, previousKeys,
+        evaluation, entry);
+      const spanMs = evaluation.capturedAtMs - episode.firstSeenAtMs;
       if (previousKeys.has(entry.key) && spanMs > boundMs) {
         const prior = persistent.get(entry.key);
-        persistent.set(entry.key, {
-          firstSeenAtMs: firstSeenAtMs.get(entry.key),
-          key: entry.key,
-          lastEntry: entry,
-          longestSpanMs: Math.max(prior?.longestSpanMs ?? ZERO, spanMs),
-        });
+        persistent.set(
+          entry.key,
+          buildPersistentDisagreementEntry(episode, entry, prior, spanMs),
+        );
       }
     }
     previousKeys = keys;

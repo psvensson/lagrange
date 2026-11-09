@@ -18,6 +18,7 @@ import {
   TRANSACTION_MODE,
 } from '../../src/constants/index.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
@@ -389,6 +390,7 @@ test(
           let nextEpoch = initialEpoch;
           const deliveredMessages = [];
           const engine = new SQLQueryEngine({
+            controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
             systemCache: {
               get: () => null,
               getAll: () => [],

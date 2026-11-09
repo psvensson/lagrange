@@ -139,7 +139,7 @@ async function joinRunning(t, f, hooks = {}) {
 
 /** The leader's own follower match for the learner (0 before any ack). */
 function learnerProgress(f) {
-  return leaderStatus(f).followerProgress[f.cluster.addressOf(TARGET)] ?? 0;
+  return leaderStatus(f).followerProgress[TARGET] ?? 0;
 }
 
 /** The learner's own applied voters, read from its durable record. */
@@ -182,7 +182,7 @@ test('a recorded learner CREATE joins the real group as a non-voting learner, in
   assert.equal(answer.leaderReplicaId, leaderOf(f), 'the acknowledging replica leads');
   assert.ok(answer.matchIndex >= answer.commitIndex, JSON.stringify(answer));
   assert.ok(answer.commitIndex >= answer.installedIndex, JSON.stringify(answer));
-  assert.ok(leaderStatus(f).followerProgress[f.cluster.addressOf(TARGET)] >=
+  assert.ok(leaderStatus(f).followerProgress[TARGET] >=
     answer.installedIndex, 'the leader\'s own progress for the learner');
 
   const durable = new Database(world.dbPath, {readonly: true});
@@ -555,7 +555,7 @@ test('a learner held behind is not reported running: NOT_CAUGHT_UP, still a lear
   assert.equal(answer.acknowledgement, 'behind');
   assert.equal(answer.proofReason, 'progress_behind',
     'the existing promotion-progress predicate does not grant');
-  const progress = () => leaderStatus(f).followerProgress[f.cluster.addressOf(TARGET)];
+  const progress = () => leaderStatus(f).followerProgress[TARGET];
   assert.ok(progress() < leaderStatus(f).commitIndex, 'the leader holds it behind');
   assert.equal(world.learners.length, 1, 'the learner stays open and hosted');
   assert.ok(world.learners[0].raft.readStatus().confState.learners.includes(TARGET_PEER));

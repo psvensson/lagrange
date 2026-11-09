@@ -1,3 +1,4 @@
+import {createMockCoordinator} from './test-helpers.js';
 /**
  * Unit tests for UnifiedRebalancer.
  * Tests the core rebalancing logic for partitions and message groups.
@@ -35,10 +36,9 @@ import {
 import {
   createMockCache,
   createMockCdcService,
-  createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 
@@ -83,19 +83,19 @@ function createTestRebalancer(options = {}) {
     serviceEndpoints,
   );
   const mockCdcService = cdcIntegrationService || createMockCdcService();
-  const mockPolicyService = createMockPolicyService(
-    partitions, tables,
-  );
+  const mockPolicyService = createMockPolicyService({partitions: partitions, tables: tables});
   const mockMessageRouter = messageRouter ||
     createMockMessageRouter(connectionState);
-  const mockCoordinator = rebalanceCoordinator || createMockCoordinator();
   const mockSqlQueryEngine = sqlQueryEngine || {
     async executeQuery() {
       return {success: true, rows: []};
     },
   };
   const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
+    createMockControlPlaneReadinessService({systemTableCache: mockCache});
+  const mockCoordinator = rebalanceCoordinator || createMockCoordinator({
+    controlPlaneReadinessService: mockReadinessService,
+  });
 
   return new UnifiedRebalancer({
     entityId,
@@ -170,10 +170,10 @@ test('UnifiedRebalancer - Odd Replica Count Helpers', async (t) => {
 test('UnifiedRebalancer - Policy-Driven Rebalancing', async (t) => {
   initializeTestEnvironment();
 
-  await t.test('validates replica count to be odd', async (t) => {
+  await t.test('message groups retain their odd-count strategy', async (t) => {
     const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
-      entityType: EntityType.PARTITION,
+      entityType: EntityType.MESSAGE_GROUP,
       nodeId: 'node-1',
     });
 
@@ -196,7 +196,7 @@ test('UnifiedRebalancer - Policy-Driven Rebalancing', async (t) => {
     });
 
     const policy = {
-      replicaCount: 5,
+      targetReplicaCount: 5,
       minReplicaCount: 3,
       maxReplicaCount: 7,
     };
@@ -220,7 +220,7 @@ test('UnifiedRebalancer - Policy-Driven Rebalancing', async (t) => {
     });
 
     const policy = {
-      replicaCount: 3,
+      targetReplicaCount: 3,
       minReplicaCount: 3,
       maxReplicaCount: 7,
     };
@@ -260,7 +260,7 @@ test('UnifiedRebalancer - Policy-Driven Rebalancing', async (t) => {
     });
 
     const policy = {
-      replicaCount: 3,
+      targetReplicaCount: 3,
       minReplicaCount: 3,
       maxReplicaCount: 7,
     };
@@ -309,7 +309,7 @@ test('UnifiedRebalancer - Policy-Driven Rebalancing', async (t) => {
     });
 
     const policy = {
-      replicaCount: 3,
+      targetReplicaCount: 3,
       minReplicaCount: 3,
       maxReplicaCount: 7,
       placementConstraints: {spreadAcrossNodes: true},
@@ -365,7 +365,7 @@ test('UnifiedRebalancer - Policy-Driven Rebalancing', async (t) => {
       });
 
       const policy = {
-        replicaCount: 3,
+        targetReplicaCount: 3,
         minReplicaCount: 3,
         maxReplicaCount: 7,
         placementConstraints: {spreadAcrossNodes: true},

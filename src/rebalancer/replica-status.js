@@ -8,6 +8,7 @@
  */
 
 import {WORKFLOW_STEP} from '../constants/index.js';
+import {memoizedParseStepsHistoryString} from './steps-history-parse-memo.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {resolvePartitionTableId} from '../bootstrap/system-partition-classification.js';
 import {
@@ -251,7 +252,26 @@ function isLiveCreateTargetStatus(status) {
   return status === ReplicaStatus.ACTIVE;
 }
 
+function isBootstrapTopologyDispatchDeferred(operationOrRow) {
+  if (!operationOrRow || typeof operationOrRow !== 'object') {
+    return false;
+  }
+  let stepsHistory = operationOrRow.stepsHistory;
+  if (!Array.isArray(stepsHistory)) {
+    stepsHistory = operationOrRow.steps_history;
+  }
+  if (typeof stepsHistory === 'string') {
+    // The one steps-history parser: unparsable -> no steps -> not deferred.
+    stepsHistory = memoizedParseStepsHistoryString(stepsHistory);
+  }
+  return getOperationMetadataValue(
+    stepsHistory,
+    OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED,
+  ) === true;
+}
+
 export {
+  isBootstrapTopologyDispatchDeferred,
   isLiveCreateTargetStatus,
   isPeerRowStatusAdmissible,
   createOperation,

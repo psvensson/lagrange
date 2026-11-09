@@ -432,8 +432,7 @@ test('W5/W6: a reservation birth ensured again after its lost answer is the ' +
       'updated_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       ['res-op-1', 'op-1', 'partition', 'p-1', 'p-1', 'n-1', 1, 1,
         'active', now, now, now + 1000],
-      {writeIdentity: `${TABLES.STORAGE_RESERVATIONS}:res-op-1:birth`,
-        skipCacheWait: true});
+      {writeIdentity: `${TABLES.STORAGE_RESERVATIONS}:res-op-1:birth`});
     const {first} = await spendFirstAttempt({engine, surface,
       attempt: insert});
     assert.equal(first.success, false, 'setup: the first answer is unknown');
@@ -526,7 +525,7 @@ test('W5/W6: the CDC service\'s routed write retries every engine attempt ' +
       return executeQuery(...args);
     };
     const insert = () => cdc.insertSystemTableRow(TABLES.NODES, row,
-      {skipCacheWait: true, queryTimeoutMs: CDC_ROUTED_BUDGET_MS,
+      {queryTimeoutMs: CDC_ROUTED_BUDGET_MS,
         idempotencyKey: 'w5-cdc-key'});
     let firstError = null;
     const {first} = await spendFirstAttempt({engine, surface,

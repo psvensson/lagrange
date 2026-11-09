@@ -133,7 +133,10 @@ test('a REAL UnifiedRebalancer policy pass attaches live pins from the ' +
     '../../src/rebalancer/unified-rebalancer.js');
 
   const cache = {
-    get: () => null,
+    get: (tableName, key) =>
+      tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS && key === SERVICE_ID ?
+        {service_id: SERVICE_ID, status: 'active', replica_count: TARGET_REPLICA_COUNT} :
+        null,
     getAll: (tableName) =>
       (tableName === SYSTEM_TABLE_NAME.CALL_ACTIVATION_LEASES ?
         [leaseRow(SERVICE_ID, PINNED_NODE, Date.now() + 30000),
@@ -161,7 +164,7 @@ test('a REAL UnifiedRebalancer policy pass attaches live pins from the ' +
     systemTableCache: cache,
     tablePolicyService: {
       getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
     },
   }));
   const policy = await rebalancer.getPolicy();

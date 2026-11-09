@@ -97,6 +97,16 @@ const BUNDLES = [
     ),
     outputFile: 'request-cell-worker.bundle.mjs',
     name: 'Request Cell Worker',
+    external: [],
+    format: LOCAL_STR_ESM,
+  },
+  {
+    entryPoint: join(
+      projectRoot,
+      'src/runtime/wasi-component-derivation-worker.js',
+    ),
+    outputFile: 'component-derivation-worker.bundle.mjs',
+    name: 'Component Derivation Worker',
     external: ['@bytecodealliance/jco-transpile'],
     format: LOCAL_STR_ESM,
   },

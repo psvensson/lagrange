@@ -199,7 +199,11 @@ function deferTransitionRetry(
       errorMessage,
     },
   );
-  const timerHandle = owner.setTimeoutFn(() => {
+  let timerHandle = null;
+  timerHandle = owner.setTimeoutFn(() => {
+    if (owner.transitionRetryTimerByOperationId.get(operationId) !== timerHandle) {
+      return;
+    }
     owner.transitionRetryTimerByOperationId.delete(operationId);
     if (owner.isShuttingDown) {
       return;

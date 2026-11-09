@@ -1,3 +1,5 @@
+import {readPolicyForPartition} from '../policy/table-policy-resolution.js';
+
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {liveActivationPinNodeIds} from
   '../service/call-activation-lease-owner.js';
@@ -7,7 +9,8 @@ import {
 import {
   PLACEMENT_OWNER_POLICY_FIELD,
 } from './placement-owner-evidence.js';
-import {resolveRuntimeServiceTargetReplicaCount} from
+import {resolveRuntimeServiceDefinitionPolicy, RUNTIME_SERVICE_POLICY_STATE,
+  RuntimeServicePolicyUnavailableError} from
   './runtime-service-policy.js';
 
 const {
@@ -44,7 +47,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
    * @return {Promise<Object>} Table policy.
    */
   async getTablePolicy() {
-    return this.tablePolicyService.getPolicyForPartition(this.entityId);
+    return readPolicyForPartition(this.tablePolicyService, this.entityId);
   }
 
   /**
@@ -59,10 +62,9 @@ class UnifiedRebalancerPolicySchedulerMethods {
   /**
    * Get runtime service policy.
    *
-   * Starts from the system-owned runtime-service placement policy. Legacy
-   * non-Binding definitions may override `targetReplicaCount` with their
-   * desired `replica_count`, preserving built-in scale and "ship not-started"
-   * behavior. Binding-derived definitions never supply placement intent:
+   * The definition policy owner supplies the effective target, preserving
+   * built-in scale and "ship not-started" behavior. Binding-derived
+   * definitions never supply placement intent:
    * target/min/max, topology, capacity, and affinity remain policy outputs.
    *
    * Affinity lift (service↔data affinity placement epic): fresh
@@ -80,8 +82,11 @@ class UnifiedRebalancerPolicySchedulerMethods {
       SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
       this.entityId,
     );
-    policy.targetReplicaCount =
-      resolveRuntimeServiceTargetReplicaCount(definition);
+    const decision = resolveRuntimeServiceDefinitionPolicy(definition);
+    if (decision.state !== RUNTIME_SERVICE_POLICY_STATE.READY) {
+      throw new RuntimeServicePolicyUnavailableError(decision);
+    }
+    policy.targetReplicaCount = decision.targetReplicaCount;
     // Data-local call activation pins: LIVE bounded leases published by
     // the call invocation owner deterministically pin their nodes into
     // the placement target while they last (distinct from the soft
@@ -264,7 +269,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
    * @param {number|null} [delayMs]
    */
   schedulePriorityAwareCheck(delayMs = null) {
-    if (this.isControlPlanePriorityPartition()) {
+    if (this.usesPriorityRebalanceCadence()) {
       this.scheduleNextCheck(this.getPriorityRetryDelayMs());
       return;
     }

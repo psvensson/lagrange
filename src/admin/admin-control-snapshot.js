@@ -44,6 +44,14 @@ import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordina
 import {assignAdminControlSnapshotReadinessDiagnosticsMethods} from './admin-control-snapshot-readiness-diagnostics-methods.js';
 import {assignAdminControlSnapshotLocalDiagnosticsMethods} from './admin-control-snapshot-local-diagnostics-methods.js';
 import {AdminControlSnapshot} from './admin-control-snapshot-leadership-summary.js';
+import {
+  attachAuthoritativeRepairDiagnostics,
+  hasPressureOrTimeoutRepairCause,
+} from './admin-control-snapshot-repair-diagnostics.js';
+import {
+  hasDurablePublishedMembershipObservation,
+  selectDurablePublishedMembershipObservation,
+} from './admin-control-snapshot-node-view-projection.js';
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
   '../control-plane/membership-publication-row-contract.js';
 // ── file-local constants ────────────────────────────────────────────────────
@@ -63,9 +71,6 @@ const CONTROL_PLANE_PUBLICATION_STORY_SYNC_METHOD =
   'getControlPlanePublicationStorySync';
 const AUTHORITATIVE_REPAIR_CAUSE_LEADER_RESOLUTION_GAP =
   'leader_resolution_gap';
-const AUTHORITATIVE_REPAIR_CAUSE_QUERY_TIMEOUT = 'query_timeout';
-const AUTHORITATIVE_REPAIR_CAUSE_CONTROL_PLANE_BACKPRESSURE =
-  'control_plane_backpressure';
 const CONTROL_SNAPSHOT_PUBLICATION_READ_REPAIR_ERROR_FRAGMENTS = Object.freeze([
   'leader is unknown',
   'leader unknown',
@@ -100,17 +105,6 @@ function hasOnlyLeaderResolutionGapRepairCause(repair = null) {
     )
   );
 }
-function hasPressureOrTimeoutRepairCause(repair = null) {
-  const causeChain = Array.isArray(repair?.causeChain) ?
-    repair.causeChain.filter(
-      (value) => typeof value === 'string' && value.length > 0,
-    ) :
-    ADMIN_CACHE_DUMP.EMPTY;
-  return (
-    causeChain.includes(AUTHORITATIVE_REPAIR_CAUSE_QUERY_TIMEOUT) ||
-    causeChain.includes(AUTHORITATIVE_REPAIR_CAUSE_CONTROL_PLANE_BACKPRESSURE)
-  );
-}
 function isRecoverableControlSnapshotPublicationReadError(error = null) {
   const message = String(error?.message || error || '').toLowerCase();
   return (
@@ -130,27 +124,6 @@ function buildMembershipPublicationReadOptions(options = {}) {
       deliveryPriority: CONTROL_PLANE_DELIVERY_PRIORITY.READINESS,
     } :
     {readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS};
-}
-function attachAuthoritativeRepairDiagnostics(snapshot, options = {}) {
-  if (!snapshot || typeof snapshot !== 'object') {
-    return snapshot;
-  }
-  const activeProjection =
-    options.repairEvaluation?.nodeCoverage?.activeProjection || null;
-  snapshot.authoritativeRepair = {
-    applied: options.repair?.applied === true,
-    forced: options.forceAuthoritativeRepair === true,
-    triggerCodes: Array.isArray(options.repairEvaluation?.triggerCodes) ?
-      [...options.repairEvaluation.triggerCodes] :
-      ADMIN_CACHE_DUMP.EMPTY,
-    activeProjectionCoverageGap: activeProjection?.hasCoverageGap === true,
-    activeProjectionMissingNodeIds: Array.isArray(
-      activeProjection?.missingNodeIds,
-    ) ?
-      [...activeProjection.missingNodeIds] :
-      ADMIN_CACHE_DUMP.EMPTY,
-  };
-  return snapshot;
 }
 function resolvePublicationOrderingValue(row, keys = []) {
   for (const key of keys) {
@@ -229,45 +202,6 @@ function resolveLatestMembershipPublicationRow(
     );
   });
   return normalizedRows[0] || null;
-}
-const CONTROL_SNAPSHOT_PUBLICATION_OBSERVATION_STATE = Object.freeze({
-  AVAILABLE: 'available',
-});
-function hasDurablePublishedMembershipObservation(
-  publicationDiagnostics = null,
-) {
-  if (
-    !publicationDiagnostics ||
-    typeof publicationDiagnostics !== 'object'
-  ) {
-    return false;
-  }
-  if (
-    publicationDiagnostics?.publicationObservation?.state ===
-    CONTROL_SNAPSHOT_PUBLICATION_OBSERVATION_STATE.AVAILABLE
-  ) {
-    return true;
-  }
-  if (
-    publicationDiagnostics?.publishedActiveNodeIdsPresent === true ||
-    Array.isArray(publicationDiagnostics?.publishedActiveNodeIds)
-  ) {
-    return true;
-  }
-  const publicationStatus = String(
-    publicationDiagnostics?.status ||
-      publicationDiagnostics?.publicationStatus ||
-      publicationDiagnostics?.publicationObservation?.status ||
-      ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
-  ).toUpperCase();
-  return publicationStatus === ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED;
-}
-function selectDurablePublishedMembershipObservation(
-  publicationDiagnostics = null,
-) {
-  return hasDurablePublishedMembershipObservation(publicationDiagnostics) ?
-    publicationDiagnostics :
-    null;
 }
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**

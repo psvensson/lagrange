@@ -1,3 +1,4 @@
+import {createMockCache} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export async function registerReplaceReplicaWorkflowAddTopologyTests({
   t,
@@ -68,7 +69,12 @@ export async function registerReplaceReplicaWorkflowAddTopologyTests({
   await t.test('UnifiedRebalancer skips ADD scheduling when storage admission blocks it',
     async (t) => {
       const admissionCalls = [];
+      const cache = createMockCache({nodes: [
+        {node_id: 'node-1', status: 'active'},
+        {node_id: 'node-2', status: 'active'},
+      ]});
       const coordinator = createTestCoordinator({
+        systemTableCache: cache,
         storageAdmissionService: {
           async checkAdd(options) {
             admissionCalls.push(options);
@@ -86,12 +92,7 @@ export async function registerReplaceReplicaWorkflowAddTopologyTests({
       const rebalancer = createTestRebalancer({
         entityId: 'nodes-p1',
         rebalanceCoordinator: coordinator,
-        cacheData: {
-          nodes: [
-            {node_id: 'node-1', status: 'active'},
-            {node_id: 'node-2', status: 'active'},
-          ],
-        },
+        systemTableCache: cache,
       });
 
       try {
@@ -169,10 +170,10 @@ export async function registerReplaceReplicaWorkflowAddTopologyTests({
           bootstrapReplicaIds,
           'bootstrap replica ids should be preserved on the CREATE_REPLICA payload',
         );
-        t.same(
+        t.equal(
           deliveries[0]?.payload?.[ReplicaOperationField.PEER_ADDRESSES],
-          bootstrapPeerAddresses,
-          'bootstrap peer addresses should be preserved on the CREATE_REPLICA payload',
+          undefined,
+          'the CREATE_REPLICA payload carries no peer-address hint list',
         );
       } finally {
         await coordinator.shutdown();
@@ -246,15 +247,10 @@ export async function registerReplaceReplicaWorkflowAddTopologyTests({
           ['mg-1-r1', 'mg-1-r2', 'mg-1-r3', 'mg-1-r4'],
           'message-group create payload should include canonical replica ids',
         );
-        t.same(
+        t.equal(
           deliveries[0]?.payload?.[ReplicaOperationField.PEER_ADDRESSES],
-          [
-            'seed-node/message-group/mg-1-r1',
-            'node-2/message-group/mg-1-r2',
-            'node-3/message-group/mg-1-r3',
-            'node-4/message-group/mg-1-r4',
-          ],
-          'message-group create payload should include canonical peer addresses',
+          undefined,
+          'the message-group create payload carries no peer-address hint list',
         );
       } finally {
         await coordinator.shutdown();

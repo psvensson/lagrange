@@ -18,6 +18,7 @@ import {createTransactionPersistenceGateway} from
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -69,6 +70,7 @@ function createTwoPartitionUsersEngine() {
   );
 
   return new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: cache,

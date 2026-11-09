@@ -19,8 +19,8 @@ const EMPTY_LIST = '[]';
 const PRIVATE_EPIC_PREFIX = '_';
 const EPIC_README = 'README.md';
 const PATH_SEPARATOR = '/';
-const YAML_KEY_PATTERN = /^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/u;
-const YAML_NESTED_KEY_PATTERN = /^(\s+)([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/u;
+const YAML_KEY_PATTERN = /^(\s*)([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/u;
+const YAML_LIST_PATTERN = /^(\s*)- /u;
 const YAML_NUMBER_PATTERN = /^-?\d+(\.\d+)?$/u;
 const YAML_QUOTED_PATTERN = /^["'](.*)["']$/u;
 const YAML_UNQUOTE_REPLACEMENT = '$1';
@@ -228,42 +228,39 @@ function pushListItem(holder, key, line) {
   holder[key].push(item);
 }
 
-// One parser step over a front-matter line; `cursor` tracks the current
-// top-level key and the innermost nested holder.
-function parseFrontLine(front, cursor, line) {
-  const top = YAML_KEY_PATTERN.exec(line);
-  if (top) {
-    front[top[1]] = parseScalar(top[2]);
-    return {key: top[1], nested: null};
+// Keep each containing key, so a list under args.requiredReceipts cannot
+// replace args itself. Indentation returns siblings to their own holder.
+function parseFrontLine(front, holders, line) {
+  const item = YAML_LIST_PATTERN.exec(line);
+  const field = YAML_KEY_PATTERN.exec(line);
+  if (!item && !field) return;
+  const indent = (item || field)[1].length;
+  while (holders.length && (item ? holders.at(-1).indent > indent :
+    holders.at(-1).indent >= indent)) holders.pop();
+  const parent = holders.at(-1);
+  if (item) {
+    if (parent) pushListItem(parent.object, parent.key, line);
+    return;
   }
-  if (cursor.key && line.trim().startsWith(YAML_LIST_PREFIX)) {
-    const holder = cursor.nested ? cursor.nested.object : front;
-    pushListItem(holder, cursor.nested ? cursor.nested.key : cursor.key, line);
-    return cursor;
+  const [, , key, raw] = field;
+  let object = front;
+  if (parent) {
+    if (!isPlainObject(parent.object[parent.key])) parent.object[parent.key] = {};
+    object = parent.object[parent.key];
   }
-  const inner = YAML_NESTED_KEY_PATTERN.exec(line);
-  if (!inner || !cursor.key) return cursor;
-  const [, indent, key, raw] = inner;
-  if (!isPlainObject(front[cursor.key])) front[cursor.key] = {};
-  if (cursor.nested && indent.length > cursor.nested.indent) {
-    const parent = cursor.nested.object;
-    if (!isPlainObject(parent[cursor.nested.key])) parent[cursor.nested.key] = {};
-    parent[cursor.nested.key][key] = parseScalar(raw);
-    return cursor;
-  }
-  front[cursor.key][key] = parseScalar(raw);
-  return {key: cursor.key, nested: {object: front[cursor.key], key, indent: indent.length}};
+  object[key] = parseScalar(raw);
+  holders.push({object, key, indent});
 }
 
-// Minimal YAML front-matter: scalars, `- item` lists, `[]`, and two levels of
-// nested keys (doneWhen: probe/args). Enough for epics; nothing else uses it.
+// Minimal YAML front-matter: scalars, `- item` lists, `[]`, and nested keys.
+// Enough for epic probes and their receipt lists; nothing else uses it.
 function parseFrontMatter(text) {
   const lines = text.split(LINE_SEPARATOR);
   const end = lines[0] === FRONT_MATTER_FENCE ? lines.indexOf(FRONT_MATTER_FENCE, 1) : -1;
   if (end === -1) return {front: null, body: text};
   const front = {};
-  let cursor = {key: null, nested: null};
-  for (const line of lines.slice(1, end)) cursor = parseFrontLine(front, cursor, line);
+  const holders = [];
+  for (const line of lines.slice(1, end)) parseFrontLine(front, holders, line);
   return {front, body: lines.slice(end + 1).join(LINE_SEPARATOR)};
 }
 

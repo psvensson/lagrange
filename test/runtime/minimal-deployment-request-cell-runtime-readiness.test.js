@@ -8,6 +8,7 @@ import {
 } from '../../src/constants/index.js';
 import {
   canonicalJson,
+  deriveBindingDeclarationDigest,
 } from '../../src/control-plane/owners/deployment-binding-contract.js';
 import {RuntimeServiceHandler} from
   '../../src/node/runtime-service-handler.js';
@@ -75,7 +76,10 @@ const MEMORY_COMPONENT_BYTES = Buffer.from(
 const PAYLOAD_DIGEST = `sha256:${createHash('sha256')
   .update(COMPONENT_BYTES)
   .digest('hex')}`;
-const SERVICE_ID = 'binding-service-request-cell';
+const BINDING_VERSION_ID = `binding-version-${'a'.repeat(64)}`;
+const SERVICE_ID = `binding-service-${createHash('sha256')
+  .update(BINDING_VERSION_ID)
+  .digest('hex')}`;
 const PACKAGE_ID = `service-package-${'c'.repeat(64)}`;
 const ACCESS_TABLES = Object.freeze([
   Object.freeze({
@@ -146,15 +150,16 @@ function definition(overrides = {}) {
       package_id: PACKAGE_ID,
     },
   };
+  const bindingDigest = deriveBindingDeclarationDigest(declaration);
   return {
-    binding_digest: `sha256:${'b'.repeat(64)}`,
+    binding_digest: bindingDigest,
     binding_projection: JSON.stringify({
-      binding_digest: `sha256:${'b'.repeat(64)}`,
-      binding_version_id: 'binding-version-request-cell',
+      binding_digest: bindingDigest,
+      binding_version_id: BINDING_VERSION_ID,
       declaration,
       tenant_id: 'tenant-a',
     }),
-    binding_version_id: 'binding-version-request-cell',
+    binding_version_id: BINDING_VERSION_ID,
     resource_budget: JSON.stringify(declaration.budgets),
     runtime_config: JSON.stringify({export_name: 'run'}),
     runtime_kind: RUNTIME_KIND.WASM_COMPONENT,
@@ -305,10 +310,19 @@ function createProductionPlacementFixture() {
   const definitionRow = {
     ...runtime.replica.definition,
     service_type: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+    status: 'active',
   };
   const outcomes = [];
   const handler = new RuntimeServiceHandler({
     cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: {
+      async readAuthoritativeRows(_tableName, _sql, [serviceId]) {
+        return {
+          rows: serviceId === SERVICE_ID ? [definitionRow] : [],
+          success: true,
+        };
+      },
+    },
     executorOutcomeEmitter: {
       emitOutcome(...args) {
         outcomes.push(args);
@@ -922,6 +936,105 @@ describe('minimal deployment request Cell runtime readiness', () => {
         /request_cell_artifact_unavailable/u,
       );
       await assertNotReady(unavailable);
+    },
+  );
+
+  test('fences a stale concurrent #prepareRequestCell before it can stop a newer generation component',
+    async () => {
+      let loaderCallCount = 0;
+      let resolveStaleLoader;
+      const staleLoaderPromise = new Promise((resolve) => {
+        resolveStaleLoader = resolve;
+      });
+      const validArtifact = {
+        artifactDigest: ARTIFACT_DIGEST,
+        bytes: COMPONENT_BYTES,
+        manifest: manifest(),
+        manifestDigest: manifestDigest(manifest()),
+        packageId: PACKAGE_ID,
+        payloadDigest: PAYLOAD_DIGEST,
+      };
+      const fixture = createFixture({
+        artifactLoader: async () => {
+          loaderCallCount += 1;
+          if (loaderCallCount === 1) {
+            return staleLoaderPromise;
+          }
+          return validArtifact;
+        },
+      });
+      const stalePrepare = fixture.driver.prepare(
+        fixture.replica.definition,
+        {},
+      );
+      await fixture.lifecycle.prepare(fixture.replica.definition, {});
+      await fixture.lifecycle.start(fixture.replica);
+      assert.equal(fixture.cellRuntime.instanceCount, 1);
+
+      resolveStaleLoader(validArtifact);
+      const staleResult = await stalePrepare;
+      assert.equal(staleResult.status, 'failed');
+      assert.equal(
+        fixture.cellRuntime.instanceCount,
+        1,
+        'stale prepare finishing artifactLoader late must not stop the live newer generation component',
+      );
+      await fixture.lifecycle.stop(fixture.replica);
+    },
+  );
+
+  test('does not clear a newer generation request cell when an older failing prepare awaits stop',
+    async () => {
+      let loaderCallCount = 0;
+      let releaseFirstStop;
+      const firstStopGate = new Promise((resolve) => {
+        releaseFirstStop = resolve;
+      });
+      const validArtifact = {
+        artifactDigest: ARTIFACT_DIGEST,
+        bytes: COMPONENT_BYTES,
+        manifest: manifest(),
+        manifestDigest: manifestDigest(manifest()),
+        packageId: PACKAGE_ID,
+        payloadDigest: PAYLOAD_DIGEST,
+      };
+      const fixture = createFixture({
+        artifactLoader: async () => {
+          loaderCallCount += 1;
+          if (loaderCallCount === 1) {
+            throw new Error('transient loader failure');
+          }
+          return validArtifact;
+        },
+      });
+      const originalStop =
+        fixture.cellRuntime.stop.bind(fixture.cellRuntime);
+      let stopCalls = 0;
+      fixture.cellRuntime.stop = async (serviceId) => {
+        stopCalls += 1;
+        if (stopCalls === 1) {
+          await firstStopGate;
+        }
+        return originalStop(serviceId);
+      };
+
+      const failingPrepare = fixture.driver.prepare(
+        fixture.replica.definition,
+        {},
+      );
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      await fixture.lifecycle.prepare(fixture.replica.definition, {});
+      releaseFirstStop();
+      const failedResult = await failingPrepare;
+      assert.equal(failedResult.status, 'failed');
+
+      const startResult = await fixture.lifecycle.start(fixture.replica);
+      assert.equal(
+        startResult.status,
+        'running',
+        'newer generation request cell remains prepared and startable after older failing prepare finishes stop',
+      );
+      await fixture.lifecycle.stop(fixture.replica);
     },
   );
 });

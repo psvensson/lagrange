@@ -105,7 +105,7 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
       transport: this.delegates.getMessageRouter(),
       dbPath: getMessageGroupDbPath(
         this.delegates.getDataDir(), options.groupId, options.replicaId),
-      peerAddresses: options.peerAddresses,
+      founderNodeIds: options.founderNodeIds,
       deferElection: Boolean(options.deferElection),
       deferElectionUntilJoinConvergence:
         options.deferElectionUntilJoinConvergence === true,

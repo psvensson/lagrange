@@ -17,6 +17,7 @@ import {createTransactionPersistenceGateway} from
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -100,6 +101,7 @@ test('deferred hash - non-transactional INSERT does not call ' +
   let hashCallCount = 0;
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createTestCache(),
     messageRouter: createTestRouter(),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
@@ -131,6 +133,7 @@ test('deferred hash - non-transactional UPDATE does not call ' +
   let hashCallCount = 0;
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createTestCache(),
     messageRouter: createTestRouter(),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
@@ -162,6 +165,7 @@ test('deferred hash - non-transactional DELETE does not call ' +
   let hashCallCount = 0;
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createTestCache(),
     messageRouter: createTestRouter(),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
@@ -195,6 +199,7 @@ test('deferred hash - transactional INSERT calls ' +
 async (t) => {
   const callLog = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createTestCache(),
     messageRouter: createTestRouter(),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
@@ -240,6 +245,7 @@ test('deferred hash - transactional UPDATE calls ' +
 async (t) => {
   const callLog = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createTestCache(),
     messageRouter: createTestRouter(),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
@@ -285,6 +291,7 @@ test('deferred hash - transactional DELETE calls ' +
 async (t) => {
   const callLog = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createTestCache(),
     messageRouter: createTestRouter(),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import {resolveTestMachineFactor} from './test-machine-factor.js';
+import {resolveTestMachineFactor, scaleByMachineFactor} from './test-machine-factor.js';
 
 import {
   appendFileSync,
@@ -341,7 +341,7 @@ function prepareTestRun(file, options) {
   // declared budget said otherwise. The per-file kill (--timeout-ms,
   // default 600s) still bounds the whole process.
   if (env.TAP_TIMEOUT === undefined) {
-    const declaredTimeoutSeconds = largestDeclaredTimeoutSeconds(absoluteFile, env);
+    const declaredTimeoutSeconds = resolveFileTapTimeoutSeconds(absoluteFile, env);
     const resolvedTimeoutSeconds = Math.max(
       declaredTimeoutSeconds ?? 0,
       parsedTimeoutFloorSeconds(env.TAP_TIMEOUT_FLOOR),
@@ -383,19 +383,29 @@ function parsedTimeoutFloorSeconds(value) {
   return Number.isInteger(seconds) && seconds > 0 ? seconds : 0;
 }
 
-function largestDeclaredTimeoutSeconds(absoluteFile, env) {
+function resolveFileTapTimeoutSeconds(absoluteFile, env) {
   let source;
   try {
     source = readFileSync(absoluteFile, TEXT_ENCODING);
   } catch {
     return null;
   }
-  const {milliseconds, problems} =
+  const {milliseconds, hasDeclaration, problems} =
     extractTimeoutDeclarations(source, absoluteFile, {env});
   if (problems.length > 0) {
     throw new Error(
       `${UNRESOLVED_TIMEOUT_ERROR}${PROBLEM_INDENT}` +
       `${problems.join(PROBLEM_INDENT)}`);
+  }
+  // The implicit TAP root is a reference-machine work budget too. Scale it
+  // through the same child-env owner, only when the parser saw no declaration.
+  // Small/zero declarations retain their existing root behavior; positive
+  // declarations were already resolved and must never be scaled twice.
+  if (!hasDeclaration) {
+    return Math.ceil(scaleByMachineFactor(
+      TAP_DEFAULT_TIMEOUT_SECONDS * MILLISECONDS_PER_SECOND,
+      resolveTestMachineFactor(env),
+    ) / MILLISECONDS_PER_SECOND);
   }
   const seconds = Math.ceil(milliseconds / MILLISECONDS_PER_SECOND);
   return seconds > TAP_DEFAULT_TIMEOUT_SECONDS ? seconds : null;

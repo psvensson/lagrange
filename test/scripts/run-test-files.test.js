@@ -31,6 +31,7 @@ const RUNAWAY_DIRECTIVE_FIXTURE =
 const FAILS_ONCE_FIXTURE = `${FIXTURE_DIRECTORY}/fails-once.fixture.mjs`;
 const HANGS_FIXTURE = `${FIXTURE_DIRECTORY}/hangs.fixture.mjs`;
 const MACHINE_FACTOR_FIXTURE = `${FIXTURE_DIRECTORY}/machine-factor.fixture.mjs`;
+const TAP_DEFAULT_BUDGET_FIXTURE = `${FIXTURE_DIRECTORY}/tap-default-budget.fixture.mjs`;
 
 describe('run-test-files', () => {
   const temporaryDirectories = [];
@@ -122,6 +123,30 @@ describe('run-test-files', () => {
         TAP_TIMEOUT_FLOOR: undefined},
     });
     assert.equal(summary.ok, true, JSON.stringify(summary.results?.[0]?.reasons));
+  });
+
+  it('scales only the implicit TAP root through the child machine-factor owner', async () => {
+    const cases = [
+      {factor: '2.3', seconds: 69},
+      {factor: undefined, seconds: 30},
+      {factor: '1', seconds: 30},
+      {factor: 'invalid', seconds: 30},
+      {factor: '0.5', seconds: 30},
+      {factor: '2.3', seconds: 17, timeout: '17'},
+      {factor: '2.3', seconds: 120, floor: '120'},
+      {factor: '2.3', seconds: 69, floor: '10'},
+    ];
+    for (const value of cases) {
+      const env = {LAGRANGE_TEST_MACHINE_FACTOR: value.factor,
+        TAP_TIMEOUT: value.timeout, TAP_TIMEOUT_FLOOR: value.floor,
+        TEST_EXPECTED_TAP_BUDGET_SECONDS: String(value.seconds)};
+      const options = {print: false, env};
+      const sync = runTestFileSync(TAP_DEFAULT_BUDGET_FIXTURE, options);
+      assert.equal(sync.ok, true, `sync ${JSON.stringify(value)}: ${sync.output}`);
+      const asyncResult = await runTestFiles([TAP_DEFAULT_BUDGET_FIXTURE], {...options, jobs: 1});
+      assert.equal(asyncResult.ok, true,
+        `async ${JSON.stringify(value)}: ${asyncResult.results[0].output}`);
+    }
   });
 
   it('runs Tap and node:test files with assertions and Tap plugins intact', async () => {

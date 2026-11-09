@@ -1,4 +1,8 @@
 import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+
+const LOCAL_STR_ACTIVE_REPLICAS_BELOW_MINIMUM =
+  'would drop active replicas below minimum';
+const LOCAL_STR_SAFETY_POLICY_UNAVAILABLE = 'safety policy unavailable';
 import {OPERATION_RESERVATION_RECOVERY_OUTCOME} from
   './operation-reservation-attempt-outcome.js';
 import {OperationWorkflowRecoveryDrain} from './operation-workflow-recovery-drain.js';
@@ -396,7 +400,11 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
 
       if (
         recoveryOutcome === OPERATION_RESERVATION_RECOVERY_OUTCOME
-          .RESERVATION_BACKED_PENDING_REDRIVEN
+          .RESERVATION_BACKED_PENDING_REDRIVEN ||
+        this.isRemoveInitialDispatchPhase({
+          type: op.type,
+          workflowStep: originalStep,
+        })
       ) {
         result.reconciled++;
       } else if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
@@ -441,6 +449,8 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
         OPERATION_WORKFLOW_OWNER_LITERAL
           .WOULD_DROP_VOTER_DASH_READY_REPLICAS_BELOW_MINIMUM_2,
       ) ||
+      normalized.includes(LOCAL_STR_ACTIVE_REPLICAS_BELOW_MINIMUM) ||
+      normalized.includes(LOCAL_STR_SAFETY_POLICY_UNAVAILABLE) ||
       normalized.includes(
         OPERATION_WORKFLOW_OWNER_LITERAL.SAFETY_CHECK_UNAVAILABLE_2,
       ) ||
@@ -583,7 +593,19 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
   async ensureReplaceRemovalIntentRecorded(operation, stepMetadata) {
     const durable = await this.repository
       .queryReplicaOperationPersistenceAuthorityOperation(operation);
-    if (durable?.workflowStep !== WORKFLOW_STEP.STOPPING) {
+    if (!durable || this.repository.isOperationTerminal(durable)) {
+      return false;
+    }
+    if (durable.workflowStep !== WORKFLOW_STEP.STOPPING) {
+      if (this.transitionRetryTimerByOperationId?.has(operation?.operationId)) {
+        return false;
+      }
+      if (await this.updateStep(durable, WORKFLOW_STEP.STOPPING,
+        undefined, {stepMetadata, requireDurable: true}) &&
+          replaceIntentEntryOf(durable)) {
+        adoptDurableReplaceIntent(operation, durable);
+        return true;
+      }
       return false;
     }
     if (replaceIntentEntryOf(durable)) {

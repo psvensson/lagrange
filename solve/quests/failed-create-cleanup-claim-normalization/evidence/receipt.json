@@ -1,0 +1,27 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "failed-create-cleanup-claim-normalization",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "unclaimed-failed-row-rejected-for-destructive-cleanup-and-release",
+      "passed": false,
+      "detail": "Subtest 3 in test/node/replica-failed-create-cleanup-generation.test.js is red on e8fd1cc6e6717a6321ece53873f60fdc5e70c31f; implementation and frozen proof pending."
+    },
+    {
+      "id": "live-pre-runtime-retry-and-terminal-settlement-preserved",
+      "passed": false,
+      "detail": "Implementation and verification of live pre-runtime retry and unblocked terminal settlement pending."
+    },
+    {
+      "id": "terminal-unclaimed-failed-row-normalized-via-lifecycle-claim-owner",
+      "passed": false,
+      "detail": "Participant and workflow normalization through ReplicaStateMachine.claimFailedCreateCleanup pending."
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "detail": "Independent implementation and frozen committed-tree verification pending."
+    }
+  ]
+}

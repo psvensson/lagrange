@@ -1,3 +1,4 @@
+import {createMockCoordinator} from './test-helpers.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -76,6 +77,24 @@ function readinessService(options = {}) {
   const fallbackDimensionsSatisfied =
     options.fallbackDimensionsSatisfied === true;
   return partialReadinessFake({
+    answerCommittedNodes() {
+      const committedLeaseMs = Date.now() + 60_000;
+      return {
+        state: 'ready',
+        epoch: {
+          publicationEpoch: 1,
+          publicationId: 'cluster_membership-1',
+          readAtMs: 0,
+        },
+        nodeRows: nodeRows().map((row) => ({
+          ...row,
+          ready_lease_expires_at:
+            eligibleNodeIds.has(row.node_id) ?
+              committedLeaseMs :
+              EXPIRED_LEASE,
+        })),
+      };
+    },
     getNodeReadinessSync(nodeId) {
       const recoveryEligible = eligibleNodeIds.has(nodeId);
       const sourceNode = nodeId === 'node-1';
@@ -146,10 +165,25 @@ function createHarness(options = {}) {
     [...RECOVERY_NODE_IDS].map(createPostgresWireEndpoint),
   );
   const createdMoves = [];
+  const controlPlaneReadinessService = options.controlPlaneReadinessService || readinessService();
   const coordinator = {
-    getMoveSafetyError: () => null,
-    canStartAddOperation: async () => true,
-    canStartRemoveOperation: async () => true,
+    ...createMockCoordinator({
+      controlPlaneReadinessService,
+      readOperationsByEntity: async (entityType, entityId) => replicaOperations
+        .filter((row) => row.entity_type === entityType && row.entity_id === entityId)
+        .map((row) => ({
+          operationId: row.operation_id,
+          entityType: row.entity_type,
+          entityId: row.entity_id,
+          type: row.operation_type,
+          partitionId: row.partition_id,
+          status: row.status,
+          workflowStep: row.workflow_step,
+          sourceReplicaId: row.source_replica_id,
+          sourceNodeId: row.source_node_id,
+          targetNodeId: row.target_node_id,
+        })),
+    }),
     createOperation: async (move) => {
       createdMoves.push({...move});
       return {
@@ -170,13 +204,6 @@ function createHarness(options = {}) {
       inFlightOperations: 0,
       totalOperations: createdMoves.length,
     }),
-    storageAccountingService: {
-      estimateReplicaBytes: () => 1,
-    },
-    storageAdmissionService: {
-      checkAdd: async () => ({decision: 'allow'}),
-      checkReplace: async () => ({decision: 'allow'}),
-    },
   };
   const disconnectedNodeIds =
     options.disconnectedNodeIds instanceof Set ?
@@ -194,11 +221,10 @@ function createHarness(options = {}) {
     nodeId: 'node-1',
     systemTableCache: cache,
     cdcIntegrationService: createMockCdcService(),
-    tablePolicyService: createMockPolicyService(partitions, tables),
+    tablePolicyService: createMockPolicyService({partitions: partitions, tables: tables}),
     messageRouter,
     rebalanceCoordinator: coordinator,
-    controlPlaneReadinessService:
-      options.controlPlaneReadinessService || readinessService(),
+    controlPlaneReadinessService,
   });
   rebalancer.initialize();
   rebalancer.isLeader = options.isLeader !== false;

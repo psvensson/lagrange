@@ -136,6 +136,7 @@ test('the original payload-only composition is refused: no learner-join capabili
     const proposal = await turnChainValue(cluster.node(leader).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER,
       replicaIdentity: target,
+      nodeId: 'node-test',
     }));
     assert.equal(proposal.outcome, 'CORE_OK', JSON.stringify(proposal));
     assert.equal(cluster.settle(() => founders.every((replicaId) =>

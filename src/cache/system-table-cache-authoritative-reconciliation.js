@@ -3,9 +3,12 @@ import {
   stableSerialize,
 } from '../control-plane/control-plane-system-table-gateway-normalizers.js';
 import {
+  SERVICE_STATUS,
   TABLES,
   isPartitionCleanupServiceRow,
 } from '../constants/index.js';
+import {RAFT_ROLE} from '../raft/constants.js';
+import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {fastJsonClone} from '../utils/fast-json-clone.js';
 import {
   SYSTEM_TABLE_CACHE_LOCAL_FIELD_NAMES,
@@ -19,6 +22,11 @@ const SERVICE_LIFECYCLE_COLUMN = Object.freeze({
   UPDATED_AT: 'updated_at',
 });
 const CLEANUP_OWNED_STATUS = 'cleanup_owned';
+const SERVICE_INCARNATION_TOKEN_FIELD_NAMES = Object.freeze([
+  ...SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES,
+  'create_attempt_token',
+  'cleanup_token',
+]);
 
 function omitSystemTableCacheLocalFields(cachedRow, authoritativeRow) {
   if (!cachedRow || typeof cachedRow !== 'object') {
@@ -190,20 +198,143 @@ function areAuthoritativeSystemTableCacheRowsAligned(
   );
 }
 
-function buildAuthoritativeSystemTableCacheReplacement(
+function hasConflictingNonEmptyField(existing, authoritative, fieldName) {
+  const existingValue = existing?.[fieldName];
+  const authoritativeValue = authoritative?.[fieldName];
+  return typeof existingValue === 'string' &&
+    existingValue.trim().length > 0 &&
+    typeof authoritativeValue === 'string' &&
+    authoritativeValue.trim().length > 0 &&
+    existingValue !== authoritativeValue;
+}
+
+function hasDifferentServiceIdentity(existing, authoritative) {
+  if (SERVICE_INCARNATION_TOKEN_FIELD_NAMES.some((fieldName) =>
+    hasConflictingNonEmptyField(existing, authoritative, fieldName))) {
+    return true;
+  }
+  return isFiniteSystemTableCacheNumber(existing?.created_at) &&
+    isFiniteSystemTableCacheNumber(authoritative?.created_at) &&
+    Number(existing.created_at) !== Number(authoritative.created_at);
+}
+
+function isNonLeaderVoterRole(role) {
+  return isVoterRaftRole(role) &&
+    String(role).toLowerCase() !== RAFT_ROLE.LEADER;
+}
+
+function isActiveServiceStatus(row) {
+  const status = row?.status;
+  return typeof status === 'string' &&
+    status.toLowerCase() === SERVICE_STATUS.ACTIVE;
+}
+
+function shouldPreserveActiveNonLeaderVoterRaftRole(
+  tableName,
   existing,
   authoritative,
 ) {
+  if (
+    tableName !== TABLES.SERVICES ||
+    !existing ||
+    !authoritative ||
+    hasDifferentServiceIdentity(existing, authoritative)
+  ) {
+    return false;
+  }
+  return isActiveServiceStatus(existing) &&
+    isActiveServiceStatus(authoritative) &&
+    authoritative.raft_role == null &&
+    isNonLeaderVoterRole(existing.raft_role) &&
+    !(Number(authoritative.updated_at) > Number(existing.updated_at));
+}
+
+function resolveReplacementArguments(firstArg, secondArg, thirdArg) {
+  if (typeof firstArg === 'string') {
+    return {
+      tableName: firstArg,
+      existing: secondArg,
+      authoritative: thirdArg,
+    };
+  }
+  const existing = firstArg;
+  const authoritative = secondArg;
+  const tableName =
+    typeof authoritative?.service_id === 'string' ||
+      typeof existing?.service_id === 'string' ?
+      TABLES.SERVICES :
+      null;
+  return {tableName, existing, authoritative};
+}
+
+function applyPreservedNonLeaderVoterRaftRole(
+  tableName,
+  existing,
+  authoritative,
+  replacement,
+) {
+  if (shouldPreserveActiveNonLeaderVoterRaftRole(
+    tableName,
+    existing,
+    authoritative,
+  )) {
+    replacement.raft_role = existing.raft_role;
+  }
+  return replacement;
+}
+
+const HLC_LOCAL_FIELD_NAMES = new Set([
+  'updated_at_hlc',
+  'updatedAtHlc',
+]);
+
+function shouldPreserveLocalFieldAcrossAuthoritativeReplacement(
+  fieldName,
+  existing,
+  authoritative,
+) {
+  if (!HLC_LOCAL_FIELD_NAMES.has(fieldName)) {
+    return true;
+  }
+  const existingUpdatedAt = Number(existing?.updated_at);
+  const authoritativeUpdatedAt = Number(authoritative?.updated_at);
+  return !(
+    Number.isFinite(existingUpdatedAt) &&
+    Number.isFinite(authoritativeUpdatedAt) &&
+    authoritativeUpdatedAt > existingUpdatedAt
+  );
+}
+
+function buildAuthoritativeSystemTableCacheReplacement(
+  firstArg,
+  secondArg,
+  thirdArg,
+) {
+  const {tableName, existing, authoritative} = resolveReplacementArguments(
+    firstArg,
+    secondArg,
+    thirdArg,
+  );
   const replacement = fastJsonClone(authoritative);
   for (const fieldName of SYSTEM_TABLE_CACHE_LOCAL_FIELD_NAMES) {
     if (
       !Object.prototype.hasOwnProperty.call(authoritative, fieldName) &&
-      Object.prototype.hasOwnProperty.call(existing, fieldName)
+      Object.prototype.hasOwnProperty.call(existing, fieldName) &&
+      shouldPreserveLocalFieldAcrossAuthoritativeReplacement(
+        fieldName,
+        existing,
+        authoritative,
+      )
     ) {
       replacement[fieldName] = fastJsonClone(existing[fieldName]);
     }
   }
-  return replacement;
+  return applyPreservedNonLeaderVoterRaftRole(
+    tableName,
+    existing,
+    authoritative,
+    replacement,
+  );
 }
 
 function buildAuthoritativeServiceLifecycleCacheReplacement(
@@ -212,11 +343,24 @@ function buildAuthoritativeServiceLifecycleCacheReplacement(
 ) {
   if (isPartitionCleanupServiceRow(authoritative)) {
     return buildAuthoritativeSystemTableCacheReplacement(
+      TABLES.SERVICES,
       existing,
       authoritative,
     );
   }
   const replacement = fastJsonClone(existing);
+  for (const fieldName of HLC_LOCAL_FIELD_NAMES) {
+    if (
+      !Object.prototype.hasOwnProperty.call(authoritative || {}, fieldName) &&
+      !shouldPreserveLocalFieldAcrossAuthoritativeReplacement(
+        fieldName,
+        existing,
+        authoritative,
+      )
+    ) {
+      delete replacement[fieldName];
+    }
+  }
   for (const [fieldName, fieldValue] of Object.entries(authoritative)) {
     if (!Object.prototype.hasOwnProperty.call(replacement, fieldName)) {
       replacement[fieldName] = fastJsonClone(fieldValue);
@@ -249,7 +393,12 @@ function buildAuthoritativeServiceLifecycleCacheReplacement(
       authoritativeUpdatedAt,
     );
   }
-  return replacement;
+  return applyPreservedNonLeaderVoterRaftRole(
+    TABLES.SERVICES,
+    existing,
+    authoritative,
+    replacement,
+  );
 }
 
 export {

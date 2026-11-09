@@ -61,7 +61,8 @@ function deferralOf(answer) {
 }
 
 function addPeer(replicaIdentity) {
-  return {type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity};
+  return {type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity,
+    nodeId: 'node-test'};
 }
 
 function removePeer(replicaIdentity) {

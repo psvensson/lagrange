@@ -16,8 +16,10 @@
 //
 // On the rs-raft partition path the partition's peer is joined the way
 // production joins one: the partition leads its group, commits a prefix
-// through its own operation port, and admits the peer through its
-// services-cache reconcile (an ADD_PEER proposal the core commits). The real
+// through its own operation port, and admits the peer from its committed
+// replica operation on the peer's ADMIT_REPLICA request (an ADD_PEER
+// proposal the core commits; quest replica-admission-from-committed-operation
+// deleted the services-cache reconcile this fixture used). The real
 // write is the port's progress probe: the leader holds no acknowledged
 // progress for the peer (the recording transport never answers), so the probe
 // sends one append to the peer at the address resolved at send time
@@ -26,6 +28,10 @@
 // so these witnesses are red until the runtime owner makes the probe honest).
 // A message group runs on the same operation port: its real write is the
 // vote request its campaign sends to its founding peer.
+import {committedPartitionPeerAddress} from
+  '../../src/partition/partition-committed-peer-address.js';
+import {RAFT_RS_PEER_ADDRESS_REFUSAL} from
+  '../../src/raft/raft-rs-peer-identity-constants.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {readdirSync, readFileSync} from 'node:fs';
 
@@ -196,10 +202,28 @@ function authoritativePartitionCache() {
 }
 
 // Lead the group, commit a prefix write through the operation port, and
-// admit the peer the way production does: its ACTIVE services row lands in
-// the cache again (a durable re-landing, UPDATE) and the leader's
-// services-cache reconcile proposes it. Admission is complete when the port's
-// configuration names the peer.
+// admit the peer the way production does: a committed ADD operation names
+// the peer, its node and this partition at SYNCING (read by the leader
+// through its committed control-plane read), and the peer's ADMIT_REPLICA
+// request reaches the leader's handler. Admission is complete when the
+// port's configuration names the peer.
+const ADMIT_REPLICA = 'ADMIT_REPLICA';
+const PEER_OPERATION_ID = 'address-authority-add-peer';
+
+function committedAddOperation(peerRow) {
+  return {
+    operation_id: PEER_OPERATION_ID,
+    type: 'ADD',
+    entity_type: SERVICE_TYPE.PARTITION,
+    entity_id: PARTITION_ID,
+    partition_id: PARTITION_ID,
+    replica_id: peerRow.service_id,
+    target_node_id: peerRow.node_id,
+    status: 'syncing',
+    workflow_step: 'SYNCING',
+  };
+}
+
 async function leadAndAdmitPeer(partition, peerRow) {
   assertRaftOperationSucceeded(await turnChainValue(partition.raft.campaign()));
   assertRaftOperationSucceeded(await turnChainValue(partition.raft.propose({
@@ -208,8 +232,16 @@ async function leadAndAdmitPeer(partition, peerRow) {
     params: [ONE],
     entryId: `address-authority-prefix-${partition.replicaId}`,
   })));
-  partition.systemTableCache.applySystemTableChange(
-    TABLES.SERVICES, CDC_OPERATIONS.UPDATE, {...peerRow, updated_at: ONE + 1});
+  const operation = committedAddOperation(peerRow);
+  partition.controlPlaneSystemTableGateway = {
+    async readAuthoritativeRows(tableName, _sql, params) {
+      return {success: true, rows: tableName === TABLES.REPLICA_OPERATIONS &&
+        params[0] === operation.operation_id ? [{...operation}] : []};
+    },
+  };
+  await partition.handleApplicationMessage({type: ADMIT_REPLICA,
+    partitionId: PARTITION_ID, replicaIdentity: peerRow.service_id,
+    operationId: operation.operation_id});
   const admitted = await waitForCondition(
     () => partition.raft.readStatus().peers
       .some((peer) => peer.address === peerRow.address),
@@ -221,9 +253,9 @@ async function leadAndAdmitPeer(partition, peerRow) {
   }
 }
 
-async function probePartitionPeerDestination(partition, peerAddress, sent) {
+async function probePartitionPeerDestination(partition, peerIdentity, sent) {
   const at = sent.length;
-  await turnChainValue(partition.raft.probePeerProgress(peerAddress));
+  await turnChainValue(partition.raft.probePeerProgress(peerIdentity));
   return sent.slice(at);
 }
 
@@ -237,12 +269,6 @@ test('a poisoned process registry cannot move a partition peer destination',
       sent,
     });
 
-    poisonTowardB(PARTITION_B);
-    t.equal(partition.buildPeerAddress(PARTITION_PEER), PARTITION_A,
-      'the authoritative cache decides, not the registry');
-    t.equal(partition.buildPeerAddress(PARTITION_A), PARTITION_A,
-      'an already-unified address is returned as given');
-
     // The partition boundary is operation-only after the rs-raft migration.
     // Observe the frozen peer projection, then drive the semantic progress
     // probe which sends one real Raft packet without exposing a peer object.
@@ -253,10 +279,10 @@ test('a poisoned process registry cannot move a partition peer destination',
     t.equal(status.peers.length, ONE,
       'the operation-port snapshot exposes exactly the one remote peer');
     t.equal(status.peers[ZERO].address, PARTITION_A,
-      'the peer projection carries the authoritative address');
+      'the peer projection carries the committed address');
 
     t.same(
-      await probePartitionPeerDestination(partition, PARTITION_A, sent),
+      await probePartitionPeerDestination(partition, PARTITION_PEER, sent),
       [PARTITION_A],
       'and the operation-port progress probe actually sent there',
     );
@@ -269,12 +295,11 @@ test('a poisoned process registry cannot move a partition peer destination',
 test('with no authoritative location a partition refuses rather than using the registry',
   async (t) => {
     initializeProcess();
-    const partition = buildPartition({cache: new SystemTableCache(), sent: []});
     poisonTowardB(PARTITION_B);
-    t.throws(() => partition.buildPeerAddress(PARTITION_PEER),
-      /Unable to resolve unified peer address/u,
-      'registry membership is never promoted into discovery authority');
-    await partition.shutdown();
+    t.throws(() => committedPartitionPeerAddress(PARTITION_PEER, null),
+      {message: RAFT_RS_PEER_ADDRESS_REFUSAL.PEER_NOT_IN_CONFIGURATION},
+      'without a committed node the peer has no address: registry ' +
+        'membership is never promoted into discovery authority');
   });
 
 test('one node mutating the shared registry cannot move another node destination',
@@ -309,12 +334,12 @@ test('one node mutating the shared registry cannot move another node destination
       ]);
       await partition.initialize();
       await leadAndAdmitPeer(partition, peerRow);
-      hosts.push({partition, peerAddress});
+      hosts.push({partition, peerAddress, peerId});
     }
 
     const write = (host) => probePartitionPeerDestination(
       host.partition,
-      host.peerAddress,
+      host.peerId,
       sent,
     );
 
@@ -365,7 +390,7 @@ test('a poisoned process registry cannot move a message-group peer destination',
       replicaId: GROUP_SELF,
       nodeId: NODE_ID,
       replicaIds: [GROUP_SELF, GROUP_PEER],
-      peerAddresses: [GROUP_A],
+      founderNodeIds: {[GROUP_SELF]: NODE_ID, [GROUP_PEER]: NODE_ID},
       transport: router,
       deferElection: true,
     }));
@@ -373,14 +398,8 @@ test('a poisoned process registry cannot move a message-group peer destination',
       serviceRow(GROUP_SELF,
         `${NODE_ID}/${ENTITY_TYPE.MESSAGE_GROUP}/${GROUP_SELF}`,
         SERVICE_TYPE.MESSAGE_GROUP),
-      serviceRow(GROUP_PEER, GROUP_A, SERVICE_TYPE.MESSAGE_GROUP),
+      serviceRow(GROUP_PEER, GROUP_B, SERVICE_TYPE.MESSAGE_GROUP),
     ]);
-
-    poisonTowardB(GROUP_B);
-    t.equal(group.buildPeerAddress(GROUP_PEER), GROUP_A,
-      'the authoritative cache decides, not the registry');
-    t.equal(group.buildPeerAddress(GROUP_A), GROUP_A,
-      'an already-unified address is returned as given');
 
     // The group opens its operation port from its two founders without
     // scheduling; its one campaign sends the vote request to the peer at the
@@ -391,7 +410,9 @@ test('a poisoned process registry cannot move a message-group peer destination',
     t.equal(status.peers.length, ONE,
       'the operation-port snapshot exposes exactly the one remote peer');
     t.equal(status.peers[ZERO].address, GROUP_A,
-      'the peer projection carries the authoritative address');
+      'the peer is addressed on its committed node, not the registry or a row');
+    t.equal(group.resolveCommittedPeerAddress(GROUP_PEER), GROUP_A,
+      'the host-side resolver answers the same committed address');
     const before = sent.length;
     assertRaftOperationSucceeded(await turnChainValue(group.raft.campaign()));
     await waitForCondition(() => sent.length > before, ADMISSION_BUDGET_MS);
@@ -403,7 +424,7 @@ test('a poisoned process registry cannot move a message-group peer destination',
     await router.shutdown();
   });
 
-test('with no authoritative location a message group refuses rather than using the registry',
+test('with no committed node a message group refuses rather than using the registry',
   async (t) => {
     initializeProcess();
     const router = new MessageRouter({
@@ -418,10 +439,12 @@ test('with no authoritative location a message group refuses rather than using t
       transport: router,
       deferElection: true,
     }));
+    await group.initialize();
     poisonTowardB(GROUP_B);
-    t.throws(() => group.buildPeerAddress(GROUP_PEER),
-      /Unable to resolve unified peer address/u,
+    t.throws(() => group.resolveCommittedPeerAddress(GROUP_PEER),
+      /peer_not_in_configuration/u,
       'registry membership is never promoted into discovery authority');
+    await group.shutdown();
     await router.shutdown();
   });
 

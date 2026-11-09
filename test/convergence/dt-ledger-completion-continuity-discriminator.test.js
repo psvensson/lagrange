@@ -969,7 +969,7 @@ t.test(
         isOutboundQueueAvailable: () => true,
       },
       tablePolicyService: {
-        getPolicyForPartition: () => ({minReplicaCount: 3}),
+        getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
       },
       cacheData: {
         nodes: [
@@ -1045,7 +1045,7 @@ t.test(
         isOutboundQueueAvailable: () => true,
       },
       tablePolicyService: {
-        getPolicyForPartition: () => ({minReplicaCount: 3}),
+        getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
       },
       // Leadership acquired before local PARTITIONS/service hydration: the
       // node cache knows the members, but the critical service catalog is

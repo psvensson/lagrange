@@ -45,6 +45,14 @@ import {
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
+// A coordinator mock carrying the node's readiness service, as every
+// production coordinator does (the rebalancer requires it).
+function createReadinessHoldingCoordinator() {
+  return createMockCoordinator({
+    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+  });
+}
+
 // ── Suite-local fixture constants ──────────────────────────────────
 
 const PARTITION_ID = 'test-partition-1';
@@ -137,7 +145,7 @@ function wireAllDependencies(ps, overrides = {}) {
   const router = overrides.messageRouter || createMockMessageRouter();
   const sql = overrides.sqlQueryEngine || createMockSqlEngine();
   const coordinator = overrides.rebalanceCoordinator ||
-    createMockCoordinator();
+    createReadinessHoldingCoordinator();
 
   ps.metadataPublicationReadinessState =
     overrides.readinessState || createMockReadinessState(true);
@@ -178,7 +186,7 @@ test('initialization gate — rebalancer not created when ' +
   ps.setCdcIntegrationService(createMockCdcService());
   ps.setTablePolicyService(createMockPolicyService());
   ps.setSqlQueryEngine(createMockSqlEngine());
-  ps.setRebalanceCoordinator(createMockCoordinator());
+  ps.setRebalanceCoordinator(createReadinessHoldingCoordinator());
 
   t.equal(ps.rebalancer, null,
     'rebalancer not created without systemTableCache');
@@ -194,7 +202,7 @@ test('initialization gate — rebalancer not created when ' +
   ps.setSystemTableCache(createMockCache());
   ps.setTablePolicyService(createMockPolicyService());
   ps.setSqlQueryEngine(createMockSqlEngine());
-  ps.setRebalanceCoordinator(createMockCoordinator());
+  ps.setRebalanceCoordinator(createReadinessHoldingCoordinator());
 
   t.equal(ps.rebalancer, null,
     'rebalancer not created without cdcIntegrationService');
@@ -210,7 +218,7 @@ test('initialization gate — rebalancer not created when ' +
   ps.setSystemTableCache(createMockCache());
   ps.setCdcIntegrationService(createMockCdcService());
   ps.setSqlQueryEngine(createMockSqlEngine());
-  ps.setRebalanceCoordinator(createMockCoordinator());
+  ps.setRebalanceCoordinator(createReadinessHoldingCoordinator());
 
   t.equal(ps.rebalancer, null,
     'rebalancer not created without tablePolicyService');
@@ -226,7 +234,7 @@ test('initialization gate — rebalancer not created when ' +
   ps.setCdcIntegrationService(createMockCdcService());
   ps.setTablePolicyService(createMockPolicyService());
   ps.setSqlQueryEngine(createMockSqlEngine());
-  ps.setRebalanceCoordinator(createMockCoordinator());
+  ps.setRebalanceCoordinator(createReadinessHoldingCoordinator());
 
   t.equal(ps.rebalancer, null,
     'rebalancer not created without messageRouter');
@@ -242,7 +250,7 @@ test('initialization gate — rebalancer not created when ' +
   ps.setSystemTableCache(createMockCache());
   ps.setCdcIntegrationService(createMockCdcService());
   ps.setTablePolicyService(createMockPolicyService());
-  ps.setRebalanceCoordinator(createMockCoordinator());
+  ps.setRebalanceCoordinator(createReadinessHoldingCoordinator());
 
   t.equal(ps.rebalancer, null,
     'rebalancer not created without sqlQueryEngine');
@@ -275,7 +283,7 @@ test('initialization gate — rebalancer not created when ' +
   ps.setCdcIntegrationService(createMockCdcService());
   ps.setTablePolicyService(createMockPolicyService());
   ps.setSqlQueryEngine(createMockSqlEngine());
-  ps.setRebalanceCoordinator(createMockCoordinator());
+  ps.setRebalanceCoordinator(createReadinessHoldingCoordinator());
 
   t.equal(ps.rebalancer, null,
     'rebalancer not created when partition is not leader');
@@ -292,7 +300,7 @@ test('initialization gate — rebalancer not created when ' +
   ps.setCdcIntegrationService(createMockCdcService());
   ps.setTablePolicyService(createMockPolicyService());
   ps.setSqlQueryEngine(createMockSqlEngine());
-  ps.setRebalanceCoordinator(createMockCoordinator());
+  ps.setRebalanceCoordinator(createReadinessHoldingCoordinator());
 
   t.equal(ps.rebalancer, null,
     'rebalancer not created when background work is not ready');
@@ -329,7 +337,7 @@ test('coordinator rebinding — setRebalanceCoordinator routes ' +
 
   t.ok(ps.rebalancer, 'rebalancer exists after wiring');
 
-  const newCoordinator = createMockCoordinator();
+  const newCoordinator = createReadinessHoldingCoordinator();
   let setCoordinatorCalled = false;
   const originalSetCoordinator =
     ps.rebalancer.setRebalanceCoordinator.bind(ps.rebalancer);
@@ -352,7 +360,7 @@ test('coordinator rebinding — setRebalanceCoordinator routes ' +
 test('coordinator rebinding — null coordinator is rejected ' +
   'by setRebalanceCoordinator', async (t) => {
   const ps = createPartitionService();
-  const originalCoordinator = createMockCoordinator();
+  const originalCoordinator = createReadinessHoldingCoordinator();
   wireAllDependencies(ps, {rebalanceCoordinator: originalCoordinator});
 
   ps.setRebalanceCoordinator(null);
@@ -375,7 +383,7 @@ test('coordinator rebinding — previous owned coordinator is ' +
     shutdownCalled = true;
   };
 
-  const newCoordinator = createMockCoordinator();
+  const newCoordinator = createReadinessHoldingCoordinator();
   ps.setRebalanceCoordinator(newCoordinator);
 
   // Allow async shutdown to complete
@@ -400,7 +408,7 @@ test('coordinator rebinding — non-owned previous coordinator is ' +
     shutdownCalled = true;
   };
 
-  const newCoordinator = createMockCoordinator();
+  const newCoordinator = createReadinessHoldingCoordinator();
   ps.setRebalanceCoordinator(newCoordinator);
 
   await new Promise((resolve) => resolve());
@@ -423,7 +431,7 @@ test('dependency sync — setRebalanceCoordinator propagates ' +
   const readinessService = createMockControlPlaneReadinessService({
     systemTableCache: cache,
   });
-  const coordinator = createMockCoordinator();
+  const coordinator = createReadinessHoldingCoordinator();
 
   const customAdmission = {
     checkAdd: async () => ({allowed: true}),
@@ -442,7 +450,7 @@ test('dependency sync — setRebalanceCoordinator propagates ' +
     cdcIntegrationService: createMockCdcService(),
     tablePolicyService: createMockPolicyService(),
     messageRouter: router,
-    rebalanceCoordinator: createMockCoordinator(),
+    rebalanceCoordinator: createReadinessHoldingCoordinator(),
     controlPlaneReadinessService: readinessService,
   });
 
@@ -462,7 +470,7 @@ test('dependency sync — setRebalanceCoordinator propagates ' +
   const initialReadiness = createMockControlPlaneReadinessService({
     systemTableCache: cache,
   });
-  const coordinator = createMockCoordinator();
+  const coordinator = createReadinessHoldingCoordinator();
 
   const customReadiness = createMockControlPlaneReadinessService({
     systemTableCache: cache,
@@ -478,7 +486,7 @@ test('dependency sync — setRebalanceCoordinator propagates ' +
     cdcIntegrationService: createMockCdcService(),
     tablePolicyService: createMockPolicyService(),
     messageRouter: router,
-    rebalanceCoordinator: createMockCoordinator(),
+    rebalanceCoordinator: createReadinessHoldingCoordinator(),
     controlPlaneReadinessService: initialReadiness,
   });
 
@@ -496,7 +504,7 @@ test('dependency sync — syncOwnerDependenciesFromCoordinator ' +
   const readinessService = createMockControlPlaneReadinessService({
     systemTableCache: cache,
   });
-  const coordinator = createMockCoordinator();
+  const coordinator = createReadinessHoldingCoordinator();
 
   const customAdmission = {
     checkAdd: async () => ({allowed: true}),
@@ -515,7 +523,7 @@ test('dependency sync — syncOwnerDependenciesFromCoordinator ' +
     cdcIntegrationService: createMockCdcService(),
     tablePolicyService: createMockPolicyService(),
     messageRouter: router,
-    rebalanceCoordinator: createMockCoordinator(),
+    rebalanceCoordinator: createReadinessHoldingCoordinator(),
     controlPlaneReadinessService: readinessService,
   });
 
@@ -536,7 +544,7 @@ test('dependency sync — null coordinator does not clear ' +
   const readinessService = createMockControlPlaneReadinessService({
     systemTableCache: cache,
   });
-  const coordinator = createMockCoordinator();
+  const coordinator = createReadinessHoldingCoordinator();
 
   const rebalancer = new UnifiedRebalancer({
     entityId: PARTITION_ID,
@@ -749,7 +757,7 @@ test('constructor gate — UnifiedRebalancer throws when ' +
     cdcIntegrationService: createMockCdcService(),
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
-    rebalanceCoordinator: createMockCoordinator(),
+    rebalanceCoordinator: createReadinessHoldingCoordinator(),
   })), {message: REBALANCER_ERROR_MSG.ENTITY_ID_REQUIRED},
   'throws when entityId missing');
 });
@@ -763,7 +771,7 @@ test('constructor gate — UnifiedRebalancer throws when ' +
     cdcIntegrationService: createMockCdcService(),
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
-    rebalanceCoordinator: createMockCoordinator(),
+    rebalanceCoordinator: createReadinessHoldingCoordinator(),
   })), {message: REBALANCER_ERROR_MSG.CACHE_REQUIRED},
   'throws when systemTableCache missing');
 });
@@ -796,7 +804,7 @@ test('initializeRebalancer gate — throws when systemTableCache ' +
   ps._cdcIntegrationService = createMockCdcService();
   ps.tablePolicyService = createMockPolicyService();
   ps.sqlQueryEngine = createMockSqlEngine();
-  ps.rebalanceCoordinator = createMockCoordinator();
+  ps.rebalanceCoordinator = createReadinessHoldingCoordinator();
 
   t.throws(
     () => ps.initializeRebalancer(),
@@ -864,7 +872,7 @@ test('dependency bundle — buildRebalancerDependencyBundle returns ' +
   const policy = createMockPolicyService();
   const router = createMockMessageRouter();
   const sql = createMockSqlEngine();
-  const coordinator = createMockCoordinator();
+  const coordinator = createReadinessHoldingCoordinator();
 
   const ps = createPartitionService();
   ps.metadataPublicationReadinessState = createMockReadinessState(true);
@@ -900,7 +908,7 @@ test('dependency bundle — setSqlQueryEngine syncs coordinator before ' +
   const policy = createMockPolicyService();
   const router = createMockMessageRouter();
   const sql = createMockSqlEngine();
-  const coordinator = createMockCoordinator();
+  const coordinator = createReadinessHoldingCoordinator();
 
   const ps = createPartitionService();
   ps.metadataPublicationReadinessState = createMockReadinessState(true);
@@ -942,7 +950,7 @@ test('dependency bundle — applyRebalancerDependencies updates ' +
   const newPolicy = createMockPolicyService();
   const newRouter = createMockMessageRouter();
   const newSql = createMockSqlEngine();
-  const newCoordinator = createMockCoordinator();
+  const newCoordinator = createReadinessHoldingCoordinator();
 
   const bundle = {
     systemTableCache: newCache,
@@ -1048,7 +1056,7 @@ test('dependency bundle — applyRebalancerDependencies is no-op ' +
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine: createMockSqlEngine(),
-    rebalanceCoordinator: createMockCoordinator(),
+    rebalanceCoordinator: createReadinessHoldingCoordinator(),
   });
 
   t.equal(ps.rebalancer, null,
@@ -1070,7 +1078,7 @@ test('dependency bundle — applyRebalancerDependencies routes ' +
     originalSet(coord);
   };
 
-  const newCoordinator = createMockCoordinator();
+  const newCoordinator = createReadinessHoldingCoordinator();
   ps.applyRebalancerDependencies({
     systemTableCache: createMockCache(),
     cdcIntegrationService: createMockCdcService(),
@@ -1110,7 +1118,7 @@ test('dependency bundle — initializeRebalancer accepts pre-built ' +
   const policy = createMockPolicyService();
   const router = createMockMessageRouter();
   const sql = createMockSqlEngine();
-  const coordinator = createMockCoordinator();
+  const coordinator = createReadinessHoldingCoordinator();
 
   const ps = createPartitionService();
   ps.metadataPublicationReadinessState = createMockReadinessState(true);
@@ -1149,7 +1157,7 @@ test('rebind path — rebindCoordinator updates PartitionService ' +
   wireAllDependencies(ps);
   t.ok(ps.rebalancer, 'rebalancer created');
 
-  const newCoordinator = createMockCoordinator();
+  const newCoordinator = createReadinessHoldingCoordinator();
   ps.rebindCoordinator(newCoordinator);
 
   t.equal(ps.rebalanceCoordinator, newCoordinator,
@@ -1163,7 +1171,7 @@ test('rebind path — rebindCoordinator updates rebalancer ' +
   wireAllDependencies(ps);
   t.ok(ps.rebalancer, 'rebalancer created');
 
-  const newCoordinator = createMockCoordinator();
+  const newCoordinator = createReadinessHoldingCoordinator();
   ps.rebindCoordinator(newCoordinator);
 
   t.equal(ps.rebalancer.rebalanceCoordinator, newCoordinator,
@@ -1185,7 +1193,7 @@ test('rebind path — rebindCoordinator routes through ' +
     originalSet(coord);
   };
 
-  const newCoordinator = createMockCoordinator();
+  const newCoordinator = createReadinessHoldingCoordinator();
   ps.rebindCoordinator(newCoordinator);
 
   t.equal(setCoordinatorCalled, true,
@@ -1206,7 +1214,7 @@ test('rebind path — setRebalanceCoordinator delegates to ' +
     originalRebind(coord);
   };
 
-  const newCoordinator = createMockCoordinator();
+  const newCoordinator = createReadinessHoldingCoordinator();
   ps.setRebalanceCoordinator(newCoordinator);
 
   t.equal(rebindCalled, true,
@@ -1229,7 +1237,7 @@ test('rebind path — rebindCoordinator emits diagnostic log ' +
     originalInfo(msg, meta);
   };
 
-  const newCoordinator = createMockCoordinator();
+  const newCoordinator = createReadinessHoldingCoordinator();
   ps.rebindCoordinator(newCoordinator);
 
   const rebindLog = logCalls.find(
@@ -1265,7 +1273,7 @@ test('rebind path — rebindCoordinator diagnostic log reflects ' +
     originalInfo(msg, meta);
   };
 
-  const coordinator = createMockCoordinator();
+  const coordinator = createReadinessHoldingCoordinator();
   ps.rebindCoordinator(coordinator);
 
   const rebindLog = logCalls.find(
@@ -1292,7 +1300,7 @@ test('rebind path — rebindCoordinator shuts down previous ' +
     shutdownCalled = true;
   };
 
-  const newCoordinator = createMockCoordinator();
+  const newCoordinator = createReadinessHoldingCoordinator();
   ps.rebindCoordinator(newCoordinator);
 
   await new Promise((resolve) => resolve());
@@ -1317,7 +1325,7 @@ test('rebind path — rebindCoordinator does not shut down ' +
     shutdownCalled = true;
   };
 
-  const newCoordinator = createMockCoordinator();
+  const newCoordinator = createReadinessHoldingCoordinator();
   ps.rebindCoordinator(newCoordinator);
 
   await new Promise((resolve) => resolve());

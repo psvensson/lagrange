@@ -36,6 +36,7 @@ import {
   initializeTestEnvironment,
 } from '../integration/helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TEST_TIMEOUT_MS = 120000;
 const SEED_NODE_ID = '550e8400-e29b-41d4-a716-446655440711';
 const NODE_B_ID = '550e8400-e29b-41d4-a716-446655440712';
@@ -129,6 +130,7 @@ test('W7: a fresh join whose registration INSERT is cut by a runtime ' +
     });
     await seedApi.initialize(0, {listen: false});
     seedApi.setSqlQueryEngine(new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
       nodeId: SEED_NODE_ID,

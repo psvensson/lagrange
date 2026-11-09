@@ -76,7 +76,9 @@ const CONFIG_SCHEMA = {
     partition: {
       type: 'object',
       properties: {
-        defaultReplicaCount: {type: 'number', minimum: 3},
+        // RF1 is an explicit standalone choice; omission still defaults to RF3.
+        // Preserve the existing exclusion of a two-replica target.
+        defaultReplicaCount: {type: 'integer', anyOf: [{const: 1}, {minimum: 3}]},
         splitThresholdBytes: {type: 'number', minimum: 1048576},
         splitThresholdQpm: {type: 'number', minimum: 1},
         mergeThresholdBytes: {type: 'number', minimum: 1048576},

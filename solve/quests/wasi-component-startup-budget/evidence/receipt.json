@@ -1,0 +1,43 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "slow-startup-liveness-witness-typed-and-terminated",
+      "passed": true,
+      "evidence": "test/runtime/wasi-component-startup-budget.test.js test 1 (child test/runtime/wasi-component-startup-liveness-child.js with fixture worker test/runtime/wasi-component-never-ready-worker-child.js): rejects WasiComponentCellError request_cell_start_failed {phase: 'instantiate', budgetMs: 10000, elapsedMs >= 10000}, instanceCount 0, child exits by itself with code 0. Red on 6d58fdba1 src (no phase/budgetMs/elapsedMs)."
+    },
+    {
+      "id": "derivation-single-flight-reuse",
+      "passed": true,
+      "evidence": "test 2: two concurrent starts plus stop/restart of one -> getDerivationTelemetry() runs 1, completed 1, inFlight 0."
+    },
+    {
+      "id": "derivation-typed-failure-at-prepare",
+      "passed": true,
+      "evidence": "test 3: corrupt bytes -> request_cell_component_derivation_failed for two serviceIds, instanceCount 0 (no Cell worker), runs 1 refused 1 (permanent for the digest). Driver prepare triggers the derivation and start awaits it (decision finding in log); minimal-deployment-request-cell-runtime-readiness corrupt-component case still passes. Satisfied by refusal-at-start evidence per the implementation-choice decision (log entry 9) and the F5 correction entry; the sealed id is not renamed."
+    },
+    {
+      "id": "derivation-ceiling-and-cancellation",
+      "passed": true,
+      "evidence": "test/runtime/wasi-component-startup-budget.test.js: DERIVATION_CPU_MS_PER_MIB 2000 / DERIVATION_CPU_FIXED_MS 5000, derivationCpuBudgetMs(0)=5000, (12912649)=29629, (256 MiB)=517000; DERIVATION_TOOLCHAIN equals the package.json jco-transpile pin. Cancellation of a RUNNING derivation (attempt 2, child test/runtime/wasi-component-derivation-cancel-child.js waits for telemetry runs === 1 and inFlight 1 before acting): supersede -> cancelled, request_cell_component_unavailable, new digest derived, cancelled 1, inFlight 0; release -> cancelled, unavailable, inFlight 0, retained 0; both children exit by themselves; mutation M6 (RUNNING abort branch removed) turns both red. The ceiling exhaustion path itself is witnessed by the constants and decision only (no deterministic over-ceiling component). Infrastructure outcomes: a 1 ms CPU sampler over 8 rounds never refuses a valid component (old code with a 1 ms sampler: 'Worker instance not running', permanent); a derivation worker that exits before deriving is request_cell_component_unavailable on this start, not retained, and derives on the next acquire (old code: permanent refusal, red)."
+    },
+    {
+      "id": "service-0-5-tests-green-native",
+      "passed": true,
+      "evidence": "one at a time via node scripts/run-classified-test-files.js on the 20-core controller: h1 24.7s, h2 16.7s, h3 17.2s, h4 27.0s, h5 47.0s, q2 16.1s, q3 16.3s, q4 15.1s, q5 23.5s, all ok; test assertions and receipts unchanged."
+    },
+    {
+      "id": "service-0-5-tests-green-two-core-jobs4",
+      "passed": true,
+      "evidence": "production-bound R12 witness: taskset -c 0,1 node scripts/run-classified-test-files.js test/service/h1-pinned-hono-component-proof.test.js test/service/h2-hono-source-ir-deployment-cutover.test.js test/service/h3-fetch-ingress-and-scoped-client.test.js test/service/q4-call-bounded-structured-partials.test.js (ordinary lane, jobs=4) -> 4/4 ok (h2 117.0s, h3 118.3s, q4 119.1s, h1 127.0s), no STARTUP_TIMEOUT_MS; red on 6d58fdba1 (3/4 not ok). Re-run after attempt 2 (derivation infrastructure-outcome repair): 4/4 ok (h2 104.1 s, h3 104.2 s, q4 104.7 s, h1 113.0 s), no STARTUP_TIMEOUT_MS. Lab hardware at 75206bf41: the nine tests at four jobs all ok on tv-dator and adams-gamla (log). Final-head lab cone at 4c0b8f54d: the nine tests ok at four jobs on tv-dator, lenovo-laptop and adam-laptop (log)."
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "evidence": "log.ndjson verification entries 2026-11-02 (subagent:a3d024861e3b35dac): reject at 75206bf41, approve at 69a618984"
+    }
+  ],
+  "evidence": [],
+  "applicability": "Candidate approved at 69a618984, merged with origin/main at 2fad21f7f; after the merge the quest test and five related runtime files were re-run green; also green: minimal-deployment-request-cell-runtime-readiness, service-cell-worker-modes, service-cell-bridge-roundtrip, call-cell-worker, node-shutdown-cell-worker-teardown, movielens-public-request-component-validation, formation-runtime-service-create-lane-budget-starvation, minimal-deployment-runtime-access-policy-live-validation, sea-bundle-smoke; npm run test:static 33/33. The design note, timings and probes are relocated to the verified evidence bundle (solve/changes/evidence-relocation/wasi-component-startup-budget). Open R17 findings are in the log."
+}

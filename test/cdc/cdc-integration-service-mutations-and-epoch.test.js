@@ -25,9 +25,6 @@ import {
 } from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
 import {
 } from '../../src/control-plane/owner-contract-outcome.js';
-import {
-  TIMEOUT_BUDGET_CLASSIFICATION,
-} from '../../src/control-plane/timeout-budget.js';
 import {CDC_EVENT} from '../../src/cdc/cdc-constants.js';
 import {
   PARTITION_TRANSITION_STATE,
@@ -76,7 +73,6 @@ test('CDCIntegrationService - updateSystemTableRow forwards query timeout to SQL
       },
       {
         queryTimeoutMs: 4321,
-        skipCacheWait: true,
       },
     );
 
@@ -103,7 +99,6 @@ test('CDCIntegrationService - updateSystemTableRow strips a same-value primary k
       SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1'},
       {node_id: 'node-1', status: 'active'},
-      {skipCacheWait: true},
     );
 
     t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
@@ -135,7 +130,7 @@ test('CDCIntegrationService - updateSystemTableRow rejects a primary-key re-home
         SYSTEM_TABLE_NAME.NODES,
         {node_id: 'node-1'},
         {node_id: 'node-2', status: 'active'},
-        {skipCacheWait: true},
+        {},
       ),
       /must not re-home primary key/,
       'differing primary-key value in data fails closed',
@@ -179,7 +174,6 @@ test('CDCIntegrationService - routed system-table write timeout budget bounds tr
         },
         {
           queryTimeoutMs: 200,
-          skipCacheWait: true,
         },
       ),
       'routed system-table writes should fail once the per-call timeout budget is exhausted',
@@ -239,7 +233,6 @@ test('CDCIntegrationService - attempt-1 timeout budget is immune to pre-attempt 
           },
           {
             queryTimeoutMs: 200,
-            skipCacheWait: true,
           },
         ),
         'routed system-table writes should fail once the per-call timeout budget is exhausted',
@@ -269,7 +262,6 @@ test('CDCIntegrationService - routed system-table writes default to shared backg
         status: 'active',
       },
       {
-        skipCacheWait: true,
       },
     );
 
@@ -312,7 +304,6 @@ test('CDCIntegrationService - critical transport system-table writes still defau
         updated_at: 1,
       },
       {
-        skipCacheWait: true,
       },
     );
 
@@ -347,7 +338,6 @@ test('CDCIntegrationService - transaction-control system-table writes default to
       SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
       TEST_TRANSACTION_ROW,
       {
-        skipCacheWait: true,
       },
     );
 
@@ -366,100 +356,58 @@ test('CDCIntegrationService - transaction-control system-table writes default to
 );
 
 test(
-  'CDCIntegrationService - updateSystemTableRow forwards minimum cache fields',
+  'CDCIntegrationService - updateSystemTableRow answers at its commit and ' +
+    'reads no projection',
   async (t) => {
-    const mockSqlEngine = createMockSqlQueryEngine();
+    const reads = [];
     const service = new CDCIntegrationService({
       nodeId: 'test-node',
-      sqlQueryEngine: mockSqlEngine,
+      sqlQueryEngine: createMockSqlQueryEngine(),
       systemTableCache: {
-        onCacheChange() {},
+        get: (...args) => reads.push(args),
+        onCacheChange: (...args) => reads.push(['onCacheChange', ...args]),
         offCacheChange() {},
       },
     });
     service.initialize();
-
-    const waitCalls = [];
-    service.waitForCacheUpdate = async (
-      tableName,
-      key,
-      expectPresent,
-      options = {},
-    ) => {
-      waitCalls.push({
-        tableName,
-        key,
-        expectPresent,
-        options,
-      });
-    };
-
-    await service.updateSystemTableRow(
+    const result = await service.updateSystemTableRow(
       SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1'},
-      {
-        status: 'suspected',
-        updated_at: 200,
-      },
-      {
-        expectedCacheFields: {node_id: 'node-1'},
-        minimumCacheFields: {updated_at: 200},
-      },
+      {status: 'suspected', updated_at: 200},
     );
-
-    t.equal(waitCalls.length, 1, 'should perform one cache wait');
-    t.same(
-      waitCalls[0]?.options?.minimumFields,
-      {updated_at: 200},
-      'should forward caller minimum cache fields to cache waits',
-    );
-    t.same(
-      waitCalls[0]?.options?.expectedFields,
-      {node_id: 'node-1'},
-      'should keep forwarding exact cache fields alongside minimums',
-    );
+    t.equal(result.committed, true, 'the update answers committed');
+    t.equal(result.position?.tableName, SYSTEM_TABLE_NAME.NODES,
+      'with its commit position');
+    t.equal(result.position?.key, 'node-1', 'keyed by the primary key');
+    t.same(reads, [], 'no projection is read or subscribed');
     t.end();
   },
 );
 
 test(
-  'CDCIntegrationService - upsert forwards exact cache visibility fields',
+  'CDCIntegrationService - upsert answers at its commit with its position',
   async (t) => {
     const service = new CDCIntegrationService({
       nodeId: 'test-node',
       sqlQueryEngine: createMockSqlQueryEngine(),
-      systemTableCache: {
-        onCacheChange() {},
-        offCacheChange() {},
-      },
+      systemTableCache: {onCacheChange() {}, offCacheChange() {}},
     });
     service.initialize();
-    const waitCalls = [];
-    service.waitForCacheUpdate = async (...args) => waitCalls.push(args);
-
-    await service.upsertSystemTableRow(
+    const result = await service.upsertSystemTableRow(
       SYSTEM_TABLE_NAME.CONFIG,
       {
         config_key: 'runtime.access.service.example',
         config_value: '{"tables":[]}',
       },
-      {
-        expectedCacheFields: {
-          config_value: '{"tables":[]}',
-        },
-      },
     );
-
-    t.same(
-      waitCalls[0]?.[3]?.expectedFields,
-      {config_value: '{"tables":[]}'},
-      'acknowledgement should wait for the exact replacement value',
-    );
+    t.equal(result.committed, true, 'the upsert answers committed');
+    t.same(result.position?.key, 'runtime.access.service.example',
+      'keyed by the primary key');
     t.end();
   },
 );
 
-test('CDCIntegrationService - upsertSystemTableRow skips cache wait when requested',
+test('CDCIntegrationService - upsertSystemTableRow never subscribes to the cache',
   async (t) => {
     const mockSqlEngine = createMockSqlQueryEngine();
     const {cache, state} = createCacheWaitProbe();
@@ -476,7 +424,6 @@ test('CDCIntegrationService - upsertSystemTableRow skips cache wait when request
         node_id: 'node-1',
         node_address: 'localhost:8080',
       },
-      {skipCacheWait: true},
     );
 
     t.equal(
@@ -488,7 +435,7 @@ test('CDCIntegrationService - upsertSystemTableRow skips cache wait when request
   },
 );
 
-test('CDCIntegrationService - insertSystemTableRow skips cache wait when requested',
+test('CDCIntegrationService - insertSystemTableRow never subscribes to the cache',
   async (t) => {
     const mockSqlEngine = createMockSqlQueryEngine();
     const {cache, state} = createCacheWaitProbe();
@@ -505,7 +452,6 @@ test('CDCIntegrationService - insertSystemTableRow skips cache wait when request
         node_id: 'node-1',
         node_address: 'localhost:8080',
       },
-      {skipCacheWait: true},
     );
 
     t.equal(
@@ -517,7 +463,7 @@ test('CDCIntegrationService - insertSystemTableRow skips cache wait when request
   },
 );
 
-test('CDCIntegrationService - updateSystemTableRow skips cache wait when requested',
+test('CDCIntegrationService - updateSystemTableRow never subscribes to the cache',
   async (t) => {
     const mockSqlEngine = createMockSqlQueryEngine();
     const {cache, state} = createCacheWaitProbe();
@@ -532,7 +478,6 @@ test('CDCIntegrationService - updateSystemTableRow skips cache wait when request
       SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1'},
       {node_address: 'localhost:8080'},
-      {skipCacheWait: true},
     );
 
     t.equal(
@@ -545,77 +490,38 @@ test('CDCIntegrationService - updateSystemTableRow skips cache wait when request
 );
 
 test(
-  'CDCIntegrationService - updateSystemTableRow rejects when cache row stays stale',
+  'CDCIntegrationService - a stale cache row never changes a committed ' +
+    'update\'s answer',
   async (t) => {
-    const mockSqlEngine = createMockSqlQueryEngine();
     let listener = null;
     const cache = {
-      has(tableName, key) {
-        return tableName === SYSTEM_TABLE_NAME.SERVICES && key === 'svc-1';
-      },
-      get(tableName, key) {
-        if (tableName !== SYSTEM_TABLE_NAME.SERVICES || key !== 'svc-1') {
-          return undefined;
-        }
-        return {
-          service_id: 'svc-1',
-          status: 'active',
-        };
-      },
+      has: () => true,
+      get: () => ({service_id: 'svc-1', status: 'active'}),
       onCacheChange(nextListener) {
         listener = nextListener;
       },
-      offCacheChange(nextListener) {
-        if (listener === nextListener) {
-          listener = null;
-        }
-      },
+      offCacheChange() {},
     };
     const service = new CDCIntegrationService({
       nodeId: 'test-node',
-      sqlQueryEngine: mockSqlEngine,
+      sqlQueryEngine: createMockSqlQueryEngine(),
       systemTableCache: cache,
     });
     service.initialize();
-    service.cacheWaitTimeoutMs = 20;
-
-    try {
-      await service.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.SERVICES,
-        {service_id: 'svc-1'},
-        {status: 'suspected'},
-        {
-          expectedCacheFields: {
-            status: 'suspected',
-          },
-        },
-      );
-      t.fail('should fail closed when cache never reflects the updated row');
-    } catch (error) {
-      const timeoutClassification = error?.timeoutClassification || null;
-      const effectiveClassification =
-        timeoutClassification?.classification ===
-          TIMEOUT_BUDGET_CLASSIFICATION.EXACT_BOUNDARY_HIT ?
-          timeoutClassification.originalClassification :
-          timeoutClassification?.classification;
-      t.match(
-        error?.message || '',
-        /cache update/i,
-        'stale cache visibility should still surface a cache-wait timeout',
-      );
-      t.equal(
-        effectiveClassification,
-        TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
-        'strict cache waits should preserve explicit cache visibility timeout classification',
-      );
-    }
-    t.equal(listener, null, 'should clean up the cache listener after timeout');
+    const result = await service.updateSystemTableRow(
+      SYSTEM_TABLE_NAME.SERVICES,
+      {service_id: 'svc-1'},
+      {status: 'suspected'},
+    );
+    t.equal(result.committed, true,
+      'the committed update answers committed while the cache stays stale');
+    t.equal(listener, null, 'no cache listener is ever registered');
     t.end();
   },
 );
 
 test(
-  'CDCIntegrationService - updateSystemTableRow repairs cache lag from authoritative row after timeout',
+  'CDCIntegrationService - updateSystemTableRow answers at commit; the projection owner repairs the cache lag from the authoritative row',
   async (t) => {
     const cache = new SystemTableCache();
     const executedQueries = [];
@@ -671,7 +577,6 @@ test(
       systemTableCache: cache,
     });
     service.initialize();
-    service.cacheWaitTimeoutMs = 20;
     service.on(CDC_EVENT.READ_MODEL_DIVERGENCE, (event) => {
       divergenceEvents.push(event);
     });
@@ -680,16 +585,14 @@ test(
       SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1'},
       {status: 'suspected', updated_at: 200},
-      {
-        expectedCacheFields: {
-          status: 'suspected',
-          updated_at: 200,
-        },
-      },
     );
 
-    t.equal(result.success, true,
-      'should recover the write after authoritative confirmation');
+    t.equal(result.committed, true, 'the write answers at its commit');
+    t.equal(executedQueries.length, 1,
+      'the write itself issues no authoritative read');
+    // The projection lag is repaired by its own owner, never by the write.
+    await service.repairCacheVisibilityHole(SYSTEM_TABLE_NAME.NODES,
+      'node-1', true, {status: 'suspected', updated_at: 200});
     t.equal(executedQueries.length, 2, 'should issue one authoritative repair query');
     t.match(
       executedQueries[1].sql,
@@ -710,7 +613,7 @@ test(
 );
 
 test(
-  'CDCIntegrationService - insertSystemTableRow repairs cache lag from authoritative row after timeout',
+  'CDCIntegrationService - insertSystemTableRow answers at commit; the projection owner repairs the cache lag from the authoritative row',
   async (t) => {
     const cache = new SystemTableCache();
     const executedQueries = [];
@@ -769,7 +672,6 @@ test(
       systemTableCache: cache,
     });
     service.initialize();
-    service.cacheWaitTimeoutMs = 20;
     service.on(CDC_EVENT.READ_MODEL_DIVERGENCE, (event) => {
       divergenceEvents.push(event);
     });
@@ -779,8 +681,11 @@ test(
       authoritativeRow,
     );
 
-    t.equal(result.success, true,
-      'should recover inserts after authoritative confirmation');
+    t.equal(result.committed, true, 'the insert answers at its commit');
+    t.equal(executedQueries.length, 1,
+      'the insert itself issues no authoritative read');
+    await service.repairCacheVisibilityHole(SYSTEM_TABLE_NAME.TABLES,
+      'tbl-1', true);
     t.equal(executedQueries.length, 2, 'should issue one authoritative read after insert');
     t.match(
       executedQueries[1].sql,
@@ -859,7 +764,6 @@ test(
       cacheMutationTarget: writableCache,
     });
     service.initialize();
-    service.cacheWaitTimeoutMs = 20;
     service.on(CDC_EVENT.READ_MODEL_DIVERGENCE, (event) => {
       divergenceEvents.push(event);
     });
@@ -868,16 +772,11 @@ test(
       SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1'},
       {status: 'suspected', updated_at: 200},
-      {
-        expectedCacheFields: {
-          status: 'suspected',
-          updated_at: 200,
-        },
-      },
     );
 
-    t.equal(result.success, true,
-      'should confirm through authoritative reads and repair writable cache targets');
+    t.equal(result.committed, true, 'the write answers at its commit');
+    await service.repairCacheVisibilityHole(SYSTEM_TABLE_NAME.NODES,
+      'node-1', true, {status: 'suspected', updated_at: 200});
     t.same(
       writableCache.get(SYSTEM_TABLE_NAME.NODES, 'node-1'),
       authoritativeRow,
@@ -1436,7 +1335,6 @@ test('CDCIntegrationService - null where-values render as IS NULL in the live in
       SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1', last_heartbeat: null},
       {status: 'active'},
-      {skipCacheWait: true},
     );
 
     t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
@@ -1475,5 +1373,42 @@ test('CDCIntegrationService - both mutation builders share the null-sentinel con
       ['op-1'],
       'the null sentinel binds no parameter',
     );
+  },
+);
+
+test('CDCIntegrationService - concurrent updateSystemTableRow calls with same coalescingKey but different payloads both execute',
+  async (t) => {
+    let callCount = 0;
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const originalExecuteQuery = mockSqlEngine.executeQuery.bind(mockSqlEngine);
+    mockSqlEngine.executeQuery = async (sql, params, options) => {
+      callCount += 1;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return originalExecuteQuery(sql, params, options);
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+    });
+    service.initialize();
+
+    const [r1, r2] = await Promise.all([
+      service.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES,
+        {node_id: 'n1'},
+        {status: 'active'},
+        {coalescingKey: 'shared-coalescing-key'},
+      ),
+      service.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES,
+        {node_id: 'n1'},
+        {status: 'draining'},
+        {coalescingKey: 'shared-coalescing-key'},
+      ),
+    ]);
+
+    t.ok(r1, 'first update completes');
+    t.ok(r2, 'second update completes');
+    t.equal(callCount, 2, 'both updates execute because payloads differ');
   },
 );

@@ -1,14 +1,11 @@
 import {
   TABLES,
 } from '../constants/index.js';
-import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 import {resolveTimeSource} from '../time/time-source.js';
-import {CDC_PROPAGATED_TABLES} from '../cache/cdc-table-policy.js';
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
 } from './control-plane-error-classification.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
-import {hasPriorityRecoverySpreadGap} from './priority-recovery-planning-intent.js';
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_STATUS,
@@ -17,7 +14,6 @@ import {
   PUBLICATION_WORKFLOW_REASON,
 } from './membership-publication-row-contract.js';
 import {
-  listEquals,
   normalizeNodeIdList,
 } from './membership-publication-row-helpers.js';
 import {
@@ -48,304 +44,38 @@ import {
   './control-plane-system-table-gateway-constants.js';
 import {buildPublicationActiveGateMembershipConvergence} from
   './publication-active-gate-handoff-contract-helpers.js';
-import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
-
-// Owner-driven membership liveness (Workstream A). A dedicated always-on interval
-// — started UNCONDITIONALLY, independent of metadata-publication readiness so it
-// cannot be gated behind the very progress it exists to create — drives the
-// membership reconcile on the partition leader. Each drive is timeout-bounded so a
-// slow/doomed reconcile can never wedge the in-flight guard.
-const OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS = 5000;
-// Owner decision 2026-10-04 (decision 4): a decision held on a lagging durable
-// priority summary (the stale-member steady trim, the published-convergence
-// gate) takes ONE extra reconcile hop after the refresh write. That hop is
-// ended by the write itself, never by the owner-driver timer.
-const PRIORITY_SUMMARY_REFRESHED_REASON = 'priority_summary_refreshed';
-
-function hasPrioritySummaryRefreshClearedGap(latestPublicationRow, candidate) {
-  return hasPriorityRecoverySpreadGap(
-    normalizeControlPlanePublicationRow(latestPublicationRow)
-      ?.priorityPartitionSummary,
-  ) && !hasPriorityRecoverySpreadGap(candidate?.priorityPartitionSummary);
-}
-const OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS = 15000; // ends-on: the reconcileActiveGateMembershipPublication() drive resolves
-const OWNER_MEMBERSHIP_RECONCILE_WAIT = Object.freeze({
-  wait: 'OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS',
-  awaited: 'the owner-driven reconcileActiveGateMembershipPublication() ' +
-    'drive resolves',
-  boundMs: OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS,
-});
-
-// The owner drive's bound was spent: the driver carries on unchanged (the
-// next interval drives again); this only makes the expiry visible, once per
-// node and observed state within the reporter's fold window.
-function reportOwnerMembershipReconcileSpent(coordinator, startedAtMs, observed) {
-  reportWaitBoundSpent(coordinator.logger, {
-    ...OWNER_MEMBERSHIP_RECONCILE_WAIT,
-    elapsedMs: Date.now() - startedAtMs,
-    subject: coordinator.nodeId ?? null,
-    lastObserved: observed,
-    scope: {nodeId: coordinator.nodeId ?? null},
-  });
-}
-const OWNER_MEMBERSHIP_DRIVER_ERROR_MSG =
-  'Owner-driven membership reconcile error';
-const OWNER_MEMBERSHIP_DRIVER_RAN_MSG =
-  'DIAG owner-membership driver ran as leader (predicate true)';
-const OWNER_MEMBERSHIP_DRIVER_PREDICATE_MSG =
-  'DIAG owner-membership driver predicate (am I the owner?)';
-const OWNER_MEMBERSHIP_DRIVER_SNAP_MSG =
-  'DIAG owner-membership driver planning snapshot';
-// B4 tripwire: owner-driven membership assumes control_plane_publications is a
-// single partition (one Raft leader = one authoritative writer = single source of
-// truth). B1 enforces non-splittable, but if that ever regressed this surfaces it
-// loudly instead of silently splitting the brain across fragments.
-const MEMBERSHIP_MULTI_PARTITION_MSG =
-  'CRITICAL: control_plane_publications has >1 partition — membership ' +
-  'single-source-of-truth assumption violated (see B1 non-split policy)';
-
-const MEMBERSHIP_RECONCILE_DEFERRED_NOT_WRITE_LEADER_MSG =
-  'Membership reconcile deferred: not the control_plane_publications write-leader';
-const NOT_PUBLICATIONS_WRITE_LEADER_REASON = 'not_publications_write_leader';
-// A membership epoch names at least one member. A candidate with no member
-// is not a valid epoch: at formation it means the seed's READY heartbeat has
-// not committed yet, after a restart that the publisher's own heartbeat has
-// not; published, it would read as "no members" to every reader until the
-// next epoch, and drop the members the latest epoch names. It defers with a
-// typed reason instead. The READY heartbeat is itself a reconcile wake (the
-// priority-recovery visibility listener enqueues on a published node ready
-// lease), so the next reconcile names the member.
-const EMPTY_PUBLICATION_CANDIDATE_REASON =
-  'publication_candidate_has_no_members';
-
-// CL-001 variant D: a non-write-leader's control_plane_publications cache is fed
-// ONLY by the leader's point-in-time CDC fan-out (leader-gated emission, no replay
-// — see closure-ledger CL-014). A node that missed the fan-out window (e.g. a
-// former owner that shed leadership mid-epoch-advance, or a replica still wiring
-// CDC) stays PERMANENTLY stale: getLatestPublicationRowSync freezes at a stale
-// epoch while the cluster advances, and the harness consistency oracle reports
-// `publication_epochs_disagree`. The only authoritative re-read
-// (hydrateCdcPropagatedTablesFromAuthority) was previously one-shot at join. A
-// deferring non-write-leader must pull its publications cache forward — but at most
-// once per this cooldown so it does NOT issue an owner read on every reconcile tick.
-const MEMBERSHIP_DEFERRED_PUBLICATIONS_CATCHUP_FAILED_MSG =
-  'Deferred non-write-leader publications cache catch-up failed';
-const DEFERRED_PUBLICATIONS_CATCHUP_COOLDOWN_MS = 5000;
-
-// CL-014 gap witnessed on GCP run 2026-08-30T15-30-04: the one-shot join-time
-// catch-up hydrates every CDC-propagated system table once, and the steady-state
-// refresh above re-reads ONLY control_plane_publications. A `services` row
-// inserted AFTER a joiner's one-shot hydration whose leader fan-out is dropped
-// ('No row found for CDC update', no repairing event) therefore never converged:
-// the joiner's routing snapshot kept canonicalLeaderServiceCount 0 for the whole
-// run and every distributed write it coordinated to that partition timed out.
-// The routing-relevant propagated tables now ride the same deferral tick behind
-// their own, wider cooldown and a leader-preferred owner read. Only a witnessed
-// leader result may sweep cache-only rows after a missed DELETE; follower/local
-// results remain fail-soft hydration inputs.
-const MEMBERSHIP_DEFERRED_PROPAGATED_CATCHUP_FAILED_MSG =
-  'Deferred non-write-leader propagated cache catch-up failed';
-const DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS = 30000;
-// The sweep is awaited inline on the deferral tick and — because a non-seed node
-// holds no system-table replica — every table costs one owner-RPC read against the
-// seed. It is therefore scoped to the ROUTING-relevant propagated tables (the ones a
-// stale row can strand a distributed write on) and never the unbounded-growth
-// tables (replica_operations, sql_transactions, debug_sessions, latency tables...),
-// with a single attempt per table so a slow owner cannot stall the tick behind
-// retry sleeps. control_plane_publications keeps its own tighter, leader-pinned
-// sweep above.
-const DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE = 1;
-// Typed skip/failure outcomes: the sweep never encodes its runtime state as a
-// raw null (system guidelines 4.5). A caller sees why nothing was swept.
-const DEFERRED_PROPAGATED_CATCHUP_OUTCOME = Object.freeze({
-  CATCHUP_UNAVAILABLE:
-    Object.freeze({swept: false, reason: 'catchup_unavailable'}),
-  COOLDOWN_ACTIVE: Object.freeze({swept: false, reason: 'cooldown_active'}),
-  READ_FAILED: Object.freeze({swept: false, reason: 'authoritative_read_failed'}),
-});
-const DEFERRED_PROPAGATED_CATCHUP_ROUTING_TABLES = Object.freeze([
-  TABLES.SERVICES,
-  TABLES.PARTITIONS,
-  TABLES.NODES,
-  TABLES.MESSAGE_GROUPS,
-  TABLES.TABLES,
-  TABLES.NODE_ENDPOINTS,
-]);
-const DEFERRED_PROPAGATED_CATCHUP_TABLES = Object.freeze(
-  DEFERRED_PROPAGATED_CATCHUP_ROUTING_TABLES.filter(
-    (tableName) => tableName !== TABLES.CONTROL_PLANE_PUBLICATIONS &&
-      CDC_PROPAGATED_TABLES.includes(tableName),
-  ),
-);
-
-// Per-tick convergence decision trace. Console-only + debug-level BY DESIGN (see
-// LoggingService.logConsoleOnly): the owner driver fires every
-// OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS on the very distributed write path a
-// publication stall blocks, so persisting a per-tick trace to the logs table
-// would add load to the stall it is meant to observe. It is therefore emitted to
-// stdout only (retrieved via the harness full-log capture under --debug-logs) and
-// dropped entirely at the default info level. This formalizes the ad-hoc DIAG
-// warns: one structured event per tick recording who the node thinks owns the
-// publication, by which leadership tier, the deficit, the decision, and outcome.
-const CONVERGENCE_DECISION_TRACE_MSG = 'convergence decision trace';
-// INFO (not debug) so the trace is captured WITHOUT raising the whole console to
-// debug — full --debug-logs emits ~10k lines/sec on a busy leader and PERTURBS the
-// timing-sensitive convergence it tries to observe. At info this is ~one line per
-// owner-driver tick (low volume), and still console-only (logConsoleOnly never
-// persists to the logs table), so it adds no DB/Raft load to the subsystem it
-// observes.
-const CONVERGENCE_TRACE_LEVEL = 'info';
-const CONVERGENCE_DECISION = Object.freeze({
-  DRIVE: 'drive',
-  SKIP: 'skip',
-  DEFER: 'defer',
-});
-const CONVERGENCE_REASON = Object.freeze({
-  NOT_OWNER: 'not-owner',
-  NO_SNAPSHOT: 'no-snapshot',
-  NO_DEFICIT: 'no-deficit',
-  DRIVEN: 'driven',
-  IN_FLIGHT: 'reconcile-in-flight',
-  ERROR: 'error',
-  NOT_WRITE_LEADER: 'not-publications-write-leader',
-  EMPTY_CANDIDATE: 'empty-publication-candidate',
-});
-const CONVERGENCE_OUTCOME = Object.freeze({
-  RECONCILE_COMMITTED: 'reconcile-committed',
-  RECONCILE_TIMED_OUT: 'reconcile-timed-out',
-  NONE: 'none',
-});
-
-// Phase 4: defer the membership reconcile when this node is NOT the
-// control_plane_publications write-leader (leader-driven mode, unconditional
-// since 2026-07-02 — validated by the dt4 full-chain and dt6 publication
-// failback/ack-recovery/quorum-failback reproducers). Fail OPEN — never block a
-// reconcile on a missing/throwing predicate, so a coordinator wired without the
-// predicate reconciles as before.
-function shouldDeferMembershipReconcileToWriteLeader(coordinator) {
-  if (
-    typeof coordinator.resolveIsControlPlanePublicationsWriteLeader !==
-    'function'
-  ) {
-    return false;
-  }
-  try {
-    return coordinator.resolveIsControlPlanePublicationsWriteLeader() !== true;
-  } catch {
-    return false;
-  }
-}
-
-function hasCandidateAcknowledgementRefresh(latestPublicationRow, candidate = {}) {
-  const normalizedLatestPublication =
-    normalizeControlPlanePublicationRow(latestPublicationRow);
-  return Array.isArray(candidate.acknowledgedNodeIds) &&
-    !listEquals(
-      normalizedLatestPublication.acknowledgedNodeIds,
-      candidate.acknowledgedNodeIds,
-    );
-}
-
-function hasCandidateStatusRefresh(latestPublicationRow, candidate = {}) {
-  const normalizedLatestPublication =
-    normalizeControlPlanePublicationRow(latestPublicationRow);
-  const candidateStatus =
-    typeof candidate.publicationStatus === 'string' ?
-      candidate.publicationStatus.toUpperCase() :
-      MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY;
-  return candidateStatus.length > 0 &&
-    candidateStatus !== normalizedLatestPublication.status;
-}
-
-const OWNER_ACK_COMPLETION_REDRIVE_STATUSES = Object.freeze([
-  MEMBERSHIP_PUBLICATION_STATUS.OPEN,
-  MEMBERSHIP_PUBLICATION_STATUS.ACK_PENDING,
-]);
-
-// CL-001 variant A: the owner-driver's drive/skip gate keys only on
-// missingPublishedCount, so once a published epoch covers every active node the
-// driver SKIPS forever (decision=skip reason=no-deficit) and never re-runs the
-// reconcile that would CLOSE a still-open publication awaiting acks. After a
-// rolling-restart rejoin the owner re-includes the rejoined node into an OPEN or
-// ACK_PENDING publication that then never closes because no stable
-// (publicationChanged===false) reconcile tick ever runs to carry its recovery-
-// eligible ack. This surfaces the pending acks the owner SHOULD still re-drive
-// on.
-//
-// Never-break / thrash guard: only return pending acks when EVERY pending-ack
-// node is one the close lane will actually CARRY into the acknowledged set on a
-// stable (publicationChanged===false) re-drive, so the publication transitions to
-// PUBLISHED rather than the driver spinning every tick. Two classes qualify, both
-// carried by the close lane's RECOVERY_ELIGIBLE_ACK rule (publishableRecoveryActive):
-//   1. recovery-eligible nodes — carried via the close lane's RECOVERY_ELIGIBLE
-//      readiness rule (controlPlaneRecoveryEligible);
-//   2. cluster-member-healthy, process-alive nodes that are NOT recovery-eligible
-//      (e.g. a rejoined-then-graduated node still pending its ack on an OPEN row) —
-//      these skip the recovery-eligibility readiness gate in the close lane and
-//      default to ELIGIBLE, so they too are carried (verified: a published-baseline
-//      node is in recoveryActiveNodeIds and defaults publishable). CL-001 GATE
-//      20260613T075853Z showed the recovering wedge is THIS class, not recovery-
-//      eligible, so the narrow guard was inert; this broadening makes it engage.
-// A pending node that is neither (e.g. process-not-alive / draining / genuinely
-// dead) yields [] here so the driver does NOT spin every tick; it is left to the
-// steady-trim disposition instead. The qualifying set is a strict SUBSET of what
-// the close lane carries, so a re-drive on this path always closes (modulo the
-// pre-existing, bounded, timeout-paced admission-blocked-cohort residual).
-function resolveOwnerAckCompletionPendingNodeIds(planningSnapshot) {
-  const latestRow = normalizeControlPlanePublicationRow(
-    planningSnapshot?.latestPublicationRow,
-  );
-  if (
-    !latestRow ||
-    !OWNER_ACK_COMPLETION_REDRIVE_STATUSES.includes(latestRow.status)
-  ) {
-    return [];
-  }
-  const requiredAckNodeIds = normalizeNodeIdList(latestRow.requiredAckNodeIds);
-  if (requiredAckNodeIds.length === 0) {
-    return [];
-  }
-  const acknowledgedNodeIds = new Set(
-    normalizeNodeIdList(latestRow.acknowledgedNodeIds),
-  );
-  const pendingAckNodeIds = requiredAckNodeIds.filter(
-    (nodeId) => !acknowledgedNodeIds.has(nodeId),
-  );
-  if (pendingAckNodeIds.length === 0) {
-    return [];
-  }
-  const readinessByNodeId =
-    planningSnapshot?.readinessByNodeId &&
-    typeof planningSnapshot.readinessByNodeId === 'object' ?
-      planningSnapshot.readinessByNodeId :
-      {};
-  const isOwnerAckCompletionEligible = (nodeId) => {
-    const dimensions = readinessByNodeId[nodeId]?.dimensions ?? {};
-    if (
-      dimensions[
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
-      ] === true
-    ) {
-      return true;
-    }
-    // Cluster-member-healthy + (not explicitly) process-not-alive: the close lane
-    // defaults such a node to ELIGIBLE (it skips the recovery-eligibility readiness
-    // gate) and carries it, so re-driving closes the OPEN publication. processAlive
-    // is checked with !== false to match the close lane's PROCESS_NOT_ALIVE defer
-    // rule (only an explicit false defers); clusterMemberHealthy must be truthy so
-    // draining/unhealthy required-ack nodes fall to steady-trim, not a spin.
-    return (
-      dimensions[
-        CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
-      ] === true &&
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] !== false
-    );
-  };
-  if (!pendingAckNodeIds.every(isOwnerAckCompletionEligible)) {
-    return [];
-  }
-  return pendingAckNodeIds;
-}
+import {
+  CONVERGENCE_DECISION,
+  CONVERGENCE_DECISION_TRACE_MSG,
+  CONVERGENCE_OUTCOME,
+  CONVERGENCE_REASON,
+  CONVERGENCE_TRACE_LEVEL,
+  DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
+  DEFERRED_PROPAGATED_CATCHUP_OUTCOME,
+  DEFERRED_PROPAGATED_CATCHUP_TABLES,
+  DEFERRED_PUBLICATIONS_CATCHUP_COOLDOWN_MS,
+  EMPTY_PUBLICATION_CANDIDATE_REASON,
+  MEMBERSHIP_DEFERRED_PROPAGATED_CATCHUP_FAILED_MSG,
+  MEMBERSHIP_DEFERRED_PUBLICATIONS_CATCHUP_FAILED_MSG,
+  MEMBERSHIP_MULTI_PARTITION_MSG,
+  MEMBERSHIP_RECONCILE_DEFERRED_NOT_WRITE_LEADER_MSG,
+  NOT_PUBLICATIONS_WRITE_LEADER_REASON,
+  OWNER_MEMBERSHIP_DRIVER_ERROR_MSG,
+  OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS,
+  OWNER_MEMBERSHIP_DRIVER_PREDICATE_MSG,
+  OWNER_MEMBERSHIP_DRIVER_RAN_MSG,
+  OWNER_MEMBERSHIP_DRIVER_SNAP_MSG,
+  OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS,
+  PRIORITY_SUMMARY_REFRESHED_REASON,
+  buildPublicationReadinessTraceFields,
+  hasCandidateAcknowledgementRefresh,
+  hasCandidateStatusRefresh,
+  hasPrioritySummaryRefreshClearedGap,
+  reportOwnerMembershipReconcileSpent,
+  resolveDeferredPropagatedCatchupCooldownMs,
+  resolveOwnerAckCompletionPendingNodeIds,
+  shouldDeferMembershipReconcileToWriteLeader,
+} from './membership-publication-coordinator-reconcile-helpers.js';
 
 class MembershipPublicationCoordinatorReconcile extends
   MembershipPublicationCoordinatorPersist {
@@ -357,6 +87,9 @@ class MembershipPublicationCoordinatorReconcile extends
   // (a deferring non-leader runs this on every reconcile tick). Never throws; a
   // partitioned node's read fails-soft inside hydrate (recorded, skipped).
   async refreshDeferredPublicationsCacheFromAuthority() {
+    if (this.deferredPublicationsCatchupInFlight) {
+      return this.deferredPublicationsCatchupInFlight;
+    }
     const service = this.cdcIntegrationService;
     if (
       !service ||
@@ -373,43 +106,46 @@ class MembershipPublicationCoordinatorReconcile extends
       return null;
     }
     this._lastDeferredPublicationsCatchupAtMs = nowMs;
-    try {
-      return await service.hydrateCdcPropagatedTablesFromAuthority({
-        tables: [TABLES.CONTROL_PLANE_PUBLICATIONS],
-        // Route the catch-up read through the authoritative owner, not this
-        // node's own (possibly stale) local publications replica. A rejoined
-        // follower whose local replica stopped applying committed entries would
-        // otherwise re-read its own frozen epoch forever (the variant-D
-        // recurrence). Local fallback is preserved (prefer, not require), so a
-        // partitioned node still fails soft. See CL-001 "VARIANT D DEEPER LAYER".
-        // The owner-preferred mode alone can route to any owner replica, so the
-        // frozen node could still self-serve stale publications. The same token
-        // therefore pins the read to the publications leader, which holds the
-        // authoritative epoch (it serves on
-        // the CONTROL_PLANE_RECOVERY_ELIGIBLE dimension even while recovery is
-        // pending). This is the variant-D frozen-follower fix.
-        readAuthority: buildControlPlaneReadAuthority({
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
-          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
-        }),
-      });
-    } catch (error) {
-      this.logger?.warn?.(MEMBERSHIP_DEFERRED_PUBLICATIONS_CATCHUP_FAILED_MSG, {
-        nodeId: this.nodeId,
-        error: error?.message || String(error),
-      });
-      return null;
-    }
+    const runPromise = (async () => {
+      try {
+        return await service.hydrateCdcPropagatedTablesFromAuthority({
+          tables: [TABLES.CONTROL_PLANE_PUBLICATIONS],
+          readAuthority: buildControlPlaneReadAuthority({
+            authoritativeReadMode:
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+            leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+          }),
+        });
+      } catch (error) {
+        this.logger?.warn?.(
+          MEMBERSHIP_DEFERRED_PUBLICATIONS_CATCHUP_FAILED_MSG,
+          {
+            nodeId: this.nodeId,
+            error: error?.message || String(error),
+          },
+        );
+        return null;
+      } finally {
+        if (this.deferredPublicationsCatchupInFlight === runPromise) {
+          this.deferredPublicationsCatchupInFlight = null;
+        }
+      }
+    })();
+    this.deferredPublicationsCatchupInFlight = runPromise;
+    return runPromise;
   }
 
   // The sibling sweep for the routing-relevant CDC-propagated system tables (the
-  // six in DEFERRED_PROPAGATED_CATCHUP_TABLES). Same deferral tick, own cooldown,
-  // one attempt per table, leader-preferred owner read, best-effort: a row this
-  // node missed in the leader's point-in-time fan-out converges within one
-  // cooldown instead of never, and a leader-witnessed complete read may also
-  // sweep a missed DELETE. Never throws; returns a typed outcome.
+  // six in DEFERRED_PROPAGATED_CATCHUP_TABLES). Same deferral tick, own cooldown
+  // (30s, vs 5s for the single publications row), one attempt per table,
+  // leader-preferred owner read, best-effort: a row this node missed in the
+  // leader's point-in-time fan-out converges within one cooldown instead of
+  // never, and a leader-witnessed complete read may also sweep a missed DELETE.
+  // Never throws; returns a typed outcome.
   async refreshDeferredPropagatedCachesFromAuthority() {
+    if (this.deferredPropagatedCatchupInFlight) {
+      return this.deferredPropagatedCatchupInFlight;
+    }
     const service = this.cdcIntegrationService;
     if (
       !service ||
@@ -420,31 +156,43 @@ class MembershipPublicationCoordinatorReconcile extends
     }
     const nowMs = typeof this.now === 'function' ? this.now() : Date.now();
     const lastMs = this._lastDeferredPropagatedCatchupAtMs;
+    const cooldownMs = resolveDeferredPropagatedCatchupCooldownMs(
+      this.systemTableCache,
+      service,
+    );
     if (
       Number.isFinite(lastMs) &&
-      nowMs - lastMs < DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS
+      nowMs - lastMs < cooldownMs
     ) {
       return DEFERRED_PROPAGATED_CATCHUP_OUTCOME.COOLDOWN_ACTIVE;
     }
     this._lastDeferredPropagatedCatchupAtMs = nowMs;
-    try {
-      return await service.hydrateCdcPropagatedTablesFromAuthority({
-        tables: DEFERRED_PROPAGATED_CATCHUP_TABLES,
-        maxAttemptsPerTable:
-          DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
-        readAuthority: buildControlPlaneReadAuthority({
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
-          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
-        }),
-      });
-    } catch (error) {
-      this.logger?.warn?.(MEMBERSHIP_DEFERRED_PROPAGATED_CATCHUP_FAILED_MSG, {
-        nodeId: this.nodeId,
-        error: error?.message || String(error),
-      });
-      return DEFERRED_PROPAGATED_CATCHUP_OUTCOME.READ_FAILED;
-    }
+    const runPromise = (async () => {
+      try {
+        return await service.hydrateCdcPropagatedTablesFromAuthority({
+          tables: DEFERRED_PROPAGATED_CATCHUP_TABLES,
+          maxAttemptsPerTable:
+            DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
+          readAuthority: buildControlPlaneReadAuthority({
+            authoritativeReadMode:
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+            leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+          }),
+        });
+      } catch (error) {
+        this.logger?.warn?.(MEMBERSHIP_DEFERRED_PROPAGATED_CATCHUP_FAILED_MSG, {
+          nodeId: this.nodeId,
+          error: error?.message || String(error),
+        });
+        return DEFERRED_PROPAGATED_CATCHUP_OUTCOME.READ_FAILED;
+      } finally {
+        if (this.deferredPropagatedCatchupInFlight === runPromise) {
+          this.deferredPropagatedCatchupInFlight = null;
+        }
+      }
+    })();
+    this.deferredPropagatedCatchupInFlight = runPromise;
+    return runPromise;
   }
 
   async reconcileClusterMembership(options = {}) {
@@ -629,17 +377,6 @@ class MembershipPublicationCoordinatorReconcile extends
     );
   }
 
-  /**
-   * Owner-driven membership reconcile (Workstream A). When this node is the
-   * control_plane_publications write-leader and active nodes are unpublished,
-   * drive the authoritative reconcile locally (Raft-quorum-committed). Timeout-
-   * bounded so a slow/doomed reconcile can never wedge the in-flight guard.
-   * @return {Promise<boolean>} whether a reconcile was driven.
-   */
-  // Emit one structured per-tick convergence decision-trace event. Console-only
-  // + debug-level (never persisted) — see CONVERGENCE_DECISION_TRACE_MSG. Guarded
-  // with optional chaining so a mock/legacy logger without logConsoleOnly is a
-  // no-op rather than a crash.
   _emitConvergenceDecisionTrace(fields) {
     this.logger?.logConsoleOnly?.(
       CONVERGENCE_TRACE_LEVEL,
@@ -648,58 +385,17 @@ class MembershipPublicationCoordinatorReconcile extends
     );
   }
 
-  // Formation-blocker diagnostic fields for the convergence decision trace: WHY
-  // the publication-active gate / priority-control-plane spread is (not) ready.
-  // Pulled from the handoff contract (known fields) + the priority-recovery
-  // planning snapshot (best-effort, optional-chained so a missing/changed shape is
-  // null, never a throw). Surfaces the exact unmet sub-condition that blocks
-  // initial formation (priority_control_plane_spread_pending / missing-active /
-  // pending-recovery) so it can be read from a low-volume --capture-logs run.
   _buildPublicationReadinessTraceFields(handoffContract, planningSnapshot) {
-    const prs = planningSnapshot?.priorityRecoveryPlanningSnapshot || null;
-    // CL-021: the contract reasonCode ALIASES catchup-fence denial as
-    // published_active_coverage_incomplete even when missing=0 (the
-    // promotionDeniedByFence path in the handoff contract), so the fence's
-    // own evidence must be observable here — otherwise sub-mode (B), where
-    // the fence denies while everything the owner sees is green, cannot be
-    // attributed from a captured run.
-    const fence = handoffContract?.activeGateCatchupFence || null;
-    return {
-      contractState: handoffContract?.state ?? null,
-      contractReason: handoffContract?.reasonCode ?? null,
-      contractNextAction: handoffContract?.nextAction ?? null,
-      expectedNodeCount: handoffContract?.expectedNodeCount ?? null,
-      publishedActiveNodeCount: handoffContract?.publishedActiveNodeCount ?? null,
-      pendingRecoveryCount: handoffContract?.pendingRecoveryCount ?? null,
-      pendingReconcileCount: handoffContract?.pendingReconcileCount ?? null,
-      fenceState: fence?.state ?? null,
-      fencePromotionAllowed: fence?.promotionAllowed ?? null,
-      fenceMissingProofReasons: Array.isArray(fence?.missingProofReasons) ?
-        fence.missingProofReasons :
-        null,
-      fenceDurablePublicationState: fence?.durablePublication?.state ?? null,
-      fenceDurablePublicationMissingCount:
-        fence?.durablePublication?.missingNodeCount ?? null,
-      fenceSnapshotCoverageState: fence?.snapshotCoverage?.state ?? null,
-      fenceSnapshotCoverageMissingCount:
-        fence?.snapshotCoverage?.missingNodeCount ?? null,
-      fencePresenceComplete: fence?.presence?.complete ?? null,
-      fencePresenceMissingCount: fence?.presence?.missingNodeCount ?? null,
-      // The priority-recovery projection nests the gate snapshot under
-      // publicationRecoveryGate; prioritySpreadPending (the formation blocker) +
-      // reasonCodes live THERE, not at the top level. Top level exposes the
-      // renamed priorityRecoveryReasonCodes. (Verified field paths.)
-      prioritySpreadPending:
-        prs?.publicationRecoveryGate?.prioritySpreadPending ?? null,
-      priorityRecoveryReasonCodes: Array.isArray(
-        prs?.priorityRecoveryReasonCodes,
-      ) ?
-        prs.priorityRecoveryReasonCodes :
-        (prs?.publicationRecoveryGate?.reasonCodes ?? null),
-      recoveryProtocolState: prs?.recoveryProtocolState ?? null,
-    };
+    return buildPublicationReadinessTraceFields(handoffContract, planningSnapshot);
   }
 
+  /**
+   * Owner-driven membership reconcile (Workstream A). When this node is the
+   * control_plane_publications write-leader and active nodes are unpublished,
+   * drive the authoritative reconcile locally (Raft-quorum-committed). Timeout-
+   * bounded so a slow/doomed reconcile can never wedge the in-flight guard.
+   * @return {Promise<boolean>} whether a reconcile was driven.
+   */
   async driveOwnerMembershipReconcile() {
     if (this.ownerMembershipReconcileInFlight === true) {
       this._emitConvergenceDecisionTrace({
@@ -714,8 +410,6 @@ class MembershipPublicationCoordinatorReconcile extends
       this.cdcIntegrationService,
     );
     const isLeader = leadership.isLeader;
-    // DIAG: the interval IS firing; log the predicate result on transition so we
-    // can see whether this node ever resolves as the owner at all.
     if (this.ownerDriverPredicateSnapshot !== isLeader) {
       this.ownerDriverPredicateSnapshot = isLeader;
       this.logger?.warn?.(OWNER_MEMBERSHIP_DRIVER_PREDICATE_MSG, {
@@ -729,17 +423,6 @@ class MembershipPublicationCoordinatorReconcile extends
         reason: CONVERGENCE_REASON.NOT_OWNER,
         leadershipTier: leadership.tier,
       });
-      // CL-001 variant D (re-diagnosis 2026-06-18): the variant-D catch-up lives in
-      // reconcileClusterMembership's not-write-leader defer branch, but that branch is
-      // reached on a follower ONLY on demand (reconcileQueue). This periodic driver is
-      // the ONLY loop that ticks every node every interval, yet it returned here without
-      // ever reaching the catch-up — so a follower that missed the leader's point-in-time
-      // CDC fan-out and settled at `steady_published` (nothing left to enqueue a reconcile
-      // reason) stayed FROZEN at a stale committed epoch to teardown, surfacing as the
-      // `publication_epochs_disagree` consistency mismatch. The catch-up's 5s cooldown ==
-      // this driver's 5s interval: it was designed to be driven from here. Read-only +
-      // local-cache-only + rate-limited + best-effort (never throws) → B4 single-writer
-      // gate intact; a non-leader never writes/promotes/trims via this path.
       await this.refreshDeferredPublicationsCacheFromAuthority();
       await this.refreshDeferredPropagatedCachesFromAuthority();
       return false;
@@ -751,8 +434,6 @@ class MembershipPublicationCoordinatorReconcile extends
         readSource:
           MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
       });
-      // DIAG: on the owner — does the planning snapshot exist and what is its
-      // own missingPublishedCount view (vs the harness convergence check)?
       const snapMissing =
         planningSnapshot ?
           (planningSnapshot.latestPublishedPublicationRow?.publishedActiveNodeIds
@@ -777,10 +458,6 @@ class MembershipPublicationCoordinatorReconcile extends
       const publicationConvergence =
         buildPublicationActiveGateMembershipConvergence(planningSnapshot);
       const publicationEpoch = publicationConvergence.publicationEpoch;
-      // CL-001 variant A: surface still-pending recovery-eligible acks on an
-      // OPEN publication so the contract requests a reconcile even when the
-      // published set has no deficit; without this the owner skips forever and
-      // the OPEN publication never closes (see resolveOwnerAckCompletionPendingNodeIds).
       const ownerAckCompletionPendingNodeIds =
         resolveOwnerAckCompletionPendingNodeIds(planningSnapshot);
       const handoffContract = buildPublicationActiveGateHandoffContract({
@@ -794,20 +471,6 @@ class MembershipPublicationCoordinatorReconcile extends
         missingCount <= 0 &&
         ownerAckCompletionPendingNodeIds.length === 0
       ) {
-        // CL-001 OWNER FACE (2026-06-19): the follower branches above catch up from
-        // authority, but the owner path did NOT — so a rejoined node that re-acquired
-        // publications leadership with a STALE cache reads its own frozen epoch, sees
-        // missing=0, and SKIPs here forever (desired=committed=observed all equal-but-
-        // stale: it BELIEVES it is steady). It then serves that stale epoch to the
-        // consistency probe as `publication_epochs_disagree`. Before trusting no-deficit,
-        // re-validate the local view against authority. refreshDeferredPublicationsCache
-        // FromAuthority routes through the real partition leader (preferred
-        // leader mode,
-        // belief-independent) and only HYDRATES the local cache — it never writes/
-        // promotes/trims, so the B4 single-writer gate is intact; any genuine deficit it
-        // reveals is reconciled on a LATER tick AFTER leadership is re-resolved from the
-        // freshened cache (a node that only wrongly believed it led steps back to the
-        // follower path). Cooldown-gated, best-effort (never throws).
         await this.refreshDeferredPublicationsCacheFromAuthority();
         this._emitConvergenceDecisionTrace({
           decision: CONVERGENCE_DECISION.SKIP,
@@ -847,9 +510,6 @@ class MembershipPublicationCoordinatorReconcile extends
           leadershipTier: leadership.tier,
         });
       }
-      // Diagnostic: the driver IS acting as owner (Tier-0 fired) with a deficit.
-      // timedOut distinguishes "predicate fixed but write can't commit (quorum)"
-      // from "write commits". Transition-logged at warn.
       const ownerDriverDiag = `missing=${missingCount} timedOut=${timedOut}`;
       if (this.ownerDriverDiagSnapshot !== ownerDriverDiag) {
         this.ownerDriverDiagSnapshot = ownerDriverDiag;
@@ -890,12 +550,6 @@ class MembershipPublicationCoordinatorReconcile extends
       });
       return false;
     } finally {
-      // Every publications-owner tick reaches the same bounded routing repair
-      // owner after its higher-priority publication decision, including
-      // no-snapshot, deficit, and error exits. Without this shared release
-      // path a missed SERVICES DELETE can preserve the priority-placement hold
-      // that keeps a membership deficit open, making the former follower and
-      // no-deficit catch-up branches permanently unreachable.
       await this.refreshDeferredPropagatedCachesFromAuthority();
       this.ownerMembershipReconcileInFlight = false;
     }
@@ -950,11 +604,6 @@ class MembershipPublicationCoordinatorReconcile extends
     }
     const intervalMs =
       options.intervalMs || OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS;
-    // DT4 seam: the owner-driver interval runs on a TimeSource (default
-    // RealTimeSource = the platform setInterval/clearInterval, byte-identical) so the
-    // convergence harness can advance it deterministically. Store the matching clear
-    // so stopOwnerMembershipDriver tears down a virtual timer too. Explicit
-    // setIntervalFn/clearIntervalFn options keep precedence.
     const timeSource = resolveTimeSource(options);
     const setIntervalFn =
       typeof options.setIntervalFn === 'function' ?
@@ -981,18 +630,9 @@ class MembershipPublicationCoordinatorReconcile extends
       clearIntervalFn(this.ownerMembershipDriverTimer);
       this.ownerMembershipDriverTimer = null;
     }
-    // Stop the SWIM probe loop alongside the owner driver (inert if no runtime
-    // was wired in).
     if (typeof this.membershipSwimRuntime?.stop === 'function') {
       this.membershipSwimRuntime.stop();
     }
-    // Clearing the 5s interval alone does not stop the reconcile queue: it
-    // self-perpetuates via its own retry-drain (OwnerKeyReconcileQueue
-    // _scheduleRetryDrain), and an in-flight persistPublicationRow keeps
-    // re-driving a ref'd retryable-control-plane-write backoff timer that holds
-    // the event loop open long after teardown. Shut the queue down so drain()
-    // bails (stopped=true) and pending retry timers are cleared. This method is
-    // teardown-only (seed stopAndClearControlPlaneServices + JoinCleanupHandler).
     if (typeof this.reconcileQueue?.shutdown === 'function') {
       this.reconcileQueue.shutdown();
     }
@@ -1001,8 +641,8 @@ class MembershipPublicationCoordinatorReconcile extends
 
 export {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
-  MembershipPublicationCoordinatorReconcile,
-  shouldDeferMembershipReconcileToWriteLeader,
   EMPTY_PUBLICATION_CANDIDATE_REASON,
+  MembershipPublicationCoordinatorReconcile,
   NOT_PUBLICATIONS_WRITE_LEADER_REASON,
+  shouldDeferMembershipReconcileToWriteLeader,
 };

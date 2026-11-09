@@ -1,3 +1,21 @@
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {PEER_ADDRESS_STATUS} from '../raft/raft-rs-runtime-owner-constants.js';
+
+// This replica's own raft status, or the port's thrown failure as its
+// answer: a status that could not be read is never a leader.
+// The port's status read threw: the host failed, a typed outcome.
+function hostFailureStatus(error) {
+  return {outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE, error};
+}
+
+function readOwnRaftStatus(service) {
+  try {
+    return service.raft?.readStatus?.();
+  } catch (error) {
+    return hostFailureStatus(error);
+  }
+}
+
 function createMessageGroupForwardingOwnerTargetMethods(options = {}) {
   const buildMessageGroupLeaderIdentitySnapshot =
     options.buildMessageGroupLeaderIdentitySnapshot;
@@ -13,72 +31,35 @@ function createMessageGroupForwardingOwnerTargetMethods(options = {}) {
   const typeofToken = options.typeofToken || {};
 
   return {
-    resolveCanonicalLeaderIdentityFromCache() {
+    // The group's canonical leader: the live raft leader this replica's own
+    // status names, on the node its committed address places it. A
+    // publication memo, a message_groups row or a role hint never stands in
+    // for it; no live leader is a named state.
+    resolveCanonicalLeaderIdentity() {
       const service = this.service;
-      if (
-        typeof service.pendingLeaderNodeUpdate === typeofToken.STRING &&
-        service.pendingLeaderNodeUpdate.length > num.ZERO
-      ) {
+      const status = readOwnRaftStatus(service);
+      if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK ||
+          status.groupId !== service.groupId ||
+          status.replicaIdentity !== service.replicaId) {
         return buildMessageGroupLeaderIdentitySnapshot(
-          messageGroupLeaderIdentityState.PUBLICATION_PENDING,
-          messageGroupLeaderIdentitySource.PENDING_PUBLICATION,
-          service.pendingLeaderNodeUpdate,
-        );
+          messageGroupLeaderIdentityState.STATUS_UNAVAILABLE,
+          messageGroupLeaderIdentitySource.NONE, null);
       }
-      if (
-        typeof service.persistedLeaderNodeId === typeofToken.STRING &&
-        service.persistedLeaderNodeId.length > num.ZERO
-      ) {
+      if (!status.leaderId) {
         return buildMessageGroupLeaderIdentitySnapshot(
-          messageGroupLeaderIdentityState.PUBLICATION_PERSISTED,
-          messageGroupLeaderIdentitySource.PERSISTED_PUBLICATION,
-          service.persistedLeaderNodeId,
-        );
+          messageGroupLeaderIdentityState.NO_LEADER,
+          messageGroupLeaderIdentitySource.RAFT_STATUS, null);
       }
-      if (
-        service.systemTableCache &&
-        typeof service.systemTableCache.get === typeofToken.FUNCTION
-      ) {
-        const group = service.systemTableCache.get(
-          tables.MESSAGE_GROUPS,
-          service.groupId,
-        );
-        const cachedLeaderNodeId =
-          group?.[column.LEADER_NODE_ID] ||
-          group?.leader_node_id ||
-          group?.leaderNodeId ||
-          null;
-        if (
-          typeof cachedLeaderNodeId === typeofToken.STRING &&
-          cachedLeaderNodeId.length > num.ZERO
-        ) {
-          return buildMessageGroupLeaderIdentitySnapshot(
-            messageGroupLeaderIdentityState.CACHE_CONFIRMED,
-            messageGroupLeaderIdentitySource.CACHE_ROW,
-            cachedLeaderNodeId,
-          );
-        }
-      }
-      if (
-        service.isLeader === true &&
-        typeof service.nodeId === typeofToken.STRING &&
-        service.nodeId.length > num.ZERO
-      ) {
+      if (status.leaderAddressStatus !== PEER_ADDRESS_STATUS.RESOLVED) {
         return buildMessageGroupLeaderIdentitySnapshot(
-          messageGroupLeaderIdentityState.LIVE_LOCAL_HINT,
-          messageGroupLeaderIdentitySource.LIVE_LOCAL_LEADER,
-          service.nodeId,
-        );
+          messageGroupLeaderIdentityState.LEADER_UNADDRESSED,
+          messageGroupLeaderIdentitySource.RAFT_STATUS, null);
       }
       return buildMessageGroupLeaderIdentitySnapshot(
-        messageGroupLeaderIdentityState.MISSING,
-        messageGroupLeaderIdentitySource.NONE,
-        null,
-      );
-    },
-
-    resolveCanonicalLeaderNodeIdFromCache() {
-      return this.resolveCanonicalLeaderIdentityFromCache().leaderNodeId;
+        messageGroupLeaderIdentityState.LIVE_LEADER,
+        messageGroupLeaderIdentitySource.RAFT_STATUS,
+        service.addressManager.parse(status.leaderAddress).nodeId,
+        {leaderId: status.leaderId, leaderAddress: status.leaderAddress});
     },
 
     isLocalForwardTarget(serviceId, address = null) {
@@ -105,41 +86,20 @@ function createMessageGroupForwardingOwnerTargetMethods(options = {}) {
         serviceId === service.replicaId;
     },
 
+    // The node a forward target lives on: its own unified address, or the
+    // node the committed configuration places the configured peer on.
     resolveForwardTargetNodeId(target = null) {
       const service = this.service;
-      const targetAddress =
-        typeof target?.address === typeofToken.STRING &&
-        target.address.length > num.ZERO ?
-          target.address :
-          service.resolvePeerAddressFromCache(target?.serviceId || null);
-
-      if (
-        typeof targetAddress === typeofToken.STRING &&
-        targetAddress.length > num.ZERO
-      ) {
-        try {
-          const parsed = service.addressManager.parse(targetAddress);
-          if (
-            typeof parsed?.nodeId === typeofToken.STRING &&
-            parsed.nodeId.length > num.ZERO
-          ) {
-            return parsed.nodeId;
-          }
-        } catch (_error) {
-          // Ignore malformed or stale addresses and fall through to cache rows.
-        }
-      }
-
-      const cache = service.systemTableCache;
-      if (!cache || typeof cache.get !== typeofToken.FUNCTION) {
+      let targetAddress;
+      try {
+        targetAddress = service.resolveCommittedPeerAddress(target?.serviceId || null);
+        const nodeId = service.addressManager.parse(targetAddress)?.nodeId;
+        return typeof nodeId === typeofToken.STRING &&
+          nodeId.length > num.ZERO ? nodeId : null;
+      } catch {
+        // Unplaced (typed refusal) or malformed: no node to forward to.
         return null;
       }
-      const serviceRow = cache.get(tables.SERVICES, target?.serviceId || null);
-      const nodeId = serviceRow?.[column.NODE_ID] || null;
-      return typeof nodeId === typeofToken.STRING &&
-        nodeId.length > num.ZERO ?
-        nodeId :
-        null;
     },
 
     isStrictForwardNodeReady(nodeId) {

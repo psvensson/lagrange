@@ -714,3 +714,21 @@ fixed before the cutover (section 4, exposure).
    2026-10-03 sequencing names only the cutover and Q0. This record treats its
    census as Q1's input for the readiness concern and does not decide whether
    S0 must wait for Q1.
+
+## 13. Pointer: realized under the cutover epic (2026-11-02, appended)
+
+Quest `serve-eligibility-committed-epoch-read` (epic `raft-rs-full-cutover`, lead decision D1 of 2026-11-02;
+this record's gate in section 10 and this epic's activation gate are **not** superseded) realizes the serve
+decision of this family as a committed-epoch read: the readiness owner answers per-node serve eligibility from
+the committed `nodes` lease and the latest published `control_plane_publications` epoch, read on the system
+partitions' raft leaders, and the projection is a memo keyed by that epoch. Design:
+`solve/quests/serve-eligibility-committed-epoch-read/evidence/design-note.md` (section 7).
+
+- Realized there: S1a, S2, S3' (open decision F10 of section 11 answered by the lead 2026-11-02 and confirmed by
+  the owner (Peter) 2026-11-02: under_replicated at the quorum minimum, added to OWNER_CONTRACT_STATE, typed
+  PROVISIONING_UNAVAILABLE -> 57P03 below it), S7a for Q9 and R1 (deleted, not restated, because system-table
+  routing and placement no longer consume serve eligibility), S7b rows R1, R7, R8, R23 and the CL-033
+  supersession for Q18, S7d row Q8.
+- Remaining with this record: S0, S5, S4a/S4b, S6 + S1b, S8, the S7a R12 residuals and Q13, S7b rows R2-R6, R9-R11,
+  R13, R16, R20, R28, S7c, S7d rows Q10, Q11, Q14, Q23, Q24, Q25 and N1-N3, S7e. R20 and Q23 keep
+  `maxCachedAgeMs` as a recorded residual (lead decision D7).

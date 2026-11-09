@@ -40,6 +40,7 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -50,6 +51,7 @@ test('SQLQueryEngine - seeds bootstrap routing overlay snapshots for ' +
   'system-table partition lookup during restart cache gaps', async (t) => {
   const cache = createMockSystemCache([], [], [], []);
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     nodeId: 'join-node',
@@ -122,6 +124,7 @@ test('SQLQueryEngine - keeps bootstrap routing overlay service visibility ' +
     },
   ], []);
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     nodeId: 'join-node',
@@ -183,6 +186,7 @@ test('SQLQueryEngine - keeps system-table bootstrap routing overlays ' +
     },
   ], []);
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     nodeId: 'join-node',
@@ -270,6 +274,7 @@ async (t) => {
     return [];
   };
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     nodeId: 'join-node',
@@ -385,6 +390,7 @@ async (t) => {
     return [];
   };
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     nodeId: 'join-node',
@@ -451,6 +457,7 @@ test('SQLQueryEngine - ignores stale bootstrap routing snapshot services ' +
     },
   ], []);
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     nodeId: 'join-node',
@@ -493,6 +500,7 @@ test('SQLQueryEngine - recovery routing overlay does not invent a leader ' +
   const partitionId = 'nodes-p1';
   const cache = createMockSystemCache([], [], [], []);
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     nodeId: 'join-node',
@@ -557,6 +565,7 @@ test('SQLQueryEngine - bootstrap overlay reuse follows the shared canonical ' +
     },
   ], []);
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     nodeId: 'join-node',
@@ -630,6 +639,7 @@ test('SQLQueryEngine - composes authoritative routing overlay refresh ' +
   ]);
   const authoritativeReads = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     authoritativeControlPlaneView: {
@@ -736,6 +746,9 @@ test('SQLQueryEngine - exposes initialized local priority control-plane ' +
     }],
   ]);
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: 'local',
     systemCache: createMockSystemCache([], [
       {
@@ -800,6 +813,9 @@ test('SQLQueryEngine - keeps disconnected priority recovery-read endpoints ' +
   const disconnectedAddress = 'dead/partition/replica_operations-p1-r3';
   const connectedAddress = 'live/partition/replica_operations-p1-r4';
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: 'local',
     systemCache: createMockSystemCache([], [
       {
@@ -840,11 +856,14 @@ test('SQLQueryEngine - keeps disconnected priority recovery-read endpoints ' +
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
   );
 
-  t.notOk(
+  // System-table routing is not filtered by transport (lead decision D2,
+  // quest serve-eligibility-committed-epoch-read): the closed endpoint stays
+  // a candidate and the delivery layer applies the live transport state.
+  t.ok(
     routingSnapshot.routableServices.some(
       (service) => service.address === disconnectedAddress,
     ),
-    'closed priority endpoint should not remain routable',
+    'closed priority endpoint stays a candidate; delivery applies transport',
   );
   t.ok(
     routingSnapshot.routableServices.some(
@@ -875,6 +894,7 @@ test('SQLQueryEngine - authoritative routing overlay refresh masks stale ' +
 async (t) => {
   const partitionId = 'control_plane_publications-p1';
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache([], [
       {
         partition_id: partitionId,
@@ -954,6 +974,7 @@ async (t) => {
     },
   ]);
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     authoritativeControlPlaneView: {
@@ -1026,6 +1047,7 @@ test('SQLQueryEngine - authoritative routing overlay refresh requests ' +
   const partitionId = 'replica_operations-p1';
   const authoritativeReads = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache([], [
       {
         partition_id: partitionId,

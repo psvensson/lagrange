@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "02e62cab21be4fbe1f7d86c0f617515746bbbe7adb7e81611b27a38701a4034e"
+    "sourceSha256": "5d77404771cd99af0bc66fec23cf27838b16438aea23c9f9192f1eb35a5bd4dc"
   },
   "layerDirection": [
     "raw_observation",
@@ -17,9 +17,9 @@
     "disposition": "proposal requiring independent architecture and proof approval"
   },
   "metrics": {
-    "moduleCount": 68,
-    "publicExportCount": 775,
-    "importEdgeCount": 313,
+    "moduleCount": 67,
+    "publicExportCount": 773,
+    "importEdgeCount": 311,
     "crossLayerEdgeCount": 96,
     "layerDirectionViolationCount": 48,
     "largestStronglyConnectedComponent": 1,
@@ -28,7 +28,7 @@
     "migrationCandidateCount": 0
   },
   "closure": {
-    "uniquelyClassifiedModules": 68,
+    "uniquelyClassifiedModules": 67,
     "uniqueClassificationRate": 1,
     "unparsedImportEdgeCount": 0,
     "proposedDirectionAcyclic": true,
@@ -607,6 +607,7 @@
         "notePriorityRecoveryPlanningAnswerRetention",
         "readPriorityRecoveryPlanningAnswerCallRetention",
         "readPriorityRecoveryPlanningAnswerOrigin",
+        "readPriorityRecoveryPlanningAnswerSync",
         "recordPriorityRecoveryPlanningProjectionReuse",
         "statePriorityRecoveryPlanningAnswerOrigin"
       ],
@@ -616,6 +617,7 @@
         "notePriorityRecoveryPlanningAnswerRetention",
         "readPriorityRecoveryPlanningAnswerCallRetention",
         "readPriorityRecoveryPlanningAnswerOrigin",
+        "readPriorityRecoveryPlanningAnswerSync",
         "recordPriorityRecoveryPlanningProjectionReuse",
         "statePriorityRecoveryPlanningAnswerOrigin"
       ]
@@ -1914,20 +1916,6 @@
       ]
     },
     {
-      "path": "src/query/query-executor-priority-recovery-bootstrap-routing.js",
-      "owner": "query",
-      "layer": "consumer_presentation",
-      "rationale": "consumer owner query",
-      "exports": [
-        "isPriorityRecoveryWriteRouting",
-        "shouldAllowPriorityRecoveryBootstrapRoutingGrace"
-      ],
-      "localExports": [
-        "isPriorityRecoveryWriteRouting",
-        "shouldAllowPriorityRecoveryBootstrapRoutingGrace"
-      ]
-    },
-    {
       "path": "src/rebalancer/operation-workflow-owner-priority-recovery-reentry.js",
       "owner": "rebalancer",
       "layer": "owner_decision",
@@ -2007,7 +1995,6 @@
       "layer": "owner_decision",
       "rationale": "owner policy or actuation surface",
       "exports": [
-        "AVAILABLE_PLANNING_SURFACE_ORDER",
         "createRemoveSafetyPlanningSnapshotReader",
         "hasAuthoritativeRemoveSafetyPlanningProvider",
         "hasAvailablePriorityRecoveryPlanningProvider",
@@ -2016,7 +2003,6 @@
         "resolveRemoveSafetyPlanningSnapshotReader"
       ],
       "localExports": [
-        "AVAILABLE_PLANNING_SURFACE_ORDER",
         "createRemoveSafetyPlanningSnapshotReader",
         "hasAuthoritativeRemoveSafetyPlanningProvider",
         "hasAvailablePriorityRecoveryPlanningProvider",
@@ -4818,26 +4804,6 @@
       "conformsToLayerDirection": null
     },
     {
-      "from": "src/query/query-executor-priority-recovery-bootstrap-routing.js",
-      "specifier": "../bootstrap/system-partition-classification.js",
-      "to": "src/bootstrap/system-partition-classification.js",
-      "targetModule": false,
-      "sourceLayer": "consumer_presentation",
-      "targetLayer": null,
-      "crossLayer": false,
-      "conformsToLayerDirection": null
-    },
-    {
-      "from": "src/query/query-executor-priority-recovery-bootstrap-routing.js",
-      "specifier": "./query-executor-shared.js",
-      "to": "src/query/query-executor-shared.js",
-      "targetModule": false,
-      "sourceLayer": "consumer_presentation",
-      "targetLayer": null,
-      "crossLayer": false,
-      "conformsToLayerDirection": null
-    },
-    {
       "from": "src/rebalancer/operation-workflow-owner-priority-recovery-reentry.js",
       "specifier": "../control-plane/priority-recovery-diagnostics-constants.js",
       "to": "src/control-plane/priority-recovery-diagnostics-constants.js",
@@ -5386,9 +5352,6 @@
     ],
     [
       "src/diagnostics/topology-convergence-priority-recovery-normalizers.js"
-    ],
-    [
-      "src/query/query-executor-priority-recovery-bootstrap-routing.js"
     ],
     [
       "src/rebalancer/operation-workflow-owner-priority-recovery-reentry.js"

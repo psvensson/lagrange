@@ -9,6 +9,9 @@ import {EP_COL, EP_META} from '../../src/wasm-service/service-endpoint-builder.j
 import {WASM_SERVICE_HEALTH_STATUS} from
   '../../src/wasm-service/wasm-service-constants.js';
 
+import {createRequestBindingFixture} from
+  '../control-plane/request-binding-service-definition-fixture.js';
+
 function createEndpointRow(overrides = {}) {
   return {
     [EP_COL.ENDPOINT_ID]: 'sys-postgres-wire-ep-node-1',
@@ -41,7 +44,7 @@ describe('service-discovery-catalog', () => {
     ];
     const definitionRows = [{
       service_id: 'sys-postgres-wire',
-      replica_count: 3,
+      status: 'active', replica_count: 3,
     }];
 
     const catalog = buildServiceDiscoveryCatalog(endpointRows, {
@@ -70,17 +73,13 @@ describe('service-discovery-catalog', () => {
     assert.equal(entry.replicas[1].endpointId, 'sys-postgres-wire-ep-node-2');
   });
 
-  it('projects the system-policy target for Binding-derived Cells', () => {
-    const serviceId = `binding-service-${'a'.repeat(64)}`;
-    const endpointRows = [createEndpointRow({
-      [EP_COL.ENDPOINT_ID]: 'orders-api-ep-node-1',
-      [EP_COL.SERVICE_ID]: serviceId,
-    })];
-    const definitionRows = [{
-      service_id: serviceId,
-      replica_count: 0,
-      binding_version_id: `binding-version-${'b'.repeat(64)}`,
-    }];
+  it('projects the system-policy target for producer-derived Binding Cells', async () => {
+    const producer = await createRequestBindingFixture();
+    const {serviceDefinition} = await producer.owners.serviceDefinitionsOwner
+      .reconcileRequestBinding(producer.bindingRow);
+    const serviceId = serviceDefinition.service_id;
+    const endpointRows = [createEndpointRow({[EP_COL.SERVICE_ID]: serviceId})];
+    const definitionRows = [serviceDefinition];
 
     const [entry] = buildServiceDiscoveryCatalog(endpointRows, {
       definitionRows,

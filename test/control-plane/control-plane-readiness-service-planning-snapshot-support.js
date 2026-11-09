@@ -90,7 +90,7 @@ test('ControlPlaneReadinessService returns the AVAILABLE planning answer whateve
     nodeId: 'node-available',
     systemTableCache: createCache(),
     membershipPublicationService: {
-      getLatestPublicationForNodeSync() {
+      getLatestClusterPublicationSync() {
         return {
           publicationEpoch: 21,
           status: 'PUBLISHED',
@@ -110,7 +110,7 @@ test('ControlPlaneReadinessService returns the AVAILABLE planning answer whateve
     return {publishedPlanningEpoch: 22};
   };
   const snapshot =
-    await readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
+    await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
       'node-available', 1500);
   t.equal(snapshot?.publishedPlanningEpoch, 21,
     'the available answer is returned; a fresher async answer cannot replace it');
@@ -127,7 +127,7 @@ test('ControlPlaneReadinessService exposes canonical priority-recovery planning 
       nodeId: 'node-priority-sync-contract',
       systemTableCache: createCache(),
       membershipPublicationService: {
-        getLatestPublicationForNodeSync() {
+        getLatestClusterPublicationSync() {
           return {
             publicationEpoch: 33,
             status: 'PUBLISHED',
@@ -224,7 +224,7 @@ test('ControlPlaneReadinessService exposes the canonical AVAILABLE priority-reco
     nodeId: 'node-priority-best-effort-contract',
     systemTableCache: createCache(),
     membershipPublicationService: {
-      async getLatestPublicationForNode() {
+      async getLatestClusterPublication() {
         ownerReadCalled = true;
         return {
           publicationEpoch: 34,
@@ -233,7 +233,7 @@ test('ControlPlaneReadinessService exposes the canonical AVAILABLE priority-reco
           publishedActiveNodeIds: ['node-priority-best-effort-contract'],
         };
       },
-      getLatestPublicationForNodeSync() {
+      getLatestClusterPublicationSync() {
         return {
           publicationEpoch: 31,
           status: 'PUBLISHED',
@@ -555,7 +555,7 @@ test('ControlPlaneReadinessService exposes a readiness-owned current published m
       nodeId: 'node-current-epoch',
       systemTableCache: createCache(),
       membershipPublicationService: {
-        getLatestPublicationForNodeSync() {
+        getLatestClusterPublicationSync() {
           return {
             publicationEpoch: 24,
             status: 'PUBLISHED',

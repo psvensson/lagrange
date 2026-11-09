@@ -1,24 +1,32 @@
 /**
- * W7 migration characterization: SQL provisioning consumes the readiness
- * owner's observer-local trust view and never reconstructs trust from cache or
- * router state.
+ * Provisioning consumes the committed serving cohort. Observer-local trust,
+ * cache and router evidence cannot provide an alternate target decision.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
   createSQLQueryEngineProvisioningMethods,
 } from '../../src/query/sql-query-engine-provisioning-methods.js';
+import {createProvisioningReadyService} from './sql-query-engine-test-support.js';
 
 const METHODS = createSQLQueryEngineProvisioningMethods();
 
-function makeEngine(nodeTrustStates) {
+function makeEngine(nodeIds) {
   let readinessCalls = 0;
+  let retiredTrustCalls = 0;
+  const owner = createProvisioningReadyService(
+    nodeIds.map((nodeId) => ({node_id: nodeId})),
+  );
   const engine = {
     nodeId: 'coordinator',
     controlPlaneReadinessService: {
-      getProvisioningNodeTrustViewSync() {
+      answerServeCohort() {
         readinessCalls += 1;
-        return nodeTrustStates;
+        return owner.answerServeCohort();
+      },
+      getProvisioningNodeTrustViewSync() {
+        retiredTrustCalls += 1;
+        return [{nodeId: 'projection-only', serveEligible: true}];
       },
     },
     get systemCache() {
@@ -37,65 +45,58 @@ function makeEngine(nodeTrustStates) {
   engine.resolveProvisionTargetNodeIdsForContext =
     METHODS.resolveProvisionTargetNodeIdsForContext.value;
   engine.normalizeTargetNodeIds = METHODS.normalizeTargetNodeIds.value;
-  return {engine, getReadinessCalls: () => readinessCalls};
+  return {
+    engine, owner,
+    getReadinessCalls: () => readinessCalls,
+    getRetiredTrustCalls: () => retiredTrustCalls,
+  };
 }
 
-test('W7: serve-eligible trust is selected strictly through the readiness ' +
-  'owner', (t) => {
-  const fixture = makeEngine([
-    {nodeId: 'node-1', repairEligible: true, serveEligible: true},
-  ]);
+test('provisioning selects targets from one committed serving cohort', (t) => {
+  const fixture = makeEngine(['node-1']);
   const diagnostics = fixture.engine.resolveProvisionTargetNodeDiagnostics(1);
-
   t.same(diagnostics.strictNodeIds, ['node-1']);
   t.same(diagnostics.selectedNodeIds, ['node-1']);
-  t.equal(fixture.getReadinessCalls(), 1,
-    'one readiness-owner view supplies the whole decision');
+  t.equal(fixture.getReadinessCalls(), 1);
+  t.equal(fixture.getRetiredTrustCalls(), 0);
   t.end();
 });
 
-test('W7: repair-only trust is an explicit degraded fallback, not a cache ' +
-  'heuristic', (t) => {
-  const fixture = makeEngine([
-    {nodeId: 'node-2', repairEligible: true, serveEligible: false},
-  ]);
+test('repair eligibility cannot replace committed serving eligibility', (t) => {
+  const fixture = makeEngine(['node-2']);
+  fixture.owner.answerServeEligibility = () => ({
+    state: 'ready', decision: 'not_eligible', reasons: ['node_not_published'],
+  });
   const diagnostics = fixture.engine.resolveProvisionTargetNodeDiagnostics(1);
-
-  t.same(diagnostics.strictNodeIds, []);
-  t.same(diagnostics.degradedFallbackNodeIds, ['node-2']);
-  t.same(diagnostics.selectedNodeIds, ['node-2']);
-  t.equal(diagnostics.usedDegradedFallback, true);
-  t.end();
-});
-
-test('W7: an untrusted node stays excluded and SQL has no local-node escape ' +
-  'hatch', (t) => {
-  const fixture = makeEngine([
-    {nodeId: 'coordinator', repairEligible: false, serveEligible: false},
-  ]);
-  const diagnostics = fixture.engine.resolveProvisionTargetNodeDiagnostics(1);
-
   t.same(diagnostics.strictNodeIds, []);
   t.same(diagnostics.degradedFallbackNodeIds, []);
-  t.same(diagnostics.selectedNodeIds, [],
-    'the local SQL node is not admitted outside the readiness owner');
+  t.same(diagnostics.selectedNodeIds, []);
+  t.equal(diagnostics.usedDegradedFallback, false);
+  t.equal(fixture.getRetiredTrustCalls(), 0);
   t.end();
 });
 
-test('W7: an empty owner view is consumed exactly once through full target ' +
-  'resolution', (t) => {
-  const fixture = makeEngine([]);
-  const resolution = fixture.engine
-    .resolveProvisionTargetNodeIdsWithDiagnostics(1);
-  const contextualTargets = fixture.engine.resolveProvisionTargetNodeIdsForContext(
-    null,
-    1,
-    resolution.diagnostics,
-  );
+test('missing or null committed authority cannot consume a positive trust projection', (t) => {
+  for (const missing of [false, true]) {
+    const fixture = makeEngine(['coordinator']);
+    if (missing) delete fixture.engine.controlPlaneReadinessService.answerServeCohort;
+    else fixture.engine.controlPlaneReadinessService.answerServeCohort = () => null;
+    const diagnostics = fixture.engine.resolveProvisionTargetNodeDiagnostics(1);
+    t.same(diagnostics.selectedNodeIds, [], 'missing cohort stays unavailable');
+    t.equal(fixture.getRetiredTrustCalls(), 0, 'no alternate reader is consulted');
+  }
+  t.end();
+});
 
+test('an empty committed cohort is consumed once through target resolution', (t) => {
+  const fixture = makeEngine([]);
+  const resolution = fixture.engine.resolveProvisionTargetNodeIdsWithDiagnostics(1);
+  const contextualTargets = fixture.engine.resolveProvisionTargetNodeIdsForContext(
+    null, 1, resolution.diagnostics,
+  );
   t.same(resolution.nodeIds, []);
   t.same(contextualTargets, []);
-  t.equal(fixture.getReadinessCalls(), 1,
-    'empty trust is a real owner answer, not a signal to reconstruct it');
+  t.equal(fixture.getReadinessCalls(), 1);
+  t.equal(fixture.getRetiredTrustCalls(), 0);
   t.end();
 });

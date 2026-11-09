@@ -42,12 +42,15 @@ const {
   ReplicaStatus,
   SAFETY_DEFERRED_RETRY_DELAY_MS,
   TIMEOUT_BUDGET_DEFAULT,
+  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
   buildHandoffDeferralTransportDiagnostics,
   classifySystemPartition,
   getControlPlaneRetryAfterMs,
+  isBootstrapTopologyDispatchDeferred,
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
+const DISPATCH_RETRY_BOUNDARY = 'dispatch_retry';
 const SAFETY_DEFERRED_RETRY_BOUNDARY = 'safety_retry';
 const DEFERRED_RETRY_REARM_WAIT = Object.freeze({
   wait: 'REBALANCE_OPERATION_BUDGET_MS',
@@ -153,13 +156,24 @@ function isOperationDeferredRetryActive(owner, operationId) {
     )
   );
 }
-function shouldDeferRetryableDispatchFailure(owner, operation, errorLike) {
-  if (!operation || !isRetryableControlPlaneError(errorLike)) {
+function isRetryableControlPlaneOperationTarget(operation) {
+  if (!operation) {
     return false;
+  }
+  if (
+    operation.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE
+  ) {
+    return true;
   }
   return classifySystemPartition({
     partitionId: operation.partitionId,
   }).systemTable;
+}
+function shouldDeferRetryableDispatchFailure(owner, operation, errorLike) {
+  if (!operation || !isRetryableControlPlaneError(errorLike)) {
+    return false;
+  }
+  return isRetryableControlPlaneOperationTarget(operation);
 }
 function isDispatchRetryableWorkflowStep(owner, operation) {
   if (!operation) {
@@ -184,10 +198,7 @@ function isDispatchRetryableWorkflowStep(owner, operation) {
   return DISPATCH_PENDING_WORKFLOW_STEPS.has(workflowStep);
 }
 function isCreateRearmDispatchPhase(owner, operation) {
-  if (
-    !operation ||
-    !classifySystemPartition({partitionId: operation.partitionId}).systemTable
-  ) {
+  if (!isRetryableControlPlaneOperationTarget(operation)) {
     return false;
   }
   if (operation.workflowStep !== WORKFLOW_STEP.CREATING) {
@@ -247,6 +258,7 @@ function buildDispatchRearmFromProgressReconcileEvidence(
         normalizedActualStatus,
       ),
     dispatchRetryableWorkflowStep:
+      !isBootstrapTopologyDispatchDeferred(operation) &&
       owner.isDispatchRetryableWorkflowStep(operation),
     priorityRecoveryPartition:
       partitionClassification.systemTable ||
@@ -428,11 +440,11 @@ function deferDispatchRetry(owner, operation, errorLike) {
       ...buildHandoffDeferralTransportDiagnostics(owner, operation, errorLike),
     },
   );
-  const timerHandle = owner.setTimeoutFn(() => {
+  let timerHandle = null;
+  timerHandle = owner.setTimeoutFn(() => {
+    if (owner.dispatchRetryTimerByOperationId.get(operationId) !== timerHandle) return;
     owner.dispatchRetryTimerByOperationId.delete(operationId);
-    if (owner.isShuttingDown) {
-      return;
-    }
+    if (owner.isShuttingDown) return;
     if (!owner.isInitialized) {
       rearmDispatchRetryWhileUninitialized(owner, operation, errorLike);
       return;
@@ -457,7 +469,7 @@ function deferDispatchRetry(owner, operation, errorLike) {
           OPERATION_OWNER_ACTION.DISPATCH,
           currentOperation,
           {
-            boundary: 'dispatch_retry',
+            boundary: DISPATCH_RETRY_BOUNDARY,
             cause:
               OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_OPERATION_DISPATCH,
             workflowStep: currentOperation.workflowStep || null,
@@ -557,18 +569,25 @@ async function runDeferredSafetyRetryInLane(
   if (
     !currentOperation ||
     owner.repository.isOperationTerminal(currentOperation) ||
-    !owner.repository.isOperationLocallyOwned(currentOperation) ||
-    !owner.isSafetyDeferredRetryableOperation(currentOperation)
+    !owner.repository.isOperationLocallyOwned(currentOperation)
   ) {
     return;
   }
+  let retryOperation = currentOperation;
+  if (!owner.isSafetyDeferredRetryableOperation(currentOperation)) {
+    if (operation && owner.isSafetyDeferredRetryableOperation(operation)) {
+      retryOperation = operation;
+    } else {
+      return;
+    }
+  }
   await owner.runOperationOwnerAction(
     OPERATION_OWNER_ACTION.EXECUTE,
-    currentOperation,
+    retryOperation,
     {
       boundary,
-      workflowStep: currentOperation.workflowStep || null,
-      partitionId: currentOperation.partitionId || null,
+      workflowStep: retryOperation.workflowStep || null,
+      partitionId: retryOperation.partitionId || null,
       runInlineWhenOwnerLaneHeld: true,
     },
   );
@@ -642,7 +661,14 @@ function scheduleDeferredSafetyRetry(owner, operation, deferReason, errorMessage
       ...buildHandoffDeferralTransportDiagnostics(owner, operation, null),
     },
   );
-  const timerHandle = owner.setTimeoutFn(() => {
+  let timerHandle = null;
+  timerHandle = owner.setTimeoutFn(() => {
+    if (
+      owner.safetyDeferredRetryTimerByOperationId.get(operationId) !==
+      timerHandle
+    ) {
+      return;
+    }
     owner.safetyDeferredRetryTimerByOperationId.delete(operationId);
     if (owner.isShuttingDown) {
       return;

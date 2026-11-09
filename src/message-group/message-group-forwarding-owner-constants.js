@@ -87,30 +87,31 @@ const MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE = Object.freeze({
 });
 
 const MESSAGE_GROUP_LEADER_IDENTITY_SOURCE = Object.freeze({
-  CACHE_ROW: 'cache_row',
-  LIVE_LOCAL_LEADER: 'live_local_leader',
   NONE: 'none',
-  PENDING_PUBLICATION: 'pending_publication',
-  PERSISTED_PUBLICATION: 'persisted_publication',
+  RAFT_STATUS: 'raft_status',
 });
 
 const MESSAGE_GROUP_LEADER_IDENTITY_STATE = Object.freeze({
-  CACHE_CONFIRMED: 'cache_confirmed',
-  LIVE_LOCAL_HINT: 'live_local_hint',
-  MISSING: 'missing',
-  PUBLICATION_PENDING: 'publication_pending',
-  PUBLICATION_PERSISTED: 'publication_persisted',
+  LIVE_LEADER: 'live_leader',
+  LEADER_UNADDRESSED: 'leader_unaddressed',
+  NO_LEADER: 'no_leader',
+  STATUS_UNAVAILABLE: 'status_unavailable',
 });
 
+// One status read's leader: its state, source, node, and (when live) the
+// leader's identity and committed address from that same read.
 function buildMessageGroupLeaderIdentitySnapshot(
   state,
   source,
   leaderNodeId,
+  leader = {leaderId: null, leaderAddress: null},
 ) {
   return Object.freeze({
     state,
     source,
     leaderNodeId,
+    leaderId: leader.leaderId,
+    leaderAddress: leader.leaderAddress,
   });
 }
 

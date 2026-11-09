@@ -34,6 +34,7 @@ import {
 } from '../raft/raft-operation-port-request.js';
 import {committedMembershipRefusal} from
   '../raft/raft-rs-committed-membership-read.js';
+import {committedPeerAddress} from '../raft/raft-rs-committed-peer-address.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 import {retireCdcCommitWaiters} from './message-group-cdc-committed-acceptance.js';
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
@@ -61,21 +62,23 @@ function shouldDeferConsensusScheduling(service) {
 }
 
 /**
- * The address of a replica identity. Status-free by construction: the
- * runtime resolves addresses while it computes a status, so this never reads
- * one.
+ * The address of a replica identity: this replica's own address, or the
+ * unified address on the node the group's committed configuration placed the
+ * peer (the port's second argument). Status-free by construction: the
+ * runtime resolves addresses while it computes a status. A peer without a
+ * committed node refuses typed (peer_not_in_configuration); no row or hint
+ * list stands in for it.
  * @param {Object} service - The message-group replica.
  * @param {string} replicaIdentity - The identity to place.
+ * @param {string|null} committedNodeId - Its committed node, or null.
  * @return {string} Its unified address.
  */
-function resolveConsensusPeerAddress(service, replicaIdentity) {
+function resolveConsensusPeerAddress(service, replicaIdentity, committedNodeId) {
   if (replicaIdentity === service.replicaId) {
     return service.unifiedAddress;
   }
-  return service.buildPeerAddress(replicaIdentity, {
-    allowBootstrapHints: true,
-    consensusResolution: true,
-  });
+  return committedPeerAddress(ENTITY_TYPE.MESSAGE_GROUP, replicaIdentity,
+    committedNodeId);
 }
 
 /**
@@ -96,7 +99,8 @@ function messageGroupConsensusRequest(service, cdcCommitLifetime) {
       service.bootstrapMembership ?? (
         service.identityExisted === true ?
           durableRecordBootstrap() :
-          genesisStamp(service.replicaIds)
+          // The founding placement commits each founder's node.
+          genesisStamp(service.replicaIds, service.founderNodeIds)
       ),
     // A replica that joins an existing group under that stamp holds no
     // founder's history: with no record it is refused (O4).
@@ -126,8 +130,9 @@ function messageGroupConsensusRequest(service, cdcCommitLifetime) {
           targetAddress: peerAddress,
         }),
       ),
-    [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]: (replicaIdentity) =>
-      resolveConsensusPeerAddress(service, replicaIdentity),
+    [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]:
+      (replicaIdentity, committedNodeId) =>
+        resolveConsensusPeerAddress(service, replicaIdentity, committedNodeId),
     // Runs inside the transaction that also advances the applied state.
     [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: (committed) =>
       service.applyCommittedEntry(committed, cdcCommitLifetime),

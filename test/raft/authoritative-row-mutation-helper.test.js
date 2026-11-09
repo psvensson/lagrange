@@ -43,12 +43,11 @@ test('AuthoritativeRowMutationHelper - flush persists pending owner-row update',
         updated_at: 123,
       },
       options: {
-        expectedCacheFields: {raft_role: 'leader'},
         routingReadinessDimension: 'controlPlaneRecoveryEligible',
         deliverySource: 'control-plane:write:services',
         recoveryCandidateSelectionKey: '{"data":{"raft_role":"leader","updated_at":123},"deliveryPriority":null,"ignoreExisting":false,"kind":"control-plane-mutation","operation":"update","routingReadinessDimension":"controlPlaneRecoveryEligible","row":null,"tableName":"services","whereClause":{"service_id":"replica-1"},"workClass":null}',
       },
-    }, 'should use the configured row key and cache-visibility fields');
+    }, 'should use the configured row key and no projection-field wait');
     t.same(result, {
       applied: true,
       authoritativeWriteApplied: true,
@@ -641,11 +640,7 @@ test('AuthoritativeRowMutationHelper - queued owner update is not stranded behin
     t.equal(helper.pendingValue, null, 'latest queued owner update should clear pending state');
   });
 
-test('AuthoritativeRowMutationHelper - classifies cache visibility failures', async (t) => {
-  t.equal(
-    classifyMutationFailure(new Error('Cache update not observed for services:replica-1')),
-    'cache-visibility-gap-unrecovered',
-  );
+test('AuthoritativeRowMutationHelper - classifies a failed write', async (t) => {
   t.equal(
     classifyMutationFailure(new Error('database unavailable')),
     'authoritative-write-failed',

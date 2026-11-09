@@ -336,8 +336,9 @@ function resolveTimeoutValue(valueNode, bindings, context, problems) {
   return null;
 }
 
-// Returns {milliseconds, problems}. `milliseconds` is the largest resolvable
-// declaration (0 when there is none); `problems` is non-empty when a
+// Returns {milliseconds, hasDeclaration, problems}. `milliseconds` is the
+// largest positive resolvable declaration; presence remains distinct when a
+// declaration is zero or negative. `problems` is non-empty when a
 // declaration exists but could not be resolved — callers must fail closed on
 // it rather than fall back to the default cap.
 export function extractTimeoutDeclarations(source, filePath, {env = process.env} = {}) {
@@ -348,6 +349,7 @@ export function extractTimeoutDeclarations(source, filePath, {env = process.env}
   } catch (error) {
     return {
       milliseconds: 0,
+      hasDeclaration: false,
       problems: [`${filePath} ${PARSE_FAILURE_PROBLEM}: ${error.message}`],
     };
   }
@@ -356,6 +358,7 @@ export function extractTimeoutDeclarations(source, filePath, {env = process.env}
   bindings.shadowedImports = collectImportShadows(ast, bindings.imports);
   const machineFactor = resolveTestMachineFactor(env);
   let largest = 0;
+  let hasDeclaration = false;
   walk(ast, (node) => {
     if (node.type !== NODE_TYPE.CALL || !isTestCallee(node.callee)) return;
     for (const argument of node.arguments) {
@@ -370,6 +373,7 @@ export function extractTimeoutDeclarations(source, filePath, {env = process.env}
           continue;
         }
         if (!isTimeoutKey(property)) continue;
+        hasDeclaration = true;
         if (property.computed) {
           problems.push(`${COMPUTED_KEY_PROBLEM} at ${location}`);
           continue;
@@ -383,5 +387,5 @@ export function extractTimeoutDeclarations(source, filePath, {env = process.env}
       }
     }
   });
-  return {milliseconds: largest, problems};
+  return {milliseconds: largest, hasDeclaration, problems};
 }

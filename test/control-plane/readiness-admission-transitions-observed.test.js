@@ -51,28 +51,44 @@ import {
 // can enter the digest and make the differential pass by moving the
 // comparison, and they carry the owner's own published state per step, so a
 // term dropped from the PUBLISH decision moves the digest too.
+//
+// SUPERSEDED 2026-11-02 (R09, quest serve-eligibility-committed-epoch-read,
+// attempt 1). The b869139a6 digests were 920e05df... (still) and eaaed0f0...
+// (ticking), reproduced unchanged on df28ef54a. User-table serve routing now
+// consumes the readiness owner's committed-epoch answer instead of a planning
+// variant of this owner. Measured differential, df28ef54a against the
+// attempt-1 tree, step by step: the routing sample changes (the user partition
+// routes on the committed answer instead of the deferred planning record) and
+// the build count and served-object indices drop because the routing variant
+// is no longer built; every served snapshot's deferred flag, token status,
+// dimensions and reason codes, and every published-state field, are equal.
+// The digests below are those of the attempt-1 tree.
 const MAIN_ADMISSION_SCENARIO_DIGEST =
-  '920e05dfd0a43f0a127ed838c72997464021e13bf12620b30bcc3fac072783f2';
+  'ab030311974120ba91fbfc969ea9297a7c0e548b892079fe975f2ff0c0532f38';
 // The same scenario with a clock that ticks on every read of it. One extra
 // clock read anywhere moves every later observation, so this is the witness
 // that the diagnostic reads no clock main did not read.
 const MAIN_TICKING_CLOCK_DIGEST =
-  'eaaed0f0a69a0a47dbba4731d0df575def68bbd9941574cfda7195e017d235ea';
+  '4ec68886d58608f6110310f95a33e33abcb416b0ca2a4d22d1809c2eecd325d8';
 // Main's owner source-read counts over the same scenario, measured the same
 // way. `canReuseCompletedSnapshot` is counted because the read path must keep
 // reaching the decision through it - the deferral-bounded audit spies there.
+// Superseded with the digests above (attempt 1 of quest
+// serve-eligibility-committed-epoch-read): every count is lower than main's
+// (145, 129, 337, 477, 22, 60, 76, 115, 98, 30, 40) because user-table
+// routing no longer builds or reads a planning variant.
 const MAIN_OWNER_CALL_COUNTS = Object.freeze({
-  readPlanningProjectionIdentity: 145,
-  captureToken: 129,
-  readCurrentSourceObservation: 337,
-  hasUnclassifiedSourceChange: 477,
-  isCompletedSnapshotLive: 22,
-  capturePositiveDecisionLiveVeto: 60,
-  capturePublicationGuard: 76,
-  captureCurrentPlanningSource: 115,
-  readCompleted: 98,
-  canReuseCompletedSnapshot: 30,
-  readSync: 40,
+  readPlanningProjectionIdentity: 94,
+  captureToken: 88,
+  readCurrentSourceObservation: 224,
+  hasUnclassifiedSourceChange: 315,
+  isCompletedSnapshotLive: 11,
+  capturePositiveDecisionLiveVeto: 41,
+  capturePublicationGuard: 60,
+  captureCurrentPlanningSource: 79,
+  readCompleted: 70,
+  canReuseCompletedSnapshot: 15,
+  readSync: 20,
 });
 
 const TRANSITION = READINESS_ADMISSION_LOG_MSG.ADMISSION_TRANSITION;

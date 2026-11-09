@@ -4,8 +4,11 @@ import {
   affectedRowsField,
   sumAffectedRowCounts,
 } from './application-database-result.js';
-import {isAppliedWithUnknownCount} from
-  '../partition/partition-write-kernel.js';
+import {
+  isAppliedWithUnknownCount,
+  pickTypedWriteAnswer,
+} from '../partition/partition-write-kernel.js';
+import {pickRoutingDenialFields} from './query-execution-budget.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
@@ -24,17 +27,22 @@ function stringOrNull(value) {
 }
 
 function copyParticipantDisposition(error, result) {
-  Object.assign(error, {
-    failureCode: stringOrNull(result?.failureCode),
-    committed: result?.committed === true,
-    outcome: stringOrNull(result?.outcome),
-    disposition: stringOrNull(result?.disposition),
-    logIndex: Number.isSafeInteger(result?.logIndex) ? result.logIndex : null,
-    entryId: stringOrNull(result?.entryId),
-    // The redelivery owner's report of the wait it spent on an unknown
-    // outcome travels with the typed failure.
-    spentWait: result?.spentWait ?? null,
-  });
+  Object.assign(
+    error,
+    {
+      failureCode: stringOrNull(result?.failureCode),
+      committed: result?.committed === true,
+      outcome: stringOrNull(result?.outcome),
+      disposition: stringOrNull(result?.disposition),
+      logIndex: Number.isSafeInteger(result?.logIndex) ? result.logIndex : null,
+      entryId: stringOrNull(result?.entryId),
+      // The redelivery owner's report of the wait it spent on an unknown
+      // outcome travels with the typed failure.
+      spentWait: result?.spentWait ?? null,
+    },
+    pickTypedWriteAnswer(result),
+    pickRoutingDenialFields(result),
+  );
 }
 
 function buildDistributedMutationResult(

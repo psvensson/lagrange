@@ -1,3 +1,4 @@
+import {createMockControlPlaneReadinessService} from '../rebalancer/test-helpers.js';
 /**
  * Three-node partition rebalance integration test.
  * Verifies that partition replicas spread across all three nodes when
@@ -11,8 +12,6 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {UnifiedRebalancer, EntityType} from
   '../../src/rebalancer/unified-rebalancer.js';
 import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
-import {CONTROL_PLANE_READINESS_DIMENSION} from
-  '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   initializeTestEnvironment,
   cleanupTestEnvironment,
@@ -44,7 +43,7 @@ function createMockTablePolicyService() {
   return {
     getDefaultPolicy: () => ({...DEFAULT_TABLE_POLICY}),
     getTablePolicy: () => ({...DEFAULT_TABLE_POLICY}),
-    getPolicyForPartition: () => ({...DEFAULT_TABLE_POLICY}),
+    getPolicyForPartition: () => ({...DEFAULT_TABLE_POLICY, targetReplicaCount: 3}),
   };
 }
 
@@ -65,16 +64,7 @@ function createMockMessageRouter() {
  * Create a control-plane readiness service that marks all nodes repair-eligible.
  * @return {Object} Mock readiness service.
  */
-function createAlwaysReadyControlPlaneReadinessService() {
-  return {
-    projectNodeLiveness: () => ({readyNow: true}),
-    getNodeReadinessSync: () => ({
-      dimensions: {
-        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
-      },
-    }),
-  };
-}
+
 
 /**
  * Create a storage accounting service with zero-byte estimates for tests.
@@ -211,7 +201,9 @@ test('Three-node partition rebalance', async (t) => {
       nodeId: seedNodeId,
       messageRouter: createMockMessageRouter(),
       rebalanceCoordinator: createMockRebalanceCoordinator(operations),
-      controlPlaneReadinessService: createAlwaysReadyControlPlaneReadinessService(),
+      controlPlaneReadinessService: createMockControlPlaneReadinessService({
+        systemTableCache: cache,
+      }),
       storageAccountingService: createMockStorageAccountingService(),
       storagePressureBehavior: createMockStoragePressureBehavior(),
       sqlQueryEngine: createMockSqlQueryEngine(),

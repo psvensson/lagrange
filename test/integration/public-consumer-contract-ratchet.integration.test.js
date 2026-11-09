@@ -140,8 +140,9 @@ test('I5 public consumer-contract ratchet (one embedded runtime)', {
   timeout: CONSUMER_CONTRACT_TEST_TIMEOUT_MS,
 }, async (t) => {
   const cluster = createEmbeddedCluster(t);
-  const formation = await cluster.formCluster(SINGLE_RUNTIME, {},
-    FORMATION_BUDGET_MS);
+  const formation = await cluster.formCluster(SINGLE_RUNTIME, {
+    configuration: {partition: {defaultReplicaCount: 1}},
+  }, FORMATION_BUDGET_MS);
   t.comment(`formation: ${JSON.stringify(formation)}`);
   const [node] = cluster.nodes;
   const session = await node.openApplicationDatabase(APPLICATION_ID);

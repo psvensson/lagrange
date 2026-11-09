@@ -6,8 +6,10 @@
  */
 
 import {ServiceInstallCatalogError} from '../control-plane/owners/index.js';
-import {RuntimeAccessPolicyError} from
-  '../control-plane/owners/runtime-access-policy-owner.js';
+import {
+  RUNTIME_ACCESS_POLICY_ERROR_CODE,
+  RuntimeAccessPolicyError,
+} from '../control-plane/owners/runtime-access-policy-owner.js';
 import {DeploymentBindingError} from
   '../control-plane/owners/deployment-binding-contract.js';
 import {deepFreeze} from '../utils/deep-freeze.js';
@@ -25,6 +27,7 @@ const SERVICE_LIFECYCLE_COMMAND_FAILED_MESSAGE =
 
 const SERVICE_LIFECYCLE_COMMAND_ERROR_CODE = Object.freeze({
   ACCESS_POLICY_REJECTED: 'service_lifecycle_access_policy_rejected',
+  ACCESS_POLICY_UNAVAILABLE: 'service_lifecycle_access_policy_unavailable',
   ARTIFACT_NOT_SEALED: 'service_lifecycle_artifact_not_sealed',
   ARTIFACT_REJECTED: 'service_lifecycle_artifact_rejected',
   ARTIFACT_SOURCE_RETIRED: 'service_lifecycle_artifact_source_retired',
@@ -83,6 +86,8 @@ const SERVICE_LIFECYCLE_COMMAND_LITERAL = Object.freeze({
 const LOCAL_STR_ARTIFACT_PAYLOAD_STORE_UNAVAILABLE =
   'artifact_payload_store_unavailable';
 const LOCAL_STR_ARTIFACT_PAYLOAD_MISSING = 'artifact_payload_missing';
+const RUNTIME_ACCESS_POLICY_PROJECTION_UNAVAILABLE =
+  RUNTIME_ACCESS_POLICY_ERROR_CODE.PROJECTION_UNAVAILABLE;
 
 class ServiceLifecycleCommandError extends Error {
   constructor(code, stage, path, message, detail = {}) {
@@ -102,7 +107,11 @@ function commandFailure(code, stage, path, message, detail = {}) {
 function classifyDelegatedFailure(error, command) {
   if (error instanceof RuntimeAccessPolicyError) {
     return {
-      code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ACCESS_POLICY_REJECTED,
+      // A committed policy this node cannot yet answer visible is typed
+      // unavailable, never a rejection of the request.
+      code: error.code === RUNTIME_ACCESS_POLICY_PROJECTION_UNAVAILABLE ?
+        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ACCESS_POLICY_UNAVAILABLE :
+        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ACCESS_POLICY_REJECTED,
       stage: SERVICE_LIFECYCLE_COMMAND_STAGE.ACCESS_POLICY,
       known: true,
     };

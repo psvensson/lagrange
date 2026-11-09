@@ -1,4 +1,5 @@
 import {SERVICE_TYPE} from '../constants/index.js';
+import {readPolicyForPartition} from '../policy/table-policy-resolution.js';
 import {ADMISSION_DECISION} from '../rebalancer/storage-capacity-constants.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {
@@ -152,10 +153,7 @@ class PartitionSplitMergeManagerCoreMethods {
    * @return {Promise<Object>} Table policy.
    */
   async getTablePolicy(partitionId) {
-    if (this.tablePolicyService) {
-      return this.tablePolicyService.getPolicyForPartition(partitionId);
-    }
-    return {};
+    return readPolicyForPartition(this.tablePolicyService, partitionId);
   }
 
   /**

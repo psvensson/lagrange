@@ -33,6 +33,10 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {
+  createCommittedServeEligibilityOwner,
+  serveEligibilityAnswer,
+} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -43,14 +47,12 @@ config.initialize();
 
 test('QueryExecutor - getRoutablePartitionServices excludes services on ' +
   'non-serve-eligible nodes', (t) => {
-  const readinessService = {
-    getNodeReadinessSync: (nodeId) => {
-      if (nodeId === 'node-down') {
-        return {dimensions: {serveEligible: false}};
-      }
-      return {dimensions: {serveEligible: true}};
-    },
-  };
+  // The committed-epoch serve answer is the routing input (quest
+  // serve-eligibility-committed-epoch-read).
+  const readinessService = createCommittedServeEligibilityOwner({
+    answers: {'node-down': serveEligibilityAnswer(false,
+      {reasons: ['ready_lease_expired']})},
+  });
 
   const systemCache = {
     services: [
@@ -139,29 +141,23 @@ async (t) => {
     },
   };
 
-  let nodeEligible = false;
+  // The owner's committed record is stale until its refresh lands: the
+  // routing denial awaits that refresh once (no per-node projection repair).
   const authoritativeRefreshes = [];
-  const readinessService = {
-    getNodeReadinessSync() {
-      return {
-        observedAt: '2026-03-11T00:00:00.000Z',
-        lifecycleState: SERVICE_STATUS.ACTIVE,
-        dimensions: {
-          serveEligible: nodeEligible,
-          repairEligible: nodeEligible,
-        },
-        reasons: nodeEligible ? [] : [
-          {code: 'cluster_member_unhealthy'},
-        ],
-      };
-    },
+  const readinessService = createCommittedServeEligibilityOwner({
+    defaultAnswer: serveEligibilityAnswer('unavailable_stale'),
+  });
+  readinessService.readServeEligibility = async () => {
+    authoritativeRefreshes.push(nodeId);
+    readinessService.setDefault(serveEligibilityAnswer(true));
+  };
+  const unusedProjection = {
     async getNodeReadiness(targetNodeId) {
       authoritativeRefreshes.push(targetNodeId);
-      // Simulate authoritative repair succeeding.
-      nodeEligible = true;
-      return this.getNodeReadinessSync();
+      return targetNodeId;
     },
   };
+  t.ok(unusedProjection, 'the projection repair is not a serve input');
 
   const executor = new QueryExecutor({
     messageRouter: createMockMessageRouter(),
@@ -182,8 +178,8 @@ async (t) => {
   t.equal(staleSnapshot.routableServiceCount, 0);
   t.ok(
     staleSnapshot.deniedByNodeId[nodeId].reasonCodes
-      .includes('cluster_member_unhealthy'),
-    'routing snapshot should surface cluster_member_unhealthy',
+      .includes('unavailable_stale'),
+    'routing snapshot should surface the typed stale serve answer',
   );
 
   // Trigger the repair path.
@@ -194,7 +190,7 @@ async (t) => {
   t.same(
     authoritativeRefreshes,
     [nodeId],
-    'routing repair should trigger one authoritative refresh',
+    'routing repair should await one committed serve refresh',
   );
 
   const refreshedSnapshot =
@@ -259,28 +255,23 @@ async (t) => {
     },
   };
 
-  let nodeEligible = false;
+  // The owner's committed record is stale until its refresh lands: the
+  // routing denial awaits that refresh once (no per-node projection repair).
   const authoritativeRefreshes = [];
-  const readinessService = {
-    getNodeReadinessSync() {
-      return {
-        observedAt: '2026-03-11T00:00:00.000Z',
-        lifecycleState: SERVICE_STATUS.ACTIVE,
-        dimensions: {
-          serveEligible: nodeEligible,
-          repairEligible: nodeEligible,
-        },
-        reasons: nodeEligible ? [] : [
-          {code: 'cluster_member_unhealthy'},
-        ],
-      };
-    },
+  const readinessService = createCommittedServeEligibilityOwner({
+    defaultAnswer: serveEligibilityAnswer('unavailable_stale'),
+  });
+  readinessService.readServeEligibility = async () => {
+    authoritativeRefreshes.push(nodeId);
+    readinessService.setDefault(serveEligibilityAnswer(true));
+  };
+  const unusedProjection = {
     async getNodeReadiness(targetNodeId) {
       authoritativeRefreshes.push(targetNodeId);
-      nodeEligible = true;
-      return this.getNodeReadinessSync();
+      return targetNodeId;
     },
   };
+  t.ok(unusedProjection, 'the projection repair is not a serve input');
 
   let deliveryCount = 0;
   let deliveredAddress = null;
@@ -391,6 +382,10 @@ test('QueryExecutor - executeOnPartition can suppress routing-triggered ' +
       authoritativeRefreshes.push(targetNodeId);
       return this.getNodeReadinessSync();
     },
+    answerServeEligibility: () => serveEligibilityAnswer('unavailable_stale'),
+    async readServeEligibility() {
+      authoritativeRefreshes.push(nodeId);
+    },
   };
 
   let deliveryCount = 0;
@@ -441,16 +436,10 @@ test('QueryExecutor - executeOnPartition can suppress routing-triggered ' +
 
 test('QueryExecutor - getPartitionServiceCandidates logs typed routing ' +
   'denials when services exist but readiness filters them all', (t) => {
-  const readinessService = {
-    getNodeReadinessSync() {
-      return {
-        observedAt: '2026-03-11T00:00:00.000Z',
-        lifecycleState: SERVICE_STATUS.ACTIVE,
-        dimensions: {serveEligible: false, repairEligible: true},
-        reasons: [{code: 'cluster_member_unhealthy'}],
-      };
-    },
-  };
+  const readinessService = createCommittedServeEligibilityOwner({
+    defaultAnswer: serveEligibilityAnswer(false,
+      {reasons: ['ready_lease_expired']}),
+  });
   const executor = new QueryExecutor({
     messageRouter: createMockMessageRouter(),
     systemCache: {
@@ -504,7 +493,7 @@ test('QueryExecutor - getPartitionServiceCandidates logs typed routing ' +
   );
   t.same(
     warnings[0].context.routingSnapshot.deniedByNodeId['node-filtered'].reasonCodes,
-    ['cluster_member_unhealthy'],
+    ['ready_lease_expired'],
   );
   t.end();
 });
@@ -589,6 +578,7 @@ test('QueryExecutor - executeOnPartition retries reads across ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -696,6 +686,7 @@ test('QueryExecutor - reconnect delivery deferral falls through to another ' +
     },
   };
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -803,6 +794,7 @@ test('QueryExecutor - read candidate delivery reserves timeout budget for ' +
     },
   };
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
   });
@@ -894,6 +886,9 @@ test('QueryExecutor - read delivery defers cold reconnect for a disconnected ' +
     },
   };
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     messageRouter,
     systemCache,
   });
@@ -984,6 +979,9 @@ test('QueryExecutor - read delivery defers cold reconnect for an unobserved ' +
     },
   };
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     messageRouter,
     systemCache,
   });
@@ -1075,6 +1073,9 @@ test('QueryExecutor - recovery read bounds connected stale candidate ack ' +
     },
   };
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     messageRouter,
     systemCache,
   });
@@ -1108,5 +1109,316 @@ test('QueryExecutor - recovery read bounds connected stale candidate ack ' +
     'the failure should preserve the router timeout code',
   );
 });
+
+function createSinglePartitionTestSystemCache(partitionId, nodeId) {
+  return {
+    partitions: [{partition_id: partitionId, leader_node_id: nodeId}],
+    services: [
+      {
+        service_id: `${partitionId}-r1`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: nodeId,
+        raft_role: 'leader',
+        address: `${nodeId}/partition/${partitionId}`,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    get(type, key) {
+      return type === TABLES.PARTITIONS ?
+        this.partitions.find((p) => p.partition_id === key) || null :
+        null;
+    },
+    filter(type, predicate) {
+      if (type === TABLES.SERVICES) return this.services.filter(predicate);
+      if (type === TABLES.PARTITIONS) return this.partitions.filter(predicate);
+      return [];
+    },
+  };
+}
+
+test(
+  'QueryExecutor - executeOnPartition forwards timeoutBudget and ' +
+    'cancellationToken to maybeAwaitDeniedPartitionRoutingRepair',
+  async (t) => {
+    const partitionId = 'p-repair-budget-forward';
+    const nodeId = 'node-denied-repair';
+    const systemCache = createSinglePartitionTestSystemCache(partitionId, nodeId);
+    const capturedRefreshCalls = [];
+    const readinessService = createCommittedServeEligibilityOwner({
+      defaultAnswer: serveEligibilityAnswer('unavailable_stale'),
+    });
+    readinessService.readServeEligibility = async (options = {}) => {
+      capturedRefreshCalls.push(options);
+      readinessService.setDefault(serveEligibilityAnswer(true));
+    };
+    const messageRouter = {
+      getConnectionState: () => 'connected',
+      deliver: async () =>
+        buildDeliveryEnvelope(
+          {acknowledged: true},
+          {success: true, rows: [{ok: 1}], changes: 0},
+        ),
+    };
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: readinessService,
+      messageRouter,
+      systemCache,
+    });
+    executor.readRetryAttempts = 1;
+    const timeoutBudget = Object.freeze({deadlineMs: Date.now() + 2500});
+    const cancellationToken = Object.freeze({
+      isCancelled: () => false,
+      onCancel: () => {},
+    });
+
+    const result = await executor.executeOnPartition(
+      partitionId,
+      'SELECT * FROM bench_accounts',
+      [],
+      true,
+      false,
+      false,
+      {timeoutMs: 2500, timeoutBudget, cancellationToken},
+    );
+
+    t.equal(result.success, true, 'read should succeed after serve refresh');
+    t.equal(capturedRefreshCalls.length, 1);
+    t.equal(capturedRefreshCalls[0].timeoutBudget, timeoutBudget);
+    t.equal(capturedRefreshCalls[0].cancellationToken, cancellationToken);
+    t.ok(
+      Number.isFinite(capturedRefreshCalls[0].timeoutMs) &&
+        capturedRefreshCalls[0].timeoutMs > 0,
+      'remaining execution timeoutMs should be forwarded to readServeEligibility',
+    );
+  },
+);
+
+test(
+  'QueryExecutor - changing failure reasons across retry attempts from ' +
+    'readiness denial to no_service_rows replaces lastFailureDetails and ' +
+    'lastError atomically without leaking Attempt 1 denial fields',
+  async (t) => {
+    const partitionId = 'p-denial-to-missing';
+    const staleNodeId = 'node-stale-attempt-1';
+    const systemCache = createSinglePartitionTestSystemCache(
+      partitionId,
+      staleNodeId,
+    );
+    const readinessService = createCommittedServeEligibilityOwner({
+      answers: {
+        [staleNodeId]: serveEligibilityAnswer(false, {
+          reasons: ['ready_lease_expired', 'unavailable_stale'],
+        }),
+      },
+    });
+    let simulatedNowMs = 1000;
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: readinessService,
+      messageRouter: createMockMessageRouter(),
+      systemCache,
+      nowFn: () => simulatedNowMs,
+    });
+    executor.leaderRetryDelayMs = 10;
+    let delayCalls = 0;
+    executor.delay = async (ms) => {
+      delayCalls += 1;
+      if (delayCalls === 1) {
+        systemCache.services = [];
+        simulatedNowMs += ms;
+        return;
+      }
+      simulatedNowMs += 100;
+    };
+
+    const result = await executor.executeOnPartition(
+      partitionId,
+      'UPDATE bench_accounts SET balance = ? WHERE id = ?',
+      [50, 1],
+      false,
+      true,
+      false,
+      {timeoutMs: 30},
+    );
+
+    t.equal(result.success, false);
+    t.equal(
+      result.routingReasonCode,
+      QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS,
+      'Attempt 2 should replace routingReasonCode with no_service_rows',
+    );
+    t.equal(
+      result.routingReadinessDimension,
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      'Attempt 2 should preserve the active routingReadinessDimension',
+    );
+    t.equal(result.routingDenialReasonCodes, undefined);
+    t.equal(result.deniedByNodeId, undefined);
+    t.equal(result.error, 'Partition service not found');
+    t.equal(result.deliveryDisposition, 'pre_submission_route_unavailable');
+  },
+);
+
+test(
+  'QueryExecutor - changing failure reasons across retry attempts from ' +
+    'candidate failure to no_service_rows replaces lastFailureDetails and ' +
+    'lastError atomically while preserving unknownOutcome and candidateDeliveryAttempted',
+  async (t) => {
+    const partitionId = 'p-candidate-to-missing';
+    const candidateNodeId = 'node-candidate-attempt-1';
+    const readSystemCache = createSinglePartitionTestSystemCache(
+      partitionId,
+      candidateNodeId,
+    );
+    const readExecutor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      messageRouter: {
+        getConnectionState: () => 'connected',
+        deliver: async () => {
+          readSystemCache.services = [];
+          return buildDeliveryEnvelope({
+            acknowledged: false,
+            error: `Connection to ${candidateNodeId} reset`,
+            errorCode: 'ROUTER_CONNECTION_CLOSED',
+          });
+        },
+      },
+      systemCache: readSystemCache,
+    });
+    readExecutor.readRetryAttempts = 2;
+    readExecutor.leaderRetryDelayMs = 1;
+
+    const readResult = await readExecutor.executeOnPartition(
+      partitionId,
+      'SELECT * FROM bench_accounts',
+      [],
+      true,
+      false,
+      false,
+      {timeoutMs: 500},
+    );
+
+    t.equal(readResult.success, false);
+    t.equal(
+      readResult.routingReasonCode,
+      QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS,
+    );
+    t.equal(readResult.participantNodeId, null);
+    t.equal(readResult.participantAddress, null);
+    t.equal(readResult.errorCode, null);
+    t.equal(readResult.error, 'Partition service not found');
+    t.equal(readResult.deliveryDisposition, undefined);
+
+    const writeSystemCache = createSinglePartitionTestSystemCache(
+      partitionId,
+      candidateNodeId,
+    );
+    let writeNowMs = 5000;
+    const writeExecutor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      messageRouter: {
+        getConnectionState: () => 'connected',
+        deliver: async () => {
+          writeSystemCache.services = [];
+          return buildDeliveryEnvelope({
+            acknowledged: false,
+            recoverableBeforeSend: false,
+            error: 'Message timeout after send',
+            errorCode: 'ROUTER_MESSAGE_TIMEOUT',
+          });
+        },
+      },
+      systemCache: writeSystemCache,
+      nowFn: () => writeNowMs,
+    });
+    writeExecutor.leaderRetryDelayMs = 10;
+    let writeDelays = 0;
+    writeExecutor.delay = async (ms) => {
+      writeDelays += 1;
+      if (writeDelays === 1) {
+        writeNowMs += ms;
+        return;
+      }
+      writeNowMs += 500;
+    };
+
+    const writeResult = await writeExecutor.executeOnPartition(
+      partitionId,
+      'UPDATE bench_accounts SET balance = ? WHERE id = ?',
+      [200, 1],
+      false,
+      true,
+      false,
+      {entryId: 'entry-atomic-unknown-1', timeoutMs: 100},
+    );
+
+    t.equal(writeResult.success, false);
+    t.equal(
+      writeResult.routingReasonCode,
+      QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS,
+    );
+    t.equal(writeResult.participantNodeId, null);
+    t.equal(writeResult.participantAddress, null);
+    t.equal(writeResult.errorCode, null);
+    t.equal(writeResult.failureCode, 'partition_write_outcome_unknown');
+    t.equal(writeResult.entryId, 'entry-atomic-unknown-1');
+    t.ok(writeResult.spentWait && typeof writeResult.spentWait === 'object');
+    t.equal(writeResult.deliveryDisposition, undefined);
+  },
+);
+
+test(
+  'QueryExecutor - executeOnPartition re-awaits readServeEligibility across ' +
+    'retry attempts when first refresh remains unavailable_stale',
+  async (t) => {
+    const partitionId = 'p-unavailable-stale-retry';
+    const nodeId = 'node-stale-refresh';
+    const systemCache = createSinglePartitionTestSystemCache(
+      partitionId,
+      nodeId,
+    );
+    const readinessService = createCommittedServeEligibilityOwner({
+      defaultAnswer: serveEligibilityAnswer(false, {
+        state: 'unavailable',
+        reason: 'unavailable_stale',
+        reasons: ['unavailable_stale'],
+      }),
+    });
+    let refreshCount = 0;
+    readinessService.readServeEligibility = async () => {
+      refreshCount += 1;
+      if (refreshCount >= 2) {
+        readinessService.setDefault(serveEligibilityAnswer(true));
+      }
+    };
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: readinessService,
+      messageRouter: {
+        getConnectionState: () => 'connected',
+        deliver: async () =>
+          buildDeliveryEnvelope(
+            {acknowledged: true},
+            {success: true, rows: [{ok: 1}], changes: 0},
+          ),
+      },
+      systemCache,
+    });
+    executor.readRetryAttempts = 1;
+    executor.leaderRetryDelayMs = 1;
+
+    const result = await executor.executeOnPartition(
+      partitionId,
+      'SELECT * FROM bench_accounts',
+      [],
+      true,
+      false,
+      false,
+      {timeoutMs: 1000},
+    );
+
+    t.equal(result.success, true, 'read succeeds once second refresh adopts epoch');
+    t.equal(refreshCount, 2, 'second attempt re-awaited readServeEligibility');
+  },
+);
 
 registerQueryExecutorRecoveryRoutingTests();

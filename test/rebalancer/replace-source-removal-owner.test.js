@@ -43,8 +43,10 @@ import {
 const PARTITION_ID = 'users-p1';
 const SOURCE_NODE_ID = 'seed-node';
 const TARGET_NODE_ID = 'node-2';
+const PEER_NODE_ID = 'node-3';
 const SOURCE_REPLICA_ID = `${PARTITION_ID}-r1`;
 const TARGET_REPLICA_ID = `${PARTITION_ID}-r2`;
+const PEER_REPLICA_ID = `${PARTITION_ID}-r3`;
 const INTENT_COMMIT_INDEX = 10;
 // Past the former STOPPING step budget (60 s) and operation budget (300 s).
 const LONG_AFTER_MS = 3_600_000;
@@ -116,6 +118,17 @@ async function createHarness({
       return handle;
     },
     clearTimeoutFn() {},
+    readinessFixture: {
+      now: () => Date.now() + clock.offsetMs,
+      readNodeRows: () => [SOURCE_NODE_ID, TARGET_NODE_ID, PEER_NODE_ID].map(
+        (nodeId) => ({
+          node_id: nodeId,
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: Date.now() + clock.offsetMs + 60_000,
+        }),
+      ),
+    },
     sqlQueryResults: {
       'FROM services WHERE service_id = ?': {
         success: true,
@@ -735,9 +748,6 @@ test('W13 (BR12): a deferred-visibility snapshot waits at the removal ' +
 // authority is the group's leader-answered CURRENT committed configuration,
 // reached through the witness read (one redirect from the target to the
 // leader it names). The target's own view is never the verdict.
-const PEER_REPLICA_ID = `${PARTITION_ID}-r3`;
-const PEER_NODE_ID = 'node-3';
-
 function peerRow() {
   return {...targetRow(ReplicaStatus.ACTIVE), service_id: PEER_REPLICA_ID,
     replica_id: PEER_REPLICA_ID, node_id: PEER_NODE_ID, raft_role: 'leader',
@@ -847,3 +857,57 @@ test('W15 (F-3, O1 round 2): an absence in a configuration applied below ' +
     await harness.coordinator.shutdown();
   }
 });
+
+test('ensureReplaceRemovalIntentRecorded transitions non-terminal pre-STOPPING durable row to STOPPING with intent',
+  async (t) => {
+    const harness = await createHarness();
+    try {
+      const initialDurable = await persistedOperation(harness);
+      t.equal(initialDurable.workflowStep, WORKFLOW_STEP.PENDING,
+        'durable row starts at pre-STOPPING step PENDING');
+
+      harness.operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+      const stepMetadata = {
+        replaceRemovalIntent: true,
+        replaceWitnessCommitIndex: INTENT_COMMIT_INDEX,
+        replaceWitnessReplicaId: TARGET_REPLICA_ID,
+      };
+
+      const recorded = await harness.owner.ensureReplaceRemovalIntentRecorded(
+        harness.operation,
+        stepMetadata,
+      );
+      t.equal(recorded, true,
+        'transition to STOPPING succeeds from pre-STOPPING durable row');
+
+      const updatedDurable = await persistedOperation(harness);
+      t.equal(updatedDurable.workflowStep, WORKFLOW_STEP.STOPPING,
+        'durable row transitioned to STOPPING');
+      const latestStep = updatedDurable.stepsHistory?.at(-1) || {};
+      t.equal(latestStep.replaceRemovalIntent, true,
+        'removal intent recorded on durable STOPPING step');
+      t.equal(latestStep.replaceWitnessCommitIndex, INTENT_COMMIT_INDEX,
+        'witness commit index recorded');
+
+      const recordedAgain = await harness.owner.ensureReplaceRemovalIntentRecorded(
+        harness.operation,
+        stepMetadata,
+      );
+      t.equal(recordedAgain, true, 'idempotent call returns true');
+
+      updatedDurable.workflowStep = WORKFLOW_STEP.REMOVED;
+      updatedDurable.status = ReplicaStatus.COMPLETED;
+      await harness.coordinator.repository.persistOperationUpdate(
+        updatedDurable,
+        {requireDurable: false},
+      );
+      const terminalResult = await harness.owner.ensureReplaceRemovalIntentRecorded(
+        harness.operation,
+        stepMetadata,
+      );
+      t.equal(terminalResult, false, 'terminal durable row refuses transition');
+    } finally {
+      await harness.coordinator.shutdown();
+    }
+  },
+);

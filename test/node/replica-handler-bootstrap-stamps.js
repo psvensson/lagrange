@@ -48,17 +48,20 @@ function committedStampFor(members, {appliedIndex = DEFAULT_COMMITTED_INDEX,
     leaderId: members[0] ?? null,
     gateOpen: true,
     identities,
+    nodeIds: Object.fromEntries(Object.keys(identities).map((peerId) =>
+      [peerId, null])),
   };
 }
 
 /**
  * The GENESIS stamp of a founding set.
  * @param {Array<string>} founders - Replica identities.
+ * @param {Object} [founderNodeIds] - {replicaIdentity: nodeId}.
  * @return {Object} The stamp.
  */
-function genesisStampFor(founders) {
+function genesisStampFor(founders, founderNodeIds = {}) {
   return {kind: COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS,
-    founders: [...founders]};
+    founders: [...founders], founderNodeIds: {...founderNodeIds}};
 }
 
 /**

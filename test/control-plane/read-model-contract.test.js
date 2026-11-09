@@ -169,11 +169,10 @@ test('RebalanceCoordinator.getEntityInFlightReplicaIds fails closed when its ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -234,11 +233,10 @@ test('emitReplicaStatusDivergence emits FIELD_MISMATCH when cache ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -301,11 +299,10 @@ test('emitReplicaStatusDivergence emits CACHE_MISSING when cache ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -364,11 +361,10 @@ test('emitReplicaStatusDivergence emits AUTHORITATIVE_MISSING when ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -427,11 +423,10 @@ test('emitReplicaStatusDivergence does not emit when cache and ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -485,11 +480,10 @@ test('emitReplicaStatusDivergence does not emit when replicaId ' +
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {

@@ -148,7 +148,10 @@ export function extractParamUpdateData({
 
   const whereClause = {};
   for (let i = 0; i < whereColumns.length; i++) {
-    whereClause[whereColumns[i]] = params[setColumns.length + i];
+    const col = whereColumns[i];
+    whereClause[col] = Object.prototype.hasOwnProperty.call(data, col) ?
+      data[col] :
+      params[setColumns.length + i];
   }
 
   const authoritativeRow = fetchUpdatedRow(tableName, whereClause);

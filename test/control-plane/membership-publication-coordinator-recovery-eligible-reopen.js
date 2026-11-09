@@ -913,6 +913,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_TEST_NAME,
           return [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS];
         },
       },
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
     });
 
@@ -1042,6 +1043,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_TEST_NAME,
           return [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS];
         },
       },
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
     });
 
@@ -1115,6 +1117,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_TEST_NAME,
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
         ],
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       reconcileQueue: {
         pending,
         enqueue(ownerKey, reason, context, options) {

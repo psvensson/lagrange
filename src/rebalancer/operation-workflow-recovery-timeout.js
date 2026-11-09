@@ -518,6 +518,10 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
         op.replicaId,
         op.partitionId,
         op.targetNodeId,
+        {
+          ignoreUnclaimedPreRuntimeFailedCreate:
+            this.isPreSyncCreateOperation(op),
+        },
       );
     } catch {
       return false;
@@ -565,6 +569,10 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     operation,
     cause = OPERATION_WORKFLOW_OWNER_LITERAL.PROGRESS,
   ) {
+    if (this.isRemoveInitialDispatchPhase(operation)) {
+      return OPERATION_LIFECYCLE_ACTION.EXECUTE_REMOVE_DISPATCH;
+    }
+
     if (cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY) {
       if (this.isPreSyncStep(operation.workflowStep)) {
         return OPERATION_LIFECYCLE_ACTION.FAIL_PRE_SYNC_RECOVERY;
@@ -578,10 +586,6 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       isActiveReplaceSourceRemovalPhase(operation.type, operation.workflowStep)
     ) {
       return OPERATION_LIFECYCLE_ACTION.EXECUTE_ACTIVE_REPLACE;
-    }
-
-    if (this.isRemoveInitialDispatchPhase(operation)) {
-      return OPERATION_LIFECYCLE_ACTION.EXECUTE_REMOVE_DISPATCH;
     }
 
     if (

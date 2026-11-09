@@ -177,9 +177,9 @@ async (t) => {
     'the terminal clear must also withdraw the pending epoch columns',
   );
   t.equal(
-    terminalClear.options?.allowPendingVisibility,
+    'allowPendingVisibility' in (terminalClear.options ?? {}),
     false,
-    'the terminal clear is an epoch transition: no pending visibility',
+    'the terminal clear answers at its commit with no visibility opt-out',
   );
 
   t.equal(

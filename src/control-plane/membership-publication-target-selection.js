@@ -48,7 +48,7 @@ const MEMBERSHIP_PUBLICATION_ACK_READINESS_RULES = Object.freeze([
       ] === true &&
       dimensions[
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE
-      ] !== false,
+      ] === true,
   }),
   Object.freeze({
     state: MEMBERSHIP_PUBLICATION_ACK_READINESS_STATE.DEFERRED,

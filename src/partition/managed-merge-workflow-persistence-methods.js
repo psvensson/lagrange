@@ -188,7 +188,7 @@ class ManagedMergeWorkflowPersistenceMethods {
    * and the status-dependent epoch effects applied in place.
    * @param {Object} workflow - Workflow state.
    * @return {Object} {updatePayload, serializedMetadata,
-   *   pendingPartitionVersion, isEpochTransition}.
+   *   pendingPartitionVersion}.
    * @private
    */
   buildMergeTransitionUpdatePayload(workflow) {
@@ -213,14 +213,10 @@ class ManagedMergeWorkflowPersistenceMethods {
       workflow,
       pendingPartitionVersion,
     );
-    const isEpochTransition = workflow.status ===
-        PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE ||
-      workflow.status === PARTITION_TRANSITION_STATE.FAILED;
     return {
       updatePayload,
       serializedMetadata,
       pendingPartitionVersion,
-      isEpochTransition,
     };
   }
 
@@ -245,11 +241,9 @@ class ManagedMergeWorkflowPersistenceMethods {
             this.buildPersistedTransitionMetadata(candidate)),
           updated_at: candidate.updatedAt,
         },
-        // Claim/renew writes are not epoch transitions: they tolerate pending
-        // cache visibility (the compare-and-swap carries the race guarantee).
-        options: this.buildManagedMergeMutationOptions({
-          allowPendingVisibility: true,
-        }),
+        // Claim/renew writes answer at their commit like every routed
+        // write (the compare-and-swap carries the race guarantee).
+        options: this.buildManagedMergeMutationOptions(),
       };
     }
     const cdcIntegrationService = this.getCDCIntegrationService();
@@ -260,18 +254,11 @@ class ManagedMergeWorkflowPersistenceMethods {
         MANAGED_MERGE_ERROR_MSG.TRANSITION_PERSIST_UNAVAILABLE,
       );
     }
-    const {updatePayload, serializedMetadata, isEpochTransition} =
+    const {updatePayload} =
       this.buildMergeTransitionUpdatePayload(candidate);
     return {
       data: updatePayload,
-      options: this.buildManagedMergeMutationOptions({
-        allowPendingVisibility: !isEpochTransition,
-        expectedCacheFields: {
-          pending_partition_version: updatePayload.pending_partition_version,
-          partition_transition_state: candidate.status,
-          partition_transition_metadata: serializedMetadata,
-        },
-      }),
+      options: this.buildManagedMergeMutationOptions(),
     };
   }
 
@@ -288,13 +275,7 @@ class ManagedMergeWorkflowPersistenceMethods {
         pending_partition_version: null,
         updated_at: this.now(),
       },
-      options: this.buildManagedMergeMutationOptions({
-        allowPendingVisibility: false,
-        expectedCacheFields: {
-          partition_transition_state: null,
-          partition_transition_metadata: null,
-        },
-      }),
+      options: this.buildManagedMergeMutationOptions(),
     };
   }
 
@@ -376,7 +357,7 @@ class ManagedMergeWorkflowPersistenceMethods {
       operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
       tableName: TABLES.PARTITIONS,
       row: partitionMetadata,
-    }, this.buildManagedMergeMutationOptions({skipCacheWait: true}));
+    }, this.buildManagedMergeMutationOptions());
   }
 
   /**
@@ -391,7 +372,7 @@ class ManagedMergeWorkflowPersistenceMethods {
       operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
       tableName: TABLES.PARTITIONS,
       whereClause: {[LOCAL_STR_PARTITION_ID]: partitionId},
-    }, this.buildManagedMergeMutationOptions({skipCacheWait: true}));
+    }, this.buildManagedMergeMutationOptions());
   }
 
   /**
@@ -415,7 +396,7 @@ class ManagedMergeWorkflowPersistenceMethods {
           partition_version: targetVersion,
           updated_at: this.now(),
         },
-      }, this.buildManagedMergeMutationOptions({skipCacheWait: true}));
+      }, this.buildManagedMergeMutationOptions());
     assertManagedMergeEpochMutationEffect(mutationResult, {
       workflowId: `sibling:${partitionId}`,
     });

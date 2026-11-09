@@ -1,3 +1,4 @@
+import {createMockPolicyService} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerQuorumConditionedRemoveSafetyTailFinalTests({
   test,
@@ -30,7 +31,7 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -68,10 +69,10 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
               }),
             };
           },
-        },
-        tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
-        },
+        }},
+        tablePolicyService: createMockPolicyService({
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),
@@ -181,7 +182,7 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -204,10 +205,10 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
               }),
             };
           },
-        },
-        tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
-        },
+        }},
+        tablePolicyService: createMockPolicyService({
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),
@@ -358,9 +359,9 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 3}),
-        },
+        tablePolicyService: createMockPolicyService({
+          getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
+        }),
         cacheData: {
           nodes: [
             createReadyNode('node-a'),

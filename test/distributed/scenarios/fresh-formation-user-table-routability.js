@@ -139,9 +139,45 @@ function resolveDependencies(cluster) {
   };
 }
 
+function formatParticipantDenialReasons(participant) {
+  const codes = participant.routingDenialReasonCodes;
+  if (!Array.isArray(codes) || codes.length === ZERO) return null;
+  return `denialReasons=${codes.join(',')}`;
+}
+
+function collectParticipantDetailParts(participant) {
+  return [
+    participant.partitionId ? `partition=${participant.partitionId}` : null,
+    participant.error ? `participantError=${participant.error}` : null,
+    participant.routingReasonCode ?
+      `routingReason=${participant.routingReasonCode}` :
+      null,
+    formatParticipantDenialReasons(participant),
+  ].filter(Boolean);
+}
+
 function errorText(error) {
   const code = error?.code ? `${error.code}: ` : '';
-  return code + String(error?.message || error);
+  const base = code + String(error?.message || error);
+  const participant = error?.firstFailedParticipant;
+  if (!participant || typeof participant !== 'object') {
+    return base;
+  }
+  const detailParts = collectParticipantDetailParts(participant);
+  return detailParts.length > ZERO ?
+    `${base} (${detailParts.join('; ')})` :
+    base;
+}
+
+function isReadRowSetComplete(result) {
+  return result?.rowSetComplete === true;
+}
+
+function resolvePrimaryReadWitness(result) {
+  if (result.readAuthorityWitness) return result.readAuthorityWitness;
+  return Array.isArray(result.readAuthorityWitnesses) ?
+    result.readAuthorityWitnesses[ZERO] ?? null :
+    null;
 }
 
 async function readRows(node, sql, timeoutMs) {
@@ -149,11 +185,14 @@ async function readRows(node, sql, timeoutMs) {
     const result = await node.queryWithTimeout(sql, [], {timeoutMs});
     const rows = Array.isArray(result?.rows) ? result.rows : null;
     if (rows === null) return {error: 'rows_absent'};
+    const complete = isReadRowSetComplete(result);
     return {
-      complete: Number.isSafeInteger(result.count) &&
-        result.count === rows.length,
+      authoritativeObservation: result.authoritativeObservation ?? null,
+      complete,
       partitions: result.partitions ?? null,
+      readAuthorityWitness: resolvePrimaryReadWitness(result),
       readAuthorityWitnesses: result.readAuthorityWitnesses ?? null,
+      rowSetComplete: complete,
       rows,
     };
   } catch (error) {
@@ -178,13 +217,16 @@ async function readSnapshot(node, timeoutMs) {
 }
 
 async function observeFormation(nodes, seedNode, timeoutMs, now) {
-  const snapshotEntries = await Promise.all(nodes.map(async (node) =>
-    [node.id, await readSnapshot(node, timeoutMs)]));
-  const [partitions, services, replicaOperations] = await Promise.all([
-    readRows(seedNode, SQL.PARTITIONS, timeoutMs),
-    readRows(seedNode, SQL.SERVICES, timeoutMs),
-    readRows(seedNode, SQL.REPLICA_OPERATIONS, timeoutMs),
-  ]);
+  const [snapshotEntries, [partitions, services, replicaOperations]] =
+    await Promise.all([
+      Promise.all(nodes.map(async (node) =>
+        [node.id, await readSnapshot(node, timeoutMs)])),
+      Promise.all([
+        readRows(seedNode, SQL.PARTITIONS, timeoutMs),
+        readRows(seedNode, SQL.SERVICES, timeoutMs),
+        readRows(seedNode, SQL.REPLICA_OPERATIONS, timeoutMs),
+      ]),
+    ]);
   return {
     authority: {partitions, replicaOperations, services},
     capturedAtMs: now(),
@@ -356,13 +398,17 @@ async function writeAndReadBack(context) {
     insert, readbacks});
 }
 
-async function scanNodeLogs(nodes, state) {
+async function scanNodeLogs(nodes, state, collector = null) {
   const perNode = {};
   const refusals = [];
   for (const node of nodes) {
     try {
       const raw = await node.getLogs({rawBuffer: true});
-      const scan = scanFormationLogLines(extractContainerLogLines(raw));
+      const lines = extractContainerLogLines(raw);
+      if (typeof collector?.retainContainerLogLines === 'function') {
+        collector.retainContainerLogLines(node.id, lines);
+      }
+      const scan = scanFormationLogLines(lines);
       perNode[node.id] = {lineCount: scan.lineCount,
         observations: scan.observations, role: node.role};
       refusals.push(...scan.learnerRefusals);
@@ -476,8 +522,11 @@ export async function run(cluster) {
   const writeReadback = userTable.result.met ?
     await step('write-readback', () => writeAndReadBack(context)) :
     null;
+  const collector = typeof cluster.getLogCollector === 'function' ?
+    cluster.getLogCollector() :
+    null;
   const logScan = await step('node-log-observations', () =>
-    scanNodeLogs(nodes, state));
+    scanNodeLogs(nodes, state, collector));
   const finalServices = await readRows(seedNode, SQL.SERVICES, timeoutMs);
   if (finalServices.error) {
     state.readFailures.push(`read_failed:services:${finalServices.error}`);

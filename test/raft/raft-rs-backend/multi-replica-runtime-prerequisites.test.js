@@ -36,6 +36,8 @@ import {
   PEER_ADDRESS_STATUS,
   PEER_DELIVERY_OUTCOME,
 } from '../../../src/raft/raft-rs-runtime-owner-constants.js';
+import {RAFT_RS_CONF_CHANGE_TYPE} from
+  '../../../src/raft/raft-rs-ready-loop-constants.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
@@ -287,15 +289,18 @@ test('F17: a follower reads its status while its configuration names a peer ' +
     const generationBefore = cluster.node(leader).readStatus()
       .runtimeGeneration;
     // The joiner is reserved on the leader only - the reservation a leader's
-    // own admission makes - and never on the follower.
+    // own admission makes - and never on the follower: the change is the
+    // core's raw ConfChangeV2, without the admission context that would
+    // reserve it (and commit its node) on every replica.
     new RaftRsPeerIdentityRegistry(cluster.replica(leader).db)
       .registerReplica(joiner);
     cluster.replicaIds.push(joiner);
     const joinerPeerId = cluster.buildReplica(joiner, founding).node
       .readStatus().peerId;
     const proposed = await turnChainValue(cluster.node(leader).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER,
-      replicaIdentity: joiner,
+      transition: 0,
+      changes: [{changeType: RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
+        nodeId: joinerPeerId}],
     }));
     assert.equal(proposed.outcome, CORE_OK,
       `setup: the leader admits the learner ${JSON.stringify(proposed)}`);
@@ -346,15 +351,15 @@ test('F18: the progress probe sends one heartbeat round to an idle ' +
       .registerReplica(learner);
     cluster.replicaIds.push(learner);
     cluster.buildReplica(learner, [leader]);
-    const learnerAddress = cluster.addressOf(learner);
     const admitted = await turnChainValue(cluster.node(leader).proposeConfChange({
       type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER,
       replicaIdentity: learner,
+      nodeId: 'node-test',
     }));
     assert.equal(admitted.outcome, CORE_OK);
     assert.equal(cluster.settle(() => {
       const status = cluster.node(leader).readStatus();
-      return status.followerProgress[learnerAddress] === status.commitIndex;
+      return status.followerProgress[learner] === status.commitIndex;
     }, {rounds: SETTLE_ROUNDS}), true,
     'setup: the learner is admitted and caught up');
 
@@ -377,12 +382,12 @@ test('F18: the progress probe sends one heartbeat round to an idle ' +
       replica.inbox.length), [0, 0], 'setup: the network is idle');
     const idle = restarted.readStatus();
     assert.equal(idle.role, LEADER_ROLE);
-    assert.equal(idle.followerProgress[learnerAddress], 0,
+    assert.equal(idle.followerProgress[learner], 0,
       'setup: the leader holds matched 0 for the caught-up learner');
     assert.ok(idle.commitIndex > 0);
 
     const ticksBefore = tickEntries(cluster);
-    const probe = await turnChainValue(restarted.probePeerProgress(learnerAddress));
+    const probe = await turnChainValue(restarted.probePeerProgress(learner));
     assert.equal(probe.outcome, CORE_OK, JSON.stringify(probe));
     assert.equal(probe.reason, PROGRESS_PROBE_SENT,
       `a peer behind the commit index is probed ${JSON.stringify(probe)}`);
@@ -392,19 +397,19 @@ test('F18: the progress probe sends one heartbeat round to an idle ' +
     const ticksAfterProbe = tickEntries(cluster);
     await deliverByStepsOnly(cluster);
     const probed = restarted.readStatus();
-    assert.equal(probed.followerProgress[learnerAddress], probed.commitIndex,
+    assert.equal(probed.followerProgress[learner], probed.commitIndex,
       'one probe brings the leader\'s matched index to its commit index ' +
       JSON.stringify(probed.followerProgress));
     assert.equal(tickEntries(cluster), ticksAfterProbe,
       'the catch-up rode on delivered steps, not on ticks');
 
-    const observed = await turnChainValue(restarted.probePeerProgress(learnerAddress));
+    const observed = await turnChainValue(restarted.probePeerProgress(learner));
     assert.equal(observed.outcome, CORE_OK);
     assert.equal(observed.reason, PROGRESS_OBSERVED);
     assert.equal(observed.matchIndex, probed.commitIndex);
 
     const outsider = await turnChainValue(restarted.probePeerProgress(
-      cluster.addressOf('f18-never-a-member')));
+      'f18-never-a-member'));
     assert.equal(outsider.outcome, CORE_REFUSED);
     assert.equal(outsider.reason, NOT_A_PEER);
   } finally {

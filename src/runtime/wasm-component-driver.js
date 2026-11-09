@@ -84,6 +84,12 @@ const CELL_WORLD = Object.freeze({
   CALL: 'call-cell',
 });
 
+function runtimeCellFor(requestCell) {
+  return isCallCell(requestCell) ?
+    Object.freeze({...requestCell, world: CELL_WORLD.CALL}) :
+    requestCell;
+}
+
 function buildDriverServiceScopedError(baseMessage, serviceId) {
   return `${baseMessage}${DRIVER_SEPARATOR.DETAIL}'${serviceId}'`;
 }
@@ -197,7 +203,21 @@ class WasmComponentDriver extends RuntimeDriver {
       options.componentRuntime || new WasiComponentCellRuntime();
     this._requestCells = new Map();
     this._replicaContexts = new Map();
+    this._serviceGenerations = new Map();
     this._requestCallBridge = null;
+  }
+
+  #advanceServiceGeneration(serviceId) {
+    const next = (this._serviceGenerations.get(serviceId) ?? 0) + 1;
+    this._serviceGenerations.set(serviceId, next);
+    return next;
+  }
+
+  #clearRequestCellState(serviceId) {
+    this._running.delete(serviceId);
+    this._prepared.delete(serviceId);
+    this._requestCells.delete(serviceId);
+    this._replicaContexts.delete(serviceId);
   }
 
   setArtifactLoader(loader) {
@@ -306,26 +326,40 @@ class WasmComponentDriver extends RuntimeDriver {
         WASM_COMPONENT_ERROR.ARTIFACT_LOADER_REQUIRED,
       );
     }
+    const generation = this.#advanceServiceGeneration(serviceId);
     try {
       const runtime = projectRequestCellRuntime(definition);
       const artifact = await this._artifactLoader(runtime);
+      if (this._serviceGenerations.get(serviceId) !== generation) {
+        throw new Error(WASM_COMPONENT_ERROR.NOT_PREPARED);
+      }
       const cell = bindRequestCellArtifact(runtime, artifact);
       const existing = this._requestCells.get(serviceId);
       if (existing &&
           (existing.bindingDigest !== cell.bindingDigest ||
            existing.payloadDigest !== cell.payloadDigest)) {
         await this._componentRuntime.stop(serviceId);
-        this._running.delete(serviceId);
+        if (this._serviceGenerations.get(serviceId) === generation) {
+          this._running.delete(serviceId);
+        }
+      }
+      if (this._serviceGenerations.get(serviceId) !== generation) {
+        throw new Error(WASM_COMPONENT_ERROR.NOT_PREPARED);
       }
       this._requestCells.set(serviceId, cell);
       this._prepared.set(serviceId, definition);
+      // Trigger the node's single-flight derivation now; start awaits the
+      // same named outcome, so a refusal surfaces typed at start.
+      void this._componentRuntime.prepareComponent(runtimeCellFor(cell));
       return {status: PREPARE_STATUS.READY};
     } catch (cause) {
-      await this._componentRuntime.stop(serviceId);
-      this._running.delete(serviceId);
-      this._replicaContexts.delete(serviceId);
-      this._requestCells.delete(serviceId);
-      this._prepared.delete(serviceId);
+      if (this._serviceGenerations.get(serviceId) === generation) {
+        this._componentRuntime.releaseComponent(serviceId);
+        await this._componentRuntime.stop(serviceId);
+        if (this._serviceGenerations.get(serviceId) === generation) {
+          this.#clearRequestCellState(serviceId);
+        }
+      }
       return buildDriverStatusResult(
         PREPARE_STATUS.FAILED,
         `${cause.code || WASM_COMPONENT_ERROR.CREATE_REPLICA_FAILED}` +
@@ -432,20 +466,23 @@ class WasmComponentDriver extends RuntimeDriver {
   }
 
   async #startRequestCell(requestCell, replicaContext, serviceId) {
+    const generation = this._serviceGenerations.get(serviceId);
     try {
-      const cell = isCallCell(requestCell) ?
-        Object.freeze({...requestCell, world: CELL_WORLD.CALL}) :
-        requestCell;
-      await this._componentRuntime.start(cell);
-      if (!await this._componentRuntime.health(serviceId)) {
+      await this._componentRuntime.start(runtimeCellFor(requestCell));
+      if (this._serviceGenerations.get(serviceId) !== generation ||
+          this._requestCells.get(serviceId) !== requestCell ||
+          !await this._componentRuntime.health(serviceId) ||
+          this._serviceGenerations.get(serviceId) !== generation) {
         throw new Error(WASM_COMPONENT_ERROR.NOT_STARTED);
       }
       this._replicaContexts.set(serviceId, replicaContext);
       this._running.add(serviceId);
       return {status: START_STATUS.RUNNING};
     } catch (cause) {
-      this._replicaContexts.delete(serviceId);
-      this._running.delete(serviceId);
+      if (this._serviceGenerations.get(serviceId) === generation) {
+        this._replicaContexts.delete(serviceId);
+        this._running.delete(serviceId);
+      }
       return buildDriverStatusResult(
         START_STATUS.FAILED,
         `${cause.code || WASM_COMPONENT_ERROR.COMPONENT_START_FAILED}` +
@@ -566,9 +603,6 @@ class WasmComponentDriver extends RuntimeDriver {
       return retireBoundReplica(this, replicaContext, serviceId);
     }
     const lifecycle = this._lifecycles.get(serviceId);
-    if (this._requestCells.has(serviceId)) {
-      await this._componentRuntime.stop(serviceId);
-    }
     if (lifecycle) {
       try {
         await lifecycle.stopReplica(serviceId);
@@ -580,13 +614,17 @@ class WasmComponentDriver extends RuntimeDriver {
           {cause},
         );
       }
+      this._lifecycles.delete(serviceId);
+      this.#clearRequestCellState(serviceId);
+      return;
     }
-
-    this._running.delete(serviceId);
-    this._prepared.delete(serviceId);
-    this._lifecycles.delete(serviceId);
-    this._requestCells.delete(serviceId);
-    this._replicaContexts.delete(serviceId);
+    const generation = this.#advanceServiceGeneration(serviceId);
+    this.#clearRequestCellState(serviceId);
+    this._componentRuntime.releaseComponent(serviceId);
+    await this._componentRuntime.stop(serviceId);
+    if (this._serviceGenerations.get(serviceId) === generation) {
+      this.#clearRequestCellState(serviceId);
+    }
   }
 
   /**

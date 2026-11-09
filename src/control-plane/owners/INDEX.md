@@ -29,7 +29,7 @@ documentClass: generated
 - [postgres-wire-scale-contract.js](postgres-wire-scale-contract.js) - No leading comment; first export: POSTGRES_WIRE_SCALE_ERROR_CODE. (importers: many)
 - [replica-operations-owner.js](replica-operations-owner.js) - No leading comment; first export: ReplicaOperationsOwner. (importers: few)
 - [request-binding-service-definition-contract.js](request-binding-service-definition-contract.js) - No leading comment; first export: REQUEST_BINDING_SERVICE_DEFINITION_ERROR_CODE. (importers: hub)
-- [runtime-access-policy-owner.js](runtime-access-policy-owner.js) - No leading comment; first export: RUNTIME_ACCESS_POLICY_BINDING_PATTERN. (importers: many)
+- [runtime-access-policy-owner.js](runtime-access-policy-owner.js) - The policy write answers at its commit; the client's answer waits until this node's projection holds that commit, so... (importers: many)
 - [service-definitions-owner.js](service-definitions-owner.js) - Persist built-in listener intent; existing placement owns convergence. (importers: few)
 - [service-endpoints-owner.js](service-endpoints-owner.js) - No leading comment; first export: ServiceEndpointsOwner. (importers: many)
 - [service-install-catalog-contract.js](service-install-catalog-contract.js) - No leading comment; first export: FAILURE_FIELDS. (importers: many)

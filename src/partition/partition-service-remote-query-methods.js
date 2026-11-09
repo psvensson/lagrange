@@ -79,26 +79,36 @@ function resolveSystemTableSchemaRefusal(service, options = null) {
     null;
 }
 
+// A write reached a replica that does not lead and has no live leader at a
+// committed address to redirect to: typed NOT_LEADER, the address owner's
+// refusal attached.
+function noLeaderWriteRefusal(service, refusal) {
+  return {success: false,
+    error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+    failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
+    leaderAddressRefusal: refusal.code ?? null,
+    partitionId: service.partitionId};
+}
+
 function writeRoutingRefusal(service, payload, isWriteOperation) {
   if (!isWriteOperation) return null;
   const epochRejection = service.rejectStalePartitionEpochWrite(
     payload[QUERY_PAYLOAD_FIELD_EXPECTED_PARTITION_VERSION]);
   if (epochRejection !== null) return epochRejection;
   if (service.role === RaftRole.LEADER) return null;
-  const leaderAddress = service.resolveLeaderAddress();
-  if (leaderAddress) {
-    service.logger.debug(PARTITION_SERVICE_LOG_MSG.REDIRECTING_WRITE_TO_LEADER, {
-      partitionId: service.partitionId,
-      replicaId: service.replicaId,
-      leaderAddress,
-    });
-    return {success: false,
-      redirect: PARTITION_SERVICE_RESPONSE.LEADER_REDIRECT, leaderAddress,
-      partitionId: service.partitionId};
+  let leaderAddress;
+  try {
+    leaderAddress = service.resolveLeaderAddress();
+  } catch (refusal) {
+    return noLeaderWriteRefusal(service, refusal);
   }
+  service.logger.debug(PARTITION_SERVICE_LOG_MSG.REDIRECTING_WRITE_TO_LEADER, {
+    partitionId: service.partitionId,
+    replicaId: service.replicaId,
+    leaderAddress,
+  });
   return {success: false,
-    error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
-    failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
+    redirect: PARTITION_SERVICE_RESPONSE.LEADER_REDIRECT, leaderAddress,
     partitionId: service.partitionId};
 }
 
@@ -128,9 +138,15 @@ async function executeRemoteQuery(service, payload) {
 
 function remoteQueryAnswer(service, result, readAuthorityWitness) {
   const success = result?.success !== false;
+  const rowSetComplete = success &&
+    Array.isArray(result?.rows) &&
+    result?.partial !== true &&
+    result?.rowSetComplete !== false;
   const answer = {
     success, rows: result.rows, changes: result.changes,
     count: result.count, partitionId: service.partitionId,
+    rowSetComplete,
+    ...(result?.partial === true ? {partial: true} : {}),
     durableCommitWitness: result.durableCommitWitness,
     originHlc: result.originHlc, acceptingNodeId: result.acceptingNodeId,
     acknowledgedAtMs: result.acknowledgedAtMs, readAuthorityWitness,
@@ -173,6 +189,12 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
       servingNodeId: this.nodeId,
       servingReplicaId: this.replicaId,
       term: status?.term ?? null,
+      appliedIndex: Number.isSafeInteger(status?.appliedIndex) ?
+        status.appliedIndex :
+        null,
+      commitIndex: Number.isSafeInteger(status?.commitIndex) ?
+        status.commitIndex :
+        null,
       role: this.role,
       // The witness records WHEN THIS REPLICA observed its own authority, so
       // it reads this replica's clock. This is the owner decision the metered

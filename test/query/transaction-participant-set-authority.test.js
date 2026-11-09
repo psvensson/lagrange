@@ -6,6 +6,7 @@ import {createTransactionPersistenceGateway} from
 import {buildTransactionDecisionRecord} from
   '../../src/query/distributed/distributed-transaction-decision.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const logger = {debug() {}, warn() {}, error() {}};
 const deferred = () => {
   let resolve;
@@ -38,7 +39,9 @@ test('R2 set authority: every possible participant is durable before BEGIN',
   async (t) => {
     const gateway = createTransactionPersistenceGateway();
     t.after(() => gateway.db.close());
-    const engine = new SQLQueryEngine({logger, controlPlaneSystemTableGateway: gateway});
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      logger, controlPlaneSystemTableGateway: gateway});
     const coordinator = engine.transactionCoordinator;
     const begun = await coordinator.begin('set');
     assert.equal(begun.success, true);
@@ -60,7 +63,9 @@ test('R2 set authority: interrupted enlist retains the participant whose BEGIN f
   async (t) => {
     const gateway = createTransactionPersistenceGateway();
     t.after(() => gateway.db.close());
-    const engine = new SQLQueryEngine({logger, controlPlaneSystemTableGateway: gateway});
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      logger, controlPlaneSystemTableGateway: gateway});
     const coordinator = engine.transactionCoordinator;
     const begun = await coordinator.begin('partial');
     coordinator.beginParticipant = async () => {
@@ -80,7 +85,9 @@ test('R2 authority: every stale status redrives the exact decision with missing 
         'ROLLING_BACK', 'FAILED', 'COMMITTED', 'ROLLED_BACK']) {
         const gateway = createTransactionPersistenceGateway();
         t.after(() => gateway.db.close());
-        const engine = new SQLQueryEngine({logger, controlPlaneSystemTableGateway: gateway});
+        const engine = new SQLQueryEngine({
+          controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+          logger, controlPlaneSystemTableGateway: gateway});
         await engine.waitForDistributedTransactionRecoveryReplay();
         const row = durableRow('c'.repeat(32), decision);
         gateway.seed('sql_transactions', row);
@@ -106,7 +113,9 @@ test('R2 authority: missing, unavailable and malformed rows retain debt until a 
   async (t) => {
     const gateway = createTransactionPersistenceGateway();
     t.after(() => gateway.db.close());
-    const engine = new SQLQueryEngine({logger, controlPlaneSystemTableGateway: gateway});
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      logger, controlPlaneSystemTableGateway: gateway});
     await engine.waitForDistributedTransactionRecoveryReplay();
     const coordinator = engine.transactionCoordinator;
     const row = durableRow('d'.repeat(32));
@@ -141,7 +150,9 @@ test('R2 authority: recovery waits for an undecided OPEN deadline, then freezes 
     let now = 100;
     const gateway = createTransactionPersistenceGateway();
     t.after(() => gateway.db.close());
-    const engine = new SQLQueryEngine({logger, controlPlaneSystemTableGateway: gateway});
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      logger, controlPlaneSystemTableGateway: gateway});
     await engine.waitForDistributedTransactionRecoveryReplay();
     const row = {...durableRow('e'.repeat(32)), status: 'ACTIVE', timeout_deadline: 200,
       participant_set_state: 'OPEN', commit_mode: 'NOT_SELECTED', frozen_participant_count: 0,
@@ -179,14 +190,18 @@ test('R2 CAS: recovery freezes before an admitted-set addition reaches the row',
     }
   }});
   t.after(() => gateway.db.close());
-  const engine = new SQLQueryEngine({logger, controlPlaneSystemTableGateway: gateway});
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    logger, controlPlaneSystemTableGateway: gateway});
   const first = engine.transactionCoordinator;
   const begun = await first.begin('recover', {timeoutDeadline: 1});
   let begins = 0;
   first.beginParticipant = async () => begins += 1;
   const addition = first.enlistParticipants('recover', ['p1']);
   await entered.promise;
-  const restart = new SQLQueryEngine({logger, controlPlaneSystemTableGateway: gateway});
+  const restart = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    logger, controlPlaneSystemTableGateway: gateway});
   await restart.waitForDistributedTransactionRecoveryReplay();
   const recovery = restart.transactionCoordinator;
   discover(recovery, gateway.rows('sql_transactions')[0]);
@@ -217,7 +232,9 @@ test('R2 CAS: lost admission and freeze answers resolve only through exact owner
       }
       return answer;
     };
-    const engine = new SQLQueryEngine({logger, controlPlaneSystemTableGateway: gateway});
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      logger, controlPlaneSystemTableGateway: gateway});
     const coordinator = engine.transactionCoordinator;
     await coordinator.begin('lost');
     let begins = 0;
@@ -251,7 +268,9 @@ test('R2 CAS: an exact competing immutable decision wins; late generic progress 
       }
       return submit(mutation, options);
     };
-    const engine = new SQLQueryEngine({logger, controlPlaneSystemTableGateway: gateway});
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      logger, controlPlaneSystemTableGateway: gateway});
     const coordinator = engine.transactionCoordinator;
     const begun = await coordinator.begin('winner');
     coordinator.beginParticipant = async () => {};

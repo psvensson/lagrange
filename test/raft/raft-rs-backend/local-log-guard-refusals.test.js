@@ -174,7 +174,7 @@ async () => {
     assertRefused(cluster, 'p4-a', ids['p4-c'],
       RAFT_RS_LOCAL_LOG_REFUSAL.APPEND_RESPONSE_BEYOND_LOCAL_LOG, steps);
     assert.ok(cluster.node('p4-a').readStatus()
-      .followerProgress[cluster.addressOf('p4-c')] < Number(beyond),
+      .followerProgress['p4-c'] < Number(beyond),
     'the follower\'s matched moved past the leader log');
     assert.ok(stillCommits(cluster, 'p4-a', ['p4-b', 'p4-c']));
   } finally {

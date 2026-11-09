@@ -251,12 +251,11 @@ function createConvergenceCoordinator(options = {}) {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       refreshAuthoritativeCacheRow: async () => true,
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -272,7 +271,9 @@ function createConvergenceCoordinator(options = {}) {
       checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
     },
     storageAccountingService: {estimateReplicaBytes: () => 1},
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     operationWorkflowCoordinator: workflowCoordinator,
     executorOutcomeEmitter: emitter,
     enableTimeouts: false,
@@ -867,12 +868,11 @@ test('Owner-path convergence: all progression entry points ' +
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
           refreshAuthoritativeCacheRow: async () => true,
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -947,7 +947,9 @@ test('Owner-path convergence: all progression entry points ' +
           checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
         },
         storageAccountingService: {estimateReplicaBytes: () => 1},
-        controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+        controlPlaneReadinessService: createMockControlPlaneReadinessService({
+          defaultRepairEligible: true,
+        }),
         operationWorkflowCoordinator: workflowCoordinator,
         executorOutcomeEmitter: emitter,
         enableTimeouts: false,

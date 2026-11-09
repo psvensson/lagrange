@@ -11,6 +11,18 @@ import {
 } from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 import {
+  REPLICA_OPERATION_UPDATE_DISPOSITION,
+} from '../../src/rebalancer/replica-operation-update-disposition.js';
+import {
+  CREATE_ADMISSION_ERROR_CODE,
+  CREATE_ADMISSION_STATE,
+  ReplicaCreateAdmissionOwner,
+} from '../../src/node/replica-create-admission-owner.js';
+import {
+  buildReplicaCreateAdmissionToken,
+  buildReplicaCreateAttemptToken,
+} from '../../src/rebalancer/replica-create-admission-token.js';
+import {
   runTerminalTransitionRepairAttempt,
 } from '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
 
@@ -60,7 +72,7 @@ function createRepository(readAuthoritativeRows) {
       getAll: () => [],
       filter: () => [],
     },
-    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+    cdcIntegrationService: {},
     controlPlaneSystemTableGateway: gateway,
     authoritativeVisibilityTimeoutMs: TEST_VISIBILITY_TIMEOUT_MS,
     authoritativeVisibilityRetryDelayMs: TEST_RETRY_DELAY_MS,
@@ -295,6 +307,271 @@ test(
       escalatedReads.every((options) =>
         options.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.PREFERRED),
       'every escalated read must pin to the partition leader so a self-stale replica cannot serve it',
+    );
+  },
+);
+
+test(
+  'composed workflow UPDATE confirmation and CREATE admission progression preserve both write visibility and physical permission boundaries',
+  async (t) => {
+    const admissionToken = buildReplicaCreateAdmissionToken({
+      operationId: TEST_OPERATION_ID,
+      operationType: OperationType.ADD,
+      entityType: SERVICE_TYPE.PARTITION,
+      entityId: TEST_PARTITION_ID,
+      partitionId: TEST_PARTITION_ID,
+      replicaId: TEST_REPLICA_ID,
+      targetNodeId: TEST_TARGET_NODE_ID,
+      workflowUpdatedAt: TEST_CREATED_AT_MS,
+    });
+    const attemptToken = buildReplicaCreateAttemptToken(admissionToken, 1);
+    let authoritativeRow = makeRow({
+      status: ReplicaStatus.PENDING,
+      workflow_step: WORKFLOW_STEP.SENDING,
+      updated_at: TEST_CREATED_AT_MS,
+      completed_at: null,
+      create_admission_state: null,
+      create_admission_token: null,
+      create_admission_replica_created_at: null,
+      create_admission_attempt_token: null,
+      create_admission_previous_attempt_token: null,
+      create_admission_attempt_seq: null,
+      create_admission_workflow_updated_at: null,
+      create_admission_owner_incarnation: null,
+    });
+    let admissionOwner = null;
+    let claimedEvidence = null;
+
+    const sharedGateway = {
+      readAuthoritativeRows: async (tableName) => {
+        if (tableName === 'nodes') {
+          return {
+            success: true,
+            rows: [{node_id: TEST_TARGET_NODE_ID, boot_incarnation: 1}],
+          };
+        }
+        return {
+          success: true,
+          rows: [{...authoritativeRow}],
+        };
+      },
+      updateSystemTableRow: async (_table, whereClause, data) => {
+        const matches = Object.entries(whereClause).every(([col, val]) =>
+          (authoritativeRow[col] ?? null) === val);
+        if (!matches) {
+          return {success: true, changes: 0, partitionResult: {affectedRows: 0}};
+        }
+        authoritativeRow = {...authoritativeRow, ...data};
+        return {success: true, changes: 1, partitionResult: {affectedRows: 1}};
+      },
+      submitMutation: async (mutation) => {
+        const data = mutation?.data || {};
+        authoritativeRow = {...authoritativeRow, ...data};
+        // Before the workflow writer's confirmation read runs, the actual
+        // ReplicaCreateAdmissionOwner advances ADMITTED -> MATERIALIZED.
+        if (admissionOwner && claimedEvidence) {
+          claimedEvidence = await admissionOwner.markMaterialized(claimedEvidence);
+        }
+        return {success: true, partitionResult: {affectedRows: 1}};
+      },
+      cdcIntegrationService: {
+        insertSystemTableRow: async () => ({success: true}),
+        updateSystemTableRow: async () => ({success: true}),
+      },
+    };
+
+    admissionOwner = new ReplicaCreateAdmissionOwner({
+      nodeId: TEST_TARGET_NODE_ID,
+      ownerIncarnation: 1,
+      gateway: sharedGateway,
+    });
+    claimedEvidence = await admissionOwner.claim({
+      operationId: TEST_OPERATION_ID,
+      operationType: OperationType.ADD,
+      entityType: SERVICE_TYPE.PARTITION,
+      entityId: TEST_PARTITION_ID,
+      partitionId: TEST_PARTITION_ID,
+      replicaId: TEST_REPLICA_ID,
+      targetNodeId: TEST_TARGET_NODE_ID,
+      admissionToken,
+      workflowUpdatedAt: TEST_CREATED_AT_MS,
+      attemptToken,
+      attemptSeq: 1,
+    });
+    t.equal(
+      claimedEvidence?.admissionState,
+      CREATE_ADMISSION_STATE.ADMITTED,
+      'admission owner claims ADMITTED on the shared row',
+    );
+
+    const repository = new ReplicaOperationRepository({
+      nodeId: TEST_NODE_ID,
+      systemTableCache: {get: () => null, getAll: () => [], filter: () => []},
+      cdcIntegrationService: {},
+      controlPlaneSystemTableGateway: sharedGateway,
+      authoritativeVisibilityTimeoutMs: TEST_VISIBILITY_TIMEOUT_MS,
+      authoritativeVisibilityRetryDelayMs: TEST_RETRY_DELAY_MS,
+      logger: {info() {}, warn() {}, error() {}, debug() {}},
+    });
+    const callerSnapshot = repository.rowToOperation({...authoritativeRow});
+    const workflowUpdate = {
+      ...callerSnapshot,
+      status: ReplicaStatus.SYNCING,
+      workflowStep: WORKFLOW_STEP.SYNCING,
+      updatedAt: TEST_TERMINAL_AT_MS,
+    };
+
+    const updateResult = await repository.persistOperationUpdate(
+      workflowUpdate,
+      {returnDisposition: true, disableSystemWriteSession: true},
+    );
+    t.equal(updateResult.persisted, true, 'workflow UPDATE confirms despite concurrent admission progression');
+    t.equal(
+      updateResult.disposition,
+      REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
+      'workflow UPDATE reports UPDATED disposition',
+    );
+    t.equal(
+      claimedEvidence?.admissionState,
+      CREATE_ADMISSION_STATE.MATERIALIZED,
+      'admission owner concurrently advanced to MATERIALIZED',
+    );
+
+    // Stale admission work still receives no physical permission from the admission owner.
+    const staleEvidence = {
+      ...claimedEvidence,
+      admissionToken: `${admissionToken}-stale`,
+    };
+    await t.rejects(
+      admissionOwner.markProgress(staleEvidence, CREATE_ADMISSION_STATE.ACTIVE),
+      {code: CREATE_ADMISSION_ERROR_CODE.STALE},
+      'stale admission token still receives no permission from ReplicaCreateAdmissionOwner',
+    );
+  },
+);
+
+test(
+  'operation visibility permits legitimate membership-lane release and rejects negative identity controls',
+  async (t) => {
+    const repository = createRepository(async () => ({success: true, rows: []}));
+    const baseExpected = repository.rowToOperation(makeRow({
+      type: OperationType.REPLACE,
+      status: ReplicaStatus.SYNCING,
+      workflow_step: WORKFLOW_STEP.SYNCING,
+      updated_at: TEST_TERMINAL_AT_MS,
+      completed_at: null,
+      source_replica_id: 'mg-p1-r1',
+      message_group_membership_lane_key: 'message-group:mg-p1',
+      message_group_membership_phase: 'source_removal_proposal_in_flight',
+      message_group_membership_obligation_state: 'unknown',
+      message_group_membership_identity: '{"groupId":"mg-p1"}',
+      create_admission_state: CREATE_ADMISSION_STATE.ADMITTED,
+      create_admission_token: 'adm-token-1',
+      create_admission_attempt_seq: 2,
+    }));
+
+    const releasedMembershipObserved = {
+      ...baseExpected,
+      messageGroupMembershipLaneKey: null,
+      messageGroupMembershipPhase: 'source_removed',
+      messageGroupMembershipObligationState: 'settled',
+      messageGroupRemovalStamp: '{"term":2}',
+    };
+    t.equal(
+      repository.isReplicaOperationVisibilitySatisfied(
+        baseExpected,
+        releasedMembershipObserved,
+      ),
+      true,
+      'legitimate membership-lane release to NULL with settled obligation satisfies visibility',
+    );
+
+    const negativeCases = [
+      ['different operationId', {...baseExpected, operationId: 'op-other'}],
+      ['different replicaId', {...baseExpected, replicaId: 'r-other'}],
+      ['different workflowStep', {...baseExpected, workflowStep: WORKFLOW_STEP.CREATING}],
+      ['different status', {...baseExpected, status: ReplicaStatus.CREATING}],
+      ['older workflow updatedAt', {...baseExpected, updatedAt: TEST_TERMINAL_AT_MS - 1}],
+      ['different admission token', {...baseExpected, createAdmissionToken: 'adm-other'}],
+      ['lower admission attemptSeq', {...baseExpected, createAdmissionAttemptSeq: 1}],
+      ['different sourceReplicaId', {...baseExpected, sourceReplicaId: 'mg-p1-r9'}],
+      ['different membership identity', {...baseExpected, messageGroupMembershipIdentity: '{"groupId":"other"}'}],
+      [
+        'unsettled cleared membership lane key',
+        {
+          ...baseExpected,
+          messageGroupMembershipLaneKey: null,
+          messageGroupMembershipObligationState: 'unknown',
+        },
+      ],
+    ];
+    for (const [label, observed] of negativeCases) {
+      t.equal(
+        repository.isReplicaOperationVisibilitySatisfied(baseExpected, observed),
+        false,
+        `visibility rejects ${label}`,
+      );
+    }
+
+    const pendingExpected = {
+      ...baseExpected,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      status: ReplicaStatus.PENDING,
+    };
+    t.equal(
+      repository.isReplicaOperationVisibilitySatisfied(pendingExpected, {
+        ...pendingExpected,
+        createAdmissionState: CREATE_ADMISSION_STATE.MATERIALIZED,
+      }),
+      false,
+      'initial PENDING comparison remains strict on admission fields',
+    );
+  },
+);
+
+test(
+  'losing terminal write adopts earlier winner updatedAt so subsequent visibility check accepts the winner',
+  async (t) => {
+    const earlierWinnerRow = makeRow({
+      status: ReplicaStatus.ACTIVE,
+      workflow_step: WORKFLOW_STEP.ACTIVE,
+      updated_at: TEST_CREATED_AT_MS,
+      completed_at: TEST_CREATED_AT_MS,
+    });
+    const repository = createRepository(async () => ({
+      success: true,
+      rows: [earlierWinnerRow],
+    }));
+    const losingProjection = {
+      ...repository.rowToOperation(earlierWinnerRow),
+      status: ReplicaStatus.FAILED,
+      workflowStep: WORKFLOW_STEP.FAILED,
+      updatedAt: TEST_TERMINAL_AT_MS + 5_000,
+      completedAt: TEST_TERMINAL_AT_MS + 5_000,
+      errorMessage: 'late losing failure',
+    };
+
+    const result = await repository.persistOperationUpdate(losingProjection, {
+      terminalTransition: true,
+      returnDisposition: true,
+    });
+    t.equal(
+      result.disposition,
+      REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
+      'losing writer reports TERMINAL_ADOPTED',
+    );
+    t.equal(
+      losingProjection.updatedAt,
+      TEST_CREATED_AT_MS,
+      'losing projection adopts the winning terminal updatedAt timestamp',
+    );
+    t.equal(
+      repository.isReplicaOperationVisibilitySatisfied(
+        losingProjection,
+        repository.rowToOperation(earlierWinnerRow),
+      ),
+      true,
+      'adopted projection accepts the earlier winning row through the timestamp floor check',
     );
   },
 );

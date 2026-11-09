@@ -11,15 +11,17 @@
 // conf-change entry (effective or no-op alike: the settlement counts
 // entries, never the key), the post-election conservative index reached
 // without one} - and LEADER (this replica gains leadership). What each wake
-// re-drives is a latched proposal: an admission the port accepted (in
-// flight), one it deferred, one a non-leading replica refused NOT_LEADER
-// (remembered; proposed only once this replica leads), and a row-driven
-// retirement the port deferred. At ab7669fd0 only MEMBERSHIP_CHANGED
-// re-drove, so each latch stayed: every later admission answered IN_FLIGHT
-// and proposed nothing. This is the one witness that discriminates the
-// re-drive's wiring; the chain witness proves the property by the
-// cache-reconcile path as well.
+// re-drives is a latched proposal: an admission request the port accepted
+// (in flight), one it deferred, one a non-leading replica answered
+// NOT_LEADER (remembered; proposed only once this replica leads), and a
+// row-driven retirement the port deferred. Admissions are requests answered
+// from the committed replica operation (quest
+// replica-admission-from-committed-operation): no services row admits.
+// At ab7669fd0 only MEMBERSHIP_CHANGED re-drove, so each latch stayed:
+// every later admission answered IN_FLIGHT and proposed nothing. This is
+// the one witness that discriminates the re-drive's wiring.
 
+import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
 import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {
   CDC_OPERATIONS,
@@ -29,11 +31,8 @@ import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {RaftRole} from '../../src/partition/partition-service.js';
-import {admitPartitionRaftPeer} from
-  '../../src/partition/partition-service-raft-membership-administration.js';
 import {
   RAFT_EVENT,
-  RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
   RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
@@ -54,6 +53,30 @@ const PEER = 'users-p9-r2';
 const TARGET = 'users-p9-r4';
 const NODE_OF = Object.freeze({[LOCAL]: 'node-a', [PEER]: 'node-b',
   [TARGET]: 'node-d'});
+const OPERATION_ID = 'users-p9-add-r4';
+
+// The committed replica operation naming the target, as the authoritative
+// read answers it.
+function answerCommittedOperation(partition) {
+  partition.controlPlaneSystemTableGateway = {
+    async readAuthoritativeRows(_tableName, _sql, params) {
+      return {success: true, rows: params?.[0] === OPERATION_ID ? [{
+        operation_id: OPERATION_ID, type: 'ADD',
+        entity_type: SERVICE_TYPE.PARTITION, entity_id: PARTITION_ID,
+        partition_id: PARTITION_ID, replica_id: TARGET,
+        target_node_id: NODE_OF[TARGET], status: 'syncing',
+        workflow_step: 'SYNCING'}] : []};
+    },
+  };
+}
+
+async function requestAdmission(partition) {
+  const response = await partition.handleReplicaAdmissionRequest({
+    partitionId: PARTITION_ID, replicaIdentity: TARGET,
+    operationId: OPERATION_ID});
+  await settle();
+  return response.admission.outcome;
+}
 
 function serviceRow(replicaId, updatedAt, status = ReplicaStatus.ACTIVE) {
   return {
@@ -106,11 +129,15 @@ async function openLeader(t, answer, members = [LOCAL]) {
     tableName: 'users',
     replicaId: LOCAL,
     replicaIds: members,
+    // The founders' placed nodes: the port addresses each from it.
+    bootstrapMembership: genesisStamp(members, Object.fromEntries(
+      members.map((member) => [member, NODE_OF[member]]))),
     nodeId: NODE_OF[LOCAL],
     dbPath: ':memory:',
     deferElection: true,
   }, provider);
   partition.systemTableCache = cache;
+  answerCommittedOperation(partition);
   t.teardown(async () => {
     partition.systemTableCache = null;
     await partition.shutdown();
@@ -121,9 +148,7 @@ async function openLeader(t, answer, members = [LOCAL]) {
   partition.raft.campaign();
   await settle();
   if (members.length === 1) {
-    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATIONS.INSERT,
-      serviceRow(TARGET, 2));
-    await settle();
+    await requestAdmission(partition);
   }
   return {partition, provider, cache};
 }
@@ -197,11 +222,8 @@ const NOT_LEADER_ANSWER = Object.freeze({
 const LATCHES = Object.freeze({
   'an admission the port accepted (in flight)': {
     open: (t) => openLeader(t, PROPOSED),
-    latch: async ({partition}) => {
-      const again = admitPartitionRaftPeer(partition, {replicaIdentity: TARGET,
-        peerAddress: serviceRow(TARGET, 2).address});
-      return again.outcome === RAFT_MEMBERSHIP_ADMISSION_OUTCOME.IN_FLIGHT;
-    },
+    latch: async ({partition}) =>
+      await requestAdmission(partition) === 'in_flight',
     count: (provider, mark) => additionsOfTarget(provider, mark),
     expected: () => 1,
   },
@@ -216,14 +238,10 @@ const LATCHES = Object.freeze({
       const world = await openLeader(t, NOT_LEADER_ANSWER, [LOCAL, PEER]);
       world.provider.setRole(RaftRole.FOLLOWER);
       await settle();
-      world.cache.applySystemTableChange(TABLES.SERVICES,
-        CDC_OPERATIONS.INSERT, serviceRow(TARGET, 2));
-      await settle();
+      world.notLeader = await requestAdmission(world.partition);
       return world;
     },
-    latch: async ({partition}) => admitPartitionRaftPeer(partition,
-      {replicaIdentity: TARGET, peerAddress: serviceRow(TARGET, 2).address})
-      .outcome === RAFT_MEMBERSHIP_ADMISSION_OUTCOME.NOT_LEADER,
+    latch: async ({notLeader}) => notLeader === 'not_leader',
     count: (provider, mark) => additionsOfTarget(provider, mark),
     expected: (wakeEvent) => wakeEvent === RAFT_EVENT.LEADER ? 1 : 0,
   },

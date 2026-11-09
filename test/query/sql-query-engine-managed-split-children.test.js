@@ -54,6 +54,8 @@ import {
 } from './sql-query-engine-test-support.js';
 
 
+import {createCommittedServeEligibilityOwner} from
+  '../control-plane/serve-eligibility-test-support.js';
 test('SQLQueryEngine - executeManagedSplit defers before child metadata ' +
   'insertion when child provisioning precheck cannot satisfy quorum', async (t) => {
   const tables = [{
@@ -120,6 +122,9 @@ test('SQLQueryEngine - executeManagedSplit defers before child metadata ' +
   const childInsertCalls = [];
   const provisionCalls = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: 'node-a',
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -346,6 +351,9 @@ test('SQLQueryEngine - provisionInitialTablePartition uses explicit child ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -471,6 +479,9 @@ test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -681,7 +692,6 @@ test('SQLQueryEngine - provisionInitialTablePartition defers active service ' +
     node_id: localNodeId,
     address: `${localNodeId}/partition/${replicaId}`,
   }];
-  const cacheWaitCalls = [];
   let sleepCalls = 0;
 
   const cache = {
@@ -759,16 +769,7 @@ test('SQLQueryEngine - provisionInitialTablePartition defers active service ' +
     },
   };
 
-  const cdcIntegrationService = {
-    async waitForCacheUpdate(tableName, key, expectPresent, options = {}) {
-      cacheWaitCalls.push({
-        tableName,
-        key,
-        expectPresent,
-        options,
-      });
-    },
-  };
+  const cdcIntegrationService = {};
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -796,11 +797,6 @@ test('SQLQueryEngine - provisionInitialTablePartition defers active service ' +
     replicaCount: 1,
   });
 
-  t.equal(
-    cacheWaitCalls.length,
-    0,
-    'visible service rows should skip authoritative metadata repair and defer active enforcement to the routable wait',
-  );
   t.equal(
     services[0]?.status,
     'active',
@@ -899,6 +895,9 @@ test('SQLQueryEngine - provisionInitialTablePartition starts replica metadata ' 
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
@@ -1078,9 +1077,15 @@ test('SQLQueryEngine - provisionInitialTablePartition can stop waiting once ' +
       resolvedReplicaCount: 3,
       minimumRoutableReplicaCount: 2,
       routableReplicaCount: 2,
+      committedReplicaCount: 2,
+      missingReplicaCount: 1,
+      epoch: {
+        publicationEpoch: 1,
+        publicationId: 'cluster_membership-1',
+      },
       fullReplicaCountConverged: false,
-      contractState: OWNER_CONTRACT_STATE.PENDING,
-      nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
+      contractState: OWNER_CONTRACT_STATE.UNDER_REPLICATED,
+      nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
       reasonCodes: [],
       retryAfterMs: 0,
     },

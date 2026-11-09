@@ -1,0 +1,16 @@
+{
+  "questId": "committed-readiness-fixture-custody",
+  "stage": "scale-by-machine-factor-import-fix-verification",
+  "verdict": "approve",
+  "verifier": "subagent:b53f502d-cb6d-4d3b-b17c-9e51dbbbcf82",
+  "ruleSetRevision": 5,
+  "baseCommit": "3ef020d0328c07afb9ed608fb78229c79acfba87",
+  "productionFilesModified": 0,
+  "files": {
+    "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "1572dd597751fff6262836572ed6b19cf3925c6a6704fe26669ce4b818daf67d",
+    "test/test-helpers/seed-release-failure-custody-fixture.js": "68168f983ae4ddcb95aefaf424856149340b67903f9af6eeb34fe7d999aa9101",
+    "test/bootstrap/retained-seed-original-handoff.integration.test.js": "014f1bb2b49b3d5442fcaaab6e2ae3032a941dbddc8f09c2de821419aab160eb",
+    "test/bootstrap/fresh-seed-activation.integration.test.js": "a543c476b7dc1d2c9add28d4133c7adb204bb9b9c8fcdc2dac6ca60242128cfa",
+    "test/integration/critical-replica-placement-causal-trace.integration.test.js": "3affe2a79156164db0b8616e669ffc64edfb988e603cd2a0cc3141c4dc813993"
+  }
+}

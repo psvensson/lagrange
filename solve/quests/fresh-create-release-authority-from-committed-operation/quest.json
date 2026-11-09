@@ -1,0 +1,72 @@
+{
+  "schema": "solve-quest/2",
+  "id": "fresh-create-release-authority-from-committed-operation",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The release of a partition that has no write origin is authorized for a fresh founding CREATE by a committed fact that whichever leader answers reads and validates. NOT_LEADER is answered first, before any authority read, so a non-leader never grants or refuses on authority. The leader reads the founding create operation row in replica_operations authoritatively through its create-admission owner (the request carries the create identity as a lookup key only, never as authority) and grants only when the row matches the request's create identity, is an ADD of the leader's partition, has its create admission MATERIALIZED or ACTIVE and is not completed, and its first step carries a GENESIS founding stamp naming the leader's replica. Membership of the leader's committed configuration is not a grant condition, so a fresh group whose configuration changed before its release (an admitted learner, a replaced founder) still releases. The FRESH_CREATE in-memory token, its AUTHORIZATION WeakMap entry, the up-front authorizeFreshCreate read and the pending-token confirmation added by fresh-create-failure-after-committed-admission are deleted as superseded (R09, recorded in both quest logs). Refusals stay typed: an unavailable authority read is UNAVAILABLE{create_admission_authority, retryAfterMs} retried by the existing completion loop under the existing create deadline; a row that fails the conditions, a forged or foreign identity, a restored legacy group or a join ADD is OPERATOR_REQUIRED{fresh_storage_or_operator_authority, reason}; FRESH_SEED and OPERATOR authority are unchanged. On a fresh founding group whose first leader is on another node than a founder, that founder's release reaches CUT_OVER.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/fresh-create-release-authority-from-committed-operation/evidence/receipt.json",
+      "requiredReceipts": [
+        "cross-node-founding-release-cut-over",
+        "legacy-and-join-no-origin-still-refused",
+        "leader-side-authority-unavailability-typed",
+        "forged-identity-refused",
+        "configuration-change-still-releases",
+        "no-fresh-create-token-remains",
+        "reproducer-user-table-founding-released",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "class-not-instance",
+      "statement": "Instance of the class 'an authority is held as a node-local projection (an in-memory token) instead of a committed fact the deciding owner reads' (authority-and-recovery.md 'One owner per authoritative fact; projections are disposable', :109-119). Applies to every fresh founding CREATE of every partition, not to user tables only; FRESH_SEED and OPERATOR carriers are recorded as residual consumers (R17, owners in evidence/design-note.md), not changed."
+    },
+    {
+      "id": "precedent-tx1-release-authority",
+      "statement": "Continues the TX1 cutover interaction proposal (replicated-transaction-decision-and-apply/cutover-interaction-proposal-20261011.md :289-309): the release authority of ordinary fresh table creation is the existing create operation/job identity, the handler reads actual committed membership, no new authority record, no fresh:true boolean, RESTART_CREATE or a table lookup never authorizes, and a restored legacy no-origin group never acquires automatic fresh permission (:276-287)."
+    },
+    {
+      "id": "completion-owner-supersession",
+      "statement": "Approved by the lead 2026-11-02: the releaseFreshCreate body pinned by scripts/participant-release-completion-audit.js FRESH_CONTRACT is updated at implementation, and the fresh-CREATE prerequisite clause of participant-release-completion-owner is superseded explicitly under R09 by an appended statement in that quest's log (recorded text never edited). OWNER_CONTRACT and REQUEST_CONTRACT stay byte-identical and the audit proves it; never a widened audit."
+    },
+    {
+      "id": "trace-first-divergence",
+      "statement": "The first divergence is recorded in docs/evidence/fresh-create-failure-after-committed-admission-2026-11/reproducer-run-2026-11-02-5d7469476.md (Next link) and in evidence/research-2026-11-02.md here; a new witness that moves it is recorded before further src changes."
+    },
+    {
+      "id": "no-symptom-patches",
+      "statement": "No timeout, deadline or budget change; no new timer, retry loop, alias, fallback, carve-out, cache read, token serialization or cross-node token registry; OPERATOR_REQUIRED is not turned into a retry. Rejected remedies in evidence/research-2026-11-02.md section 3 are not reintroduced."
+    },
+    {
+      "id": "lab-execution",
+      "statement": "Live runs only through node scripts/lab.js (fleet first, dry run first, one scenario run at a time, thermal admission, no cluster node on the controller, no pruning on lab hosts); raw logs outside the repository in lagrange-evidence-store/<run-id>/, summaries and sha256 digests in quest evidence."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "proof",
+      "statement": "Red first on production-bound witnesses: a real cross-node founding group (real ReplicaHandlers, PartitionServices and raft-rs ports, JSON-encoded remote delivery) where a non-leader founder's release is refused OPERATOR_REQUIRED today and reaches CUT_OVER after; legacy, join and completed-founding negatives stay refused; leader-side authority unavailability retried within the existing deadline. Then one live run of fresh-formation-user-table-routability measuring the user-table founding release; scenario green is not claimed while C6 and C1/C10 remain."
+    },
+    {
+      "id": "sequencing",
+      "statement": "Follows fresh-create-failure-after-committed-admission-v2 (landed at bba206ddd, PR #189; supersedes fresh-create-failure-after-committed-admission), whose pending token closed the permanent-failure defect first; this quest deletes that mechanism as superseded. The two are kept as bounded, independently verified units with different invariants and witnesses (design note, 'Why this quest is separate'). Stream B (replica-admission-from-committed-operation) lands on its own and is not merged into either landing branch; once both are on main, this quest moves the admission-input boundary (src/node/replica-create-admission-input.js) to the first requestReplicaAdmission send and closes the verifier coverage gaps C1-C3 recorded in this log."
+    },
+    {
+      "id": "rejected-condition-e",
+      "statement": "Considered and rejected (lead 2026-11-02): requiring every member of the leader's committed configuration to be a GENESIS founder. It would turn a legitimately fresh group whose configuration changed before release into a permanent OPERATOR_REQUIRED (a new orphan path, R11/R12); conditions (a)-(d) already refuse a restored legacy group."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "admission-gating",
+    "recovery-replay",
+    "transport-delivery"
+  ],
+  "sealedAt": "80f9b8df2f81451fb142aad2bc95706b4897ceb2"
+}

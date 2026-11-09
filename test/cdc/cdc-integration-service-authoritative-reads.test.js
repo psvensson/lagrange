@@ -110,7 +110,7 @@ test('CDCIntegrationService - steady-state system table writes skip local follow
       SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1'},
       {status: 'ready'},
-      {skipCacheWait: true},
+      {},
     );
 
     t.equal(

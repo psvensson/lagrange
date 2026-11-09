@@ -2,8 +2,11 @@
 // consensus configuration so the final MovieLens cohort is exactly the live
 // replicas, while row absence alone remains conservative.
 //
-// The partition's contribution is the membership proposals its services-cache
-// reconcile makes through the frozen operation port (proposeConfChange). The
+// The partition's contribution is the membership proposals it makes through
+// the frozen operation port (proposeConfChange): retirements from accepted
+// services-row deletes and terminal evidence, admissions from the targets'
+// requests answered from their committed operations (quest
+// replica-admission-from-committed-operation; a row never admits). The
 // port is built by the controllable provider through the service's
 // createOperationPort seam, so every ADD_PEER / REMOVE_PEER the partition
 // proposes is recorded in the provider's confChanges and the configuration
@@ -30,10 +33,13 @@ import {
 } from '../../src/raft/raft-operation-port-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
 import {
   ControllableConsensusPort,
   createControllablePartitionService,
 } from '../partition/partition-service-test-support.js';
+import {answerCommittedOperations, committedAddOperation} from
+  '../partition/committed-operation-gateway-fixture.js';
 
 const PARTITION_ID = 'sql_transaction_participants-p1';
 const R1 = 'sql_transaction_participants-p1-r1';
@@ -77,23 +83,28 @@ function peerAddresses(partition) {
 function proposalsSince(provider, mark) {
   return provider.confChanges.slice(mark).map((change) => ({
     type: change.type,
-    peerAddress: change.peerAddress,
     replicaIdentity: change.replicaIdentity,
+    ...(change.nodeId === undefined ? {} : {nodeId: change.nodeId}),
   }));
 }
 
+function nodeOf(replicaId) {
+  return ADDRESS_BY_REPLICA[replicaId].split('/')[0];
+}
+
+// An admission commits the node the committed operation names.
 function addPeer(replicaId) {
   return {
     type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
-    peerAddress: ADDRESS_BY_REPLICA[replicaId],
     replicaIdentity: replicaId,
+    nodeId: nodeOf(replicaId),
   };
 }
 
+// A removal names the replica identity only.
 function removePeer(replicaId) {
   return {
     type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
-    peerAddress: ADDRESS_BY_REPLICA[replicaId],
     replicaIdentity: replicaId,
   };
 }
@@ -111,6 +122,16 @@ function nextImmediate() {
 async function settleCacheChange() {
   await nextImmediate();
   await nextImmediate();
+}
+
+// The committed ADD operation of each joining replica, on its node.
+const OPERATIONS = [R4, R5, REPLACEMENT].map((replicaId) =>
+  committedAddOperation(PARTITION_ID, [replicaId, nodeOf(replicaId)]));
+
+async function requestAdmission(partition, replicaId) {
+  await partition.handleReplicaAdmissionRequest({partitionId: PARTITION_ID,
+    replicaIdentity: replicaId, operationId: `add-op-${replicaId}`});
+  await settleCacheChange();
 }
 
 test('authoritative replica deletes prune departed peers so the final ' +
@@ -142,11 +163,14 @@ async (t) => {
     tableName: 'sql_transaction_participants',
     replicaId: R1,
     replicaIds: [R1, R2, R3],
+    bootstrapMembership: genesisStamp([R1, R2, R3],
+      Object.fromEntries([R1, R2, R3].map((id) => [id, nodeOf(id)]))),
     nodeId: 'node-a',
     dbPath: ':memory:',
     deferElection: true,
   }, provider);
   partition.systemTableCache = cache;
+  answerCommittedOperations(partition, OPERATIONS);
   t.teardown(async () => {
     partition.systemTableCache = null;
     await partition.shutdown();
@@ -187,10 +211,13 @@ async (t) => {
     );
   }
   await settleCacheChange();
+  for (const replicaId of [R4, R5]) {
+    await requestAdmission(partition, replicaId);
+  }
   t.same(
     proposalsSince(provider, mark),
     [removePeer(R2), removePeer(R3), addPeer(R4), addPeer(R5)],
-    'the accepted deletes retire r2/r3 and the reconcile admits r4/r5, each ' +
+    'the accepted deletes retire r2/r3 and the requests admit r4/r5, each ' +
       'as one membership proposal through the port',
   );
   t.same(
@@ -206,6 +233,7 @@ async (t) => {
     serviceRow(REPLACEMENT, 4),
   );
   await settleCacheChange();
+  await requestAdmission(partition, REPLACEMENT);
   t.same(
     proposalsSince(provider, mark),
     [addPeer(REPLACEMENT)],
@@ -307,7 +335,10 @@ async (t) => {
   });
   partition.replicaIds.push(unprovenReplicaId);
   mark = provider.confChanges.length;
-  partition.reconcileRaftPeersFromCache();
+  // A services change of the partition: the cache handler runs over a
+  // configuration that holds a row-less peer.
+  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATIONS.UPDATE,
+    serviceRow(R5, 6));
   await settleCacheChange();
   t.ok(
     peerAddresses(partition).includes(unprovenAddress),

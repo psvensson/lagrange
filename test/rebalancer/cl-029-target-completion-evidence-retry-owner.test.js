@@ -118,6 +118,7 @@ import {DurableWorkflowCoordinator} from
 import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
 
 import {createReplaceWitness} from './replace-witness-fixture.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 const TEST_NODE_ID = 'node-target-local';
 const TEST_SEED_NODE_ID = 'node-seed-remote';
 const TEST_OPERATION_ID = 'op-cl-029-replace';
@@ -456,14 +457,13 @@ function createHarness(store) {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async refreshAuthoritativeCacheRow() {
         return true;
       },
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -489,11 +489,11 @@ function createHarness(store) {
         return {allowed: true, decision: 'allow'};
       },
     },
-    controlPlaneReadinessService: {
+    controlPlaneReadinessService: partialReadinessFake({
       getNodeReadinessSync() {
         return null;
       },
-    },
+    }),
     operationWorkflowCoordinator: workflowCoordinator,
     executorOutcomeEmitter: emitter,
     setTimeoutFn(callback, delayMs) {

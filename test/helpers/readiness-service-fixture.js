@@ -13,6 +13,8 @@ import {
 import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
+import {CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 
 const READINESS_FIXTURE_NODE_ID = 'readiness-fixture-node';
 const NODE_ID_COLUMN = 'node_id';
@@ -89,7 +91,16 @@ const NEUTRAL_COLLABORATOR_MEMBERS = Object.freeze({
     getCapacitySnapshotForNode: answerNullAsync,
     getCapacitySnapshotForNodeSync: answerNull,
   }),
-  authoritativeControlPlaneView: () => ({syncOwnerDependencies: noop}),
+  authoritativeControlPlaneView: () => ({
+    syncOwnerDependencies: noop,
+    // The serve-eligibility read answered this when the view lacked it.
+    readReadinessOwnerRows: async () => ({
+      success: false,
+      error: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR
+        .AUTHORITATIVE_READ_OWNER_UNAVAILABLE,
+      rows: [],
+    }),
+  }),
   authoritativeNodeEvidenceReconciler: () => ({syncOwnerDependencies: noop}),
 });
 
@@ -298,13 +309,19 @@ function ownerClockOrAmbient(clock) {
 // The members an owner calls on the node's readiness service without a
 // probe, and the answer each gave the owner when a hand-written fake lacked
 // it: no planning answer, not ready now, no startup authority, no readiness
-// (not process-alive), and the owner's own clock.
+// (not process-alive), no committed node answer, and the owner's own clock.
 function readinessConsumerMembers(clock) {
   return {
     getPriorityRecoveryPlanningAnswerSync: answerNull,
     projectNodeLiveness: answerNull,
     getStartupAuthoritySnapshotSync: answerNull,
     getNodeReadinessSync: answerNull,
+    // No committed node answer: the rebalancer plans over no candidate rows.
+    answerCommittedNodes: answerNull,
+    // The committed serve record: a refresh that settles with nothing, and a
+    // subscription that never fires.
+    readServeEligibility: answerNullAsync,
+    subscribeServeEligibility: () => noop,
     now: ownerClockOrAmbient(clock),
   };
 }
@@ -319,6 +336,11 @@ function readinessConsumerMembers(clock) {
  * @return {Object} The same fake.
  */
 function readinessServiceFake(fake, clock) {
+  // A frozen port is caller-owned and declared complete (PR #201 custody):
+  // the fixture never adapts it, so a member it lacks stays missing.
+  if (Object.isFrozen(fake)) {
+    return fake;
+  }
   for (const [member, answer] of Object.entries(
     readinessConsumerMembers(clock),
   )) {

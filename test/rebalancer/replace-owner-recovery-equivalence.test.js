@@ -103,12 +103,12 @@ const SETTLE_TURNS = 40;
 // budgets.
 const LONG_WAIT_MS = 3_600_000;
 
-function readyNode(nodeId) {
+function readyNode(nodeId, nowMs = Date.now()) {
   return {
     node_id: nodeId,
     status: NODE_STATE.ACTIVE,
     connection_state: NODE_STATE.READY,
-    ready_lease_expires_at: Date.now() + READY_LEASE_EXTENSION_MS,
+    ready_lease_expires_at: nowMs + READY_LEASE_EXTENSION_MS,
   };
 }
 
@@ -255,7 +255,7 @@ async function deliver(world, target, payload) {
 // double always was.
 function createObservedCache() {
   const cache = createMockCache({
-    nodes: NODE_IDS.map(readyNode),
+    nodes: NODE_IDS.map((nodeId) => readyNode(nodeId)),
     services: [
       serviceRow(SOURCE_REPLICA_ID, SOURCE_NODE_ID, 'follower'),
       serviceRow(PEER_REPLICA_B, PEER_NODE_B, 'leader'),
@@ -303,8 +303,14 @@ function startCoordinator(world) {
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
     },
-    controlPlaneReadinessService: world.readiness,
-    tablePolicyService: {getPolicyForPartition: () => ({minReplicaCount: 3})},
+    readinessFixture: {
+      callbacks: world.readiness,
+      now: () => Date.now() + world.clockOffsetMs,
+      readNodeRows: () => NODE_IDS.map((id) => readyNode(id, Date.now() + world.clockOffsetMs)),
+    },
+    tablePolicyService: {getPolicyForPartition: () => ({
+      targetReplicaCount: 3, minReplicaCount: 3,
+    })},
     setTimeoutFn(fn, delayMs) {
       const handle = {fn, delayMs, cleared: false, unref() {}};
       world.fallbackTimers.push(handle);

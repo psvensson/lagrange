@@ -175,3 +175,104 @@ test(
     );
   },
 );
+
+test(
+  'read-only observation causes zero product cache writes while independent CDC updates remain visible',
+  async (t) => {
+    const writableCache = createOpenMembershipCache();
+    const readOnlyCache = createReadOnlyCache(writableCache);
+    const readiness = createReadinessService({
+      throwOnAuthoritativePublishedRead: true,
+    });
+    const initialNodesVersion = writableCache.getTableMutationVersion(
+      TABLES.NODES,
+    );
+    const initialPublicationsVersion = writableCache.getTableMutationVersion(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+    );
+
+    const api = new AdminWebSocketAPI({
+      nodeId: NODE_ID,
+      systemTableCache: readOnlyCache,
+      controlPlaneReadinessService: readiness.service,
+      nowFn: () => NOW_MS,
+    });
+
+    t.throws(
+      () =>
+        readOnlyCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+          id: NODE_ID,
+          node_id: NODE_ID,
+          status: 'inactive',
+        }),
+      /Cache write violation/i,
+      'direct observer write through readOnlyCache is refused',
+    );
+
+    const beforeCdc = await api.executeLocalQueryEnvelope(
+      {
+        queryId: 'q-readonly-observer-before-cdc',
+        sql: 'SELECT * FROM control_snapshot_local()',
+        params: [],
+      },
+      {
+        clientInfo: {
+          lane: 'snapshot',
+        },
+      },
+    );
+    t.equal(beforeCdc.success, true, 'snapshot observation succeeds');
+    t.equal(
+      writableCache.getTableMutationVersion(TABLES.NODES),
+      initialNodesVersion,
+      'observer query produces zero nodes table cache mutations',
+    );
+    t.equal(
+      writableCache.getTableMutationVersion(TABLES.CONTROL_PLANE_PUBLICATIONS),
+      initialPublicationsVersion,
+      'observer query produces zero publications table cache mutations',
+    );
+
+    // Independent CDC applies a published membership row to the writable cache.
+    writableCache.applySystemTableChange(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      'UPDATE',
+      {
+        ...OPEN_PUBLICATION_ROW,
+        status: 'PUBLISHED',
+        acknowledged_node_ids: [NODE_ID, 'node-2'],
+      },
+    );
+    const postCdcPublicationsVersion = writableCache.getTableMutationVersion(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+    );
+    t.ok(
+      postCdcPublicationsVersion > initialPublicationsVersion,
+      'independent CDC write advances the underlying cache mutation version',
+    );
+
+    const afterCdc = await api.executeLocalQueryEnvelope(
+      {
+        queryId: 'q-readonly-observer-after-cdc',
+        sql: 'SELECT * FROM control_snapshot_local()',
+        params: [],
+      },
+      {
+        clientInfo: {
+          lane: 'snapshot',
+        },
+      },
+    );
+    t.equal(afterCdc.success, true, 'post-CDC snapshot observation succeeds');
+    t.equal(
+      writableCache.getTableMutationVersion(TABLES.CONTROL_PLANE_PUBLICATIONS),
+      postCdcPublicationsVersion,
+      'post-CDC observer query still produces zero product cache writes',
+    );
+    t.same(
+      afterCdc.rows?.[0]?.publishedNodes,
+      ['node-2', NODE_ID],
+      'independent CDC update is immediately visible through the read-only cache',
+    );
+  },
+);

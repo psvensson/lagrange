@@ -1,3 +1,4 @@
+import {createMockCoordinator, createMockControlPlaneReadinessService} from './test-helpers.js';
 /**
  * Deterministic latency witness for the staggered-joiner dead-scheduling gap.
  *
@@ -30,9 +31,6 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
   REBALANCE_COORDINATOR_EVENT,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {
@@ -43,7 +41,6 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
-import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 const SEED_NODE_ID = 'node-seed';
 const JOINER_NODE_ID = 'node-joiner';
@@ -137,30 +134,10 @@ function createSharedCache() {
   return {cache, tables};
 }
 
-function buildReadinessSnapshot(cache, nodeId) {
-  const nodeRow = cache.get('nodes', nodeId);
-  const eligible = nodeRow?.connection_state === 'ready' &&
-    Number(nodeRow?.ready_lease_expires_at) > 0;
-  return {
-    nodeId,
-    dimensions: {
-      [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-      [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: eligible,
-      [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: eligible,
-      [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: eligible,
-      [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: eligible,
-      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: eligible,
-      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: eligible,
-      [CONTROL_PLANE_READINESS_DIMENSION
-        .CONTROL_PLANE_RECOVERY_ELIGIBLE]: eligible,
-      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: eligible,
-    },
-    reasons: [],
-  };
-}
-
 function createRebalancer(cache, partitionId) {
-  const ownerClock = () => 1_800_000_000_000;
+  const controlPlaneReadinessService = createMockControlPlaneReadinessService({
+    systemTableCache: cache, now: () => 1_800_000_000_000,
+  });
   const rebalancer = new UnifiedRebalancer({
     entityId: partitionId,
     entityType: EntityType.PARTITION,
@@ -171,28 +148,17 @@ function createRebalancer(cache, partitionId) {
       updateSystemTableRow: async () => ({success: true}),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({targetReplicaCount: 5}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 5}),
     },
     messageRouter: {
       getConnectionState: () => 'connected',
       getConnectedNodes: () => [SEED_NODE_ID],
       isOutboundQueueAvailable: () => true,
     },
-    rebalanceCoordinator: {
-      getMoveSafetyError: () => null,
-      getStats: () => ({inFlightOperations: 0, totalOperations: 0}),
-      storageAccountingService: {estimateReplicaBytes: () => 1},
-      storageAdmissionService: {
-        checkAdd: async () => ({decision: 'allow'}),
-        checkReplace: async () => ({decision: 'allow'}),
-      },
-    },
+    rebalanceCoordinator: createMockCoordinator({controlPlaneReadinessService}),
     sqlQueryEngine: {executeQuery: async () => ({success: true, rows: []})},
-    controlPlaneReadinessService: partialReadinessFake({
-      getNodeReadinessSync: (nodeId) =>
-        buildReadinessSnapshot(cache, nodeId),
-    }, ownerClock),
-    nowFn: ownerClock,
+    controlPlaneReadinessService,
+    nowFn: () => 1_800_000_000_000,
     randomSource: {random: () => 0},
   });
   rebalancer.initialize();

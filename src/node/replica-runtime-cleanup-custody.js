@@ -94,7 +94,12 @@ async function fenceFailedReplicaCreateRuntime(handler, replicaId, partitionId,
     handler.localServices.delete(replicaId);
   }
   if (handler.localReplicas.get(replicaId)?.service === service) {
-    handler.setLocalReplica(replicaId, {service: null});
+    handler.setLocalReplica(replicaId, {
+      service: null,
+      createAdmissionOperationId: null,
+      createAdmissionToken: null,
+      createAttemptToken: null,
+    });
   }
   return true;
 }

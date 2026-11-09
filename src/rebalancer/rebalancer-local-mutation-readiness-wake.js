@@ -13,6 +13,51 @@ const LOCAL_MUTATION_READINESS_WAKE_TABLES = Object.freeze(new Set([
   TABLES.REPLICA_OPERATIONS,
 ]));
 
+function isLocalMutationReadinessWakeArmed(rebalancer) {
+  return Boolean(
+    rebalancer.localMutationReadinessWakeListener ||
+      rebalancer.localMutationReadinessPlanningUnsubscribe,
+  );
+}
+
+function attachLocalMutationReadinessCacheListener(
+  rebalancer,
+  scheduleWakeEvaluation,
+) {
+  const cache = rebalancer.systemTableCache;
+  if (!cache || typeof cache.onCacheChange !== 'function') {
+    return false;
+  }
+  const listener = (tableName) => {
+    if (LOCAL_MUTATION_READINESS_WAKE_TABLES.has(tableName)) {
+      scheduleWakeEvaluation();
+    }
+  };
+  rebalancer.localMutationReadinessWakeListener = listener;
+  cache.onCacheChange(listener);
+  return true;
+}
+
+function attachLocalMutationReadinessPlanningListener(
+  rebalancer,
+  scheduleWakeEvaluation,
+) {
+  const readinessService = rebalancer.controlPlaneReadinessService;
+  if (
+    !readinessService ||
+    typeof readinessService.subscribeReadinessPlanningSnapshots !== 'function'
+  ) {
+    return false;
+  }
+  rebalancer.localMutationReadinessPlanningUnsubscribe =
+    readinessService.subscribeReadinessPlanningSnapshots((snapshot) => {
+      if (!snapshot?.nodeId || snapshot.nodeId === rebalancer.nodeId) {
+        scheduleWakeEvaluation();
+      }
+    });
+  return true;
+}
+
 /**
  * Event wake for a rebalancer deferred on local mutation readiness (owner
  * rule: no early unblock may be ended only by a timer). While deferred, the
@@ -36,19 +81,11 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
   },
 
   armLocalMutationReadinessWake() {
-    const cache = this.systemTableCache;
-    if (
-      this.localMutationReadinessWakeListener ||
-      !cache ||
-      typeof cache.onCacheChange !== 'function'
-    ) {
-      return Boolean(this.localMutationReadinessWakeListener);
+    if (isLocalMutationReadinessWakeArmed(this)) {
+      return true;
     }
-    const listener = (tableName) => {
-      if (
-        !LOCAL_MUTATION_READINESS_WAKE_TABLES.has(tableName) ||
-        this.localMutationReadinessWakeCheckPending === true
-      ) {
+    const scheduleWakeEvaluation = () => {
+      if (this.localMutationReadinessWakeCheckPending === true) {
         return;
       }
       this.localMutationReadinessWakeCheckPending = true;
@@ -57,9 +94,15 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
         this.resolveLocalMutationReadinessWake();
       });
     };
-    this.localMutationReadinessWakeListener = listener;
-    cache.onCacheChange(listener);
-    return true;
+    const armedCache = attachLocalMutationReadinessCacheListener(
+      this,
+      scheduleWakeEvaluation,
+    );
+    const armedPlanning = attachLocalMutationReadinessPlanningListener(
+      this,
+      scheduleWakeEvaluation,
+    );
+    return armedCache || armedPlanning;
   },
 
   disarmLocalMutationReadinessWake() {
@@ -69,10 +112,15 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
     if (listener && cache && typeof cache.offCacheChange === 'function') {
       cache.offCacheChange(listener);
     }
+    const unsubscribe = this.localMutationReadinessPlanningUnsubscribe;
+    this.localMutationReadinessPlanningUnsubscribe = null;
+    if (typeof unsubscribe === 'function') {
+      unsubscribe();
+    }
   },
 
   resolveLocalMutationReadinessWake() {
-    if (!this.localMutationReadinessWakeListener) {
+    if (!isLocalMutationReadinessWakeArmed(this)) {
       return false;
     }
     if (!this.isLeader || this.isShuttingDown) {

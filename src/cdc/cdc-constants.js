@@ -19,7 +19,6 @@ const CDC_EVENT = Object.freeze({
 const CDC_CONFIG_KEY = Object.freeze({
   RETRY_MAX_ATTEMPTS: 'cdc.retryMaxAttempts',
   RETRY_DELAY_MS: 'cdc.retryDelayMs',
-  CACHE_WAIT_TIMEOUT_MS: 'cdc.cacheWaitTimeoutMs',
 });
 
 const CDC_DEFAULTS = Object.freeze({
@@ -29,7 +28,6 @@ const CDC_DEFAULTS = Object.freeze({
   RETRY_DELAY_MS: 100,
   // Wait briefly for CDC to apply to the cache after successful writes.
   // ends-on: the routed write appears in the local cache
-  CACHE_WAIT_TIMEOUT_MS: 1000,
 });
 
 // Config key for the current assignment epoch persisted in the config table.
@@ -98,6 +96,10 @@ const CDC_LOG_MSG = Object.freeze({
   UPDATE_FAILED: 'Failed to update system table row',
   DELETING_ROW: 'Deleting system table row via SQL',
   DELETED_ROW: 'System table row deleted',
+  ZERO_ROW_DELETE_RECONCILE_FAILED:
+    'Zero-row deletion projection reconcile failed',
+  PROJECTION_WAIT_STARTED: 'Projection wait started',
+  PROJECTION_WAIT_ENDED: 'Projection wait ended',
   DELETE_FAILED: 'Failed to delete system table row',
   UPSERTING_ROW: 'Upserting system table row via SQL',
   UPSERTED_ROW: 'System table row upserted',
@@ -170,8 +172,6 @@ const CDC_ERROR_MSG = Object.freeze({
   UPDATE_FAILED: 'Update failed',
   DELETE_FAILED: 'Delete failed',
   UPSERT_FAILED: 'Upsert failed',
-  CACHE_WAIT_TIMEOUT: (tableName, key, timeoutMs) =>
-    `Cache update not observed for ${tableName}:${key} within ${timeoutMs}ms`,
   INVALID_EVENT: 'Invalid CDC event: event must be an object',
   NOT_EPOCH_CHANGE_PREFIX: 'Not an epoch change event: config_key is ',
   EPOCH_MANAGER_REQUIRED: 'epochManager is required',

@@ -12,7 +12,6 @@ import {
 } from '../partition/partition-transition-row.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_STEADY_STATE = 'steady_state';
 const LOCAL_STR_TABLE_PARTITION_METADATA_WAIT = 'table_partition_metadata_wait';
 const LOCAL_STR_PARTITION_ROUTING_WAIT = 'partition_routing_wait';
 const LOCAL_STR_PARTITION_LEADER_WAIT = 'partition_leader_wait';
@@ -25,7 +24,6 @@ const {
   SERVICE_TYPE,
   TABLES,
   TIMEOUT_BUDGET_CLASSIFICATION,
-  TIMEOUT_BUDGET_DEFAULT,
   getRemainingBudgetMs,
   isRetryableManagedSplitTransition,
 } = SQL_QUERY_ENGINE_SHARED;
@@ -257,17 +255,10 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
       return;
     }
 
-    const usesCacheRepairWaits =
-      this.cdcIntegrationService &&
-      typeof this.cdcIntegrationService.waitForCacheUpdate === 'function' &&
-      this.systemCache &&
-      typeof this.systemCache.onCacheChange === 'function';
     const effectiveBudget = this.allocateControlPlaneTimeoutBudget({
       timeoutBudget,
       requestedBudgetMs: this.tablePartitionProvisioningTimeoutMs,
-      minimumBudgetMs: usesCacheRepairWaits ?
-        TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS :
-        this.tablePartitionProvisioningPollIntervalMs,
+      minimumBudgetMs: this.tablePartitionProvisioningPollIntervalMs,
       classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
       nestedOperation: 'table_partition_metadata_wait',
       timeoutError:
@@ -276,36 +267,6 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
     const waitBudgetMs = getRemainingBudgetMs(effectiveBudget, {
       now: this.nowFn,
     });
-
-    if (usesCacheRepairWaits) {
-      const waits = [
-        this.cdcIntegrationService.waitForCacheUpdate(
-          TABLES.PARTITIONS,
-          partitionId,
-          true,
-          {
-            fallbackPhase: 'steady_state',
-            timeoutMs: waitBudgetMs,
-          },
-        ),
-      ];
-      if (tableId) {
-        waits.push(
-          this.cdcIntegrationService.waitForCacheUpdate(
-            TABLES.TABLES,
-            tableId,
-            true,
-            {
-              fallbackPhase: LOCAL_STR_STEADY_STATE,
-              timeoutMs: waitBudgetMs,
-            },
-          ),
-        );
-      }
-      await Promise.all(waits);
-      throwIfCancellationRequested(waitOptions.cancellationToken);
-      return;
-    }
 
     await this.waitForCondition(
       hasTableAndPartitionMetadata,
@@ -349,7 +310,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
 
   /**
    * Wait for one partition service row to become visible in local cache.
-   * Uses CDC authoritative repair when available.
+   * Polls the local metadata view within the provisioning budget.
    * @param {string} replicaId - Partition service replica ID.
    * @return {Promise<void>}
    * @private
@@ -365,18 +326,11 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
       return;
     }
 
-    const usesCacheRepairWaits =
-      this.cdcIntegrationService &&
-      typeof this.cdcIntegrationService.waitForCacheUpdate === 'function' &&
-      this.systemCache &&
-      typeof this.systemCache.onCacheChange === 'function';
     const nestedOperation = 'partition_service_metadata_wait';
     const effectiveBudget = this.allocateControlPlaneTimeoutBudget({
       timeoutBudget,
       requestedBudgetMs: this.tablePartitionProvisioningTimeoutMs,
-      minimumBudgetMs: usesCacheRepairWaits ?
-        TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS :
-        this.tablePartitionProvisioningPollIntervalMs,
+      minimumBudgetMs: this.tablePartitionProvisioningPollIntervalMs,
       classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
       nestedOperation,
       timeoutError:
@@ -386,22 +340,6 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
     const waitBudgetMs = getRemainingBudgetMs(effectiveBudget, {
       now: this.nowFn,
     });
-
-    if (usesCacheRepairWaits) {
-      await this.cdcIntegrationService.waitForCacheUpdate(
-        TABLES.SERVICES,
-        replicaId,
-        true,
-        {
-          fallbackPhase: LOCAL_STR_STEADY_STATE,
-          timeoutMs: waitBudgetMs,
-        },
-      );
-      throwIfCancellationRequested(waitOptions.cancellationToken);
-      if (this.hasServiceMetadata(replicaId)) {
-        return;
-      }
-    }
 
     await this.waitForCondition(
       conditionFn,
@@ -415,7 +353,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
         nestedOperation,
         scope: {replicaId},
-        observe: () => ({usedCacheRepairWait: Boolean(usesCacheRepairWaits)}),
+        observe: () => ({hasServiceMetadata: this.hasServiceMetadata(replicaId)}),
       },
     );
   }
@@ -494,18 +432,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         partitionId,
         routingReadinessDimension,
       ).length >= requiredCount;
-    const checkRoutableCountWithRepair = async () => {
-      if (hasRequiredRoutableCount()) {
-        return true;
-      }
-      return (
-        (await this.maybeAwaitPartitionRoutingRepair(
-          partitionId,
-          routingReadinessDimension,
-        )) && hasRequiredRoutableCount()
-      );
-    };
-    if (await checkRoutableCountWithRepair()) {
+    if (hasRequiredRoutableCount()) {
       return;
     }
 
@@ -518,6 +445,26 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
       timeoutError:
         QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX + partitionId,
     });
+    const repairOptions = {
+      timeoutBudget: effectiveBudget,
+      cancellationToken: waitOptions.cancellationToken || null,
+    };
+    const checkRoutableCountWithRepair = async () => {
+      if (hasRequiredRoutableCount()) {
+        return true;
+      }
+      return (
+        (await this.maybeAwaitPartitionRoutingRepair(
+          partitionId,
+          routingReadinessDimension,
+          repairOptions,
+        )) && hasRequiredRoutableCount()
+      );
+    };
+    if (await checkRoutableCountWithRepair()) {
+      return;
+    }
+
     await this.waitForCondition(
       checkRoutableCountWithRepair,
       getRemainingBudgetMs(effectiveBudget, {now: this.nowFn}),
@@ -552,6 +499,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
     partitionId,
     routingReadinessDimension = this.queryExecutor
       ?.defaultRoutingReadinessDimension,
+    options = {},
   ) {
     if (
       !partitionId ||
@@ -570,14 +518,17 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         routingReadinessDimension,
       );
     } catch (_error) {
+      throwIfCancellationRequested(options?.cancellationToken);
       return false;
     }
 
     try {
       return await this.queryExecutor.maybeAwaitDeniedPartitionRoutingRepair(
         routingSnapshot,
+        options,
       );
     } catch (_error) {
+      throwIfCancellationRequested(options?.cancellationToken);
       return false;
     }
   }

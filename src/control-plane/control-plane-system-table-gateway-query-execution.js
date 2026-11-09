@@ -247,10 +247,11 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
     return cdcIntegrationService;
   },
 
+  // A phase-scoped write (bootstrap, join admission) issued before this
+  // node has a CDC integration owner commits through the SQL engine. Every
+  // routed write answers at its commit, so no cache-wait opt-out gates it
+  // any more (replica-admission-from-committed-operation, attempt 2).
   shouldUseSqlMutationFallback(options = {}, tableName = null) {
-    if (options?.skipCacheWait !== true) {
-      return false;
-    }
     const phaseScope = normalizePhaseScope(options?.phaseScope);
     if (!phaseScope) {
       return false;
@@ -448,7 +449,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
 
   async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
     return this.executeRead(
-      buildAuthoritativeControlPlaneReadIntent(tableName, sql, params),
+      buildAuthoritativeControlPlaneReadIntent(tableName, sql, params, options),
       options,
     );
   },
@@ -459,6 +460,17 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       options,
     );
   },
+
+  async querySystemTable(firstArg, secondArg, thirdArg, fourthArg) {
+    if (typeof firstArg === 'string' && typeof secondArg === 'string') {
+      return this.executeQuery(secondArg, thirdArg || [], {
+        ...fourthArg,
+        tableName: firstArg,
+      });
+    }
+    return this.executeQuery(firstArg, secondArg || [], thirdArg || {});
+  },
+
 };
 
 function assignControlPlaneSystemTableGatewayQueryExecution(targetClass) {
@@ -468,4 +480,6 @@ function assignControlPlaneSystemTableGatewayQueryExecution(targetClass) {
   );
 }
 
-export {assignControlPlaneSystemTableGatewayQueryExecution};
+export {
+  assignControlPlaneSystemTableGatewayQueryExecution,
+};

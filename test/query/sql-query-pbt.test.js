@@ -14,6 +14,7 @@ import {QueryExecutor} from '../../src/query/query-executor.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -105,6 +106,7 @@ test('Property 10: SQL Query Distribution', async (t) => {
         }
 
         const executor = new QueryExecutor({
+          controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
           messageRouter: createMockMessageRouter(),
           systemCache: createMockSystemCache(partitionIds),
         });
@@ -142,6 +144,7 @@ test('Property 10b: ORDER BY preserves ordering', async (t) => {
         mockPartitionData.set('p2', p2Data);
 
         const executor = new QueryExecutor({
+          controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
           messageRouter: createMockMessageRouter(),
           systemCache: createMockSystemCache(['p1', 'p2']),
         });
@@ -181,6 +184,7 @@ test('Property 10c: LIMIT respects count', async (t) => {
         mockPartitionData.set('p2', p2Data);
 
         const executor = new QueryExecutor({
+          controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
           messageRouter: createMockMessageRouter(),
           systemCache: createMockSystemCache(['p1', 'p2']),
         });

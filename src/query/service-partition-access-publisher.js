@@ -210,7 +210,6 @@ class ServicePartitionAccessPublisher {
         `${this.nodeId}${ACCESS_ID_SEPARATOR}${serviceId}`,
       mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
       pressureRetryAfterMs: this.intervalMs,
-      skipCacheWait: true,
       workClass: PRESSURE_WORK_CLASS.BACKGROUND,
     };
   }

@@ -221,8 +221,24 @@ test('AdminControlSnapshot repair-deferred trigger refreshes after visible owner
         },
       },
     });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () => ({
+      applied: false,
+      failedTables: [TABLES.SERVICES],
+      causeChain: [
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_BACKPRESSURE_CAUSE,
+      ],
+      localQueryTransport: {
+        state:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE
+            .ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_QUERY_TRANSPORT_READY_STATE,
+        ready: true,
+      },
+    });
 
-    const result = await snapshot.resolveLocalControlSnapshot();
+    const result = await snapshot.resolveLocalControlSnapshot({
+      allowAuthoritativeRepair: true,
+    });
 
     t.equal(
       reconcileOptions.reconcileAuthoritativeMembershipPublication,
@@ -565,8 +581,24 @@ test('AdminControlSnapshot repair-deferred trigger preserves original snapshot a
         },
       },
     });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () => ({
+      applied: false,
+      failedTables: [TABLES.SERVICES],
+      causeChain: [
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_BACKPRESSURE_CAUSE,
+      ],
+      localQueryTransport: {
+        state:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE
+            .ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_QUERY_TRANSPORT_READY_STATE,
+        ready: true,
+      },
+    });
 
-    const result = await snapshot.resolveLocalControlSnapshot();
+    const result = await snapshot.resolveLocalControlSnapshot({
+      allowAuthoritativeRepair: true,
+    });
 
     t.equal(
       reconcileOptions.reconcileAuthoritativeMembershipPublication,
@@ -751,8 +783,24 @@ test('AdminControlSnapshot repair-deferred trigger queues owner reconcile withou
         },
       },
     });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () => ({
+      applied: false,
+      failedTables: [TABLES.SERVICES],
+      causeChain: [
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_BACKPRESSURE_CAUSE,
+      ],
+      localQueryTransport: {
+        state:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE
+            .ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_QUERY_TRANSPORT_READY_STATE,
+        ready: true,
+      },
+    });
 
-    const result = await snapshot.resolveLocalControlSnapshot();
+    const result = await snapshot.resolveLocalControlSnapshot({
+      allowAuthoritativeRepair: true,
+    });
 
     t.equal(
       reconcileOptions.length,
@@ -1016,28 +1064,32 @@ test('AdminControlSnapshot no-attempt path still triggers publication owner comm
         },
       },
     });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () => ({
+      applied: false,
+      failedTables: [TABLES.SERVICES],
+      causeChain: [
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_BACKPRESSURE_CAUSE,
+      ],
+      localQueryTransport: {
+        state:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE
+            .ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_QUERY_TRANSPORT_READY_STATE,
+        ready: true,
+      },
+    });
 
     const result = await snapshot.resolveLocalControlSnapshot();
 
-    t.match(
+    t.equal(
       reconcileOptions,
-      {
-        readSource: 'authoritative_preferred',
-        publishedActiveNodeIds: ['node-1', 'node-2'],
-        requiredAckNodeIds: ['node-1', 'node-2'],
-        acknowledgedNodeIds: ['node-1', 'node-2'],
-        allowPendingVisibility: true,
-        readProfile:
-          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
-        skipPublicationWriteReadback:
-          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK,
-      },
-      'repair-deferred no-attempt path should perform the narrow publication-owner reconcile',
+      null,
+      'ordinary no-attempt path must not trigger the publication owner command',
     );
     t.equal(
       buildOptions.length,
       1,
-      'the no-attempt trigger-only path should not rebuild the snapshot',
+      'the no-attempt path should not rebuild the snapshot',
     );
     t.same(
       result.nodes,
@@ -1048,15 +1100,12 @@ test('AdminControlSnapshot no-attempt path still triggers publication owner comm
       result,
       {
         snapshotObservation: {
-          state: 'deferred_refresh',
-          contractState: 'deferred',
-          nextAction: 'retry',
-          retryAfterMs:
-            ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+          state: 'stale_usable',
+          refreshState: 'idle',
         },
         observationMode: 'repair_deferred',
       },
-      'the no-attempt deferred path should keep bounded owner-reconcile retry evidence',
+      'the ordinary no-attempt path should return stale-usable observation without scheduling owner reconcile',
     );
   });
 
@@ -1136,8 +1185,32 @@ test(ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_OPEN_PROGRESS_TEST_NAME
       },
     },
   });
+  snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () => ({
+    applied: false,
+    failedTables: [TABLES.SERVICES],
+    causeChain: [
+      ACTIVE_GATE_SNAPSHOT_TEST_STATE
+        .ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_BACKPRESSURE_CAUSE,
+    ],
+    localQueryTransport: {
+      state:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_QUERY_TRANSPORT_READY_STATE,
+      ready: true,
+    },
+  });
 
-  const result = await snapshot.resolveLocalControlSnapshot();
+  await snapshot.resolveLocalControlSnapshot();
+  t.equal(
+    reconcileOptions,
+    null,
+    'ordinary no-attempt path must not enqueue OPEN publication owner reconcile',
+  );
+  buildOptions.length = 0;
+
+  const result = await snapshot.resolveLocalControlSnapshot({
+    allowAuthoritativeRepair: true,
+  });
 
   t.match(
     reconcileOptions,
@@ -1151,7 +1224,6 @@ test(ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_OPEN_PROGRESS_TEST_NAME
       acknowledgedNodeIds: [
         ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
       ],
-      allowPendingVisibility: true,
       readProfile:
         ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
       skipPublicationWriteReadback:
@@ -1261,8 +1333,32 @@ test('AdminControlSnapshot no-attempt path queues flattened ACK_PENDING count-on
         },
       },
     });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () => ({
+      applied: false,
+      failedTables: [TABLES.SERVICES],
+      causeChain: [
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_BACKPRESSURE_CAUSE,
+      ],
+      localQueryTransport: {
+        state:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE
+            .ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_QUERY_TRANSPORT_READY_STATE,
+        ready: true,
+      },
+    });
 
-    const result = await snapshot.resolveLocalControlSnapshot();
+    await snapshot.resolveLocalControlSnapshot();
+    t.equal(
+      reconcileOptions,
+      null,
+      'ordinary no-attempt path must not enqueue ACK_PENDING count-only owner reconcile',
+    );
+    buildOptions.length = 0;
+
+    const result = await snapshot.resolveLocalControlSnapshot({
+      allowAuthoritativeRepair: true,
+    });
 
     t.match(
       reconcileOptions,
@@ -1276,7 +1372,6 @@ test('AdminControlSnapshot no-attempt path queues flattened ACK_PENDING count-on
         acknowledgedNodeIds: [
           ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
         ],
-        allowPendingVisibility: true,
         readProfile:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
       },
@@ -1369,23 +1464,15 @@ test('AdminControlSnapshot repair-unavailable path still triggers publication ow
 
     const result = await snapshot.resolveLocalControlSnapshot();
 
-    t.match(
+    t.equal(
       reconcileOptions,
-      {
-        publishedActiveNodeIds: ['node-1', 'node-2'],
-        requiredAckNodeIds: ['node-1', 'node-2'],
-        acknowledgedNodeIds: ['node-1', 'node-2'],
-        readProfile:
-          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
-        skipPublicationWriteReadback:
-          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_SKIP_WRITE_READBACK,
-      },
-      'repair-unavailable snapshots should still enqueue publication owner catch-up',
+      null,
+      'repair-unavailable snapshots must not enqueue publication owner catch-up',
     );
     t.same(
       result.nodes,
       ['node-1'],
-      'the repair-unavailable path should return the original trigger-only snapshot',
+      'the repair-unavailable path should return the original local snapshot',
     );
   });
 
@@ -1442,8 +1529,24 @@ test('AdminControlSnapshot repair-deferred shared owner wakes recovery waits wit
         },
       },
     });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () => ({
+      applied: false,
+      failedTables: [TABLES.SERVICES],
+      causeChain: [
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_BACKPRESSURE_CAUSE,
+      ],
+      localQueryTransport: {
+        state:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE
+            .ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_QUERY_TRANSPORT_READY_STATE,
+        ready: true,
+      },
+    });
 
-    const result = await snapshot.resolveLocalControlSnapshot();
+    const result = await snapshot.resolveLocalControlSnapshot({
+      allowAuthoritativeRepair: true,
+    });
 
     t.equal(
       buildOptions.length,

@@ -149,6 +149,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       };
       let upsertCallCount = 0;
       const coordinator = new MembershipPublicationCoordinator({
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
           async listPublications() {
@@ -707,6 +708,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         }];
       });
       const coordinator = new MembershipPublicationCoordinator({
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         systemTableCache: {
           getAll(tableName) {
@@ -906,6 +908,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         now: () => 1000,
       });
       const coordinator = new MembershipPublicationCoordinator({
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         systemTableCache,
         controlPlaneReadinessService: readinessService,
@@ -960,6 +963,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       };
       const persistedRows = [];
       const coordinator = new MembershipPublicationCoordinator({
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
           async listPublications() {
@@ -1122,6 +1126,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       const persistedRows = [];
       const readinessRefreshModes = [];
       const coordinator = new MembershipPublicationCoordinator({
+        resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
           async listPublications() {

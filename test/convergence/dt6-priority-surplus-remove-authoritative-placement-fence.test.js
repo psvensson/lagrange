@@ -8,7 +8,10 @@ import {
   MOVE_REASON,
   REBALANCER_SKIP_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
-import {createTestCoordinator} from '../rebalancer/test-helpers.js';
+import {
+  createMockPolicyService,
+  createTestCoordinator,
+} from '../rebalancer/test-helpers.js';
 
 const PARTITION_ID = `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`;
 const LEDGER_PARTITION_ID = `${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS}-p1`;
@@ -95,22 +98,56 @@ function cacheData(localRows = staleHandoffRows()) {
   };
 }
 
-async function runRemove({
-  authoritativeRows = canonicalSpreadRows(),
-  authoritativeSource = 'owner_rpc_lane',
-  authoritativeSuccess = true,
-  authoritativeError = null,
-  enforceConcurrentOperationBudget = true,
-  localRows = staleHandoffRows(),
-  moveReason = MOVE_REASON.SPREAD_REPLICAS,
-  moveNodeId = 'node-seed',
-  partitionId = PARTITION_ID,
-  replicaId = `${PARTITION_ID}-r1`,
-  targetPolicy = {
+const DEFAULT_SERVICES_LEADER_WITNESS = Object.freeze({
+  state: 'observed',
+  role: 'leader',
+  partitionId: 'services-p1',
+  servingNodeId: 'node-seed',
+  servingReplicaId: 'services-p1-r1',
+  term: 1,
+  commitIndex: 1,
+  appliedIndex: 1,
+  observedAtMs: 1700000000000,
+});
+
+const DEFAULT_RUN_REMOVE_OPTIONS = Object.freeze({
+  authoritativeRows: null,
+  authoritativeSource: 'owner_rpc_lane',
+  authoritativeSuccess: true,
+  authoritativeError: null,
+  authoritativeRowSetComplete: true,
+  authoritativePartial: false,
+  authoritativeReadAuthorityWitness: DEFAULT_SERVICES_LEADER_WITNESS,
+  enforceConcurrentOperationBudget: true,
+  localRows: null,
+  moveReason: MOVE_REASON.SPREAD_REPLICAS,
+  moveNodeId: 'node-seed',
+  partitionId: PARTITION_ID,
+  replicaId: `${PARTITION_ID}-r1`,
+  targetPolicy: Object.freeze({
     targetReplicaCount: TARGET_REPLICA_COUNT,
     minReplicaCount: 2,
-  },
-} = {}) {
+  }),
+});
+
+async function runRemove(overrides = {}) {
+  const config = {...DEFAULT_RUN_REMOVE_OPTIONS, ...overrides};
+  const authoritativeRows = config.authoritativeRows ?? canonicalSpreadRows();
+  const localRows = config.localRows ?? staleHandoffRows();
+  const {
+    authoritativeSource,
+    authoritativeSuccess,
+    authoritativeError,
+    authoritativeRowSetComplete,
+    authoritativePartial,
+    authoritativeReadAuthorityWitness,
+    enforceConcurrentOperationBudget,
+    moveReason,
+    moveNodeId,
+    partitionId,
+    replicaId,
+    targetPolicy,
+  } = config;
   const servicesReads = [];
   const mutations = [];
   const operationRows = [];
@@ -124,6 +161,9 @@ async function runRemove({
         return authoritativeSuccess ? {
           success: true,
           source: authoritativeSource,
+          rowSetComplete: authoritativeRowSetComplete,
+          partial: authoritativePartial,
+          readAuthorityWitness: authoritativeReadAuthorityWitness,
           rows: authoritativeRows,
         } : {
           success: false,
@@ -171,9 +211,9 @@ async function runRemove({
         return true;
       },
     },
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       getPolicyForPartition: async () => targetPolicy,
-    },
+    }),
   });
   coordinator.queryShutdownIncompleteOperations = async () => [];
   coordinator.createOperationRecordInternal = async ({move}) => {
@@ -226,7 +266,7 @@ t.test(
     );
     t.equal(
       result.servicesReads[0]?.options.leaderMode,
-      CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+      CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
     );
   },
 );
@@ -268,6 +308,40 @@ for (const testCase of [
   {
     name: 'non-owner fallback',
     options: {authoritativeSource: 'local_partition_replica'},
+  },
+  {
+    name: 'incomplete owner row set',
+    options: {
+      authoritativeRows: canonicalSurplusRows(),
+      replicaId: `${PARTITION_ID}-r6`,
+      authoritativeRowSetComplete: false,
+    },
+  },
+  {
+    name: 'partial owner row set',
+    options: {
+      authoritativeRows: canonicalSurplusRows(),
+      replicaId: `${PARTITION_ID}-r6`,
+      authoritativePartial: true,
+    },
+  },
+  {
+    name: 'follower witness on owner read',
+    options: {
+      authoritativeRows: canonicalSurplusRows(),
+      replicaId: `${PARTITION_ID}-r6`,
+      authoritativeReadAuthorityWitness: {
+        state: 'observed',
+        role: 'follower',
+        partitionId: 'services-p1',
+        servingNodeId: 'node-seed',
+        servingReplicaId: 'services-p1-r1',
+        term: 1,
+        commitIndex: 1,
+        appliedIndex: 1,
+        observedAtMs: 1700000000000,
+      },
+    },
   },
   {
     name: 'source absent',
@@ -383,3 +457,115 @@ for (const testCase of [
     t.ok(result.mutations.length > 0);
   });
 }
+
+t.test('cached RF=3 cannot authorize a five-to-four priority REMOVE when authoritative policy is RF=5', async (t) => {
+  const fiveVoterRows = voterRows(PARTITION_ID, [
+    {replicaId: `${PARTITION_ID}-r1`, nodeId: 'node-seed'},
+    {replicaId: `${PARTITION_ID}-r2`, nodeId: 'node-1'},
+    {replicaId: `${PARTITION_ID}-r3`, nodeId: 'node-2'},
+    {replicaId: `${PARTITION_ID}-r4`, nodeId: 'node-3'},
+    {replicaId: `${PARTITION_ID}-r5`, nodeId: 'node-4'},
+  ]);
+  const policyCalls = [];
+  const coordinator = createTestCoordinator({
+    nodeId: 'node-1',
+    cacheData: cacheData(fiveVoterRows),
+    controlPlaneSystemTableGateway: {
+      async readAuthoritativeRows(tableName) {
+        if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+          return {
+            success: true,
+            source: 'owner_rpc_lane',
+            rowSetComplete: true,
+            readAuthorityWitness: {
+              state: 'observed',
+              role: 'leader',
+              partitionId: 'services-p1',
+              servingNodeId: 'node-seed',
+              servingReplicaId: 'services-p1-r1',
+              term: 2,
+              commitIndex: 10,
+              appliedIndex: 10,
+              observedAtMs: 1700000000000,
+            },
+            rows: fiveVoterRows,
+          };
+        }
+        return {success: true, source: 'owner_rpc_lane', rows: []};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        policyCalls.push('cache_getter');
+        return {targetReplicaCount: 3, minReplicaCount: 3};
+      },
+      async resolvePartitionPolicyFact(partitionId, options = {}) {
+        policyCalls.push({
+          method: 'resolvePartitionPolicyFact',
+          partitionId,
+          requireAuthoritative: options.requireAuthoritative === true,
+        });
+        return {
+          state: 'authoritative_policy',
+          policy: {targetReplicaCount: 5, minReplicaCount: 5},
+          targetReplicaCount: 5,
+          minReplicaCount: 5,
+          rowSetComplete: true,
+          readAuthorityWitness: {
+            state: 'observed',
+            role: 'leader',
+            partitionId: 'partitions-p1',
+            servingNodeId: 'node-seed',
+            servingReplicaId: 'partitions-p1-r1',
+            term: 1,
+            commitIndex: 1,
+            appliedIndex: 1,
+            observedAtMs: 1700000000000,
+          },
+          tableReadAuthorityWitness: {
+            state: 'observed',
+            role: 'leader',
+            partitionId: 'tables-p1',
+            servingNodeId: 'node-seed',
+            servingReplicaId: 'tables-p1-r1',
+            term: 1,
+            commitIndex: 1,
+            appliedIndex: 1,
+            observedAtMs: 1700000000000,
+          },
+        };
+      },
+    },
+  });
+  try {
+    let blockedError = null;
+    try {
+      await coordinator.ensurePrioritySurplusRemovePlacementFenceAllowed({
+        normalizedMoveType: 'REMOVE',
+        partitionId: PARTITION_ID,
+        entityType: 'partition',
+        entityId: PARTITION_ID,
+        move: {
+          type: 'REMOVE',
+          nodeId: 'node-4',
+          replicaId: `${PARTITION_ID}-r5`,
+          moveReason: MOVE_REASON.SPREAD_REPLICAS,
+        },
+      });
+    } catch (error) {
+      blockedError = error;
+    }
+    t.equal(
+      blockedError?.admissionResult?.placementFenceDecision?.state,
+      'not_surplus',
+      'authoritative RF=5 blocks 5-to-4 removal despite cached RF=3 getter',
+    );
+    t.same(policyCalls, [{
+      method: 'resolvePartitionPolicyFact',
+      partitionId: PARTITION_ID,
+      requireAuthoritative: true,
+    }]);
+  } finally {
+    await coordinator.shutdown();
+  }
+});

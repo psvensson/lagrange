@@ -1,3 +1,5 @@
+import {createMockCoordinator} from './test-helpers.js';
+import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 /**
  * Unit tests for UnifiedRebalancer.
  * Tests the core rebalancing logic for partitions and message groups.
@@ -18,7 +20,6 @@ import {
   MoveType,
   ReplicaStatus,
   NodeStatus,
-  DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {
@@ -41,14 +42,14 @@ import {
 import {
   createMockCache,
   createMockCdcService,
-  createMockCoordinator,
   createMockMembershipPublicationService,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 
 // Initialize test environment
 // Create a mock system table cache
@@ -91,19 +92,24 @@ function createTestRebalancer(options = {}) {
     serviceEndpoints,
   );
   const mockCdcService = cdcIntegrationService || createMockCdcService();
-  const mockPolicyService = createMockPolicyService(
-    partitions, tables,
-  );
+  const mockPolicyService = createMockPolicyService({partitions: partitions, tables: tables});
   const mockMessageRouter = messageRouter ||
     createMockMessageRouter(connectionState);
-  const mockCoordinator = rebalanceCoordinator || createMockCoordinator();
   const mockSqlQueryEngine = sqlQueryEngine || {
     async executeQuery() {
       return {success: true, rows: []};
     },
   };
-  const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache, nowFn);
+  // A named hand fake is completed by the one fixture completer.
+  const mockReadinessService = controlPlaneReadinessService ?
+    readinessServiceFake(controlPlaneReadinessService, nowFn || undefined) :
+    createMockControlPlaneReadinessService({
+      systemTableCache: mockCache,
+      ...(nowFn ? {now: nowFn} : {}),
+    });
+  const mockCoordinator = rebalanceCoordinator || createMockCoordinator({
+    controlPlaneReadinessService: mockReadinessService,
+  });
 
   return new UnifiedRebalancer({
     entityId,
@@ -395,7 +401,7 @@ test('UnifiedRebalancer keeps reserved priority move capacity during transient p
 test('UnifiedRebalancer - Policy Management', async (t) => {
   initializeTestEnvironment();
 
-  await t.test('returns default table policy when no cache data', async (t) => {
+  await t.test('returns the explicit policy-owner fixture declaration', async (t) => {
     const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
@@ -404,7 +410,7 @@ test('UnifiedRebalancer - Policy Management', async (t) => {
 
     const policy = await rebalancer.getPolicy();
 
-    t.equal(policy.replicaCount, DEFAULT_TABLE_POLICY.replicaCount);
+    t.equal(policy.targetReplicaCount, 3);
     t.equal(policy.minReplicaCount, DEFAULT_TABLE_POLICY.minReplicaCount);
     t.equal(policy.maxReplicaCount, DEFAULT_TABLE_POLICY.maxReplicaCount);
   });
@@ -427,16 +433,16 @@ test('UnifiedRebalancer - Policy Management', async (t) => {
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
-      partitions: [{partition_id: 'partition-1', table_id: 'table-1'}],
+      partitions: [{partition_id: 'partition-1', table_id: 'table-1', replica_count: 5}],
       tables: [{
         table_id: 'table-1',
-        table_policies: JSON.stringify({replicaCount: 5, minReplicaCount: 3}),
+        table_policies: JSON.stringify({minReplicaCount: 3}),
       }],
     });
 
     const policy = await rebalancer.getPolicy();
 
-    t.equal(policy.replicaCount, 5);
+    t.equal(policy.targetReplicaCount, 5);
     t.equal(policy.minReplicaCount, 3);
   });
 
@@ -524,11 +530,11 @@ test('UnifiedRebalancer - Node Management', async (t) => {
   await t.test('uses published membership as steady-state topology truth',
     async (t) => {
       const readinessService = {
-        ...createMockReadinessService(createMockCache([
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache([
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
-        ])),
+        ])}),
         membershipPublicationService: createMockMembershipPublicationService([
           'node-1',
           'node-3',
@@ -560,11 +566,11 @@ test('UnifiedRebalancer - Node Management', async (t) => {
     'allows priority control-plane recovery to use recovery-eligible nodes before publication spread converges',
     async (t) => {
       const readinessService = {
-        ...createMockReadinessService(createMockCache([
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache([
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
-        ])),
+        ])}),
         membershipPublicationService: createMockMembershipPublicationService(
           ['node-1', 'node-2'],
           3,
@@ -609,12 +615,12 @@ test('UnifiedRebalancer - Node Management', async (t) => {
     'retains the latest published membership when a newer publication is still open',
     async (t) => {
       const readinessService = {
-        ...createMockReadinessService(createMockCache([
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache([
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
           {node_id: 'node-4', status: NodeStatus.ACTIVE},
-        ])),
+        ])}),
         membershipPublicationService: {
           getLatestClusterPublicationSync() {
             return {

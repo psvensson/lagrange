@@ -1,3 +1,4 @@
+import {createMockControlPlaneReadinessService} from '../rebalancer/test-helpers.js';
 /**
  * Integration tests for node joining rebalancing flow.
  * Requirements: 3.1, 4.1, 8.3
@@ -40,11 +41,10 @@ import {
   getUniquePort,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
-import {CONTROL_PLANE_READINESS_DIMENSION} from
-  '../../src/control-plane/control-plane-readiness-constants.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 async function shutdownOrFail(t, promise, label) {
   try {
     await promise;
@@ -54,31 +54,6 @@ async function shutdownOrFail(t, promise, label) {
   }
 }
 
-function createAlwaysReadyControlPlaneReadinessService() {
-  const dimensions = {
-    [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
-  };
-  return {
-    projectNodeLiveness: () => ({readyNow: true}),
-    getNodeReadinessSync: (_nodeId, options = {}) => ({
-      dimensions: {
-        ...dimensions,
-        ...(options.decisionDimension ?
-          {[options.decisionDimension]: true} :
-          {}),
-      },
-    }),
-  };
-}
 
 function createMockStorageAdmissionService() {
   return {
@@ -231,6 +206,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
 
       // Create SQL query engine for RebalanceCoordinator
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -251,7 +227,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
           messageRouter: bootstrapResult.messageRouter,
         }),
         controlPlaneReadinessService:
-          createAlwaysReadyControlPlaneReadinessService(),
+          createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
         storageAdmissionService: createMockStorageAdmissionService(),
         storageAccountingService: createMockStorageAccountingService(),
         enableTimeouts: false,
@@ -273,7 +249,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
         messageRouter: bootstrapResult.messageRouter,
         rebalanceCoordinator,
         controlPlaneReadinessService:
-          createAlwaysReadyControlPlaneReadinessService(),
+          createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
         storageAccountingService: createMockStorageAccountingService(),
         storagePressureBehavior: createMockStoragePressureBehavior(),
         sqlQueryEngine,
@@ -376,6 +352,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
 
       // Create SQL query engine for BootstrapAPI
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -489,6 +466,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
 
       // Create SQL query engine for RebalanceCoordinator
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -503,7 +481,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
         tablePolicyService,
         sqlQueryEngine,
         controlPlaneReadinessService:
-          createAlwaysReadyControlPlaneReadinessService(),
+          createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
         storageAdmissionService: createMockStorageAdmissionService(),
         storageAccountingService: createMockStorageAccountingService(),
         enableTimeouts: false,
@@ -547,7 +525,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
         messageRouter: bootstrapResult.messageRouter,
         rebalanceCoordinator,
         controlPlaneReadinessService:
-          createAlwaysReadyControlPlaneReadinessService(),
+          createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
         storageAccountingService: createMockStorageAccountingService(),
         storagePressureBehavior: createMockStoragePressureBehavior(),
         sqlQueryEngine,
@@ -582,7 +560,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
       };
 
       const result = await rebalancer.rebalance('integration_test', {
-        replicaCount: 5,
+        targetReplicaCount: 5,
         minReplicaCount: 1,
         maxReplicaCount: 7,
         placementConstraints: {spreadAcrossNodes: true},
@@ -660,6 +638,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
 
       // Create real SQL query engine
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -674,7 +653,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
         tablePolicyService,
         sqlQueryEngine,
         controlPlaneReadinessService:
-          createAlwaysReadyControlPlaneReadinessService(),
+          createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
         storageAdmissionService: createMockStorageAdmissionService(),
         storageAccountingService: createMockStorageAccountingService(),
         enableTimeouts: false,
@@ -775,7 +754,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
         messageRouter: bootstrapResult.messageRouter,
         rebalanceCoordinator,
         controlPlaneReadinessService:
-          createAlwaysReadyControlPlaneReadinessService(),
+          createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
         storageAccountingService: createMockStorageAccountingService(),
         storagePressureBehavior: createMockStoragePressureBehavior(),
         sqlQueryEngine,

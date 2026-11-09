@@ -53,7 +53,7 @@ const leaderOf = (f) => f.cluster.leaderReplicaId();
 const otherFounder = (f, ...not) => FOUNDERS.find((id) => !not.includes(id) &&
   id !== leaderOf(f));
 const learnerMatch = (f, leader = leaderOf(f)) =>
-  f.cluster.node(leader).readStatus().followerProgress[f.cluster.addressOf(TARGET)];
+  f.cluster.node(leader).readStatus().followerProgress[TARGET];
 /** The learner acknowledged everything its leader committed (the pump runs). */
 const caughtUp = (fx, leader = leaderOf(fx.f)) => fx.world.until(() =>
   learnerMatch(fx.f, leader) >= fx.f.cluster.node(leader).readStatus().commitIndex &&
@@ -88,7 +88,7 @@ function learnerQuery(f, permit) {
   return {purpose: 'learner-action', groupId: identity.groupId,
     action: {operationId: O, transitionIdentity: identity.transitionIdentity,
       permitSequence: permit.permitSequence, stage: permit.permitStage,
-      replicaIdentity: TARGET, peerId: TARGET_PEER}};
+      replicaIdentity: TARGET, peerId: TARGET_PEER, nodeId: identity.targetNodeId}};
 }
 
 // --- Guard-witness physics shared by the two promotion guard files ---------

@@ -667,23 +667,23 @@ test('persistWorkflowTransition includes source checkpoint in ' +
   );
 });
 
-test('ManagedSplitWorkflow tolerates pending visibility on durable split ' +
-  'transition writes', async (t) => {
+// Re-derived for answers at commit (quest
+// replica-admission-from-committed-operation, attempt 2): a durable split
+// transition write answers committed; no answer carries a visibility state
+// (the pending/confirmation-pending variants are deleted with the wait).
+test('ManagedSplitWorkflow proceeds on committed durable split transition ' +
+  'writes with no visibility opt-out', async (t) => {
   const updateCalls = [];
   const {workflow} = buildWorkflow({
     updateCalls,
     cdcIntegrationService: {
       async updateSystemTableRow(tableName, whereClause, data, updateOptions) {
         updateCalls.push({tableName, whereClause, data, options: updateOptions});
-        return {
-          success: true,
-          affectedRows: 1,
-          visibilityState: 'deferred_by_pressure',
-        };
+        return {success: true, committed: true, affectedRows: 1};
       },
       async insertSystemTableRow(tableName, row) {
         updateCalls.push({tableName, row, options: null});
-        return {success: true};
+        return {success: true, committed: true};
       },
     },
   });
@@ -691,51 +691,15 @@ test('ManagedSplitWorkflow tolerates pending visibility on durable split ' +
   const result = await workflow.execute('users-p1');
 
   t.equal(result.success, true,
-    'split execution should continue after authoritative transition writes');
+    'split execution continues on committed transition writes');
   const workflowUpdates = updateCalls.filter((entry) =>
     entry.tableName === TABLES.TABLES && entry.data,
   );
   t.ok(workflowUpdates.length > 0,
     'workflow transition writes should be recorded through the gateway');
   for (const update of workflowUpdates) {
-    t.equal(update.options?.allowPendingVisibility, true,
-      'durable split transition writes must tolerate pending cache visibility');
-  }
-});
-
-test('ManagedSplitWorkflow tolerates authoritative confirmation pending on durable split ' +
-  'transition writes', async (t) => {
-  const updateCalls = [];
-  const {workflow} = buildWorkflow({
-    updateCalls,
-    cdcIntegrationService: {
-      async updateSystemTableRow(tableName, whereClause, data, updateOptions) {
-        updateCalls.push({tableName, whereClause, data, options: updateOptions});
-        return {
-          success: true,
-          affectedRows: 1,
-          visibilityState: 'authoritative_confirmation_pending',
-        };
-      },
-      async insertSystemTableRow(tableName, row) {
-        updateCalls.push({tableName, row, options: null});
-        return {success: true};
-      },
-    },
-  });
-
-  const result = await workflow.execute('users-p1');
-
-  t.equal(result.success, true,
-    'split execution should continue while durable transition confirmation is still pending');
-  const workflowUpdates = updateCalls.filter((entry) =>
-    entry.tableName === TABLES.TABLES && entry.data,
-  );
-  t.ok(workflowUpdates.length > 0,
-    'workflow transition writes should still route through the gateway');
-  for (const update of workflowUpdates) {
-    t.equal(update.options?.allowPendingVisibility, true,
-      'durable split transition writes must continue to allow pending visibility confirmation');
+    t.equal('allowPendingVisibility' in (update.options ?? {}), false,
+      'durable split transition writes carry no visibility opt-out');
   }
 });
 

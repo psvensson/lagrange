@@ -92,9 +92,7 @@ import {
   REASON_NOT_SPREAD,
   REASON_NOT_WRITABLE,
   RECOVERY_PENDING_HOST_REPORT,
-  RECOVERY_ROUTING_ELIGIBLE_ONLY,
   RECOVERY_ROUTING_FIELD,
-  RECOVERY_ROUTING_PRIORITY_RECOVERY_BOOTSTRAP,
   REGRESSED_EPOCH,
   REOPEN_AT,
   RESTARTED_BOOT_INCARNATION,
@@ -569,8 +567,9 @@ function assertNoRecoveryRoutingLane(readOptions, label) {
 
 test('non-hosting-joiner-reads-authority-publication-during-recovery: a ' +
   'joiner hosting no control_plane_publications replica reads the authority ' +
-  'publication through the priority-recovery bootstrap lane while every ' +
-  'replica host is recovery-pending, and only that read is exempt', async () => {
+  'publication while every replica host is recovery-pending, because ' +
+  'system-table routing decides on leadership and live transport, not on a ' +
+  'readiness lane (lead decision D2)', async () => {
   const fixture = await buildRetainedFixture();
   const {rows, storageOwner, retained} = fixture;
   const seedReadbacks = storageOwner.readOptions();
@@ -582,36 +581,28 @@ test('non-hosting-joiner-reads-authority-publication-during-recovery: a ' +
   const snapshot = await projectOnJoiner(nonHosting.joiner);
   assertConsumedActive(snapshot, retained.generation);
   assert.deepEqual(nonHosting.routedOwner.reads, [{
-    recoveryRouting: RECOVERY_ROUTING_PRIORITY_RECOVERY_BOOTSTRAP,
+    recoveryRoutingDeclared: false,
     routable: true,
-  }], 'the consumer durable read declares the bootstrap lane and routes');
+  }], 'the consumer durable read declares no lane and routes');
 
-  // The gate itself is unchanged: an ordinary publication read of the same
-  // row on the same host is still refused (no routable candidate).
+  // An ordinary publication read of the same row on the same reachable host
+  // routes the same way: no read is exempt because no read is gated.
   const ordinary = buildNonHostingStorageOwner(
     storageOwner, RECOVERY_PENDING_HOST_REPORT,
   );
-  assert.equal(
-    await ordinary.getPublication(AUTHORITY_PUBLICATION_ID, {skipCacheWait: true}),
-    null,
+  assert.ok(
+    await ordinary.getPublication(AUTHORITY_PUBLICATION_ID, {}),
   );
   assert.deepEqual(ordinary.reads, [{
-    recoveryRouting: RECOVERY_ROUTING_ELIGIBLE_ONLY,
-    routable: false,
+    recoveryRoutingDeclared: false,
+    routable: true,
   }]);
   const readOptionsOwner =
     Object.create(ControlPlanePublicationsOwner.prototype);
   assert.equal(
     readOptionsOwner.buildPublicationReadOptions({})[RECOVERY_ROUTING_FIELD],
-    RECOVERY_ROUTING_ELIGIBLE_ONLY,
-    'the publications owner defaults every read to the eligible-only lane',
-  );
-  assert.equal(
-    readOptionsOwner.buildPublicationReadOptions({
-      [RECOVERY_ROUTING_FIELD]: true,
-    })[RECOVERY_ROUTING_FIELD],
-    RECOVERY_ROUTING_ELIGIBLE_ONLY,
-    'a boolean is not a lane: only the typed lane value opts a read in',
+    undefined,
+    'the publications owner declares no recovery-routing lane',
   );
 });
 
@@ -630,9 +621,9 @@ test('no-contract-sentinel-is-typed-absent: the durable read reports no ' +
   assert.equal(typeof published, STRING_TYPE,
     'the no-contract token is a truthy typed token, not a row');
   assert.deepEqual(denied.routedOwner.reads, [{
-    recoveryRouting: RECOVERY_ROUTING_PRIORITY_RECOVERY_BOOTSTRAP,
+    recoveryRoutingDeclared: false,
     routable: false,
-  }], 'a genuinely unhealthy host is refused even on the bootstrap lane');
+  }], 'a host the live router cannot reach is refused');
 
   const select =
     formationReleasePublication.selectFormationReleaseHandoffContractSource;

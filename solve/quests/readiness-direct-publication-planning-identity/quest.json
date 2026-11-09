@@ -1,0 +1,35 @@
+{
+  "schema": "solve-quest/2",
+  "id": "readiness-direct-publication-planning-identity",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Synchronous direct-publication readiness retains the existing resolved-answer context and reuses publication protocol input through its existing diagnostics owner, without skipping fresh node evaluation or bypassing planning identity and authority validation.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/readiness-direct-publication-planning-identity/evidence/receipt.json",
+      "requiredReceipts": [
+        "resolved-direct-sync-context",
+        "owned-protocol-input-reuse",
+        "complete-readiness-cost-bound",
+        "invalidation-and-retirement",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-semantic-path",
+      "statement": "Sync DIRECT_PUBLICATION_ROW answers use the existing rememberResolvedNodePlanningAnswer owner as async answers do. Reuse only the pure protocol representation for the exact frozen diagnostics object retained by the existing membershipPublicationDiagnosticsMemo, bounded by its published node domain. All calls still use the existing normalizer and verified planning identity owner; unowned/mutable inputs take that same full construction path. No new permission source, readiness shortcut, timer, supervisor or persisted state."
+    },
+    {
+      "id": "truth-and-cost",
+      "statement": "Keep all fresh bulk evaluations and published/explicit/observed node dispositions, including missing-node denial. Do not increase the sealed 585 heavy-build or 3184 gate-build counts, add winner reads, weaken invalidation, or drop fixed-point verification. Exact historical count changes require an explicit R09 disposition and may only tighten after independent evidence. The unchanged formation rig and its complete snapshots must remain measured."
+    },
+    {
+      "id": "currency-and-lifetime",
+      "statement": "Cover target separation and bounded retained inputs, diagnostic replacement, current semantic generation, source cache/owner/admission-fence replacement, unowned/mutable inputs and shutdown/invalidation. Preserve the existing memo invalidation and projection authority owners. A diagnostic-only method experiment is not implementation, frozen proof or acceptance."
+    }
+  ],
+  "sealedAt": "3bd7e2e8875c5ff32fd94162a3775aea991a35df"
+}

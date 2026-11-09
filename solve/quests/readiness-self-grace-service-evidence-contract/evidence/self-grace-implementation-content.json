@@ -1,0 +1,38 @@
+{
+  "base": "ad0d64de8cfc06b574b0589f33985d4be1f3a4d0",
+  "quest": "readiness-self-grace-service-evidence-contract",
+  "files": [
+    {
+      "path": "src/control-plane/control-plane-readiness-evidence-reasons.js",
+      "sha256": "d0057424ef951d397cd3b1d973aee6e1fb3a7baceb5dc4528eae3327bd6a32f8"
+    },
+    {
+      "path": "architecture/readiness-and-owner-contracts.md",
+      "sha256": "26d21516cad46e6c0cca454cbc4484273a981cfc1f38c86cdffeb63b4ca4dd73"
+    },
+    {
+      "path": "test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js",
+      "sha256": "282597a40fc77d569a176b535ea1cf8de8c7a0fbc6516fba94696af4629d0654"
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/quest.json",
+      "sha256": "72d08b6f83d5a42e3b4f25cf972c14b569b38b961c81b4c3111edb88149ea853"
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/evidence/receipt.json",
+      "sha256": "7d4f2a09d9c3776cdef806a712bd757bf48194389e0b7708a49cc4376b4210b8"
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/evidence/independent-self-grace-design-review.md",
+      "sha256": "0f872061ba6c80636f589a49ee712e8e9fd7b2839d357a777c975289abbd34da"
+    },
+    {
+      "path": "solve/quests/readiness-self-grace-service-evidence-contract/evidence/independent-self-grace-design-inputs.json",
+      "sha256": "1fda7a7fb4b540e8aa0b766f6cd136a1d89d3780cdddd110c2d1377250c560c9"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/self-grace-28-callers.log",
+      "sha256": "f05df9d18965f58edcdedbc9088254b15d56a3d44cdf9d1dbac45dc516d67a29"
+    }
+  ]
+}

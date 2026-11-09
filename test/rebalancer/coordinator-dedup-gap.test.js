@@ -31,7 +31,9 @@ const DEFERRED_PRIORITY_ENTITY_OBSERVATION = Object.freeze({
   operationCount: 0,
   operations: [],
   deferredOutcome: Object.freeze({
-    completionState: 'deferred',
+    completionState: 'operation_visibility_deferred',
+    reasonCode: 'operation_visibility_deferred',
+    retryAfterMs: null,
     source: 'test-deferred-priority-entity-observation',
   }),
   retryAfterMs: null,
@@ -64,8 +66,6 @@ const TEST_DEFERRED_CACHE_CONFLICT_TEST_NAME =
   'priority create lane blocks cache-visible add-like work when authoritative visibility is deferred';
 const TEST_DEFERRED_CACHE_CONFLICT_ASSERT_SKIP_REASON =
   'cache-visible add-like work should close the critical create lane';
-const TEST_DEFERRED_CACHE_CONFLICT_ASSERT_OPERATION_ID =
-  'conflict error should identify the cache-visible operation';
 
 test('Bug: coordinator dedup gap on sequential calls', async (t) => {
   t.beforeEach(async () => {
@@ -357,7 +357,8 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       coordinator.initialize();
 
       try {
-        coordinator.repository.getOperationsByEntityAuthoritative = async () => [{
+        coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+        async () => coordinator.repository.buildEntityOperationVisibilityObservation([{
           operationId: 'replace-op-1',
           type: OperationType.REPLACE,
           partitionId: 'nodes-p1',
@@ -374,7 +375,7 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
             timestamp: Date.now(),
             sourceReplicaId: 'nodes-p1-r1',
           }],
-        }];
+        }], null);
 
         let conflictError = null;
         try {
@@ -424,8 +425,8 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       coordinator.initialize();
 
       try {
-        coordinator.repository.getOperationsByEntityAuthoritative =
-          async () => [];
+        coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+          async () => coordinator.repository.buildEntityOperationVisibilityObservation([], null);
 
         const first = await coordinator.createOperation({
           type: OperationType.REPLACE,
@@ -839,6 +840,16 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       coordinator.repository.getOperationsByEntityAuthoritativeObservation =
         async () => DEFERRED_PRIORITY_ENTITY_OBSERVATION;
 
+      await t.rejects(coordinator.ensureEntityAddLikeCreateLaneAvailable({
+        normalizedMoveType: OperationType.REPLACE,
+        partitionId: TEST_PRIORITY_RECENT_INTENT_PARTITION_ID,
+        entityType: TEST_PRIORITY_RECENT_INTENT_ENTITY_TYPE,
+        entityId: TEST_PRIORITY_RECENT_INTENT_PARTITION_ID,
+        move: {enforceConcurrentOperationBudget: true},
+      }), {rebalanceSkipReason: REBALANCER_SKIP_REASON.CONFLICTING_OPERATION_IN_FLIGHT,
+        conflictingOperationId: TEST_CACHE_VISIBLE_SOURCE_REMOVAL_OPERATION_ID},
+      'the lane owner retains the conservative cached conflict');
+
       try {
         let createError = null;
         try {
@@ -858,14 +869,11 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
 
         t.equal(
           createError?.rebalanceSkipReason,
-          REBALANCER_SKIP_REASON.CONFLICTING_OPERATION_IN_FLIGHT,
-          'cache-visible source-removal work should keep the entity create lane exclusive',
+          REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+          'creation refuses earlier while required identity visibility is deferred',
         );
-        t.equal(
-          createError?.conflictingOperationId,
-          TEST_CACHE_VISIBLE_SOURCE_REMOVAL_OPERATION_ID,
-          'the conflicting cache-visible operation should be named',
-        );
+        t.equal(createError?.reasonCode, 'operation_visibility_deferred',
+          'the original required-read reason survives');
         t.equal(
           coordinator.stats.operationsCreated,
           0,
@@ -1283,6 +1291,16 @@ test(TEST_DEFERRED_CACHE_CONFLICT_TEST_NAME, async (t) => {
     async () => DEFERRED_PRIORITY_ENTITY_OBSERVATION;
   coordinator.hasContainedPriorityRecoveryPressure = () => true;
 
+  await t.rejects(coordinator.ensureCriticalPartitionCreateLaneAvailable({
+    normalizedMoveType: OperationType.REPLACE,
+    partitionId: TEST_DEFERRED_CACHE_CONFLICT_PARTITION_ID,
+    entityType: TEST_DEFERRED_CACHE_CONFLICT_ENTITY_TYPE,
+    entityId: TEST_DEFERRED_CACHE_CONFLICT_PARTITION_ID,
+    move: {enforceConcurrentOperationBudget: true},
+  }), {rebalanceSkipReason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+    conflictingOperationId: TEST_DEFERRED_CACHE_CONFLICT_OPERATION_ID},
+  'the critical lane owner still names its cache-visible conflict');
+
   try {
     try {
       await coordinator.createOperation({
@@ -1297,16 +1315,10 @@ test(TEST_DEFERRED_CACHE_CONFLICT_TEST_NAME, async (t) => {
       });
       t.fail(TEST_DEFERRED_CACHE_CONFLICT_ASSERT_SKIP_REASON);
     } catch (error) {
-      t.equal(
-        error?.rebalanceSkipReason,
-        REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
-        TEST_DEFERRED_CACHE_CONFLICT_ASSERT_SKIP_REASON,
-      );
-      t.equal(
-        error?.conflictingOperationId,
-        TEST_DEFERRED_CACHE_CONFLICT_OPERATION_ID,
-        TEST_DEFERRED_CACHE_CONFLICT_ASSERT_OPERATION_ID,
-      );
+      t.equal(error?.rebalanceSkipReason, REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+        'creation refuses earlier at required identity visibility');
+      t.equal(error?.reasonCode, 'operation_visibility_deferred');
+      t.equal(coordinator.stats.operationsCreated, 0, 'no duplicate operation was created');
     }
   } finally {
     coordinator.queryExistingInFlightOperation =

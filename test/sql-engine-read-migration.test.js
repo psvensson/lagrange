@@ -53,7 +53,7 @@ test('TablePolicyService uses SQL engine for getTablePolicy',
         return {
           rows: [{
             table_id: params[0],
-            table_policies: '{"replicaCount": 5}',
+            table_policies: '{"splitTrafficThreshold": 5}',
           }],
         };
       }
@@ -72,7 +72,7 @@ test('TablePolicyService uses SQL engine for getTablePolicy',
       'Should query tables table');
     t.same(engine.queries[0].params, ['t1'],
       'Should pass table ID as param');
-    t.equal(policy.replicaCount, 5,
+    t.equal(policy.splitTrafficThreshold, 5,
       'Should return parsed policy');
   });
 
@@ -81,14 +81,14 @@ test('TablePolicyService uses SQL engine for getPolicyForPartition',
     const engine = createTrackingEngine((sql, _params) => {
       if (sql.includes('FROM partitions')) {
         return {
-          rows: [{partition_id: 'p1', table_id: 't1'}],
+          rows: [{partition_id: 'p1', table_id: 't1', replica_count: 7}],
         };
       }
       if (sql.includes('FROM tables')) {
         return {
           rows: [{
             table_id: 't1',
-            table_policies: '{"replicaCount": 7}',
+            table_policies: '{"splitTrafficThreshold": 7}',
           }],
         };
       }
@@ -107,7 +107,7 @@ test('TablePolicyService uses SQL engine for getPolicyForPartition',
       'First query should be partitions');
     t.match(engine.queries[1].sql, /FROM tables/,
       'Second query should be tables');
-    t.equal(policy.replicaCount, 7,
+    t.equal(policy.splitTrafficThreshold, 7,
       'Should return correct policy');
   });
 

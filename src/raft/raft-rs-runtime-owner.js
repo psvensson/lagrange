@@ -1640,19 +1640,12 @@ function probeRefusal(reason) {
   });
 }
 
-// The configured peer (other than this replica) whose resolved address is
-// the probed one; an unreserved or unresolvable peer is no match.
-function configuredPeerAt(group, confState, peerAddress) {
-  return [...confState.voters, ...confState.learners].find((id) => {
-    if (id === group.peerId) {
-      return false;
-    }
-    try {
-      return group.resolvePeerAddress(id) === peerAddress;
-    } catch {
-      return false;
-    }
-  });
+// The configured peer (other than this replica) whose reserved identity is
+// the probed replica; an unreserved id is no match. No address is resolved.
+function configuredPeerOf(group, confState, replicaIdentity) {
+  return [...confState.voters, ...confState.learners].find((id) =>
+    id !== group.peerId &&
+    group.resolvePeerIdentity(id).replicaIdentity === replicaIdentity);
 }
 
 // One heartbeat interval of the leader: raft-rs broadcasts its heartbeat on
@@ -1678,15 +1671,15 @@ function driveOneHeartbeat(group, expectedGeneration) {
 
 // The progress probe: a peer whose matched index already reaches the commit
 // index is observed; a peer behind it gets one heartbeat round through the
-// core; an address outside the configuration, or a probe on a replica that is
+// core; a replica outside the configuration, or a probe on a replica that is
 // not the leader, is a typed refusal (a non-leader must never tick here).
-function probePeerProgress(group, expectedGeneration, peerAddress) {
+function probePeerProgress(group, expectedGeneration, replicaIdentity) {
   const observed = readGroupObservation(group, expectedGeneration);
   if (!observed.ok) {
     return settledTurn(observed.result);
   }
   const {status, confState} = observed.value;
-  const peerId = configuredPeerAt(group, confState, peerAddress);
+  const peerId = configuredPeerOf(group, confState, replicaIdentity);
   if (peerId === undefined) {
     return settledTurn(probeRefusal(RUNTIME_REASON.NOT_A_PEER));
   }
@@ -1761,7 +1754,7 @@ const COMMAND_OPERATION = Object.freeze({
   [RUNTIME_COMMAND.DRAIN_INBOUND]: () =>
     settledTurn(outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_DRAINED})),
   [RUNTIME_COMMAND.PROBE_PEER_PROGRESS]: (group, command, generation) =>
-    probePeerProgress(group, generation, command.peerAddress),
+    probePeerProgress(group, generation, command.replicaIdentity),
   [RUNTIME_COMMAND.TRANSFER_LEADERSHIP]: (group, command, generation) =>
     transferLeadership(group, generation, command.transfer),
   [RUNTIME_COMMAND.PROPOSE_MEMBERSHIP_TRANSITION]:
@@ -2211,6 +2204,7 @@ function createRuntimeDispatcher(request) {
     sendToPeer: request.sendToPeer,
     resolvePeerAddress: request.resolvePeerAddress,
     resolvePeerIdentity: request.resolvePeerIdentity,
+    resolvePeerNodeId: request.resolvePeerNodeId,
     applyCommittedEntry: request.applyCommittedEntry,
     applyCommittedMembershipContext: request.applyCommittedMembershipContext,
     readLearnerOriginEvidence: request.readLearnerOriginEvidence,

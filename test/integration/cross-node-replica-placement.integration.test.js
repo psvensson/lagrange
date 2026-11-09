@@ -24,7 +24,7 @@ import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebala
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 import {
-  createAlwaysReadyControlPlaneReadinessService,
+  createMockControlPlaneReadinessService,
   createMockStorageAccountingService,
   createMockStorageAdmissionService,
   createMockStoragePressureBehavior,
@@ -117,7 +117,7 @@ function createMockTablePolicyService() {
       return {...DEFAULT_TABLE_POLICY};
     },
     getPolicyForPartition() {
-      return {...DEFAULT_TABLE_POLICY};
+      return {...DEFAULT_TABLE_POLICY, targetReplicaCount: 3};
     },
   };
 }
@@ -250,7 +250,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           replicaId: 'mg-test-1-r1',
           nodeId: seedNodeId,
           replicaIds: ['mg-test-1-r1'],
-          peerAddresses: [`${seedNodeId}/message-group/mg-test-1-r1`],
           transport: resources.bootstrapRouter,
           systemTableCache,
         }));
@@ -399,7 +398,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           messageRouter: resources.seedRouter,
           rebalanceCoordinator: createMockRebalanceCoordinator(),
           controlPlaneReadinessService:
-            createAlwaysReadyControlPlaneReadinessService(),
+            createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
           storageAdmissionService: createMockStorageAdmissionService(),
           storageAccountingService: createMockStorageAccountingService(),
           storagePressureBehavior: createMockStoragePressureBehavior(),
@@ -479,7 +478,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         replicaId: 'mg-route-test-r1',
         nodeId,
         replicaIds: ['mg-route-test-r1'],
-        peerAddresses: [`${nodeId}/message-group/mg-route-test-r1`],
         transport: resources.router,
       }));
 
@@ -602,7 +600,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         messageRouter: createMockMessageRouter(),
         rebalanceCoordinator: createMockRebalanceCoordinator(),
         controlPlaneReadinessService:
-          createAlwaysReadyControlPlaneReadinessService(),
+          createMockControlPlaneReadinessService({systemTableCache: cache}),
         storageAdmissionService: createMockStorageAdmissionService(),
         storageAccountingService: createMockStorageAccountingService(),
         storagePressureBehavior: createMockStoragePressureBehavior(),

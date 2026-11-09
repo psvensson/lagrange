@@ -336,9 +336,9 @@ test('HeartbeatService skips cache wait for heartbeat writes and fails on missin
     await createService(updates, []).sendHeartbeat(null, null);
     t.equal(updates.length, 1, 'issues one heartbeat update');
     t.equal(
-      updates[0].options?.skipCacheWait,
-      true,
-      'heartbeat update should not block on cache wait',
+      'skipCacheWait' in (updates[0].options ?? {}),
+      false,
+      'heartbeat update carries no cache-wait opt-out (no cache-wait opt-out exists: writes answer at their commit)',
     );
 
     ConfigurationManager.resetInstance();

@@ -19,7 +19,16 @@ import {MembershipPublicationCoordinatorReads} from
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
-// Production-shaped witness for the readiness-routing-cache-lag-bridge
+// Superseded in part 2026-11-02 by quest serve-eligibility-committed-epoch-read
+// (attempt 1): user-table serving is the readiness owner's committed-epoch
+// answer, so the routed-read stored-snapshot bridge and its deferred-delivery
+// frontier no longer decide routing; the bridge-only witnesses were removed.
+// The heartbeat-window guarantees are kept against the committed answer: a
+// renewing heartbeat never closes routing, a revoking change (abandoned
+// publication, saturating load) closes it at once, and routing stops exactly
+// when the committed ready lease expires.
+//
+// Original: production-shaped witness for the readiness-routing-cache-lag-bridge
 // quest: the REAL SystemTableCache, the real readiness service with its
 // single planning owner, and the real QueryExecutor. The cache has two
 // change channels: the apply channel (onCacheApplyChange) classifies every
@@ -119,6 +128,9 @@ function createRig() {
       published_active_node_ids: JSON.stringify([NODE_ID, PEER_NODE_ID]),
       required_ack_node_ids: '[]',
       acknowledged_node_ids: '[]',
+      priority_partition_summary: JSON.stringify({
+        satisfied: true, blockedPartitions: [],
+      }),
       status: PUBLISHED_STATUS,
       created_at: PUBLICATION_ISO,
       updated_at: PUBLICATION_ISO,
@@ -129,9 +141,18 @@ function createRig() {
     nodeId: 'seed-node',
     systemTableCache: cache,
   });
+  // The committed state the serve answer is read from: in this rig the
+  // committed rows are the rows the cache holds at read time (a leader that
+  // has applied every change), read through the readiness-owner read.
+  const committedView = {
+    async readReadinessOwnerRows(tableName) {
+      return {success: true, rows: cache.getAll(tableName)};
+    },
+  };
   const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
+    authoritativeControlPlaneView: committedView,
     membershipPublicationService,
     cdcGroupPropagationService: {
       getPublicationModeDiagnostics: () => ({
@@ -160,30 +181,6 @@ function createRig() {
     route: () => executor.isRoutablePartitionService(service)};
 }
 
-function planningOwner(rig) {
-  return rig.readinessService.readinessPlanningSnapshotOwner;
-}
-
-// The bridge's own gate: some non-nodes table has an applied revision whose
-// deferred delivery the readiness service has not processed yet.
-function nonNodeDeliveryPending(rig) {
-  const owner = planningOwner(rig);
-  return owner.hasNonNodeTableDeferredDeliveryPending(
-    owner.readCurrentSourceObservation());
-}
-
-// The frontier for one table: true while an applied revision of it has not
-// been delivered on the deferred channel.
-function deliveryPending(rig, tableName) {
-  const tracker = planningOwner(rig).semanticGenerationTracker;
-  return tracker.deferredDeliveredSourceRevisions[tableName] !==
-    rig.cache.getTableMutationVersion(tableName);
-}
-
-function unclassified(rig) {
-  return planningOwner(rig).hasUnclassifiedSourceChange();
-}
-
 function deactivateMessageGroup(rig) {
   rig.cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, {
     [COLUMN.SERVICE_ID]: MESSAGE_GROUP_SERVICE_ID,
@@ -205,243 +202,6 @@ function renewingHeartbeat(rig) {
   });
 }
 
-async function settledRig(t) {
-  const rig = createRig();
-  t.after(() => rig.readinessService.shutdown?.());
-  await tick();
-  assert.equal(rig.route(), true, 'the bootstrap read routes');
-  await tick();
-  await tick();
-  // Settle: the owner has built, persisted, and drained once, so stored
-  // evidence exists for the bridge to consult.
-  await macrotask();
-  await macrotask();
-  assert.equal(rig.route(), true, 'settled state routes');
-  assert.equal(nonNodeDeliveryPending(rig), false,
-    'settled: no deferred delivery is pending');
-  return rig;
-}
-
-test('a fresh heartbeat never closes routing: applying turn, after its ' +
-  'deferred delivery, queued rebuilds', async (t) => {
-  const rig = createRig();
-  t.after(() => rig.readinessService.shutdown?.());
-  await tick();
-  assert.equal(rig.route(), true, 'the bootstrap read routes');
-  await tick();
-  await tick();
-  renewingHeartbeat(rig);
-  assert.equal(unclassified(rig), false,
-    'the apply channel classified the heartbeat in the applying turn');
-  assert.equal(deliveryPending(rig, TABLES.NODES), true,
-    'the heartbeat\'s deferred delivery is still pending');
-  assert.equal(nonNodeDeliveryPending(rig), false,
-    'nothing beyond the nodes table is pending: the bridge stays open');
-  assert.equal(rig.route(), true,
-    'the applying-turn read routes while the deferred delivery is pending');
-  await tick();
-  assert.equal(deliveryPending(rig, TABLES.NODES), false,
-    'the deferred delivery caught the frontier up');
-  assert.equal(rig.route(), true,
-    'the read after the heartbeat\'s deferred delivery routes');
-  for (let round = 0; round < MACROTASK_ROUNDS; round += 1) {
-    await macrotask();
-    rig.clock.now += MACROTASK_STEP_MS;
-    assert.equal(rig.route(), true,
-      `queued owner rebuild ${round + 1} keeps the replica routable`);
-  }
-});
-
-test('a completed snapshot already stale on another table is never served ' +
-  'through the nodes-only bridge while a heartbeat delivery is pending',
-async (t) => {
-  const rig = createRig();
-  t.after(() => rig.readinessService.shutdown?.());
-  await tick();
-  assert.equal(rig.route(), true, 'the bootstrap read routes');
-  await tick();
-  await tick();
-  // A services change (the node's message group goes inactive) is classified
-  // and delivered; its rebuild is still queued when a heartbeat lands whose
-  // deferred delivery is pending, so only the nodes table is outstanding and
-  // the bridge's frontier gate passes: the services-stale record itself must
-  // refuse.
-  deactivateMessageGroup(rig);
-  await tick();
-  renewingHeartbeat(rig);
-  assert.equal(nonNodeDeliveryPending(rig), false,
-    'precondition: the services change is delivered, only nodes is pending');
-  assert.equal(deliveryPending(rig, TABLES.NODES), true,
-    'precondition: the heartbeat\'s deferred delivery is pending');
-  assert.equal(rig.route(), false,
-    'the pre-change record is stale on the services table: fail closed');
-  await tick();
-  await macrotask();
-  await macrotask();
-  assert.equal(rig.route(), false, 'the rebuilt answer is false too');
-});
-
-test('a delivered heartbeat never lets a services change whose deferred ' +
-  'delivery is pending ride the bridge', async (t) => {
-  const rig = createRig();
-  t.after(() => rig.readinessService.shutdown?.());
-  await tick();
-  assert.equal(rig.route(), true, 'the bootstrap read routes');
-  await tick();
-  await tick();
-  // The heartbeat is classified and delivered (rebuild queued); then the
-  // message group goes inactive: classified in the applying turn, but its
-  // deferred delivery is pending, and the pre-change record is stale on the
-  // services table.
-  renewingHeartbeat(rig);
-  await tick();
-  deactivateMessageGroup(rig);
-  assert.equal(unclassified(rig), false,
-    'precondition: the services change is classified in the applying turn');
-  assert.equal(nonNodeDeliveryPending(rig), true,
-    'precondition: its deferred delivery is pending');
-  assert.equal(rig.route(), false,
-    'a services change pending deferred delivery fails closed even after a ' +
-    'delivered heartbeat');
-  await tick();
-  await macrotask();
-  await macrotask();
-  assert.equal(rig.route(), false, 'the rebuilt answer is false too');
-});
-
-// A peer node's async evaluation stores its snapshot and advances the
-// readiness snapshot generation without any nodes-table change.
-async function peerEvaluation(rig) {
-  await rig.readinessService.evaluateNodeReadiness(PEER_NODE_ID, {});
-}
-
-test('a delivered services change plus a peer snapshot-generation advance ' +
-  'never rides the bridge, with or without a pending heartbeat delivery',
-async (t) => {
-  for (const withHeartbeat of [false, true]) {
-    const rig = createRig();
-    t.after(() => rig.readinessService.shutdown?.());
-    await tick();
-    assert.equal(rig.route(), true, 'the bootstrap read routes');
-    await tick();
-    await tick();
-    deactivateMessageGroup(rig);
-    await tick();
-    await peerEvaluation(rig);
-    if (withHeartbeat) {
-      rig.cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
-        [COLUMN.NODE_ID]: NODE_ID,
-        [COLUMN.LAST_HEARTBEAT]: rig.clock.now,
-      });
-    }
-    // Only a nodes delivery can be outstanding, so the frontier gate passes
-    // and the stored/completed witnesses themselves must refuse.
-    assert.equal(nonNodeDeliveryPending(rig), false,
-      `precondition: nothing beyond nodes is pending (heartbeat=${withHeartbeat})`);
-    assert.equal(deliveryPending(rig, TABLES.NODES), withHeartbeat,
-      `precondition: a nodes delivery is pending iff heartbeat=${withHeartbeat}`);
-    assert.equal(rig.route(), false,
-      `the services-stale record fails closed (heartbeat=${withHeartbeat})`);
-    await tick();
-    await macrotask();
-    await macrotask();
-    assert.equal(rig.route(), false, 'the rebuilt answer is false too');
-  }
-});
-
-test('a classified publication change whose deferred delivery is pending ' +
-  'never rides the stored-evidence bridge', async (t) => {
-  const rig = await settledRig(t);
-  abandonPublication(rig);
-  assert.equal(unclassified(rig), false,
-    'precondition: the publication change is classified in the applying turn');
-  assert.equal(nonNodeDeliveryPending(rig), true,
-    'precondition: its deferred delivery (the stored-snapshot invalidation) ' +
-    'is pending');
-  assert.equal(rig.route(), false,
-    'the publication change is pending deferred delivery: neither stored ' +
-    'nor completed evidence may bridge it');
-  await tick();
-  assert.equal(nonNodeDeliveryPending(rig), false,
-    'the deferred delivery caught the frontier up');
-  await macrotask();
-  await macrotask();
-  assert.equal(rig.route(), false, 'the rebuilt answer is false too');
-});
-
-test('a heartbeat carrying saturating load is never bridged, while its ' +
-  'deferred delivery is pending or once delivered', async (t) => {
-  const rig = await settledRig(t);
-  rig.cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
-    [COLUMN.NODE_ID]: NODE_ID,
-    [COLUMN.LAST_HEARTBEAT]: rig.clock.now,
-    [COLUMN.CPU_USAGE_PERCENT]: SATURATED_LOAD_PERCENT,
-  });
-  assert.equal(deliveryPending(rig, TABLES.NODES), true,
-    'precondition: the heartbeat\'s deferred delivery is pending');
-  assert.equal(nonNodeDeliveryPending(rig), false,
-    'precondition: the frontier gate passes; the row itself must refuse');
-  assert.equal(rig.route(), false,
-    'saturating load fails closed while its deferred delivery is pending');
-  await tick();
-  assert.equal(rig.route(), false, 'and once the heartbeat is delivered');
-  await macrotask();
-  await macrotask();
-  assert.equal(rig.route(), false, 'the rebuilt answer is false too');
-});
-
-// A nodes-table change that leaves the stored snapshot's liveness watermark
-// (heartbeat, lease, connection state) unchanged: only the deferred
-// invalidation could refute stored evidence beside it.
-function loadMetricsUpdate(rig) {
-  rig.cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
-    [COLUMN.NODE_ID]: NODE_ID,
-    [COLUMN.CPU_USAGE_PERCENT]: 11,
-  });
-}
-
-// Adversarial: a nodes change alone bridges, so a non-nodes change applied
-// in the SAME turn must not ride that bridge while its own deferred delivery
-// is pending; services and publications, alone and together, beside a
-// renewing heartbeat and beside a watermark-neutral nodes update.
-test('a non-nodes change applied in the same turn as a heartbeat never ' +
-  'rides the heartbeat\'s bridge', async (t) => {
-  const nodesChanges = [
-    {name: 'renewing heartbeat', apply: renewingHeartbeat},
-    {name: 'load-metrics update', apply: loadMetricsUpdate},
-  ];
-  const nonNodeChanges = [
-    {name: 'services', apply: [deactivateMessageGroup]},
-    {name: 'publications', apply: [abandonPublication]},
-    {name: 'services+publications',
-      apply: [deactivateMessageGroup, abandonPublication]},
-  ];
-  for (const nodesChange of nodesChanges) {
-    const control = await settledRig(t);
-    nodesChange.apply(control);
-    assert.equal(control.route(), true,
-      `control: the ${nodesChange.name} alone bridges in the applying turn`);
-    for (const nonNodeChange of nonNodeChanges) {
-      const label = `${nonNodeChange.name} beside a ${nodesChange.name}`;
-      const rig = await settledRig(t);
-      nodesChange.apply(rig);
-      for (const apply of nonNodeChange.apply) apply(rig);
-      assert.equal(unclassified(rig), false,
-        `precondition (${label}): classified in the applying turn`);
-      assert.equal(deliveryPending(rig, TABLES.NODES), true,
-        `precondition (${label}): the nodes delivery is pending`);
-      assert.equal(nonNodeDeliveryPending(rig), true,
-        `precondition (${label}): a non-nodes delivery is pending`);
-      assert.equal(rig.route(), false,
-        `${label} fails closed in the applying turn`);
-      await tick();
-      await macrotask();
-      await macrotask();
-      assert.equal(rig.route(), false, `${label}: the rebuilt answer is false too`);
-    }
-  }
-});
-
 function heartbeat(rig) {
   rig.cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
     [COLUMN.NODE_ID]: NODE_ID,
@@ -449,12 +209,71 @@ function heartbeat(rig) {
   });
 }
 
-test('routing stops exactly when the ready lease expires', async (t) => {
+async function settledRig(t) {
   const rig = createRig();
   t.after(() => rig.readinessService.shutdown?.());
+  await rig.readinessService.readServeEligibility();
+  assert.equal(rig.route(), true, 'the committed record routes');
   await tick();
-  assert.equal(rig.route(), true);
+  await macrotask();
+  assert.equal(rig.route(), true, 'settled state routes');
+  return rig;
+}
+
+test('a fresh heartbeat never closes routing: applying turn, after its ' +
+  'deferred delivery, queued refreshes', async (t) => {
+  const rig = await settledRig(t);
+  renewingHeartbeat(rig);
+  assert.equal(rig.route(), true,
+    'a lease extension leaves the committed answer valid in the applying turn');
   await tick();
+  assert.equal(rig.route(), true,
+    'the read after the heartbeat\'s deferred delivery routes');
+  for (let round = 0; round < MACROTASK_ROUNDS; round += 1) {
+    await macrotask();
+    rig.clock.now += MACROTASK_STEP_MS;
+    assert.equal(rig.route(), true,
+      `queued refresh ${round + 1} keeps the replica routable`);
+  }
+});
+
+test('an abandoned publication closes routing at once and after the ' +
+  'committed refresh', async (t) => {
+  const rig = await settledRig(t);
+  abandonPublication(rig);
+  assert.equal(rig.route(), false,
+    'the publication change makes the committed record stale: no serving');
+  await rig.readinessService.readServeEligibility();
+  assert.equal(rig.route(), false,
+    'the refreshed committed record has no published membership');
+});
+
+test('a heartbeat carrying saturating load closes routing at once and after ' +
+  'the committed refresh', async (t) => {
+  const rig = await settledRig(t);
+  rig.cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
+    [COLUMN.NODE_ID]: NODE_ID,
+    [COLUMN.LAST_HEARTBEAT]: rig.clock.now,
+    [COLUMN.CPU_USAGE_PERCENT]: SATURATED_LOAD_PERCENT,
+  });
+  assert.equal(rig.route(), false,
+    'saturating load is a revoking change: the committed record is stale');
+  await rig.readinessService.readServeEligibility();
+  assert.equal(rig.route(), false,
+    'the refreshed committed answer refuses the saturated node');
+});
+
+test('a control-plane service row is not a serve input', async (t) => {
+  const rig = await settledRig(t);
+  deactivateMessageGroup(rig);
+  await tick();
+  await macrotask();
+  assert.equal(rig.route(), true,
+    'serving is the committed lease and published membership only');
+});
+
+test('routing stops exactly when the ready lease expires', async (t) => {
+  const rig = await settledRig(t);
   // Heartbeats keep arriving; the lease does not get renewed.
   while (rig.clock.now + HEARTBEAT_STEP_MS < rig.lease) {
     rig.clock.now += HEARTBEAT_STEP_MS;
@@ -467,12 +286,11 @@ test('routing stops exactly when the ready lease expires', async (t) => {
   heartbeat(rig);
   assert.equal(rig.route(), true, 'one millisecond before expiry routes');
   await tick();
-  // The node goes silent: the lease lapses and the heartbeat goes stale.
-  rig.clock.now = rig.lease + STALE_HEARTBEAT_MS;
+  rig.clock.now = rig.lease;
   assert.equal(rig.route(), false,
-    'a positive completed snapshot is live-vetoed, never bridged, once ' +
-    'the lease lapsed and no fresher row exists');
-  await tick();
-  await macrotask();
-  assert.equal(rig.route(), false, 'and stays refused after the rebuild');
+    'at the committed lease expiry the answer is stale, never eligible');
+  rig.clock.now = rig.lease + STALE_HEARTBEAT_MS;
+  await rig.readinessService.readServeEligibility();
+  assert.equal(rig.route(), false,
+    'the refreshed committed record still holds the lapsed lease');
 });

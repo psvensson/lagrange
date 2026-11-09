@@ -85,22 +85,71 @@ function isWritableCacheTarget(cache) {
   );
 }
 
+function resolveWritableCacheTarget(gateway, candidate) {
+  if (isWritableCacheTarget(candidate)) return candidate;
+  const ownedTarget = gateway?.resolveCdcIntegrationService?.()?.cacheMutationTarget;
+  return isWritableCacheTarget(ownedTarget) ? ownedTarget : null;
+}
+
 function resolveCacheTargets(gateway, options) {
   const defaultCache = gateway.resolveSystemTableCache();
-  const cdcWritableCache =
-    gateway.resolveCdcIntegrationService?.()?.cacheMutationTarget || null;
-  const candidateWritable = options?.cacheMutationTarget || defaultCache;
-  const writableCache = isWritableCacheTarget(candidateWritable) ?
-    candidateWritable :
-    isWritableCacheTarget(cdcWritableCache) ?
-      cdcWritableCache :
-      candidateWritable;
   return {
-    writableCache,
+    writableCache: resolveWritableCacheTarget(
+      gateway, options?.cacheMutationTarget || defaultCache,
+    ),
     readableCache:
-      options?.systemTableCache || defaultCache ||
-      options?.cacheMutationTarget,
+      options?.systemTableCache || defaultCache || options?.cacheMutationTarget,
   };
+}
+
+// All gateway-owned cache ingress shares this primitive. Error custody stays
+// with the input wrapper: full reconciliation and committed CDC propagate;
+// authoritative subset repair logs per row and continues.
+function applyCacheRow(target, tableName, operation, row, options) {
+  target.applySystemTableChange(tableName, operation, row, options);
+}
+
+const CACHE_APPLY_FAILED = 'control_plane_gateway_apply_cache_failed';
+
+function applyBestEffortRows(gateway, writableCache, tableName, rows, operation, options) {
+  const target = resolveWritableCacheTarget(gateway, writableCache);
+  if (!target || !Array.isArray(rows)) return false;
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    try {
+      applyCacheRow(target, tableName, operation, row, options);
+    } catch (error) {
+      gateway?.logger?.debug?.(CACHE_APPLY_FAILED, {
+        tableName, error: error?.message ?? String(error),
+      });
+    }
+  }
+  // A usable target accepted this batch. This is not a row-change count,
+  // durable-progress verdict, or complete-table observation receipt.
+  return true;
+}
+
+function applyAuthoritativeSystemTableRowsToCache(gateway, writableCache, tableName, rows) {
+  return applyBestEffortRows(gateway, writableCache, tableName, rows, CDC_OPERATION.UPSERT);
+}
+
+function evictAuthoritativeAbsentSystemTableRowsFromCache(
+  gateway, writableCache, tableName, rows,
+) {
+  return applyBestEffortRows(gateway, writableCache, tableName, rows, CDC_OPERATION.DELETE, {
+    mutationMode: SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_ABSENCE_RECONCILIATION,
+  });
+}
+
+function applyCommittedPartitionCdcEventToCache(
+  systemTableCache, cdcEvent, observedAtMs = Date.now(),
+) {
+  if (!isWritableCacheTarget(systemTableCache) || !cdcEvent?.tableName ||
+      !cdcEvent?.operation || !cdcEvent?.data) return;
+  applyCacheRow(systemTableCache, cdcEvent.tableName, cdcEvent.operation, cdcEvent.data, {
+    causeId: cdcEvent.causeId,
+    cdcObservedAtMs: observedAtMs,
+  });
 }
 
 function hasUsableCacheTargets(writableCache, readableCache) {
@@ -288,12 +337,16 @@ function applyAuthoritativeUpserts(options) {
     )) {
       continue;
     }
-    options.writableCache.applySystemTableChange(
+    applyCacheRow(
+      options.writableCache,
       options.tableName,
       CDC_OPERATION.UPSERT,
       canonicalRow,
       options.upsertOptions,
     );
+    if (Array.isArray(options.changedRowIds)) {
+      options.changedRowIds.push(normalizedKey);
+    }
     mutationCount += 1;
   }
   return mutationCount;
@@ -315,12 +368,16 @@ function applyMissingRowDeletes(options) {
     ) {
       continue;
     }
-    options.writableCache.applySystemTableChange(
+    applyCacheRow(
+      options.writableCache,
       options.tableName,
       CDC_OPERATION.DELETE,
       cachedRow,
       options.causeOptions,
     );
+    if (Array.isArray(options.changedRowIds)) {
+      options.changedRowIds.push(String(key));
+    }
     mutationCount += 1;
   }
   return mutationCount;
@@ -410,6 +467,21 @@ function buildPostApplyCacheDivergenceReason(context, indexes) {
     CACHE_RECONCILIATION_DIAGNOSTIC.UNCLASSIFIED_POST_APPLY_DIVERGENCE;
 }
 
+function buildPublishedAuthoritativeObservationPayload(
+  requestedObservedAtMs,
+  receipt = {},
+) {
+  return {
+    observedAtMs: requestedObservedAtMs,
+    causeId: receipt.causeId,
+    term: receipt.term ?? null,
+    appliedIndex: receipt.appliedIndex ?? null,
+    commitIndex: receipt.commitIndex ?? null,
+    servingNodeId: receipt.servingNodeId ?? null,
+    partitionId: receipt.partitionId ?? null,
+  };
+}
+
 function publishAuthoritativeObservation(options) {
   if (!options.observationRequested) {
     return {success: true, observedAtMs: null};
@@ -423,10 +495,10 @@ function publishAuthoritativeObservation(options) {
   try {
     observedAtMs = options.writableCache.recordAuthoritativeObservation(
       options.tableName,
-      {
-        observedAtMs: requestedObservedAtMs,
-        causeId: options.receipt.causeId,
-      },
+      buildPublishedAuthoritativeObservationPayload(
+        requestedObservedAtMs,
+        options.receipt,
+      ),
     );
     persistedObservedAtMs =
       options.readableCache.getLastAuthoritativeObservedAtMs(
@@ -487,6 +559,7 @@ function buildReconciliationContext(options) {
     cachedEntries,
     rowComparator,
     causeOptions,
+    changedRowIds: [],
   };
 }
 
@@ -541,9 +614,12 @@ function applyCacheReconciliation(context, indexes) {
     causeOptions: context.causeOptions,
     upsertOptions,
     deleteMissingPolicy: context.deleteMissingPolicy,
+    changedRowIds: context.changedRowIds,
   };
-  return applyAuthoritativeUpserts(mutationOptions) +
-    applyMissingRowDeletes(mutationOptions);
+  return (
+    applyAuthoritativeUpserts(mutationOptions) +
+    applyMissingRowDeletes(mutationOptions)
+  );
 }
 
 function observationCacheIsVerified(context, indexes) {
@@ -565,6 +641,7 @@ function buildReconciliationSuccess(context, mutationCount, publication) {
     tableName: context.tableName,
     reconcileIntent: context.reconcileIntent,
     mutationCount,
+    changedRowIds: [...context.changedRowIds],
     authoritativeObservedAtMs: publication.observedAtMs,
     outcome: mutationCount > 0 ?
       CONTROL_PLANE_MUTATION_OUTCOME.APPLIED :
@@ -683,4 +760,9 @@ function assignControlPlaneSystemTableGatewayCacheReconciliation(targetClass) {
   );
 }
 
-export {assignControlPlaneSystemTableGatewayCacheReconciliation};
+export {
+  applyAuthoritativeSystemTableRowsToCache,
+  applyCommittedPartitionCdcEventToCache,
+  assignControlPlaneSystemTableGatewayCacheReconciliation,
+  evictAuthoritativeAbsentSystemTableRowsFromCache,
+};

@@ -18,6 +18,7 @@ import {
   resumeFixtureParticipantGroupAdmission,
 } from '../test-helpers/participant-transaction-fixture.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const PARTICIPANT_RELEASE_BUDGET_MS = 1000;
 
 /**
@@ -70,9 +71,19 @@ function createMockCDCService() {
     insertedRows,
     updatedRows,
     deletedRows,
+    async awaitProjectionAt(position) {
+      return {outcome: 'reached', position};
+    },
     async insertSystemTableRow(tableName, data) {
       insertedRows.push({tableName, data});
-      return buildMutationEnvelope('INSERT', tableName, {data});
+      return buildMutationEnvelope('INSERT', tableName, {
+        data,
+        position: {
+          tableName,
+          key: data?.table_id || data?.partition_id,
+          originHlc: '1793615397288-1-node',
+        },
+      });
     },
     async updateSystemTableRow(tableName, where, data) {
       updatedRows.push({tableName, where, data});
@@ -139,6 +150,7 @@ test('End-to-end SQL workflow integration tests', async (t) => {
     const cdcService = createMockCDCService();
 
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       cdcIntegrationService: cdcService,
     });
@@ -175,6 +187,7 @@ test('End-to-end SQL workflow integration tests', async (t) => {
     const cdcService = createMockCDCService();
 
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: cache,
       cdcIntegrationService: cdcService,
     });

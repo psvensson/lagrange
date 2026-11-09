@@ -27,6 +27,8 @@ import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
 import {spawnGit} from './checks/git-invocation.js';
+import {CONVERGENCE_PROBES_SHARD_PATH} from './checks/test-primary-classification-constants.js';
+import {isTestCensusPath} from './checks/test-primary-classification.js';
 import {computeReleaseProofIdentity} from './release-proof-identity.js';
 import {
   EXECUTION_PROBLEM, RETRY_POLICY, describeCheckout, executionReportProblems,
@@ -577,6 +579,53 @@ function subjectTree({sha, cwd, git}) {
   return tree.status === 0 ? text(tree.stdout) : null;
 }
 
+const GIT_LS_TREE_ARGS = Object.freeze(['ls-tree', '-r', '--name-only']);
+const GIT_SHOW_COMMAND = 'show';
+const POSIX_SLASH = '/';
+const [TEST_TREE_ROOT] = CONVERGENCE_PROBES_SHARD_PATH.split(POSIX_SLASH);
+const SHARD_COMMENT_PREFIX = '#';
+const SUBJECT_CORPUS_UNREADABLE = 'subject-corpus-unreadable';
+
+function readConvergenceProbes({sha, entries, cwd, git}) {
+  if (!entries.includes(CONVERGENCE_PROBES_SHARD_PATH)) {
+    return new Set();
+  }
+  const shard = git([GIT_SHOW_COMMAND, `${sha}:${CONVERGENCE_PROBES_SHARD_PATH}`], {cwd});
+  if (shard.status !== 0) return null;
+  return new Set(text(shard.stdout).split(RECEIPT_MESSAGE_NEWLINE)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith(SHARD_COMMENT_PREFIX)));
+}
+
+function subjectCorpusFiles({sha, cwd, git = runGit}) {
+  const listed = git([...GIT_LS_TREE_ARGS, sha, TEST_TREE_ROOT], {cwd});
+  const entries = listed.status === 0 ?
+    text(listed.stdout).split(RECEIPT_MESSAGE_NEWLINE).map((line) => line.trim()).filter(Boolean) :
+    null;
+  const probes = entries === null ? null : readConvergenceProbes({sha, entries, cwd, git});
+  if (entries === null || probes === null) {
+    return {ok: false, reason: SUBJECT_CORPUS_UNREADABLE, files: []};
+  }
+  return {
+    ok: true,
+    files: entries.filter((entry) => isTestCensusPath(entry) && !probes.has(entry)),
+  };
+}
+
+function citesWholeCorpus(report, contract) {
+  return Array.isArray(report?.reusedProofs) &&
+    contract.citableProofs.includes(PROOF.CORPUS_FULL) &&
+    report.reusedProofs.some((cited) => cited?.proofId === PROOF.CORPUS_FULL);
+}
+
+function requiredCorpusFiles({sha, contract, report, cwd, git}) {
+  if (!report || typeof report !== 'object' || Array.isArray(report) ||
+      citesWholeCorpus(report, contract)) {
+    return {ok: true, files: []};
+  }
+  return subjectCorpusFiles({sha, cwd, git});
+}
+
 // A proof the report says it reused must be one the contract's seal lets it
 // cite, and must resolve now, for this very commit (never through a sibling's
 // release identity), to the very receipt object it cited.
@@ -613,10 +662,13 @@ function validatedExecution({proofId, sha, contract, report, remote, cwd, git}) 
   // cannot be checked, and an unchecked identity is never admitted.
   const unverifiable = contract.identityReuse === true && identity === null ?
     [{code: EXECUTION_PROBLEM.IDENTITY_MISMATCH, detail: IDENTITY_UNVERIFIABLE}] : [];
+  const corpus = requiredCorpusFiles({sha, contract, report, cwd, git});
+  const corpusProblems = corpus.ok ? [] :
+    [{code: EXECUTION_PROBLEM.PLANNED_FILE_NOT_EXECUTED, detail: corpus.reason}];
   const checked = executionReportProblems(report, {sha, tree: subjectTree({sha, cwd, git}),
-    identity, retryPolicy: contract.retryPolicy});
+    identity, retryPolicy: contract.retryPolicy, requiredFiles: corpus.files});
   const problems = checked.summary ?
-    [...unverifiable, ...checked.problems,
+    [...unverifiable, ...corpusProblems, ...checked.problems,
       ...reusedProofProblems({report, sha, contract, remote, cwd, git})] :
     checked.problems;
   if (problems.length > 0) throw new ProofRecordRefused(proofId, sha, problems);
@@ -897,4 +949,5 @@ export {
   resolveCorpusProof,
   resolveProof,
   runCli,
+  subjectCorpusFiles,
 };

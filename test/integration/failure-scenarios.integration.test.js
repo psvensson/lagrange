@@ -1,3 +1,4 @@
+import {createMockControlPlaneReadinessService} from '../rebalancer/test-helpers.js';
 /**
  * Failure scenario integration tests.
  * Tests node failure detection, recovery, network partition handling,
@@ -20,8 +21,6 @@ import {NodeService} from '../../src/node/node-service.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SERVICE_TYPE} from '../../src/constants/index.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
-import {CONTROL_PLANE_READINESS_DIMENSION} from
-  '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   createVirginSeedBootstrapService,
   initializeTestEnvironment,
@@ -30,7 +29,6 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
-import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
 import {
@@ -39,29 +37,8 @@ import {
 } from
   '../test-helpers/lifecycle-state-store.js';
 
-function createAlwaysReadyControlPlaneReadinessService() {
-  const dimensions = {
-    [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
-  };
-  return readinessServiceFake({
-    getNodeReadinessSync: (_nodeId, options = {}) => ({
-      dimensions: {
-        ...dimensions,
-        ...(options.decisionDimension ?
-          {[options.decisionDimension]: true} :
-          {}),
-      },
-    }),
-  });
-}
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+
 
 function getCachePrimaryKeyField(tableName) {
   if (tableName === SYSTEM_TABLE_NAME.NODES) {
@@ -455,6 +432,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
 
       // Create real SQL query engine for RebalanceCoordinator
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -470,7 +448,9 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
         sqlQueryEngine,
         storageAdmissionService: createMockStorageAdmissionService(),
         storageAccountingService: createMockStorageAccountingService(),
-        controlPlaneReadinessService: createAlwaysReadyControlPlaneReadinessService(),
+        controlPlaneReadinessService: createMockControlPlaneReadinessService({
+          systemTableCache: systemTableCache,
+        }),
         enableTimeouts: false,
       });
       rebalanceCoordinator.initialize();
@@ -536,7 +516,9 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
         sqlQueryEngine,
         messageRouter: bootstrapResult.messageRouter,
         rebalanceCoordinator,
-        controlPlaneReadinessService: createAlwaysReadyControlPlaneReadinessService(),
+        controlPlaneReadinessService: createMockControlPlaneReadinessService({
+          systemTableCache: systemTableCache,
+        }),
         storageAccountingService: createMockStorageAccountingService(),
         storagePressureBehavior: createMockStoragePressureBehavior(),
       });

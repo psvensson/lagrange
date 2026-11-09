@@ -1,3 +1,4 @@
+import {createMockCoordinator} from './test-helpers.js';
 /**
  * Unit tests for UnifiedRebalancer.
  * Tests the core rebalancing logic for partitions and message groups.
@@ -34,12 +35,12 @@ import {
 import {
   createMockCache,
   createMockCdcService,
-  createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 
 // Initialize test environment
 // Create a mock system table cache
@@ -83,19 +84,21 @@ function createTestRebalancer(options = {}) {
     serviceEndpoints,
   );
   const mockCdcService = cdcIntegrationService || createMockCdcService();
-  const mockPolicyService = createMockPolicyService(
-    partitions, tables,
-  );
+  const mockPolicyService = createMockPolicyService({partitions: partitions, tables: tables});
   const mockMessageRouter = messageRouter ||
     createMockMessageRouter(connectionState);
-  const mockCoordinator = rebalanceCoordinator || createMockCoordinator();
   const mockSqlQueryEngine = sqlQueryEngine || {
     async executeQuery() {
       return {success: true, rows: []};
     },
   };
-  const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
+  // A named hand fake is completed by the one fixture completer.
+  const mockReadinessService = controlPlaneReadinessService ?
+    readinessServiceFake(controlPlaneReadinessService, nowFn || undefined) :
+    createMockControlPlaneReadinessService({systemTableCache: mockCache});
+  const mockCoordinator = rebalanceCoordinator || createMockCoordinator({
+    controlPlaneReadinessService: mockReadinessService,
+  });
 
   return new UnifiedRebalancer({
     entityId,
@@ -219,7 +222,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 3', async (t) => {
       });
       const cache = createMockCache(nodes);
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
@@ -539,14 +542,11 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 3', async (t) => {
         ],
       );
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
         async getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return planningSnapshot;
-        },
-        async getMembershipPublicationPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
         membershipPublicationService: {

@@ -41,6 +41,8 @@ const CONTROL_PLANE_SNAPSHOT_REPAIR_REASON = Object.freeze({
 
 const CONTROL_PLANE_SNAPSHOT_REASON_CODE = Object.freeze({
   REVISION_BEHIND: 'snapshot_revision_behind',
+  PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP:
+    'priority_placement_completion_handoff_gap',
 });
 
 function normalizeDistinctStringArray(values = []) {
@@ -423,6 +425,9 @@ class ControlPlaneSnapshotOwner {
     }
     const repairOptions = {
       reason: CONTROL_PLANE_SNAPSHOT_REPAIR_REASON.CONTROL_SNAPSHOT,
+      bypassReuse: reasonCodes.includes(
+        CONTROL_PLANE_SNAPSHOT_REASON_CODE.PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP,
+      ),
       triggerCodes: reasonCodes,
     };
     const repairDecision = this.resolveRepairDecision(repairOptions);

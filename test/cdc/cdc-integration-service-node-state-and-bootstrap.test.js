@@ -999,7 +999,7 @@ test('CDCIntegrationService - steady-state writes use isolated SQL sessions',
         service_id: 'service-1',
         address: 'node1/service/1',
       },
-      {skipCacheWait: true},
+      {},
     );
 
     t.equal(result.success, true, 'should succeed with an isolated session');
@@ -1045,7 +1045,7 @@ async (t) => {
       service_id: 'service-routing-key-1',
       address: 'node1/service/routing-key-1',
     },
-    {skipCacheWait: true},
+    {},
   );
   await service.insertSystemTableRow(
     SYSTEM_TABLE_NAME.SERVICES,
@@ -1053,7 +1053,7 @@ async (t) => {
       service_id: 'service-routing-key-1',
       address: 'node1/service/routing-key-1',
     },
-    {skipCacheWait: true},
+    {},
   );
 
   t.equal(observedSessions.length, 2, 'should execute both routed SQL writes');
@@ -1082,7 +1082,6 @@ async (t) => {
   const expectedRecoveryCandidateSelectionKey =
     'cdc-recovery-selection-key';
   const expectedSessionId = 'cdc-system-write:explicit-session';
-  const expectedVisibilityResult = {visibilityState: 'visible'};
   const mockSqlEngine = {
     async executeQuery(sql, params = [], options = {}) {
       observedQueries.push({sql, params, options});
@@ -1097,8 +1096,6 @@ async (t) => {
     sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
-  service.waitForCacheUpdate =
-    async () => expectedVisibilityResult;
 
   await service.updateSystemTableRow(
     SYSTEM_TABLE_NAME.SERVICES,

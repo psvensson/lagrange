@@ -1,9 +1,13 @@
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {isUnclaimedPreRuntimeFailedCreateRow} from
+  './failed-create-cleanup-token.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 const OBSERVED_REPLICA_ROW_FIELD = Object.freeze({
   ADDRESS: 'address',
+  PREVIOUS_STATE: 'previous_state',
+  PREVIOUS_STATE_CAMEL: 'previousState',
   RAFT_ROLE: 'raft_role',
   RAFT_ROLE_CAMEL: 'raftRole',
   SERVICE_TYPE: 'service_type',
@@ -278,19 +282,30 @@ function assignReplicaOperationRepositoryObservationMethods(
    * @param {Object} [options={}]
    * @return {string|null}
    */
+    resolveObservedReplicaLifecycleStatus(observedRow, options = {}) {
+      if (
+        options?.ignoreUnclaimedPreRuntimeFailedCreate === true &&
+        isUnclaimedPreRuntimeFailedCreateRow(observedRow)
+      ) {
+        return null;
+      }
+      return this.normalizeObservedReplicaLifecycle(observedRow);
+    }
+
     getObservedReplicaStatusFromCache(
       replicaId,
       partitionId,
       targetNodeId,
       options = {},
     ) {
-      return this.normalizeObservedReplicaLifecycle(
+      return this.resolveObservedReplicaLifecycleStatus(
         this.getObservedReplicaRowFromCache(
           replicaId,
           partitionId,
           targetNodeId,
           options,
         ),
+        options,
       );
     }
     /**
@@ -439,7 +454,10 @@ function assignReplicaOperationRepositoryObservationMethods(
             REPLICA_OPERATION_REPOSITORY_LITERAL
               .CACHE_FALLBACK_AFTER_AUTHORITATIVE_FAILURE :
             REPLICA_OPERATION_REPOSITORY_LITERAL.CACHE,
-        lifecycleStatus: this.normalizeObservedReplicaLifecycle(observedRow),
+        lifecycleStatus: this.resolveObservedReplicaLifecycleStatus(
+          observedRow,
+          readOptions,
+        ),
       });
     }
     /**
@@ -534,7 +552,15 @@ function assignReplicaOperationRepositoryObservationMethods(
         return Object.freeze({
           state: REPLICA_OPERATION_REPOSITORY_LITERAL.OBSERVED,
           source: REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE,
-          lifecycleStatus: this.normalizeObservedReplicaLifecycle(observedRow),
+          lifecycleStatus: this.resolveObservedReplicaLifecycleStatus(
+            observedRow,
+            readOptions,
+          ),
+          previousState: this.readObservedReplicaRowString(
+            observedRow,
+            OBSERVED_REPLICA_ROW_FIELD.PREVIOUS_STATE,
+            OBSERVED_REPLICA_ROW_FIELD.PREVIOUS_STATE_CAMEL,
+          ),
           lifecyclePrecondition:
             buildObservedReplicaLifecyclePrecondition(observedRow),
         });

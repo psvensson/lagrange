@@ -24,7 +24,8 @@ import {NO_ADMISSION_BASIS, claimReplicaCreateDurablePhysicalWorker,
   requireReplicaCreateRotationWorkerClaim,
   revalidateReplicaCreatePhysicalWorker, rowMatchesAdmissionBasis,
   runReplicaCreateExclusive, advanceReplicaCreatePhysicalWorker,
-  snapshotReplicaCreateInstallAuthority} from
+  snapshotReplicaCreateInstallAuthority,
+  throwIfReplicaCreateProgressSuperseded} from
   './replica-create-process-owner.js';
 import {closeReplicaCreateAdmissionForLifecycle} from
   './replica-create-lifecycle-close.js';
@@ -78,6 +79,31 @@ function admissionError(code, operationId, message) {
   error.errorCode = code;
   error.operationId = operationId || null;
   error.deferRetry = code === CREATE_ADMISSION_ERROR_CODE.DEFERRED;
+  return error;
+}
+
+function readDeferredError(operationId, authorityOutcome, authorityError) {
+  const error = admissionError(
+    CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+    operationId,
+    `CREATE admission read deferred for ${operationId}`,
+  );
+  error.authorityOutcome = authorityOutcome;
+  error.authorityError = authorityError;
+  return error;
+}
+
+// The deferral names what the authority read answered, so a refusing
+// projection (routing readiness, pressure, no leader) is observable.
+function readRefusedDeferredError(operationId, observation) {
+  return readDeferredError(operationId, observation?.outcome ?? null,
+    observation?.error ?? null);
+}
+
+function readThrewDeferredError(operationId, cause) {
+  const error = readDeferredError(operationId, null,
+    String(cause?.message ?? cause));
+  error.cause = cause;
   return error;
 }
 
@@ -362,20 +388,10 @@ class ReplicaCreateAdmissionOwner {
         CRITICAL_OPTIONS,
       );
     } catch (cause) {
-      const error = admissionError(
-        CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-        operationId,
-        `CREATE admission read deferred for ${operationId}`,
-      );
-      error.cause = cause;
-      throw error;
+      throw readThrewDeferredError(operationId, cause);
     }
     if (observation?.success !== true) {
-      throw admissionError(
-        CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-        operationId,
-        `CREATE admission read deferred for ${operationId}`,
-      );
+      throw readRefusedDeferredError(operationId, observation);
     }
     return observation.rows?.length === 1 ? observation.rows[0] : null;
   }
@@ -429,55 +445,37 @@ class ReplicaCreateAdmissionOwner {
 
   async snapshotTargetAdmissions(entityType) {
     if (!this.gateway) {
-      throw admissionError(
-        CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-        this.nodeId,
-        `CREATE admission recovery authority unavailable for ${this.nodeId}`,
-      );
+      throw admissionError(CREATE_ADMISSION_ERROR_CODE.DEFERRED, this.nodeId,
+        `CREATE admission recovery authority unavailable for ${this.nodeId}`);
     }
     if (typeof entityType !== 'string' || entityType.length === 0) {
-      throw admissionError(
-        CREATE_ADMISSION_ERROR_CODE.INVALID,
-        this.nodeId,
-        `CREATE admission recovery needs its entity type on ${this.nodeId}`,
-      );
+      throw admissionError(CREATE_ADMISSION_ERROR_CODE.INVALID, this.nodeId,
+        `CREATE admission recovery needs its entity type on ${this.nodeId}`);
     }
     const observation = await readAuthoritativeControlPlaneRows(
-      this.gateway,
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      READ_TARGET_ADMISSIONS_SQL,
-      [this.nodeId, entityType],
-      CRITICAL_OPTIONS,
-    );
+      this.gateway, SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      READ_TARGET_ADMISSIONS_SQL, [this.nodeId, entityType], CRITICAL_OPTIONS);
     if (observation?.success !== true || !Array.isArray(observation.rows)) {
-      throw admissionError(
-        CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-        this.nodeId,
-        `CREATE admission recovery snapshot deferred for ${this.nodeId}`,
-      );
+      throw admissionError(CREATE_ADMISSION_ERROR_CODE.DEFERRED, this.nodeId,
+        `CREATE admission recovery snapshot deferred for ${this.nodeId}`);
     }
     return observation.rows;
   }
 
   async requireCurrentBootIncarnation() {
     const observation = await readAuthoritativeControlPlaneRows(
-      this.gateway,
-      SYSTEM_TABLE_NAME.NODES,
-      READ_CURRENT_BOOT_SQL,
-      [this.nodeId],
-      CRITICAL_OPTIONS,
-    );
+      this.gateway, SYSTEM_TABLE_NAME.NODES, READ_CURRENT_BOOT_SQL,
+      [this.nodeId], CRITICAL_OPTIONS).catch(() => null);
     const row = observation?.success === true &&
       Array.isArray(observation.rows) && observation.rows.length === 1 ?
       observation.rows[0] : null;
-    if (row?.node_id !== this.nodeId ||
-        nullableSafeInteger(row.boot_incarnation) !== this.ownerIncarnation) {
-      const error = admissionError(
-        CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-        this.nodeId,
-        `Current boot authority unavailable for ${this.nodeId}`,
-      );
+    const bootIncarnation = nullableSafeInteger(row?.boot_incarnation);
+    if (row?.node_id !== this.nodeId || bootIncarnation !== this.ownerIncarnation) {
+      const error = admissionError(CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+        this.nodeId, `Current boot authority unavailable for ${this.nodeId}`);
       error.bootAuthorityUnavailable = true;
+      error.bootIncarnationSuperseded = row?.node_id === this.nodeId &&
+        bootIncarnation !== null && bootIncarnation !== this.ownerIncarnation;
       throw error;
     }
     return row;
@@ -635,12 +633,14 @@ class ReplicaCreateAdmissionOwner {
     );
   }
 
-  async advance(evidence, expectedStates, nextState, data = {}, extraWhere = {}) {
+  async #advanceWithObservation(
+    evidence, expectedStates, nextState, data = {}, extraWhere = {},
+  ) {
     const expected = Array.isArray(expectedStates) ? expectedStates :
       [expectedStates];
     if (!isValidAdvanceRequest(
       evidence, this.ownerIncarnation, expected, nextState,
-    )) return null;
+    )) return {progressed: null, row: null};
     await this.requireCurrentBootIncarnation();
     for (const expectedState of expected) {
       let result = null;
@@ -673,8 +673,17 @@ class ReplicaCreateAdmissionOwner {
     await this.requireCurrentBootIncarnation();
     if (!rowMatchesAdvanceResult(
       row, evidence, nextState, this.ownerIncarnation, data,
-    )) return null;
-    return admissionEvidenceFromRow(row, requestFromAdmissionRow(row));
+    )) return {progressed: null, row};
+    return {
+      progressed: admissionEvidenceFromRow(row, requestFromAdmissionRow(row)),
+      row,
+    };
+  }
+
+  async advance(evidence, expectedStates, nextState, data = {}, extraWhere = {}) {
+    return (await this.#advanceWithObservation(
+      evidence, expectedStates, nextState, data, extraWhere,
+    )).progressed;
   }
 
   async markMaterialized(evidence, admissionBasis = NO_ADMISSION_BASIS) {
@@ -690,7 +699,7 @@ class ReplicaCreateAdmissionOwner {
   async markProgress(evidence, nextState) {
     if (nextState !== CREATE_ADMISSION_STATE.ACTIVE &&
         nextState !== CREATE_ADMISSION_STATE.FAILED) return null;
-    return this.advance(
+    const {progressed, row} = await this.#advanceWithObservation(
       evidence,
       [
         CREATE_ADMISSION_STATE.ADMITTED,
@@ -699,6 +708,10 @@ class ReplicaCreateAdmissionOwner {
       ],
       nextState,
     );
+    if (!progressed) {
+      throwIfReplicaCreateProgressSuperseded(this, row, evidence);
+    }
+    return progressed;
   }
 
   async beginFailedAttemptRotation(evidence, physicalClaim = null) {

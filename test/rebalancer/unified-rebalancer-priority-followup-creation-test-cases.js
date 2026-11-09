@@ -2,12 +2,10 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
   const {
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
     CONTROL_PLANE_READINESS_DIMENSION,
-    createMockCache,
     createMockCdcService,
     createMockCoordinator,
     createMockMembershipPublicationService,
     createMockMessageRouter,
-    createMockReadinessService,
     createTestRebalancer,
     EntityType,
     initializeTestEnvironment,
@@ -286,8 +284,7 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
         };
       },
     };
-    const readinessService = {
-      ...createMockReadinessService(createMockCache()),
+    const readinessCallbacks = {
       getNodeReadinessSync(nodeId) {
         return {
           nodeId,
@@ -307,9 +304,6 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
           },
           reasons: [],
         };
-      },
-      async getNodeReadiness(nodeId) {
-        return this.getNodeReadinessSync(nodeId);
       },
       getPriorityRecoveryPlanningSnapshotBestEffort() {
         return priorityRecoveryPlanningSnapshot;
@@ -379,7 +373,7 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
         },
       ],
       rebalanceCoordinator: coordinator,
-      controlPlaneReadinessService: readinessService,
+      readinessFixture: {callbacks: readinessCallbacks},
     });
 
     rebalancer.setLeader(true);
@@ -536,8 +530,7 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
         };
       },
     };
-    const readinessService = {
-      ...createMockReadinessService(createMockCache()),
+    const readinessCallbacks = {
       getNodeReadinessSync(nodeId) {
         const recoveryOnlyTarget = nodeId === PRIORITY_FOLLOW_UP_NODE_ID_D;
         return {
@@ -560,9 +553,6 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
           },
           reasons: [],
         };
-      },
-      async getNodeReadiness(nodeId) {
-        return this.getNodeReadinessSync(nodeId);
       },
       getPriorityRecoveryPlanningSnapshotBestEffort() {
         return priorityRecoveryPlanningSnapshot;
@@ -641,7 +631,7 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
       ],
       messageRouter,
       rebalanceCoordinator: coordinator,
-      controlPlaneReadinessService: readinessService,
+      readinessFixture: {callbacks: readinessCallbacks},
     });
 
     rebalancer.setLeader(true);

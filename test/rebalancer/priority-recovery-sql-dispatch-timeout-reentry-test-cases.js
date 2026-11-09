@@ -180,7 +180,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getNodeReadinessSync(nodeId) {
@@ -197,7 +196,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       enableTimeouts: false,
@@ -369,7 +368,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -380,7 +378,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         setTimeoutFn(fn, delayMs) {
@@ -512,7 +510,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver(target, payload, options) {
@@ -529,7 +526,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         setTimeoutFn(fn, delayMs) {
@@ -688,7 +685,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getNodeReadinessSync(nodeId) {
@@ -705,7 +701,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       enableTimeouts: false,
@@ -861,9 +857,9 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
+        getPriorityRecoveryPlanningAnswerSync: buildDispatchPendingReentryPlanningSnapshot,
         getPriorityRecoveryPlanningSnapshotBestEffort() {
           return buildDispatchPendingReentryPlanningSnapshot();
         },
@@ -881,7 +877,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       setTimeoutFn(fn, delayMs) {
@@ -1069,7 +1065,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
         getNodeReadinessSync(nodeId) {
@@ -1086,7 +1081,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       enableTimeouts: false,
@@ -1228,7 +1223,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
           getNodeReadinessSync(nodeId) {
@@ -1245,7 +1239,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         messageRouter: initiatedRouter(deliveries),
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         enableTimeouts: false,
@@ -1392,9 +1386,9 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneReadinessService: {
+        getPriorityRecoveryPlanningAnswerSync: buildDispatchPendingReentryPlanningSnapshot,
         getPriorityRecoveryPlanningSnapshotBestEffort() {
           return buildDispatchPendingReentryPlanningSnapshot();
         },
@@ -1412,7 +1406,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       messageRouter: initiatedRouter(deliveries),
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       enableTimeouts: false,

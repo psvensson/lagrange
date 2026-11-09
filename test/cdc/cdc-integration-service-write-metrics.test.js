@@ -5,30 +5,18 @@
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import {
-  CDCIntegrationService,
-} from '../../src/cdc/cdc-integration-service.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CDC_OPERATION, METRICS_LOG_TAG,
 } from '../../src/constants/index.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  createCDCServiceWithMockSql,
+  collectServiceInfoCalls as collectInfoCalls,
+  setupCDCTestLifecycle,
+} from './cdc-integration-service-test-support.js';
 
-beforeEach(() => {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize({});
-  const logger = LoggingService.getInstance();
-  logger.initialize({level: 'error'});
-});
-
-afterEach(() => {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-});
+setupCDCTestLifecycle(beforeEach, afterEach);
 
 function createMockSqlEngine() {
   return {
@@ -47,22 +35,9 @@ function createFailingSqlEngine() {
 }
 
 function createService(sqlEngine) {
-  const service = new CDCIntegrationService({
-    nodeId: 'test-node',
+  return createCDCServiceWithMockSql({
     sqlQueryEngine: sqlEngine || createMockSqlEngine(),
   });
-  service.initialize();
-  return service;
-}
-
-function collectInfoCalls(service) {
-  const calls = [];
-  const originalInfo = service.logger.info.bind(service.logger);
-  service.logger.info = function(tag, data) {
-    calls.push({tag, data});
-    return originalInfo(tag, data);
-  };
-  return calls;
 }
 
 function collectErrorCalls(service) {
@@ -127,11 +102,8 @@ test('insertSystemTableRow emits metrics.cdc.write on success',
     t.equal(metric.data.operation, CDC_OPERATION.INSERT);
     t.equal(typeof metric.data.sqlDurationMs, 'number');
     t.ok(metric.data.sqlDurationMs >= 0, 'sqlDurationMs non-negative');
-    t.equal(typeof metric.data.cacheWaitDurationMs, 'number');
-    t.ok(
-      metric.data.cacheWaitDurationMs >= 0,
-      'cacheWaitDurationMs non-negative',
-    );
+    // A write answers at its commit: no cache-wait phase is measured.
+    t.equal('cacheWaitDurationMs' in metric.data, false);
     t.equal(typeof metric.data.totalDurationMs, 'number');
     t.ok(metric.data.totalDurationMs >= 0, 'totalDurationMs non-negative');
     t.end();
@@ -156,17 +128,14 @@ test('updateSystemTableRow emits metrics.cdc.write on success',
     t.equal(metric.data.operation, CDC_OPERATION.UPDATE);
     t.equal(typeof metric.data.sqlDurationMs, 'number');
     t.ok(metric.data.sqlDurationMs >= 0, 'sqlDurationMs non-negative');
-    t.equal(typeof metric.data.cacheWaitDurationMs, 'number');
-    t.ok(
-      metric.data.cacheWaitDurationMs >= 0,
-      'cacheWaitDurationMs non-negative',
-    );
+    // A write answers at its commit: no cache-wait phase is measured.
+    t.equal('cacheWaitDurationMs' in metric.data, false);
     t.equal(typeof metric.data.totalDurationMs, 'number');
     t.ok(metric.data.totalDurationMs >= 0, 'totalDurationMs non-negative');
     t.end();
   });
 
-test('CDC write metric totalDurationMs equals sql + cacheWait',
+test('CDC write metric totalDurationMs covers the sql phase (no cache wait)',
   async (t) => {
     const service = createService();
     const infoCalls = collectInfoCalls(service);
@@ -178,11 +147,8 @@ test('CDC write metric totalDurationMs equals sql + cacheWait',
     const metric = infoCalls.find(
       (c) => c.tag === METRICS_LOG_TAG.CDC_WRITE,
     );
-    t.equal(
-      metric.data.totalDurationMs,
-      metric.data.sqlDurationMs + metric.data.cacheWaitDurationMs,
-      'totalDurationMs is sum of sql and cacheWait',
-    );
+    t.ok(metric.data.totalDurationMs >= metric.data.sqlDurationMs,
+      'totalDurationMs covers the sql phase');
     t.end();
   });
 
@@ -261,15 +227,11 @@ test('CDC write metric has structured fields with correct types',
     t.ok('tableName' in metric.data, 'has tableName');
     t.ok('operation' in metric.data, 'has operation');
     t.ok('sqlDurationMs' in metric.data, 'has sqlDurationMs');
-    t.ok('cacheWaitDurationMs' in metric.data, 'has cacheWaitDurationMs');
+    t.notOk('cacheWaitDurationMs' in metric.data, 'no cacheWaitDurationMs');
     t.ok('totalDurationMs' in metric.data, 'has totalDurationMs');
     t.equal(
       Number.isInteger(metric.data.sqlDurationMs), true,
       'sqlDurationMs is integer',
-    );
-    t.equal(
-      Number.isInteger(metric.data.cacheWaitDurationMs), true,
-      'cacheWaitDurationMs is integer',
     );
     t.equal(
       Number.isInteger(metric.data.totalDurationMs), true,

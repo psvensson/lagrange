@@ -1,4 +1,5 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
+import {committedWritePosition} from './cdc-committed-write-answer.js';
 import {buildSystemTableMutationSqlParts} from './cdc-system-table-mutation-sql-helpers.js';
 import {hydrateCdcPropagatedTablesFromAuthority} from
   './cdc-integration-service-authoritative-catchup.js';
@@ -57,10 +58,8 @@ const {
   METRICS_LOG_TAG,
   SQL,
   buildSystemTableMutationError,
-  buildSystemTableVisibilityResult,
   getSystemCachePrimaryKeyFieldOrFallback,
   logSystemTableWriteFailure,
-  normalizeSystemTableVisibilityResult,
   shouldEmitTableWriteMetric,
   shouldLogTableWriteFailure,
 } = CDC_INTEGRATION_SERVICE_SHARED;
@@ -270,25 +269,13 @@ class CDCIntegrationServiceMutationOperations {
         }
         const pkField = this.getPrimaryKeyField(tableName);
         const pkValue = rowData[pkField];
-        const cacheWaitStartMs = this.timeSource.now();
-        let visibilityResult = buildSystemTableVisibilityResult();
-        if (pkValue && options?.skipCacheWait !== true) {
-          visibilityResult = normalizeSystemTableVisibilityResult(
-            await this.waitForCacheUpdate(tableName, pkValue, true, {
-              allowPendingVisibility: options?.allowPendingVisibility === true,
-              originHlc: result.originHlc,
-            }),
-          );
-        }
-        const cacheWaitDurationMs = this.timeSource.now() - cacheWaitStartMs;
         if (shouldEmitTableWriteMetric(tableName)) {
           try {
             this.logger.info(METRICS_LOG_TAG.CDC_WRITE, {
               tableName,
               operation: CDC_OPERATION.INSERT,
               sqlDurationMs,
-              cacheWaitDurationMs,
-              totalDurationMs: sqlDurationMs + cacheWaitDurationMs,
+              totalDurationMs: sqlDurationMs,
             });
           } catch (_metricsErr) {
             // Metrics logging must not propagate to callers
@@ -307,17 +294,13 @@ class CDCIntegrationServiceMutationOperations {
         });
         return {
           success: true,
+          committed: true,
+          position: committedWritePosition(tableName, pkValue, result),
           operation: CDCOperationType.INSERT,
           tableName,
           data: rowData,
           affectedRows: result?.affectedRows,
           partitionResult: result,
-          visibilityState: visibilityResult.visibilityState,
-          contractState: visibilityResult.contractState,
-          nextAction: visibilityResult.nextAction,
-          authoritativeVisibilityConfirmed:
-            visibilityResult.authoritativeVisibilityConfirmed,
-          retryAfterMs: visibilityResult.retryAfterMs,
         };
       } catch (error) {
         this.stats.failures++;
@@ -452,41 +435,13 @@ class CDCIntegrationServiceMutationOperations {
             CDC_ERROR_MSG.UPDATE_FAILED,
           );
         }
-        const cacheWaitStartMs = this.timeSource.now();
-        let visibilityResult = buildSystemTableVisibilityResult();
-        if (
-          options?.skipCacheWait !== true &&
-          (typeof result.affectedRows !== 'number' ||
-            result.affectedRows > 0)
-        ) {
-          const expectedCacheFields =
-            options?.expectedCacheFields &&
-            typeof options.expectedCacheFields === 'object' ?
-              options.expectedCacheFields :
-              null;
-          const minimumCacheFields =
-            options?.minimumCacheFields &&
-            typeof options.minimumCacheFields === 'object' ?
-              options.minimumCacheFields :
-              null;
-          visibilityResult = normalizeSystemTableVisibilityResult(
-            await this.waitForCacheUpdate(tableName, id, true, {
-              expectedFields: expectedCacheFields,
-              minimumFields: minimumCacheFields,
-              allowPendingVisibility: options?.allowPendingVisibility === true,
-              originHlc: result.originHlc,
-            }),
-          );
-        }
-        const cacheWaitDurationMs = this.timeSource.now() - cacheWaitStartMs;
         if (shouldEmitTableWriteMetric(tableName)) {
           try {
             this.logger.info(METRICS_LOG_TAG.CDC_WRITE, {
               tableName,
               operation: CDC_OPERATION.UPDATE,
               sqlDurationMs,
-              cacheWaitDurationMs,
-              totalDurationMs: sqlDurationMs + cacheWaitDurationMs,
+              totalDurationMs: sqlDurationMs,
             });
           } catch (_metricsErr) {
             // Metrics logging must not propagate to callers
@@ -507,17 +462,13 @@ class CDCIntegrationServiceMutationOperations {
         });
         return {
           success: true,
+          committed: true,
+          position: committedWritePosition(tableName, id, result),
           operation: CDCOperationType.UPDATE,
           tableName,
           whereClause,
           data: updateData,
           partitionResult: result,
-          visibilityState: visibilityResult.visibilityState,
-          contractState: visibilityResult.contractState,
-          nextAction: visibilityResult.nextAction,
-          authoritativeVisibilityConfirmed:
-            visibilityResult.authoritativeVisibilityConfirmed,
-          retryAfterMs: visibilityResult.retryAfterMs,
         };
       } catch (error) {
         this.stats.failures++;
@@ -603,6 +554,7 @@ class CDCIntegrationServiceMutationOperations {
     return {
       ...this.stats,
       total: this.stats.inserts + this.stats.updates + this.stats.deletes,
+      projectionWaiters: this.getProjectionWaitDiagnostics().activeWaiters,
     };
   }
 

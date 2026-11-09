@@ -53,11 +53,27 @@ const PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD = Object.freeze({
   TIMESTAMP: 'timestamp',
 });
 const PLAYBACK_STAGE_SETUP_CLUSTER_ACTIVE = 'setup.cluster.active';
+const PLAYBACK_STARTUP_STAGE_IDS = Object.freeze(new Set([
+  PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+  PLAYBACK_STAGE_SETUP_CLUSTER_ACTIVE,
+]));
 const PLAYBACK_CONTROL_PLANE_FALLBACK_STAGE_IDS = Object.freeze(new Set([
   PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
   PLAYBACK_STAGE_SETUP_CLUSTER_ACTIVE,
   PLAYBACK_STAGE_LOAD_READINESS_WAITING,
   PLAYBACK_STAGE_LOAD_READINESS_STABLE,
+]));
+const TERMINAL_REPLICA_OPERATION_STATUS_SET = Object.freeze(new Set([
+  'cancelled',
+  'completed',
+  'failed',
+  'removed',
+]));
+const TERMINAL_REPLICA_OPERATION_WORKFLOW_STEP_SET = Object.freeze(new Set([
+  'CANCELLED',
+  'COMPLETED',
+  'FAILED',
+  'REMOVED',
 ]));
 const PRIORITY_RECOVERY_LOG_OPERATION_STATUS_RETRY_DEFERRED =
   'retry_deferred';
@@ -99,6 +115,9 @@ const PRIORITY_RECOVERY_LOG_DISPATCH_RETRY_BOUNDARY_WITNESS_BY_BOUNDARY =
   });
 const EMPTY_STRING = '';
 const NEWLINE = '\n';
+const stringTrim = Function.call.bind(String.prototype.trim);
+const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
+const stringToUpperCase = Function.call.bind(String.prototype.toUpperCase);
 const FAILURE_BUNDLE_SEGMENT_TYPE = Object.freeze({
   OBJECT: 'object',
   STRING: 'string',
@@ -155,6 +174,22 @@ function buildPlaybackControlPlaneFallback(events) {
   if (!selectedActiveGateDetails) {
     return null;
   }
+
+  const selectedActiveGateStage =
+    typeof selectedActiveGateDetails.stage === 'string' &&
+    stringTrim(selectedActiveGateDetails.stage).length > ZERO ?
+      stringTrim(selectedActiveGateDetails.stage) :
+      null;
+  const latestEventTimestampMs = sortedEvents.length > ZERO ?
+    normalizeNonNegativeCount(sortedEvents[sortedEvents.length - 1]?.timestamp) :
+    null;
+  const activeGateSnapshotHistorical = Boolean(
+    selectedActiveGateStage &&
+    PLAYBACK_STARTUP_STAGE_IDS.has(selectedActiveGateStage) &&
+    Number.isFinite(latestEventTimestampMs) &&
+    Number.isFinite(selectedActiveGateTimestampMs) &&
+    latestEventTimestampMs > selectedActiveGateTimestampMs,
+  );
 
   const publicationConvergence = resolvePlaybackPublicationConvergence(
     selectedActiveGateDetails,
@@ -230,6 +265,8 @@ function buildPlaybackControlPlaneFallback(events) {
       Object.keys(readinessByNodeId).length > ZERO ? readinessByNodeId : null,
     activeGateObservedAtMs: selectedActiveGateTimestampMs,
     activeGateObservedAt: toIsoTimestamp(selectedActiveGateTimestampMs),
+    activeGateSnapshotStage: selectedActiveGateStage,
+    activeGateSnapshotHistorical,
   };
 
   const selectedSnapshotNodeId = String(
@@ -254,6 +291,8 @@ function buildPlaybackControlPlaneFallback(events) {
           capturedAt: toIsoTimestamp(selectedCapturedAtMs),
           observedNodeIds,
           source: 'playback_active_gate',
+          activeGateStage: selectedActiveGateStage,
+          historicalStartupSnapshot: activeGateSnapshotHistorical,
           controlPlaneDiagnostics: {
             publicationConvergence,
             publishedMembershipObservation,
@@ -526,11 +565,51 @@ function selectLatestPlaybackSnapshot(snapshotStates = []) {
   })[ZERO] || null;
 }
 
-function buildPlaybackPriorityRecoveryDecisionSnapshots(entry, latestSnapshot) {
+function collectTerminalPlaybackOperationIds(replicaOperationRows = []) {
+  const terminalIds = new Set();
+  for (const row of Array.isArray(replicaOperationRows) ?
+    replicaOperationRows :
+    []) {
+    if (!isRecord(row)) {
+      continue;
+    }
+    const operationId = stringTrim(
+      String(row.operation_id || row.operationId || EMPTY_STRING),
+    );
+    if (operationId.length === ZERO) {
+      continue;
+    }
+    const status = stringToLowerCase(
+      stringTrim(String(row.status || EMPTY_STRING)),
+    );
+    const workflowStep = stringToUpperCase(
+      stringTrim(
+        String(row.workflow_step || row.workflowStep || EMPTY_STRING),
+      ),
+    );
+    if (
+      TERMINAL_REPLICA_OPERATION_STATUS_SET.has(status) ||
+      TERMINAL_REPLICA_OPERATION_WORKFLOW_STEP_SET.has(workflowStep)
+    ) {
+      terminalIds.add(operationId);
+    }
+  }
+  return [...terminalIds];
+}
+
+function buildPlaybackPriorityRecoveryDecisionSnapshots(
+  entry,
+  latestSnapshot,
+  fallbackControlPlaneDiagnostics = null,
+) {
   if (!isRecord(latestSnapshot)) {
     return null;
   }
-  const controlPlaneDiagnostics = resolveControlPlaneDiagnostics(entry);
+  const controlPlaneDiagnostics =
+    resolveControlPlaneDiagnostics(entry) ||
+    (isRecord(fallbackControlPlaneDiagnostics) ?
+      fallbackControlPlaneDiagnostics :
+      null);
   const publicationConvergence = isRecord(
     controlPlaneDiagnostics?.publicationConvergence,
   ) ?
@@ -539,17 +618,32 @@ function buildPlaybackPriorityRecoveryDecisionSnapshots(entry, latestSnapshot) {
   if (!isRecord(publicationConvergence)) {
     return null;
   }
-  const replicaOperationRows = Array.isArray(
+  const rawReplicaOperationRows = Array.isArray(
     latestSnapshot?.[PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.REPLICA_OPERATIONS],
   ) ?
     latestSnapshot[PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.REPLICA_OPERATIONS] :
     [];
+  const terminalOperationIdSet = new Set(
+    collectTerminalPlaybackOperationIds(rawReplicaOperationRows),
+  );
+  const replicaOperationRows = [];
+  for (const row of rawReplicaOperationRows) {
+    if (!isRecord(row)) {
+      continue;
+    }
+    const operationId = stringTrim(
+      String(row.operation_id || row.operationId || EMPTY_STRING),
+    );
+    if (operationId.length === ZERO || !terminalOperationIdSet.has(operationId)) {
+      replicaOperationRows.push(row);
+    }
+  }
   const serviceRows = Array.isArray(
     latestSnapshot?.[PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.SERVICES],
   ) ?
     latestSnapshot[PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.SERVICES] :
     [];
-  if (replicaOperationRows.length === ZERO && serviceRows.length === ZERO) {
+  if (rawReplicaOperationRows.length === ZERO && serviceRows.length === ZERO) {
     return null;
   }
   return buildSharedPriorityRecoveryDecisionSnapshots({
@@ -576,7 +670,11 @@ function buildPlaybackPriorityRecoveryDecisionSnapshots(entry, latestSnapshot) {
   });
 }
 
-async function collectPlaybackSnapshotInsights(scenarioDir, entry) {
+async function collectPlaybackSnapshotInsights(
+  scenarioDir,
+  entry,
+  fallbackControlPlaneDiagnostics = null,
+) {
   const playbackSnapshotsAbsolutePath = join(
     scenarioDir,
     PLAYBACK_SNAPSHOTS_FILENAME,
@@ -587,14 +685,33 @@ async function collectPlaybackSnapshotInsights(scenarioDir, entry) {
       parsePlaybackSnapshotStates(content),
     );
     const priorityRecoveryDecisionSnapshots =
-      buildPlaybackPriorityRecoveryDecisionSnapshots(entry, latestSnapshot);
+      buildPlaybackPriorityRecoveryDecisionSnapshots(
+        entry,
+        latestSnapshot,
+        fallbackControlPlaneDiagnostics,
+      );
     if (!priorityRecoveryDecisionSnapshots) {
       return null;
     }
+    const replicaOperationRows = Array.isArray(
+      latestSnapshot?.[
+        PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.REPLICA_OPERATIONS
+      ],
+    ) ?
+      latestSnapshot[
+        PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.REPLICA_OPERATIONS
+      ] :
+      [];
     return {
       controlPlaneFallback: {
         priorityRecoveryDecisionSnapshots,
       },
+      terminalOperationIds: collectTerminalPlaybackOperationIds(
+        replicaOperationRows,
+      ),
+      latestSnapshotTimestampMs: normalizeNonNegativeCount(
+        latestSnapshot?.[PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.TIMESTAMP],
+      ),
     };
   } catch (_error) {
     return null;

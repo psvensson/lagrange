@@ -390,6 +390,10 @@ function normalizeReplicaOperationRecord(row, options = {}) {
       LOCAL_STR_CREATE_ADMISSION_ATTEMPT_TOKEN,
       LOCAL_STR_CREATEADMISSIONATTEMPTTOKEN,
     ),
+    createAdmissionReplicaCreatedAt: normalizeEpochMillis(
+      row?.create_admission_replica_created_at ??
+        row?.createAdmissionReplicaCreatedAt,
+    ),
     createdAt,
     updatedAt,
     completedAt,
@@ -491,31 +495,23 @@ function resolveRecordOwnerNodeId(record) {
 }
 
 function getOwnerNodeStartMs(ownerNodeId, options = {}) {
-  const nowMs = Number.isFinite(options.nowMs) ?
-    Math.floor(options.nowMs) :
-    Date.now();
-
-  // Try to find the start time from options.serviceRows
+  const nowMs = Number.isFinite(options.nowMs) ? Math.floor(options.nowMs) : Date.now();
   if (ownerNodeId && Array.isArray(options.serviceRows)) {
     let maxStartMs = 0;
     for (const service of options.serviceRows) {
-      const sNodeId = service?.nodeId || service?.node_id;
-      if (sNodeId === ownerNodeId) {
+      if ((service?.nodeId || service?.node_id) === ownerNodeId) {
         const startMs = normalizeEpochMillis(service?.startedAt || service?.started_at);
-        if (Number.isFinite(startMs) && startMs > maxStartMs) {
-          maxStartMs = startMs;
-        }
+        if (Number.isFinite(startMs) && startMs > maxStartMs) maxStartMs = startMs;
       }
     }
-    if (maxStartMs > 0) {
-      return maxStartMs;
-    }
+    if (maxStartMs > 0) return maxStartMs;
   }
-
-  // Fall back to local process start time
+  if (ownerNodeId && typeof options.localNodeId === LOCAL_STR_STRING &&
+      options.localNodeId.length > 0 && ownerNodeId !== options.localNodeId) {
+    return 0;
+  }
   const uptimeSec = typeof process !== 'undefined' && typeof process.uptime === 'function' ?
-    process.uptime() :
-    0;
+    process.uptime() : 0;
   return nowMs - Math.floor(uptimeSec * TIME_MS.SECOND);
 }
 

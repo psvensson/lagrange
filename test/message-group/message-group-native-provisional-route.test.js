@@ -27,7 +27,7 @@ import {CDC_GROUP_PROPAGATION_STATE} from '../../src/topology/cdc-group-propagat
 import {LatencyTreeService} from '../../src/topology/latency-tree-service.js';
 import {buildSafeTargets} from '../../src/topology/cdc-group-propagation-routing.js';
 import {provisionalRouteFixture, registrationInsert, sourceView, targetView, recordOf,
-  json, note, pump, tick, releaseB, addressOf, payloadOf, cdcEvents,
+  json, note, pump, tick, releaseB, releaseFollower, addressOf, payloadOf, cdcEvents,
   NODE_ID, SOURCE_GROUP, TARGET_GROUP, SOURCE_REPLICA, TARGET_REPLICAS,
   LEADER, FIRST_HOP, FOLLOWER, PARTITION_ID} from './message-group-native-provisional-route-fixture.js';
 
@@ -110,18 +110,18 @@ function assertPartialRouteSetup(t, f) {
   const follower = f.follower.raft.readStatus();
   t.diagnostic(json({stage: 'setup-partial-route-observations-before-assertions', first, follower,
     firstRows: f.first.systemTableCache.getAll(TABLES.SERVICES),
-    followerRows: f.follower.systemTableCache.getAll(TABLES.SERVICES),
-    followerHints: f.follower.peerAddresses}));
+    followerRows: f.follower.systemTableCache.getAll(TABLES.SERVICES)}));
   assert.notEqual(first.role, RAFT_ROLE.LEADER);
   assert.equal(first.leaderId, null);
   assert.equal(first.leaderAddressStatus, PEER_ADDRESS_STATUS.NO_LEADER);
   assert.equal(first.peerId, f.cutPeer);
+  // The follower has no live leader yet (it has heard nothing since it
+  // reopened): no native leader route exists, whatever any row says.
   assert.equal(follower.role, RAFT_ROLE.FOLLOWER);
-  assert.equal(follower.leaderId, LEADER);
+  assert.equal(follower.leaderId, null);
   assert.equal(follower.leaderAddress, null);
-  assert.equal(follower.leaderAddressStatus, PEER_ADDRESS_STATUS.UNAVAILABLE);
+  assert.equal(follower.leaderAddressStatus, PEER_ADDRESS_STATUS.NO_LEADER);
   assert.equal(f.follower.systemTableCache.get(TABLES.SERVICES, LEADER), undefined);
-  assert.deepEqual(f.follower.peerAddresses, []);
   assert.equal(f.services.get(LEADER).raft.readStatus().role, RAFT_ROLE.LEADER);
   assert.equal(f.source.raft.readStatus().role, RAFT_ROLE.LEADER);
   const readiness = f.source.getMetadataIngressReadiness({requiredTables: [TABLES.SERVICES]});
@@ -305,7 +305,7 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   assertActualIngress(f, FIRST_HOP, a, 0);
   const localIngress = assertActualIngress(f, FOLLOWER, a, 1);
   assert.equal(localIngress.status.role, RAFT_ROLE.FOLLOWER);
-  assert.equal(localIngress.status.leaderAddressStatus, PEER_ADDRESS_STATUS.UNAVAILABLE);
+  assert.equal(localIngress.status.leaderAddressStatus, PEER_ADDRESS_STATUS.NO_LEADER);
   assertSourceGroupApplied(provisional, a);
   const direct = f.events.find((event) => event.kind === 'application-send' &&
     event.address === addressOf(FIRST_HOP) &&
@@ -338,6 +338,9 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   assertActualIngress(f, FIRST_HOP, b, 0);
   assertActualIngress(f, FOLLOWER, b, 1);
   assertOwedWithoutAck(hydrated.source, f.debts);
+  // The release: the follower hears its leader again. The route is the
+  // leader's committed address; no row supplies it.
+  await releaseFollower(f);
   const after = f.follower.raft.readStatus();
   assert.equal(f.follower.raft, f.followerBeforePort);
   assert.equal(after.lifecycleIncarnation, f.followerBefore.lifecycleIncarnation);
@@ -347,15 +350,10 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   assert.equal(after.leaderId, LEADER);
   assert.equal(after.leaderAddressStatus, PEER_ADDRESS_STATUS.RESOLVED);
   assert.equal(after.leaderAddress, addressOf(LEADER));
-  const hydratedRow = f.follower.systemTableCache.get(TABLES.SERVICES, LEADER);
-  assert.equal(hydratedRow.status, SERVICE_STATUS.STOPPED);
-  assert.ok(f.events.some((event) => event.kind === 'actual-peer-reconciliation' &&
-      event.row?.service_id === LEADER),
-  'the real cache change invoked the existing peer reconciliation owner');
   assert.equal(f.first.systemTableCache.get(TABLES.SERVICES, LEADER), undefined,
     'first relay did not hydrate itself');
   assert.deepEqual(targets(f), f.capturedTargets, 'STOPPED B does not replace the captured F1 target');
-  t.diagnostic(json({stage: 'semantic-stopped-b-hydrates-same-follower-route', hydrated, after}));
+  t.diagnostic(json({stage: 'semantic-follower-hears-leader-releases-route', hydrated, after}));
 
   const drive = f.producerLeader.cdcDelivery.driveCdcObligations('native-provisional-route-redrive')
     .then((answer) => ({answer}), (error) => ({error}));
@@ -385,9 +383,11 @@ test('SERVICES scan releases provisional relay to the real native leader', async
     event.replicaId === FOLLOWER && event.phase === 'measured' &&
     event.status.lifecycleIncarnation === f.followerBefore.lifecycleIncarnation);
   assert.ok(ingress.length > 0, 'measured follower incarnation handled the CDC route');
+  assert.ok(ingress.some((event) => event.status.leaderId === LEADER),
+    'the released follower handled the route under its live leader');
   for (const event of ingress) {
     assert.equal(event.status.role, RAFT_ROLE.FOLLOWER);
-    assert.equal(event.status.leaderId, LEADER);
+    assert.ok(event.status.leaderId === LEADER || event.status.leaderId === null);
     assert.equal(event.status.lifecycleIncarnation, f.followerBefore.lifecycleIncarnation);
     assert.equal(event.status.configurationKey, f.followerBefore.configurationKey);
   }

@@ -21,6 +21,7 @@ import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
@@ -118,7 +119,9 @@ function buildHedgingCluster(spec) {
     },
   };
 
-  const executor = new QueryExecutor({messageRouter, systemCache});
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    messageRouter, systemCache});
   executor.parallelQueryCoordinator.speculativeExecutionDelayMs =
     HEDGE_CHECK_INTERVAL_MS;
   return {

@@ -185,12 +185,14 @@ function createCoordinator(operation, operationRow) {
     },
     systemTableCache: createMockCache(),
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
         return {success: true, rows: TEST_EMPTY_ROWS, affectedRows: 0};
       },
     },
     controlPlaneReadinessService: {
+      getPriorityRecoveryPlanningAnswerSync() {
+        return buildPlanningSnapshot(operation);
+      },
       getPriorityRecoveryPlanningSnapshotBestEffort() {
         return buildPlanningSnapshot(operation);
       },
@@ -212,7 +214,7 @@ function createCoordinator(operation, operationRow) {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: NUM.THREE};
+        return {targetReplicaCount: 3, minReplicaCount: NUM.THREE};
       },
     },
     setTimeoutFn(fn, delayMs) {

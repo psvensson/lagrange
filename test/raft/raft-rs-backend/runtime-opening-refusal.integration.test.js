@@ -89,7 +89,7 @@ for (const phase of ['unhealthy', 'replacing']) {
       fixture.databases.push(database);
       const request = {...fixture.survivor.replica(EXISTING_REPLICA).request,
         groupId, peerId: replicaId, peerAddress: replicaId, bootstrapPeerIds: [replicaId],
-        bootstrapMembership: genesisStamp([replicaId]), durableStorage: database};
+        bootstrapMembership: genesisStamp([replicaId], {}), durableStorage: database};
       await fixture.trap();
       let attempts = 0;
       const attempt = () => {

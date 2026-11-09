@@ -1,3 +1,4 @@
+import {createMockCoordinator} from './test-helpers.js';
 /**
  * CL-044 fail-honest lane-discrimination witness.
  *
@@ -139,7 +140,7 @@ function buildReadiness(nodeId) {
       [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: ready,
       [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: ready,
       [CONTROL_PLANE_READINESS_DIMENSION
-        .CONTROL_PLANE_RECOVERY_ELIGIBLE]: ready,
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
       [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: ready,
     },
     reasons: ready ? [] : [{code: 'ready_lease_missing'}],
@@ -155,6 +156,17 @@ function createReadinessService(clock) {
     },
   };
   return partialReadinessFake({
+    answerCommittedNodes() {
+      return {
+        state: 'ready',
+        epoch: {
+          publicationEpoch: 1,
+          publicationId: 'cluster_membership-1',
+          readAtMs: 0,
+        },
+        nodeRows: createNodeRows(),
+      };
+    },
     getNodeReadinessSync: buildReadiness,
     membershipPublicationService: {
       getLatestClusterPublicationSync: () => publicationRow,
@@ -171,18 +183,6 @@ function createReadinessService(clock) {
       };
     },
   }, clock);
-}
-
-function createCoordinator() {
-  return {
-    getMoveSafetyError: () => null,
-    getStats: () => ({inFlightOperations: 0, totalOperations: 0}),
-    storageAccountingService: {estimateReplicaBytes: () => 1},
-    storageAdmissionService: {
-      checkAdd: async () => ({decision: 'allow'}),
-      checkReplace: async () => ({decision: 'allow'}),
-    },
-  };
 }
 
 function buildOpenSpreadBlocker() {
@@ -204,6 +204,7 @@ function createRebalancer(
   options = {},
 ) {
   const ownerClock = () => FAKE_NOW_MS;
+  const controlPlaneReadinessService = createReadinessService(ownerClock);
   const rebalancer = new UnifiedRebalancer({
     entityId,
     entityType: EntityType.PARTITION,
@@ -214,7 +215,7 @@ function createRebalancer(
       updateSystemTableRow: async () => ({success: true}),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({targetReplicaCount: TARGET_REPLICA_COUNT}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: TARGET_REPLICA_COUNT}),
     },
     messageRouter: {
       getConnectionState: (nodeId) =>
@@ -224,13 +225,13 @@ function createRebalancer(
       getConnectedNodes: () => [...STARTUP_AUTHORITY_NODE_IDS],
       isOutboundQueueAvailable: () => true,
     },
-    rebalanceCoordinator: createCoordinator(),
+    rebalanceCoordinator: createMockCoordinator({controlPlaneReadinessService}),
     sqlQueryEngine: {
       async executeQuery() {
         return {success: true, rows: []};
       },
     },
-    controlPlaneReadinessService: createReadinessService(ownerClock),
+    controlPlaneReadinessService,
     nowFn: ownerClock,
     randomSource: {random: () => 0},
   });

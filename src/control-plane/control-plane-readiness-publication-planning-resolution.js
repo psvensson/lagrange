@@ -691,10 +691,16 @@ function resolveNodeMembershipPublicationPlanningAnswerSync(
     service.resolveMembershipPublicationPlanningSource(options) ===
     MEMBERSHIP_PUBLICATION_PLANNING_SOURCE.DIRECT_PUBLICATION_ROW
   ) {
-    return service.buildDirectMembershipPublicationPlanningAnswer(
+    return rememberResolvedNodePlanningAnswer(
+      service,
       nodeId,
       observedAt,
       membershipPublication,
+      service.buildDirectMembershipPublicationPlanningAnswer(
+        nodeId,
+        observedAt,
+        membershipPublication,
+      ),
     );
   }
   return service.resolveAvailableNodePlanningAnswer(

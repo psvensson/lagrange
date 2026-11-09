@@ -20,13 +20,11 @@ const numberIsFinite = Number.isFinite;
 const DATA_DESCRIPTOR_VALUE_PROPERTY = 'value';
 const RETRY_AFTER_MS_PROPERTY = 'retryAfterMs';
 
-const CACHE_VISIBILITY_ERROR_FRAGMENT = 'Cache update not observed';
 const AUTHORITATIVE_ROW_MUTATION_REASON = Object.freeze({
   APPLIED: 'applied',
   AUTHORITATIVE_CONFIRM_UNAVAILABLE: 'authoritative-confirm-unavailable',
   AUTHORITATIVE_WRITE_FAILED: 'authoritative-write-failed',
   CACHE_VISIBILITY_GAP_RECOVERED: 'cache-visibility-gap-recovered',
-  CACHE_VISIBILITY_GAP_UNRECOVERED: 'cache-visibility-gap-unrecovered',
   DEFERRED: 'deferred',
   IN_FLIGHT: 'in-flight',
   NOOP: 'noop',
@@ -56,26 +54,19 @@ const AUTHORITATIVE_PROBE_DEFER_CAUSE = Object.freeze({
   ROW_UNAVAILABLE: 'row-unavailable',
 });
 
-function classifyMutationFailure(error) {
-  const message = error?.message || '';
-  if (message.includes(CACHE_VISIBILITY_ERROR_FRAGMENT)) {
-    return AUTHORITATIVE_ROW_MUTATION_REASON.CACHE_VISIBILITY_GAP_UNRECOVERED;
-  }
+function classifyMutationFailure() {
   return AUTHORITATIVE_ROW_MUTATION_REASON.AUTHORITATIVE_WRITE_FAILED;
 }
 
 // Every frozen gateway outcome has one explicit Raft disposition. Apply and
 // zero-row truth remain owned by classifyControlPlaneMutationResult; this
-// table is consulted only after canonical apply is false, so APPLIED and
-// PENDING_VISIBILITY represent contradictory failed envelopes here.
+// table is consulted only after canonical apply is false, so APPLIED
+// represents a contradictory failed envelope here.
 const GATEWAY_OUTCOME_MUTATION_REASON = objectCreate(null);
 GATEWAY_OUTCOME_MUTATION_REASON[CONTROL_PLANE_MUTATION_OUTCOME.APPLIED] =
   AUTHORITATIVE_ROW_MUTATION_REASON.REJECTED;
 GATEWAY_OUTCOME_MUTATION_REASON[CONTROL_PLANE_MUTATION_OUTCOME.NO_OP] =
   AUTHORITATIVE_ROW_MUTATION_REASON.NOOP;
-GATEWAY_OUTCOME_MUTATION_REASON[
-  CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY
-] = AUTHORITATIVE_ROW_MUTATION_REASON.REJECTED;
 GATEWAY_OUTCOME_MUTATION_REASON[CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED] =
   AUTHORITATIVE_ROW_MUTATION_REASON.DEFERRED;
 GATEWAY_OUTCOME_MUTATION_REASON[CONTROL_PLANE_MUTATION_OUTCOME.REJECTED] =

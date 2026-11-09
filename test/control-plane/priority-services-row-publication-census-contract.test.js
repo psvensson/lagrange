@@ -16,6 +16,7 @@ import {
   normalizePositiveInteger,
 } from '../../src/control-plane/membership-publication-row-helpers.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   buildCreateCdcData,
 } from '../../src/node/replica-state-machine-transition.js';
@@ -230,5 +231,46 @@ test('an unpublished expected SERVICES row is diagnosed as row_absent', (t) => {
     readyDistinctNodeCount: 2,
     exclusionReasonCounts: {row_absent: 1},
   });
+  t.end();
+});
+
+test('priority local FAILED seed preserves tracked pre-runtime lifecycle metadata ' +
+  'and does not arm local-only insert reconciliation', (t) => {
+  const cache = createTwoReplicaCache();
+  const publicationContext = createPublicationContext(cache);
+  publicationContext.replicaStateMachine.getState = () => ({
+    state: ReplicaStatus.FAILED,
+    previousState: ReplicaStatus.PENDING,
+    createdAt: FIXTURE_TIMESTAMP_MS,
+    stateEnteredAt: FIXTURE_TIMESTAMP_MS + NEXT_TIMESTAMP_INCREMENT_MS,
+    durableVersion: FIXTURE_TIMESTAMP_MS + NEXT_TIMESTAMP_INCREMENT_MS,
+    cleanupToken: null,
+    createAttemptToken: 'attempt-1',
+    replicaIdentity: TARGET_REPLICA_ID,
+  });
+
+  const rowSeeded = seedLocalPriorityServiceRow.call(
+    publicationContext,
+    TARGET_REPLICA_ID,
+    PARTITION_ID,
+    ReplicaStatus.FAILED,
+  );
+  t.equal(rowSeeded, true);
+  t.match(cache.get(SYSTEM_TABLE_NAME.SERVICES, TARGET_REPLICA_ID), {
+    service_id: TARGET_REPLICA_ID,
+    replica_id: TARGET_REPLICA_ID,
+    status: ReplicaStatus.FAILED,
+    previous_state: ReplicaStatus.PENDING,
+    created_at: FIXTURE_TIMESTAMP_MS,
+    state_entered_at: FIXTURE_TIMESTAMP_MS + NEXT_TIMESTAMP_INCREMENT_MS,
+    updated_at: FIXTURE_TIMESTAMP_MS + NEXT_TIMESTAMP_INCREMENT_MS,
+    cleanup_token: null,
+    create_attempt_token: 'attempt-1',
+  });
+  t.same(
+    publicationContext.markedReplicaIds,
+    [],
+    'terminal FAILED seed does not mark the row for local-only full-row insert',
+  );
   t.end();
 });

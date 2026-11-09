@@ -254,6 +254,7 @@ try {
         restApiPort: ports.restApiPort, wsPort: ports.transportWebSocketPort},
       admin: {websocketPort: ports.adminWebSocketPort},
       transport: {wsHost: host},
+      partition: {defaultReplicaCount: 1},
       logging: {level: 'error'},
       storage: {dataDir: directory},
     },

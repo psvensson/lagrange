@@ -17,7 +17,6 @@ import {
   LEARNER_PROMOTION_PROOF_REASON,
   evaluateLearnerPromotionProof,
 } from '../../src/raft/learner-promotion-progress.js';
-import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {
   COMMITTED_ENTRY_COUNT,
   LEADER_REPLICA,
@@ -46,6 +45,14 @@ import {
 // event-loop stalls and 5 s transport timeouts, each proof retry a 1 s
 // timer + the round trip.
 //
+// Quest learner-host-from-committed-admission (2026-11-01) moved the proof
+// onto committed facts: a learner the leader never admitted (its row
+// withheld from the leader cache, so no admission was proposed) is refused
+// not_in_configuration; a learner the leader admitted is granted on its
+// progress even when the leader cache later loses its row (the live
+// defect: 14 refusals at 1 s for a durably committed row). No refusal
+// re-asserts the learner's row: the CL-021 kick is deleted.
+//
 // REAL owners: a live PartitionService leader, three live followers and the
 // learner on the loopback transport (every voter the leader's configuration
 // names is a live replica the leader admitted), with split system-table
@@ -53,8 +60,8 @@ import {
 // environment, all on the scenario clock:
 //   - the learner's SERVICES row is WITHHELD from the leader cache (the
 //     target's deferred status write) and lands on its own only at
-//     ROW_WITHHOLD_S — or earlier when the learner re-asserts it through
-//     the replica state machine's CL-021 deferred-row retry;
+//     ROW_WITHHOLD_S, or on the fixture's explicit landing schedule; or the
+//     leader cache LOSES the admitted learner's row (hideRow);
 //   - the leader STALLS in periodic windows (LEADER_STALL_S stalled,
 //     LEADER_AWAKE_S awake) and, when a sustained app-channel latency is
 //     injected, every proof round trip takes that long: a proof delivery
@@ -136,6 +143,8 @@ const SINGLE_WAKE = 1;
 const NO_REQUESTS = 0;
 const SCHEDULING_SLACK_MS = VIRTUAL_SECOND_MS / 2;
 const REQUEST_INVALID = LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID;
+const NOT_IN_CONFIGURATION =
+  LEARNER_PROMOTION_PROOF_REASON.NOT_IN_CONFIGURATION;
 const PROGRESS_BEHIND = LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND;
 const PROGRESS_PROVEN = LEARNER_PROMOTION_PROOF_REASON.PROGRESS_PROVEN;
 const TRANSPORT_FAILED = LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED;
@@ -143,24 +152,24 @@ const EPOCH_MISMATCH = LEARNER_PROMOTION_PROOF_REASON.EPOCH_MISMATCH;
 const WOULD_EXCEED_TARGET = 'would_exceed_target_replica_count';
 // Typed refusal causes and wake reasons under witness (string-pinned so
 // the file links on HEAD, where the typed contract does not yet exist).
-const CAUSE_ADDRESS_UNRESOLVABLE = 'learner_address_unresolvable';
 const CAUSE_REQUEST_SHAPE = 'request_shape';
 const CAUSE_RESPONSE_BINDING_MISMATCH = 'response_binding_mismatch';
 const WAKE_SERVICES_ROW_VISIBLE = 'services_row_visible';
 const WAKE_PUBLISHED_EPOCH_CHANGED = 'published_epoch_changed';
 const LOG_LEVEL_INFO = 'info';
+const TABLES_SERVICES = 'services';
 const OUTCOME_TIMEOUT = 'timeout';
 const WAKE_DELAY_MS = PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_WAKE_DELAY_MS;
-// The exact cpp drive on the row landing schedule: one typed refusal while
-// the row is withheld, one CL-021 kick, one services_row_visible wake, and
+// The exact withheld-row drive on the row landing schedule: one typed
+// not_in_configuration refusal while the leader has not admitted the
+// learner, the landing on that refusal, one services_row_visible wake, and
 // the wake proof request granted — never a progress_behind cycle.
-const SINGLE_KICK = 1;
 const NO_REQUESTS_DURING_LANDING = 0;
 const QUANTIZED_DEFERRALS = Object.freeze([
-  [REQUEST_INVALID, CAUSE_ADDRESS_UNRESOLVABLE],
+  [NOT_IN_CONFIGURATION, null],
 ]);
 const QUANTIZED_REQUEST_OUTCOMES =
-  Object.freeze([REQUEST_INVALID, PROGRESS_PROVEN]);
+  Object.freeze([NOT_IN_CONFIGURATION, PROGRESS_PROVEN]);
 const QUANTIZED_WAKES = Object.freeze([WAKE_SERVICES_ROW_VISIBLE]);
 
 function seconds(clock, atMs) {
@@ -301,10 +310,15 @@ function createRowLanding(clock) {
     insertServiceRow(
       fixture.leaderCache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER,
     );
-    landing.settled = waitForLeaderReplicationToLearner(
+    // The withheld status write lands: the learner's admission request
+    // reaches the leader, which admits it from the committed operation
+    // (quest replica-admission-from-committed-operation; the cache-driven
+    // reconcile is deleted).
+    const admission = fixture.requestLearnerAdmission();
+    landing.settled = admission.then(() => waitForLeaderReplicationToLearner(
       fixture.leader, DRIVE_BUDGET_S * VIRTUAL_SECOND_MS,
       {isCancelled: () => landing.cancelled},
-    ).then((proven) => {
+    )).then((proven) => {
       landing.replicationProven = proven;
       landing.replicationAtLanding =
         readLeaderReplicationToLearner(fixture.leader);
@@ -318,19 +332,6 @@ function createRowLanding(clock) {
     return landing.settled;
   };
   return landing;
-}
-
-// The target's replica state machine as the durable services-row owner:
-// its CL-021 deferred-row retry is the only path that lands the row early.
-function createDeferredRowStateMachine(clock, landing) {
-  const kicks = [];
-  return {
-    kicks,
-    reconcileLocalOnlyServiceRowsNow() {
-      kicks.push(clock.now());
-      return landing.land().then(() => kicks.length);
-    },
-  };
 }
 
 // The first proof request sent after an event, by request index (a
@@ -405,11 +406,9 @@ async function createChannelFixture(options = {}) {
     startPartitioned: options.startPartitioned === true,
     learnerRow: true,
     leaderLearnerRow: options.withholdRow !== true,
+    hideLeaderLearnerRowAfterAdmission: options.hideRow === true,
     publishedEpoch: options.publishedEpoch,
     retryIntervalMs: RETRY_INTERVAL_MS,
-    replicaStateMachine: options.stateMachine === true ?
-      createDeferredRowStateMachine(clock, landing) :
-      undefined,
     wrapLearnerTransport: (inner) => {
       transport =
         createProofChannelTransport(inner, clock, stallPlan, latencyMs);
@@ -437,7 +436,6 @@ async function createChannelFixture(options = {}) {
     transport,
     leaderLog,
     learnerLog,
-    stateMachine: fixture.learner.replicaStateMachine,
     async shutdown() {
       clearTimeout(withholdTimer);
       landing.cancel();
@@ -469,15 +467,20 @@ function grantedProof(fixture) {
       proof?.decision === LEARNER_PROMOTION_PROOF_DECISION.GRANTED) || null;
 }
 
-// The full cpp drive: row withheld, leader stalls, state machine present.
-async function runCppDrive() {
+// The withheld-row drive: the leader has not admitted the learner (its row
+// is withheld from the leader cache), the leader stalls, and the row lands on
+// the fixture's schedule the instant the first refusal returns.
+async function runWithheldRowDrive() {
   configureFixtureRuntime();
   const fixture = await createChannelFixture({
     withholdRow: true,
     stall: true,
-    stateMachine: true,
     publishedEpoch: PUBLISHED_EPOCH_ONE,
   });
+  fixture.transport.listeners.onResponse = () => {
+    fixture.transport.listeners.onResponse = null;
+    fixture.landing.land();
+  };
   try {
     const promoted = await waitForPromotion(fixture);
     const activeAtMs = fixture.clock.now();
@@ -496,7 +499,6 @@ async function runCppDrive() {
       wakeDelayMs: wakeRequest ?
         wakeRequest.sentAtMs - fixture.landing.landedAtMs :
         null,
-      kicks: fixture.stateMachine.kicks.length,
       // The landing schedule as observed: replication proven before the
       // learner-visible landing, the phase length in real ms, and the proof
       // requests sent inside the phase (must be none).
@@ -527,6 +529,41 @@ async function runCppDrive() {
   }
 }
 
+// The cpp drive of the live defect: the leader admitted the learner, then
+// its cache lost the learner's row (no change event), and the leader
+// stalls. The proof is decided from the committed configuration and the
+// leader's progress, so the learner is never refused for the row.
+async function runCppDrive() {
+  configureFixtureRuntime();
+  const fixture = await createChannelFixture({
+    hideRow: true,
+    stall: true,
+    publishedEpoch: PUBLISHED_EPOCH_ONE,
+  });
+  try {
+    const promoted = await waitForPromotion(fixture);
+    const activeAtMs = fixture.clock.now();
+    return {
+      promoted,
+      activeAtS: promoted ?
+        seconds(fixture.clock, activeAtMs) :
+        Number.POSITIVE_INFINITY,
+      leaderHoldsRow: fixture.leaderCache.get(TABLES_SERVICES,
+        LEARNER_REPLICA) !== undefined,
+      deferrals: learnerDeferrals(fixture.learnerLog).map((d) =>
+        [d.proofReason, d.cause]),
+      proof: grantedProof(fixture),
+      requests: fixture.transport.requests.map((request) => [
+        seconds(fixture.clock, request.sentAtMs),
+        request.outcome,
+      ]),
+    };
+  } finally {
+    await fixture.shutdown();
+    resetFixtureRuntime();
+  }
+}
+
 function describeDrive(drive) {
   return JSON.stringify({
     deferrals: drive.deferrals,
@@ -543,7 +580,8 @@ test(
     configureFixtureRuntime();
     const fixture = await createChannelFixture({withholdRow: true});
     try {
-      // Land the row the instant the first (unresolvable) refusal returns —
+      // Land the row the instant the first (not_in_configuration) refusal
+      // returns —
       // phase zero of the retry timer, so a timer-only owner re-requests a
       // full interval later while an event-driven owner re-requests now.
       fixture.transport.listeners.onResponse = () => {
@@ -551,10 +589,10 @@ test(
         fixture.landing.land();
       };
       const promoted = await waitForPromotion(fixture);
-      assert.equal(promoted, true, 'the learner promotes once resolvable');
+      assert.equal(promoted, true, 'the learner promotes once admitted');
       const {requests} = fixture.transport;
-      assert.equal(requests[0].outcome, REQUEST_INVALID,
-        'the first proof is refused while the row is withheld');
+      assert.equal(requests[0].outcome, NOT_IN_CONFIGURATION,
+        'the first proof is refused while the leader has not admitted it');
       const wakeRequest = requestAfterEvent(
         requests, fixture.landing.requestCountAtLanding,
       );
@@ -629,8 +667,8 @@ test(
 );
 
 test(
-  'typed-refusal-cause-address-unresolvable: request_invalid carries a ' +
-  'typed cause on both sides and is logged at info',
+  'typed-refusal-not-in-configuration: a learner the leader never ' +
+  'admitted is refused not_in_configuration on both sides, logged at info',
   async () => {
     configureFixtureRuntime();
     const fixture = await createChannelFixture({withholdRow: true});
@@ -646,17 +684,16 @@ test(
         'the leader logs the refusal at info');
       assert.equal(leaderRefusal.payload.learnerReplicaId, LEARNER_REPLICA);
       assert.equal(leaderRefusal.payload.partitionId, PARTITION_ID);
-      assert.equal(leaderRefusal.payload.cause, CAUSE_ADDRESS_UNRESOLVABLE,
-        'the leader-side cause is learner_address_unresolvable');
+      assert.equal(leaderRefusal.payload.reason, NOT_IN_CONFIGURATION,
+        'the leader-side reason is not_in_configuration');
       const learnerDeferral = learnerDeferrals(fixture.learnerLog)[0];
       assert.ok(learnerDeferral, 'the learner logs the deferral at info');
-      assert.equal(learnerDeferral.proofReason, REQUEST_INVALID);
-      assert.equal(learnerDeferral.cause, CAUSE_ADDRESS_UNRESOLVABLE,
-        'the learner sees the typed cause');
-      assert.equal(fixture.transport.requests[0].proof.cause,
-        CAUSE_ADDRESS_UNRESOLVABLE, 'the refusal itself carries the cause');
+      assert.equal(learnerDeferral.proofReason, NOT_IN_CONFIGURATION,
+        'the learner sees the typed reason');
+      assert.equal(fixture.transport.requests[0].proof.reason,
+        NOT_IN_CONFIGURATION, 'the refusal itself carries the reason');
 
-      const shapeResponse = leader.handleLearnerPromotionProofRequest({
+      const shapeResponse = await leader.handleLearnerPromotionProofRequest({
         partitionId: FOREIGN_PARTITION_ID,
         replicaId: LEARNER_REPLICA,
       });
@@ -707,54 +744,6 @@ test(
       'response_binding_mismatch is logged at info with learner/partition');
       assert.equal(learner.role, RaftRole.LEARNER,
         'no refusal shape ever promotes');
-    } finally {
-      await fixture.shutdown();
-      resetFixtureRuntime();
-    }
-  },
-);
-
-test(
-  'learner-reasserts-row-on-unresolvable: an unresolvable refusal kicks ' +
-  'the CL-021 deferred services-row retry now, not on its tick',
-  async (t) => {
-    configureFixtureRuntime();
-    const fixture = await createChannelFixture({
-      withholdRow: true,
-      stateMachine: true,
-    });
-    try {
-      assert.equal(
-        typeof ReplicaStateMachine.prototype.reconcileLocalOnlyServiceRowsNow,
-        'function',
-        'the replica state machine owns the deferred-row retry entry point ' +
-          'the learner kicks (its per-row backoff bounds apply inside)');
-      const promoted = await waitForPromotion(fixture);
-      assert.equal(promoted, true, 'the re-asserted row lets the proof grant');
-      const {requests} = fixture.transport;
-      const {kicks} = fixture.stateMachine;
-      assert.equal(requests[0].outcome, REQUEST_INVALID,
-        'the first proof is refused while the row is withheld');
-      assert.ok(kicks.length >= 1, 'the learner kicked the deferred-row retry');
-      const kickDelayMs = kicks[0] - requests[0].completedAtMs;
-      t.diagnostic(`unresolvable refusal -> CL-021 kick after ${kickDelayMs} ` +
-        `ms; kicks ${kicks.length}; row landed at ` +
-        `${seconds(fixture.clock, fixture.landing.landedAtMs)} s`);
-      assert.ok(kicks[0] >= requests[0].completedAtMs,
-        'the kick follows the unresolvable refusal, never precedes it');
-      assert.ok(kickDelayMs < WAKE_BOUND_MS,
-        'the kick is immediate, not deferred to the retry timer');
-      const unresolvableRefusals = requests.filter((request) =>
-        request.outcome === REQUEST_INVALID).length;
-      assert.ok(kicks.length <= unresolvableRefusals,
-        'at most one kick per unresolvable refusal (bounded by the cadence)');
-      const wakeRequest = requestAfterEvent(
-        requests, fixture.landing.requestCountAtLanding,
-      );
-      assert.ok(wakeRequest, 'a proof request follows the re-asserted row');
-      assert.ok(
-        wakeRequest.sentAtMs - fixture.landing.landedAtMs < WAKE_BOUND_MS,
-        'the re-asserted row wakes the proof request');
     } finally {
       await fixture.shutdown();
       resetFixtureRuntime();
@@ -1011,42 +1000,40 @@ test(
 );
 
 test(
-  'cpp-learner-active-within-bound: with the row withheld and the leader ' +
-  'stalling, the learner is a voter within the bound on a proven proof',
+  'cpp-learner-active-within-bound: the leader admitted the learner and ' +
+  'then lost its services row; with the leader stalling, the learner is a ' +
+  'voter within the bound on a proven proof, never refused for the row',
   async (t) => {
     const drive = await runCppDrive();
     t.diagnostic(`learner voter at +${drive.activeAtS} s (HEAD floor ` +
-      `${HEAD_ACTIVE_FLOOR_S} s, bound ${GREEN_ACTIVE_BOUND_S} s); row landed ` +
-      `at +${drive.rowLandedAtS} s; kicks ${drive.kicks}; wake delay ` +
-      `${drive.wakeDelayMs} ms; requests ${JSON.stringify(drive.requests)}; ` +
+      `${HEAD_ACTIVE_FLOOR_S} s, bound ${GREEN_ACTIVE_BOUND_S} s); ` +
+      `requests ${JSON.stringify(drive.requests)}; ` +
       `deferrals ${JSON.stringify(drive.deferrals)}`);
+    assert.equal(drive.leaderHoldsRow, false,
+      'the leader cache never regained the learner row');
     assert.equal(drive.promoted, true, 'the learner became a voter');
     assert.ok(drive.activeAtS <= GREEN_ACTIVE_BOUND_S,
       `voter by +${GREEN_ACTIVE_BOUND_S} s (observed +${drive.activeAtS} s)`);
-    assert.ok(drive.deferrals.some(([reason, cause]) =>
-      reason === REQUEST_INVALID && cause === CAUSE_ADDRESS_UNRESOLVABLE),
-    'the first refusal is typed learner_address_unresolvable');
-    assert.ok(drive.kicks >= 1, 'the learner re-asserted its services row');
-    assert.ok(drive.wakeDelayMs !== null && drive.wakeDelayMs < WAKE_BOUND_MS,
-      `the proof re-request follows the row landing within ${WAKE_BOUND_MS} ms`);
+    assert.deepEqual(drive.deferrals.filter(([reason]) =>
+      reason === REQUEST_INVALID || reason === NOT_IN_CONFIGURATION), [],
+    'no refusal names the request or the configuration: the admitted ' +
+      'learner is never refused for its row');
     assert.ok(drive.proof, 'promotion was granted on a proof');
     assert.equal(drive.proof.learnerMatchIndex, drive.proof.safePromotionIndex,
       'the granted proof has learnerMatchIndex === safePromotionIndex');
     assert.equal(drive.proof.safePromotionIndex, COMMITTED_ENTRY_COUNT,
       'the safe promotion index is the leader committed prefix');
     assert.equal(drive.proof.membershipEpoch, PUBLISHED_EPOCH_ONE);
-    assert.equal(drive.leaderEpoch, drive.learnerEpoch,
-      'leader and learner observe the same published epoch');
-    assert.equal(drive.learnerEpoch, PUBLISHED_EPOCH_ONE);
   },
 );
 
 test(
-  'witness-deterministic: two identical cpp drives produce the identical ' +
+  'witness-deterministic: two identical withheld-row drives produce the ' +
+  'identical ' +
   'refusal/wake event sequence and outcome',
   async (t) => {
-    const first = await runCppDrive();
-    const second = await runCppDrive();
+    const first = await runWithheldRowDrive();
+    const second = await runWithheldRowDrive();
     t.diagnostic(`drive 1: +${first.activeAtS} s ${describeDrive(first)}`);
     t.diagnostic(`drive 2: +${second.activeAtS} s ${describeDrive(second)}`);
     assert.equal(describeDrive(second), describeDrive(first),
@@ -1061,7 +1048,7 @@ test(
   'schedule — the leader proves the learner\'s replication before the ' +
   'learner-visible landing, so the wake proof request never races it',
   async (t) => {
-    const drive = await runCppDrive();
+    const drive = await runWithheldRowDrive();
     t.diagnostic(`landing phase ${drive.landingPhaseMs} ms real (cadence ` +
       `${RETRY_INTERVAL_MS} ms); replication at landing ` +
       `${JSON.stringify(drive.replicationAtLanding)}; requests during ` +
@@ -1077,7 +1064,7 @@ test(
       'no proof request was sent between the leader-side and the ' +
       'learner-visible landing');
     assert.deepEqual(drive.deferrals, QUANTIZED_DEFERRALS,
-      'exactly one refusal, typed learner_address_unresolvable — never a ' +
+      'exactly one refusal, typed not_in_configuration — never a ' +
       'progress_behind cycle');
     assert.deepEqual(drive.requests.map(([, outcome]) => outcome),
       QUANTIZED_REQUEST_OUTCOMES,
@@ -1085,7 +1072,6 @@ test(
       'granted wake request');
     assert.deepEqual(drive.wakes, QUANTIZED_WAKES,
       'exactly one wake, typed services_row_visible');
-    assert.equal(drive.kicks, SINGLE_KICK, 'exactly one CL-021 kick');
     assert.equal(drive.promoted, true, 'the learner became a voter');
     assert.ok(drive.wakeDelayMs !== null && drive.wakeDelayMs < WAKE_BOUND_MS,
       `the granted request follows the landing within ${WAKE_BOUND_MS} ms`);

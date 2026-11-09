@@ -44,6 +44,7 @@ import {
 } from
   '../integration/helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const ports = createPortAllocator(import.meta.url);
 function getUniquePort() {
   return ports.getPort();
@@ -194,6 +195,7 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
 
       await seedApi.initialize(0, {listen: false});
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -269,6 +271,7 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
 
       await seedApi.initialize(0, {listen: false});
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -358,6 +361,7 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
 
       await seedApi.initialize(0, {listen: false});
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,

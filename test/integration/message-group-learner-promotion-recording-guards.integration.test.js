@@ -193,7 +193,9 @@ test('voter evidence guards: a committed promotion answer is evidence only with 
     const voters = stamp.voters.filter((peer) => peer !== dropped);
     const identities = Object.fromEntries(Object.entries(stamp.identities)
       .filter(([peer]) => peer !== dropped));
-    const canonical = committedStampOfAnswer({...stamp, voters, learners, identities,
+    const nodeIds = Object.fromEntries(Object.entries(stamp.nodeIds)
+      .filter(([peer]) => peer !== dropped));
+    const canonical = committedStampOfAnswer({...stamp, voters, learners, identities, nodeIds,
       leaderId: stamp.identities[voters[0]], configurationKey: configurationOf(voters, learners)});
     assert.ok(canonical, 'a valid committed stamp without the dropped member');
     return canonical;
@@ -205,6 +207,8 @@ test('voter evidence guards: a committed promotion answer is evidence only with 
   () => record({...committed, membership: {...votersWithoutSource}}), 'conflict');
   const foundersOnly = committedStampOfAnswer({...learner, learners: [],
     identities: Object.fromEntries(Object.entries(learner.identities)
+      .filter(([peer]) => peer !== identity.targetPeerId)),
+    nodeIds: Object.fromEntries(Object.entries(learner.nodeIds)
       .filter(([peer]) => peer !== identity.targetPeerId)),
     configurationKey: configurationOf(learner.voters, [])});
   assert.ok(foundersOnly, 'a valid stamp that never held the target');
@@ -252,7 +256,8 @@ test('the recorded voter fact is one pure predicate: every clause refuses its fo
       const voters = role === 'voter' ? [...voter.voters, extraPeer] : voter.voters;
       const learners = role === 'learner' ? [...voter.learners, extraPeer] : voter.learners;
       return canonical({...voter, voters, learners, identities: {...voter.identities,
-        [extraPeer]: extra}, configurationKey: configurationOf(voters, learners)});
+        [extraPeer]: extra}, nodeIds: {...voter.nodeIds, [extraPeer]: null},
+      configurationKey: configurationOf(voters, learners)});
     };
     const leaderGeneration = permit.leaderConfigurationStamp.membershipGenerationIndex;
     const forgeries = {
@@ -280,7 +285,9 @@ test('the recorded voter fact is one pure predicate: every clause refuses its fo
         const voters = voter.voters.map((peer) => (peer === exchanged ? extraPeer : peer));
         const identities = Object.fromEntries(Object.entries(voter.identities)
           .filter(([peer]) => peer !== exchanged).concat([[extraPeer, extra]]));
-        return canonical({...voter, voters, identities,
+        const nodeIds = Object.fromEntries(Object.entries(voter.nodeIds)
+          .filter(([peer]) => peer !== exchanged).concat([[extraPeer, null]]));
+        return canonical({...voter, voters, identities, nodeIds,
           configurationKey: configurationOf(voters, voter.learners)});
       })()},
       'a voter stamp with an extra learner': {messageGroupVoterStamp: widened('learner')},
@@ -300,7 +307,9 @@ test('the recorded voter fact is one pure predicate: every clause refuses its fo
           const voters = stamp.voters.filter((peer) => peer !== sourcePeer);
           const identities = Object.fromEntries(Object.entries(stamp.identities)
             .filter(([peer]) => peer !== sourcePeer));
-          return canonical({...stamp, voters, learners, identities,
+          const nodeIds = Object.fromEntries(Object.entries(stamp.nodeIds)
+            .filter(([peer]) => peer !== sourcePeer));
+          return canonical({...stamp, voters, learners, identities, nodeIds,
             leaderId: stamp.identities[voters[0]],
             configurationKey: configurationOf(voters, learners)});
         };
@@ -311,6 +320,8 @@ test('the recorded voter fact is one pure predicate: every clause refuses its fo
         const learner = JSON.parse(operation.messageGroupLearnerStamp);
         return canonical({...learner, learners: [],
           identities: Object.fromEntries(Object.entries(learner.identities)
+            .filter(([peer]) => peer !== identity.targetPeerId)),
+          nodeIds: Object.fromEntries(Object.entries(learner.nodeIds)
             .filter(([peer]) => peer !== identity.targetPeerId)),
           configurationKey: configurationOf(learner.voters, [])});
       })()},
@@ -450,6 +461,7 @@ async (t) => {
       [...membership.learners];
     const widenedMembership = {...membership, voters, learners,
       identities: {...membership.identities, [extraPeer]: extra},
+      nodeIds: {...membership.nodeIds, [extraPeer]: null},
       configurationKey: configurationOf(voters, learners)};
     assert.ok(committedStampOfAnswer(widenedMembership), `${role}: a valid committed stamp`);
     return {...committed, membership: widenedMembership};
@@ -477,7 +489,7 @@ test('V2 (real schedule, F1): an unrelated learner joins before the ordered succ
       '(replica_identity, raft_peer_id) VALUES (?, ?)').run(other, deriveRaftRsPeerId(other));
   }
   const added = await turnChainValue(f.cluster.node(leader).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: other}));
+    type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: other, nodeId: 'node-test'}));
   assert.equal(added.outcome, RAFT_OPERATION_OUTCOME.CORE_OK, JSON.stringify(added));
   assert.ok(f.cluster.settle(() => FOUNDERS.every((id) => f.cluster.node(id).readStatus()
     .confState.learners.map(String).includes(deriveRaftRsPeerId(other)))),

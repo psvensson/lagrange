@@ -118,10 +118,12 @@ function withObservedProgressRetention(Base) {
         }
         this.clearTimeoutFn(existing.timeoutHandle);
         existing.nextAttemptAt = desiredAttemptAt;
-        existing.timeoutHandle = this.setTimeoutFn(
-          () => this.runObservedProgressRetry(operationId),
+        let timeoutHandle = null;
+        timeoutHandle = this.setTimeoutFn(
+          () => this.runObservedProgressRetry(operationId, timeoutHandle),
           retryDelayMs,
         );
+        existing.timeoutHandle = timeoutHandle;
         return true;
       }
       const retryEntry = {
@@ -133,10 +135,12 @@ function withObservedProgressRetention(Base) {
         tableName,
         timeoutHandle: null,
       };
-      retryEntry.timeoutHandle = this.setTimeoutFn(
-        () => this.runObservedProgressRetry(operationId),
+      let timeoutHandle = null;
+      timeoutHandle = this.setTimeoutFn(
+        () => this.runObservedProgressRetry(operationId, timeoutHandle),
         retryDelayMs,
       );
+      retryEntry.timeoutHandle = timeoutHandle;
       this.observedProgressRetryTimerByOperationId.set(
         operationId,
         retryEntry,
@@ -288,10 +292,14 @@ function withObservedProgressRetention(Base) {
       });
     }
 
-    runObservedProgressRetry(operationId) {
+    runObservedProgressRetry(operationId, expectedTimeoutHandle = null) {
       const retryEntry =
         this.observedProgressRetryTimerByOperationId.get(operationId);
-      if (!retryEntry) {
+      if (
+        !retryEntry ||
+        expectedTimeoutHandle !== null &&
+          retryEntry.timeoutHandle !== expectedTimeoutHandle
+      ) {
         return;
       }
       this.observedProgressRetryTimerByOperationId.delete(operationId);

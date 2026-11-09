@@ -58,8 +58,23 @@ test('only the canonical machine-factor operation scales a declaration', () => {
   for (const [factor, expected] of [['1', 30000], ['3', 90000], ['1.4', 42000]]) {
     assert.deepEqual(extractTimeoutDeclarations(source, FILE, {
       env: {LAGRANGE_TEST_MACHINE_FACTOR: factor},
-    }), {milliseconds: expected, problems: []});
+    }), {milliseconds: expected, hasDeclaration: true, problems: []});
   }
+});
+
+test('declaration presence distinguishes absent, small, equal and non-positive budgets', () => {
+  assert.deepEqual(extract('test(\'ordinary\', () => {});'), {
+    milliseconds: 0, hasDeclaration: false, problems: [],
+  });
+  for (const [budget, milliseconds] of [[0, 0], ['0 - 1', 0],
+    [1000, 1000], [30000, 30000], [90000, 90000]]) {
+    assert.deepEqual(extract(`test('declared', {timeout: ${budget}}, () => {});`), {
+      milliseconds, hasDeclaration: true, problems: [],
+    });
+  }
+  const unsupported = extract('test(\'unresolved\', {timeout: -1}, () => {});');
+  assert.equal(unsupported.hasDeclaration, true);
+  assert.equal(unsupported.problems.length, 1, 'unsupported unary syntax retains its refusal');
 });
 
 test('same-named functions and shadowed imports cannot impersonate the scaler', () => {
@@ -236,6 +251,8 @@ function runFixture(declaredMs, expectedSeconds, env, expectedCaseMs = null) {
     `t.test('observes the cap', {timeout: ${declaredMs}}, (tt) => {\n` +
     '  tt.equal(process.env.TAP_TIMEOUT, ' +
     `${JSON.stringify(expectedSeconds)});\n` +
+    `  tt.equal(t.options.timeout, ${(expectedSeconds === undefined ?
+      TAP_DEFAULT_SECONDS : Number(expectedSeconds)) * 1000});\n` +
     (expectedCaseMs === null ? '' :
       `  tt.equal(FIXTURE_TIMEOUT_MS, ${expectedCaseMs});\n`) +
     '  tt.end();\n' +
@@ -279,6 +296,20 @@ test('case timer and file cap scale once while an explicit caller cap wins', () 
     {...factor, TAP_TIMEOUT: '120'}, 90000), true);
   assert.equal(runFixture(90000, '90', factor, 90000), true,
     'an already numeric budget is not scaled again by the runner');
+});
+
+test('small and non-positive declarations retain their existing root and floor behavior', () => {
+  const factor = {LAGRANGE_TEST_MACHINE_FACTOR: '2.3'};
+  for (const budget of [1000, 30000, 0, '0 - 1']) {
+    assert.equal(runFixture(budget, undefined, factor), true,
+      'a declared budget is not an implicit machine-scaled root');
+    assert.equal(runFixture(budget, '120', {...factor, TAP_TIMEOUT_FLOOR: '120'}), true,
+      'the existing lane floor remains effective');
+  }
+  assert.equal(runFixture(1000, '10', {...factor, TAP_TIMEOUT_FLOOR: '10'}), true,
+    'the small-declaration floor behavior is unchanged');
+  assert.throws(() => runFixture(-1, undefined, factor), /Command failed/u,
+    'unresolved unary declarations still refuse before launch');
 });
 
 // The CI lanes export TAP_TIMEOUT_FLOOR (ci.yml, release.yml): a minimum for

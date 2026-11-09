@@ -1,3 +1,5 @@
+import {createMockCoordinator, createMockPolicyService} from './test-helpers.js';
+import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 /**
  * Unit tests for UnifiedRebalancer.
  * Tests the core rebalancing logic for partitions and message groups.
@@ -21,7 +23,6 @@ import {
   MoveType,
   ReplicaStatus,
   NodeStatus,
-  DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {
@@ -64,7 +65,7 @@ import {
   registerUnifiedRebalancerPlanningGateDecisionsTests,
 } from './unified-rebalancer-planning-gate-decisions-test-cases.js';
 import {
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
 } from './unified-rebalancer-test-support.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {
@@ -252,22 +253,7 @@ function createMockCdcService() {
 }
 
 // Create mock table policy service
-function createMockPolicyService(partitions = [], tables = []) {
-  return {
-    getPolicyForPartition: (partitionId) => {
-      const partition = partitions.find((p) => p.partition_id === partitionId);
-      if (!partition) return {...DEFAULT_TABLE_POLICY};
-      const table = tables.find((t) => t.table_id === partition.table_id);
-      if (!table || !table.table_policies) return {...DEFAULT_TABLE_POLICY};
-      try {
-        return {...DEFAULT_TABLE_POLICY, ...JSON.parse(table.table_policies)};
-      } catch (_e) {
-        return {...DEFAULT_TABLE_POLICY};
-      }
-    },
-    getMessageGroupPolicy: async () => ({...DEFAULT_MESSAGE_GROUP_POLICY}),
-  };
-}
+
 
 // Create mock message router
 function createMockMessageRouter(
@@ -299,42 +285,6 @@ function createBackpressuredMessageRouter() {
   };
 }
 
-
-// Create mock rebalance coordinator
-function createMockCoordinator() {
-  const storageAccountingService = {
-    estimateReplicaBytes: () => 1,
-  };
-  const storageAdmissionService = {
-    checkAdd: async () => ({decision: 'allow'}),
-    checkReplace: async () => ({decision: 'allow'}),
-  };
-  return {
-    getMoveSafetyError: () => null,
-    createOperation: async (move) => ({
-      operationId: 'op-' + Date.now(),
-      type: move.type,
-      partitionId: move.partitionId,
-      targetNodeId: move.nodeId,
-      status: 'pending',
-      workflowStep: 'pending',
-    }),
-    executeOperation: async () => ({success: true}),
-    canStartAddOperation: async () => true,
-    canStartRemoveOperation: async () => true,
-    // getStats is called synchronously by UnifiedRebalancer.getStats()
-    getStats: () => ({
-      operationsCreated: 0,
-      operationsCompleted: 0,
-      operationsFailed: 0,
-      operationsTimedOut: 0,
-      inFlightOperations: 0,
-      totalOperations: 0,
-    }),
-    storageAccountingService,
-    storageAdmissionService,
-  };
-}
 
 function createEventedMockCoordinator() {
   const coordinator = createMockCoordinator();
@@ -403,6 +353,7 @@ function createTestRebalancer(options = {}) {
     messageRouter = null,
     rebalanceCoordinator = null,
     controlPlaneReadinessService = null,
+    readinessFixture = {},
     bootstrapReadinessState = null,
     nowFn = null,
     priorityRecoveryActivityStaleGraceMs = null,
@@ -418,12 +369,9 @@ function createTestRebalancer(options = {}) {
     serviceEndpoints,
   );
   const mockCdcService = cdcIntegrationService || createMockCdcService();
-  const mockPolicyService = createMockPolicyService(
-    partitions, tables,
-  );
+  const mockPolicyService = createMockPolicyService({partitions: partitions, tables: tables});
   const mockMessageRouter = messageRouter ||
     createMockMessageRouter(connectionState);
-  const mockCoordinator = rebalanceCoordinator || createMockCoordinator();
   const mockSqlQueryEngine = sqlQueryEngine || {
     async executeQuery() {
       return {success: true, rows: []};
@@ -431,8 +379,14 @@ function createTestRebalancer(options = {}) {
   };
   const mockReadinessService = controlPlaneReadinessService ?
     readinessServiceFake(controlPlaneReadinessService, nowFn || Date.now) :
-    createMockReadinessService(mockCache);
-
+    createMockControlPlaneReadinessService({
+      ...readinessFixture,
+      systemTableCache: mockCache,
+      ...(nowFn ? {now: nowFn} : {}),
+    });
+  const mockCoordinator = rebalanceCoordinator || createMockCoordinator({
+    controlPlaneReadinessService: mockReadinessService,
+  });
   return new UnifiedRebalancer({
     entityId,
     entityType,
@@ -485,10 +439,9 @@ const unifiedRebalancerTestContext = {
   createMockMembershipPublicationService,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   createTestRebalancer,
   DEFAULT_MESSAGE_GROUP_POLICY,
-  DEFAULT_TABLE_POLICY,
   EntityType,
   initializeTestEnvironment,
   LOCAL_MUTATION_TEST_CONTROL_PLANE_WRITE_UNHEALTHY,
@@ -595,3 +548,5 @@ registerUnifiedRebalancerSurrogateFollowupSynthesisTests(unifiedRebalancerTestCo
 registerUnifiedRebalancerClosureWitnessFollowupTests(unifiedRebalancerTestContext);
 registerUnifiedRebalancerBudgetArbitrationCleanupTests(unifiedRebalancerTestContext);
 registerUnifiedRebalancerBudgetQueryGatewayTests(unifiedRebalancerTestContext);
+
+export {DEFAULT_TABLE_POLICY};

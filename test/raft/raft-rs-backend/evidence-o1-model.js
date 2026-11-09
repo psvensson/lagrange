@@ -33,6 +33,7 @@ import {
   foldAt,
   logFold,
   reservedIdentities,
+  reservedNodeIds,
 } from './committed-membership-oracles.js';
 import {
   RAFT_EVENT,
@@ -210,7 +211,7 @@ function commitVoterChange(cluster, type, identity) {
   for (let attempt = 0; attempt < PROPOSAL_ATTEMPTS && !shows();
     attempt += 1) {
     cluster.node(leaderOf(cluster)).proposeConfChange({
-      type, replicaIdentity: identity});
+      type, replicaIdentity: identity, nodeId: 'node-test'});
     settle(cluster, shows, liveReplicas(cluster), RETRY_ROUNDS);
   }
   assert.ok(settle(cluster, shows, liveReplicas(cluster)),
@@ -252,6 +253,8 @@ function oracleStamp(cluster, leader, genesisPeerIds) {
     gateOpen: true,
     identities: Object.fromEntries([...at.voters, ...at.learners].map(
       (peerId) => [peerId, reserved.get(peerId)])),
+    nodeIds: Object.fromEntries([...at.voters, ...at.learners].map(
+      (peerId) => [peerId, reservedNodeIds(dbFile).get(peerId) ?? null])),
   };
 }
 

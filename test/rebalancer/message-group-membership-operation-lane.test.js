@@ -126,7 +126,7 @@ function createRepository(database, options = {}) {
       getAll: () => [],
       filter: () => [],
     },
-    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+    cdcIntegrationService: {},
     controlPlaneSystemTableGateway: createSqlGateway(database, options),
     authoritativeVisibilityTimeoutMs: 25,
     authoritativeVisibilityRetryDelayMs: 1,
@@ -143,14 +143,16 @@ function createCoordinator(database, nodeId) {
       getAll: () => [],
       filter: () => [],
     },
-    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+    cdcIntegrationService: {},
     controlPlaneSystemTableGateway: gateway,
     sqlQueryEngine: gateway,
     messageRouter: {deliver: async () => (buildDeliveryEnvelope({acknowledged: true}))},
     tablePolicyService: {
-      getPolicyForPartition: async () => ({minReplicaCount: 1}),
+      getPolicyForPartition: async () => ({targetReplicaCount: 3, minReplicaCount: 1}),
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
   });

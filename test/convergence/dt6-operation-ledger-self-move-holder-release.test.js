@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {REBALANCER_DEFAULT} from '../../src/rebalancer/rebalancer-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {STORAGE_RESERVATION_AUTHORITY_ERROR} from
+  '../../src/rebalancer/storage-reservation-authority.js';
 import {
   FORMATION_READINESS_BUDGET_MS,
   HEAD_CRITICAL_CHECK_DELAY_MS,
@@ -105,9 +107,8 @@ function assertStaleTerminalClaimRefusedBeforeHold(m) {
   assert.ok(
     staleClaim !== null &&
       staleClaim.atMs === STALE_CLAIM_REDRIVE_AT_MS &&
-      staleClaim.skipReason ===
-        OPERATION_WORKFLOW_OWNER_SHARED.OPERATION_WORKFLOW_OWNER_REASON
-          .OPERATION_NOT_DISPATCHABLE &&
+      staleClaim.success === false && staleClaim.terminal === true &&
+      staleClaim.error?.endsWith(STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_TERMINAL) &&
       staleClaim.row?.step === WORKFLOW_STEP.FAILED &&
       staleClaim.holderBefore.operationId === null &&
       staleClaim.holderAfter.operationId === null,

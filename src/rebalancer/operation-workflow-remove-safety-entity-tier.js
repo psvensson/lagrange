@@ -60,7 +60,13 @@ async function evaluateEntityRemoveSafety(context, operation, identity) {
   }
   const observation = await context.getEntityReplicaRowsForSafety(identity);
   const rows = Array.isArray(observation?.rows) ? observation.rows : [];
-  if (observation?.available !== true || rows.length === 0) {
+  if (observation?.available !== true) {
+    return context.buildDeferredRemoveSafetyEvaluationForOperation(
+      operation,
+      `${identity.entityType} ${identity.entityId} safety check unavailable`,
+    );
+  }
+  if (rows.length === 0) {
     return context.buildFailedRemoveSafetyEvaluation(
       `${identity.entityType} ${identity.entityId} safety check unavailable`,
     );
@@ -119,7 +125,8 @@ async function evaluateEntityRemoveSafety(context, operation, identity) {
     identity.entityId,
   );
   if (!Number.isInteger(minReplicaCount) || minReplicaCount < 1) {
-    return context.buildFailedRemoveSafetyEvaluation(
+    return context.buildDeferredRemoveSafetyEvaluationForOperation(
+      operation,
       `${identity.entityType} ${identity.entityId} safety policy unavailable`,
     );
   }

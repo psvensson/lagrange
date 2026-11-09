@@ -107,7 +107,7 @@ test('native logs marker remains unapplied and unacknowledged while quorum traff
       (to === leaderAddress || followers.has(to)));
     // This witness measures durable source application, not cache delivery.
     const pending = trackAnswer(f.owner.appendDiagnosticMarker(REQUEST, NODE_ID,
-      {skipCacheWait: true}));
+      {}));
     const exactAppendHeld = () => gate.records.some(({address, packet}) =>
       followers.has(address) && markerEntry({entries: packet.message?.entries || []}));
     try {
@@ -144,7 +144,7 @@ test('native logs marker remains unapplied and unacknowledged while quorum traff
       assert.equal(await f.group.waitFor(() =>
         f.group.services.every((service) => rows(service).length === 1)), true);
       const original = rows(f.leader)[0];
-      const replay = await f.owner.appendDiagnosticMarker(REQUEST, NODE_ID, {skipCacheWait: true});
+      const replay = await f.owner.appendDiagnosticMarker(REQUEST, NODE_ID, {});
       assert.deepEqual(replay, answer, 'same semantic marker reconciles the first row');
       for (const service of f.group.services) assert.deepEqual(rows(service), [original]);
       traceConsumer(t, 'marker-healed', {answer, replay,

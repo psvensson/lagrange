@@ -4,7 +4,12 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  executeAuthoritativeSystemTableRead,
+  queryLocalAuthoritativeSystemTableRows,
+} from '../../src/cdc/cdc-integration-service-authoritative-read-flow.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 function createMockSystemCache(tableName = SYSTEM_TABLE_NAME.SERVICES) {
   const primaryKey = tableName === SYSTEM_TABLE_NAME.LOGS ?
     'log_id' :
@@ -67,6 +72,7 @@ test('SQLQueryEngine - single-table system selects prefer local authoritative re
     const deliveries = [];
     const cdcReads = [];
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache(),
       messageRouter: {
         async deliver(address, message) {
@@ -86,14 +92,34 @@ test('SQLQueryEngine - single-table system selects prefer local authoritative re
           options,
         ) {
           cdcReads.push({tableName, sql, params, options});
+          const witness = {
+            appliedIndex: 19,
+            commitIndex: 19,
+            nodeId: 'test-node',
+            observedAtMs: 1700000000000,
+            partitionId: 'services-p1',
+            role: 'leader',
+            term: 2,
+          };
           return {
-            success: true,
+            authoritativeObservation: {
+              maxAppliedIndex: 19,
+              maxCommitIndex: 19,
+              maxTerm: 2,
+              observedPartitionCount: 1,
+              tableName,
+              witnessCount: 1,
+            },
+            count: 1,
+            readAuthorityWitness: witness,
+            readAuthorityWitnesses: [witness],
+            rowSetComplete: true,
             rows: [{
               service_id: 'svc-1',
               service_type: 'partition',
             }],
-            count: 1,
             source: 'local_partition_replica',
+            success: true,
           };
         },
       },
@@ -105,18 +131,45 @@ test('SQLQueryEngine - single-table system selects prefer local authoritative re
     const serviceRead = cdcReads.find(
       (read) => read.tableName === SYSTEM_TABLE_NAME.SERVICES,
     );
+    const readAuthority = serviceRead.options.readAuthority;
 
     t.equal(result.success, true, 'should succeed from local authoritative rows');
     t.equal(result.rows.length, 1, 'should return local authoritative rows');
+    t.equal(result.rowSetComplete, true, 'should preserve rowSetComplete');
     t.equal(
-      serviceRead?.tableName,
+      result.readAuthorityWitness.appliedIndex,
+      19,
+      'should preserve readAuthorityWitness',
+    );
+    t.equal(
+      result.readAuthorityWitnesses.length,
+      1,
+      'should preserve readAuthorityWitnesses',
+    );
+    t.equal(
+      result.authoritativeObservation.maxAppliedIndex,
+      19,
+      'should preserve authoritativeObservation',
+    );
+    t.equal(
+      serviceRead.tableName,
       SYSTEM_TABLE_NAME.SERVICES,
       'should query the canonical system table',
     );
     t.equal(
-      serviceRead?.options?.readAuthority?.authoritativeReadMode,
+      readAuthority.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
       'should not recurse into routed SQL from the SQL engine fast path',
+    );
+    t.equal(
+      readAuthority.localReadConsistency,
+      'local_leader',
+      'full-table system select must require local_leader consistency',
+    );
+    t.equal(
+      readAuthority.replicaFallbackConsistency,
+      null,
+      'full-table system select must not silently fall back to any_replica',
     );
     t.equal(deliveries.length, 0, 'should bypass routed query delivery');
     t.same(result.partitions, ['services-p1'], 'should still report the target partition');
@@ -127,6 +180,7 @@ test('SQLQueryEngine - system-table local reads reuse AuthoritativeControlPlaneV
     const deliveries = [];
     const authoritativeReads = [];
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache(),
       messageRouter: {
         async deliver(address, message) {
@@ -174,6 +228,7 @@ test('SQLQueryEngine - PG system-table reads execute normalized SQLite SQL local
   async (t) => {
     const authoritativeReads = [];
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache(),
       authoritativeControlPlaneView: {
         async readRows(tableName, sql, params) {
@@ -201,6 +256,7 @@ test('SQLQueryEngine - bounded system-table primary-key lookups confirm ' +
   'empty local reads through the owner lane', async (t) => {
   const authoritativeReads = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache(SYSTEM_TABLE_NAME.LOGS),
     authoritativeControlPlaneView: {
       async readRows(tableName, sql, params, options) {
@@ -244,6 +300,7 @@ test('SQLQueryEngine - routed system-table queries default to critical delivery 
   async (t) => {
     const deliveries = [];
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache(),
       messageRouter: {
         async deliver(address, message, options) {
@@ -276,6 +333,7 @@ test('SQLQueryEngine - system selects that do not project the primary key ' +
   const deliveries = [];
   const cdcReads = [];
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache(),
     messageRouter: {
       async deliver(address, message) {
@@ -338,4 +396,256 @@ test('SQLQueryEngine - system selects that do not project the primary key ' +
     'star selects keep the local authoritative fast path',
   );
   t.equal(starResult.success, true, 'star select should succeed');
+});
+
+test('SQLQueryEngine - real executeAuthoritativeSystemTableRead local-leader path attaches witness, completeness, and authoritativeObservation', async (t) => {
+  const localLeaderPartitionService = {
+    appliedIndex: 31,
+    commitIndex: 31,
+    nodeId: 'test-node',
+    partitionId: 'services-p1',
+    raft: {
+      commitIndex: 31,
+      currentTerm: 4,
+      getRole() {
+        return 'leader';
+      },
+      lastApplied: 31,
+    },
+    replicaId: 'services-p1-r1',
+    role: 'leader',
+    buildRemoteReadAuthorityWitness() {
+      return {
+        appliedIndex: 31,
+        commitIndex: 31,
+        observedAtMs: 1700000000500,
+        partitionId: 'services-p1',
+        role: 'leader',
+        servingNodeId: 'test-node',
+        servingReplicaId: 'services-p1-r1',
+        state: 'observed',
+        term: 4,
+      };
+    },
+    async executeLocalQuery() {
+      return {
+        rowSetComplete: true,
+        rows: [{
+          node_id: 'test-node',
+          partition_id: 'services-p1',
+          raft_role: 'leader',
+          service_id: 'services-p1-r1',
+          service_type: 'partition',
+          status: 'active',
+        }],
+        success: true,
+      };
+    },
+  };
+  const realCdcService = {
+    logger: {warn() {}, info() {}},
+    nodeId: 'test-node',
+    now: () => 1700000000500,
+    partitionServicesProvider: () =>
+      new Map([['services-p1', localLeaderPartitionService]]),
+    systemTableCache: createMockSystemCache(),
+    getPrimaryKeyField() {
+      return 'service_id';
+    },
+    normalizeComparableCacheFieldValue(val) {
+      return typeof val === 'number' ? val : null;
+    },
+    async executeAuthoritativeSystemTableRead(tableName, sql, params, options) {
+      return executeAuthoritativeSystemTableRead(
+        this,
+        tableName,
+        sql,
+        params,
+        options,
+      );
+    },
+  };
+  const engine = new SQLQueryEngine({
+    cdcIntegrationService: realCdcService,
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    messageRouter: {
+      async deliver() {
+        throw new Error('unexpected routed delivery');
+      },
+    },
+    systemCache: createMockSystemCache(),
+  });
+
+  const result = await engine.executeQuery('SELECT * FROM services');
+  t.equal(result.success, true, 'real local-leader read should succeed');
+  t.equal(result.rowSetComplete, true, 'real local-leader read should mark rowSetComplete');
+  t.equal(result.readAuthorityWitness.role, 'leader', 'witness role should be leader');
+  t.equal(result.readAuthorityWitness.appliedIndex, 31, 'witness appliedIndex should match leader');
+  t.equal(result.readAuthorityWitness.commitIndex, 31, 'witness commitIndex should match leader');
+  t.equal(result.readAuthorityWitness.term, 4, 'witness term should match leader');
+  t.equal(result.readAuthorityWitnesses.length, 1, 'witness list should contain the serving leader witness');
+  t.equal(
+    result.authoritativeObservation.tableName,
+    SYSTEM_TABLE_NAME.SERVICES,
+    'authoritativeObservation should identify the table',
+  );
+  t.equal(
+    result.authoritativeObservation.rowSetComplete,
+    true,
+    'authoritativeObservation should confirm rowSetComplete',
+  );
+  t.equal(
+    result.authoritativeObservation.maxAppliedIndex,
+    31,
+    'authoritativeObservation should carry maxAppliedIndex from witness',
+  );
+  t.equal(
+    result.authoritativeObservation.observedAtMs,
+    1700000000500,
+    'authoritativeObservation should carry observedAtMs from witness',
+  );
+
+  localLeaderPartitionService.buildRemoteReadAuthorityWitness = () => ({
+    appliedIndex: 0,
+    commitIndex: 0,
+    observedAtMs: 1700000000500,
+    partitionId: 'services-p1',
+    role: 'leader',
+    servingNodeId: 'test-node',
+    servingReplicaId: 'services-p1-r1',
+    state: 'observed',
+    term: 0,
+  });
+  const unsealedResult = await engine.executeQuery(
+    'SELECT * FROM services WHERE status = \'active\'',
+  );
+  t.equal(
+    unsealedResult.rowSetComplete,
+    false,
+    'zero-term witness must not seal rowSetComplete',
+  );
+  t.equal(
+    unsealedResult.readAuthorityWitness,
+    null,
+    'zero-term witness must be rejected without synthesizing a fallback',
+  );
+  t.equal(
+    unsealedResult.authoritativeObservation,
+    null,
+    'authoritativeObservation must remain null when witness is invalid',
+  );
+
+  // Restore valid leader witness and verify that omitted rowSetComplete or
+  // non-empty failure collections never mint rowSetComplete: true or
+  // authoritativeObservation.
+  localLeaderPartitionService.buildRemoteReadAuthorityWitness = () => ({
+    appliedIndex: 31,
+    commitIndex: 31,
+    observedAtMs: 1700000000500,
+    partitionId: 'services-p1',
+    role: 'leader',
+    servingNodeId: 'test-node',
+    servingReplicaId: 'services-p1-r1',
+    state: 'observed',
+    term: 4,
+  });
+  for (const incompletePayload of [
+    {rows: [{service_id: 'services-p1-r1'}], success: true},
+    {
+      failedPartitions: ['services-p2'],
+      rowSetComplete: true,
+      rows: [{service_id: 'services-p1-r1'}],
+      success: true,
+    },
+    {
+      partitionErrors: [{partitionId: 'services-p2'}],
+      rowSetComplete: true,
+      rows: [{service_id: 'services-p1-r1'}],
+      success: true,
+    },
+    {
+      participantFailures: [{partitionId: 'services-p2'}],
+      rowSetComplete: true,
+      rows: [{service_id: 'services-p1-r1'}],
+      success: true,
+    },
+  ]) {
+    localLeaderPartitionService.executeLocalQuery = async () =>
+      incompletePayload;
+    const probeOut = await queryLocalAuthoritativeSystemTableRows(
+      realCdcService,
+      SYSTEM_TABLE_NAME.SERVICES,
+      'SELECT * FROM services',
+      [],
+      {consistency: 'local_leader'},
+    );
+    t.equal(probeOut.rowSetComplete, false);
+    t.equal(probeOut.authoritativeObservation, null);
+  }
+});
+
+test('QueryExecutorBase.executeSelect preserves participant rowSetComplete, readAuthorityWitness, and authoritativeObservation across admin envelope', async (t) => {
+  const {QueryExecutor} = await import(
+    '../../src/query/query-executor.js'
+  );
+  const {SQLParser} = await import('../../src/query/sql-parser.js');
+  const {createAdminQueryResultMessageEnvelope} = await import(
+    '../../src/admin/admin-query-result-message-envelope.js'
+  );
+  const witness = {
+    appliedIndex: 12,
+    commitIndex: 12,
+    observedAtMs: 1700000000000,
+    partitionId: 'services-p1',
+    role: 'leader',
+    servingNodeId: 'node-2',
+    servingReplicaId: 'services-p1-r2',
+    state: 'observed',
+    term: 4,
+  };
+  const authoritativeObservation = {
+    appliedIndex: 12,
+    commitIndex: 12,
+    observedAtMs: 1700000000000,
+    partitionId: 'services-p1',
+    rowSetComplete: true,
+    scope: 'complete_table',
+    servingNodeId: 'node-2',
+    servingReplicaId: 'services-p1-r2',
+    tableName: 'services',
+    term: 4,
+  };
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    messageRouter: {},
+    nodeId: 'node-1',
+    nowFn: () => 1700000000000,
+    systemCache: createMockSystemCache(),
+  });
+  executor.executeOnPartitions = async () => [{
+    authoritativeObservation,
+    partitionId: 'services-p1',
+    readAuthorityWitness: witness,
+    rowSetComplete: true,
+    rows: [{
+      node_id: 'node-2',
+      partition_id: 'services-p1',
+      raft_role: 'leader',
+      service_id: 'services-p1-r2',
+      service_type: 'partition',
+      status: 'active',
+    }],
+    success: true,
+  }];
+  const routed = await executor.executeSelect(
+    new SQLParser('SELECT * FROM services').parse(),
+    ['services-p1'],
+  );
+  const envelope = createAdminQueryResultMessageEnvelope('q-routed', routed);
+  t.equal(routed.rowSetComplete, true);
+  t.same(routed.readAuthorityWitness, witness);
+  t.same(routed.authoritativeObservation, authoritativeObservation);
+  t.equal(envelope.rowSetComplete, true);
+  t.same(envelope.readAuthorityWitness, witness);
+  t.same(envelope.authoritativeObservation, authoritativeObservation);
 });

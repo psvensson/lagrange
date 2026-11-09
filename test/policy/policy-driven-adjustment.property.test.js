@@ -1,9 +1,7 @@
 /**
  * Property Test: Policy-Driven Automatic Adjustment
- * Property 35: For any policy change affecting replica placement,
- * the system should automatically adjust replica locations and
- * counts to comply with the new policy without operator
- * intervention.
+ * Table policy updates preserve the committed mutation, notification,
+ * cache and timestamp contracts. Partition targets are declared separately.
  * Validates: Requirements 19.4
  */
 
@@ -25,8 +23,7 @@ const trafficThreshold = fc.integer({min: 1, max: 10000});
 
 // Generate valid table policies
 const validTablePolicy = fc.record({
-  replicaCount: oddReplicaCount,
-  minReplicaCount: fc.constant(3),
+  minReplicaCount: oddReplicaCount,
   maxReplicaCount: fc.constant(9),
   splitStorageThreshold: storageThreshold,
   splitTrafficThreshold: trafficThreshold,
@@ -34,11 +31,14 @@ const validTablePolicy = fc.record({
   mergeTrafficThreshold: trafficThreshold,
 });
 
-// Mock CDC integration service that tracks updates
-function createMockCDCService() {
+// Mock CDC integration service that tracks updates; `engine` is the
+// committed authority a policy write's base is read from (census site 6).
+function createMockCDCService(engine = createMutableMockSqlEngine()) {
   const updates = [];
   return {
     updates,
+    executeAuthoritativeSystemTableRead: async (_tableName, sql, params) =>
+      ({success: true, ...await engine.executeQuery(sql, params)}),
     updateSystemTableRow: async (tableName, whereClause, data, options) => {
       updates.push({
         tableName,
@@ -77,6 +77,7 @@ function createMutableMockSqlEngine() {
           rows: [{
             partition_id: params[0],
             table_id: 'table-1',
+            replica_count: 3,
           }],
         };
       }
@@ -99,7 +100,7 @@ test('Property 35: Policy-Driven Automatic Adjustment',
           validTablePolicy,
           async (newPolicy) => {
             const engine = createMutableMockSqlEngine();
-            const mockCDC = createMockCDCService();
+            const mockCDC = createMockCDCService(engine);
             const service = new TablePolicyService({
               sqlQueryEngine: engine,
               cdcIntegrationService: mockCDC,
@@ -122,8 +123,8 @@ test('Property 35: Policy-Driven Automatic Adjustment',
             const updatedPolicy = JSON.parse(
               mockCDC.updates[0].data.table_policies,
             );
-            return updatedPolicy.replicaCount ===
-              newPolicy.replicaCount;
+            return updatedPolicy.minReplicaCount ===
+              newPolicy.minReplicaCount;
           },
         ),
         {numRuns: 10},
@@ -138,7 +139,7 @@ test('Property 35: Policy-Driven Automatic Adjustment',
           validTablePolicy,
           async (newPolicy) => {
             const engine = createMutableMockSqlEngine();
-            const mockCDC = createMockCDCService();
+            const mockCDC = createMockCDCService(engine);
             const service = new TablePolicyService({
               sqlQueryEngine: engine,
               cdcIntegrationService: mockCDC,
@@ -161,8 +162,8 @@ test('Property 35: Policy-Driven Automatic Adjustment',
             if (eventData.tableId !== 'table-1') {
               return false;
             }
-            if (eventData.newPolicy.replicaCount !==
-                newPolicy.replicaCount) {
+            if (eventData.newPolicy.minReplicaCount !==
+                newPolicy.minReplicaCount) {
               return false;
             }
 
@@ -183,7 +184,7 @@ test('Property 35: Policy-Driven Automatic Adjustment',
             validTablePolicy,
             async (firstPolicy, secondPolicy) => {
               const engine = createMutableMockSqlEngine();
-              const mockCDC = createMockCDCService();
+              const mockCDC = createMockCDCService(engine);
               const service = new TablePolicyService({
                 sqlQueryEngine: engine,
                 cdcIntegrationService: mockCDC,
@@ -196,8 +197,8 @@ test('Property 35: Policy-Driven Automatic Adjustment',
 
               const afterFirst =
                 await service.getTablePolicy('table-1');
-              if (afterFirst.replicaCount !==
-                  firstPolicy.replicaCount) {
+              if (afterFirst.minReplicaCount !==
+                  firstPolicy.minReplicaCount) {
                 return false;
               }
 
@@ -208,8 +209,8 @@ test('Property 35: Policy-Driven Automatic Adjustment',
 
               const afterSecond =
                 await service.getTablePolicy('table-1');
-              return afterSecond.replicaCount ===
-                secondPolicy.replicaCount;
+              return afterSecond.minReplicaCount ===
+                secondPolicy.minReplicaCount;
             },
           ),
           {numRuns: 10},
@@ -227,7 +228,7 @@ test('Property 35: Policy-Driven Automatic Adjustment',
             ),
             async (evenReplicaCount) => {
               const engine = createMutableMockSqlEngine();
-              const mockCDC = createMockCDCService();
+              const mockCDC = createMockCDCService(engine);
               const service = new TablePolicyService({
                 sqlQueryEngine: engine,
                 cdcIntegrationService: mockCDC,
@@ -238,7 +239,7 @@ test('Property 35: Policy-Driven Automatic Adjustment',
 
               try {
                 await service.updateTablePolicy('table-1', {
-                  replicaCount: evenReplicaCount,
+                  minReplicaCount: evenReplicaCount,
                 });
                 return false;
               } catch (_e) {
@@ -251,8 +252,8 @@ test('Property 35: Policy-Driven Automatic Adjustment',
 
               const currentPolicy =
                 await service.getTablePolicy('table-1');
-              return currentPolicy.replicaCount ===
-                originalPolicy.replicaCount;
+              return currentPolicy.minReplicaCount ===
+                originalPolicy.minReplicaCount;
             },
           ),
           {numRuns: 10},
@@ -267,7 +268,7 @@ test('Property 35: Policy-Driven Automatic Adjustment',
           validTablePolicy,
           async (newPolicy) => {
             const engine = createMutableMockSqlEngine();
-            const mockCDC = createMockCDCService();
+            const mockCDC = createMockCDCService(engine);
             const service = new TablePolicyService({
               sqlQueryEngine: engine,
               cdcIntegrationService: mockCDC,
@@ -299,7 +300,7 @@ test('Property 35: Policy-Driven Automatic Adjustment',
           validTablePolicy,
           async (newPolicy) => {
             const engine = createMutableMockSqlEngine();
-            const mockCDC = createMockCDCService();
+            const mockCDC = createMockCDCService(engine);
             const service = new TablePolicyService({
               sqlQueryEngine: engine,
               cdcIntegrationService: mockCDC,
@@ -317,8 +318,8 @@ test('Property 35: Policy-Driven Automatic Adjustment',
               mockCDC.updates[0].data.table_policies,
             );
 
-            return p.replicaCount ===
-                     newPolicy.replicaCount &&
+            return p.minReplicaCount ===
+                     newPolicy.minReplicaCount &&
                    p.splitStorageThreshold ===
                      newPolicy.splitStorageThreshold &&
                    p.splitTrafficThreshold ===

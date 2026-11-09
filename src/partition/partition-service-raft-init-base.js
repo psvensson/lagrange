@@ -9,12 +9,10 @@ import {
 const PARTITION_REPLICA_INIT_SYNC_SECTION_SITE = 'partition_replica_init';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
-  isBootstrapPeerAdmissible,
-  reconcileRaftPeersFromCacheForService,
   redriveAdmissionsOnMembershipChange,
 } from './partition-service-raft-peer-cache-reconciliation.js';
-import {admitPartitionRaftPeer} from
-  './partition-service-raft-membership-administration.js';
+import {committedPartitionPeerAddress} from
+  './partition-committed-peer-address.js';
 import {
   relayPartitionConsensusObservations,
   wirePartitionRaftLifecycleEvents,
@@ -58,14 +56,9 @@ import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const {
-  AddressManager,
-  CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
-  COLUMN,
   CONFIG_KEY,
   ConfigurationManager,
   Database,
-  ENTITY_TYPE,
-  PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
@@ -76,14 +69,10 @@ const {
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
   RaftRole,
-  ReplicaStatus,
-  SERVICE_TYPE,
-  TABLES,
   assertCritical,
   computeReplicaElectionTimeouts,
   fs,
   path,
-  resolveCanonicalPartitionLeaderObservation,
   resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
 
@@ -109,131 +98,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     }
   }
 
-  /**
-   * Join newly visible peers and replace moved peer addresses using the
-   * authoritative services cache. Missing rows are ignored conservatively.
-   * @private
-   */
-  reconcileRaftPeersFromCache() {
-    reconcileRaftPeersFromCacheForService(this);
-  }
-  /**
-   * Read one system table row from the local cache when present.
-   * @param {string} tableName
-   * @param {Function} predicate
-   * @return {Object|null}
-   * @private
-   */
-  getCachedSystemTableRow(tableName, predicate) {
-    if (!this.systemTableCache || typeof predicate !== 'function') {
-      return null;
-    }
-    if (typeof this.systemTableCache.filter === 'function') {
-      const rows = this.systemTableCache.filter(tableName, predicate);
-      return rows[0] || null;
-    }
-    if (typeof this.systemTableCache.getAll === 'function') {
-      const rows = this.systemTableCache.getAll(tableName) || [];
-      return rows.find(predicate) || null;
-    }
-    return null;
-  }
-  /**
-   * Read matching system table rows from the local cache when present.
-   * @param {string} tableName
-   * @param {Function} predicate
-   * @return {Array<Object>}
-   * @private
-   */
-  getCachedSystemTableRows(tableName, predicate) {
-    if (!this.systemTableCache || typeof predicate !== 'function') {
-      return [];
-    }
-    if (typeof this.systemTableCache.filter === 'function') {
-      return this.systemTableCache.filter(tableName, predicate);
-    }
-    if (typeof this.systemTableCache.getAll === 'function') {
-      const rows = this.systemTableCache.getAll(tableName) || [];
-      return rows.filter(predicate);
-    }
-    return [];
-  }
-  /**
-   * Resolve the current leader replica from canonical owner-row metadata.
-   * Owner rows are the only canonical leader truth for partition routing; if
-   * leader_node_id is missing or stale, fail closed instead of deriving from
-   * services.raft_role.
-   * @return {string|null}
-   * @private
-   */
-  resolveLeaderIdFromMetadata() {
-    const serviceRows = this.getCachedSystemTableRows(
-      TABLES.SERVICES,
-      (service) =>
-        service?.[COLUMN.PARTITION_ID] === this.partitionId &&
-        service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-        service?.[COLUMN.STATUS] !== ReplicaStatus.FAILED &&
-        service?.[COLUMN.STATUS] !== ReplicaStatus.REMOVED,
-    );
-    if (serviceRows.length === 0) {
-      return null;
-    }
-    const resolveLeaderReplicaId = (leaderNodeId) => {
-      if (
-        typeof leaderNodeId !== 'string' ||
-        leaderNodeId.length === 0
-      ) {
-        return null;
-      }
-      const leaderReplica = serviceRows.find(
-        (service) => service?.[COLUMN.NODE_ID] === leaderNodeId,
-      );
-      const leaderReplicaId =
-        leaderReplica?.[COLUMN.REPLICA_ID] ||
-        leaderReplica?.[COLUMN.SERVICE_ID] ||
-        null;
-      return typeof leaderReplicaId === 'string' &&
-        leaderReplicaId.length > 0 ?
-        leaderReplicaId :
-        null;
-    };
-    const partitionRow = this.getCachedSystemTableRow(
-      TABLES.PARTITIONS,
-      (partition) => partition?.[COLUMN.PARTITION_ID] === this.partitionId,
-    );
-    const leaderObservation = resolveCanonicalPartitionLeaderObservation({
-      partition: partitionRow,
-      partitionPresent: partitionRow !== null,
-      serviceRows,
-    });
-    if (
-      leaderObservation?.state !==
-      CANONICAL_PARTITION_LEADER_OBSERVATION_STATE.AVAILABLE
-    ) {
-      return null;
-    }
-    return resolveLeaderReplicaId(leaderObservation?.leaderNodeId);
-  }
-  /**
-   * Seed leader identity from the startup leader-address hint when joining
-   * an already-established group. Stable joins may not observe a fresh Raft
-   * leader-change event before learner promotion needs to run.
-   * @return {string|null}
-   * @private
-   */
-  resolveLeaderIdFromHint() {
-    if (!this.leaderAddressHint) {
-      return null;
-    }
-    try {
-      const parsed = AddressManager.getInstance().parse(this.leaderAddressHint);
-      return parsed.serviceType === ENTITY_TYPE.PARTITION ?
-        parsed.serviceId :
-        null;
-    } catch (_parseErr) {
-      return null;
-    }
-  }
+
   /**
    * Report partition initialization progress stage.
    * @param {string} stage - Initialization stage.
@@ -465,8 +330,9 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
             targetAddress: peerAddress,
           }),
         ),
-      [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]: (address) =>
-        this.buildPeerAddress(address),
+      // Every peer is addressed from its committed node (C3): never a row.
+      [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]:
+        committedPartitionPeerAddress,
       // One committed record per applied entry, inside the transaction
       // that also advances the rs-raft applied state.
       [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: (committed) =>
@@ -537,51 +403,38 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       );
     }
     wirePartitionRaftLifecycleEvents(this, shouldIgnoreDemotionEvent);
-    const totalPeerCount = Math.max(0, this.replicaIds.length - 1);
+    // The peers this replica joins are the ones its opened configuration
+    // names (owner decision O1), each addressed from its committed node by
+    // the port (C3); nothing here reads a row or proposes an admission:
+    // a configured peer is a member already.
+    const configuredPeers = this.raft.readStatus()?.peers || [];
+    const totalPeerCount = configuredPeers.length;
     let joinedPeerCount = 0;
     this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.JOINING_PEERS, {
       peerTotal: totalPeerCount,
       peerJoined: joinedPeerCount,
     });
-    for (const peerId of this.replicaIds) {
-      // A committed member the address book cannot place yet resolves once
-      // discovery catches up; the bootstrap membership, not the address
-      // book, names the members (owner decision O1). A peer whose row has
-      // not recorded its fact is admitted only on that row change (F2).
-      const peerAddress = peerId === this.replicaId ||
-        !isBootstrapPeerAdmissible(this, peerId) ? null :
-        this.resolveKnownPeerAddress(peerId);
-      if (peerAddress !== null) {
-        if (!this.suppressLifecycleLogs) {
-          this.logger.info(PARTITION_SERVICE_LOG_MSG.JOINING_PEER_ADDRESS, {
-            peerId,
-            peerAddress,
-            replicaId: this.replicaId,
-            partitionId: this.partitionId,
-            addressFormat: peerAddress.includes(
-              PARTITION_SERVICE_ADDRESS.SEPARATOR,
-            ) ?
-              PARTITION_SERVICE_ADDRESS.FORMAT_UNIFIED :
-              PARTITION_SERVICE_ADDRESS.FORMAT_SIMPLE,
-          });
-        }
-        // The bootstrap peers are voters of the core's initial
-        // configuration already; the admission owner proposes only on a
-        // leader and only a peer the configuration does not name.
-        admitPartitionRaftPeer(this, {replicaIdentity: peerId, peerAddress});
-        joinedPeerCount += 1;
-        this.reportInitializationStage(
-          PARTITION_SERVICE_INIT_STAGE.JOINED_PEER,
-          {
-            peerId,
-            peerAddress,
-            peerTotal: totalPeerCount,
-            peerJoined: joinedPeerCount,
-          },
-        );
+    for (const peer of configuredPeers) {
+      if (!this.suppressLifecycleLogs) {
+        this.logger.info(PARTITION_SERVICE_LOG_MSG.JOINING_PEER_ADDRESS, {
+          peerId: peer.replicaIdentity,
+          peerAddress: peer.address,
+          addressStatus: peer.addressStatus,
+          replicaId: this.replicaId,
+          partitionId: this.partitionId,
+        });
       }
+      joinedPeerCount += 1;
+      this.reportInitializationStage(
+        PARTITION_SERVICE_INIT_STAGE.JOINED_PEER,
+        {
+          peerId: peer.replicaIdentity,
+          peerAddress: peer.address,
+          peerTotal: totalPeerCount,
+          peerJoined: joinedPeerCount,
+        },
+      );
     }
-    this.reconcileRaftPeersFromCache();
     this.maybeInitializeRebalancer();
     // A lone replica below its participation gate (a restore that has not
     // replayed to its gate) does not campaign; its scheduling is armed for

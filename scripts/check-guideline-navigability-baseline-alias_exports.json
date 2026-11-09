@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-08T12:15:36.639Z",
-  "rawViolationCount": 40,
+  "generatedAt": "2026-11-09T06:33:39.122Z",
+  "rawViolationCount": 38,
   "violations": [
     {
       "filePath": "src/admin/admin-websocket-api-composition.js",
@@ -58,26 +58,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/control-plane/control-plane-readiness-publication-aware.js",
-      "line": 41,
-      "column": 2,
-      "functionName": "<anonymous>",
-      "kind": "alias_exports",
-      "reason": "alias export; import the original name directly",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service.js",
-      "line": 10,
-      "column": 2,
-      "functionName": "<anonymous>",
-      "kind": "alias_exports",
-      "reason": "alias export; import the original name directly",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/control-plane/membership-publication-coordinator-queue.js",
-      "line": 684,
+      "line": 671,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "alias_exports",
@@ -86,7 +68,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-priority-partition-canonical-data.js",
-      "line": 356,
+      "line": 358,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "alias_exports",
@@ -95,7 +77,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-priority-partition-canonical-data.js",
-      "line": 357,
+      "line": 359,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "alias_exports",
@@ -257,7 +239,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-membership-transition.js",
-      "line": 193,
+      "line": 194,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "alias_exports",
@@ -266,7 +248,7 @@
     },
     {
       "filePath": "src/rebalancer/index.js",
-      "line": 36,
+      "line": 35,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "alias_exports",

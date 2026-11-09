@@ -16,11 +16,9 @@ const POLICY_EVENT = Object.freeze({
 
 const POLICY_LOG_MSG = Object.freeze({
   TABLE_POLICY_INITIALIZED: 'TablePolicyService initialized',
-  TABLE_NOT_FOUND_DEFAULT: 'Table not found, using default policy',
-  PARTITION_NOT_FOUND_DEFAULT: 'Partition not found, using default policy',
   MESSAGE_GROUP_NOT_FOUND_DEFAULT:
     'Message group not found, using default policy',
-  POLICY_PARSE_FAILED: 'Failed to parse table policy, using defaults',
+  POLICY_PARSE_FAILED: 'Failed to parse policy',
   UPDATE_TABLE_POLICY: 'Updating table policy',
   UPDATE_TABLE_POLICY_FAILED: 'Failed to update table policy',
   POLICY_CACHE_CLEARED: 'Policy cache cleared',
@@ -33,9 +31,41 @@ const POLICY_LOG_MSG = Object.freeze({
 const POLICY_ERROR_CODE = Object.freeze({
   TABLE_ID_REQUIRED: 'TABLE_ID_REQUIRED',
   POLICY_INVALID: 'TABLE_POLICY_INVALID',
+  TARGET_UPDATE_UNSUPPORTED: 'TABLE_POLICY_TARGET_UPDATE_UNSUPPORTED',
+  READ_UNAVAILABLE: 'TABLE_POLICY_READ_UNAVAILABLE',
   OBSERVATION_CHANGED: 'TABLE_POLICY_MUTATION_OBSERVATION_CHANGED',
   OUTCOME_UNCONFIRMED: 'TABLE_POLICY_MUTATION_OUTCOME_UNCONFIRMED',
+  // No committed base for the conditional policy write could be read.
+  BASE_UNAVAILABLE: 'TABLE_POLICY_BASE_UNAVAILABLE',
 });
+
+const POLICY_AUTHORITY_STATE = Object.freeze({
+  AUTHORITATIVE_POLICY: 'authoritative_policy',
+  AUTHORITATIVE_ABSENCE: 'authoritative_absence',
+  UNAVAILABLE_OR_STALE: 'unavailable_or_stale',
+});
+
+const POLICY_READ_REASON = Object.freeze({
+  TABLE_UNAVAILABLE: 'table_unavailable',
+  TABLE_ABSENT: 'table_absent',
+  PARTITION_UNAVAILABLE: 'partition_unavailable',
+  PARTITION_ABSENT: 'partition_absent',
+  MESSAGE_GROUP_UNAVAILABLE: 'message_group_unavailable',
+  MESSAGE_GROUP_ABSENT: 'message_group_absent',
+  TARGET_UNDECLARED: 'partition_target_undeclared',
+  MESSAGE_GROUP_TARGET_UNDECLARED: 'message_group_target_undeclared',
+  POLICY_INVALID: 'policy_invalid',
+  TARGET_INVALID: 'policy_target_invalid',
+  MINIMUM_INVALID: 'policy_minimum_invalid',
+  OWNER_UNAVAILABLE: 'policy_owner_unavailable',
+  READ_FAILED: 'policy_read_failed',
+  STALE_EVIDENCE: 'policy_evidence_stale',
+  UNSUPPORTED_ENTITY_TYPE: 'unsupported_entity_type',
+});
+
+const TABLE_POLICY_TARGET_FIELDS = Object.freeze([
+  'replicaCount', 'targetReplicaCount',
+]);
 
 const POLICY_ERROR_MSG = Object.freeze({
   SERVICE_ID_REQUIRED: 'serviceId is required',
@@ -45,13 +75,17 @@ const POLICY_ERROR_MSG = Object.freeze({
   INVALID_RAFT_ROLE_PREFIX: 'Invalid Raft role: ',
   INVALID_POLICY_PREFIX: 'Invalid policy: ',
   INVALID_MERGED_POLICY_PREFIX: 'Invalid merged policy: ',
+  POLICY_OBJECT_REQUIRED: 'Table policy must be an object',
+  TARGET_UPDATE_UNSUPPORTED:
+    'Table policy cannot set replication targets; partitions declare their targets',
+  fieldFiniteRequired: (field) => `${field} must be finite`,
   fieldTypeMismatch: (field, expectedType, actualType) =>
     `${field} must be ${expectedType}, got ${actualType}`,
   REPLICA_COUNT_MIN: 'replicaCount must be at least 1',
   REPLICA_COUNT_ODD: 'replicaCount must be odd for Raft quorum',
-  MIN_REPLICA_COUNT_MIN: 'minReplicaCount must be at least 1',
+  MIN_REPLICA_COUNT_MIN: 'minReplicaCount must be a positive safe integer',
   MIN_REPLICA_COUNT_ODD: 'minReplicaCount must be odd for Raft quorum',
-  MAX_REPLICA_COUNT_MIN: 'maxReplicaCount must be at least 1',
+  MAX_REPLICA_COUNT_MIN: 'maxReplicaCount must be a positive safe integer',
   MAX_REPLICA_COUNT_ODD: 'maxReplicaCount must be odd for Raft quorum',
   MIN_GT_MAX: 'minReplicaCount cannot be greater than maxReplicaCount',
   REPLICA_BETWEEN: 'replicaCount must be between minReplicaCount and maxReplicaCount',
@@ -66,7 +100,6 @@ const POLICY_ERROR_MSG = Object.freeze({
 });
 
 const POLICY_DEFAULT = Object.freeze({
-  REPLICA_COUNT: NUM.THREE,
   MIN_REPLICA_COUNT: NUM.THREE,
   MAX_REPLICA_COUNT: NUM.SEVEN,
   BYTES_PER_GIB: NUM.BYTES_PER_MIB * NUM.BYTES_PER_KIB,
@@ -78,7 +111,6 @@ const POLICY_DEFAULT = Object.freeze({
 });
 
 const DEFAULT_TABLE_POLICY = Object.freeze({
-  replicaCount: POLICY_DEFAULT.REPLICA_COUNT,
   minReplicaCount: POLICY_DEFAULT.MIN_REPLICA_COUNT,
   maxReplicaCount: POLICY_DEFAULT.MAX_REPLICA_COUNT,
   splitStorageThreshold: POLICY_DEFAULT.SPLIT_STORAGE_GIB * POLICY_DEFAULT.BYTES_PER_GIB,
@@ -116,7 +148,6 @@ const DEFAULT_MESSAGE_GROUP_POLICY = Object.freeze({
 });
 
 const POLICY_FIELD_TYPES = Object.freeze({
-  replicaCount: TYPEOF.NUMBER,
   minReplicaCount: TYPEOF.NUMBER,
   maxReplicaCount: TYPEOF.NUMBER,
   splitStorageThreshold: TYPEOF.NUMBER,
@@ -141,14 +172,17 @@ export {
   DEFAULT_MESSAGE_GROUP_POLICY,
   DEFAULT_TABLE_POLICY,
   MESSAGE_GROUP_POLICY_FIELD_TYPES,
+  POLICY_AUTHORITY_STATE,
   POLICY_DEFAULT,
   POLICY_ERROR_CODE,
   POLICY_ERROR_MSG,
   POLICY_EVENT,
   POLICY_FIELD_TYPES,
   POLICY_LOG_MSG,
+  POLICY_READ_REASON,
   POLICY_SUBSYSTEM,
   POLICY_VALUE,
   RAFT_ROLE,
   STRING,
+  TABLE_POLICY_TARGET_FIELDS,
 };

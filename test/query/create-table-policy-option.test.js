@@ -9,6 +9,7 @@ import {canonicalizeSchemaProvisioningIntent} from
 import {TableCreationService} from
   '../../src/query/table-creation-service.js';
 import {CDC_TABLE_POLICY_REFUSAL} from '../../src/cache/cdc-table-policy.js';
+import {POLICY_ERROR_CODE} from '../../src/policy/policy-constants.js';
 
 const SPLIT_STORAGE_THRESHOLD_BYTES = 1048576;
 const CREATE_WITH_POLICY_SQL =
@@ -120,7 +121,7 @@ test('CREATE TABLE validates programmatic table-policy options before writes',
 
     await t.rejects(
       service.executeCreateTableProvisioning(ast),
-      /Invalid CREATE TABLE policy/,
+      {code: POLICY_ERROR_CODE.POLICY_INVALID},
     );
     t.equal(submittedMutations.length, 0,
       'invalid policy cannot partially persist table or partition metadata');

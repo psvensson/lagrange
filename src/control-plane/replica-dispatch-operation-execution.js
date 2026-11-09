@@ -13,6 +13,12 @@ import {
 import {
   REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS,
 } from './replica-dispatch-reconcile-callbacks.js';
+import {
+  STORAGE_RESERVATION_AUTHORITY_ERROR,
+} from '../rebalancer/storage-reservation-authority.js';
+import {
+  STALE_DISPATCH_EPOCH_PREFIX,
+} from '../rebalancer/operation-workflow-dispatch-epoch-gate.js';
 
 const {
   ControlPlaneField,
@@ -191,6 +197,8 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
     }
 
     const targetNodeId = row.target_node_id;
+    // The row's step every dispatch-failure record of this attempt names.
+    const rowWorkflowStep = row.workflow_step || null;
     const rowOperation = this.buildOperationFromRow(row);
     const dispatchReadiness = await this.captureDispatchReadiness(
       rowOperation,
@@ -204,7 +212,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
       this.recordDispatchFailure({
         operationId,
         targetNodeId,
-        workflowStep: row.workflow_step || null,
+        workflowStep: rowWorkflowStep,
         skipped: true,
         reason:
           DISPATCH_READINESS_ERROR_REASON.TARGET_NODE_READINESS_REFRESH_FAILED,
@@ -231,7 +239,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
       this.recordDispatchFailure({
         operationId,
         targetNodeId,
-        workflowStep: row.workflow_step || null,
+        workflowStep: rowWorkflowStep,
         skipped: true,
         reason: REPLICA_DISPATCH_SERVICE_LITERAL.TARGET_NODE_NOT_READY,
         error: readinessError.message,
@@ -311,6 +319,22 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
       }
 
       if (!dispatchResult || dispatchResult.success !== true) {
+        if (this.isTerminalDispatchResult(dispatchResult)) {
+          this.clearDeferredOperationDispatchRetry(operationId);
+          this.dispatchFailureSignaturesByOperationId.delete(operationId);
+          this.recordDispatchFailure({
+            operationId,
+            targetNodeId,
+            workflowStep: rowWorkflowStep,
+            skipped: dispatchResult?.skipped === true,
+            reason:
+              dispatchResult?.reason ||
+              REPLICA_DISPATCH_SERVICE_LITERAL.DISPATCH_UNSUCCESSFUL,
+            error: dispatchResult?.error || null,
+            readinessSnapshot: dispatchReadiness.snapshot,
+          });
+          return;
+        }
         if (
           dispatchResult?.reason ===
           REPLICA_DISPATCH_SERVICE_LITERAL.DEFERRED_RETRY_PENDING
@@ -367,7 +391,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
         this.recordDispatchFailure({
           operationId,
           targetNodeId,
-          workflowStep: row.workflow_step || null,
+          workflowStep: rowWorkflowStep,
           skipped: dispatchResult?.skipped === true,
           reason:
             dispatchResult?.reason ||
@@ -397,6 +421,31 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
       this.dispatchInFlight.delete(operationId);
       this.priorityDispatchInFlight.delete(operationId);
     }
+  }
+
+  /**
+   * Whether one unsuccessful dispatch outcome is an authoritative terminal state
+   * that must not be retried.
+   *
+   * @param {Object|null} dispatchResult
+   * @return {boolean}
+   * @private
+   */
+  isTerminalDispatchResult(dispatchResult) {
+    if (dispatchResult?.terminal === true) {
+      return true;
+    }
+    const error = typeof dispatchResult?.error === 'string' ?
+      dispatchResult.error :
+      null;
+    if (!error) {
+      return false;
+    }
+    return (
+      error.includes(
+        STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_TERMINAL,
+      ) || error.startsWith(STALE_DISPATCH_EPOCH_PREFIX)
+    );
   }
 
   /**

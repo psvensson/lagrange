@@ -9,6 +9,11 @@ import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  isCatchupLearnerRaftRole,
+  isExplicitNonLeaderRaftRole,
+  isVoterRaftRole,
+} from '../raft/replica-voter-readiness.js';
 
 const {
   AuthoritativeRowMutationHelper,
@@ -19,6 +24,7 @@ const {
   SERVICE_TYPE,
   SYSTEM_TABLE_NAME,
   TABLES,
+  normalizePublishedRaftRole,
 } = PARTITION_SERVICE_SHARED;
 
 // Loudness terminal for the leader-row publication (quest
@@ -32,6 +38,37 @@ const LEADER_PUBLICATION_RETRY_BUDGET_WAIT = Object.freeze({
   wait: 'LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS',
   awaited: 'durable partitions.leader_node_id publication accepted',
 });
+
+function resolveComparableLiveRole(targetRole, liveRole) {
+  if (typeof liveRole !== 'string' || liveRole.length === 0) {
+    return null;
+  }
+  if (
+    isVoterRaftRole(targetRole) &&
+    !isExplicitNonLeaderRaftRole(targetRole)
+  ) {
+    return liveRole;
+  }
+  return normalizePublishedRaftRole(liveRole, {
+    collapseLeaderToFollower: true,
+  });
+}
+
+function isMismatchedLiveRole(role, liveRole) {
+  const comparableLiveRole = resolveComparableLiveRole(role, liveRole);
+  return typeof role === 'string' &&
+    role.length > 0 &&
+    typeof comparableLiveRole === 'string' &&
+    comparableLiveRole.length > 0 &&
+    role !== comparableLiveRole;
+}
+
+function isStaleRoleFlushForLiveRole(role, liveRole) {
+  return Boolean(
+    (isCatchupLearnerRaftRole(role) && isVoterRaftRole(liveRole)) ||
+    isMismatchedLiveRole(role, liveRole),
+  );
+}
 
 function hasAuthoritativeReadOwner(gateway) {
   if (
@@ -231,11 +268,21 @@ function createRoleMutationHelper(owner) {
     }),
     buildUpdateOptions: () => buildRoleMutationDeliveryOptions(owner),
     buildExpectedCacheFields: (role) => ({raft_role: role}),
-    prepareFlush: () => ({
-      skip: false,
-      clearPending: false,
-      reason: PARTITION_SERVICE_LITERAL.READY,
-    }),
+    prepareFlush: ({pendingValue, flushingValue} = {}) => {
+      const targetRole = flushingValue ?? pendingValue;
+      const liveRole = owner.role || null;
+      const staleRoleFlush = isStaleRoleFlushForLiveRole(targetRole, liveRole);
+      return {
+        skip: staleRoleFlush,
+        clearPending:
+          staleRoleFlush && isStaleRoleFlushForLiveRole(pendingValue, liveRole),
+        reason: staleRoleFlush ?
+          PARTITION_SERVICE_LITERAL.NOT_OWNER :
+          PARTITION_SERVICE_LITERAL.READY,
+      };
+    },
+    readLiveValue: (expectedRole) =>
+      resolveComparableLiveRole(expectedRole, owner.role),
     readRowFromCache: (systemTableCache) =>
       systemTableCache?.get?.(TABLES.SERVICES, owner.replicaId) || null,
     readValueFromCache: (systemTableCache) => {

@@ -1,3 +1,6 @@
+import {readCommittedNodeFloor} from './operation-workflow-committed-node-floor.js';
+import {noteReplaceOwnerObservedReplicaRows} from './operation-workflow-replace-owner-wake.js';
+import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
   evaluateProjectedPeersContactable,
@@ -20,6 +23,7 @@ const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   PRIORITY_RECOVERY_COMPLETION_STATE,
+  REBALANCE_COORDINATOR_DEFER_REASON,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
   REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   REMOVE_SAFETY_READINESS_DIMENSION,
@@ -512,13 +516,33 @@ async function evaluateRemoveSafety(context, operation) {
     !Array.isArray(criticalReplicaRows) ||
     criticalReplicaRows.length === 0
   ) {
-    return context.buildFailedRemoveSafetyEvaluation(
+    const errorMessage =
       `Critical partition ${operation.partitionId}` +
-        OPERATION_WORKFLOW_OWNER_LITERAL.SAFETY_CHECK_UNAVAILABLE,
+      OPERATION_WORKFLOW_OWNER_LITERAL.SAFETY_CHECK_UNAVAILABLE;
+    if (criticalReplicaRows?.authoritativeReadAvailable === false) {
+      return context.buildDeferredRemoveSafetyEvaluation(
+        errorMessage,
+        operation.type === OperationType.REPLACE ?
+          REBALANCE_COORDINATOR_DEFER_REASON.REPLACE_REMOVE_SAFETY_BLOCKED :
+          REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED,
+      );
+    }
+    return context.buildFailedRemoveSafetyEvaluation(errorMessage);
+  }
+  noteReplaceOwnerObservedReplicaRows(context, operation, criticalReplicaRows);
+
+  const committedNodeFloor = await readCommittedNodeFloor(context, criticalReplicaRows);
+  if (committedNodeFloor.state !== SERVE_ELIGIBILITY_STATE.READY) {
+    return context.buildDeferredRemoveSafetyEvaluation(
+      `Partition ${operation.partitionId} committed node authority unavailable: ` +
+        committedNodeFloor.reason,
+      operation.type === OperationType.REPLACE ?
+        REBALANCE_COORDINATOR_DEFER_REASON.REPLACE_REMOVE_SAFETY_BLOCKED :
+        REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED,
     );
   }
-
   const removeSafetyReadiness = {
+    committedNodeFloor,
     partitionId: operation.partitionId,
     decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
     participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
@@ -732,11 +756,8 @@ async function evaluateRemoveSafety(context, operation) {
     return peerPingGuard;
   }
 
-  if (priorityPublicationLeaderRemoveSafetyEvaluation) {
-    return priorityPublicationLeaderRemoveSafetyEvaluation;
-  }
-
-  return context.buildSafeRemoveSafetyEvaluation();
+  return priorityPublicationLeaderRemoveSafetyEvaluation ||
+    context.buildSafeRemoveSafetyEvaluation();
 }
 
 export {

@@ -348,11 +348,11 @@ test('registerNodeBudget - forwards write options to the registration ' +
 
   await service.registerNodeBudget({
     nodeRow: buildNodeRow(),
-    upsertOptions: {skipCacheWait: true},
+    upsertOptions: {},
   });
 
   assert.equal(mutationCalls.length, 1);
-  assert.equal(mutationCalls[0].options.skipCacheWait, true);
+  assert.equal('skipCacheWait' in mutationCalls[0].options, false);
   assert.equal(
     mutationCalls[0].options.workloadClass,
     CONTROL_PLANE_WORKLOAD_CLASS.NODE_METADATA_MUTATION,

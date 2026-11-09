@@ -97,7 +97,6 @@ function buildCoordinator(nodeId) {
       return [];
     }},
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
         return {success: true, rows: [], affectedRows: 0};
       },
@@ -113,7 +112,7 @@ function buildCoordinator(nodeId) {
     },
     sqlQueryEngine: {executeQuery: noopQuery},
     tablePolicyService: {async getPolicyForPartition() {
-      return {minReplicaCount: 1};
+      return {targetReplicaCount: 3, minReplicaCount: 1};
     }},
     storageAccountingService: {estimateReplicaBytes() {
       return 1024;
@@ -121,7 +120,9 @@ function buildCoordinator(nodeId) {
     messageRouter: {async deliver() {
       return buildDeliveryEnvelope({acknowledged: true});
     }, on() {}, removeListener() {}},
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     setTimeoutFn() {
       return {};

@@ -500,7 +500,9 @@ export function buildReplicaInventorySnapshot(options = {}) {
     REPLICA_INVENTORY_OBSERVATION_STATE.UNAVAILABLE,
   ];
   const sourceUnavailable = unavailableStates.includes(committedState) ||
-    unavailableStates.includes(operationState);
+    unavailableStates.includes(operationState) ||
+    (Boolean(operationObservation.deferredOutcome) &&
+      operationState !== REPLICA_INVENTORY_OBSERVATION_STATE.BOUNDED_USABLE);
   const skewExceeded = observedAtSkewMs !== null &&
     observedAtSkewMs > maxObservedAtSkewMs;
   const hasConflict = anomalies.some((anomaly) =>

@@ -406,16 +406,12 @@ test('Property 4: Peer addresses use unified format', async (t) => {
             return false;
           }
 
-          // Property: buildPeerAddress should return unified format for known peers
-          const peerAddress = partition.buildPeerAddress(otherReplicaId);
-          if (!peerAddress.includes('/partition/')) {
-            return false;
-          }
-
-          // Property: buildPeerAddress should preserve already-unified addresses
-          const alreadyUnified = `${nodeId}/partition/${otherReplicaId}`;
-          const preserved = partition.buildPeerAddress(alreadyUnified);
-          if (preserved !== alreadyUnified) {
+          // Property: every configured peer is addressed on the node its
+          // founding stamp committed, in the unified format.
+          const peer = partition.raft.readStatus().peers.find((entry) =>
+            entry.replicaIdentity === otherReplicaId);
+          if (peer && peer.address !==
+              `${nodeId}/partition/${otherReplicaId}`) {
             return false;
           }
 

@@ -60,14 +60,29 @@ function stampDefect(defect) {
     `raft-rs bootstrap membership refused: ${defect}`), {defect, consensus});
 }
 
+// Record each identity's committed node the stamp carries. A node the
+// registry already holds otherwise is a stamp contradicting a committed fact.
+function recordStampNodeIds(registry, nodeIdsByIdentity) {
+  try {
+    registry.recordCommittedNodeIds(nodeIdsByIdentity);
+  } catch {
+    throw stampDefect(COMMITTED_MEMBERSHIP_STAMP_DEFECT.IDENTITY_MISMATCH);
+  }
+}
+
 function committedBootstrap(membership, registry, peerId) {
-  const identities = membership.identities || {};
+  const identities = membership.identities;
+  const nodeIds = [];
   for (const [raftPeerId, replicaIdentity] of Object.entries(identities)) {
     if (typeof replicaIdentity !== 'string' ||
         registry.registerReplica(replicaIdentity) !== String(raftPeerId)) {
       throw stampDefect(COMMITTED_MEMBERSHIP_STAMP_DEFECT.IDENTITY_MISMATCH);
     }
+    if (membership.nodeIds[raftPeerId] !== null) {
+      nodeIds.push([replicaIdentity, membership.nodeIds[raftPeerId]]);
+    }
   }
+  recordStampNodeIds(registry, nodeIds);
   const voters = (membership.voters || []).map(String);
   const learners = (membership.learners || []).map(String);
   const self = String(peerId);
@@ -124,10 +139,12 @@ function bootstrapOfRequest({membership, registry, peerId,
     return Object.freeze({...committedBootstrap(canonical, registry, peerId),
       identityExisted: existed});
   }
+  const voters = canonical.founders.map((identity) =>
+    registry.registerReplica(identity));
+  recordStampNodeIds(registry, Object.entries(canonical.founderNodeIds));
   return Object.freeze({
     source: canonical.kind,
-    voters: canonical.founders.map((identity) =>
-      registry.registerReplica(identity)),
+    voters,
     learners: [],
     bootstrapIndex: GENESIS_BOOTSTRAP_INDEX,
     membershipGenerationIndex: GENESIS_BOOTSTRAP_INDEX,

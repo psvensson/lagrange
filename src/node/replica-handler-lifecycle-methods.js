@@ -26,6 +26,8 @@ import {PARTICIPANT_RELEASE_ACTION, PARTICIPANT_RELEASE_RESULT_FIELD,
 import {captureParticipantReleaseDispatch, receiveParticipantRelease} from
   './replica-handler-participant-release.js';
 import {runParticipantCutover} from './replica-handler-participant-cutover.js';
+import {claimTerminalFailedCreateTargetCleanup} from
+  './replica-handler-failed-create-publication.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const CREATE_ADMISSION_RECOVERY_NOT_STARTED = false;
@@ -63,6 +65,8 @@ async function dispatchReplicaMessage(handler, type, payload) {
     return handler.handleRetireReplicaPeer(payload);
   case ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP:
     return handler.handleReadCommittedMembership(payload);
+  case ReplicaOperationMessageType.CLAIM_FAILED_CREATE_CLEANUP:
+    return handler.handleClaimFailedCreateCleanup(payload);
   default:
     return handler.buildReplicaOperationResponse(
       ReplicaOperationResponseStatus.ERROR,
@@ -127,6 +131,10 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
       if (this.replicaCreateAdmissionRecoveryBarrier) {
         await this.replicaCreateAdmissionRecoveryBarrier;
       }
+    }
+
+    async handleClaimFailedCreateCleanup(payload) {
+      return claimTerminalFailedCreateTargetCleanup(this, payload);
     }
     /**
      * Handle incoming message (called by message router).

@@ -259,7 +259,7 @@ test('drain order: a configuration change dropped in a transfer window is ' +
     const delivered = await pendingInTransferWindow(driver);
     const {answer, entries} = await turn(driver, () =>
       turnChainValue(driver.port(A).proposeConfChange({
-        type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D})));
+        type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D, nodeId: 'node-test'})));
     assertTransferInProgress(answer);
     assertDecidedAfterDrain(entries, delivered,
       {effect: EFFECT.REFUSED_PROPOSAL, operation: CORE.PROPOSE_CONF_CHANGE});

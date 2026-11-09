@@ -176,7 +176,7 @@ test('a membership admission during a leadership transfer is DEFERRED, ' +
     const joining = 'transfer-admission-joiner';
     reservePartitionRaftPeerIdentity(leader, joining);
     const admission = admitPartitionRaftPeer(leader, {
-      replicaIdentity: joining, peerAddress: `node-9/partition/${joining}`});
+      replicaIdentity: joining, nodeId: 'node-9'});
     const settled = admission.settled ? await admission.settled : admission;
     assert.equal(settled.outcome, RAFT_MEMBERSHIP_ADMISSION_OUTCOME.DEFERRED,
       `the admission waits out the transfer (${JSON.stringify(settled)})`);

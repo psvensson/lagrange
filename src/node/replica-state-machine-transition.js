@@ -20,6 +20,7 @@ import {
   nextLifecycleStateEntry,
   observeAuthoritativeReplicaLifecycle,
   readAuthoritativeReplicaLifecycle,
+  resolvePreservedReplicaRaftRole,
   resolveReplicaCreateGroupId,
   rowMatchesReplicaLifecycle,
 } from './replica-state-machine-lifecycle-observation.js';
@@ -592,49 +593,43 @@ async function updateReplicaStateInCdc(
   }
 }
 
+function isMatchingActiveSibling(
+  other,
+  currentReplicaId,
+  targetPartitionId,
+  targetNodeId,
+) {
+  if (!other) {
+    return false;
+  }
+  const otherReplicaId = other.replicaId || other.serviceId;
+  if (otherReplicaId === currentReplicaId ||
+      other.partitionId !== targetPartitionId ||
+      other.nodeId !== targetNodeId) {
+    return false;
+  }
+  const isLeader = other.isLeader === true || other.role === 'leader';
+  return RETAINS_CANONICAL_PARTITION_LEADER_SERVICE_STATES.has(other.state) || isLeader;
+}
+
 /**
  * @param {ReplicaStateMachine} stateMachine - Owning state machine instance.
  * @param {Object|null} replicaState - Replica state to inspect.
  * @return {boolean}
  */
 function hasOtherActivePartitionReplicaOnLeaderNode(stateMachine, replicaState) {
-  if (!replicaState ||
-      !stateMachine.systemTableCache ||
-      typeof stateMachine.systemTableCache.filter !== 'function') {
+  if (!replicaState || !stateMachine?.replicas) {
     return false;
   }
-
   const currentReplicaId = replicaState.replicaId || replicaState.serviceId;
-  const siblingServices = stateMachine.systemTableCache.filter(
-    TABLES.SERVICES,
-    (service) => {
-      if (!service) {
-        return false;
-      }
-      const serviceType = service.service_type || service.serviceType;
-      if (serviceType !== SERVICE_TYPE.PARTITION) {
-        return false;
-      }
-      const partitionId = service.partition_id || service.partitionId;
-      if (partitionId !== replicaState.partitionId) {
-        return false;
-      }
-      const nodeId = service.node_id || service.nodeId;
-      if (nodeId !== replicaState.nodeId) {
-        return false;
-      }
-      const replicaId =
-        service.replica_id || service.replicaId || service.service_id;
-      if (replicaId === currentReplicaId) {
-        return false;
-      }
-      const status = service.status;
-      return RETAINS_CANONICAL_PARTITION_LEADER_SERVICE_STATES.has(status);
-    },
-  );
-
-  return Array.isArray(siblingServices) &&
-    siblingServices.length > REPLICA_STATE_MACHINE_NUM.ZERO;
+  const targetPartitionId = replicaState.partitionId;
+  const targetNodeId = replicaState.nodeId;
+  for (const other of stateMachine.replicas.values()) {
+    if (isMatchingActiveSibling(other, currentReplicaId, targetPartitionId, targetNodeId)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -658,12 +653,12 @@ function armTimeoutClock(stateMachine, replicaId) {
 
 /**
  * Build CDC payload for updating an existing services row.
- * @param {ReplicaStateMachine} stateMachine - Owning state machine instance.
  * @param {Object} replicaState - Replica state snapshot.
  * @param {string|null} previousState - Previous state value.
+ * @param {ReplicaStateMachine|null} [stateMachine] - Owning state machine instance.
  * @return {Object} Partial services-row update payload.
  */
-function buildUpdateCdcData(replicaState, previousState) {
+function buildUpdateCdcData(replicaState, previousState, stateMachine = null) {
   const durableUpdatedAt = Number.isFinite(replicaState.durableUpdatedAt) ?
     replicaState.durableUpdatedAt : replicaState.stateEnteredAt;
   const cdcData = {
@@ -678,7 +673,12 @@ function buildUpdateCdcData(replicaState, previousState) {
   if (replicaState.errorMessage) {
     cdcData.error_message = replicaState.errorMessage;
   }
-
+  const serviceId = replicaState.serviceId || replicaState.replicaId;
+  const preservedVoterRole = resolvePreservedReplicaRaftRole(
+    stateMachine, replicaState, serviceId, {voterOnly: true});
+  if (preservedVoterRole) {
+    cdcData.raft_role = preservedVoterRole;
+  }
   return cdcData;
 }
 
@@ -706,22 +706,11 @@ function buildCreateCdcData(
   // spread recovery (exclusionReasonCounts = raft_role_missing on every
   // blocked partition; the mode=load ACTIVE-wait root). Preserve them from
   // the cached row when present.
-  const cachedRow =
-    typeof stateMachine.systemTableCache?.get === 'function' ?
-      stateMachine.systemTableCache.get(TABLES.SERVICES, serviceId) :
-      null;
-  const preservedColumns = {};
-  if (
-    typeof cachedRow?.raft_role === 'string' &&
-    cachedRow.raft_role.length > 0
-  ) {
-    preservedColumns.raft_role = cachedRow.raft_role;
-  }
+  const preservedRole = resolvePreservedReplicaRaftRole(
+    stateMachine, replicaState, serviceId, {voterOnly: false});
+  const preservedColumns = preservedRole ? {raft_role: preservedRole} : {};
   const groupId = resolveReplicaCreateGroupId(
-    stateMachine,
-    replicaState,
-    serviceId,
-  );
+    stateMachine, replicaState, serviceId);
   return {
     ...preservedColumns,
     ...stateMachine._buildUpdateCdcData(replicaState, null),
@@ -752,7 +741,6 @@ function buildCdcPersistenceOptions(replicaState, serviceId) {
     coalescingKey: `replica-state:${serviceId}`,
     deliveryPriority: backgroundWrite ? LOCAL_STR_BACKGROUND : LOCAL_STR_CRITICAL,
     workClass: backgroundWrite ? LOCAL_STR_BACKGROUND : LOCAL_STR_CRITICAL,
-    skipCacheWait: true,
   };
 }
 

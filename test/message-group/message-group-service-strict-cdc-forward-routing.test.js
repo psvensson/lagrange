@@ -152,7 +152,15 @@ test(
     }));
 
     service.initialized = true;
-    service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+    service.raft = reportingConsensusPort({
+      role: RaftRole.FOLLOWER,
+      groupId: TEST_STRICT_RECOVERY_FORWARD_GROUP_ID,
+      replicaIdentity: TEST_STRICT_RECOVERY_FORWARD_LOCAL_REPLICA_ID,
+      peers: [{
+        replicaIdentity: TEST_STRICT_RECOVERY_FORWARD_REMOTE_REPLICA_ID,
+        address: TEST_STRICT_RECOVERY_FORWARD_REMOTE_ADDRESS,
+      }],
+    });
     service.leaderId = TEST_STRICT_RECOVERY_FORWARD_LEADER_REPLICA_ID;
     service.cdcIntegrationService = {
       canWriteSystemTableLocally() {
@@ -515,6 +523,15 @@ test(
       let repairCalls = 0;
       let deliveredAddress = null;
       let deliveredOptions = null;
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: 'mg-forward-repair',
+        replicaIdentity: 'mg-forward-repair-r3',
+        peers: [{
+          replicaIdentity: 'mg-forward-repair-r1',
+          address: 'peer-node-a/message-group/mg-forward-repair-r1',
+        }],
+      });
       service.resolveCDCForwardSelection = () => {
         selectionCalls += 1;
         if (selectionCalls === 1) {
@@ -661,7 +678,15 @@ test(
         reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
       });
       service.initialized = true;
-      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: TEST_ADDRESSED_STRICT_CONVERGENCE_GROUP_ID,
+        replicaIdentity: TEST_ADDRESSED_STRICT_CONVERGENCE_LOCAL_REPLICA_ID,
+        peers: [{
+          replicaIdentity: TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_REPLICA_ID,
+          address: TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_ADDRESS,
+        }],
+      });
       service.leaderId =
         TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_REPLICA_ID;
       service.transport.getConnectionState = (candidateNodeId) => {
@@ -797,7 +822,15 @@ test(
         reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
       });
       service.initialized = true;
-      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: TEST_ADDRESSED_STRICT_CONVERGENCE_GROUP_ID,
+        replicaIdentity: TEST_ADDRESSED_STRICT_CONVERGENCE_LOCAL_REPLICA_ID,
+        peers: [{
+          replicaIdentity: TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_REPLICA_ID,
+          address: TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_ADDRESS,
+        }],
+      });
       service.leaderId =
         TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_REPLICA_ID;
       service.transport.getConnectionState = (candidateNodeId) => {
@@ -962,6 +995,15 @@ test('MessageGroupService - missing handler logs bounded transport diagnostics',
     service.logger.warn = (msg, fields) => {
       warningLogs.push({msg, fields});
     };
+    service.raft = reportingConsensusPort({
+      role: RaftRole.FOLLOWER,
+      groupId: 'mg-forward-diag',
+      replicaIdentity: 'mg-forward-diag-r1',
+      peers: [{
+        replicaIdentity: 'mg-forward-diag-r2',
+        address: 'remote-node/message-group/mg-forward-diag-r2',
+      }],
+    });
     service.resolveCDCForwardSelection = () => ({
       strictForwarding: true,
       strictForwardRetryAfterMs: 275,
@@ -1009,150 +1051,38 @@ test('MessageGroupService - missing handler logs bounded transport diagnostics',
       'warning should preserve strict forwarding retry-after');
   });
 
-test('MessageGroupService - buildPeerAddress follows cache updates after relocation', async (t) => {
-  const {router, nodeId, cleanup} = await createTestTransport();
-  try {
-    const peerId = 'mg-1-r2';
-    const initialAddress = 'peer-node-a/message-group/mg-1-r2';
-    const relocatedAddress = 'peer-node-b/message-group/mg-1-r2';
-
-    const service = new MessageGroupService(withTestDbPath({
-      groupId: 'mg-1',
-      replicaId: 'mg-1-r1',
-      nodeId,
-      replicaIds: ['mg-1-r1', 'mg-1-r2'],
-      peerAddresses: [`stale-node/message-group/${peerId}`],
-      transport: router,
-    }));
-
-    service.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
-      service_id: peerId,
-      service_type: SERVICE_TYPE.MESSAGE_GROUP,
-      node_id: 'peer-node-a',
-      group_id: 'mg-1',
-      replica_id: peerId,
-      status: SERVICE_STATUS.ACTIVE,
-      address: initialAddress,
-      updated_at: Date.now(),
-    });
-
-    t.equal(
-      service.buildPeerAddress(peerId),
-      initialAddress,
-      'should resolve initial location from services cache',
-    );
-
-    service.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
-      service_id: peerId,
-      node_id: 'peer-node-b',
-      address: relocatedAddress,
-      updated_at: Date.now() + 1,
-    });
-
-    t.equal(
-      service.buildPeerAddress(peerId),
-      relocatedAddress,
-      'should resolve relocated address from refreshed cache entry',
-    );
-  } finally {
-    await cleanup();
-  }
-});
-
-test('MessageGroupService - buildPeerAddress logs structured diagnostics ' +
-  'only when bootstrap hints are explicitly allowed', async (t) => {
-  const {router, nodeId, cleanup} = await createTestTransport();
-  try {
-    const peerId = 'mg-1-r2';
-    const hintAddress = `seed-node/message-group/${peerId}`;
-    const warningLogs = [];
-
-    const service = new MessageGroupService(withTestDbPath({
-      groupId: 'mg-1',
-      replicaId: 'mg-1-r1',
-      nodeId,
-      replicaIds: ['mg-1-r1', 'mg-1-r2'],
-      peerAddresses: [hintAddress],
-      transport: router,
-    }));
-
-    const originalWarn = service.logger.warn?.bind(service.logger);
-    service.logger.warn = (msg, fields) => {
-      warningLogs.push({msg, fields});
-      if (originalWarn) {
-        return originalWarn(msg, fields);
-      }
-    };
-
-    t.throws(
-      () => service.buildPeerAddress(peerId),
-      /Unable to resolve unified peer address/,
-      'generic peer resolution should fail closed when only bootstrap hints remain',
-    );
-    t.equal(
-      service.buildPeerAddress(peerId, {allowBootstrapHints: true}),
-      hintAddress,
-      'explicit join-time resolution may still use the bootstrap hint bridge',
-    );
-    t.equal(
-      service.buildPeerAddress(peerId, {allowBootstrapHints: true}),
-      hintAddress,
-      'repeated explicit fallback should still resolve via bootstrap hint',
-    );
-    t.equal(warningLogs.length, 1, 'should emit fallback diagnostics only once per peer');
-    t.equal(
-      warningLogs[0]?.fields?.resolutionSource,
-      'bootstrap_hint',
-      'fallback diagnostics should identify bootstrap hint source',
-    );
-  } finally {
-    await cleanup();
-  }
-});
-
 test(
-  'MessageGroupService - buildPeerAddress prefers the consensus configuration peer address before bootstrap hints',
+  'MessageGroupService - a peer address is the committed configuration\'s, ' +
+  'never the services row',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
       const peerId = 'mg-1-r2';
-      const liveAddress = `peer-node-a/message-group/${peerId}`;
-      const hintAddress = `seed-node/message-group/${peerId}`;
-      const warningLogs = [];
-
+      const committedAddress = `peer-node-a/message-group/${peerId}`;
       const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-1',
         replicaId: 'mg-1-r1',
         nodeId,
         replicaIds: ['mg-1-r1', 'mg-1-r2'],
-        peerAddresses: [hintAddress],
         transport: router,
       }));
-
+      service.systemTableCache.applySystemTableChange(TABLES.SERVICES,
+        CDC_OPERATION.UPSERT, {
+          service_id: peerId, service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: 'stale-node', group_id: 'mg-1', replica_id: peerId,
+          status: SERVICE_STATUS.ACTIVE,
+          address: `stale-node/message-group/${peerId}`, updated_at: Date.now(),
+        });
       service.raft = reportingConsensusPort({
         groupId: 'mg-1',
         replicaIdentity: 'mg-1-r1',
-        peers: [{address: liveAddress, replicaIdentity: peerId}],
+        peers: [{address: committedAddress, replicaIdentity: peerId}],
       });
-
-      const originalWarn = service.logger.warn?.bind(service.logger);
-      service.logger.warn = (msg, fields) => {
-        warningLogs.push({msg, fields});
-        if (originalWarn) {
-          return originalWarn(msg, fields);
-        }
-      };
-
-      t.equal(
-        service.buildPeerAddress(peerId),
-        liveAddress,
-        'runtime peer location should win before bootstrap hints are considered',
-      );
-      t.equal(
-        warningLogs.length,
-        0,
-        'live raft peer resolution should not emit bootstrap fallback diagnostics',
-      );
+      t.equal(service.resolveCommittedPeerAddress(peerId), committedAddress,
+        'the configured peer is addressed where the configuration places it');
+      t.throws(() => service.resolveCommittedPeerAddress('mg-1-r9'),
+        /peer_not_in_configuration/,
+        'an identity outside the configuration refuses typed');
     } finally {
       await cleanup();
     }
@@ -1160,7 +1090,7 @@ test(
 );
 
 test(
-  'MessageGroupService - cache reconciliation re-addresses a moved peer by identity and admits new replicas',
+  'MessageGroupService - cache reconciliation keeps a moved peer at its committed node and admits new replicas',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
@@ -1188,7 +1118,6 @@ test(
         replicaId: 'mg-1-r1',
         nodeId,
         replicaIds: ['mg-1-r1', 'mg-1-r2'],
-        peerAddresses: ['node-old/message-group/mg-1-r2'],
         transport: router,
       }, port);
       await service.initialize();
@@ -1198,15 +1127,17 @@ test(
       await new Promise((resolve) => setImmediate(resolve));
 
       t.equal(
-        service.buildPeerAddress('mg-1-r2'),
-        'node-new/message-group/mg-1-r2',
-        'cache-backed ownership should override stale bootstrap peer hints',
-      );
-      t.equal(
         port.request[RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS](
-          'mg-1-r2'),
-        'node-new/message-group/mg-1-r2',
-        'consensus deliveries to the moved peer resolve its new address by identity',
+          'mg-1-r2', 'node-old'),
+        'node-old/message-group/mg-1-r2',
+        'consensus deliveries address the peer on its committed node; a row ' +
+        'naming another node is no evidence',
+      );
+      t.throws(
+        () => port.request[RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS](
+          'mg-1-r2', null),
+        /peer_not_in_configuration/,
+        'a peer without a committed node refuses typed, whatever the row says',
       );
       t.same(
         port.confChanges,
@@ -1230,7 +1161,7 @@ test(
         [{
           type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
           replicaIdentity: 'mg-1-r3',
-          peerAddress: 'node-3/message-group/mg-1-r3',
+          nodeId: 'node-3',
         }],
         'newly visible replicas should be admitted by identity from later cache rows',
       );

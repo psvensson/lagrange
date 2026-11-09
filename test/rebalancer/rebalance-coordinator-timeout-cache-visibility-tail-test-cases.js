@@ -39,7 +39,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       },
       cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-        async waitForCacheUpdate() {},
         async executeAuthoritativeSystemTableRead(
           tableName,
           sql,
@@ -82,7 +81,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       sqlQueryEngine: {
@@ -137,7 +136,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneSystemTableGateway: {
           async readRows(tableName, sql, params, options = {}) {
@@ -181,7 +179,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -253,7 +251,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       },
       cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-        async waitForCacheUpdate() {},
         async executeAuthoritativeSystemTableRead(
           tableName,
           sql,
@@ -280,7 +277,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       sqlQueryEngine: {
@@ -372,7 +369,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -381,7 +377,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -445,7 +441,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
           async executeAuthoritativeSystemTableRead(tableName, sql) {
             if (tableName === 'replica_operations' &&
               String(sql).includes('SELECT * FROM replica_operations')) {
@@ -465,7 +460,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -557,10 +552,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -583,7 +578,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -646,7 +641,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -655,7 +649,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -703,10 +697,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -729,7 +723,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -801,10 +795,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -827,7 +821,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -897,7 +891,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -906,7 +899,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -974,7 +967,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -983,7 +975,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -1049,10 +1041,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1072,7 +1064,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -1143,10 +1135,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1169,7 +1161,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -1237,10 +1229,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1260,7 +1252,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -1313,10 +1305,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         systemTableCache: {},
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1339,7 +1331,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -1403,10 +1395,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         systemTableCache: {},
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() { return this.getPriorityRecoveryPlanningAnswerSync(); },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1429,7 +1421,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {

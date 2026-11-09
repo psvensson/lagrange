@@ -198,7 +198,9 @@ function createTestCoordinatorWithPersistence() {
     controlPlaneSystemTableGateway:
       createMockControlPlaneSystemTableGateway(sqlQueryEngine),
     transactionCoordinator: createMockTransactionCoordinator(),
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     storageAdmissionService: {
       checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
       checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),

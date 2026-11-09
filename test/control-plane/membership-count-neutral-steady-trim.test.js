@@ -322,6 +322,7 @@ test('the summary refresh that clears the durable gap enqueues the trimming reco
     const enqueued = [];
     const coordinator = new MembershipPublicationCoordinator({
       nodeId: NODE_A,
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       controlPlanePublicationsOwner: {
         async listPublications() {
           return {rows: [durableRow]};

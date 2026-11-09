@@ -3,10 +3,7 @@ import {v4 as uuidv4} from 'uuid';
 import {resolveDeclaredPartitionKeyType} from '../partition/partition-boundary-representation.js';
 import {STATE, TABLES} from '../constants/index.js';
 import {CONTROL_PLANE_MUTATION_OPERATION} from '../control-plane/control-plane-system-table-gateway.js';
-import {resolveControlPlaneSystemTableVisibilityState} from '../control-plane/control-plane-system-table-visibility-constants.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
-import {validateTablePolicy} from '../policy/table-policy-validation.js';
-import {assertTablePolicyCdcRequestSupported} from '../cache/cdc-table-policy.js';
 import {
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
@@ -16,29 +13,11 @@ import {
 import {SCHEMA_PROVISIONING_ERROR_CODE} from
   './schema-provisioning-job-constants.js';
 import {
-  TABLE_CREATION_SERVICE_LITERAL,
-  TABLE_CREATION_VISIBILITY_STATE,
   buildCreateTableSuccessResult,
   resolveTableCreationCompletion,
-  resolveTableCreationMutationContractOutcome,
 } from './table-creation-service-completion.js';
 
 const EMPTY_SCHEMA_DEFINITION_JSON = '{}';
-const LOCAL_STR_COMMA_SPACE = ', ';
-
-function resolveCreateTablePolicy(ast) {
-  const tablePolicy = ast?.options?.tablePolicy || {};
-  assertTablePolicyCdcRequestSupported(tablePolicy);
-  const validation = validateTablePolicy(tablePolicy);
-  if (!validation.valid) {
-    throw new Error(
-      `Invalid CREATE TABLE policy: ${validation.errors.join(
-        LOCAL_STR_COMMA_SPACE,
-      )}`,
-    );
-  }
-  return tablePolicy;
-}
 
 function sortObject(value) {
   if (Array.isArray(value)) return value.map(sortObject);
@@ -109,17 +88,35 @@ function buildExistingReconciliationOptions(options) {
   };
 }
 
+function extractProvisioningResultFields(summary) {
+  if (!summary) {
+    return {
+      epoch: null,
+      requestedReplicaCount: null,
+      committedReplicaCount: null,
+      missingReplicaCount: 0,
+    };
+  }
+  return {
+    epoch: summary.epoch || null,
+    requestedReplicaCount:
+      summary.requestedReplicaCount !== undefined ?
+        summary.requestedReplicaCount :
+        null,
+    committedReplicaCount:
+      summary.committedReplicaCount !== undefined ?
+        summary.committedReplicaCount :
+        null,
+    missingReplicaCount:
+      Number.isInteger(summary.missingReplicaCount) ?
+        summary.missingReplicaCount :
+        0,
+  };
+}
+
 function buildExistingTableResult(ast, existingTable, reconciliation) {
-  const visibilityState = String(
-    reconciliation?.visibilityState ||
-    TABLE_CREATION_VISIBILITY_STATE.VISIBLE,
-  );
   const provisioningSummary = reconciliation?.provisioningSummary || null;
-  const completion = resolveTableCreationCompletion({
-    visibilityState,
-    provisioningSummary,
-    metadataContractOutcome: reconciliation,
-  });
+  const completion = resolveTableCreationCompletion({provisioningSummary});
   return buildCreateTableSuccessResult({
     tableId: firstTruthyValue(
       reconciliation?.tableId,
@@ -138,9 +135,7 @@ function buildExistingTableResult(ast, existingTable, reconciliation) {
     completionReason: completion.completionReason,
     contractState: completion.contractState,
     nextAction: completion.nextAction,
-    visibilityState,
-    visibilityPending:
-      visibilityState !== TABLE_CREATION_SERVICE_LITERAL.VISIBLE,
+    ...extractProvisioningResultFields(provisioningSummary),
     partitionMetadataCreated:
       reconciliation?.partitionMetadataCreated === true,
     provisioningSummary,
@@ -181,7 +176,7 @@ function buildCreateTableMetadataContext(service, ast, options) {
     table_name: ast.tableName,
     schema_definition: JSON.stringify(schemaDefinition),
     partition_key: partitionKey,
-    table_policies: JSON.stringify(resolveCreateTablePolicy(ast)),
+    table_policies: JSON.stringify(ast.options?.tablePolicy ?? {}),
     partition_count: 1,
     active_partition_version: 1,
     pending_partition_version: null,
@@ -249,7 +244,6 @@ async function submitCreateTableMetadata(metadataGateway, context, options) {
       row: context.tableMetadata,
     },
     {
-      allowPendingVisibility: true,
       workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
       deliveryPriority: 'critical',
     },
@@ -262,30 +256,23 @@ async function submitCreateTableMetadata(metadataGateway, context, options) {
       row: context.partitionMetadata,
     },
     {
-      allowPendingVisibility: true,
       workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
       deliveryPriority: 'critical',
     },
   );
-  const visibilityState = resolveControlPlaneSystemTableVisibilityState(
-    [tableMutation?.visibilityState, partitionMutation?.visibilityState],
-    TABLE_CREATION_VISIBILITY_STATE.VISIBLE,
-  );
-  return {
-    contractOutcome: resolveTableCreationMutationContractOutcome(
-      [tableMutation, partitionMutation],
-      visibilityState,
-    ),
-    visibilityState,
-  };
+  // Both metadata rows answered at their commit (a failed commit throws):
+  // the metadata half of CREATE TABLE is done; no answer content reads a
+  // projection. The statement that asked keeps same-node read-your-writes
+  // at these positions (table-creation-service-durable-job.js).
+  options.onMetadataCommitted?.(metadataGateway,
+    [tableMutation?.position, partitionMutation?.position]);
+  return {tableMutation, partitionMutation};
 }
 
 async function buildCreatedTableResult(
   service,
   context,
-  visibilityState,
   provisioningSummary,
-  metadataContractOutcome = null,
 ) {
   await service.evaluateSplitMergeLifecycle();
   service.logger.info(QUERY_LOG_MSG.TABLE_CREATED_SUCCESS, {
@@ -294,11 +281,7 @@ async function buildCreatedTableResult(
     partitionKey: context.partitionKey,
     partitionId: context.partitionId,
   });
-  const completion = resolveTableCreationCompletion({
-    visibilityState,
-    provisioningSummary,
-    metadataContractOutcome,
-  });
+  const completion = resolveTableCreationCompletion({provisioningSummary});
   return {
     success: true,
     operation: QUERY_OPERATION.CREATE_TABLE,
@@ -311,38 +294,25 @@ async function buildCreatedTableResult(
     completionReason: completion.completionReason,
     contractState: completion.contractState,
     nextAction: completion.nextAction,
-    visibilityState,
-    visibilityPending:
-      visibilityState !== TABLE_CREATION_SERVICE_LITERAL.VISIBLE,
+    ...extractProvisioningResultFields(provisioningSummary),
     provisioningSummary,
   };
 }
 
 async function executePersistedCreateTable(service, context, options, gateway) {
-  const metadata = await submitCreateTableMetadata(gateway, context, options);
+  await submitCreateTableMetadata(gateway, context, options);
   await options.assertProvisioningOwnership?.();
   const provisioningSummary = await service.provisionInitialPartition(
     buildDurableProvisioningInput(context, options),
   );
-  return buildCreatedTableResult(
-    service,
-    context,
-    metadata.visibilityState,
-    provisioningSummary,
-    metadata.contractOutcome,
-  );
+  return buildCreatedTableResult(service, context, provisioningSummary);
 }
 
 async function executeUnpersistedCreateTable(service, context, options) {
   const provisioningSummary = await service.provisionInitialPartition(
     buildBaseProvisioningInput(context, options),
   );
-  return buildCreatedTableResult(
-    service,
-    context,
-    TABLE_CREATION_VISIBILITY_STATE.VISIBLE,
-    provisioningSummary,
-  );
+  return buildCreatedTableResult(service, context, provisioningSummary);
 }
 
 const tableCreationCreateTableMethods = {

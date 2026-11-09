@@ -95,7 +95,6 @@ const MAIN_READ_ORDER = Object.freeze([
   'readinessSnapshot',
   'planningAnswer',
   'filter:services',
-  `nodeReadiness:${LEARNER_NODE_ID}`,
   'filter:replica_operations',
   STEPS_HISTORY_READ, STEPS_HISTORY_READ,
 ]);
@@ -835,7 +834,6 @@ test('the logged inputs come from the one evaluation that decided', async () => 
     'get:partitions': 1,
     'readinessSnapshot': 1,
     'planningAnswer': 1,
-    [`nodeReadiness:${LEARNER_NODE_ID}`]: 1,
     [STEPS_HISTORY_READ]: 2,
   });
   // The carrier's whole read budget: main's reads, plus ONE memoised parse of

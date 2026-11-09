@@ -155,7 +155,15 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
       messageGroup.logger = messageGroupLogger;
       // A follower's port: the production proposal routing forwards to the
       // leader target the forward selection names.
-      messageGroup.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+      messageGroup.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: 'mg-pressure',
+        replicaIdentity: 'mg-pressure-r2',
+        peers: [{
+          replicaIdentity: 'mg-pressure-r1',
+          address: 'seed-node/message-group/mg-pressure-r1',
+        }],
+      });
       messageGroup.resolveCDCForwardSelection = () => ({
         strictForwarding: true,
         strictForwardRetryAfterMs: 250,
@@ -203,7 +211,6 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
           SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
           {group_id: 'mg-pressure', status: 'active'},
           {
-            skipCacheWait: true,
             causeId: 'integration-control-plane-pressure',
             workClass: 'background',
           },
@@ -441,7 +448,6 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
           },
         },
         {
-          skipCacheWait: true,
         },
       );
       t.equal(mutationResult.success, true,

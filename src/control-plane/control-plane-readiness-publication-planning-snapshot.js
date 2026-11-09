@@ -485,22 +485,12 @@ function getPriorityRecoveryPlanningAnswerSync(service, nodeId, observedAt) {
  * caller that requires the stronger evidence asks for the authoritative
  * owner-read surface explicitly and accepts that wait as part of its own
  * contract.
- *
- * The name is kept so this slice does not rename every call site, but the
- * contract is AVAILABLE NOW.
  * @param {string} nodeId
  * @param {number} observedAt
  * @return {Promise<Object|null>} the available planning answer
  */
-async function getMembershipPublicationPlanningSnapshotBestEffort(service, nodeId, observedAt) {
-  return service.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt);
-}
-
 async function getPriorityRecoveryPlanningSnapshotBestEffort(service, nodeId, observedAt) {
-  return service.getMembershipPublicationPlanningSnapshotBestEffort(
-    nodeId,
-    observedAt,
-  );
+  return service.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt);
 }
 
 /**
@@ -652,13 +642,30 @@ function buildMembershipPublicationDiagnostics(service, row, observedAt) {
   });
 }
 
+function buildMembershipPublicationProtocolInput(service, context) {
+  const memo = service.membershipPublicationDiagnosticsMemo;
+  const reuseOwnedInput = memo && memo.diagnostics &&
+    memo.diagnostics === context.membershipPublication &&
+    Object.isFrozen(memo.diagnostics) &&
+    memo.diagnostics.publishedActiveNodeIds.includes(context.nodeId);
+  if (!reuseOwnedInput) {
+    return buildPublicationRecoveryProtocolSnapshot(context.membershipPublication,
+      {targetNodeId: context.nodeId});
+  }
+  // Representation reuse shares the diagnostics lifetime and its finite
+  // published domain. This input never skips the normalizer below: only the
+  // existing identity owner can admit a current, verified projection.
+  if (!memo.protocolSnapshotsByNodeId) memo.protocolSnapshotsByNodeId = new Map();
+  if (!memo.protocolSnapshotsByNodeId.has(context.nodeId)) {
+    memo.protocolSnapshotsByNodeId.set(context.nodeId,
+      buildPublicationRecoveryProtocolSnapshot(context.membershipPublication,
+        {targetNodeId: context.nodeId}));
+  }
+  return memo.protocolSnapshotsByNodeId.get(context.nodeId);
+}
+
 function buildMembershipPublicationPlanningSnapshot(service, context = {}) {
-  const protocolSnapshot = buildPublicationRecoveryProtocolSnapshot(
-    context.membershipPublication,
-    {
-      targetNodeId: context.nodeId,
-    },
-  );
+  const protocolSnapshot = service.buildMembershipPublicationProtocolInput(context);
   if (!protocolSnapshot) {
     return null;
   }
@@ -680,11 +687,11 @@ export {
   readPlanningProjectionSourceGeneration,
   resolveMemoizedPriorityRecoveryPlanningProjectionSync,
   getPriorityRecoveryPlanningAnswerSync,
-  getMembershipPublicationPlanningSnapshotBestEffort,
   getPriorityRecoveryPlanningSnapshotBestEffort,
   getPriorityRecoveryPlanningAnswerForOwnerRead,
   getPriorityRecoveryPlanningAnswerForOwnerReadSync,
   getCurrentPublishedMembershipEpochSync,
   buildMembershipPublicationDiagnostics,
+  buildMembershipPublicationProtocolInput,
   buildMembershipPublicationPlanningSnapshot,
 };

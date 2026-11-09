@@ -199,8 +199,6 @@ A formation's `wait_bound_spent` lines sort mechanically by `wait`. Any `wait` t
 - `joinRetryPolicy.retryTimeoutMs`
 - `seedContactEvidenceWindow.budget`
 - `JOIN_NODE_REGISTRATION_MAX_ATTEMPTS`
-- `DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS`
-- `DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS`
 - the metadata-ingress `leadershipWaitTimeoutMs` at wait-for-leadership-phase:142
 
 ### Known findings (owner)
@@ -217,7 +215,11 @@ These are kept wired, with behaviour unchanged.
 | `CACHE_WAIT_TIMEOUT_MS` | cdc-integration-service-cache-visibility-wait.js:198 (fast path before the designed authoritative repair) | CDC | undetermined (unlogged at base) |
 | `swimSuspicionTimeoutMs` | membership-swim-detector.js:379 (suspicion declares DEAD) | control-plane membership (SWIM) | undetermined |
 | `LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS` | partition-service-metadata-mutation-helpers.js:400 | partition leader publication | 1 in judge/run3, 1 in f1 (base ERROR "Leader-row publication retry budget exhausted"; already an ERROR at base, not a new red) |
+| `DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS` | dynamic-config-startup-wiring.js `waitWithinBound` (startup read, per key) | dynamic-config-startup-owned-initialization: late is a reported state, startup proceeds non-blocking and the read stays owned | undetermined |
+| `DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS` | dynamic-config-startup-wiring.js `waitWithinBound` (controller initialize) | dynamic-config-startup-owned-initialization: late is a reported state, startup proceeds non-blocking and the controller stays owned | undetermined |
 | `CATCHUP_DEFAULT.MAX_ATTEMPTS_PER_TABLE` | cdc-integration-service-authoritative-catchup.js:345 (deferred reads only) | CDC catch-up; the untyped "Partition service not found" (a read or write racing a split or move) belongs to query routing | see the determination below; expected 0, at most 1 line per table and partition |
+
+**Superseded under R09 (dynamic-config-startup-owned-initialization, 2026-11-02):** both `DYNAMIC_CONFIG_STARTUP_*` bounds were listed here as no longer emitted, and they emit again: each spend is one `wait_bound_spent` under its own name. They are known findings with this quest as owner, so a spend is no longer classed unexpected. Under the certifier's current policy (`CERTIFICATION_KNOWN_FINDING_SPENT_WAIT_POLICY`, which is FAIL) a run with such a spend still does not certify: it fails as `certification_known_finding_spent_wait` with the owner named, and it would stop failing only if the owner relaxed that policy to LIST_WITH_OWNER.
 
 **Undetermined (would settle it):**
 - `CATCHUP_DEFAULT.MAX_ATTEMPTS_PER_TABLE`. Determination from the code (2026-10-05): the base WARN "CDC catch-up hydration table read failed" (14-34 per run in judge/run2 and frozen run-2/run-3, all "Partition service not found") is NOT this wait in the common case. A read with no routable service ends in query-executor-partition-delivery.js `buildFailureResult(PARTITION_SERVICE_NOT_FOUND)` with no details, so `retryAfterMs` is null and `deferRetry` false; the owner-RPC result passes them through unchanged (owner-rpc-read-execution.js `normalizeAuthoritativeQueryRowSet`), no SQL fallback runs, and catch-up breaks on the first attempt without reporting. It reports only when the same `executeOnPartition` call first delivered to a candidate that answered with `retryAfterMs > 0` or `deferRetry` (the `lastFailureDetails` carry-over at :267), or on the transport-preflight deferral. The report now has the subject `<table>@<partitionId>` and `partitionId` in scope, so a repeat folds. Settled by: one live formation on this head counting `wait_bound_spent` lines with this wait (expected 0; any line names its table and partition).

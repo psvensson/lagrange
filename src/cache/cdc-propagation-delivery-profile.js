@@ -19,6 +19,9 @@ const CDC_PROPAGATION_DELIVERY_SOURCE_LITERAL = Object.freeze({
   CRITICAL_VISIBILITY_REPLACE_PENDING_PREFIX:
     'latency.cdc.propagation.visibility.replace',
   KEY_SEPARATOR: ':',
+  MESSAGE_GROUP_SERVICE_ID_PREFIX: 'mg-',
+  CAMEL_SERVICE_TYPE: 'serviceType',
+  CAMEL_SERVICE_ID: 'serviceId',
 });
 
 const CDC_PROPAGATION_DELIVERY_STATE = Object.freeze({
@@ -37,10 +40,13 @@ const BACKGROUND_CDC_PROPAGATION_TABLES = new Set([
 ]);
 
 const CRITICAL_VISIBILITY_CDC_PROPAGATION_TABLES = new Set([
+  TABLES.CONTROL_PLANE_PUBLICATIONS,
   TABLES.NODES,
   TABLES.NODE_ENDPOINTS,
   TABLES.PARTITIONS,
+  TABLES.REPLICA_OPERATIONS,
   TABLES.SERVICE_ENDPOINTS,
+  TABLES.TABLES,
 ]);
 
 const ROW_SUPERSEDABLE_CRITICAL_VISIBILITY_TABLES = new Set([
@@ -233,14 +239,28 @@ function normalizeCdcPropagationEvents(events) {
     [];
 }
 
+function readRowStringField(row, primaryField, camelField) {
+  return String(row?.[primaryField] ?? row?.[camelField] ?? '');
+}
+
 function isCriticalPartitionServiceRow(row = null) {
-  const serviceType = String(
-    row?.[COLUMN.SERVICE_TYPE] ??
-    row?.service_type ??
-    row?.serviceType ??
-    '',
+  const serviceType = readRowStringField(
+    row,
+    COLUMN.SERVICE_TYPE,
+    CDC_PROPAGATION_DELIVERY_SOURCE_LITERAL.CAMEL_SERVICE_TYPE,
   ).toLowerCase();
-  return serviceType === SERVICE_TYPE.PARTITION;
+  if (serviceType.length > 0) {
+    return serviceType === SERVICE_TYPE.PARTITION;
+  }
+  const serviceId = readRowStringField(
+    row,
+    COLUMN.SERVICE_ID,
+    CDC_PROPAGATION_DELIVERY_SOURCE_LITERAL.CAMEL_SERVICE_ID,
+  );
+  return serviceId.length > 0 &&
+    !serviceId.startsWith(
+      CDC_PROPAGATION_DELIVERY_SOURCE_LITERAL.MESSAGE_GROUP_SERVICE_ID_PREFIX,
+    );
 }
 
 function isCriticalCdcPropagationEvent(event = null) {

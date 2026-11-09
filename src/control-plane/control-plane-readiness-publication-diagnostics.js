@@ -28,7 +28,6 @@ const {
   MEMBERSHIP_PUBLICATION_READ_SCOPE,
   buildControlPlanePublicationStory,
   resolveMembershipPublicationReadLane,
-  resolveMembershipPublicationReadOptions,
   resolveMembershipPublicationReadScope,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
@@ -53,22 +52,13 @@ async function getMembershipPublicationDiagnostics(
   observedAt,
   readOptions = {},
 ) {
-  const publicationService =
-    readWiredCollaborator(service, COLLABORATOR.MEMBERSHIP_PUBLICATION);
-  if (publicationService === UNWIRED) {
+  if (readWiredCollaborator(service, COLLABORATOR.MEMBERSHIP_PUBLICATION) ===
+      UNWIRED) {
     return null;
   }
-  const normalizedReadOptions = resolveMembershipPublicationReadOptions({
-    lane: resolveMembershipPublicationReadLane(readOptions?.lane),
-    queryTimeoutMs:
-      Number.isFinite(readOptions?.queryTimeoutMs) &&
-      readOptions.queryTimeoutMs > 0 ?
-        readOptions.queryTimeoutMs :
-        service.membershipPublicationDiagnosticsQueryTimeoutMs,
-  });
-  const row = await publicationService.getLatestPublicationForNode(
+  const row = await service.getLatestMembershipPublicationRow(
     nodeId,
-    normalizedReadOptions,
+    readOptions,
   );
   return service.buildMembershipPublicationDiagnostics(row, observedAt);
 }
@@ -96,6 +86,8 @@ function getMembershipPublicationDiagnosticsSync(
   // (handleCacheChange) stays as belt-and-suspenders for caches without a
   // version surface.
   const memoizableRead =
+    resolveMembershipPublicationReadLane(readOptions?.lane) ===
+      MEMBERSHIP_PUBLICATION_READ_LANE.DIAGNOSTICS &&
     resolveMembershipPublicationReadScope(readOptions?.scope) ===
       MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER &&
     readWiredCollaborator(service, COLLABORATOR.MEMBERSHIP_PUBLICATION) !==

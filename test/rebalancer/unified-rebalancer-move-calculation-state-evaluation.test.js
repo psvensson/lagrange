@@ -1,3 +1,4 @@
+import {createMockCoordinator} from './test-helpers.js';
 /**
  * Unit tests for UnifiedRebalancer.
  * Tests the core rebalancing logic for partitions and message groups.
@@ -42,13 +43,12 @@ import {
 import {
   createMockCache,
   createMockCdcService,
-  createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
-import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 
 // Initialize test environment
 // Create a mock system table cache
@@ -76,6 +76,7 @@ function createTestRebalancer(options = {}) {
     messageRouter = null,
     rebalanceCoordinator = null,
     controlPlaneReadinessService = null,
+    readinessFixture = {},
     bootstrapReadinessState = null,
     nowFn = null,
     priorityRecoveryActivityStaleGraceMs = null,
@@ -91,20 +92,21 @@ function createTestRebalancer(options = {}) {
     serviceEndpoints,
   );
   const mockCdcService = cdcIntegrationService || createMockCdcService();
-  const mockPolicyService = createMockPolicyService(
-    partitions, tables,
-  );
+  const mockPolicyService = createMockPolicyService({partitions: partitions, tables: tables});
   const mockMessageRouter = messageRouter ||
     createMockMessageRouter(connectionState);
-  const mockCoordinator = rebalanceCoordinator || createMockCoordinator();
   const mockSqlQueryEngine = sqlQueryEngine || {
     async executeQuery() {
       return {success: true, rows: []};
     },
   };
-  const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
-
+  // A named hand fake is completed by the one fixture completer.
+  const mockReadinessService = controlPlaneReadinessService ?
+    readinessServiceFake(controlPlaneReadinessService, nowFn || undefined) :
+    createMockControlPlaneReadinessService({...readinessFixture, systemTableCache: mockCache});
+  const mockCoordinator = rebalanceCoordinator || createMockCoordinator({
+    controlPlaneReadinessService: mockReadinessService,
+  });
   return new UnifiedRebalancer({
     entityId,
     entityType,
@@ -681,7 +683,7 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
       {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.FAILED},
     ];
 
-    const policy = {minReplicaCount: 3};
+    const policy = {targetReplicaCount: 3, minReplicaCount: 3};
 
     t.equal(rebalancer.isCriticalState(replicas, policy), true);
   });
@@ -734,7 +736,7 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
       {replica_id: 'r4', node_id: 'node-4', status: ReplicaStatus.ACTIVE},
     ];
 
-    const policy = {replicaCount: 3};
+    const policy = {targetReplicaCount: 3};
 
     t.equal(rebalancer.isSuboptimalState(replicas, policy), true);
   });
@@ -759,7 +761,7 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
     ];
 
     const policy = {
-      replicaCount: 3,
+      targetReplicaCount: 3,
       placementConstraints: {spreadAcrossNodes: true},
     };
 
@@ -785,7 +787,7 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
     ];
 
     const policy = {
-      replicaCount: 3,
+      targetReplicaCount: 3,
       placementConstraints: {spreadAcrossNodes: true},
     };
 
@@ -946,7 +948,7 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
             address: 'node-2/partition/control_plane_publications-p1-r3',
           },
         ],
-        controlPlaneReadinessService: partialReadinessFake({
+        readinessFixture: {callbacks: {
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -972,7 +974,7 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
           getCurrentPublishedMembershipEpochSync() {
             return 2;
           },
-        }),
+        }},
         rebalanceCoordinator: {
           ...createMockCoordinator(),
           async createOperation(move) {
@@ -995,7 +997,7 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
       const result = await rebalancer.rebalance(
         TriggerType.PERIODIC,
         {
-          replicaCount: 3,
+          targetReplicaCount: 3,
           minReplicaCount: 3,
           maxReplicaCount: 7,
           placementConstraints: {spreadAcrossNodes: true},

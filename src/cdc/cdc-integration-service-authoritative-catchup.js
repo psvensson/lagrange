@@ -324,6 +324,31 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
             },
           );
         }
+        if (readFromLeader && !isTerminal()) {
+          const observationReceipt = {
+            observedAtMs: readResult.readAuthorityWitness.observedAtMs,
+            term: readResult.readAuthorityWitness.term ?? null,
+            appliedIndex: readResult.readAuthorityWitness.appliedIndex ?? null,
+            commitIndex: readResult.readAuthorityWitness.commitIndex ?? null,
+            servingNodeId:
+              readResult.readAuthorityWitness.servingNodeId ?? null,
+            partitionId: readResult.readAuthorityWitness.partitionId ?? null,
+            causeId: 'cdc-authoritative-catchup',
+          };
+          service.systemTableCache?.recordAuthoritativeObservation?.(
+            tableName,
+            observationReceipt,
+          );
+          if (
+            service.cacheMutationTarget &&
+            service.cacheMutationTarget !== service.systemTableCache
+          ) {
+            service.cacheMutationTarget.recordAuthoritativeObservation?.(
+              tableName,
+              observationReceipt,
+            );
+          }
+        }
         // The apply gate refused these rows if the owner turned terminal
         // while the read was in flight: the table is not hydrated then.
         hydrated = !isTerminal();

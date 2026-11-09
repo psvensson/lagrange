@@ -16,12 +16,14 @@ function initializeGuardedRuntimeServiceHandler(service, systemTableCache) {
     serviceLifecycleManager: service.serviceLifecycleManager,
     systemTableCache,
     heartbeatService: service.heartbeatService,
+    controlPlaneSystemTableGateway: service.controlPlaneSystemTableGateway,
   });
   const result = gate.guardedSetup(() => RuntimeServiceHandlerSetup.create({
     bootIncarnation: service.bootIncarnation,
     nodeId: service.nodeId,
     messageRouter: service.messageRouter,
     cdcIntegrationService: service.cdcIntegrationService,
+    controlPlaneSystemTableGateway: service.controlPlaneSystemTableGateway,
     systemTableCache,
     serviceLifecycleManager: service.serviceLifecycleManager,
     serviceRuntimeLifecycle: service.serviceRuntimeLifecycle,

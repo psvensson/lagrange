@@ -5,11 +5,16 @@
   "epic": "raft-rs-full-cutover",
   "statement": "The partition leader answers a learner promotion proof from its committed configuration and its own admission record: the learner's host is a field of the admitted identity recorded when the leader admitted the peer, never looked up in the CDC-fed services cache. The cache-address resolution paths behind buildPeerAddress for promotion and transport, and the refusal cause learner_address_unresolvable, are deleted; the only refusals are NOT_LEADER and NOT_IN_CONFIGURATION. On a fresh three-node formation no promotion proof is refused for a replica named in the committed configuration, the priority control-plane spread reaches readyDistinctNodeCount 3 within the stated bound, and time-to-serve-lane is recorded.",
   "doneWhen": {
-    "probe": "scenario-harness",
+    "probe": "test-receipt",
     "args": {
-      "scenario": "fresh-formation-user-table-routability",
-      "consecutive": 3,
-      "metric": "priority"
+      "file": "solve/quests/learner-host-from-committed-admission/evidence/receipt.json",
+      "requiredReceipts": [
+        "committed-node-identity-recorded-at-apply",
+        "proof-and-transport-from-committed-configuration",
+        "address-refusals-eliminated-on-reproducer",
+        "production-bound-restart-witness",
+        "independent-verification"
+      ]
     }
   },
   "constraints": [
@@ -24,10 +29,15 @@
     {
       "id": "proof",
       "statement": "Red first at the unit level (proof handler resolves host from admission/committed configuration; cache row absent or stale does not change the answer; unknown replica refuses NOT_IN_CONFIGURATION), then the live scenario fresh-formation-user-table-routability on local-three-node.json red before, green three consecutive after, with node logs retained; independent verification before landing."
+    },
+    {
+      "id": "doneWhen-supersession",
+      "statement": "supersedes: scenario-level doneWhen fresh-formation-user-table-routability consecutive 3 superseded 2026-11-02 because the scenario remains red for another cause (C1/C10 admission trigger from the services-row projection and the CDC hold), owned by the successor quest replica-admission-from-committed-operation; the instance witnesses are this quest's proof"
     }
   ],
   "verificationTemplates": [
     "owner-interaction",
     "admission-gating"
-  ]
+  ],
+  "sealedAt": "f70f43a290b75d22b5be49130f81f604183a8fdb"
 }

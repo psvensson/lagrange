@@ -28,7 +28,10 @@ const noLog = {debug() {}, info() {}, warn() {}, error() {}};
 
 async function fixture(t, {issue = true, permitChanges = {}, nativeTimeSource = null,
   tempRoot = os.tmpdir()} = {}) {
+  // The founders' GENESIS stamp commits their node (the identity record's
+  // source node): every replica addresses them from the committed fact.
   const cluster = new PartitionNodeCluster({partitionId: GROUP, replicaIds: FOUNDERS, tempRoot,
+    founderNodeIds: Object.fromEntries(FOUNDERS.map((id) => [id, NODE])),
     substrateFor: nativeTimeSource === null ? null : () => ({timeSource: nativeTimeSource})});
   t.after(() => cluster.dispose());
   cluster.tickers = [FOUNDERS[0]];
@@ -98,7 +101,7 @@ async function fixture(t, {issue = true, permitChanges = {}, nativeTimeSource = 
   const repositoryFor = (nodeId) => new ReplicaOperationRepository({nodeId,
     membershipOwnerBootIncarnation: 1, timeSource: clock,
     controlPlaneSystemTableGateway: gateway, logger: noLog, systemTableCache,
-    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+    cdcIntegrationService: {},
     authoritativeVisibilityTimeoutMs: 0, authoritativeVisibilityRetryDelayMs: 0});
   const repository = repositoryFor(NODE);
   const identity = JSON.stringify({operationId: O, groupId: GROUP,

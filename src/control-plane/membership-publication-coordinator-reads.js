@@ -26,6 +26,7 @@ import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_KIND,
   MEMBERSHIP_PUBLICATION_OWNER_KEY,
+  MEMBERSHIP_PUBLICATION_READ_PROFILE,
   MEMBERSHIP_PUBLICATION_READ_SOURCE,
   MEMBERSHIP_PUBLICATION_STATUS,
 } from './membership-publication-row-contract.js';
@@ -68,6 +69,42 @@ const MEMBERSHIP_OWNER_DIVERGENCE_KIND_SNAPSHOT = 'snapshot';
 // v4 quiescence anchor: re-emit a stable (deduped) state at least this often so
 // the last log entry reflects the true final state, not just the last change.
 const MEMBERSHIP_OWNER_DIVERGENCE_SNAPSHOT_INTERVAL_MS = 30000;
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE =
+  'authoritative_row_source_unavailable';
+const LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_CODE =
+  'AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE';
+
+async function fetchDirectOwnerRows(
+  owner,
+  options,
+  authoritativeReadRequested,
+) {
+  if (
+    authoritativeReadRequested !== true &&
+    typeof owner.listPublicationsFromCache === 'function'
+  ) {
+    const cachedPublicationRows = normalizeTableRowsResult(
+      await owner.listPublicationsFromCache(options),
+    );
+    if (
+      cachedPublicationRows.length > 0 ||
+      typeof owner.listPublications !== 'function'
+    ) {
+      return {handled: true, rows: cachedPublicationRows};
+    }
+  }
+  if (typeof owner.listPublications === 'function') {
+    const publicationReadOptions = buildPublicationListReadOptions(options);
+    return {
+      handled: true,
+      rows: normalizeTableRowsResult(
+        await owner.listPublications(publicationReadOptions),
+      ),
+    };
+  }
+  return {handled: false, rows: []};
+}
 
 class MembershipPublicationCoordinatorReads {
   constructor(options = {}) {
@@ -157,30 +194,19 @@ class MembershipPublicationCoordinatorReads {
         MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED;
     if (
       tableName === TABLES.CONTROL_PLANE_PUBLICATIONS &&
-      authoritativeReadRequested !== true &&
-      this.controlPlanePublicationsOwner &&
-      typeof this.controlPlanePublicationsOwner.listPublicationsFromCache === 'function'
+      this.controlPlanePublicationsOwner
     ) {
-      const cachedPublicationRows = normalizeTableRowsResult(
-        await this.controlPlanePublicationsOwner.listPublicationsFromCache(options),
+      const pubResult = await fetchDirectOwnerRows(
+        this.controlPlanePublicationsOwner,
+        options,
+        authoritativeReadRequested,
       );
-      if (
-        cachedPublicationRows.length > 0 ||
-        typeof this.controlPlanePublicationsOwner.listPublications !== 'function'
-      ) {
-        return cachedPublicationRows;
+      if (pubResult.handled) {
+        return pubResult.rows;
       }
     }
-    if (
-      tableName === TABLES.CONTROL_PLANE_PUBLICATIONS &&
-      this.controlPlanePublicationsOwner &&
-      typeof this.controlPlanePublicationsOwner.listPublications === 'function'
-    ) {
-      const publicationReadOptions = buildPublicationListReadOptions(options);
-      return normalizeTableRowsResult(
-        await this.controlPlanePublicationsOwner.listPublications(publicationReadOptions),
-      );
-    }
+    const isPlanningRead =
+      options.readProfile === MEMBERSHIP_PUBLICATION_READ_PROFILE.PLANNING;
     const view = this.getAuthoritativeControlPlaneView();
     if (view && typeof view.readRows === 'function' && view.canRead()) {
       const result = await view.readRows(
@@ -195,6 +221,7 @@ class MembershipPublicationCoordinatorReads {
       if (isAuthoritativeControlPlaneRowReadSuccessful(result)) {
         const authoritativeRows = normalizeTableRowsResult(result);
         if (
+          !isPlanningRead &&
           shouldMergePlanningEvidenceRows(tableName, options) &&
           typeof this.systemTableCache?.getAll === 'function'
         ) {
@@ -205,6 +232,18 @@ class MembershipPublicationCoordinatorReads {
           );
         }
         return authoritativeRows;
+      }
+      if (isPlanningRead) {
+        const message = result?.error ||
+          LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE;
+        const error = new Error(
+          typeof message === LOCAL_STR_STRING ?
+            message :
+            LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
+        );
+        error.code = LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_CODE;
+        error.cause = result?.error;
+        throw error;
       }
     }
     if (typeof this.systemTableCache?.getAll === 'function') {

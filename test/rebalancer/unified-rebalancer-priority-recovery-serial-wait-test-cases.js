@@ -3,7 +3,7 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
     CONTROL_PLANE_PUBLICATIONS_PRIORITY_PARTITION_ID,
     createMockCache,
     createMockCoordinator,
-    createMockReadinessService,
+    createMockControlPlaneReadinessService,
     createTestRebalancer,
     EntityType,
     NodeStatus,
@@ -206,7 +206,7 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
       );
       const createdOperationsWithMissingSerialWait = [];
       const missingSerialWaitReadinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningSnapshotBestEffort() {
           return missingSerialWaitPlanningSnapshot;
         },
@@ -223,7 +223,7 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
         },
       };
       const missingSerialWaitCoordinator = {
-        ...createMockCoordinator(),
+        ...createMockCoordinator({controlPlaneReadinessService: missingSerialWaitReadinessService}),
         getConcurrentAddCountByPriorityClass: async () => ({
           priorityCount: TEST_NUMBER.ONE,
           ordinaryPriorityCount: TEST_NUMBER.ONE,
@@ -289,7 +289,7 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
       );
 
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
@@ -307,7 +307,7 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
       };
       const createdOperations = [];
       const coordinator = {
-        ...createMockCoordinator(),
+        ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
         getConcurrentAddCountByPriorityClass: async () => ({
           priorityCount: TEST_NUMBER.ONE,
           ordinaryPriorityCount: TEST_NUMBER.ONE,
@@ -453,7 +453,7 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
         partitionRows,
       );
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
@@ -471,7 +471,7 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
       };
       const createdOperations = [];
       const coordinator = {
-        ...createMockCoordinator(),
+        ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
         getConcurrentAddCountByPriorityClass: async () => ({
           priorityCount: TEST_NUMBER.ONE,
           ordinaryPriorityCount: TEST_NUMBER.ONE,
@@ -746,7 +746,7 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
         replicaOperations,
       );
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
@@ -763,7 +763,7 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
       };
       const createdOperations = [];
       const coordinator = {
-        ...createMockCoordinator(),
+        ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
         createOperation: async (move) => {
           createdOperations.push(move);
           return {

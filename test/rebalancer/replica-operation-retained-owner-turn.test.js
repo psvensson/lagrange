@@ -84,9 +84,9 @@ function createCoordinator(operation, deliveries) {
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
     systemTableCache: {get: () => null},
-    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+    cdcIntegrationService: {},
     tablePolicyService: {
-      getPolicyForPartition: async () => ({minReplicaCount: 1}),
+      getPolicyForPartition: async () => ({targetReplicaCount: 3, minReplicaCount: 1}),
     },
     messageRouter: {
       async deliver() {
@@ -103,7 +103,9 @@ function createCoordinator(operation, deliveries) {
     },
     operationWorkflowCoordinator: new DurableWorkflowCoordinator(),
     transactionCoordinator: createMockTransactionCoordinator(),
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     enableTimeouts: false,
   });
   coordinator.initialize();

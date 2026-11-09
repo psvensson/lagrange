@@ -36,16 +36,15 @@ export function buildMutationSingleFlightKey(
   if (options?.allowCoalescing === false) {
     return null;
   }
-  if (
-    typeof options?.coalescingKey === 'string' &&
-    options.coalescingKey.length > 0
-  ) {
-    return `${operation}:${tableName}:${options.coalescingKey}`;
-  }
   return stableSerializeMutationKey({
     operation,
     tableName,
     identity: identity || null,
+    coalescingKey:
+      typeof options?.coalescingKey === 'string' &&
+      options.coalescingKey.length > 0 ?
+        options.coalescingKey :
+        null,
     payload,
     ignoreExisting: options?.ignoreExisting === true,
   });

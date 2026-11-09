@@ -27,6 +27,9 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
+import {createRequestBindingFixture} from
+  '../control-plane/request-binding-service-definition-fixture.js';
+
 function initEnv() {
   ConfigurationManager.resetInstance();
   const config = ConfigurationManager.getInstance();
@@ -197,8 +200,10 @@ test('UnifiedRebalancer accepts runtime_service entity type', async (t) => {
 test('getPolicy returns runtime service policy', async (t) => {
   initEnv();
 
-  await t.test('returns default runtime service policy', async (t) => {
-    const rebalancer = createRebalancer();
+  await t.test('returns declared target and system policy bounds', async (t) => {
+    const rebalancer = createRebalancer({serviceDefinitions: [
+      {service_id: 'sys-postgres-wire', status: 'active', replica_count: 3},
+    ]});
     const policy = await rebalancer.getPolicy();
     t.equal(policy.targetReplicaCount, 3);
     t.equal(policy.minReplicaCount, 1);
@@ -207,7 +212,9 @@ test('getPolicy returns runtime service policy', async (t) => {
   });
 
   await t.test('returns a fresh copy each call', async (t) => {
-    const rebalancer = createRebalancer();
+    const rebalancer = createRebalancer({serviceDefinitions: [
+      {service_id: 'sys-postgres-wire', status: 'active', replica_count: 3},
+    ]});
     const p1 = await rebalancer.getPolicy();
     const p2 = await rebalancer.getPolicy();
     t.not(p1, p2, 'different object references');
@@ -253,16 +260,14 @@ test('getRuntimeServicePolicy derives targetReplicaCount from service_definition
     t.equal(policy.targetReplicaCount, 0, 'explicit 0 is honored');
   });
 
-  await t.test('missing definition falls back to the static default', async (t) => {
+  // R09: runtime-definition-create-authority supersedes the permissive default.
+  await t.test('missing definition refuses placement without inventing a count', async (t) => {
     const rebalancer = createRebalancer();
-    const policy = await rebalancer.getPolicy();
-    t.equal(
-      policy.targetReplicaCount,
-      REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE.targetReplicaCount,
-    );
+    await t.rejects(rebalancer.getPolicy(),
+      {code: 'runtime_service_policy_unavailable', reason: 'unavailable', deferRetry: true});
   });
 
-  await t.test('non-finite replica_count falls back to the static default', async (t) => {
+  await t.test('non-finite replica_count refuses placement', async (t) => {
     const rebalancer = createRebalancer({
       serviceDefinitions: [
         {
@@ -273,41 +278,24 @@ test('getRuntimeServicePolicy derives targetReplicaCount from service_definition
         },
       ],
     });
-    const policy = await rebalancer.getPolicy();
-    t.equal(
-      policy.targetReplicaCount,
-      REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE.targetReplicaCount,
-    );
+    await t.rejects(rebalancer.getPolicy(),
+      {code: 'runtime_service_policy_unavailable', reason: 'invalid', deferRetry: true});
   });
 });
 
 test('Binding-derived runtime policy owns replica shape', async (t) => {
   initEnv();
-  const rebalancer = createRebalancer({
-    serviceDefinitions: [
-      {
-        service_id: 'sys-postgres-wire',
-        service_type: REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE,
-        status: 'active',
-        replica_count: 9,
-        binding_version_id: `binding-version-${'a'.repeat(64)}`,
-        binding_digest: `sha256:${'b'.repeat(64)}`,
-        binding_projection: JSON.stringify({
-          binding_version_id: `binding-version-${'a'.repeat(64)}`,
-          binding_digest: `sha256:${'b'.repeat(64)}`,
-          declaration: {
-            source: {kind: 'request'},
-          },
-        }),
-      },
-    ],
-  });
+  const producer = await createRequestBindingFixture();
+  const {serviceDefinition} = await producer.owners.serviceDefinitionsOwner
+    .reconcileRequestBinding(producer.bindingRow);
+  const rebalancer = createRebalancer({entityId: serviceDefinition.service_id,
+    serviceDefinitions: [{...serviceDefinition, replica_count: 9}]});
 
   const policy = await rebalancer.getPolicy();
   t.equal(
     policy.targetReplicaCount,
     REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE.targetReplicaCount,
-    'legacy desired-count data cannot override a Binding-derived target',
+    'stored count cannot override a validated Binding-derived target',
   );
   t.equal(
     policy.minReplicaCount,

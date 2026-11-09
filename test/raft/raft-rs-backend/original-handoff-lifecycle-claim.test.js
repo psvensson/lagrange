@@ -20,7 +20,7 @@ function generation(t) {
   const db = new Database(':memory:');
   const port = createRaftRsOperationPort({groupId: GROUP, peerId: REPLICA,
     peerAddress: 'local-replica', durableStorage: db, timing: TIMING,
-    bootstrapPeerIds: [REPLICA], bootstrapMembership: genesisStamp([REPLICA]),
+    bootstrapPeerIds: [REPLICA], bootstrapMembership: genesisStamp([REPLICA], {}),
     resolvePeerAddress: () => 'local-replica', sendToPeer: () => {},
     applyCommittedEntry: () => {}, deferElection: true,
     [REQUEST.APPLY_COMMITTED_ENTRY_MODE]: RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS});

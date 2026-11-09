@@ -79,18 +79,22 @@ function resolveCdcSubscriptionDiagnostics(partitionService) {
 
 function buildControlSnapshotResolveOptions(options = {}) {
   const forceAuthoritativeRepair = options.forceAuthoritativeRepair === true;
+  const allowAuthoritativeRepair = options.allowAuthoritativeRepair === true;
+  const allowAuthoritativeReadinessRefresh =
+    options.allowAuthoritativeReadinessRefresh === undefined ?
+      (forceAuthoritativeRepair || allowAuthoritativeRepair ? undefined : false) :
+      options.allowAuthoritativeReadinessRefresh;
   return {
     ...(forceAuthoritativeRepair ?
       {forceAuthoritativeRepair: true} :
       {}),
     allowAuthoritativeRepair: options.allowAuthoritativeRepair,
-    ...(!forceAuthoritativeRepair ?
+    ...(!forceAuthoritativeRepair && allowAuthoritativeRepair ?
       {[CONTROL_SNAPSHOT_DEFER_INLINE_OWNER_COMMAND_FIELD]: true} :
       {}),
     boundedObservationProbe: !forceAuthoritativeRepair,
     queryTimeoutMs: options.queryTimeoutMs,
-    allowAuthoritativeReadinessRefresh:
-        options.allowAuthoritativeReadinessRefresh,
+    allowAuthoritativeReadinessRefresh,
     allowStaleReadinessOnCacheChange:
         options.allowStaleReadinessOnCacheChange,
     allowAuthoritativePublishedMembershipRecovery:
@@ -121,6 +125,46 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
     toNonNegativeInteger,
     uniqueSorted,
   } = options;
+  function appendPartitionCdcDiagnostics(partitionId, diagnostics, observation) {
+    const {
+      partitionDiagnosticsById,
+      missingDiagnosticsPartitionIds,
+      noSubscriberPartitionIds,
+      bufferedPartitionIds,
+    } = observation;
+    if (!diagnostics) {
+      partitionDiagnosticsById[partitionId] = {
+        diagnosticsAvailable: false,
+        ready: false,
+        subscriberCount: 0,
+        bufferedEvents: 0,
+        bufferReplayInFlight: false,
+      };
+      missingDiagnosticsPartitionIds.push(partitionId);
+      return;
+    }
+    const subscriberCount = toNonNegativeInteger(diagnostics.subscriberCount);
+    const bufferedEvents = toNonNegativeInteger(diagnostics.bufferedEvents);
+    const bufferReplayInFlight = diagnostics.bufferReplayInFlight === true;
+    const ready =
+      subscriberCount > 0 &&
+      bufferedEvents === 0 &&
+      bufferReplayInFlight !== true;
+    partitionDiagnosticsById[partitionId] = {
+      diagnosticsAvailable: true,
+      ready,
+      subscriberCount,
+      bufferedEvents,
+      bufferReplayInFlight,
+      diagnostics,
+    };
+    if (subscriberCount <= 0) {
+      noSubscriberPartitionIds.push(partitionId);
+    }
+    if (bufferedEvents > 0 || bufferReplayInFlight === true) {
+      bufferedPartitionIds.push(partitionId);
+    }
+  }
   class AdminControlSnapshotLocalDiagnosticsMethods {
     buildLocalCdcTelemetry() {
       const partitionServices = this.resolveLocalPartitionServices ?
@@ -133,15 +177,8 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       let catchupDetected = false;
       if (partitionServices instanceof Map) {
         for (const partitionService of partitionServices.values()) {
-          if (
-            !partitionService ||
-            typeof partitionService.getCDCSubscriptionDiagnostics !==
-              'function'
-          ) {
-            continue;
-          }
-          const diagnostics = partitionService.getCDCSubscriptionDiagnostics();
-          if (!diagnostics || typeof diagnostics !== 'object') {
+          const diagnostics = resolveCdcSubscriptionDiagnostics(partitionService);
+          if (!diagnostics) {
             continue;
           }
           const partitionSubscriberCount = Number(
@@ -257,43 +294,12 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
           }
           const diagnostics =
             resolveCdcSubscriptionDiagnostics(partitionService);
-          if (!diagnostics) {
-            partitionDiagnosticsById[partitionId] = {
-              diagnosticsAvailable: false,
-              ready: false,
-              subscriberCount: 0,
-              bufferedEvents: 0,
-              bufferReplayInFlight: false,
-            };
-            missingDiagnosticsPartitionIds.push(partitionId);
-            continue;
-          }
-          const subscriberCount = toNonNegativeInteger(
-            diagnostics.subscriberCount,
-          );
-          const bufferedEvents = toNonNegativeInteger(
-            diagnostics.bufferedEvents,
-          );
-          const bufferReplayInFlight =
-            diagnostics.bufferReplayInFlight === true;
-          const ready =
-            subscriberCount > 0 &&
-            bufferedEvents === 0 &&
-            bufferReplayInFlight !== true;
-          partitionDiagnosticsById[partitionId] = {
-            diagnosticsAvailable: true,
-            ready,
-            subscriberCount,
-            bufferedEvents,
-            bufferReplayInFlight,
-            diagnostics,
-          };
-          if (subscriberCount <= 0) {
-            noSubscriberPartitionIds.push(partitionId);
-          }
-          if (bufferedEvents > 0 || bufferReplayInFlight === true) {
-            bufferedPartitionIds.push(partitionId);
-          }
+          appendPartitionCdcDiagnostics(partitionId, diagnostics, {
+            partitionDiagnosticsById,
+            missingDiagnosticsPartitionIds,
+            noSubscriberPartitionIds,
+            bufferedPartitionIds,
+          });
         }
       }
       const localPartitionIds = uniqueSorted(
@@ -615,6 +621,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
         const boundedSnapshot = await this.buildLocalControlSnapshot({
           ...resolveOptions,
           boundedObservationProbe: true,
+          skipAuthoritativeSnapshotRowRefresh: true,
         });
         return await this.scheduleBoundedMembershipPublicationReconcile(
           boundedSnapshot,
@@ -644,8 +651,10 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       resolveOptions = {},
     ) {
       if (
+        (resolveOptions.allowAuthoritativeRepair !== true &&
+          resolveOptions.forceAuthoritativeRepair !== true) ||
         typeof this.triggerMembershipPublicationHandoffOwnerCommand !==
-        'function'
+          'function'
       ) {
         return boundedSnapshot;
       }

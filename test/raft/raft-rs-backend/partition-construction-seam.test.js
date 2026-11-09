@@ -54,7 +54,7 @@ function minimalPartitionRequest(overrides = {}) {
     [RAFT_OPERATION_PORT_REQUEST.PEER_ADDRESS]: REPLICA_ID,
     [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS]: [REPLICA_ID],
     [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
-      genesisStamp([REPLICA_ID]),
+      genesisStamp([REPLICA_ID], {}),
     [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: new Database(':memory:'),
     [RAFT_OPERATION_PORT_REQUEST.TIMING]: TIMING,
     [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: {},
@@ -95,7 +95,7 @@ function buildPartition() {
     tableName: 'seam_table',
     replicaId: REPLICA_ID,
     replicaIds: [REPLICA_ID],
-    bootstrapMembership: genesisStamp([REPLICA_ID]),
+    bootstrapMembership: genesisStamp([REPLICA_ID], {}),
     nodeId: 'node-seam-1',
     dbPath: ':memory:',
     deferElection: true,

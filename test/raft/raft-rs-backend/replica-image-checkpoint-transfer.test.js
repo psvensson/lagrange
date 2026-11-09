@@ -30,6 +30,7 @@ import {OperationType} from '../../../src/rebalancer/replica-status.js';
 const GROUP = 'mg-checkpoint-owner-red';
 const FOUNDERS = Object.freeze(['mg-red-a', 'mg-red-b', 'mg-red-c']);
 const TARGET = 'mg-red-fresh-d';
+const TARGET_NODE = 'node-d';
 const REMOVED = 'mg-red-removed-z';
 const APPLIED_INDEX = '12';
 const APPLIED_TERM = '4';
@@ -147,6 +148,9 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
       const registry = new RaftRsPeerIdentityRegistry(db);
       const voters = FOUNDERS.map((replica) => registry.registerReplica(replica));
       const targetPeer = registry.registerReplica(TARGET);
+      // The target's committed node (its admission context's): the image
+      // must carry it so the installed replica addresses it from the fact.
+      registry.recordCommittedNodeId(TARGET, TARGET_NODE);
       const removedPeer = registry.registerReplica(REMOVED);
       const store = new RaftRsDurableStore(db);
       store.putAppliedState(GROUP, APPLIED_INDEX, {
@@ -202,9 +206,16 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
       t.equal(sealed.outcome, 'valid', 'the sealed replica image validates');
       t.equal(Object.isFrozen(created.descriptor.raftRs.confState.learners),
         true, 'the built descriptor deeply freezes ConfState member arrays');
+      t.equal(created.descriptor.raftRs.peerReservations.find(
+        ({replicaIdentity}) => replicaIdentity === TARGET).nodeId, TARGET_NODE,
+      'the sealed descriptor carries the target\'s committed node');
       const malformedCases = [
         ['descriptor/payload peer map disagreement', (descriptor) => {
           descriptor.raftRs.peerReservations[0].peerId = '7';
+        }],
+        ['descriptor/payload committed node disagreement', (descriptor) => {
+          descriptor.raftRs.peerReservations.find(
+            ({replicaIdentity}) => replicaIdentity === TARGET).nodeId = 'node-x';
         }],
         ['noncanonical generation', (descriptor) => {
           descriptor.raftRs.membershipGenerationIndex = '09';

@@ -116,7 +116,8 @@ function learnerQuery(f, permitSequence) {
   const identity = JSON.parse(f.request.identity);
   return {purpose: PURPOSE.LEARNER_ACTION, groupId: GROUP, action: {operationId: O,
     transitionIdentity: identity.transitionIdentity, permitSequence, stage: 'add-learner',
-    replicaIdentity: identity.targetReplicaId, peerId: identity.targetPeerId}};
+    replicaIdentity: identity.targetReplicaId, peerId: identity.targetPeerId,
+    nodeId: identity.targetNodeId}};
 }
 const readAction = (f, replicaId, permitSequence) =>
   f.cluster.node(replicaId).readCommittedMembership(learnerQuery(f, permitSequence));
@@ -271,7 +272,7 @@ function transitionOf(f, permit) {
   return {operationId: O, transitionIdentity: permit.transitionIdentity,
     permitSequence: permit.permitSequence, stage: permit.permitStage,
     replicaIdentity: permit.replicaIdentity,
-    peerAddress: JSON.parse(f.request.identity).targetAddress,
+    nodeId: JSON.parse(f.request.identity).targetNodeId,
     replicaLifecycleIncarnation: permit.replicaLifecycleIncarnation,
     runtimeGeneration: permit.runtimeGeneration, leaderTerm: permit.leaderTerm,
     leaderConfigurationStamp: permit.leaderConfigurationStamp};

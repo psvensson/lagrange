@@ -1,5 +1,7 @@
 // Real released SERVICES producer, RF1 source MG and RF5 target MG. The only
 // fault is transport custody: native G/F1 traffic and the unchanged B envelope.
+import {founderNodeIdsOfPlacement} from
+  '../../src/raft/raft-rs-committed-peer-address.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -110,7 +112,16 @@ async function pump(f, rounds = DELIVERY_ROUNDS) {
     for (const item of f.native.splice(0)) {
       const cut = item.envelope.groupId === TARGET_GROUP && f.cutPeer !== null &&
         (item.envelope.from === f.cutPeer || item.envelope.to === f.cutPeer);
-      if (cut) {
+      // The reopened follower hears nothing from its group until released:
+      // it has no live leader yet (an election-time state), so its native
+      // leader route does not exist.
+      const unheard = item.envelope.groupId === TARGET_GROUP &&
+        f.unheardPeer !== null && item.envelope.to === f.unheardPeer;
+      if (unheard) {
+        f.unheardNative.push(item);
+        note(f, 'native-unheard', {from: item.envelope.from, to: item.envelope.to,
+          msgType: item.envelope.message.msgType});
+      } else if (cut) {
         f.heldNative.push(item);
         note(f, 'native-cut', {from: item.envelope.from, to: item.envelope.to,
           groupId: item.envelope.groupId, msgType: item.envelope.message.msgType});
@@ -158,6 +169,16 @@ async function deliverApplication(f, address, envelope, options) {
   }
 }
 
+// The follower starts hearing its group again: the leader's next heartbeat
+// names it, at the address the committed configuration places it.
+async function releaseFollower(f) {
+  f.unheardPeer = null;
+  for (let round = 0; round < SETUP_ROUNDS; round += 1) {
+    await tick(f);
+    if (f.follower.raft.readStatus().leaderId === LEADER) return;
+  }
+}
+
 function releaseB(f) {
   f.holdB = false;
   for (const held of f.heldApplications.splice(0)) held.resolve();
@@ -167,7 +188,8 @@ async function openReplica(f, groupId, replicaId, replicas, rows, hints) {
   const cache = new SystemTableCache();
   for (const row of rows) cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, row);
   const service = new MessageGroupService({groupId, replicaId, replicaIds: replicas,
-    peerAddresses: hints, nodeId: NODE_ID, transport: f.router,
+    founderNodeIds: founderNodeIdsOfPlacement(replicas, hints), nodeId: NODE_ID,
+    transport: f.router,
     dbPath: path.join(f.directory, `${replicaId}.sqlite`),
     timeSource: new VirtualTimeSource({startMs: 1000}),
     nodeService: {getSystemTableCache: () => cache, getReadOnlySystemTableCache: () => cache}});
@@ -228,7 +250,8 @@ async function reopen(f, replicaId, rows) {
   assert.deepEqual(readRaftRsPeerIdentityReservations(service.db), before.reservations);
   assert.equal(service.raft.readStatus().peerId, before.status.peerId);
   assert.deepEqual(service.raft.readStatus().confState, before.status.confState);
-  assert.deepEqual(service.peerAddresses, [], 'the reopened service has no bootstrap address hints');
+  assert.deepEqual({...service.founderNodeIds}, {},
+    'the reopened service opens from its durable record, with no founding placement');
   note(f, 'retained-reopen', {replicaId, before, after: service.raft.readStatus()});
   return service;
 }
@@ -270,6 +293,7 @@ async function prepareRecipients(f) {
   const campaign = await turnChainValue(f.first.raft.campaign());
   note(f, 'isolated-native-campaign', {campaign, status: f.first.raft.readStatus()});
   await pump(f);
+  f.unheardPeer = f.services.get(FOLLOWER).raft.readStatus().peerId;
   f.follower = await reopen(f, FOLLOWER,
     [activeProjection(TARGET_GROUP, FIRST_HOP), activeProjection(TARGET_GROUP, FOLLOWER)]);
   f.followerBeforePort = f.follower.raft;
@@ -279,10 +303,6 @@ async function prepareRecipients(f) {
       row: this.systemTableCache.get(TABLES.SERVICES, LEADER) ?? null});
     return Reflect.apply(reconcile, this, args);
   };
-  for (let round = 0; round < SETUP_ROUNDS; round += 1) {
-    await tick(f);
-    if (f.follower.raft.readStatus().leaderId === LEADER) break;
-  }
   await pump(f);
   f.phase = 'measured';
 }
@@ -336,7 +356,8 @@ async function provisionalRouteFixture(t) {
     raft: {heartbeatIntervalMs: 20, electionTimeoutMinMs: 150, electionTimeoutMaxMs: 300}});
   LoggingService.getInstance().initialize({level: 'fatal'});
   const f = {phase: 'setup', services: new Map(), events: [], native: [], heldNative: [],
-    cutPeer: null, holdB: true, heldApplications: [], applicationSettlements: new Set(),
+    cutPeer: null, unheardPeer: null, unheardNative: [], holdB: true, heldApplications: [],
+    applicationSettlements: new Set(),
     directory: fs.mkdtempSync(path.join(os.tmpdir(), 'mg-provisional-rf5-')),
     report: (observation) => t.diagnostic(json(observation))};
   f.router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION,
@@ -374,6 +395,6 @@ function registrationInsert(service, entryId) {
 }
 
 export {provisionalRouteFixture, registrationInsert, sourceView, targetView, recordOf,
-  json, note, pump, tick, releaseB, addressOf, payloadOf, cdcEvents,
+  json, note, pump, tick, releaseB, releaseFollower, addressOf, payloadOf, cdcEvents,
   NODE_ID, SOURCE_GROUP, TARGET_GROUP, SOURCE_REPLICA, TARGET_REPLICAS,
   LEADER, FIRST_HOP, FOLLOWER, PARTITION_ID};

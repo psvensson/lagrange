@@ -53,10 +53,6 @@ export {
   buildControlPlaneWorkloadProfile,
 } from './control-plane-workload-profile.js';
 export {
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
-  normalizeControlPlaneSystemTableVisibilityState,
-} from './control-plane-system-table-visibility-constants.js';
-export {
   getControlPlaneErrorCode,
   getControlPlaneFailureSummary,
   getControlPlaneRetryAfterMs,

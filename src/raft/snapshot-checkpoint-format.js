@@ -14,11 +14,11 @@ import {
   RAFT_CHECKPOINT_PAYLOAD_KIND,
   RAFT_CHECKPOINT_PAYLOAD_VERSION,
   RAFT_CHECKPOINT_VALIDATION_OUTCOME,
-  RAFT_RS_CHECKPOINT_ADMITTED_PEER_FIELDS,
   RAFT_RS_CHECKPOINT_CONF_STATE_FIELDS,
   RAFT_RS_CHECKPOINT_DESCRIPTOR_FIELDS,
   RAFT_RS_CHECKPOINT_ENVELOPE_FIELDS,
   RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS,
+  RAFT_RS_CHECKPOINT_PEER_RESERVATION_OPTIONAL_FIELDS,
   RAFT_RS_CHECKPOINT_REASON,
 } from './snapshot-checkpoint-constants.js';
 import {learnerAdmissionMatchesReservation} from './raft-rs-committed-membership-context.js';
@@ -121,14 +121,22 @@ function validRaftRsConfState(confState) {
     typeof confState.autoLeave === 'boolean';
 }
 
+// A reservation's exact key set: the two required fields plus each recorded
+// fact it carries (an absent fact is an absent key, never a null).
+function reservationFieldsOf(reservation) {
+  return [...RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS,
+    ...RAFT_RS_CHECKPOINT_PEER_RESERVATION_OPTIONAL_FIELDS.filter(
+      (field) => reservation?.[field] !== undefined)];
+}
+
 function validRaftRsReservationShapes(reservations) {
   return Array.isArray(reservations) &&
     reservations.every((reservation) =>
-      exactKeys(reservation, reservation?.learnerAdmission === undefined ?
-        RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS :
-        RAFT_RS_CHECKPOINT_ADMITTED_PEER_FIELDS) &&
+      exactKeys(reservation, reservationFieldsOf(reservation)) &&
       isNonEmptyString(reservation.replicaIdentity) &&
       isDecimalInteger(reservation.peerId) &&
+      (reservation.nodeId === undefined ||
+        isNonEmptyString(reservation.nodeId)) &&
       (reservation.learnerAdmission === undefined ||
         typeof reservation.learnerAdmission === 'string')) &&
     unique(reservations.map(({replicaIdentity}) => replicaIdentity)) &&

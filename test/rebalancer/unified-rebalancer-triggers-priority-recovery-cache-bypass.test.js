@@ -1,3 +1,4 @@
+import {createMockCoordinator} from './test-helpers.js';
 /**
  * Unit tests for UnifiedRebalancer.
  * Tests the core rebalancing logic for partitions and message groups.
@@ -54,8 +55,9 @@ import {registerPriorityRecoverySerialWaitTestCases} from './unified-rebalancer-
 import {
   createMockCdcService,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
 } from './unified-rebalancer-test-support.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 
 const TEST_NUMBER = Object.freeze({
   ZERO: 0,
@@ -160,42 +162,6 @@ function createMockMessageRouter(
   };
 }
 
-// Create mock rebalance coordinator
-function createMockCoordinator() {
-  const storageAccountingService = {
-    estimateReplicaBytes: () => 1,
-  };
-  const storageAdmissionService = {
-    checkAdd: async () => ({decision: 'allow'}),
-    checkReplace: async () => ({decision: 'allow'}),
-  };
-  return {
-    getMoveSafetyError: () => null,
-    createOperation: async (move) => ({
-      operationId: TEST_SCALAR.OPERATION_ID_PREFIX + Date.now(),
-      type: move.type,
-      partitionId: move.partitionId,
-      targetNodeId: move.nodeId,
-      status: ReplicaStatus.PENDING,
-      workflowStep: WORKFLOW_STEP.PENDING,
-    }),
-    executeOperation: async () => ({success: true}),
-    canStartAddOperation: async () => true,
-    canStartRemoveOperation: async () => true,
-    // getStats is called synchronously by UnifiedRebalancer.getStats()
-    getStats: () => ({
-      operationsCreated: TEST_NUMBER.ZERO,
-      operationsCompleted: TEST_NUMBER.ZERO,
-      operationsFailed: TEST_NUMBER.ZERO,
-      operationsTimedOut: TEST_NUMBER.ZERO,
-      inFlightOperations: TEST_NUMBER.ZERO,
-      totalOperations: TEST_NUMBER.ZERO,
-    }),
-    storageAccountingService,
-    storageAdmissionService,
-  };
-}
-
 // Create mock readiness service backed by the same cache
 // Create a fully configured rebalancer for testing
 function createTestRebalancer(options = {}) {
@@ -232,19 +198,21 @@ function createTestRebalancer(options = {}) {
     serviceEndpoints,
   );
   const mockCdcService = cdcIntegrationService || createMockCdcService();
-  const mockPolicyService = createMockPolicyService(
-    partitions, tables,
-  );
+  const mockPolicyService = createMockPolicyService({partitions: partitions, tables: tables});
   const mockMessageRouter = messageRouter ||
     createMockMessageRouter(connectionState);
-  const mockCoordinator = rebalanceCoordinator || createMockCoordinator();
   const mockSqlQueryEngine = sqlQueryEngine || {
     async executeQuery() {
       return {success: true, rows: []};
     },
   };
-  const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
+  // A named hand fake is completed by the one fixture completer.
+  const mockReadinessService = controlPlaneReadinessService ?
+    readinessServiceFake(controlPlaneReadinessService, nowFn || undefined) :
+    createMockControlPlaneReadinessService({systemTableCache: mockCache});
+  const mockCoordinator = rebalanceCoordinator || createMockCoordinator({
+    controlPlaneReadinessService: mockReadinessService,
+  });
 
   return new UnifiedRebalancer({
     entityId,
@@ -416,7 +384,7 @@ const TEST_MESSAGE = Object.freeze({
 const PRIORITY_RECOVERY_REBALANCER_TEST_CONTEXT = Object.freeze({
   createMockCache,
   createMockCoordinator,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   createTestRebalancer,
   EntityType,
   MoveType,
@@ -871,7 +839,7 @@ test(TEST_NAME.SUITE, async (t) => {
         {node_id: TEST_NODE_ID_D, status: NodeStatus.ACTIVE},
       ]);
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
@@ -1017,7 +985,7 @@ test(TEST_NAME.SUITE, async (t) => {
       });
       const cache = createMockCache(nodes);
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
@@ -1156,7 +1124,7 @@ test(TEST_NAME.SUITE, async (t) => {
       });
       const cache = createMockCache([]);
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
@@ -1275,7 +1243,7 @@ test(TEST_NAME.SUITE, async (t) => {
         })],
       );
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },

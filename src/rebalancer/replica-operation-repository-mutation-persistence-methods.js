@@ -1,6 +1,7 @@
 import {
   REPLICA_OPERATION_INSERT_DISPOSITION,
 } from './replica-operation-insert-disposition.js';
+import {TYPEOF, WORKFLOW_STEP} from '../constants/index.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
@@ -10,6 +11,7 @@ import {
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const ABSENT_VISIBILITY_VALUE = null;
+const SETTLED_MEMBERSHIP_OBLIGATION_STATE = 'settled';
 const SQLITE_CONSTRAINT_PRIMARY_KEY = 'SQLITE_CONSTRAINT_PRIMARYKEY';
 const REPLICA_OPERATION_VISIBILITY_WAIT = Object.freeze({
   wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
@@ -63,17 +65,50 @@ function nullableOperationValue(value) {
   return value ?? null;
 }
 
-function membershipVisibilitySatisfied(expectedOperation, observedOperation) {
-  const membershipFields = [
-    'sourceReplicaId',
-    ...REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS,
+function createAdmissionVisibilitySatisfied(expected, observed) {
+  if (expected.createAdmissionState == null) return true;
+  const fields = [
+    'createAdmissionState', 'createAdmissionToken',
+    'createAdmissionReplicaCreatedAt', 'createAdmissionAttemptToken',
+    'createAdmissionPreviousAttemptToken', 'createAdmissionAttemptSeq',
+    'createAdmissionWorkflowUpdatedAt', 'createAdmissionOwnerIncarnation',
   ];
-  const carriesMembership = membershipFields.some((field) =>
-    expectedOperation[field] !== null &&
-      expectedOperation[field] !== undefined);
-  return !carriesMembership || membershipFields.every((field) =>
-    nullableOperationValue(observedOperation[field]) ===
-      nullableOperationValue(expectedOperation[field]));
+  if (fields.every((field) => observed[field] === expected[field])) return true;
+  return Boolean(
+    expected.workflowStep &&
+    expected.workflowStep !== WORKFLOW_STEP.PENDING &&
+    typeof observed.createAdmissionState === TYPEOF.STRING &&
+    observed.createAdmissionToken === expected.createAdmissionToken &&
+    Number(observed.createAdmissionAttemptSeq) >=
+      Number(expected.createAdmissionAttemptSeq),
+  );
+}
+
+function membershipLaneKeyVisibilitySatisfied(expected, observed) {
+  const expectedKey = nullableOperationValue(expected.messageGroupMembershipLaneKey);
+  if (expectedKey === null) return true;
+  const observedKey = nullableOperationValue(observed.messageGroupMembershipLaneKey);
+  return observedKey === expectedKey ||
+    observedKey === null &&
+    observed.messageGroupMembershipObligationState ===
+      SETTLED_MEMBERSHIP_OBLIGATION_STATE;
+}
+
+function membershipVisibilitySatisfied(expected, observed) {
+  const fields = ['sourceReplicaId', ...REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS];
+  if (!fields.some((field) => expected[field] != null)) return true;
+  if (fields.every((field) =>
+    nullableOperationValue(observed[field]) === nullableOperationValue(expected[field]))) {
+    return true;
+  }
+  if (!expected.workflowStep || expected.workflowStep === WORKFLOW_STEP.PENDING) {
+    return false;
+  }
+  const identityFields = ['sourceReplicaId', 'messageGroupMembershipIdentity'];
+  return identityFields.every((field) =>
+    expected[field] == null ||
+    nullableOperationValue(observed[field]) === nullableOperationValue(expected[field])) &&
+    membershipLaneKeyVisibilitySatisfied(expected, observed);
 }
 
 function isReplicaOperationUniqueConstraintFailure(result) {
@@ -612,20 +647,11 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       ) {
         return false;
       }
-      if (expectedOperation.createAdmissionState !== null &&
-          expectedOperation.createAdmissionState !== undefined) {
-        const admissionFields = [
-          'createAdmissionState',
-          'createAdmissionToken',
-          'createAdmissionReplicaCreatedAt',
-          'createAdmissionAttemptToken',
-          'createAdmissionPreviousAttemptToken',
-          'createAdmissionAttemptSeq',
-          'createAdmissionWorkflowUpdatedAt',
-          'createAdmissionOwnerIncarnation',
-        ];
-        if (admissionFields.some((field) =>
-          observedOperation[field] !== expectedOperation[field])) return false;
+      if (!createAdmissionVisibilitySatisfied(
+        expectedOperation,
+        observedOperation,
+      )) {
+        return false;
       }
       if (!membershipVisibilitySatisfied(expectedOperation,
         observedOperation)) {

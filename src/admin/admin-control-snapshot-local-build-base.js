@@ -35,27 +35,8 @@ import {AdminCacheOwnerState} from './admin-cache-owner-state.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
-  READY: 'ready',
-  UPDATEDAT: 'updatedAt',
-  UPDATED_AT: 'updated_at',
-  UNKNOWN_ERROR: 'unknown_error',
   PUBLISHED: 'PUBLISHED',
   NODEID: 'nodeId',
-  ID: 'id',
-  NAME: 'name',
-  CAPTUREDAT: 'capturedAt',
-  SOURCELEADERNODEID: 'sourceLeaderNodeId',
-  DECISIONTIMESTAMP: 'decisionTimestamp',
-  FAILEDAT: 'failedAt',
-  NEXTATTEMPTAT: 'nextAttemptAt',
-  TABLEID: 'tableId',
-  TABLE_NAME: 'table_name',
-  TABLENAME: 'tableName',
-  PARTITIONSTATE: 'partitionState',
-  REPLICAID: 'replicaId',
-  RAFTROLE: 'raftRole',
-  STATUS: 'status',
-  ADDRESS: 'address',
 });
 const CONTROL_PLANE_DIAGNOSTICS_READINESS_CACHE_MAX_AGE_MS = 5000;
 const CONTROL_PLANE_SNAPSHOT_OWNER_RESOLVE_METHOD = 'resolveControlSnapshot';
@@ -176,34 +157,32 @@ function buildControlSnapshotPriorityRecoveryPressureDiagnostics(
 const CONTROL_SNAPSHOT_PUBLICATION_OBSERVATION_STATE = Object.freeze({
   AVAILABLE: 'available',
 });
-function hasDurablePublishedMembershipObservation(
-  publicationDiagnostics = null,
-) {
-  if (
-    !publicationDiagnostics ||
-    typeof publicationDiagnostics !== 'object'
-  ) {
-    return false;
-  }
-  if (
-    publicationDiagnostics?.publicationObservation?.state ===
-    CONTROL_SNAPSHOT_PUBLICATION_OBSERVATION_STATE.AVAILABLE
-  ) {
-    return true;
-  }
-  if (
-    publicationDiagnostics?.publishedActiveNodeIdsPresent === true ||
-    Array.isArray(publicationDiagnostics?.publishedActiveNodeIds)
-  ) {
-    return true;
-  }
-  const publicationStatus = String(
+function resolveObservedPublicationStatus(publicationDiagnostics) {
+  return String(
     publicationDiagnostics?.status ||
       publicationDiagnostics?.publicationStatus ||
       publicationDiagnostics?.publicationObservation?.status ||
       ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
   ).toUpperCase();
-  return publicationStatus === ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED;
+}
+function hasDurablePublishedMembershipObservation(
+  publicationDiagnostics = null,
+) {
+  if (!isControlSnapshotPlainRecord(publicationDiagnostics)) {
+    return false;
+  }
+  const observationState =
+    publicationDiagnostics.publicationObservation?.state;
+  const hasPublishedNodes =
+    publicationDiagnostics.publishedActiveNodeIdsPresent === true ||
+    Array.isArray(publicationDiagnostics.publishedActiveNodeIds);
+  return (
+    observationState ===
+      CONTROL_SNAPSHOT_PUBLICATION_OBSERVATION_STATE.AVAILABLE ||
+    hasPublishedNodes ||
+    resolveObservedPublicationStatus(publicationDiagnostics) ===
+      ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED
+  );
 }
 function selectDurablePublishedMembershipObservation(
   publicationDiagnostics = null,
@@ -384,6 +363,58 @@ function attachControlSnapshotObservationMode(snapshot, options = {}) {
 function resolveInjectedControlSnapshotLogger(logger) {
   return logger || null;
 }
+
+function resolveBlockedPartitionCount(summary) {
+  return Array.isArray(summary?.blockedPartitions) ?
+    summary.blockedPartitions.length :
+    Infinity;
+}
+
+function hasPriorityMetricMismatch(targetSummary, liveSummary) {
+  return (
+    Number(liveSummary?.distinctNodesWithPriorityPartitionCount) !==
+      Number(targetSummary?.distinctNodesWithPriorityPartitionCount) ||
+    Number(liveSummary?.priorityPartitionsBelowRequiredReplicationCount) !==
+      Number(targetSummary?.priorityPartitionsBelowRequiredReplicationCount)
+  );
+}
+
+function shouldOverlayPrioritySummary(targetSummary, liveSummary) {
+  if (!liveSummary || typeof liveSummary !== 'object') {
+    return false;
+  }
+  if (liveSummary.satisfied === true || targetSummary?.satisfied !== true) {
+    return true;
+  }
+  if (hasPriorityMetricMismatch(targetSummary, liveSummary)) {
+    return true;
+  }
+  return (
+    resolveBlockedPartitionCount(liveSummary) <=
+    resolveBlockedPartitionCount(targetSummary)
+  );
+}
+
+function overlayLivePriorityPartitionSummary(
+  targetConvergence,
+  currentPriorityPlacementObservation,
+) {
+  if (
+    currentPriorityPlacementObservation?.state !==
+      CONTROL_SNAPSHOT_AUTHORITY_INTEGER_STATE_AVAILABLE ||
+    !currentPriorityPlacementObservation.priorityPartitionSummary ||
+    typeof currentPriorityPlacementObservation.priorityPartitionSummary !==
+      'object' ||
+    targetConvergence?.publicationObservation?.state !==
+      CONTROL_SNAPSHOT_AUTHORITY_INTEGER_STATE_AVAILABLE
+  ) {
+    return;
+  }
+  const liveSummary = currentPriorityPlacementObservation.priorityPartitionSummary;
+  if (shouldOverlayPrioritySummary(targetConvergence.priorityPartitionSummary, liveSummary)) {
+    targetConvergence.priorityPartitionSummary = liveSummary;
+  }
+}
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
  * Control snapshot builder.
@@ -459,10 +490,6 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
       throw new Error(ADMIN_ERROR_MESSAGE.CONTROL_SNAPSHOT_UNAVAILABLE);
     }
     const tableRows = systemTableCache.getAll(TABLES.TABLES);
-    const partitionRows = systemTableCache.getAll(TABLES.PARTITIONS);
-    const replicaOperationRows = systemTableCache.getAll(
-      TABLES.REPLICA_OPERATIONS,
-    );
     const capturedAt = this.nowFn();
     const preferAuthoritativePublicationRead =
       options.preferAuthoritativePublicationRead === true ||
@@ -488,8 +515,12 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
     if (!this.isCurrentCacheOwner(cacheOwner)) {
       return null;
     }
+    let replicaOperationRows = systemTableCache.getAll(
+      TABLES.REPLICA_OPERATIONS,
+    );
+    let serviceRows = systemTableCache.getAll(TABLES.SERVICES);
+    let partitionRows = systemTableCache.getAll(TABLES.PARTITIONS);
     const nodeRows = systemTableCache.getAll(TABLES.NODES);
-    const serviceRows = systemTableCache.getAll(TABLES.SERVICES);
     const nodeEndpointRows = systemTableCache.getAll(
       TABLES.NODE_ENDPOINTS,
     );
@@ -521,6 +552,21 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
       controlPlaneDiagnostics &&
       typeof controlPlaneDiagnostics === 'object'
     ) {
+      const currentPriorityPlacementObservation =
+        buildCurrentPriorityPlacementObservation({
+          capturedAt,
+          partitionRows,
+          serviceRows,
+          readinessByNodeId: controlPlaneDiagnostics.readinessByNodeId,
+          activeNodeViews,
+        });
+      controlPlaneDiagnostics[
+        CONTROL_SNAPSHOT_CURRENT_PRIORITY_PLACEMENT_OBSERVATION_FIELD
+      ] = currentPriorityPlacementObservation;
+      overlayLivePriorityPartitionSummary(
+        controlPlaneDiagnostics.publicationConvergence,
+        currentPriorityPlacementObservation,
+      );
       const publicationActiveGateHandoff =
         this.resolvePublicationActiveGateHandoffContract({
           nodeRows,
@@ -552,6 +598,10 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
       const resolvedConvergence =
         reevaluatedEvidence.publicationConvergence ||
         controlPlaneDiagnostics.publicationConvergence;
+      overlayLivePriorityPartitionSummary(
+        resolvedConvergence,
+        currentPriorityPlacementObservation,
+      );
       const resolvedConvergenceGate =
         reevaluatedEvidence.publicationConvergenceGate ||
         controlPlaneDiagnostics.publicationConvergenceGate;
@@ -612,6 +662,11 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
         if (!this.isCurrentCacheOwner(cacheOwner)) {
           return null;
         }
+        replicaOperationRows = systemTableCache.getAll(
+          TABLES.REPLICA_OPERATIONS,
+        );
+        serviceRows = systemTableCache.getAll(TABLES.SERVICES);
+        partitionRows = systemTableCache.getAll(TABLES.PARTITIONS);
         if (
           membershipPublicationHandoffOutcome &&
           typeof membershipPublicationHandoffOutcome === 'object'
@@ -715,20 +770,7 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
       activePartitionServiceRows,
       leaderSummaryOptions,
     );
-    if (
-      controlPlaneDiagnostics &&
-      typeof controlPlaneDiagnostics === 'object'
-    ) {
-      controlPlaneDiagnostics[
-        CONTROL_SNAPSHOT_CURRENT_PRIORITY_PLACEMENT_OBSERVATION_FIELD
-      ] = buildCurrentPriorityPlacementObservation({
-        capturedAt,
-        partitionRows,
-        serviceRows,
-        readinessByNodeId: controlPlaneDiagnostics.readinessByNodeId,
-        activeNodeViews,
-      });
-    }
+
     const voterCounts = this.buildControlSnapshotVoterCounts(
       activePartitionServiceRows,
     );

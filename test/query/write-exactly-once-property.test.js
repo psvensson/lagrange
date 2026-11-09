@@ -190,8 +190,7 @@ async function runLogicalWrite(write, {engine, gateway, index, seed,
   violations, tally}) {
   const [sql, params] = statementOf(write);
   const identity = write.kind === 'named-birth' ?
-    {writeIdentity: controlPlaneWriteIdentity(NAME_SCOPE, write.key, 'birth'),
-      skipCacheWait: true} :
+    {writeIdentity: controlPlaneWriteIdentity(NAME_SCOPE, write.key, 'birth')} :
     {idempotencyKey: `property-${seed}-${index}`};
   const deliver = () => withMutedConsoleError(() =>
     (write.kind === 'named-birth' ?

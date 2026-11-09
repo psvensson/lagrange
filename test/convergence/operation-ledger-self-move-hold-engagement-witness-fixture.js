@@ -526,26 +526,25 @@ function bindOwnerTimersToClock({coordinator, timeSource}) {
 // placement fence and published-membership safety, and the dispatch epoch
 // gate consult them).
 function bindStartupAuthority({
-  coordinator,
-  getPublicationRow,
-  getStartupAuthority,
-  getPlanningAnswer,
+  coordinator, timeSource, getNodeRows, getPublicationRow, getStartupAuthority, getPlanningAnswer,
 }) {
   const readinessService = coordinator.controlPlaneReadinessService;
+  readinessService.answerCommittedNodes = () => ({
+    state: 'ready', nodeRows: getNodeRows(),
+    epoch: {publicationEpoch: getPublicationRow().publication_epoch,
+      publicationId: `cluster_membership-${getPublicationRow().publication_epoch}`, readAtMs: timeSource.now()},
+  });
   readinessService.getCurrentPublishedMembershipEpochSync = () =>
     getPublicationRow().publication_epoch;
   readinessService.membershipPublicationService = {
     getLatestClusterPublicationSync: () => getPublicationRow(),
   };
-  readinessService.getStartupAuthoritySnapshotSync = () =>
-    getStartupAuthority();
+  readinessService.getStartupAuthoritySnapshotSync = () => getStartupAuthority();
   // Published-membership REMOVE safety reads the owner surface; the same
   // owner-derived planning answer is presented there, unchanged. The
   // best-effort surface stays for the AVAILABLE consumers in this scenario.
-  readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead =
-    async () => getPlanningAnswer();
-  readinessService.getMembershipPublicationPlanningSnapshotBestEffort =
-    async () => getPlanningAnswer();
+  readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead = async () => getPlanningAnswer();
+  readinessService.getPriorityRecoveryPlanningSnapshotBestEffort = async () => getPlanningAnswer();
 }
 
 async function flushMicrotasks() {
@@ -811,6 +810,8 @@ async function runSelfMovePlannedBeforeAddsScenario(
     bindOwnerTimersToClock({coordinator, timeSource});
     bindStartupAuthority({
       coordinator,
+      timeSource,
+      getNodeRows: nodeRows,
       getPublicationRow: () => publicationRow,
       getStartupAuthority: () => state.startupAuthority,
       getPlanningAnswer: () => state.planningAnswer,

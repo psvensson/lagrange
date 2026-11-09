@@ -18,6 +18,8 @@ import {PARTICIPANT_RELEASE_TYPE} from
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {observeParticipantReleaseDelivery} from './participant-release-delivery-recorder.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {createCommittedServeEligibilityOwner} from
+  '../control-plane/serve-eligibility-test-support.js';
 
 function routeNativeServices(cache, services) {
   for (const service of services) {
@@ -91,6 +93,11 @@ async function attachQueryRelease({group, owners}) {
       getTimeSource: () => control.timeSource, getLogger: () => control.logger,
     }});
     engine = bridge.acquireSqlQueryEngine();
+    // Production attaches the readiness owner when the rebalance coordinator
+    // arrives (setRebalanceCoordinator); this composition has none, so it
+    // states the committed owner directly (quest
+    // serve-eligibility-committed-epoch-read: no absent-owner default).
+    engine.setControlPlaneReadinessService(createCommittedServeEligibilityOwner());
     control.sqlQueryEngine = engine;
     const routing = engine.queryExecutor.getPartitionRoutingSnapshot(group.services[0].partitionId);
     assert.equal(routing.canonicalLeaderObservationState, 'available', JSON.stringify(routing));

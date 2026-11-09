@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-08T12:15:36.616Z",
+  "generatedAt": "2026-11-09T06:33:39.106Z",
   "rawViolationCount": 59,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
-      "line": 661,
+      "line": 670,
       "column": 27,
       "functionName": "assignAdminControlSnapshotLocalDiagnosticsMethods",
       "kind": "prototype_copy_bags",
@@ -14,7 +14,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-readiness-diagnostics-methods.js",
-      "line": 676,
+      "line": 782,
       "column": 27,
       "functionName": "assignAdminControlSnapshotReadinessDiagnosticsMethods",
       "kind": "prototype_copy_bags",
@@ -41,7 +41,7 @@
     },
     {
       "filePath": "src/admin/admin-service-discovery-repair-cache-methods.js",
-      "line": 560,
+      "line": 566,
       "column": 27,
       "functionName": "assignAdminServiceDiscoveryRepairCacheMethods",
       "kind": "prototype_copy_bags",
@@ -50,7 +50,7 @@
     },
     {
       "filePath": "src/admin/admin-service-discovery-repair-methods.js",
-      "line": 534,
+      "line": 611,
       "column": 27,
       "functionName": "assignAdminServiceDiscoveryRepairMethods",
       "kind": "prototype_copy_bags",
@@ -86,7 +86,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache-observation-methods.js",
-      "line": 454,
+      "line": 483,
       "column": 27,
       "functionName": "assignSystemTableCacheObservationMethods",
       "kind": "prototype_copy_bags",
@@ -122,7 +122,7 @@
     },
     {
       "filePath": "src/node/replica-handler-create-admission-methods.js",
-      "line": 783,
+      "line": 776,
       "column": 27,
       "functionName": "assignReplicaHandlerCreateAdmissionMethods",
       "kind": "prototype_copy_bags",
@@ -131,7 +131,7 @@
     },
     {
       "filePath": "src/node/replica-handler-create-methods.js",
-      "line": 691,
+      "line": 764,
       "column": 27,
       "functionName": "assignReplicaHandlerCreateMethods",
       "kind": "prototype_copy_bags",
@@ -140,7 +140,7 @@
     },
     {
       "filePath": "src/node/replica-handler-create-status-methods.js",
-      "line": 716,
+      "line": 778,
       "column": 27,
       "functionName": "assignReplicaHandlerCreateStatusMethods",
       "kind": "prototype_copy_bags",
@@ -167,7 +167,7 @@
     },
     {
       "filePath": "src/node/replica-handler-leader-handoff-methods.js",
-      "line": 149,
+      "line": 150,
       "column": 27,
       "functionName": "assignReplicaHandlerLeaderHandoffMethods",
       "kind": "prototype_copy_bags",
@@ -176,7 +176,7 @@
     },
     {
       "filePath": "src/node/replica-handler-lifecycle-methods.js",
-      "line": 176,
+      "line": 184,
       "column": 27,
       "functionName": "assignReplicaHandlerLifecycleMethods",
       "kind": "prototype_copy_bags",
@@ -221,7 +221,7 @@
     },
     {
       "filePath": "src/node/replica-handler-runtime-metadata-methods.js",
-      "line": 661,
+      "line": 558,
       "column": 27,
       "functionName": "assignReplicaHandlerRuntimeMetadataMethods",
       "kind": "prototype_copy_bags",
@@ -239,7 +239,7 @@
     },
     {
       "filePath": "src/node/replica-handler-status-methods.js",
-      "line": 264,
+      "line": 270,
       "column": 27,
       "functionName": "assignReplicaHandlerStatusMethods",
       "kind": "prototype_copy_bags",
@@ -266,7 +266,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-count-check-methods.js",
-      "line": 339,
+      "line": 326,
       "column": 25,
       "functionName": "createPartitionServiceLearnerPromotionCountCheckMethods",
       "kind": "prototype_copy_bags",
@@ -275,7 +275,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 671,
+      "line": 640,
       "column": 4,
       "functionName": "createPartitionServiceLearnerPromotionMethods",
       "kind": "prototype_copy_bags",
@@ -284,7 +284,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-proof-methods.js",
-      "line": 325,
+      "line": 363,
       "column": 25,
       "functionName": "createPartitionServiceLearnerPromotionProofMethods",
       "kind": "prototype_copy_bags",
@@ -293,7 +293,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-wake-methods.js",
-      "line": 215,
+      "line": 167,
       "column": 25,
       "functionName": "createPartitionServiceLearnerPromotionWakeMethods",
       "kind": "prototype_copy_bags",
@@ -302,7 +302,7 @@
     },
     {
       "filePath": "src/partition/partition-service-lifecycle-methods.js",
-      "line": 236,
+      "line": 235,
       "column": 21,
       "functionName": "createPartitionServiceLifecycleMethods",
       "kind": "prototype_copy_bags",
@@ -311,7 +311,7 @@
     },
     {
       "filePath": "src/partition/partition-service-merge-replication-methods.js",
-      "line": 714,
+      "line": 723,
       "column": 25,
       "functionName": "createPartitionServiceMergeReplicationMethods",
       "kind": "prototype_copy_bags",
@@ -329,7 +329,7 @@
     },
     {
       "filePath": "src/partition/partition-service-metadata-delivery-methods.js",
-      "line": 595,
+      "line": 597,
       "column": 4,
       "functionName": "createPartitionServiceMetadataDeliveryMethods",
       "kind": "prototype_copy_bags",
@@ -338,7 +338,7 @@
     },
     {
       "filePath": "src/partition/partition-service-rebalancer-methods.js",
-      "line": 244,
+      "line": 246,
       "column": 21,
       "functionName": "createPartitionServiceRebalancerMethods",
       "kind": "prototype_copy_bags",
@@ -347,7 +347,7 @@
     },
     {
       "filePath": "src/partition/partition-service-source-replication-start-methods.js",
-      "line": 427,
+      "line": 433,
       "column": 21,
       "functionName": "createPartitionServiceSourceReplicationStartMethods",
       "kind": "prototype_copy_bags",
@@ -365,7 +365,7 @@
     },
     {
       "filePath": "src/partition/partition-split-merge-manager-core-methods.js",
-      "line": 583,
+      "line": 581,
       "column": 21,
       "functionName": "createPartitionSplitMergeManagerCoreMethods",
       "kind": "prototype_copy_bags",
@@ -392,7 +392,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 863,
+      "line": 865,
       "column": 9,
       "functionName": "createMovePlannerStateMethods",
       "kind": "prototype_copy_bags",
@@ -410,7 +410,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 322,
+      "line": 335,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryEntityReadMethods",
       "kind": "prototype_copy_bags",
@@ -446,7 +446,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 737,
+      "line": 736,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryMutationGatewayMethods",
       "kind": "prototype_copy_bags",
@@ -455,7 +455,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
-      "line": 724,
+      "line": 750,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryMutationPersistenceMethods",
       "kind": "prototype_copy_bags",
@@ -482,7 +482,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-update-methods.js",
-      "line": 545,
+      "line": 548,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryMutationUpdateMethods",
       "kind": "prototype_copy_bags",
@@ -491,7 +491,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 627,
+      "line": 653,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryObservationMethods",
       "kind": "prototype_copy_bags",
@@ -518,7 +518,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-visibility-methods.js",
-      "line": 790,
+      "line": 743,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryVisibilityMethods",
       "kind": "prototype_copy_bags",

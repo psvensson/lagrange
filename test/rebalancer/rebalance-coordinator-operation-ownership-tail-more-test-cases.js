@@ -42,11 +42,10 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -108,7 +107,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       controlPlaneSystemTableGateway: {
         async readRows(tableName, sql, params) {
@@ -118,7 +116,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -167,11 +165,10 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -299,11 +296,10 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -389,11 +385,10 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -489,11 +484,10 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       controlPlaneReadinessService: {
@@ -507,7 +501,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
             },
           };
         },
-        async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+        async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: Object.freeze(['node-a', 'node-local']),
@@ -599,7 +593,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
   test('OperationWorkflowOwner prefers canonical priority-recovery planning answers',
     async (t) => {
       const canonicalCalls = [];
-      const legacyCalls = [];
       const coordinator = createCoordinator({
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
@@ -615,11 +608,10 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         controlPlaneReadinessService: {
@@ -651,34 +643,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
                 missingPartitionIds: ['sql_write_operations-p1'],
               }),
             });
-          },
-          async getMembershipPublicationPlanningSnapshotBestEffort() {
-            legacyCalls.push(1);
-            return {
-              publishedActiveNodeIdsPresent: true,
-              publishedActiveNodeIds: Object.freeze([
-                'legacy-node-a',
-                'legacy-node-local',
-              ]),
-              recoveryActiveNodeIds: Object.freeze([
-                'legacy-node-a',
-                'legacy-node-local',
-              ]),
-              projectedServingNodeIds: Object.freeze([
-                'legacy-node-a',
-                'legacy-node-local',
-              ]),
-              locallyEligibleNodeIds: Object.freeze([
-                'legacy-node-a',
-                'legacy-node-local',
-              ]),
-              publishedMembershipIncludesTargetNode: false,
-              priorityPartitionSummary: Object.freeze({
-                satisfied: false,
-                requiredDistinctNodeCount: 2,
-                missingPartitionIds: ['sql_write_operations-p1'],
-              }),
-            };
           },
         },
         messageRouter: {
@@ -738,11 +702,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           'node-local',
           'priority create-budget gates should read the local canonical planning view instead of a remote operation participant snapshot',
         );
-        t.equal(
-          legacyCalls.length,
-          0,
-          'legacy fallback planning surface should not be called when canonical answer exists',
-        );
       } finally {
         await coordinator.shutdown();
       }
@@ -767,11 +726,10 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       controlPlaneReadinessService: {
@@ -785,7 +743,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
             },
           };
         },
-        async getMembershipPublicationPlanningSnapshotBestEffort() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: Object.freeze(['node-a', 'node-b']),
@@ -907,11 +865,10 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -984,11 +941,10 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -1068,11 +1024,10 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -1144,11 +1099,10 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -1230,11 +1184,10 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {

@@ -29,6 +29,7 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {recoveryDecisionColumns, recoveryRowsOf} from
   '../test-helpers/transaction-recovery-rows-fixture.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const RECOVERED_ID = 'a'.repeat(32);
 const logger = {warn() {}, error() {}, debug() {}, info() {}};
 
@@ -56,7 +57,9 @@ function restartedEngine(t, sessionId = QUERY_SESSION.DEFAULT) {
     return buildDeliveryEnvelope({acknowledged: true},
       answerParticipantTransactionRequest(message, address.split('/')[2]));
   }};
-  const engine = new SQLQueryEngine({controlPlaneSystemTableGateway: gateway,
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneSystemTableGateway: gateway,
     systemCache: cache, messageRouter: router, logger,
     autoStartDistributedTransactionRecovery: false});
   t.after(() => engine.shutdown());

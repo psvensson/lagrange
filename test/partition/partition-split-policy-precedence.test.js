@@ -32,11 +32,13 @@ function createPolicyCache() {
   }];
   const partitions = [{
     partition_id: DEFAULT_PARTITION_ID,
+    replica_count: 3,
     table_id: DEFAULT_TABLE_ID,
     table_name: 'ratings_default',
     size_bytes: OBSERVED_RATINGS_SIZE_BYTES,
   }, {
     partition_id: 'ratings-override-p1',
+    replica_count: 3,
     table_id: 'tbl-ratings-override',
     table_name: 'ratings_override',
     size_bytes: OBSERVED_RATINGS_SIZE_BYTES,
@@ -57,10 +59,17 @@ function createPolicyCache() {
   };
 }
 
-function createPolicyMutationCapture() {
+// `cache` doubles as the committed authority a policy write's base is read
+// from (census site 6); the fixture has one consistent state.
+function createPolicyMutationCapture(cache) {
   const updates = [];
   return {
     updates,
+    async executeAuthoritativeSystemTableRead(_tableName, _sql, params) {
+      const rows = cache.tables.filter((row) => row.table_id === params[0]);
+      return {success: true, rows: rows.map((row) => ({...row})),
+        rowCount: rows.length};
+    },
     async updateSystemTableRow(tableName, whereClause, data) {
       updates.push({tableName, whereClause, data});
       return {success: true, partitionResult: {affectedRows: 1}};
@@ -135,20 +144,20 @@ test('managed split policy uses configured defaults and explicit table ' +
 test('unrelated policy updates preserve configured split threshold ' +
   'provenance', async (t) => {
   const cache = createPolicyCache();
-  const cdcIntegrationService = createPolicyMutationCapture();
+  const cdcIntegrationService = createPolicyMutationCapture(cache);
   const policyService = new TablePolicyService({
     systemTableCache: cache,
     cdcIntegrationService,
   });
 
-  await policyService.updateTablePolicy(DEFAULT_TABLE_ID, {replicaCount: 5});
+  await policyService.updateTablePolicy(DEFAULT_TABLE_ID, {minReplicaCount: 5});
 
   const persistedPolicy = JSON.parse(
     cdcIntegrationService.updates[0].data.table_policies,
   );
   t.same(
     persistedPolicy,
-    {minReplicaCount: 3, replicaCount: 5},
+    {minReplicaCount: 5},
     'an unrelated update persists only stored and explicitly updated fields',
   );
   t.notOk(
@@ -212,11 +221,13 @@ test('MovieLens ratings override leaves system logs on the production ' +
     }],
     partitions: [{
       partition_id: SCENARIO_PARTITION_ID,
+      replica_count: 3,
       table_id: SCENARIO_TABLE_ID,
       table_name: 'ratings',
       size_bytes: OBSERVED_RATINGS_SIZE_BYTES,
     }, {
       partition_id: SYSTEM_LOGS_PARTITION_ID,
+      replica_count: 3,
       table_id: 'logs',
       table_name: 'logs',
       size_bytes: OBSERVED_RATINGS_SIZE_BYTES,

@@ -1,3 +1,4 @@
+import {createMockCoordinator, createMockControlPlaneReadinessService} from './test-helpers.js';
 /**
  * Unit tests for UnifiedRebalancer.
  * Tests the core rebalancing logic for partitions and message groups.
@@ -28,7 +29,6 @@ import {
 import {
   createMockCache,
   createMockCdcService,
-  createMockCoordinator,
   createMockMembershipPublicationService,
   createMockMessageRouter,
   createMockPolicyService,
@@ -36,7 +36,6 @@ import {
   createPostgresWireEndpoint,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
-import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 // Initialize test environment
 // Create a mock system table cache
@@ -45,68 +44,7 @@ import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 // Create mock message router
 // Create mock rebalance coordinator
 // Create mock readiness service backed by the same cache
-function createMockReadinessService(mockCache) {
-  return partialReadinessFake({
-    getNodeReadinessSync: (nodeId) => {
-      const nodeRow = mockCache.get('nodes', nodeId);
-      if (!nodeRow) {
-        return {
-          nodeId,
-          dimensions: {
-            [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
-              false,
-            [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
-              false,
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .METADATA_PUBLICATION_HEALTHY]: true,
-            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
-          },
-          reasons: [],
-        };
-      }
-      const now = Date.now();
-      const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
-      const leaseValid =
-        Number.isFinite(leaseExpiry) && leaseExpiry > now;
-      const isActive = nodeRow.status === 'active';
-      const healthy = isActive && leaseValid;
-      return {
-        nodeId,
-        dimensions: {
-          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .METADATA_PUBLICATION_HEALTHY]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
-            healthy,
-        },
-        reasons: [],
-      };
-    },
-    getNodeReadiness: async (nodeId) => {
-      return createMockReadinessService(mockCache)
-        .getNodeReadinessSync(nodeId);
-    },
-  });
-}
+
 
 // Create a fully configured rebalancer for testing
 function createTestRebalancer(options = {}) {
@@ -127,7 +65,7 @@ function createTestRebalancer(options = {}) {
     cdcIntegrationService = null,
     messageRouter = null,
     rebalanceCoordinator = null,
-    controlPlaneReadinessService = null,
+    readinessCallbacks = {},
     bootstrapReadinessState = null,
     nowFn = null,
     priorityRecoveryActivityStaleGraceMs = null,
@@ -144,19 +82,20 @@ function createTestRebalancer(options = {}) {
   );
 
   const mockCdcService = cdcIntegrationService || createMockCdcService();
-  const mockPolicyService = createMockPolicyService(
-    partitions, tables,
-  );
+  const mockPolicyService = createMockPolicyService({partitions: partitions, tables: tables});
   const mockMessageRouter = messageRouter ||
     createMockMessageRouter(connectionState);
-  const mockCoordinator = rebalanceCoordinator || createMockCoordinator();
   const mockSqlQueryEngine = sqlQueryEngine || {
     async executeQuery() {
       return {success: true, rows: []};
     },
   };
-  const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
+  const mockReadinessService = createMockControlPlaneReadinessService({
+    systemTableCache: mockCache, callbacks: readinessCallbacks,
+  });
+  const mockCoordinator = rebalanceCoordinator || createMockCoordinator({
+    controlPlaneReadinessService: mockReadinessService,
+  });
 
   return new UnifiedRebalancer({
     entityId,
@@ -183,7 +122,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     'checkRebalance keeps control_plane_publications blocked until ' +
       'websocket endpoint visibility covers every active node',
     async (t) => {
-      const readinessService = partialReadinessFake({
+      const readinessCallbacks = {
         getNodeReadinessSync(nodeId) {
           const clusterMemberHealthy = nodeId !== 'node-3';
           return {
@@ -207,7 +146,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
             reasons: [],
           };
         },
-      });
+      };
 
       const rebalancer = createTestRebalancer({
         entityId: 'control_plane_publications-p1',
@@ -235,7 +174,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           'node-2',
           'node-3',
         ]),
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -435,7 +374,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     'checkRebalance allows control_plane_publications once full endpoint ' +
       'visibility covers every active node',
     async (t) => {
-      const readinessService = partialReadinessFake({
+      const readinessCallbacks = {
         getNodeReadinessSync(nodeId) {
           return {
             nodeId,
@@ -458,7 +397,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
             reasons: [],
           };
         },
-      });
+      };
 
       const rebalancer = createTestRebalancer({
         entityId: 'control_plane_publications-p1',
@@ -487,7 +426,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           'node-2',
           'node-3',
         ]),
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -705,9 +644,9 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
-    'checkRebalance defers critical system partitions while local serve readiness is false',
+    'checkRebalance defers on missing transport endpoints even with a negative local serve projection',
     async (t) => {
-      const readinessService = partialReadinessFake({
+      const readinessCallbacks = {
         getNodeReadinessSync: () => ({
           nodeId: 'node-1',
           dimensions: {
@@ -721,7 +660,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
             {code: 'transport_not_ready'},
           ],
         }),
-      });
+      };
       const rebalancer = createTestRebalancer({
         entityId: 'replica_operations-p1',
         entityType: EntityType.PARTITION,
@@ -731,7 +670,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
         ],
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -749,22 +688,26 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         scheduledDelayMs = overrideDelayMs;
       };
 
+      t.equal(rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+        'endpoint_visibility_incomplete', 'the endpoint owner identifies the actual blocker');
+      t.equal(rebalancer.resolveLocalServePlanningGateDecision(), null,
+        'there is no separate local serve projection gate');
       await rebalancer.checkRebalance();
 
       t.equal(
         evaluateCalls,
         0,
-        'critical system partitions should not evaluate while the local leader is not serve-eligible',
+        'missing transport endpoints keep critical planning deferred',
       );
       t.equal(
         typeof scheduledDelayMs,
         'number',
-        'local serve-readiness gate should schedule a delayed retry',
+        'the endpoint blocker schedules a delayed retry',
       );
       t.equal(
         scheduledDelayMs,
         rebalancer.criticalCheckDelayMs,
-        'priority control-plane partitions should retry serve-readiness checks on the short critical cadence',
+        'endpoint readiness retries use the short critical cadence',
       );
     });
 
@@ -777,7 +720,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       const TEST_PEER_NODE_ID = 'node-2';
       const TEST_SECOND_PEER_NODE_ID = 'node-3';
       const TEST_UNSET_SCHEDULE_DELAY = Symbol('unset');
-      const readinessService = partialReadinessFake({
+      const readinessCallbacks = {
         getNodeReadinessSync: () => ({
           nodeId: TEST_LOCAL_NODE_ID,
           dimensions: {
@@ -803,7 +746,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
             },
           ],
         }),
-      });
+      };
       const rebalancer = createTestRebalancer({
         entityId: TEST_PRIORITY_PARTITION_ID,
         entityType: EntityType.PARTITION,
@@ -823,7 +766,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           createPostgresWireEndpoint(TEST_PEER_NODE_ID),
           createPostgresWireEndpoint(TEST_SECOND_PEER_NODE_ID),
         ],
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
       });
 
       rebalancer.initialize();
@@ -932,7 +875,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           stableWindowMs: 5000,
         }),
       };
-      const readinessService = partialReadinessFake({
+      const readinessCallbacks = {
         getNodeReadinessSync(nodeId) {
           if (nodeId !== 'node-1') {
             return {
@@ -973,7 +916,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
             ],
           };
         },
-      });
+      };
       const rebalancer = createTestRebalancer({
         entityId: 'replica_operations-p1',
         entityType: EntityType.PARTITION,
@@ -998,7 +941,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           createPostgresWireEndpoint('node-2'),
           createPostgresWireEndpoint('node-3'),
         ],
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
         bootstrapReadinessState,
       });
 
@@ -1043,7 +986,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           stableWindowMs: 5000,
         }),
       };
-      const readinessService = partialReadinessFake({
+      const readinessCallbacks = {
         getNodeReadinessSync(nodeId) {
           if (nodeId === 'node-1') {
             return {
@@ -1091,7 +1034,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
             ],
           };
         },
-      });
+      };
       const staleLease = Date.now() - 1000;
       const rebalancer = createTestRebalancer({
         entityId: 'control_plane_publications-p1',
@@ -1122,7 +1065,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           createPostgresWireEndpoint('node-2'),
           createPostgresWireEndpoint('node-3'),
         ],
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
         bootstrapReadinessState,
       });
 
@@ -1168,7 +1111,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           stableWindowMs: 5000,
         }),
       };
-      const readinessService = partialReadinessFake({
+      const readinessCallbacks = {
         getNodeReadinessSync(nodeId) {
           if (nodeId === 'node-1') {
             return {
@@ -1216,7 +1159,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
             ],
           };
         },
-      });
+      };
       const rebalancer = createTestRebalancer({
         entityId: 'control_plane_publications-p1',
         entityType: EntityType.PARTITION,
@@ -1246,7 +1189,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           createPostgresWireEndpoint('node-2'),
           createPostgresWireEndpoint('node-3'),
         ],
-        controlPlaneReadinessService: readinessService,
+        readinessCallbacks,
         bootstrapReadinessState,
       });
 

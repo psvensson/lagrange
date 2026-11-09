@@ -117,6 +117,7 @@ const PARTITION_SERVICE_MESSAGE_TYPE = Object.freeze({
   START_SPLIT_REPLICATION: 'START_SPLIT_REPLICATION',
   START_MERGE_REPLICATION: 'START_MERGE_REPLICATION',
   LEARNER_PROMOTION_PROOF: 'LEARNER_PROMOTION_PROOF',
+  ADMIT_REPLICA: 'ADMIT_REPLICA',
 });
 
 const PARTITION_SERVICE_RESPONSE = Object.freeze({
@@ -372,8 +373,6 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Learner promotion proof response refused by learner',
   LEARNER_PROMOTION_WAKE_COALESCED:
     'Learner promotion wake coalesced into the in-flight check',
-  LEARNER_PROMOTION_ROW_REASSERTED:
-    'Learner promotion re-asserted the durable services row',
   LEADER_DURABILITY_RECOVERED:
     'Replica local durability recovered; leadership fitness restored',
   LEARNER_PROMOTION_ALLOWED_MULTI: 'Learner promotion allowed - multiple learners will reach odd',
@@ -387,11 +386,6 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   RAFT_TRANSITION_EVIDENCE: 'Raft leadership transition evidence',
   LEADER_CHANGED: 'Leader changed',
   JOINING_PEER_ADDRESS: 'Joining peer with fully qualified address',
-  PEER_ADDRESS_NOT_UNIFIED: 'Peer address must be in unified format',
-  PEER_ADDRESS_FROM_LIST: 'Built peer address from peerAddresses array',
-  PEER_ADDRESS_FROM_CACHE: 'Built peer address from cache',
-  PEER_ADDRESS_FROM_LIVE_RAFT_LEADER:
-    'Built peer address from the current live Raft leader',
   PEER_RETIRED_FROM_AUTHORITATIVE_SERVICE_CHANGE:
     'Retired Raft peer from authoritative service change',
   PEER_ADDRESS_FROM_NODE: 'Built peer address using local nodeId',
@@ -699,7 +693,18 @@ const PARTITION_STATEMENT_ADMISSION_LOG_MSG = Object.freeze({
   STATEMENT_REFUSED: 'Partition statement refused by the statement-admission owner',
 });
 
+// Why this replica has no leader address to forward to: its own live raft
+// status names no leader, names one without a committed address, or could
+// not be read. The leader address is never taken from a cached row, a
+// cached leader id or a leader-address hint.
+const PARTITION_LEADER_ADDRESS_REFUSAL = Object.freeze({
+  NO_LEADER: 'leader_address_no_leader',
+  LEADER_UNADDRESSED: 'leader_address_unaddressed',
+  STATUS_UNAVAILABLE: 'leader_address_status_unavailable',
+});
+
 export {
+  PARTITION_LEADER_ADDRESS_REFUSAL,
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
   PARTITION_COMMITTED_COMMAND_OUTCOME,

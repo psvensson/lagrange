@@ -87,7 +87,9 @@ test('public application database transaction facade semantics (single runtime, 
   timeout: TRANSACTIONS_TEST_TIMEOUT_MS,
 }, async (t) => {
   const cluster = createEmbeddedCluster(t);
-  const formation = await cluster.formCluster(TRANSACTIONS_CLUSTER_SIZE);
+  const formation = await cluster.formCluster(TRANSACTIONS_CLUSTER_SIZE, {
+    configuration: {partition: {defaultReplicaCount: 1}},
+  });
   t.comment(`formation (${TRANSACTIONS_CLUSTER_SIZE} process(es)): ` +
     JSON.stringify(formation));
   const writer = cluster.nodes[0];

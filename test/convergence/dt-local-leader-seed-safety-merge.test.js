@@ -198,9 +198,9 @@ t.test(
       cachedSeededRow(LOCAL_NODE),
     );
     t.equal(
-      noAuthoritative.leader_node_id,
-      LOCAL_NODE,
-      'no authoritative row: the cached projection stands alone',
+      noAuthoritative,
+      null,
+      'no authoritative row: cached projection never substitutes for missing authority',
     );
 
     t.equal(

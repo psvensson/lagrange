@@ -128,7 +128,7 @@ function createReadinessOwner(publication, now) {
     nodeId: TEST_NODE_ID,
     systemTableCache: createCache(),
     membershipPublicationService: {
-      getLatestPublicationForNodeSync() {
+      getLatestClusterPublicationSync() {
         return publication;
       },
     },

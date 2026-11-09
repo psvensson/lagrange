@@ -47,6 +47,8 @@ import {
   statusOf,
   waitFor,
 } from './committed-membership-harness.js';
+import {committedAddOperation} from
+  '../../partition/committed-operation-gateway-fixture.js';
 import {durableAppliedState} from './committed-membership-oracles.js';
 import {
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
@@ -84,7 +86,7 @@ assert.deepEqual([...PROPOSER_CLASS.proposes, ...PROPOSER_CLASS.refusedNotLeader
   .sort(), Object.values(ROLE).sort(), 'every core role is classified');
 
 function addPeer(identity) {
-  return {type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: identity};
+  return {type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: identity, nodeId: 'node-test'};
 }
 
 function removePeer(identity) {
@@ -240,16 +242,24 @@ async () => {
     const followerMember = founders.find((member) =>
       harness.services.get(member[0]) !== leader);
     const follower = harness.services.get(followerMember[0]);
-    // The target's row reaches the FOLLOWER only: its admission is refused
-    // NOT_LEADER by its own role check and remembered.
+    // The target's admission request reaches the FOLLOWER only: it is
+    // answered NOT_LEADER by its own role check and remembered (quest
+    // replica-admission-from-committed-operation).
     harness.caches.get(followerMember[0]).applySystemTableChange(
       TABLES.SERVICES, CDCOperation.INSERT, serviceRow(PARTITION_ID, target));
+    const targetOperation = committedAddOperation(PARTITION_ID, target);
+    harness.operations.push(targetOperation);
+    const answered = await follower.handleReplicaAdmissionRequest({
+      partitionId: PARTITION_ID, replicaIdentity: target[0],
+      operationId: targetOperation.operation_id});
+    assert.equal(answered.admission.outcome, 'not_leader',
+      'setup: the follower answers NOT_LEADER');
     const targetPeerId = deriveRaftRsPeerId(target[0]);
     const votersOf = (member) => durableAppliedState(harness.dbPathOf(member),
       PARTITION_ID).voters;
     assert.equal(await waitFor(() =>
       votersOf(harness.leaderMember()).includes(targetPeerId), 600), false,
-    'a follower admits nothing: the leader never saw the row');
+    'a follower admits nothing: the leader never saw the request');
 
     const transfer = await turnChainValue(leader.raft.transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,

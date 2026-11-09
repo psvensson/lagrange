@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "parallel-query-read-authority-propagation",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "The existing parallel-query success outcome preserves the serving partition's readAuthorityWitness through both ordinary completion and a winning speculative result, without manufacturing evidence for a response that has none.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/parallel-query-read-authority-propagation/evidence/receipt.json",
+      "requiredReceipts": [
+        "ordinary-success-propagation",
+        "speculative-success-propagation",
+        "absence-preserved",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-owner",
+      "statement": "Forward the witness already supplied by the remote read owner through the canonical success-result mapper. Preserve row results, failure semantics, hedging, routing, and read admission. Do not derive authority from a cache, rows, or a partition identifier."
+    },
+    {
+      "id": "diagnostic-scope",
+      "statement": "This repairs an observed diagnostic propagation loss. It does not repair formation, prove H1, admit historical unwitnessed reads, or alter the fresh-formation acceptance predicate."
+    },
+    {
+      "id": "validation",
+      "statement": "Exercise the actual coordinator ordinary completion and winning speculative path with controlled external responses; retain a prior-source red control and absent-witness controls. Independent review and classified lab verification bind to the committed candidate."
+    }
+  ],
+  "sealedAt": "5d678fca9c22ff4bf10b0a04e93928246d58111e"
+}

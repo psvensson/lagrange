@@ -24,6 +24,7 @@ import {
   createMockSystemCache,
 } from '../query/sql-query-engine-test-support.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const HOST_NODE_ID = 'projection-retain-node';
 const SERVICE_ID = 'projection-retain-service-r2';
 const OTHER_SERVICE_ID = 'projection-retain-service-r3';
@@ -68,6 +69,7 @@ function createRuntimeHarness(servicesOwner) {
     },
   });
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache([], [], null),
     messageRouter: createMockMessageRouter(),
     nodeId: HOST_NODE_ID,

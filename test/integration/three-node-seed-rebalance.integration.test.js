@@ -27,13 +27,14 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 import {
-  createAlwaysReadyControlPlaneReadinessService,
+  createMockControlPlaneReadinessService,
   createMockStorageAccountingService,
   createMockStorageAdmissionService,
   createMockStoragePressureBehavior,
 } from './rebalancer-integration-doubles.js';
 import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TEST_TIMEOUT_MS = 120000;
 // Reference budgets, calibrated on the reference machine and pinned by
 // test/bootstrap/join-formation-discovery-window-budget.test.js; every wait
@@ -264,6 +265,7 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
         t.ok(systemTableCache, 'system table cache should be available');
 
         const queryEngine = new SQLQueryEngine({
+          controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
           systemCache: systemTableCache,
           messageRouter: bootstrapResult.messageRouter,
           nodeId: seedNodeId,
@@ -405,7 +407,7 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
               messageRouter: bootstrapResult.messageRouter,
               rebalanceCoordinator: createMockProbeRebalanceCoordinator(),
               controlPlaneReadinessService:
-              createAlwaysReadyControlPlaneReadinessService(),
+              createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
               storageAdmissionService: createMockStorageAdmissionService(),
               storageAccountingService: createMockStorageAccountingService(),
               storagePressureBehavior: createMockStoragePressureBehavior(),

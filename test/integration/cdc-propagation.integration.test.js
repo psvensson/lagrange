@@ -33,6 +33,7 @@ import {
 } from './helpers/cluster-test-helpers.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const ports = createPortAllocator(import.meta.url);
 
 /**
@@ -133,6 +134,7 @@ test('CDC propagation integration', {timeout: 120000}, async (t) => {
       t.ok(systemTableCache, 'should have system table cache');
 
       sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -239,6 +241,7 @@ test('CDC propagation integration', {timeout: 120000}, async (t) => {
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
 
       sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -337,6 +340,7 @@ test('CDC propagation integration', {timeout: 120000}, async (t) => {
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
 
       sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -456,6 +460,7 @@ test('CDC propagation integration', {timeout: 120000}, async (t) => {
       systemTableCache.onCacheChange(listener);
 
       sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,

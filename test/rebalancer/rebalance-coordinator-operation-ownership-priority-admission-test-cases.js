@@ -32,11 +32,10 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -54,7 +53,8 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         enableTimeouts: false,
       });
       coordinator.initialize();
-      coordinator.repository.getOperationsByEntityAuthoritative = async () => [];
+      coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+        async () => coordinator.repository.buildEntityOperationVisibilityObservation([], null);
       coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 60_000;
       coordinator.workflowOwner.lastEmptyIncompleteOperationQueryAtMs = Date.now();
 
@@ -126,11 +126,10 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -205,11 +204,10 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -290,11 +288,10 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -393,11 +390,10 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -521,11 +517,10 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -604,11 +599,10 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -698,11 +692,10 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -783,11 +776,10 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -847,11 +839,10 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {

@@ -6,6 +6,7 @@ import {resolvePartitionExecutionBuilders} from
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {createMockSystemCache} from './query-executor-test-support.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const DURABLE_COMMIT_WITNESS = Object.freeze({
   partitionId: 'widgets-p1',
   leaderNodeId: 'node-2',
@@ -47,6 +48,7 @@ test('default partition delivery preserves the durable commit witness',
 test('INSERT rendering returns the durable commit witness to the coordinator',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache(['widgets-p1']),
       messageRouter: {
         async deliver() {
@@ -75,6 +77,7 @@ test('INSERT rendering returns the durable commit witness to the coordinator',
 test('distributed mutation preserves a shared committed origin HLC',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache(['widgets-p1']),
       messageRouter: {},
     });

@@ -326,3 +326,51 @@ test('RaftAdaptiveTimingController clamps low thresholds above high thresholds',
 
     controller.shutdown();
   });
+
+test('RaftAdaptiveTimingController registers watchers before hydration so updates arriving during loadConfig are preserved',
+  async (t) => {
+    const watchers = new Map();
+    let releaseGet;
+    const getGate = new Promise((resolve) => {
+      releaseGet = resolve;
+    });
+    let blockedOnce = false;
+    const config = {
+      async get(key) {
+        if (
+          key === CONFIG_KEY.RAFT_ADAPTIVE_TIMING_HIGH_CPU_PERCENT &&
+          !blockedOnce
+        ) {
+          blockedOnce = true;
+          // Emit watcher update while initial get() is in flight
+          const cb = watchers.get(key);
+          if (cb) {
+            cb(92);
+          }
+          await getGate;
+          return 75;
+        }
+        return 50;
+      },
+      watch(key, cb) {
+        watchers.set(key, cb);
+        return () => watchers.delete(key);
+      },
+    };
+    const controller = new RaftAdaptiveTimingController({
+      dynamicConfigService: config,
+      intervalFactory: () => ({mocked: true}),
+      clearIntervalFn: () => {},
+      samplerFactory: () => createSequentialSampler([]),
+      evaluateOnStart: false,
+    });
+    const initPromise = controller.initialize();
+    releaseGet();
+    await initPromise;
+    t.equal(
+      controller.getState().settings.highCpuPercent,
+      92,
+      'watcher update arriving while loadConfig get() is in flight must not be overwritten by stale get() result',
+    );
+    controller.shutdown();
+  });

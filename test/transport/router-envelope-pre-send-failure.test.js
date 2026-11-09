@@ -10,6 +10,7 @@ import {deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
   '../../src/transport/transport-semantic-outcome.js';
 import {createRouterEnvelopeFixture, serviceAddress, settleUntil} from './router-envelope-witness-fixture.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 test('a socket already closed before send retains the router pre-send fact through recovery',
   async (t) => {
     const fixture = createRouterEnvelopeFixture(import.meta.url, 'presend-owner');
@@ -122,7 +123,9 @@ test('QUERY/MG finite reply loss recovers under the original write entry', async
     return {success: true, changes: 1, settledReplay: true};
   });
   await fixture.connect(sender, target);
-  const executor = new QueryExecutor({nodeId: sender.router.nodeId,
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    nodeId: sender.router.nodeId,
     systemCache: createMockSystemCache(['p1']), messageRouter: sender.router});
   executor.delay = async () => {
     await fixture.connect(sender, target);

@@ -1,8 +1,35 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ParallelQueryCoordinator} from '../../src/query/distributed/parallel-query-coordinator.js';
-import {QueryExecutionMetrics} from '../../src/query/distributed/parallel-query-execution-metrics.js';
+import {PartitionQueryMetrics, QueryExecutionMetrics} from '../../src/query/distributed/parallel-query-execution-metrics.js';
+import {DistributedWriteCoordinator} from '../../src/query/distributed/distributed-write-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {CancellationToken} from '../../src/query/cancellation-token.js';
+import {PARTITION_SERVICE_REMOTE_QUERY_METHODS} from
+  '../../src/partition/partition-service-remote-query-methods.js';
+import {resolvePartitionExecutionBuilders} from
+  '../../src/query/query-executor-partition-request-builders.js';
+import {QueryExecutor} from '../../src/query/query-executor.js';
+import {SQLParser} from '../../src/query/sql-parser.js';
+import {createAdminQueryResultMessageEnvelope} from
+  '../../src/admin/admin-query-result-message-envelope.js';
+import {
+  SERVICE_STATUS,
+  SERVICE_TYPE,
+  TABLES,
+} from '../../src/constants/index.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  QUERY_ROUTING_DIAGNOSTIC_REASON,
+} from '../../src/query/query-constants.js';
+import {buildDeliveryEnvelope} from
+  '../../src/transport/transport-semantic-outcome.js';
+import {NodeHandle} from '../distributed/harness/cluster.js';
+import {
+  createCommittedServeEligibilityOwner,
+  serveEligibilityAnswer,
+} from '../control-plane/serve-eligibility-test-support.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -23,6 +50,73 @@ function createMockSystemCache(partitions) {
       return null;
     },
   };
+}
+
+for (const hasWitness of [true, false]) {
+  test(`parallel reads preserve ${hasWitness ? 'supplied' : 'absent'} authority`,
+    async (t) => {
+      const partitionId = 'services-p1';
+      const sql = 'SELECT DISTINCT service_id AS learner_service_id ' +
+        'FROM services WHERE service_id = ? AND service_id IS NOT NULL';
+      const witness = PARTITION_SERVICE_REMOTE_QUERY_METHODS
+        .buildRemoteReadAuthorityWitness.call({
+          partitionId,
+          nodeId: 'serving-node',
+          replicaId: 'services-p1-r1',
+          role: 'leader',
+          raft: {readStatus: () => ({term: 7})},
+          timeSource: {now: () => 12345},
+        }, false);
+      t.equal(witness.state, 'observed', 'remote owner supplies the witness');
+      const response = {success: true, rows: [{learner_service_id: 'learner'}]};
+      if (hasWitness) response.readAuthorityWitness = witness;
+      const expected = hasWitness ? witness : undefined;
+      const {buildSuccessResult} = resolvePartitionExecutionBuilders({
+        partitionId, sql, params: ['learner'],
+      });
+      const raw = buildSuccessResult(response);
+      t.same(raw.readAuthorityWitness, expected,
+        'request owner preserves the controlled remote answer');
+      let calls = 0;
+      const coordinator = new ParallelQueryCoordinator({
+        partitionQueryExecutor: async () => {
+          calls++;
+          return raw;
+        },
+      });
+      const primary = await coordinator.executeParallel(
+        sql, [partitionId], ['learner'], {forRead: true, timeoutMs: 1000});
+      t.equal(calls, 1, 'ordinary fan-out executes the partition once');
+      t.same(primary.results[0].rows, response.rows, 'rows are retained');
+      t.same(primary.results[0].readAuthorityWitness, expected,
+        'ordinary completion preserves supplied evidence or its absence');
+
+      const metrics = new QueryExecutionMetrics('authority-hedge', 1);
+      const results = new Map();
+      const pendingPartitions = new Set([partitionId]);
+      const accept = (result) => {
+        const speculativeMetrics = new PartitionQueryMetrics(partitionId);
+        speculativeMetrics.start();
+        coordinator.acceptSpeculativeResult({
+          partitionId, result, speculativeMetrics, metrics,
+          results, pendingPartitions,
+        });
+      };
+      accept(raw);
+      const accepted = results.get(partitionId);
+      t.equal(pendingPartitions.size, 0, 'successful hedge completes partition');
+      t.same(accepted.rows, response.rows, 'winning hedge retains its rows');
+      t.same(accepted.readAuthorityWitness, expected,
+        'winning hedge preserves supplied evidence or its absence');
+      accept({...raw,
+        readAuthorityWitness: {...witness, servingNodeId: 'losing-node'}});
+      t.equal(results.get(partitionId), accepted,
+        'late losing hedge cannot replace the accepted answer');
+      accept({success: false, error: 'controlled refusal',
+        readAuthorityWitness: witness});
+      t.equal(results.get(partitionId), accepted,
+        'failed hedge cannot replace the accepted answer');
+    });
 }
 
 test('ParallelQueryCoordinator - chunk scheduling executes all partitions', async (t) => {
@@ -423,3 +517,339 @@ test('ParallelQueryCoordinator - cooperative cancellation aborts fanout', async 
     globalThis.clearTimeout = originalClearTimeout;
   }
 });
+
+function resolveNodeHandleError(queryId, result) {
+  const envelope = createAdminQueryResultMessageEnvelope(queryId, result);
+  const node = new NodeHandle('node-1', 'c1', '127.0.0.1', 'seed', {});
+  let rejectedError = null;
+  node._getPendingQueries('default').set(queryId, {
+    operationLabel: 'query',
+    timeout: null,
+    resolve: () => {},
+    reject: (err) => {
+      rejectedError = err;
+    },
+  });
+  node._resolvePendingQuery(envelope, 'default');
+  return {envelope, rejectedError};
+}
+
+function createDeniedPartitionExecutorFixture({
+  deniedNodeId = 'node-denied',
+  denialReasons = ['ready_lease_expired', 'unavailable_stale'],
+  readinessDimension = CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+} = {}) {
+  const readinessService = createCommittedServeEligibilityOwner({
+    answers: {
+      'node-live': serveEligibilityAnswer(true),
+      [deniedNodeId]: serveEligibilityAnswer(false, {reasons: denialReasons}),
+    },
+  });
+  const systemCache = {
+    partitions: [
+      {partition_id: 'p1', leader_node_id: 'node-live'},
+      {partition_id: 'p2', leader_node_id: deniedNodeId},
+    ],
+    services: [
+      {
+        service_id: 'p1-r1',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: 'p1',
+        node_id: 'node-live',
+        raft_role: 'leader',
+        address: 'node-live/partition/p1',
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: 'p2-r1',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: 'p2',
+        node_id: deniedNodeId,
+        raft_role: 'leader',
+        address: `${deniedNodeId}/partition/p2`,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    get(type, key) {
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.find(
+          (partition) => partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === TABLES.SERVICES) {
+        return this.services.filter(predicate);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    getConnectionState: () => 'connected',
+    deliver: async (address) => {
+      if (address === 'node-live/partition/p1') {
+        return buildDeliveryEnvelope(
+          {acknowledged: true},
+          {
+            success: true,
+            rows: [{id: 1}],
+            changes: 1,
+          },
+        );
+      }
+      return buildDeliveryEnvelope({
+        acknowledged: false,
+        error: `Unexpected delivery to ${address}`,
+      });
+    },
+  };
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: readinessService,
+    messageRouter,
+    systemCache,
+  });
+  executor.readRetryAttempts = 1;
+  executor.leaderRetryAttempts = 1;
+  executor.leaderRetryDelayMs = 1000;
+  return {
+    executor,
+    deniedNodeId,
+    denialReasons,
+    readinessDimension,
+  };
+}
+
+function assertRoutingDenialSurface({
+  t,
+  surfaceLabel,
+  surface,
+  expectedDenialFields,
+  deniedNodeId,
+  denialReasons,
+}) {
+  t.match(
+    surface?.participantFailures?.[0],
+    expectedDenialFields,
+    `${surfaceLabel} participantFailures[0] should preserve routing denial fields`,
+  );
+  t.match(
+    surface?.firstFailedParticipant,
+    expectedDenialFields,
+    `${surfaceLabel} firstFailedParticipant should preserve routing denial fields`,
+  );
+  t.same(
+    surface?.firstFailedParticipant?.deniedByNodeId?.[deniedNodeId]
+      ?.reasonCodes,
+    denialReasons,
+    `${surfaceLabel} firstFailedParticipant should preserve deniedByNodeId`,
+  );
+}
+
+for (const speculativeExecutionEnabled of [false, true]) {
+  const modeLabel = speculativeExecutionEnabled ? 'hedged' : 'ordinary';
+  test(
+    `ParallelQueryCoordinator - ${modeLabel} SELECT preserves routing denial ` +
+      'diagnostics end-to-end into participantFailures, admin envelope, and NodeHandle',
+    async (t) => {
+      const {
+        executor,
+        deniedNodeId,
+        denialReasons,
+        readinessDimension,
+      } = createDeniedPartitionExecutorFixture();
+      executor.parallelQueryCoordinator.speculativeExecutionEnabled =
+        speculativeExecutionEnabled;
+      const ast = new SQLParser(
+        'SELECT id FROM bench_accounts WHERE id >= ?',
+      ).parse();
+
+      const selectResult = await executor.executeSelect(
+        ast,
+        ['p1', 'p2'],
+        [1],
+        {
+          routingReadinessDimension: readinessDimension,
+          timeoutMs: 500,
+        },
+      );
+
+      t.equal(selectResult.success, false, `${modeLabel} SELECT should fail on p2`);
+      const expectedDenialFields = {
+        partitionId: 'p2',
+        routingReasonCode:
+          QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS,
+        routingReadinessDimension: readinessDimension,
+        routingDenialReasonCodes: denialReasons,
+      };
+      assertRoutingDenialSurface({
+        t,
+        surfaceLabel: `${modeLabel} SELECT`,
+        surface: selectResult,
+        expectedDenialFields,
+        deniedNodeId,
+        denialReasons,
+      });
+      assertRoutingDenialSurface({
+        t,
+        surfaceLabel: `${modeLabel} fanout metrics`,
+        surface: selectResult.distributedMetrics?.fanout,
+        expectedDenialFields,
+        deniedNodeId,
+        denialReasons,
+      });
+
+      const {envelope, rejectedError} = resolveNodeHandleError(
+        `q-select-${modeLabel}`,
+        selectResult,
+      );
+      assertRoutingDenialSurface({
+        t,
+        surfaceLabel: `${modeLabel} admin envelope`,
+        surface: envelope,
+        expectedDenialFields,
+        deniedNodeId,
+        denialReasons,
+      });
+      t.ok(rejectedError, `${modeLabel} NodeHandle should reject with formatted error`);
+      assertRoutingDenialSurface({
+        t,
+        surfaceLabel: `${modeLabel} NodeHandle error`,
+        surface: rejectedError,
+        expectedDenialFields,
+        deniedNodeId,
+        denialReasons,
+      });
+    },
+  );
+}
+
+test(
+  'DistributedWriteCoordinator - UPDATE, DELETE, and INSERT preserve routing ' +
+    'denial diagnostics end-to-end into participantFailures, admin envelope, and NodeHandle',
+  async (t) => {
+    const readinessDimension =
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
+    const {
+      executor,
+      deniedNodeId,
+      denialReasons,
+    } = createDeniedPartitionExecutorFixture({
+      deniedNodeId: 'node-write-denied',
+      denialReasons: ['ready_lease_expired'],
+      readinessDimension,
+    });
+    const coordinator = new DistributedWriteCoordinator({
+      partitionResolver: {
+        resolvePartitionForKey(_table, keyValue) {
+          return Number(keyValue) === 1 ? 'p1' : 'p2';
+        },
+      },
+      queryExecutor: executor,
+      getTablePartitions() {
+        return [
+          {partition_id: 'p1', partition_key_start: null, partition_key_end: '5'},
+          {partition_id: 'p2', partition_key_start: '5', partition_key_end: null},
+        ];
+      },
+      getTableInfo() {
+        return {primaryKey: 'id'};
+      },
+    });
+
+    const statements = [
+      {
+        label: 'UPDATE',
+        sql: 'UPDATE bench_accounts SET balance = ? WHERE id >= ?',
+        params: [100, 1],
+        planOptions: {
+          partitionIds: ['p1', 'p2'],
+          routingReadinessDimension: readinessDimension,
+        },
+      },
+      {
+        label: 'DELETE',
+        sql: 'DELETE FROM bench_accounts WHERE id >= ?',
+        params: [1],
+        planOptions: {
+          partitionIds: ['p1', 'p2'],
+          routingReadinessDimension: readinessDimension,
+        },
+      },
+      {
+        label: 'INSERT',
+        sql: 'INSERT INTO bench_accounts (id, balance) VALUES (?, ?), (?, ?)',
+        params: [1, 10, 9, 20],
+        planOptions: {
+          routingReadinessDimension: readinessDimension,
+        },
+      },
+    ];
+
+    for (const statement of statements) {
+      const ast = new SQLParser(statement.sql).parse();
+      const plan = coordinator.createWritePlan(
+        ast,
+        statement.params,
+        statement.planOptions,
+      );
+      const writeResult = await coordinator.executePlan(
+        plan,
+        statement.params,
+        {
+          routingReadinessDimension: readinessDimension,
+          timeoutMs: 500,
+        },
+      );
+
+      t.equal(writeResult.success, false, `${statement.label} should fail on p2`);
+      const expectedDenialFields = {
+        partitionId: 'p2',
+        routingReasonCode:
+          QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS,
+        routingReadinessDimension: readinessDimension,
+        routingDenialReasonCodes: denialReasons,
+      };
+      t.match(
+        writeResult.participantFailures?.[0],
+        expectedDenialFields,
+        `${statement.label} participantFailures[0] should preserve routing denial fields`,
+      );
+      t.same(
+        writeResult.participantFailures?.[0]?.deniedByNodeId?.[deniedNodeId]
+          ?.reasonCodes,
+        denialReasons,
+        `${statement.label} participantFailures[0] should preserve deniedByNodeId`,
+      );
+      t.match(
+        writeResult.firstFailedParticipant,
+        expectedDenialFields,
+        `${statement.label} firstFailedParticipant should preserve routing denial fields`,
+      );
+
+      const {envelope, rejectedError} = resolveNodeHandleError(
+        `q-write-${statement.label.toLowerCase()}`,
+        writeResult,
+      );
+      t.match(
+        envelope.firstFailedParticipant,
+        expectedDenialFields,
+        `${statement.label} admin envelope firstFailedParticipant should preserve routing denial fields`,
+      );
+      t.match(
+        rejectedError?.firstFailedParticipant,
+        expectedDenialFields,
+        `${statement.label} NodeHandle error.firstFailedParticipant should preserve routing denial fields`,
+      );
+      t.same(
+        rejectedError?.firstFailedParticipant?.deniedByNodeId?.[deniedNodeId]
+          ?.reasonCodes,
+        denialReasons,
+        `${statement.label} NodeHandle error.firstFailedParticipant should preserve deniedByNodeId`,
+      );
+    }
+  },
+);

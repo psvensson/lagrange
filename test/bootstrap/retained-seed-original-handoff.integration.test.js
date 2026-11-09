@@ -37,6 +37,7 @@ import {
   createRetainedSeedBootstrapService,
   initializeTestEnvironment,
 } from '../integration/helpers/cluster-test-helpers.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 import {SEED_RETAINED_EFFECT_STATE} from
   '../../src/bootstrap/seed-retained-effects-constants.js';
 import {
@@ -300,7 +301,7 @@ function pass(observed, receipt) {
 }
 
 test('R1 prospective original allocation persists exact cohort before first native effect',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
     const observed = await retainedObservation(t, 'R1');
     const {declaration, rightsAfterFirst} = observed;
     assert.ok(declaration, 'initial attempt issued a durable original allocation declaration');
@@ -326,7 +327,7 @@ test('R1 prospective original allocation persists exact cohort before first nati
   });
 
 test('R2 cold retained cohort validates all founders and unused publication rights before opening',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
     const observed = await retainedObservation(t, 'R2');
     const {second, rightsAfterFirst} = observed;
     assert.equal(Object.keys(rightsAfterFirst).length, EXPECTED_FOUNDER_COUNT);
@@ -344,7 +345,7 @@ test('R2 cold retained cohort validates all founders and unused publication righ
   });
 
 test('R3 completed cohort advances to deferred elections and participant release',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
     const observed = await retainedObservation(t, 'R3');
     const {
       directory, postEnableBackup, declaration, selected,
@@ -390,7 +391,7 @@ test('R3 completed cohort advances to deferred elections and participant release
   });
 
 test('R4 release-completed cohort publishes exact original SERVICES and cluster_id',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
     const observed = await retainedObservation(t, 'R4');
     const {declaration, servicesRows, clusterIdRow, rightsAfterSecond} = observed;
     assert.equal(servicesRows.length, EXPECTED_FOUNDER_COUNT);
@@ -421,7 +422,7 @@ test('R4 release-completed cohort publishes exact original SERVICES and cluster_
   });
 
 test('R5 public admission remains closed across every retained continuation boundary',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
     const observed = await retainedObservation(t, 'R5');
     const {directory, postEnableBackup, first, second} = observed;
     assert.equal(first.returnedRuntime, false);
@@ -456,7 +457,7 @@ test('R5 public admission remains closed across every retained continuation boun
   });
 
 test('R6 cold public partial seed preserves original ENABLE and reaches exact handoff frontier',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
     const observed = await retainedObservation(t, 'R6');
     const {first, second, selected, originAfterFirst, originAfterSecond} = observed;
     assert.deepEqual(originAfterFirst, selected.after);
@@ -475,7 +476,7 @@ test('R6 cold public partial seed preserves original ENABLE and reaches exact ha
   });
 
 test('R7 transferred publication rights refuse original cold continuation',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
     const observed = await retainedObservation(t, 'R7');
     const {
       directory, postHandoffBackup, declaration, selected, rightsAfterSecond,
@@ -505,7 +506,7 @@ test('R7 transferred publication rights refuse original cold continuation',
   });
 
 test('R8 contrary or partial retained state fails closed without mutating origin',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)}, async (t) => {
     const observed = await retainedObservation(t, 'R8');
     const {directory, postEnableBackup, declaration, selected} = observed;
     restoreDirectorySnapshot(postEnableBackup, directory);

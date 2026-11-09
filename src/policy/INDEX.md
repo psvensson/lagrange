@@ -7,7 +7,8 @@ documentClass: generated
 
 ## Files
 
-- [policy-constants.js](policy-constants.js) - No leading comment; first export: DEFAULT_MESSAGE_GROUP_POLICY. (importers: many)
-- [table-policy-resolution.js](table-policy-resolution.js) - No leading comment; first export: mergeStoredTablePolicyOverrides. (importers: one)
+- [policy-constants.js](policy-constants.js) - No leading comment; first export: DEFAULT_MESSAGE_GROUP_POLICY. (importers: hub)
+- [table-policy-committed-base.js](table-policy-committed-base.js) - The base of a table-policy write (census site 6 of quest replica-admission-from-committed-operation, attempt 2;... (importers: one)
+- [table-policy-resolution.js](table-policy-resolution.js) - No leading comment; first export: buildPolicyAuthorityDecision. (importers: many)
 - [table-policy-service.js](table-policy-service.js) - Table Policy Service - Manages table policies for partition behavior. (importers: many)
-- [table-policy-validation.js](table-policy-validation.js) - Extract storage-related placement constraints from a constraints object. (importers: few)
+- [table-policy-validation.js](table-policy-validation.js) - The reason a refused policy read carries: the typed reason a policy refusal (a decision, or an error this owner's... (importers: few)

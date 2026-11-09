@@ -247,12 +247,14 @@ test('table policy invokes TablePolicyService.updateTablePolicy',
     t.equal(gateway.submittedMutations.length, 1);
     const {mutation} = gateway.submittedMutations[0];
     t.equal(mutation.tableName, 'tables');
-    t.same(mutation.whereClause, {table_id: TABLE_ID});
+    // Conditional on the committed base (census site 6).
+    t.same(mutation.whereClause,
+      {table_id: TABLE_ID, table_policies: '{}', updated_at: null});
     t.same(JSON.parse(mutation.data.table_policies),
       {splitStorageThreshold: 1024});
 
     const invalid = await operations.updateTablePolicy(TABLE_ID,
-      {policy: {replicaCount: 2}});
+      {policy: {minReplicaCount: 2}});
     t.equal(invalid.statusCode, 400);
     t.equal(invalid.body.errorCode, POLICY_ERROR_CODE.POLICY_INVALID);
     t.equal(gateway.submittedMutations.length, 1, 'nothing written');

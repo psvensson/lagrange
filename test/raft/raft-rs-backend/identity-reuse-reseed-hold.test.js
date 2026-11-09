@@ -120,7 +120,7 @@ test('W1: a leader heartbeat to an identity re-opened empty holds that ' +
   try {
     const ids = peerIdsOf(cluster);
     const matched = cluster.node('w1-a').readStatus()
-      .followerProgress[cluster.addressOf('w1-c')];
+      .followerProgress['w1-c'];
     assert.ok(matched >= FORMED_ENTRIES,
       `setup: the leader holds w1-c matched at ${matched}`);
     const generation = bystander.node('w1-x').readStatus().runtimeGeneration;

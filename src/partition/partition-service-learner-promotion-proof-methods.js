@@ -10,6 +10,10 @@ import {
 import {
   buildSnapshotCatchupIdentityFromCache,
 } from '../raft/snapshot-catchup.js';
+import {COMMITTED_MEMBERSHIP_ANSWER_KIND} from
+  '../raft/raft-committed-membership-constants.js';
+import {readPartitionCommittedMembership} from
+  './partition-service-raft-membership-administration.js';
 import {
   TRANSPORT_CONFIG_KEY,
   TRANSPORT_DEFAULT,
@@ -26,6 +30,26 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 const PROTOTYPE_CONSTRUCTOR_NAME = 'constructor';
+
+/**
+ * The refusal a committed-membership answer gives a proof request, or null
+ * when the configuration names the learner as a voter or learner under
+ * exactly its replica identity.
+ * @param {Object} membership - The witness read's answer.
+ * @param {string} learnerReplicaId - The requesting learner.
+ * @return {Object|null} Frozen refused proof, or null.
+ */
+function learnerConfigurationRefusal(membership, learnerReplicaId) {
+  if (membership?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED) {
+    return refuseLearnerPromotionProof(
+      LEARNER_PROMOTION_PROOF_REASON.CONFIGURATION_UNAVAILABLE,
+      membership?.reason ?? null);
+  }
+  const named = [...membership.voters, ...membership.learners].some(
+    (peerId) => membership.identities[peerId] === learnerReplicaId);
+  return named ? null : refuseLearnerPromotionProof(
+    LEARNER_PROMOTION_PROOF_REASON.NOT_IN_CONFIGURATION, null);
+}
 
 /**
  * Learner-promotion progress-proof plumbing (quest
@@ -55,24 +79,27 @@ class PartitionServiceLearnerPromotionProofMethods {
     }).membershipEpoch;
   }
   /**
-   * Leader-side handler for a learner's promotion-proof request. Gathers
-   * the facts (live leadership, current term, committed index as the safe
-   * promotion index, leader-observed learner match index, both membership
-   * epochs) and answers with the raft layer's typed proof outcome. Every
-   * refusal is typed; a malformed request refuses REQUEST_INVALID with
-   * cause request_shape, an unresolvable learner address (its services row
-   * not yet in this cache) with cause learner_address_unresolvable.
+   * Leader-side handler for a learner's promotion-proof request (quest
+   * learner-host-from-committed-admission). Decided from committed facts
+   * only, in order: the request shape (REQUEST_INVALID/request_shape); this
+   * replica's live leadership, before any other read (NOT_LEADER); its
+   * committed configuration naming the learner under exactly its replica
+   * identity (NOT_IN_CONFIGURATION; an unreadable configuration refuses
+   * CONFIGURATION_UNAVAILABLE with the read's reason); then the raft-layer
+   * predicate over the leader's own progress for that identity (raft-rs
+   * Progress[id].matched), term, commit index and both membership epochs.
+   * No address is resolved: whether the learner can be reached is the
+   * transport's concern, never an input to this decision.
    * @param {Object} payload request
    *   ({partitionId, replicaId, membershipEpoch})
-   * @return {Object} {partitionId, learnerReplicaId, proof}
+   * @return {Promise<Object>} {partitionId, learnerReplicaId, proof}
    * @private
    */
-  handleLearnerPromotionProofRequest(payload) {
+  async handleLearnerPromotionProofRequest(payload) {
     const learnerReplicaId = String(
       payload?.replicaId || STRING.EMPTY,
     ).trim();
     const requestShape = {
-
       partitionId: this.partitionId,
       learnerReplicaId,
     };
@@ -86,29 +113,32 @@ class PartitionServiceLearnerPromotionProofMethods {
         {requestedPartitionId: payload?.partitionId},
       );
     }
-    let learnerAddress = null;
-    try {
-      learnerAddress = this.buildPeerAddress(learnerReplicaId);
-    } catch (addressError) {
-      return this.refuseLearnerPromotionProofRequest(
-        requestShape,
-        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE,
-        {error: addressError.message},
-      );
+    if (!this.leadsForLearnerPromotionProof()) {
+      return {...requestShape, proof: evaluateLearnerPromotionProof({
+        raftIsLeader: false})};
     }
-    const followerMatchIndex =
-      this.raft?.readStatus?.().followerProgress?.[learnerAddress];
-    const matchObservation = Object.freeze({
-      state: Number.isFinite(followerMatchIndex) ? 'available' : 'unavailable',
-      matchIndex: Number.isFinite(followerMatchIndex) ? followerMatchIndex : 0,
-    });
+    const membership = await readPartitionCommittedMembership(this);
+    const configurationRefusal =
+      learnerConfigurationRefusal(membership, learnerReplicaId);
+    if (configurationRefusal !== null) {
+      this.logger.info(
+        PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_PROOF_REQUEST_REFUSED, {
+          partitionId: this.partitionId,
+          replicaId: this.replicaId,
+          learnerReplicaId,
+          reason: configurationRefusal.reason,
+          cause: configurationRefusal.cause,
+        });
+      return {...requestShape, proof: configurationRefusal};
+    }
+    const status = this.raft.readStatus();
+    const followerMatchIndex = status.followerProgress?.[learnerReplicaId];
     const proof = evaluateLearnerPromotionProof({
-      raftIsLeader:
-        this.isLeader === true &&
-          this.raft?.readStatus?.().role === RaftRole.LEADER,
+      raftIsLeader: this.leadsForLearnerPromotionProof(),
       currentTerm: this.resolveCurrentTermSafe(),
-      committedIndex: this.raft.readStatus().commitIndex,
-      learnerMatchIndex: matchObservation.matchIndex,
+      committedIndex: status.commitIndex,
+      learnerMatchIndex: Number.isFinite(followerMatchIndex) ?
+        followerMatchIndex : 0,
       leaderMembershipEpoch: this.resolveLearnerPromotionMembershipEpoch(),
       learnerMembershipEpoch: payload?.membershipEpoch,
     });
@@ -120,13 +150,22 @@ class PartitionServiceLearnerPromotionProofMethods {
       // cadence): re-sending the last log entry either yields a
       // same-identity save + ack (caught up) or an append-fail that engages
       // the existing catch-up batching (behind). Fire-and-forget.
-      this.probeLearnerReplicationProgress(learnerAddress);
+      this.probeLearnerReplicationProgress(learnerReplicaId);
     }
     return {...requestShape, proof};
   }
   /**
-   * Leader-side typed REQUEST_INVALID refusal, logged at info so the two
-   * mints of one reason are distinguishable in a node log.
+   * This replica leads its group now: its own flag and its port's live role.
+   * @return {boolean}
+   * @private
+   */
+  leadsForLearnerPromotionProof() {
+    return this.isLeader === true &&
+      this.raft?.readStatus?.().role === RaftRole.LEADER;
+  }
+  /**
+   * Leader-side typed REQUEST_INVALID refusal (a malformed request), logged
+   * at info like every leader-side refusal of a configuration fact.
    * @param {Object} requestShape response envelope without the proof
    * @param {string} cause LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE member
    * @param {Object} detail extra log fields
@@ -154,26 +193,27 @@ class PartitionServiceLearnerPromotionProofMethods {
     };
   }
   /**
-   * Send the leader's last log entry to one learner so progress evidence
-   * (an APPEND_ACK, or an append-fail engaging catch-up) materializes.
-   * Never throws; failures only defer the next proof retry.
-   * @param {string} learnerAddress learner unified address
+   * Drive one heartbeat round to one learner (by replica identity) so
+   * progress evidence (an APPEND_ACK, or an append-fail engaging catch-up)
+   * materializes; the port addresses it from its committed node. Never
+   * throws; failures only defer the next proof retry.
+   * @param {string} learnerReplicaId learner replica identity
    * @return {Promise<void>}
    * @private
    */
-  async probeLearnerReplicationProgress(learnerAddress) {
+  async probeLearnerReplicationProgress(learnerReplicaId) {
     if (typeof this.raft?.probePeerProgress !== PARTITION_SERVICE_LITERAL.FUNCTION) {
       return;
     }
     try {
-      await turnChainValue(this.raft.probePeerProgress(learnerAddress));
+      await turnChainValue(this.raft.probePeerProgress(learnerReplicaId));
     } catch (probeError) {
       this.logger.debug(
         PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_PROGRESS_PROBE_FAILED,
         {
           partitionId: this.partitionId,
           replicaId: this.replicaId,
-          learnerAddress,
+          learnerReplicaId,
           error: probeError.message,
         },
       );
@@ -185,9 +225,7 @@ class PartitionServiceLearnerPromotionProofMethods {
    * response-shape failure returns a typed refused proof with a typed
    * cause — fail-closed; the caller reschedules on its retry cadence. The
    * delivery carries a bounded timeout so one stalled round trip never
-   * stacks beyond the cadence. A leader refusal whose cause is
-   * learner_address_unresolvable re-asserts this learner's durable
-   * services row (quest learner-promotion-proof-channel-wake).
+   * stacks beyond the cadence.
    * @param {Object} promotionObservation
    * @param {string} promotionObservation.leaderReplicaId discovered leader
    * @param {number} promotionObservation.membershipEpoch epoch observed at
@@ -237,7 +275,6 @@ class PartitionServiceLearnerPromotionProofMethods {
         },
       );
     }
-    this.reactToLearnerPromotionRefusalCause(response.proof);
     return response.proof;
   }
   /**

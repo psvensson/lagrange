@@ -136,7 +136,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    * @private
    */
   getPriorityAwareDelayMs(scheduleDelayMs) {
-    if (this.isControlPlanePriorityPartition()) {
+    if (this.usesPriorityRebalanceCadence()) {
       return this.getPriorityRetryDelayMs();
     }
     return scheduleDelayMs;
@@ -152,7 +152,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    */
   getRetryableFailureRetryDelayMs(error) {
     const retryAfterMs = getControlPlaneRetryAfterMs(error);
-    if (this.isControlPlanePriorityPartition()) {
+    if (this.usesPriorityRebalanceCadence()) {
       return Math.max(
         this.getPriorityRetryDelayMs(),
         Number.isFinite(retryAfterMs) &&
@@ -481,42 +481,8 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     });
   },
 
-  resolveLocalServePlanningGateDecision(evaluationContext = null) {
-    const localServeReadinessBlocker =
-      this.getCriticalSystemLocalServeReadinessBlocker();
-    if (!localServeReadinessBlocker) {
-      return null;
-    }
-    const priorityRecoveryGateBypass =
-      this.buildPriorityRecoveryPlanningGateBypassSnapshot(evaluationContext);
-    if (priorityRecoveryGateBypass.shouldBypass === true) {
-      return null;
-    }
-    const scheduleDelayMs = this.increaseCurrentInterval(
-      REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER.WAIT,
-    );
-    const delayMs = this.getPriorityAwareDelayMs(scheduleDelayMs);
-    return this.buildRebalancePlanningGateDecision({
-      gate: REBALANCE_PLANNING_GATE.LOCAL_SERVE_READINESS,
-      blocker: localServeReadinessBlocker,
-      logMessage: REBALANCER_LOG_MSG.WAIT_LOCAL_SERVE_READINESS,
-      logContext: {
-        entityType: this.entityType,
-        nodeId: this.nodeId,
-        delayMs,
-        reasonCodes: Array.isArray(localServeReadinessBlocker.reasons) ?
-          localServeReadinessBlocker.reasons
-            .map((reason) =>
-              String(
-                reason?.code || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-              ),
-            )
-            .filter(Boolean) :
-          [],
-      },
-      scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
-      scheduleDelayMs,
-    });
+  resolveLocalServePlanningGateDecision(_evaluationContext = null) {
+    return null;
   },
 
   /**
@@ -673,10 +639,10 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       const executedMoveCount = this.countExecutedMoves(rebalanceResult);
 
       if (executedMoveCount > UNIFIED_REBALANCER_LITERAL.ZERO) {
-        this.currentInterval = this.isControlPlanePriorityPartition() ?
+        this.currentInterval = this.usesPriorityRebalanceCadence() ?
           this.getPriorityRetryDelayMs() :
           this.periodicCheckIntervalMs;
-      } else if (this.isControlPlanePriorityPartition()) {
+      } else if (this.usesPriorityRebalanceCadence()) {
         this.currentInterval = this.getPriorityRetryDelayMs();
         forcePriorityRetry = true;
       } else {
@@ -692,7 +658,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     // place the user-table leader-placement cure may act.
     const cureDecision = await applyUserTableLeaderPlacementCure(this);
 
-    if (this.isControlPlanePriorityPartition()) {
+    if (this.usesPriorityRebalanceCadence()) {
       this.currentInterval = this.getPriorityRetryDelayMs();
     } else if (isUserTableLeaderCureGapActionable(cureDecision)) {
       // An open actionable leader-placement gap holds the cadence flat:
@@ -716,7 +682,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     }
 
     const now = ownerNowMs(this);
-    const minInterval = this.isControlPlanePriorityPartition() ?
+    const minInterval = this.usesPriorityRebalanceCadence() ?
       UNIFIED_REBALANCER_LITERAL.THOUSAND :
       NUM.FIVE * UNIFIED_REBALANCER_LITERAL.THOUSAND;
 

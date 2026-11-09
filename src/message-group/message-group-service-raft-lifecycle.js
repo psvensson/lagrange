@@ -5,6 +5,7 @@
  * join-phase scheduling suppression / convergence release.
  * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 7.3, 7.4
  */
+import {AddressManager} from '../address/address-manager.js';
 import {
   COLUMN,
   ENTITY_TYPE,
@@ -32,6 +33,23 @@ import {
 } from './message-group-consensus-port.js';
 import {MESSAGE_GROUP_SERVICE_LITERAL} from
   './message-group-service-runtime-support.js';
+
+function enableJoinConvergenceMetadataPublication(service, options) {
+  const shouldEnable =
+    options?.enableMetadataPublication === true &&
+    (service.publishRoleMetadata === false ||
+      service.publishLeaderNodeMetadata === false);
+  if (!shouldEnable) {
+    return false;
+  }
+  service.publishRoleMetadata = true;
+  service.publishLeaderNodeMetadata = true;
+  service.queueRoleUpdate(service.role);
+  if (service.isLeader) {
+    service.queueLeaderNodeUpdate(service.nodeId);
+  }
+  return true;
+}
 
 const SERVICE_SHUTDOWN = 'message_group_service_shutdown';
 
@@ -149,7 +167,9 @@ function assignRaftLifecycle(serviceClass) {
           groupId: this.groupId,
           localReplicaIdentity: this.replicaId,
           logger: this.logger,
-        }, {replicaIdentity, peerAddress});
+        }, {replicaIdentity, peerAddress,
+          nodeId: AddressManager.getInstance()
+            .nodeIdOfProjectedAddress(peerAddress)});
       }
     },
     /**
@@ -384,7 +404,8 @@ function assignRaftLifecycle(serviceClass) {
      * leadership.
      * @return {void}
      */
-    completeJoinConvergence() {
+    completeJoinConvergence(options = {}) {
+      enableJoinConvergenceMetadataPublication(this, options);
       const wasJoiningExistingGroup = this.isJoiningExistingGroup === true;
       const shouldReleaseDeferredElection =
         this.deferElectionUntilJoinConvergence === true;

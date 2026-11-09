@@ -1,4 +1,4 @@
-import {COLUMN, SERVICE_STATUS, STATE} from
+import {COLUMN, NODE_STATE, SERVICE_STATUS, STATE} from
   '../constants/index.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 
@@ -63,6 +63,12 @@ const NODE_LIVENESS_SEMANTIC_STATE = objectFreeze({
   UNKNOWN: 'unknown',
   VALID: 'valid',
 });
+
+const KNOWN_NODE_STATUSES = objectFreeze(Object.values(NODE_STATE));
+const MEMBERSHIP_DENIED_LEASE_STATES = objectFreeze([
+  NODE_LIVENESS_SEMANTIC_STATE.CLEARED,
+  NODE_LIVENESS_SEMANTIC_STATE.INVALID,
+]);
 
 const NODE_LIVENESS_SEMANTIC_THRESHOLD_DEFAULT = objectFreeze({
   clusterMemberStaleHeartbeatMs: 30_000,
@@ -139,6 +145,23 @@ function hasOwnReadyLeaseField(nodeRow) {
   return false;
 }
 
+// One lease decoder for projection and same-heartbeat evidence identity.
+// A cleared lease is a known negative; malformed data is not that fact.
+function readReadyLeaseFact(nodeRow) {
+  for (let index = 0; index < READY_LEASE_FIELD_NAMES.length; index++) {
+    const field = READY_LEASE_FIELD_NAMES[index];
+    if (!nodeRow || !objectHasOwn(nodeRow, field)) continue;
+    const raw = nodeRow[field];
+    if (raw === null) {
+      return {expiresAtMs: null, valueState: NODE_LIVENESS_SEMANTIC_STATE.CLEARED};
+    }
+    const expiresAtMs = normalizeFiniteNumber(raw);
+    return {expiresAtMs, valueState: expiresAtMs === null ?
+      NODE_LIVENESS_SEMANTIC_STATE.INVALID : NODE_LIVENESS_SEMANTIC_STATE.VALID};
+  }
+  return {expiresAtMs: null, valueState: NODE_LIVENESS_SEMANTIC_STATE.UNKNOWN};
+}
+
 function readFirstOwnValue(record, fieldNames) {
   if (!record) return undefined;
   for (let index = 0; index < fieldNames.length; index += 1) {
@@ -157,6 +180,7 @@ function readNodeLivenessRowFacts(nodeRow) {
   return objectFreeze({
     lastHeartbeatMs: times.lastHeartbeatMs,
     readyLeaseExpiresAtMs: times.readyLeaseExpiresAtMs,
+    readyLeaseValueState: times.readyLeaseValueState,
     hasReadyLeaseField: hasOwnReadyLeaseField(nodeRow),
     status: normalizeState(readFirstOwnValue(nodeRow, STATUS_FIELD_NAMES)),
     connectionState: normalizeState(
@@ -165,13 +189,13 @@ function readNodeLivenessRowFacts(nodeRow) {
 }
 
 function readNodeTimes(nodeRow) {
+  const lease = readReadyLeaseFact(nodeRow);
   return objectFreeze({
     lastHeartbeatMs: normalizeFiniteNumber(
       readFirstOwnValue(nodeRow, LAST_HEARTBEAT_FIELD_NAMES),
     ),
-    readyLeaseExpiresAtMs: normalizeFiniteNumber(
-      readFirstOwnValue(nodeRow, READY_LEASE_FIELD_NAMES),
-    ),
+    readyLeaseExpiresAtMs: lease.expiresAtMs,
+    readyLeaseValueState: lease.valueState,
   });
 }
 
@@ -191,23 +215,14 @@ function projectDeadlineFreshness(valueMs, thresholdMs, nowMs) {
   });
 }
 
-function projectLease(nodeRow, readyLeaseExpiresAtMs, nowMs) {
-  if (numberIsFinite(readyLeaseExpiresAtMs)) {
-    return objectFreeze({
-      expiresAtMs: readyLeaseExpiresAtMs,
-      explicitlyCleared: false,
-      state: nowMs < readyLeaseExpiresAtMs ?
-        NODE_LIVENESS_SEMANTIC_STATE.VALID :
-        NODE_LIVENESS_SEMANTIC_STATE.EXPIRED,
-    });
-  }
-  const explicitlyCleared = hasOwnReadyLeaseField(nodeRow);
+function projectLease(readyLeaseExpiresAtMs, valueState, nowMs) {
   return objectFreeze({
-    expiresAtMs: null,
-    explicitlyCleared,
-    state: explicitlyCleared ?
-      NODE_LIVENESS_SEMANTIC_STATE.CLEARED :
-      NODE_LIVENESS_SEMANTIC_STATE.UNKNOWN,
+    expiresAtMs: readyLeaseExpiresAtMs,
+    explicitlyCleared: valueState === NODE_LIVENESS_SEMANTIC_STATE.CLEARED,
+    state: valueState === NODE_LIVENESS_SEMANTIC_STATE.VALID ?
+      (nowMs < readyLeaseExpiresAtMs ?
+        NODE_LIVENESS_SEMANTIC_STATE.VALID : NODE_LIVENESS_SEMANTIC_STATE.EXPIRED) :
+      valueState,
   });
 }
 
@@ -364,7 +379,8 @@ function projectClusterMembership(context) {
     return NODE_LIVENESS_SEMANTIC_STATE.HEALTHY;
   }
   if (context.readyNow) return NODE_LIVENESS_SEMANTIC_STATE.HEALTHY;
-  if (!context.statusActive || context.lease.explicitlyCleared) {
+  if (!context.statusActive ||
+      arrayPrototypeIncludes(MEMBERSHIP_DENIED_LEASE_STATES, context.lease.state)) {
     return NODE_LIVENESS_SEMANTIC_STATE.INVALID;
   }
   if (context.nodeId === context.localNodeId) {
@@ -430,7 +446,8 @@ function projectReadyWhenWritten(context) {
 
 function projectNodeSemanticFacts(context) {
   const {nodeRow, nowMs, source, thresholds} = context;
-  const {lastHeartbeatMs, readyLeaseExpiresAtMs} = readNodeTimes(nodeRow);
+  const {lastHeartbeatMs, readyLeaseExpiresAtMs, readyLeaseValueState} =
+    readNodeTimes(nodeRow);
   const status = normalizeState(readFirstOwnValue(nodeRow, STATUS_FIELD_NAMES));
   const rowStateSource = typeof source.rowConnectionState === 'string' ?
     source.rowConnectionState :
@@ -445,7 +462,7 @@ function projectNodeSemanticFacts(context) {
     routerTransportConnected ||
       arrayPrototypeIncludes(ROW_READY_CONNECTION_STATES, rowConnectionState);
   const statusActive = status === ACTIVE_SERVICE_STATUS;
-  const lease = projectLease(nodeRow, readyLeaseExpiresAtMs, nowMs);
+  const lease = projectLease(readyLeaseExpiresAtMs, readyLeaseValueState, nowMs);
   const clusterHeartbeat = projectDeadlineFreshness(
     lastHeartbeatMs,
     thresholds.clusterMemberStaleHeartbeatMs,
@@ -531,6 +548,7 @@ function buildNodeLivenessProjection(context, facts, clusterMembershipState) {
     statusSemantics: objectFreeze({
       state: facts.status || NODE_LIVENESS_SEMANTIC_STATE.UNKNOWN,
       active: facts.statusActive,
+      valid: arrayPrototypeIncludes(KNOWN_NODE_STATUSES, facts.status),
     }),
     connectionSemantics: objectFreeze({
       state: connectionState,

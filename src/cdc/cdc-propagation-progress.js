@@ -34,26 +34,28 @@ function discardProvisionalCoverage(progress) {
   }
 }
 
-function refreshCdcPropagationRoutes(progress, targets, {fallback = false} = {}) {
+function hasRouteAddress(routeOrTarget) {
+  return typeof routeOrTarget?.address === 'string' && routeOrTarget.address.length > 0;
+}
+
+function refreshCdcPropagationRoutes(progress, targets) {
   let requirementsChanged = false;
   for (const target of targets) {
     const leaf = progress.targets.find((entry) => entry.groupId === target.groupId);
     if (!leaf) {
-      const route = observedRoute(target);
-      progress.targets.push({groupId: target.groupId, route, preferredRoute: route,
+      progress.targets.push({groupId: target.groupId, route: observedRoute(target),
         coverage: emptyCdcCoverage()});
       requirementsChanged = true;
       continue;
     }
-    const comparison = fallback ? leaf.route : leaf.preferredRoute;
-    if (sameObservedRoute(comparison, target)) continue;
+    if (!hasRouteAddress(target) && hasRouteAddress(leaf.route)) continue;
+    if (sameObservedRoute(leaf.route, target)) continue;
     // Observed route replacement invalidates weak coverage. A native receipt
     // remains a fact of its captured group; omitted groups remain required.
     if (leaf.coverage.state === CDC_COVERAGE_STATE.PROVISIONAL) {
       leaf.coverage = emptyCdcCoverage();
     }
     leaf.route = observedRoute(target);
-    if (!fallback) leaf.preferredRoute = leaf.route;
   }
   // The existing topology owner has exposed a larger obligation set. Native
   // receipts remain facts, while weak coverage must be observed for this set.
@@ -122,10 +124,6 @@ function bindCdcPropagationProgress(context, progress, events) {
       return nextUncoveredLeaf(progress, passState);
     },
     isSource: (dispatch) => dispatch.target === progress,
-    refreshRoutes: (targets, options) => {
-      assertCurrent();
-      refreshCdcPropagationRoutes(progress, targets, options);
-    },
     // The source leaf observes its local answer; a target leaf observes its
     // delivery envelope, or null when it was not sent (uncovered).
     observe: (dispatch, observed) => {
@@ -151,6 +149,9 @@ function bindCdcPropagationProgress(context, progress, events) {
         progress.targets.map((leaf) => leaf.coverage), progress.sourceGroupId,
         progress.source.resolveStrictCdcForwardRetryAfterMs());
     },
+    failedTargetGroupIds: () => progress.targets
+      .filter((leaf) => leaf.coverage.state === CDC_COVERAGE_STATE.UNCOVERED)
+      .map((leaf) => leaf.groupId),
   });
 }
 

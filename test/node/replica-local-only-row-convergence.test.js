@@ -25,6 +25,11 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {
+  assignReplicaHandlerCreateStatusMethods,
+} from '../../src/node/replica-handler-create-status-methods.js';
 import {
   CONTROL_PLANE_MUTATION_OUTCOME,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -32,6 +37,23 @@ import {
 const NODE_ID = 'node-a';
 const REPLICA_ID = 'control_plane_publications-p1-r5';
 const PARTITION_ID = 'control_plane_publications-p1';
+
+class TestReplicaHandlerHost {}
+assignReplicaHandlerCreateStatusMethods(TestReplicaHandlerHost);
+
+function createHandler(stateMachine) {
+  const systemTableCache = new SystemTableCache();
+  stateMachine.systemTableCache = systemTableCache;
+  const handler = Object.create(TestReplicaHandlerHost.prototype);
+  handler.nodeId = NODE_ID;
+  handler.replicaStateMachine = stateMachine;
+  handler.systemTableCache = systemTableCache;
+  handler.buildTrackedServiceAddress = (replicaId) =>
+    `${NODE_ID}/partition/${replicaId}`;
+  handler.getTrackedReplicaRole = () => null;
+  handler.getTrackedService = () => null;
+  return handler;
+}
 
 function createStateMachine({gateway, nowRef}) {
   return new ReplicaStateMachine({
@@ -231,9 +253,6 @@ test('CL-021: deferred durable services rows converge', async (t) => {
     async (t) => {
       const cases = [
         ['applied', {outcome: CONTROL_PLANE_MUTATION_OUTCOME.APPLIED}, true],
-        ['pending visibility', {
-          outcome: CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
-        }, true],
         ['no-op', {outcome: CONTROL_PLANE_MUTATION_OUTCOME.NO_OP}, false],
         ['deferred', {outcome: CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED}, false],
         ['rejected', {outcome: CONTROL_PLANE_MUTATION_OUTCOME.REJECTED}, false],
@@ -462,39 +481,319 @@ test('CL-021: deferred durable services rows converge', async (t) => {
   );
 });
 
-test('CL-021: the on-demand retry kick runs the same bounded pass', async (t) => {
-  // quest learner-promotion-proof-channel-wake: a partition learner whose
-  // promotion proof was refused learner_address_unresolvable kicks the
-  // deferred-row retry now instead of waiting for the tick — through the
-  // same pass, so the per-row backoff still bounds the write rate.
+test('CL-021: the deferred-row retry runs only on its own bounded pass; ' +
+  'no promotion refusal kicks it', async (t) => {
+  // quest learner-host-from-committed-admission: the learner promotion
+  // proof no longer depends on the learner's services row, so the on-demand
+  // kick a learner_address_unresolvable refusal used to fire is deleted.
+  // The tick's pass keeps its per-row backoff.
   const nowRef = {value: 1_760_000_000_000};
   const {gateway, calls} = createGateway();
   const stateMachine = createStateMachine({gateway, nowRef});
   await seedLocalOnlyReplica(stateMachine);
+  t.equal(typeof stateMachine.reconcileLocalOnlyServiceRowsNow, 'undefined',
+    'there is no on-demand retry entry');
 
-  const kicked = await stateMachine.reconcileLocalOnlyServiceRowsNow();
+  const kicked = await stateMachine._reconcileLocalOnlyServiceRows();
   t.equal(kicked, 0, 'control plane still failing: nothing converged');
-  t.equal(calls.mutations.length, 1, 'the kick made one durable attempt');
+  t.equal(calls.mutations.length, 1, 'the pass made one durable attempt');
   t.equal(
     stateMachine.isServiceRowLocalOnly(REPLICA_ID),
     true,
     'the marker stays until a durable commit',
   );
 
-  await stateMachine.reconcileLocalOnlyServiceRowsNow();
+  await stateMachine._reconcileLocalOnlyServiceRows();
   t.equal(
     calls.mutations.length,
     1,
-    'an immediate second kick is bounded by the per-row backoff',
+    'an immediate second pass is bounded by the per-row backoff',
   );
 
   gateway.failNext = false;
   nowRef.value += 60_000;
-  const persisted = await stateMachine.reconcileLocalOnlyServiceRowsNow();
-  t.equal(persisted, 1, 'after the backoff the kick converges the row');
+  const persisted = await stateMachine._reconcileLocalOnlyServiceRows();
+  t.equal(persisted, 1, 'after the backoff the pass converges the row');
   t.equal(
     stateMachine.isServiceRowLocalOnly(REPLICA_ID),
     false,
     'marker cleared on durable commit',
   );
+});
+
+test('shared incarnation rule governs both durable role persistence and local priority seeding with negative controls', async (t) => {
+  const nowRef = {value: 1_760_000_000_000};
+  const {gateway} = createGateway();
+  const stateMachine = createStateMachine({gateway, nowRef});
+  const handler = createHandler(stateMachine);
+
+  // Establish incarnation 1 in stateMachine and cache with voter role 'follower'
+  stateMachine.registerReplicaSnapshot(REPLICA_ID, {
+    partitionId: PARTITION_ID,
+    nodeId: NODE_ID,
+    state: ReplicaStatus.SYNCING,
+    serviceId: REPLICA_ID,
+    serviceType: 'partition',
+    serviceAddress: `${NODE_ID}/partition/${REPLICA_ID}`,
+    replicaIdentity: `${REPLICA_ID}#inc-1`,
+    createdAt: 1000,
+    stateEnteredAt: 1000,
+    durableVersionColumn: 'state_entered_at',
+    durableVersion: 1000,
+    createAttemptToken: 'attempt-1',
+    cleanupToken: null,
+  });
+  handler.systemTableCache.applySystemTableChange('services', 'UPSERT', {
+    service_id: REPLICA_ID,
+    replica_id: `${REPLICA_ID}#inc-1`,
+    partition_id: PARTITION_ID,
+    node_id: NODE_ID,
+    service_type: 'partition',
+    status: ReplicaStatus.SYNCING,
+    raft_role: 'follower',
+    created_at: 1000,
+    updated_at: 1000,
+    create_attempt_token: 'attempt-1',
+    cleanup_token: null,
+  });
+
+  // Positive case: same incarnation preserves raft_role in both local seeding and durable payload
+  handler.seedLocalPriorityServiceRow(REPLICA_ID, PARTITION_ID, ReplicaStatus.ACTIVE, {
+    markLocalOnly: false,
+  });
+  t.equal(
+    handler.systemTableCache.get('services', REPLICA_ID)?.raft_role,
+    'follower',
+    'local priority seed preserves voter role for matching incarnation',
+  );
+  const matchingDurablePayload = stateMachine._buildCreateCdcData(
+    stateMachine.getState(REPLICA_ID),
+    REPLICA_ID,
+    'partition',
+    `${NODE_ID}/partition/${REPLICA_ID}`,
+  );
+  t.equal(
+    matchingDurablePayload.raft_role,
+    'follower',
+    'durable create payload preserves voter role for matching incarnation',
+  );
+
+  // Negative control 1: superseded create_attempt_token must not leak cached raft_role into new incarnation
+  stateMachine.replicas.set(REPLICA_ID, {
+    ...stateMachine.getState(REPLICA_ID),
+    state: ReplicaStatus.CREATING,
+    createdAt: 2000,
+    stateEnteredAt: 2000,
+    durableVersion: 2000,
+    createAttemptToken: 'attempt-2',
+  });
+  const mismatchedAttemptDurablePayload = stateMachine._buildCreateCdcData(
+    stateMachine.getState(REPLICA_ID),
+    REPLICA_ID,
+    'partition',
+    `${NODE_ID}/partition/${REPLICA_ID}`,
+  );
+  t.equal(
+    mismatchedAttemptDurablePayload.raft_role,
+    undefined,
+    'durable create payload rejects cached raft_role from older create_attempt_token',
+  );
+  // Replace cache entry to verify local seed also rejects mismatched incarnation
+  handler.systemTableCache.deleteRow?.('services', REPLICA_ID);
+  handler.systemTableCache.applySystemTableChange('services', 'UPSERT', {
+    service_id: REPLICA_ID,
+    replica_id: `${REPLICA_ID}#inc-1`,
+    partition_id: PARTITION_ID,
+    node_id: NODE_ID,
+    service_type: 'partition',
+    status: ReplicaStatus.SYNCING,
+    raft_role: 'follower',
+    created_at: 1000,
+    updated_at: 1000,
+    create_attempt_token: 'attempt-1',
+  });
+  // seedLocalReplicaVoterRaftRole must also refuse to seed onto conflicting cached incarnation
+  handler.getTrackedReplicaRole = () => 'follower';
+  t.equal(
+    handler.seedLocalReplicaVoterRaftRole(REPLICA_ID),
+    false,
+    'seedLocalReplicaVoterRaftRole refuses to seed voter role onto conflicting cached incarnation',
+  );
+  handler.getTrackedReplicaRole = () => null;
+
+  // Negative control 2: local ACTIVE seed for attempt-2 must not combine new attempt/created_at
+  // metadata with the cached follower role from attempt-1 via SystemTableCache merge
+  handler.seedLocalPriorityServiceRow(REPLICA_ID, PARTITION_ID, ReplicaStatus.ACTIVE, {
+    markLocalOnly: false,
+  });
+  const activeAttempt2Row = handler.systemTableCache.get('services', REPLICA_ID);
+  t.equal(
+    activeAttempt2Row?.create_attempt_token,
+    'attempt-2',
+    'local ACTIVE seed writes new incarnation attempt token',
+  );
+  t.equal(
+    activeAttempt2Row?.created_at,
+    2000,
+    'local ACTIVE seed writes new incarnation created_at',
+  );
+  t.equal(
+    activeAttempt2Row?.raft_role,
+    null,
+    'local ACTIVE seed clears cached raft_role from older incarnation instead of merging it',
+  );
+
+  // Negative control 3: when compatible owner evidence is unavailable (untracked replica),
+  // local ACTIVE seed must omit/clear cached raft_role
+  handler.systemTableCache.applySystemTableChange('services', 'UPSERT', {
+    service_id: REPLICA_ID,
+    raft_role: 'follower',
+    updated_at: 2500,
+  });
+  stateMachine.replicas.delete(REPLICA_ID);
+  handler.seedLocalPriorityServiceRow(REPLICA_ID, PARTITION_ID, ReplicaStatus.ACTIVE, {
+    markLocalOnly: false,
+  });
+  t.equal(
+    handler.systemTableCache.get('services', REPLICA_ID)?.raft_role,
+    null,
+    'local ACTIVE seed clears cached raft_role when owner lifecycle evidence is unavailable',
+  );
+
+  // Negative control 4: terminal FAILED seed must never preserve cached raft_role
+  handler.systemTableCache.applySystemTableChange('services', 'UPSERT', {
+    service_id: REPLICA_ID,
+    raft_role: 'follower',
+    updated_at: 3000,
+  });
+  handler.seedLocalPriorityServiceRow(REPLICA_ID, PARTITION_ID, ReplicaStatus.FAILED, {
+    markLocalOnly: false,
+  });
+  const failedRow = handler.systemTableCache.get('services', REPLICA_ID);
+  t.equal(failedRow?.status, ReplicaStatus.FAILED, 'row transitioned to failed');
+  t.equal(failedRow?.raft_role, null, 'terminal FAILED seed clears cached raft_role');
+
+  // Positive control 5: live tracked voter role is resolved on SYNCING -> ACTIVE
+  // when cached SERVICES row had raft_role: null, and preserved across in-flight
+  // authoritative catch-up replacement with raft_role: null at <= updated_at
+  const {
+    buildAuthoritativeSystemTableCacheReplacement,
+    buildAuthoritativeServiceLifecycleCacheReplacement,
+  } = await import(
+    '../../src/cache/system-table-cache-authoritative-reconciliation.js'
+  );
+  handler.systemTableCache.clear();
+  stateMachine.resolveLiveReplicaRole = (serviceId) =>
+    handler.getTrackedReplicaRole(serviceId) === 'leader' ? 'follower' : null;
+  stateMachine.replicas.set(REPLICA_ID, {
+    replicaId: REPLICA_ID,
+    replicaIdentity: `${REPLICA_ID}#inc-3`,
+    partitionId: PARTITION_ID,
+    nodeId: NODE_ID,
+    state: ReplicaStatus.ACTIVE,
+    previousState: ReplicaStatus.SYNCING,
+    createdAt: 4000,
+    stateEnteredAt: 4100,
+    durableVersion: 4100,
+    createAttemptToken: 'attempt-3',
+    cleanupToken: null,
+  });
+  handler.systemTableCache.applySystemTableChange('services', 'UPSERT', {
+    service_id: REPLICA_ID,
+    replica_id: `${REPLICA_ID}#inc-3`,
+    partition_id: PARTITION_ID,
+    node_id: NODE_ID,
+    service_type: 'partition',
+    status: ReplicaStatus.SYNCING,
+    raft_role: null,
+    created_at: 4000,
+    updated_at: 4050,
+    create_attempt_token: 'attempt-3',
+  });
+  handler.getTrackedReplicaRole = () => 'leader';
+  t.equal(
+    stateMachine._buildUpdateCdcData(
+      stateMachine.getState(REPLICA_ID),
+      REPLICA_ID,
+      ReplicaStatus.SYNCING,
+      null,
+    ).raft_role,
+    'follower',
+    'ReplicaStateMachine resolves live voter role on SYNCING -> ACTIVE transition when cached raft_role is null',
+  );
+  handler.seedLocalPriorityServiceRow(REPLICA_ID, PARTITION_ID, ReplicaStatus.ACTIVE, {
+    markLocalOnly: false,
+  });
+  const seededFromLiveRole = handler.systemTableCache.get('services', REPLICA_ID);
+  t.equal(
+    seededFromLiveRole?.raft_role,
+    'follower',
+    'seedLocalPriorityServiceRow resolves live voter role (collapsing leader to follower) when cached raft_role is null',
+  );
+  const inFlightAuthoritativeRow = {
+    ...seededFromLiveRole,
+    raft_role: null,
+    updated_at: seededFromLiveRole.updated_at,
+  };
+  t.equal(
+    buildAuthoritativeSystemTableCacheReplacement(
+      seededFromLiveRole,
+      inFlightAuthoritativeRow,
+    ).raft_role,
+    'follower',
+    'buildAuthoritativeSystemTableCacheReplacement preserves non-leader voter raft_role against in-flight null authoritative read',
+  );
+  t.equal(
+    buildAuthoritativeServiceLifecycleCacheReplacement(
+      seededFromLiveRole,
+      inFlightAuthoritativeRow,
+    ).raft_role,
+    'follower',
+    'buildAuthoritativeServiceLifecycleCacheReplacement preserves non-leader voter raft_role against in-flight null authoritative read',
+  );
+  t.equal(
+    buildAuthoritativeSystemTableCacheReplacement(
+      {...seededFromLiveRole, raft_role: 'leader'},
+      inFlightAuthoritativeRow,
+    ).raft_role,
+    null,
+    'buildAuthoritativeSystemTableCacheReplacement never preserves leader raft_role when authoritative row clears raft_role',
+  );
+  const olderCachedRowWithHlc = {
+    ...seededFromLiveRole,
+    status: ReplicaStatus.CREATING,
+    state_entered_at: 4000,
+    updated_at: 4000,
+    updated_at_hlc: '4000-0-services-p1-r1',
+  };
+  const newerAuthoritativeRowWithoutHlc = {
+    ...seededFromLiveRole,
+    status: ReplicaStatus.ACTIVE,
+    state_entered_at: 4300,
+    updated_at: 4300,
+  };
+  delete newerAuthoritativeRowWithoutHlc.updated_at_hlc;
+  const repairedRow = buildAuthoritativeSystemTableCacheReplacement(
+    olderCachedRowWithHlc,
+    newerAuthoritativeRowWithoutHlc,
+  );
+  t.equal(
+    repairedRow.updated_at_hlc,
+    undefined,
+    'buildAuthoritativeSystemTableCacheReplacement drops superseded updated_at_hlc when authoritative updated_at advances',
+  );
+  handler.systemTableCache.applySystemTableChange('services', 'UPSERT', repairedRow);
+  handler.systemTableCache.applySystemTableChange('services', 'UPDATE', {
+    ...seededFromLiveRole,
+    status: ReplicaStatus.SYNCING,
+    state_entered_at: 4200,
+    updated_at: 4200,
+    updated_at_hlc: '4200-0-services-p1-r1',
+  });
+  t.equal(
+    handler.systemTableCache.get('services', REPLICA_ID)?.status,
+    ReplicaStatus.ACTIVE,
+    'delayed intermediate CDC event with older updated_at/state_entered_at cannot regress an authoritatively repaired ACTIVE row',
+  );
+  stateMachine.shutdown?.();
 });

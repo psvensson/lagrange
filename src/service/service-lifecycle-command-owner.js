@@ -474,12 +474,12 @@ class ServiceLifecycleCommandOwner {
     this.signaturePolicy = validateSignaturePolicy(options.signaturePolicy);
   }
 
-  async execute(command, payload, securityContext) {
+  async execute(command, payload, securityContext, options = {}) {
     try {
       const context = validateSecurityContext(securityContext);
       switch (command) {
       case SERVICE_LIFECYCLE_SQL_COMMAND.CONFIGURE_ACCESS:
-        return await this.configureAccess(command, payload, context);
+        return await this.configureAccess(command, payload, context, options);
       case SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING:
         return await this.submitBinding(command, payload, context);
       case SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING:
@@ -543,7 +543,7 @@ class ServiceLifecycleCommandOwner {
     return result.manifest;
   }
 
-  async configureAccess(command, payload, securityContext) {
+  async configureAccess(command, payload, securityContext, options = {}) {
     if (!this.runtimeAccessPolicyOwner) {
       commandFailure(
         SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.DEPENDENCY_REQUIRED,
@@ -555,6 +555,7 @@ class ServiceLifecycleCommandOwner {
     const policy = await this.runtimeAccessPolicyOwner.configureBindingAccess(
       payload,
       securityContext,
+      options.abortSignal ? {abortSignal: options.abortSignal} : {},
     );
     return successResult(command, [{
       binding_version_id: policy.bindingVersionId,

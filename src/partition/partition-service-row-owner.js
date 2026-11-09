@@ -48,14 +48,12 @@ const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   allowCoalescing: true,
   deliveryPriority: 'background',
   pressureRetryAfterMs: 250,
-  skipCacheWait: true,
   workClass: 'background',
 });
 const CRITICAL_SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   allowCoalescing: true,
   deliveryPriority: 'critical',
   pressureRetryAfterMs: 250,
-  skipCacheWait: true,
   workClass: 'critical',
 });
 const partitionRegistrationEvidence = new WeakSet();

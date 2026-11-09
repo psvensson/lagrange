@@ -996,3 +996,245 @@ test('pre-intent REPLACE failure settles without fabricating cleanup ' +
     });
   }
 });
+
+// Quest fresh-create-failure-after-committed-admission, receipt
+// failed-create-without-owner-not-protected. Run b26d2c090's r4: a FAILED
+// target whose create failed after its admission may have committed
+// (previous_state syncing) under a terminal FAILED ADD. With the target-side
+// cleanup claim, the planner removes it through decideFailedCreateTargetCleanup
+// although check 2 (previous_state) and check 3 (terminal create target)
+// would otherwise protect it; without a claim (a failure before any admission
+// input) the target stays protected for the coordinator's re-dispatch.
+test('L3: the claimed FAILED target of a create that failed after admission ' +
+  'input is removed; an unclaimed one stays protected', async (t) => {
+  t.beforeEach(() => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    ConfigurationManager.getInstance().initialize({});
+    LoggingService.getInstance().initialize({level: 'error'});
+  });
+
+  await t.test('claimed: REMOVE with the owner precondition', async (t) => {
+    const harness = await authoritativeCleanupHarness(ReplicaStatus.FAILED);
+    try {
+      await harness.rebalancer.refreshFailedCreateTargetCleanupDecisions();
+      const moves = plannedMoves(harness.rebalancer, ReplicaStatus.FAILED, {
+        targetFields: {previous_state: ReplicaStatus.SYNCING,
+          cleanup_token: buildFailedCreateCleanupToken('op-ADD-failed')},
+      });
+      t.equal(moves.length, 1);
+      t.match(moves[0], {type: REBALANCER_MOVE_TYPE.REMOVE, replicaId: TARGET_ID,
+        reason: MOVE_REASON.REPLICA_FAILED});
+      t.ok(moves[0][ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION],
+        'the REMOVE carries the claimed lifecycle generation');
+    } finally {
+      harness.rebalancer.shutdown();
+      await harness.coordinator.shutdown();
+    }
+  });
+
+  await t.test('unclaimed: no REMOVE (re-dispatchable)', async (t) => {
+    const unclaimed = {
+      getTerminalFailedReplaceTargetReplicaIds: () => new Set(),
+      getTerminalFailedCreateTargetReplicaIds: () => new Set([TARGET_ID]),
+      getTerminalFailedCreateTargetClaims: () => [],
+      getFailedCreateTargetCleanupPrecondition: () => null,
+    };
+    const moves = plannedMoves(unclaimed, ReplicaStatus.FAILED, {
+      targetFields: {previous_state: ReplicaStatus.CREATING, cleanup_token: null},
+    });
+    t.same(moves.filter((move) => move.replicaId === TARGET_ID), [],
+      'an unclaimed pre-admission failed target is not removed by the planner');
+  });
+
+  await t.test('unclaimed pre-runtime FAILED row stays non-terminal for in-flight ' +
+    'pre-sync ADD/REPLACE, while claimed or terminalized rows close cleanup',
+  async (t) => {
+    const unclaimedFailedRow = {
+      ...lifecycleRow(ReplicaStatus.FAILED, FAILED_STATE_ENTERED_AT, null),
+      previous_state: ReplicaStatus.CREATING,
+    };
+    const cache = createMockCache({
+      services: [unclaimedFailedRow],
+      replicaOperations: [],
+    });
+    let authoritativeRow = unclaimedFailedRow;
+    const coordinator = createTestCoordinator({
+      nodeId: 'node-1',
+      enableTimeouts: false,
+      systemTableCache: cache,
+      sqlQueryResults: {
+        get 'FROM services WHERE service_id = ?'() {
+          return {success: true, affectedRows: 1, rows: [authoritativeRow]};
+        },
+      },
+    });
+    const rebalancer = createTestRebalancer({
+      entityId: PARTITION_ID,
+      nodeId: 'node-1',
+      systemTableCache: cache,
+      rebalanceCoordinator: coordinator,
+    });
+    try {
+      const owner = coordinator.workflowOwner;
+      const replaceOp = await coordinator.createOperation({
+        type: OperationType.REPLACE,
+        partitionId: PARTITION_ID,
+        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+        entityId: PARTITION_ID,
+        sourceNodeId: 'node-1',
+        nodeId: TARGET_NODE,
+        replicaId: TARGET_ID,
+      });
+      await installCreateAdmissionAttempt(coordinator, replaceOp);
+      await owner.updateStep(replaceOp, WORKFLOW_STEP.CREATING);
+
+      // Positive witness: unclaimed pre-runtime FAILED does not trigger target
+      // progress during transition retry grace and does not fail pre-sync REPLACE.
+      t.equal(owner.hasObservedOperationRowTargetProgress(replaceOp), false,
+        'unclaimed pre-runtime FAILED is not observed target progress');
+      t.equal(
+        await owner.reconcileObservedTargetProgressDuringTransitionGrace(
+          replaceOp, Date.now()),
+        false,
+        'unclaimed pre-runtime FAILED does not break active transition retry grace',
+      );
+      const reconciledPreSync = await owner.getReconciledReplicaStatus(
+        replaceOp.replicaId,
+        replaceOp.partitionId,
+        replaceOp.targetNodeId,
+        {ignoreUnclaimedPreRuntimeFailedCreate: true},
+      );
+      t.equal(reconciledPreSync, null,
+        'pre-sync create status reconciliation ignores unclaimed pre-runtime FAILED');
+      await owner.reconcileOperationLifecycle(replaceOp);
+      const afterReconcile = await coordinator.getOperation(replaceOp.operationId);
+      t.not(afterReconcile.workflowStep, WORKFLOW_STEP.FAILED,
+        'in-flight pre-sync REPLACE is not failed by unclaimed pre-runtime FAILED row');
+
+      // Recovery path witness: if the create operation terminally fails while
+      // the target row is still unclaimed FAILED for its exact attempt token,
+      // failOperation does not record a null-token precondition; instead,
+      // refreshFailedCreateTargetCleanupDecisions normalizes the row to an
+      // operation-bound cleanup_token before admitting it for cleanup.
+      await owner.failOperation(replaceOp, 'Step timeout exhausted');
+      const terminalReplace = await coordinator.getOperation(replaceOp.operationId);
+      t.equal(terminalReplace.workflowStep, WORKFLOW_STEP.FAILED);
+      t.equal(
+        terminalReplace.stepsHistory.at(-1)?.[
+          OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+        ],
+        undefined,
+        'terminal create failure does not persist a null-token cleanup precondition',
+      );
+      await rebalancer.refreshFailedCreateTargetCleanupDecisions();
+      t.equal(
+        unclaimedFailedRow.cleanup_token,
+        buildFailedCreateCleanupToken(replaceOp.operationId),
+        'participant claim normalization stamps the operation-bound cleanup token',
+      );
+      t.same(
+        [...rebalancer.getTerminalFailedReplaceTargetReplicaIds()],
+        [replaceOp.replicaId],
+        'normalized FAILED row of a terminal operation is admitted for cleanup',
+      );
+      t.equal(
+        rebalancer.getFailedCreateTargetCleanupPrecondition(replaceOp.replicaId)
+          ?.cleanup_token,
+        buildFailedCreateCleanupToken(replaceOp.operationId),
+        'cleanup precondition carries the non-null operation-bound cleanup token',
+      );
+
+      // Inverse counterexample: a claimed FAILED row immediately counts as
+      // target progress and terminal replica failure for a pre-sync create.
+      const claimedRow = {
+        ...unclaimedFailedRow,
+        cleanup_token: buildFailedCreateCleanupToken('op-claimed'),
+      };
+      authoritativeRow = claimedRow;
+      cache.upsert(SYSTEM_TABLE_NAME.SERVICES, TARGET_ID, claimedRow);
+      t.equal(
+        await owner.getReconciledReplicaStatus(
+          replaceOp.replicaId,
+          replaceOp.partitionId,
+          replaceOp.targetNodeId,
+          {ignoreUnclaimedPreRuntimeFailedCreate: true},
+        ),
+        ReplicaStatus.FAILED,
+        'claimed FAILED row is never ignored during status reconciliation',
+      );
+    } finally {
+      rebalancer.shutdown();
+      await coordinator.shutdown();
+    }
+  });
+
+  await t.test('delayed FAILED row landing after terminal failOperation ' +
+    'admits matching create-attempt incarnation for cleanup', async (t) => {
+    const delayedFailedRow = {
+      ...lifecycleRow(ReplicaStatus.FAILED, FAILED_STATE_ENTERED_AT, null),
+      previous_state: ReplicaStatus.PENDING,
+    };
+    const cache = createMockCache({
+      services: [],
+      replicaOperations: [],
+    });
+    let authoritativeAvailable = false;
+    const coordinator = createTestCoordinator({
+      nodeId: 'node-1',
+      enableTimeouts: false,
+      systemTableCache: cache,
+      sqlQueryResults: {
+        get 'FROM services WHERE service_id = ?'() {
+          if (!authoritativeAvailable) {
+            return {success: false, error: 'authority unavailable'};
+          }
+          return {success: true, affectedRows: 1, rows: [delayedFailedRow]};
+        },
+      },
+    });
+    const rebalancer = createTestRebalancer({
+      entityId: PARTITION_ID,
+      nodeId: 'node-1',
+      systemTableCache: cache,
+      rebalanceCoordinator: coordinator,
+    });
+    try {
+      const owner = coordinator.workflowOwner;
+      const replaceOp = await coordinator.createOperation({
+        type: OperationType.REPLACE,
+        partitionId: PARTITION_ID,
+        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+        entityId: PARTITION_ID,
+        sourceNodeId: 'node-1',
+        nodeId: TARGET_NODE,
+        replicaId: TARGET_ID,
+      });
+      await installCreateAdmissionAttempt(coordinator, replaceOp);
+      await owner.updateStep(replaceOp, WORKFLOW_STEP.CREATING);
+      await owner.failOperation(replaceOp, 'Step timeout exhausted');
+      const terminalReplace = await coordinator.getOperation(
+        replaceOp.operationId,
+      );
+      t.equal(
+        terminalReplace.stepsHistory.at(-1)?.[
+          OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+        ],
+        undefined,
+        'settlement while authority is unavailable records no precondition',
+      );
+
+      authoritativeAvailable = true;
+      cache.upsert(SYSTEM_TABLE_NAME.SERVICES, TARGET_ID, delayedFailedRow);
+      await rebalancer.refreshFailedCreateTargetCleanupDecisions();
+      t.same(
+        [...rebalancer.getTerminalFailedReplaceTargetReplicaIds()],
+        [replaceOp.replicaId],
+        'delayed FAILED row matching exact create admission incarnation is admitted for cleanup',
+      );
+    } finally {
+      rebalancer.shutdown();
+      await coordinator.shutdown();
+    }
+  });
+});

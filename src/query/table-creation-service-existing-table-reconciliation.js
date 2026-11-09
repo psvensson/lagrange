@@ -16,8 +16,6 @@ import {
 import {
   TABLE_CREATION_SERVICE_LITERAL,
   resolveTableCreationCompletion,
-  resolveTableCreationMutationContractOutcome,
-  resolveTableCreationVisibilityContractOutcome,
 } from './table-creation-service-completion.js';
 
 
@@ -52,9 +50,6 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
     let existingPartition =
       await this.findExistingPartitionRecord(partitionId);
     let partitionMetadataCreated = false;
-    let visibilityState = TABLE_CREATION_SERVICE_LITERAL.VISIBLE;
-    let metadataContractOutcome =
-      resolveTableCreationVisibilityContractOutcome(visibilityState);
     if (!existingPartition) {
       const controlPlaneGateway = this.getControlPlaneSystemTableGateway();
       if (
@@ -73,27 +68,19 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
         existingTableRecord,
       );
       await options.assertProvisioningOwnership?.();
-      const partitionMutation = await controlPlaneGateway.submitMutation(
+      // Answers at its commit; a failed commit throws.
+      await controlPlaneGateway.submitMutation(
         {
           operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
           tableName: TABLES.PARTITIONS,
           row: existingPartition,
         },
         {
-          allowPendingVisibility: true,
           workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
           deliveryPriority: 'critical',
         },
       );
       partitionMetadataCreated = true;
-      visibilityState = String(
-        partitionMutation?.visibilityState ||
-          TABLE_CREATION_SERVICE_LITERAL.VISIBLE,
-      );
-      metadataContractOutcome = resolveTableCreationMutationContractOutcome(
-        [partitionMutation],
-        visibilityState,
-      );
     }
     // Desired RF for the existing partition comes from the single policy
     // authority; an undeclared policy fails the reconciliation closed instead
@@ -120,16 +107,11 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
       assertProvisioningOwnership:
         options.assertProvisioningOwnership || null,
     });
-    const completion = resolveTableCreationCompletion({
-      visibilityState,
-      provisioningSummary,
-      metadataContractOutcome,
-    });
+    const completion = resolveTableCreationCompletion({provisioningSummary});
     return {
       tableId,
       partitionId,
       partitionMetadataCreated,
-      visibilityState,
       completionState: completion.completionState,
       completionReason: completion.completionReason,
       contractState: completion.contractState,

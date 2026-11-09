@@ -3,6 +3,7 @@ import {
 } from './control-plane-readiness-constants.js';
 import {
   appendOwnArrayValue,
+  arrayIsArray,
   buildStringSet,
   copyDenseOwnDataArray,
   copyStrictOwnDataRecord,
@@ -12,6 +13,9 @@ import {
   inspectOwnDataProperty,
   normalizePrimitiveStringList,
   readOwnDataProperty,
+  SetConstructor,
+  setAdd,
+  setHas,
 } from './membership-publication-priority-partition-canonical-data.js';
 
 const DIMENSIONS_FIELD = 'dimensions';
@@ -23,7 +27,7 @@ const objectKeys = Object.keys;
 
 function isReadinessPromotable(readinessEntry = null) {
   if (readinessEntry === null || readinessEntry === undefined) {
-    return true;
+    return false;
   }
   const readinessSnapshot = copyStrictOwnDataRecord(readinessEntry);
   if (readinessSnapshot === null) {
@@ -33,9 +37,6 @@ function isReadinessPromotable(readinessEntry = null) {
     readinessSnapshot,
     [DIMENSIONS_FIELD],
   );
-  if (dimensionsEntry.state === DATA_PROPERTY_STATE.ABSENT) {
-    return true;
-  }
   if (dimensionsEntry.state !== DATA_PROPERTY_STATE.VALID) {
     return false;
   }
@@ -60,20 +61,19 @@ function isReadinessPromotable(readinessEntry = null) {
   const repairEligible = readDimension(
     CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
   ).value;
-  const serveEligible = readDimension(
-    CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
-  ).value;
+  // Serving is not an input: the serve answer requires the published
+  // membership and the priority spread this promotability feeds (quest
+  // serve-eligibility-committed-epoch-read; an output is never its own
+  // input). The remaining !== false defaults are attempt 4's.
   if (!hasPublicationSignal) {
     return clusterHealthy === true &&
-      controlPlaneWritable !== false &&
-      repairEligible !== false &&
-      serveEligible !== false;
+      controlPlaneWritable === true &&
+      repairEligible === true;
   }
   if (published.value === true) {
     return clusterHealthy === true &&
-      controlPlaneWritable !== false &&
-      repairEligible !== false &&
-      serveEligible !== false;
+      controlPlaneWritable === true &&
+      repairEligible === true;
   }
   return recoveryEligible.value === true;
 }
@@ -157,13 +157,26 @@ function resolvePreferredNodeIds(
   projectedServingNodeIds,
   publishedActiveNodeIds,
 ) {
-  if (locallyEligibleNodeIds.value?.length > 0) {
-    return locallyEligibleNodeIds.value;
+  const merged = [];
+  const seen = new SetConstructor();
+  const sources = [
+    locallyEligibleNodeIds?.value,
+    projectedServingNodeIds?.value,
+    publishedActiveNodeIds?.value,
+  ];
+  for (let i = 0; i < sources.length; i += 1) {
+    const list = sources[i];
+    if (arrayIsArray(list)) {
+      for (let j = 0; j < list.length; j += 1) {
+        const id = list[j];
+        if (typeof id === 'string' && id.length > 0 && !setHas(seen, id)) {
+          setAdd(seen, id);
+          appendOwnArrayValue(merged, id);
+        }
+      }
+    }
   }
-  if (projectedServingNodeIds.value?.length > 0) {
-    return projectedServingNodeIds.value;
-  }
-  return publishedActiveNodeIds.value || [];
+  return merged;
 }
 
 function buildPrioritySpreadEligibleNodeSnapshot(options = {}) {

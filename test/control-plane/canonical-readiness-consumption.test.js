@@ -23,6 +23,9 @@ import {SERVICE_STATUS, NUM, TYPEOF} from '../../src/constants/index.js';
 import {
   ADMISSION_MODE,
 } from '../../src/rebalancer/storage-capacity-constants.js';
+import {serveEligibilityFromFixture} from './serve-eligibility-test-support.js';
+import {createMockControlPlaneReadinessService} from '../rebalancer/test-helpers.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 const FIXTURE_NODE_ID = 'node-readiness-1';
 const FIXTURE_PARTITION_ID = 'partition-readiness-1';
@@ -80,6 +83,13 @@ function createControlledReadinessService(readinessMap, calls = null) {
       }
       return readinessMap.get(nodeId) ||
         buildReadiness(nodeId, false);
+    },
+    answerServeEligibility: (nodeId) => {
+      if (Array.isArray(calls)) {
+        calls.push({kind: 'serve', nodeId});
+      }
+      return serveEligibilityFromFixture(
+        (id) => readinessMap.get(id) || buildReadiness(id, false))(nodeId);
     },
     getNodeReadiness: async (nodeId, options = {}) => {
       if (Array.isArray(calls)) {
@@ -284,8 +294,13 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
       {node_id: readyNodeId},
       {node_id: unreadyNodeId},
     ]);
-    const readinessService =
-      createControlledReadinessService(readinessMap, readinessCalls);
+    const readinessService = createMockControlPlaneReadinessService({
+      readNodeRows: () => {
+        readinessCalls.push({kind: 'committed'});
+        return cache.getAll(SYSTEM_TABLE_NAME.NODES);
+      },
+      callbacks: createControlledReadinessService(readinessMap, readinessCalls),
+    });
 
     const rebalancer = new UnifiedRebalancer({
       entityId: FIXTURE_PARTITION_ID,
@@ -329,19 +344,18 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
           'unready node should be excluded',
         );
         const decisionCalls = readinessCalls.filter((call) =>
-          call.kind !== 'liveness');
-        const livenessCalls = readinessCalls.filter((call) =>
-          call.kind === 'liveness');
+          call.kind === 'sync' || call.kind === 'async');
+        const committedCalls = readinessCalls.filter((call) =>
+          call.kind === 'committed');
         t.ok(
           decisionCalls.length > 0 && decisionCalls.every((call) =>
             call.options?.decisionDimension ===
               CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE),
           'steady-state rebalancer availability should record repairEligible decisions',
         );
-        t.same(
-          livenessCalls.map((call) => call.nodeId),
-          [readyNodeId],
-          'steady-state availability projects liveness before admitting the ready candidate',
+        t.equal(
+          committedCalls.length, 1,
+          'availability obtains its candidate rows from the committed owner',
         );
       });
 
@@ -383,6 +397,49 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
           'the rebalancer never builds a private readiness service',
         );
       });
+
+    // PR #201 witness, in the stream's shape: the readiness service is a
+    // required collaborator, so "no committed reader" is a service whose
+    // committed node answer is unavailable (the fixture's absent answer).
+    await t.test('missing committed reader cannot turn positive cache rows into candidates',
+      async (t) => {
+        const noCommittedReader = new UnifiedRebalancer({
+          entityId: FIXTURE_PARTITION_ID,
+          entityType: EntityType.PARTITION,
+          nodeId: readyNodeId,
+          systemTableCache: cache,
+          cdcIntegrationService: {
+            insertSystemTableRow: async () => ({success: true}),
+            updateSystemTableRow: async () => ({success: true}),
+          },
+          tablePolicyService: {
+            getPolicyForPartition: () => ({}),
+          },
+          messageRouter: {
+            getConnectionState: () => 'connected',
+            deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
+            pingNode: async () => true,
+            isOutboundQueueAvailable: () => true,
+          },
+          rebalanceCoordinator: {
+            getMoveSafetyError: () => null,
+            createOperation: async () => ({operationId: 'op-1'}),
+            executeOperation: async () => ({success: true}),
+            canStartAddOperation: async () => true,
+            canStartRemoveOperation: async () => true,
+            getStats: () => ({}),
+          },
+          cdcGroupPropagationService: createPublicationOwner(),
+          controlPlaneReadinessService: partialReadinessFake({
+            getNodeReadinessSync: (nodeId) => buildReadiness(nodeId, true),
+          }),
+        });
+        const available = noCommittedReader.getAvailableNodes();
+        t.same(
+          available, [],
+          'unavailable committed authority cannot be replaced by cache rows',
+        );
+      });
   });
 
 // ── RebalanceCoordinator ────────────────────────────────────────────
@@ -415,7 +472,6 @@ test('RebalanceCoordinator.isNodeReadyForRouting consumes canonical',
       cdcIntegrationService: {
         insertSystemTableRow: async () => ({success: true}),
         updateSystemTableRow: async () => ({success: true}),
-        waitForCacheUpdate: async () => true,
       },
       messageRouter: {
         getConnectionState: () => 'connected',
@@ -673,10 +729,14 @@ test('QueryExecutor can route bootstrap-owned work via repair-eligible readiness
       'default serve-eligible routing should still block non-servable nodes',
     );
     t.equal(
-      readinessCalls[0]?.options?.decisionDimension,
-      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
-      'default query routing should record serveEligible decisions',
+      readinessCalls[0]?.kind,
+      'serve',
+      'default query routing consumes the committed serve answer',
     );
+    t.notOk(readinessCalls.some((call) =>
+      call.options?.decisionDimension ===
+        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE),
+    'default query routing reads no projected serve dimension');
 
     const repairEligible = await executor.executeOnPartition(
       FIXTURE_PARTITION_ID,
@@ -1108,21 +1168,26 @@ test('regression: rebalancer cannot bypass canonical readiness',
     );
 
     let callCount = 0;
-    const blockingService = {
-      getNodeReadinessSync: (nodeId) => {
-        callCount++;
-        return buildReadiness(nodeId, false);
-      },
-      getNodeReadiness: async (nodeId) => {
-        callCount++;
-        return buildReadiness(nodeId, false);
-      },
-      getAllNodeReadiness: async () => [],
-    };
-
     const cache = createMinimalCache([
       {node_id: FIXTURE_NODE_ID},
     ]);
+    const blockingService = createMockControlPlaneReadinessService({
+      readNodeRows: () => {
+        callCount++;
+        return cache.getAll(SYSTEM_TABLE_NAME.NODES);
+      },
+      callbacks: {
+        getNodeReadinessSync: (nodeId) => {
+          callCount++;
+          return buildReadiness(nodeId, false);
+        },
+        getNodeReadiness: async (nodeId) => {
+          callCount++;
+          return buildReadiness(nodeId, false);
+        },
+        getAllNodeReadiness: async () => [],
+      },
+    });
 
     const rebalancer = new UnifiedRebalancer({
       entityId: FIXTURE_PARTITION_ID,
@@ -1280,7 +1345,6 @@ test('regression: RebalanceCoordinator cannot bypass canonical readiness',
       cdcIntegrationService: {
         insertSystemTableRow: async () => ({success: true}),
         updateSystemTableRow: async () => ({success: true}),
-        waitForCacheUpdate: async () => true,
       },
       messageRouter: {
         getConnectionState: () => 'connected',

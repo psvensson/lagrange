@@ -1,9 +1,11 @@
 import {types} from 'node:util';
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {
+  buildLocalAuthoritativeObservation,
   executeLocalSystemTableRead,
   resolveLocalSystemTableServices,
   resolveSystemTablePartitionIds,
+  selectLocalPartitionWitness,
 } from './cdc-integration-service-local-system-table-routing.js';
 import {
   buildOwnerRpcSqlFallbackQueryOptions,
@@ -23,6 +25,7 @@ const {
   CDC_INTEGRATION_SERVICE_ERROR,
   CDC_INTEGRATION_SERVICE_LITERAL,
   CONTROL_PLANE_READINESS_DIMENSION,
+  INITIAL_PARTITION_IDS,
   QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -38,6 +41,18 @@ const objectHasOwn = Object.hasOwn;
 const objectKeys = Object.keys;
 const JSON_SERIALIZATION_HOOK_PROPERTY = 'toJSON';
 const DATA_DESCRIPTOR_VALUE_PROPERTY = 'value';
+const ABSENT_WITNESS_VALUE = null;
+const EMPTY_WITNESS_ARRAY = Object.freeze([]);
+const ABSENT_OBSERVATION_VALUE = null;
+const EMPTY_ROW_ARRAY = Object.freeze([]);
+const UNAVAILABLE_LOCAL_READ_SNAPSHOT = Object.freeze({
+  available: false,
+  rows: EMPTY_ROW_ARRAY,
+  rowSetComplete: false,
+  readAuthorityWitness: ABSENT_WITNESS_VALUE,
+  readAuthorityWitnesses: EMPTY_WITNESS_ARRAY,
+  authoritativeObservation: ABSENT_OBSERVATION_VALUE,
+});
 
 function isFlatJsonValue(value) {
   return value === null || value === undefined ||
@@ -222,8 +237,54 @@ function mergeAuthoritativeSystemTableRowSets(service, tableName, rowSets) {
   return [...mergedRows.values()];
 }
 
+function hasLocalAuthoritativeReadFailureEvidence(result) {
+  return [
+    result?.failedPartitions,
+    result?.partitionErrors,
+    result?.participantFailures,
+  ].some((collection) => Array.isArray(collection) && collection.length > 0);
+}
+
 function localAuthoritativeReadRowsAreUsable(result) {
-  return result?.success === true && Array.isArray(result.rows);
+  return (
+    result?.success === true &&
+    result?.partial !== true &&
+    result?.rowSetComplete !== false &&
+    !hasLocalAuthoritativeReadFailureEvidence(result) &&
+    Array.isArray(result.rows)
+  );
+}
+
+function isLocalPartitionRowSetComplete(result) {
+  return (
+    localAuthoritativeReadRowsAreUsable(result) &&
+    result?.rowSetComplete === true
+  );
+}
+
+function haveAllExpectedSystemTablePartitions(
+  tableName,
+  expectedPartitionIds,
+  witnessList,
+) {
+  const canonicalPartitionId = INITIAL_PARTITION_IDS[tableName] || null;
+  if (
+    !canonicalPartitionId ||
+    !Array.isArray(expectedPartitionIds) ||
+    expectedPartitionIds.length !== 1 ||
+    expectedPartitionIds[0] !== canonicalPartitionId
+  ) {
+    return false;
+  }
+  const witnessedPartitionIds = new Set(
+    witnessList
+      .map((witness) => witness?.partitionId)
+      .filter((partitionId) => typeof partitionId === 'string' && partitionId.length > 0),
+  );
+  return (
+    witnessedPartitionIds.size === 1 &&
+    witnessedPartitionIds.has(canonicalPartitionId)
+  );
 }
 
 async function queryLocalAuthoritativeSystemTableRows(
@@ -233,18 +294,21 @@ async function queryLocalAuthoritativeSystemTableRows(
   params = [],
   options = {},
 ) {
+  const expectedPartitionIds = resolveSystemTablePartitionIds(
+    service,
+    tableName,
+  );
   const localServices = resolveLocalSystemTableServices(service, tableName, {
     consistency: options.consistency,
   });
 
   if (localServices.length === 0) {
-    return {
-      available: false,
-      rows: [],
-    };
+    return UNAVAILABLE_LOCAL_READ_SNAPSHOT;
   }
 
   const rowSets = [];
+  const collectedWitnesses = [];
+  let completePartitionCount = 0;
   let available = false;
 
   for (const partitionService of localServices) {
@@ -261,6 +325,17 @@ async function queryLocalAuthoritativeSystemTableRows(
       }
 
       rowSets.push(result.rows);
+      const witness = selectLocalPartitionWitness(
+        service,
+        partitionService,
+        result,
+      );
+      if (witness) {
+        collectedWitnesses.push(witness);
+        if (isLocalPartitionRowSetComplete(result)) {
+          completePartitionCount += 1;
+        }
+      }
       available = true;
     } catch (error) {
       service.logger.warn(
@@ -277,11 +352,33 @@ async function queryLocalAuthoritativeSystemTableRows(
     }
   }
 
+  const rowSetComplete = available &&
+    completePartitionCount === localServices.length &&
+    rowSets.length === localServices.length &&
+    collectedWitnesses.length === localServices.length &&
+    haveAllExpectedSystemTablePartitions(
+      tableName,
+      expectedPartitionIds,
+      collectedWitnesses,
+    );
+  const primaryWitness = collectedWitnesses[0] || ABSENT_WITNESS_VALUE;
+  const authoritativeObservation = buildLocalAuthoritativeObservation(
+    tableName,
+    rowSetComplete,
+    collectedWitnesses,
+    sql,
+    params,
+  );
+
   return {
     available,
     rows: available ?
       mergeAuthoritativeSystemTableRowSets(service, tableName, rowSets) :
-      [],
+      EMPTY_ROW_ARRAY,
+    rowSetComplete,
+    readAuthorityWitness: primaryWitness,
+    readAuthorityWitnesses: collectedWitnesses,
+    authoritativeObservation,
   };
 }
 
@@ -495,6 +592,13 @@ async function executeAuthoritativeSystemTableRead(
     rows: localRead.rows,
     count: localRead.rows.length,
     rowCount: localRead.rows.length,
+    rowSetComplete: localRead.rowSetComplete === true,
+    readAuthorityWitness: localRead.readAuthorityWitness || ABSENT_WITNESS_VALUE,
+    readAuthorityWitnesses: Array.isArray(localRead.readAuthorityWitnesses) ?
+      localRead.readAuthorityWitnesses :
+      EMPTY_WITNESS_ARRAY,
+    authoritativeObservation:
+      localRead.authoritativeObservation || ABSENT_OBSERVATION_VALUE,
     source: AUTHORITATIVE_READ_SOURCE.LOCAL_PARTITION_REPLICA,
     localReadHit: true,
     localReplicaFallbackHit,
@@ -583,6 +687,8 @@ async function executeAuthoritativeSystemTableRead(
       error:
         CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
       rows: [],
+      rowSetComplete: false,
+      authoritativeObservation: ABSENT_OBSERVATION_VALUE,
       localReadHit: false,
       localReplicaFallbackHit: false,
       queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
@@ -649,6 +755,8 @@ async function executeAuthoritativeSystemTableRead(
     error:
       CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
     rows: [],
+    rowSetComplete: false,
+    authoritativeObservation: ABSENT_OBSERVATION_VALUE,
     localReadHit: false,
     localReplicaFallbackHit: false,
     queryTimeoutMs: baseDiagnostics.queryTimeoutMs,

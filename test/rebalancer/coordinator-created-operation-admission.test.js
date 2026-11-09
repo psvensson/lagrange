@@ -5,6 +5,11 @@ import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationResponseStatus} from
   '../../src/rebalancer/replica-operation-constants.js';
+import {OPERATION_METADATA_KEY} from '../../src/rebalancer/replica-operation-progress.js';
+import {
+  OPERATION_WORKFLOW_OWNER_SHARED,
+} from '../../src/rebalancer/operation-workflow-owner-shared.js';
+const {OPERATION_WORKFLOW_OWNER_REASON} = OPERATION_WORKFLOW_OWNER_SHARED;
 import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
@@ -24,11 +29,11 @@ function createAdmissionCoordinator() {
         return [];
       },
     },
-    cdcIntegrationService: {async waitForCacheUpdate() {}},
+    cdcIntegrationService: {},
     messageRouter: {async deliver() {}},
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     sqlQueryEngine: {
@@ -36,7 +41,9 @@ function createAdmissionCoordinator() {
         return {success: true, rows: [], affectedRows: 0};
       },
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
   });
@@ -271,6 +278,28 @@ test('CREATE redispatch adopts the durable admission tuple instead of mutable ' 
     t.equal(delivered[0].request.createAdmissionAttemptToken,
       durable.createAdmissionAttemptToken,
       'admission-first recovery retains the exact durable attempt');
+
+    delivered.length = 0;
+    const rotated = {
+      ...durable,
+      createAdmissionState: 'ROTATING',
+      createAdmissionAttemptToken: 'attempt-from-sending-101:2',
+      createAdmissionPreviousAttemptToken: durable.createAdmissionAttemptToken,
+      createAdmissionAttemptSeq: 2,
+    };
+    owner.repository.getOperationByIdVisibilityObservation = async () => ({
+      operation: rotated,
+      deferredOutcome: null,
+    });
+    const rotatedResult = await owner.executeOperationInternal({...durable}, {});
+    t.equal(rotatedResult.success, true,
+      'redispatch when caller already holds attempt 1 refreshes from authority');
+    t.equal(delivered.length, 1);
+    t.equal(delivered[0].request.createAdmissionAttemptSeq, 2,
+      'redispatch adopts rotated attempt sequence instead of stale attempt 1');
+    t.equal(delivered[0].request.createAdmissionAttemptToken,
+      rotated.createAdmissionAttemptToken,
+      'redispatch carries rotated attempt token');
   } finally {
     await coordinator.shutdown();
   }
@@ -377,6 +406,39 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
       'admission winning the terminal CAS race is retained');
     t.equal(retained.length, 1,
       'the race winner converges on the same retained-progress owner');
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('operations with bootstrapTopologyDispatchDeferred are not claimed or executed', async (t) => {
+  const coordinator = createAdmissionCoordinator();
+  const owner = coordinator.workflowOwner;
+  try {
+    const deferredOp = {
+      operationId: 'op-deferred-1',
+      nodeId: 'node-local',
+      targetNodeId: 'node-local',
+      partitionId: 'user-p1',
+      type: OperationType.ADD,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      stepsHistory: [
+        {
+          [OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED]: true,
+        },
+      ],
+    };
+
+    const claimed = await owner.claimPendingDispatchOperation(deferredOp);
+    t.equal(claimed, null, 'claimPendingDispatchOperation returns null for deferred bootstrap operation');
+
+    const advanceResult = await owner.advanceDispatchCandidateStep(deferredOp, deferredOp);
+    t.equal(advanceResult.skipped, true, 'advanceDispatchCandidateStep skips deferred bootstrap operation');
+    t.equal(advanceResult.reason, OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE);
+
+    const execResult = await owner.executeOperationInternal(deferredOp, {});
+    t.equal(execResult.skipped, true, 'executeOperationInternal skips deferred bootstrap operation');
+    t.equal(execResult.reason, OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE);
   } finally {
     await coordinator.shutdown();
   }

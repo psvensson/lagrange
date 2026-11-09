@@ -22,6 +22,7 @@ import {
   createMockSystemCache,
 } from './sql-query-engine-test-support.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 ConfigurationManager.getInstance().initialize();
 
 function buildEngineHarness(partitionIds) {
@@ -74,6 +75,7 @@ function buildEngineHarness(partitionIds) {
     },
   };
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     transactionCoordinator,
@@ -159,6 +161,7 @@ test('transaction-owned mode - failed freeze persistence blocks participant comm
       },
     });
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       controlPlaneSystemTableGateway: gateway,
     });
     const coordinator = engine.transactionCoordinator;
@@ -189,6 +192,7 @@ test('transaction-owned mode - failed freeze persistence blocks participant comm
 test('transaction-owned mode - ambiguous commit outcome read carries identity',
   async (t) => {
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       autoStartDistributedTransactionRecovery: false,
       controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     });

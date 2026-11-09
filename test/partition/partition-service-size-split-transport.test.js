@@ -4,6 +4,10 @@
  * Requirements: 3.2, 3.3, 3.4, 3.5, 4.4
  */
 
+import {committedPartitionPeerAddress} from
+  '../../src/partition/partition-committed-peer-address.js';
+import {RAFT_RS_PEER_ADDRESS_REFUSAL} from
+  '../../src/raft/raft-rs-peer-identity-constants.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -1101,124 +1105,99 @@ test('PartitionService - the consensus port is created with its configuration', 
   await partition.shutdown();
 });
 
-test('PartitionService - buildPeerAddress returns correct format', async (t) => {
-  const peerAddresses = [
-    'node-1/partition/replica-1',
-    'node-2/partition/replica-2',
-    'node-3/partition/replica-3',
-  ];
-  const partition = new PartitionService(withFoundingStamp({
-    partitionId: 'test-partition-19',
-    tableId: 'peer_addr_test',
+test('PartitionService - a peer is addressed from its committed node only',
+  async (t) => {
+    t.equal(committedPartitionPeerAddress('replica-2', 'node-2'),
+      'node-2/partition/replica-2',
+      'the unified address on the committed node');
+    t.throws(() => committedPartitionPeerAddress('replica-2', null),
+      {message: RAFT_RS_PEER_ADDRESS_REFUSAL.PEER_NOT_IN_CONFIGURATION},
+      'no committed node: a typed refusal, never an address-book lookup');
+  });
+
+test('PartitionService - services rows never admit a peer and never move a ' +
+  'configured peer because its row names another node',
+async (t) => {
+  const systemTableCache = new SystemTableCache();
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    service_id: 'replica-1',
+    partition_id: 'test-partition-19b',
+    service_type: SERVICE_TYPE.PARTITION,
+    node_id: 'node-1',
+    status: SERVICE_STATUS.ACTIVE,
+    raft_role: RaftRole.LEADER,
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    service_id: 'replica-2',
+    partition_id: 'test-partition-19b',
+    service_type: SERVICE_TYPE.PARTITION,
+    node_id: 'node-new',
+    status: SERVICE_STATUS.ACTIVE,
+    raft_role: RaftRole.FOLLOWER,
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    service_id: 'replica-3',
+    partition_id: 'test-partition-19b',
+    service_type: SERVICE_TYPE.PARTITION,
+    node_id: 'node-3',
+    status: SERVICE_STATUS.ACTIVE,
+    raft_role: RaftRole.FOLLOWER,
+  });
+
+  const consensusPort = new ControllableConsensusPort({
+    peers: [{
+      address: 'node-old/partition/replica-2',
+      replicaIdentity: 'replica-2',
+    }],
+  });
+  const partition = createControllablePartitionService({
+    partitionId: 'test-partition-19b',
+    tableId: 'peer_refresh_test',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
-    peerAddresses: peerAddresses,
+    peerAddresses: ['node-old/partition/replica-2'],
     dbPath: ':memory:',
-  }));
+    deferElection: true,
+  }, consensusPort);
 
   await partition.initialize();
+  try {
+    consensusPort.confChanges.length = 0;
+    partition.systemTableCache = systemTableCache;
 
-  // Test with simple peer ID (should resolve from provided peer addresses)
-  const addr1 = partition.buildPeerAddress('replica-2');
-  t.equal(addr1, 'node-2/partition/replica-2', 'Should resolve correct address');
-
-  // Test with already-formatted address (should return as-is)
-  const addr2 = partition.buildPeerAddress('node-2/partition/replica-3');
-  t.equal(addr2, 'node-2/partition/replica-3', 'Should return formatted address as-is');
-
-  await partition.shutdown();
-});
-
-test('PartitionService - cache reconciliation refreshes moved peers and joins new replicas',
-  async (t) => {
-    const systemTableCache = new SystemTableCache();
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
-      service_id: 'replica-1',
-      partition_id: 'test-partition-19b',
-      service_type: SERVICE_TYPE.PARTITION,
-      node_id: 'node-1',
-      status: SERVICE_STATUS.ACTIVE,
-      raft_role: RaftRole.LEADER,
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
-      service_id: 'replica-2',
-      partition_id: 'test-partition-19b',
-      service_type: SERVICE_TYPE.PARTITION,
-      node_id: 'node-new',
-      status: SERVICE_STATUS.ACTIVE,
-      raft_role: RaftRole.FOLLOWER,
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
-      service_id: 'replica-3',
-      partition_id: 'test-partition-19b',
-      service_type: SERVICE_TYPE.PARTITION,
-      node_id: 'node-3',
-      status: SERVICE_STATUS.ACTIVE,
-      raft_role: RaftRole.FOLLOWER,
-    });
-
-    const consensusPort = new ControllableConsensusPort({
-      peers: [{
-        address: 'node-old/partition/replica-2',
-        replicaIdentity: 'replica-2',
-      }],
-    });
-    const partition = createControllablePartitionService({
-      partitionId: 'test-partition-19b',
-      tableId: 'peer_refresh_test',
-      replicaId: 'replica-1',
-      replicaIds: ['replica-1'],
-      nodeId: 'node-1',
-      peerAddresses: ['node-old/partition/replica-2'],
-      dbPath: ':memory:',
-      deferElection: true,
-    }, consensusPort);
-
-    await partition.initialize();
-    try {
-      consensusPort.confChanges.length = 0;
-      partition.systemTableCache = systemTableCache;
-
-      const refreshedAddress = partition.buildPeerAddress('replica-2');
-      await new Promise((resolve) => setImmediate(resolve));
-
-      const removedAddresses = consensusPort.confChanges
-        .filter((change) =>
-          change.type === RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER)
-        .map((change) => change.peerAddress);
-      const joinedAddresses = consensusPort.confChanges
-        .filter((change) =>
-          change.type === RAFT_MEMBERSHIP_OPERATION.ADD_PEER)
-        .map((change) => change.peerAddress);
-
-      t.equal(
-        refreshedAddress,
-        'node-new/partition/replica-2',
-        'cache-backed ownership should override stale bootstrap peer hints',
-      );
-      t.same(
-        removedAddresses,
-        ['node-old/partition/replica-2'],
-        'stale raft peer address should be replaced when ownership moves',
-      );
-      t.same(
-        joinedAddresses,
-        [
-          'node-new/partition/replica-2',
-          'node-3/partition/replica-3',
-        ],
-        'newly visible peers should be proposed through the semantic port',
-      );
-      t.ok(
-        partition.replicaIds.includes('replica-2') &&
-        partition.replicaIds.includes('replica-3'),
-        'replicaIds should expand to include cache-discovered peers',
-      );
-    } finally {
-      await partition.shutdown();
+    // A services change reaches the partition: rows are discovery (quest
+    // replica-admission-from-committed-operation); admission is requested.
+    for (const row of systemTableCache.getAll(TABLES.SERVICES)) {
+      partition.handleSystemTableCacheChange(TABLES.SERVICES,
+        CDCOperation.UPDATE, row);
     }
-  });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const removedAddresses = consensusPort.confChanges
+      .filter((change) =>
+        change.type === RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER)
+      .map((change) => change.peerAddress);
+    const joinedAddresses = consensusPort.confChanges
+      .filter((change) =>
+        change.type === RAFT_MEMBERSHIP_OPERATION.ADD_PEER)
+      .map((change) =>
+        `${change.nodeId}/partition/${change.replicaIdentity}`);
+
+    t.same(
+      removedAddresses,
+      [],
+      'a configured peer is never removed because a row disagrees with ' +
+          'its committed node',
+    );
+    t.same(joinedAddresses, [],
+      'a newly visible row proposes no admission');
+    t.same(partition.replicaIds, ['replica-1'],
+      'rows do not expand the replica identity cohort');
+  } finally {
+    await partition.shutdown();
+  }
+});
 
 test('PartitionService - emits leaderElected event for single replica', async (t) => {
   const partition = new PartitionService(withFoundingStamp({

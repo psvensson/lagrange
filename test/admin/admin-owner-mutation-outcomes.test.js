@@ -22,7 +22,7 @@ const OPERATIONS = [
   {kind: 'config', existing: true, method: 'PUT', url: '/api/admin/config/' + CONFIG_KEY,
     payload: {value: 'warn'}, prefix: 'CONFIG_MUTATION'},
   {kind: 'policy', method: 'PATCH', url: '/api/admin/tables/' + TABLE_ID + '/policy',
-    payload: {policy: {replicaCount: 3}}, prefix: 'TABLE_POLICY_MUTATION'},
+    payload: {policy: {splitTrafficThreshold: 123}}, prefix: 'TABLE_POLICY_MUTATION'},
 ];
 
 function fixture(t, operation, initialResult) {
@@ -48,6 +48,8 @@ function fixture(t, operation, initialResult) {
     [{table_id: TABLE_ID, table_name: 'events', table_policies: '{}'}] :
     (operation.existing ? [{config_key: CONFIG_KEY, config_value: 'info',
       value_type: 'string'}] : [])});
+  // The policy write's base is one committed read (census site 6).
+  gateway.readAuthoritativeRows = gateway.readRows;
   const config = new DynamicConfigService({nodeId: 'owner-effect-node',
     controlPlaneSystemTableGateway: gateway});
   const policy = new TablePolicyService({controlPlaneSystemTableGateway: gateway,
@@ -65,7 +67,7 @@ function fixture(t, operation, initialResult) {
       result = answer;
     },
     callOwner: () => operation.kind === 'config' ? config.set(CONFIG_KEY, 'warn') :
-      policy.updateTablePolicy(TABLE_ID, {replicaCount: 3})};
+      policy.updateTablePolicy(TABLE_ID, {splitTrafficThreshold: 123})};
 }
 
 function assertNoPublication(t, f) {
@@ -84,8 +86,6 @@ test('owners preserve negative gateway outcomes without publishing applied succe
     {answer: {success: true, affectedRows: 0}, status: 409, suffix: '_OBSERVATION_CHANGED'},
     {answer: {success: true}, status: 503, suffix: '_OUTCOME_UNCONFIRMED'},
     {answer: {success: true, affectedRows: '1'}, status: 503, suffix: '_OUTCOME_UNCONFIRMED'},
-    {answer: {success: true, affectedRows: 1, visibilityState: 'pending_visibility'},
-      status: 503, suffix: '_OUTCOME_UNCONFIRMED'},
   ];
   for (const operation of OPERATIONS) {
     for (const outcome of outcomes) {
@@ -119,7 +119,7 @@ test('confirmed single-row insert/update publishes once and clears prior deferra
     } else {
       t.equal(f.policy.policyCache.has(TABLE_ID), false);
       t.equal(f.events.length, 1);
-      t.equal(response.json().policy.replicaCount, 3);
+      t.equal(response.json().policy.splitTrafficThreshold, 123);
     }
   }
 });

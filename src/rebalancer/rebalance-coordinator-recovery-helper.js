@@ -1,9 +1,6 @@
 import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {filterConcurrentAddBudgetOperations} from './rebalance-coordinator-priority-budget-helper.js';
-import {
-  REBALANCE_COORDINATOR_TYPE,
-} from './rebalance-coordinator-helper-common.js';
 
 const {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
@@ -109,7 +106,14 @@ async function handleRecovery(coordinator) {
       continue;
     }
 
-    if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
+    if (
+      coordinator.workflowOwner.isRemoveInitialDispatchPhase({
+        type: op.type,
+        workflowStep: originalStep,
+      })
+    ) {
+      result.reconciled++;
+    } else if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
       result.markedFailed++;
     } else if (originalStep === WORKFLOW_STEP.SYNCING) {
       result.reconciled++;
@@ -195,16 +199,11 @@ async function getOperationsByPartition(coordinator, partitionId) {
 }
 
 async function getOperationsByEntity(coordinator, entityType, entityId, options = {}) {
-  if (
-    options?.visibilityReadMode ===
-      REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED &&
-    typeof coordinator.repository?.getOperationsByEntityAuthoritative ===
-      REBALANCE_COORDINATOR_TYPE.FUNCTION
-  ) {
-    return coordinator.repository.getOperationsByEntityAuthoritative(
-      entityType,
-      entityId,
+  if (options?.visibilityReadMode === REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED) {
+    const observation = await coordinator.getEntityAuthoritativeOperationObservation(
+      entityType, entityId,
     );
+    return coordinator.requireEntityOperationRows(observation, entityType, entityId);
   }
   return coordinator.repository.getOperationsByEntity(entityType, entityId);
 }

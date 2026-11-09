@@ -421,6 +421,9 @@ test('Seed node bootstrap integration', {timeout: TEST_TIMEOUT_MS}, async (t) =>
       });
 
       t.ok(result.success, 'write after bootstrap should succeed');
+      if (result.position) {
+        await cdcService.awaitProjectionAt(result.position);
+      }
 
       // Verify the write went through SQL engine by checking cache
       const systemTableCache = NodeService.getInstance().getSystemTableCache();

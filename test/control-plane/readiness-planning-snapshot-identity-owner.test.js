@@ -48,6 +48,10 @@ import {
 } from '../../src/diagnostics/event-loop-gap-watchdog.js';
 import {MembershipPublicationCoordinator} from
   '../../src/control-plane/membership-publication-coordinator.js';
+import {buildPublicationRecoveryProtocolSnapshot} from
+  '../../src/control-plane/recovery-protocol-snapshot.js';
+import {readPriorityRecoveryPlanningAnswerCallRetention} from
+  '../../src/control-plane/priority-recovery-planning-answer-origin.js';
 import {
   MS_PER_SECOND,
   NODE_COUNT,
@@ -62,6 +66,7 @@ import {
 
 import {
   createReadinessServiceForTest,
+  readinessCollaboratorFake,
   readinessCollaboratorFakes,
 } from '../helpers/readiness-service-fixture.js';
 // Measured on this exact rig at the base commit (probe-derived identity, one
@@ -69,16 +74,18 @@ import {
 // 5s of virtual time = 344.8/s.
 const PRE_CHANGE_HEAVY_BUILDS = 1724;
 // Measured after giving the canonical planning snapshot one VERIFIED identity
-// owner plus Q2 semantic source classification: 585 heavy planning builds =
-// 117/s. Each remaining build is either
+// owner plus Q2 semantic source classification was 585 heavy builds. The
+// direct-publication custody repair tightens this to 565 (113/s), with every
+// fresh node evaluation retained. Each remaining build is either
 // the first projection of genuinely new content, or the one verification
 // rebuild that makes a snapshot canonical.
-const AFTER_HEAVY_BUILDS = 585;
+const AFTER_HEAVY_BUILDS = 565;
 // The publication recovery gate snapshot was the largest instrumented site on
 // the failing seed (586/s). It must not regress: measured 4118 -> 3184 builds
 // over the same sequence after frozen observation gates gained identity reuse.
 const PRE_CHANGE_GATE_BUILDS = 4118;
-const AFTER_GATE_BUILDS = 3184;
+// R09 direct-publication custody: same rig, tighter than the prior 3184.
+const AFTER_GATE_BUILDS = 3164;
 // The publications winner read is the one live read the planning memo version
 // key performs. The identity owner adds none: it reuses the floored source
 // generation the normalizer already computed.
@@ -130,6 +137,19 @@ const SHAPE_SPACE_SIZE = SHAPE_STATUSES.length * SHAPE_EPOCHS.length *
 const SHAPE_SPACE_DIVERGENT = 15235;
 const PRECONDITION_UNSOUND_SHAPES = 3405;
 
+function createPublicationCoordinator({readiness, cache, clock}) {
+  return new MembershipPublicationCoordinator({
+    nodeId: OWNER_NODE_ID,
+    systemTableCache: cache,
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: readiness,
+    now: () => clock.value,
+  });
+}
+
 function createService({clock, cache}) {
   const readiness = createReadinessServiceForTest({
     nodeId: OWNER_NODE_ID,
@@ -143,16 +163,7 @@ function createService({clock, cache}) {
       ),
     },
   });
-  const coordinator = new MembershipPublicationCoordinator({
-    nodeId: OWNER_NODE_ID,
-    systemTableCache: cache,
-    cdcIntegrationService: {
-      updateSystemTableRow: async () => ({success: true}),
-      upsertSystemTableRow: async () => ({success: true}),
-    },
-    controlPlaneReadinessService: readiness,
-    now: () => clock.value,
-  });
+  const coordinator = createPublicationCoordinator({readiness, cache, clock});
   readiness.syncOwnerDependencies({membershipPublicationService: coordinator});
   const builds = [];
   const build = readiness.buildTrackedPriorityRecoveryPlanningProjection;
@@ -265,13 +276,18 @@ test('renormalisation-fixed-point-holds-across-the-whole-rig', () => {
       'byte-identical to their input');
 });
 
-test('version-key-change-mints-one-fresh-identity', () => {
+test('version-key-change-mints-one-fresh-identity', (t) => {
   // Drive the canonical publication owner boundary. Q2 removes the competing
   // live winner probe, so a winner change without its source-owner event is no
   // longer a supported second authority.
   const {readiness, cache, clock, builds} = createFixture();
+  t.after(() => readiness.shutdown());
+  const work = tracePublicationPlanningWork(readiness);
+  const expectedNodeIds = Array.from({length: NODE_COUNT}, (_, index) => `node-${index}`);
   const first = readiness.getPriorityRecoveryPlanningAnswerSync(
     OWNER_NODE_ID, clock.value);
+  assertPublicationAdvanceWork(work, expectedNodeIds);
+  work.length = 0;
   const buildsAfterFirst = builds.length;
   assert.equal(
     readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, clock.value),
@@ -279,6 +295,8 @@ test('version-key-change-mints-one-fresh-identity', () => {
     'a stable version key serves one planning answer identity');
   assert.equal(builds.length, buildsAfterFirst,
     'the stable-key repeat rebuilds nothing');
+  assert.equal(work.length, 0, 'the cold-key repeat performs no fresh observations');
+  work.length = 0;
   cache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'UPDATE', {
     publication_id: 'pub-1',
     publication_kind: 'cluster_membership',
@@ -289,15 +307,30 @@ test('version-key-change-mints-one-fresh-identity', () => {
     OWNER_NODE_ID, clock.value);
   assert.notEqual(advanced, first,
     'an owner-observed publication advance mints a FRESH identity');
+  // R09: 2cd37024e added the mandatory fresh bulk evaluations. The old
+  // flat total-three premise is explicitly superseded by complete accounting:
+  // three candidate-owner builds plus two for EACH independently expected node.
+  assertPublicationAdvanceWork(work, expectedNodeIds);
   assert.equal(builds.length,
-    buildsAfterFirst + VERSION_KEY_ADVANCE_BUILDS,
-    'the publication advance costs the owner-forced rebuild, merge, and ' +
-      'canonical verification exactly once each');
+    buildsAfterFirst + VERSION_KEY_ADVANCE_BUILDS + 2 * NODE_COUNT);
+  const malformed = [
+    work.filter((event) => event.nodeId !== expectedNodeIds[0]),
+    work.filter((event) => event.scope === 'candidate'),
+    [...work, {kind: 'build', scope: 'candidate'}],
+    [...work, {kind: 'build', scope: 'node', nodeId: 'unexpected-node', source: 'direct_publication_row'}],
+    [...work, {kind: 'unclassified'}],
+  ];
+  for (const events of malformed) {
+    assert.throws(() => assertPublicationAdvanceWork(events, expectedNodeIds),
+      'omission, extra and unclassified work cannot disappear from measurement');
+  }
+  work.length = 0;
   const buildsAfterAdvance = builds.length;
   assert.equal(
     readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, clock.value),
     advanced,
     'the post-advance identity is served while the key holds');
+  assert.equal(work.length, 0, 'stable repeats do no candidate or nested fresh work');
   assert.equal(builds.length, buildsAfterAdvance,
     'no further rebuild while the key holds');
 });
@@ -804,4 +837,294 @@ function driveOwnerBuildSequence({readiness, cache, clock}) {
     Date.now = platformNow;
     readiness.shutdownReadinessPlanningOwner();
   }
+}
+
+// The direct row is already the selected planning source. Its synchronous
+// answer must have the same context custody as the existing asynchronous path.
+test('direct sync answers preserve async shape and exact context custody', async (t) => {
+  const publications = [null, undefined, {},
+    {status: 'PUBLISHED', publicationEpoch: 3},
+    {status: 'OPEN', publicationEpoch: null, publishedActiveNodeIds: [OWNER_NODE_ID]}];
+  const options = {membershipPublicationPlanningSource: 'direct_publication_row'};
+  let retainedCases = 0;
+  for (const retain of [false, true]) {
+    for (const publication of publications) {
+      const left = createFixture();
+      const right = createFixture();
+      t.after(() => left.readiness.shutdown());
+      t.after(() => right.readiness.shutdown());
+      if (retain) {
+        for (const world of [left, right]) {
+          world.cache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'UPDATE', {
+            publication_id: 'pub-1', publication_kind: 'cluster_membership',
+            publication_epoch: 9, status: 'ACKNOWLEDGING', acknowledged_node_ids: '[]',
+            published_active_node_ids: JSON.stringify([OWNER_NODE_ID]),
+          });
+          const prior = world.readiness.getPriorityRecoveryPlanningAnswerSync(
+            OWNER_NODE_ID, world.clock.value);
+          assert.equal(world.readiness.isPriorityControlPlaneRecoveryActive(prior), true);
+          world.readiness.storeActivePriorityRecoveryPlanningSnapshot(
+            OWNER_NODE_ID, prior, world.clock.value);
+          assert.equal(world.readiness.getActivePriorityRecoveryPlanningSnapshot(
+            OWNER_NODE_ID, world.clock.value), prior);
+        }
+      }
+      const sync = left.readiness.resolveNodeMembershipPublicationPlanningAnswerSync(
+        OWNER_NODE_ID, left.clock.value, publication, options);
+      const asyncAnswer = await right.readiness.resolveNodeMembershipPublicationPlanningAnswer(
+        OWNER_NODE_ID, right.clock.value, publication, options);
+      assert.deepEqual(sync, asyncAnswer, `async parity with retained=${retain}`);
+      const usedRetention = readPriorityRecoveryPlanningAnswerCallRetention(
+        left.readiness, OWNER_NODE_ID);
+      assert.equal(usedRetention, readPriorityRecoveryPlanningAnswerCallRetention(
+        right.readiness, OWNER_NODE_ID));
+      if (retain && usedRetention) retainedCases += 1;
+      if (!sync) continue;
+      const context = {nodeId: OWNER_NODE_ID, observedAt: left.clock.value,
+        membershipPublication: publication ?? null, membershipPublicationPlanningSnapshot: sync};
+      let merges = 0;
+      const merge = left.readiness.resolveMembershipPublicationPlanningSnapshot;
+      left.readiness.resolveMembershipPublicationPlanningSnapshot = function(...args) {
+        merges += 1;
+        return merge.apply(this, args);
+      };
+      const same = left.readiness
+        .resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync(context);
+      assert.equal(same, sync);
+      let asyncMerges = 0;
+      const asyncMerge = right.readiness.resolveMembershipPublicationPlanningSnapshot;
+      right.readiness.resolveMembershipPublicationPlanningSnapshot = function(...args) {
+        asyncMerges += 1;
+        return asyncMerge.apply(this, args);
+      };
+      right.readiness.resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync(
+        {...context, membershipPublicationPlanningSnapshot: asyncAnswer});
+      assert.equal(merges, asyncMerges,
+        `sync context reuse matches async for publication=${JSON.stringify(publication)}`);
+      if (publication !== undefined) {
+        assert.equal(merges, 0, 'the exact typed final answer is not merged again');
+      }
+      const beforeOtherOwner = asyncMerges;
+      right.readiness.membershipPublicationPlanningSnapshotContextMemo = new WeakMap();
+      right.readiness.resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync(context);
+      assert.equal(asyncMerges, beforeOtherOwner + 1,
+        'another owner cannot reuse completed-answer context from this owner');
+      const exactContextMerges = merges;
+      for (const change of [{nodeId: 'node-1'}, {observedAt: left.clock.value + 1},
+        {membershipPublication: {status: 'PUBLISHED', publicationEpoch: 7}}]) {
+        left.readiness.membershipPublicationPlanningSnapshotContextMemo = new WeakMap();
+        left.readiness.resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync(
+          {...context, ...change});
+      }
+      assert.equal(merges, exactContextMerges + 3,
+        'different node, observation time or publication re-enters the owner');
+    }
+  }
+  assert.ok(retainedCases > 0, 'the matrix actually exercises retained-answer selection');
+});
+
+function currentPublicationContext({readiness, clock}, nodeId = OWNER_NODE_ID) {
+  return {nodeId, observedAt: clock.value,
+    membershipPublication: readiness.getMembershipPublicationDiagnosticsSync(nodeId, clock.value)};
+}
+
+test('owned protocol input is bounded by the exact published domain', (t) => {
+  const world = createFixture();
+  t.after(() => world.readiness.shutdown());
+  const {readiness} = world;
+  const context = currentPublicationContext(world);
+  const memo = readiness.membershipPublicationDiagnosticsMemo;
+  assert.ok(Object.isFrozen(context.membershipPublication));
+  assert.ok(Object.isFrozen(context.membershipPublication.publishedActiveNodeIds));
+  const first = readiness.buildMembershipPublicationProtocolInput(context);
+  assert.equal(readiness.buildMembershipPublicationProtocolInput(context), first);
+  const second = readiness.buildMembershipPublicationProtocolInput({...context, nodeId: 'node-1'});
+  assert.notEqual(second, first, 'target-specific inputs never share identity');
+  for (const nodeId of context.membershipPublication.publishedActiveNodeIds) {
+    readiness.buildMembershipPublicationPlanningSnapshot({...context, nodeId});
+  }
+  const retained = memo.protocolSnapshotsByNodeId.size;
+  assert.equal(retained, context.membershipPublication.publishedActiveNodeIds.length);
+  for (let index = 0; index < 40; index++) {
+    const nodeId = `unpublished-${index}`;
+    const answer = readiness.buildMembershipPublicationPlanningSnapshot({...context, nodeId});
+    assert.ok(answer, 'out-of-domain nodes still receive a complete direct planning answer');
+  }
+  assert.equal(memo.protocolSnapshotsByNodeId.size, retained,
+    'arbitrary target requests cannot grow the owned representation memo');
+  const mutable = {...context.membershipPublication};
+  readiness.membershipPublicationDiagnosticsMemo = {diagnostics: mutable};
+  const mutableContext = {...context, membershipPublication: mutable};
+  assert.notEqual(readiness.buildMembershipPublicationProtocolInput(mutableContext),
+    readiness.buildMembershipPublicationProtocolInput(mutableContext),
+    'even an exact memo reference cannot retain mutable input');
+  assert.equal(readiness.membershipPublicationDiagnosticsMemo.protocolSnapshotsByNodeId, undefined);
+  readiness.membershipPublicationDiagnosticsMemo = memo;
+  for (const publication of [{...context.membershipPublication},
+    Object.freeze({...context.membershipPublication})]) {
+    const unowned = {...context, membershipPublication: publication};
+    assert.notEqual(readiness.buildMembershipPublicationProtocolInput(unowned),
+      readiness.buildMembershipPublicationProtocolInput(unowned),
+      'mutable and unowned frozen input is constructed on every call');
+  }
+});
+
+function assertFullPublicationProjection(readiness, context) {
+  const served = readiness.buildMembershipPublicationPlanningSnapshot(context);
+  const raw = buildPublicationRecoveryProtocolSnapshot(context.membershipPublication,
+    {targetNodeId: context.nodeId});
+  const fresh = raw ? readiness.normalizeMembershipPublicationPlanningSnapshot(raw) : null;
+  assert.deepEqual(served, fresh, 'reused input agrees with a fresh canonical derivation');
+  return served;
+}
+
+test('protocol reuse respects semantic currency and admission denial then recovery', (t) => {
+  const world = createFixture();
+  t.after(() => world.readiness.shutdown());
+  const {readiness, cache, builds} = world;
+  const context = currentPublicationContext(world);
+  const raw = readiness.buildMembershipPublicationProtocolInput(context);
+  let normalizations = 0;
+  const normalize = readiness.normalizeMembershipPublicationPlanningSnapshot;
+  readiness.normalizeMembershipPublicationPlanningSnapshot = function(...args) {
+    normalizations += 1;
+    return normalize.apply(this, args);
+  };
+  readiness.buildMembershipPublicationPlanningSnapshot(context);
+  readiness.buildMembershipPublicationPlanningSnapshot(context);
+  assert.equal(normalizations, 2, 'every use still crosses the current normalizer');
+  const before = builds.length;
+  cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
+    [COLUMN.SERVICE_ID]: 'service-0', [COLUMN.NODE_ID]: OWNER_NODE_ID,
+    [COLUMN.ADDRESS]: 'node-0/partition/priority-partition-v2',
+  });
+  assertFullPublicationProjection(readiness, context);
+  assert.ok(builds.length > before, 'changed semantic currency engages fresh normalization');
+  const deniedFence = Object.freeze({allowed: false, state: 'identity_mismatch',
+    reasonCodes: ['cluster_incarnation_identity_mismatch']});
+  readiness.syncOwnerDependencies({localClusterIncarnationFenceProvider: () => deniedFence});
+  const denied = assertFullPublicationProjection(readiness, context);
+  assert.equal(denied.admissionState, 'blocked');
+  assert.deepEqual(denied.admissionReasonCodes, ['cluster_incarnation_identity_mismatch']);
+  assert.equal(denied.clusterIncarnationFence, deniedFence);
+  const admittedFence = Object.freeze({allowed: true, state: 'ready', reasonCodes: []});
+  readiness.syncOwnerDependencies({localClusterIncarnationFenceProvider: () => admittedFence});
+  const admitted = assertFullPublicationProjection(readiness, context);
+  assert.equal(admitted.admissionState, 'admitted');
+  assert.deepEqual(admitted.admissionReasonCodes, []);
+  assert.equal(admitted.clusterIncarnationFence, admittedFence);
+  assert.equal(readiness.buildMembershipPublicationProtocolInput(context), raw,
+    'only pure raw representation survives changing admission evidence');
+});
+
+test('protocol reuse follows actual publication owner replacement and retirement', (t) => {
+  const world = createFixture();
+  t.after(() => world.readiness.shutdown());
+  const {readiness, cache, clock} = world;
+  const context = currentPublicationContext(world);
+  const raw = readiness.buildMembershipPublicationProtocolInput(context);
+  cache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'UPDATE', {
+    publication_id: 'pub-1', publication_kind: 'cluster_membership',
+    publication_epoch: 7, status: 'PUBLISHED',
+  });
+  const changed = currentPublicationContext(world);
+  assert.equal(assertFullPublicationProjection(readiness, changed).publicationEpoch, 7);
+  assert.notEqual(readiness.buildMembershipPublicationProtocolInput(changed), raw);
+  const oldMemo = readiness.membershipPublicationDiagnosticsMemo;
+  const replacementCache = createFormationShapedCache(clock.value);
+  replacementCache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'UPDATE', {
+    publication_id: 'pub-1', publication_kind: 'cluster_membership',
+    publication_epoch: 11, status: 'PUBLISHED',
+  });
+  // A re-wiring is validated: the fixture completes the partial cache.
+  readiness.syncOwnerDependencies({systemTableCache:
+    readinessCollaboratorFake('systemTableCache', replacementCache)});
+  assert.equal(readiness.membershipPublicationDiagnosticsMemo, null);
+  const cacheChanged = currentPublicationContext(world);
+  assert.notEqual(readiness.membershipPublicationDiagnosticsMemo, oldMemo);
+  assert.equal(assertFullPublicationProjection(readiness, cacheChanged).publicationEpoch, 7,
+    'the unchanged publication owner still supplies the authoritative current answer');
+  const replacement = createPublicationCoordinator({readiness, cache: replacementCache, clock});
+  readiness.syncOwnerDependencies({membershipPublicationService: replacement});
+  assert.equal(readiness.membershipPublicationDiagnosticsMemo, null);
+  const ownerChanged = currentPublicationContext(world);
+  assert.equal(assertFullPublicationProjection(readiness, ownerChanged).publicationEpoch, 11,
+    'the new canonical publication owner supplies its different current contents');
+  assert.notEqual(ownerChanged.membershipPublication, cacheChanged.membershipPublication);
+  readiness.shutdown();
+  assert.equal(readiness.membershipPublicationDiagnosticsMemo, null);
+});
+
+test('complete accounting rejects the actual fresh-bulk omission schedule', (t) => {
+  const {readiness, clock} = createFixture();
+  t.after(() => readiness.shutdown());
+  // On this cold fixture the retired pre-2cd fresh-miss behavior returned no
+  // nodes. Engage that missing work at the actual caller boundary, not only by
+  // changing a recorded measurement vector.
+  readiness.getAllNodeReadinessSync = () => [];
+  const work = tracePublicationPlanningWork(readiness);
+  readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, clock.value);
+  assert.equal(work.length, VERSION_KEY_ADVANCE_BUILDS,
+    'the defective schedule still does the three candidate builds');
+  const expectedNodeIds = Array.from({length: NODE_COUNT}, (_, index) => `node-${index}`);
+  assert.throws(() => assertPublicationAdvanceWork(work, expectedNodeIds),
+    'missing completed node observations fail even though total work fell to three');
+});
+
+function tracePublicationPlanningWork(readiness) {
+  const work = [];
+  const frames = [];
+  const buildNode = readiness.buildNodeReadinessSyncCurrent;
+  readiness.buildNodeReadinessSyncCurrent = function(nodeId, options = {}) {
+    const frame = {scope: 'node', nodeId, source: options.membershipPublicationPlanningSource};
+    frames.push(frame);
+    try {
+      const snapshot = buildNode.call(this, nodeId, options);
+      work.push({kind: 'observation', ...frame, snapshot});
+      return snapshot;
+    } finally {
+      frames.pop();
+    }
+  };
+  const buildProjection = readiness.buildTrackedPriorityRecoveryPlanningProjection;
+  readiness.buildTrackedPriorityRecoveryPlanningProjection = function(...args) {
+    work.push({kind: 'build', ...(frames.at(-1) ?? {scope: 'candidate'})});
+    return buildProjection.apply(this, args);
+  };
+  return work;
+}
+
+function assertPublicationAdvanceWork(work, expectedNodeIds) {
+  const observations = new Map(expectedNodeIds.map((id) => [id, 0]));
+  const nodeBuilds = new Map(expectedNodeIds.map((id) => [id, 0]));
+  let candidateBuilds = 0;
+  let totalBuilds = 0;
+  for (const event of work) {
+    assert.ok(event.kind === 'build' || event.kind === 'observation', 'every event is classified');
+    if (event.kind === 'build') totalBuilds += 1;
+    if (event.scope === 'candidate') {
+      assert.equal(event.kind, 'build');
+      candidateBuilds += 1;
+    } else {
+      assert.equal(event.scope, 'node');
+      assert.equal(event.source, 'direct_publication_row');
+      assert.ok(observations.has(event.nodeId), 'every node is in the independent expected domain');
+      if (event.kind === 'observation') {
+        assert.equal(event.snapshot?.nodeId, event.nodeId, 'the requested node snapshot returned');
+        for (const dimension of ['clusterMemberHealthy', 'controlPlaneWritable', 'serveEligible']) {
+          assert.equal(typeof event.snapshot?.dimensions?.[dimension], 'boolean');
+        }
+        assert.ok(Array.isArray(event.snapshot.reasons), 'the completed result includes its reasons');
+      }
+      const counts = event.kind === 'observation' ? observations : nodeBuilds;
+      counts.set(event.nodeId, counts.get(event.nodeId) + 1);
+    }
+  }
+  assert.equal(candidateBuilds, VERSION_KEY_ADVANCE_BUILDS);
+  for (const nodeId of expectedNodeIds) {
+    assert.equal(observations.get(nodeId), 1, `one fresh evaluation for ${nodeId}`);
+    assert.equal(nodeBuilds.get(nodeId), 2, `projection and verification for ${nodeId}`);
+  }
+  assert.equal(totalBuilds, VERSION_KEY_ADVANCE_BUILDS + 2 * expectedNodeIds.length,
+    'every build contributes to the complete total');
 }

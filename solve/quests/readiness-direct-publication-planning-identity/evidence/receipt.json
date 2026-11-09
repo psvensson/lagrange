@@ -1,0 +1,32 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "readiness-direct-publication-planning-identity",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "resolved-direct-sync-context",
+      "passed": false,
+      "detail": "Causal experiment only; reviewed implementation and exact-candidate proof pending."
+    },
+    {
+      "id": "owned-protocol-input-reuse",
+      "passed": false,
+      "detail": "Causal experiment only; reviewed implementation and exact-candidate proof pending."
+    },
+    {
+      "id": "complete-readiness-cost-bound",
+      "passed": false,
+      "detail": "Causal experiment only; reviewed implementation and exact-candidate proof pending."
+    },
+    {
+      "id": "invalidation-and-retirement",
+      "passed": false,
+      "detail": "Causal experiment only; reviewed implementation and exact-candidate proof pending."
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "detail": "Causal experiment only; reviewed implementation and exact-candidate proof pending."
+    }
+  ]
+}

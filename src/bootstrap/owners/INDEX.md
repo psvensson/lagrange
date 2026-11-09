@@ -7,7 +7,7 @@ documentClass: generated
 
 ## Files
 
-- [backup-restore-owner.js](backup-restore-owner.js) - No leading comment; first export: BackupRestoreOwner. (importers: few)
+- [backup-restore-owner.js](backup-restore-owner.js) - An exported partition must carry its own payload and Raft position. (importers: few)
 - [bootstrap-cluster-view-owner.js](bootstrap-cluster-view-owner.js) - No leading comment; first export: BootstrapClusterViewOwner. (importers: few)
 - [bootstrap-control-plane-recovery-health.js](bootstrap-control-plane-recovery-health.js) - No leading comment; first export: assignBootstrapControlPlaneRecoveryHealthMethods. (importers: few)
 - [bootstrap-join-admission-owner.js](bootstrap-join-admission-owner.js) - Report a spent bootstrap-request execution budget at a join-admission stage. (importers: few)
@@ -33,7 +33,7 @@ documentClass: generated
 - [join-message-group-runtime-owner.js](join-message-group-runtime-owner.js) - A message-group replica is started on the node its active services row names, or on a node no active row names; a... (importers: few)
 - [join-phase-owners.js](join-phase-owners.js) - Joining phase owner registry. (importers: few)
 - [management-v1-constants.js](management-v1-constants.js) - Canonical constants for the `lagrange.management.v1` contract: - B2 Cluster Facts (`GET /management/v1/facts`) - B3... (importers: many)
-- [management-v1-owner.js](management-v1-owner.js) - No leading comment; first export: ManagementV1Owner. (importers: few)
+- [management-v1-owner.js](management-v1-owner.js) - The physical rolling-upgrade ports handed to the rolling-upgrade owner. (importers: few)
 - [management-v1-request-validator.js](management-v1-request-validator.js) - No leading comment; first export: computeCanonicalOperationDigest. (importers: few)
 - [move-replica-assignment-admission-blocking.js](move-replica-assignment-admission-blocking.js) - No leading comment; first export: moveReplicaAssignmentAdmissionBlockingMethods. (importers: one)
 - [move-replica-assignment-lease-validation.js](move-replica-assignment-lease-validation.js) - No leading comment; first export: moveReplicaAssignmentLeaseValidationMethods. (importers: one)
@@ -42,7 +42,7 @@ documentClass: generated
 - [move-replica-assignment-reservation-persistence.js](move-replica-assignment-reservation-persistence.js) - No leading comment; first export: moveReplicaAssignmentReservationPersistenceMethods. (importers: one)
 - [move-replica-assignment-visibility-policy.js](move-replica-assignment-visibility-policy.js) - No leading comment; first export: moveReplicaAssignmentVisibilityPolicyMethods. (importers: one)
 - [move-replica-handoff-owner.js](move-replica-handoff-owner.js) - No leading comment; first export: MoveReplicaHandoffOwner. (importers: one)
-- [rolling-upgrade-owner.js](rolling-upgrade-owner.js) - No leading comment; first export: RollingUpgradeOwner. (importers: few)
+- [rolling-upgrade-owner.js](rolling-upgrade-owner.js) - An absent or incomplete snapshot is never read as a ready cluster. (importers: few)
 - [seed-phase-owners.js](seed-phase-owners.js) - Seed phase owner registry. (importers: one)
 - [seed-registration-runtime-owner.js](seed-registration-runtime-owner.js) - No leading comment; first export: SeedRegistrationRuntimeOwner. (importers: few)
 - [seed-runtime-bridge-owner.js](seed-runtime-bridge-owner.js) - No leading comment; first export: SeedRuntimeBridgeOwner. (importers: many)

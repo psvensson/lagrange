@@ -147,6 +147,27 @@ test('ConfigurationManager overrides', async (t) => {
   ConfigurationManager.resetInstance();
 });
 
+test('partition replication is explicitly configured without changing the default', async (t) => {
+  t.teardown(() => ConfigurationManager.resetInstance());
+  for (const replicaCount of [undefined, 1, 3, 5]) {
+    ConfigurationManager.resetInstance();
+    const config = ConfigurationManager.getInstance();
+    config.initialize(replicaCount === undefined ? {} :
+      {partition: {defaultReplicaCount: replicaCount}});
+    t.equal(config.get('partition.defaultReplicaCount'), replicaCount ?? 3,
+      'startup preserves the declared target, defaulting only an omitted value');
+    t.equal(config.get('messageGroup.replicaCount'), 3,
+      'the partition setting does not change message-group replication');
+  }
+  for (const replicaCount of [0, -1, 2, 1.5, 3.5]) {
+    ConfigurationManager.resetInstance();
+    const config = ConfigurationManager.getInstance();
+    t.throws(() => config.initialize({partition: {defaultReplicaCount: replicaCount}}),
+      /partition\/defaultReplicaCount/u,
+      `startup rejects unsupported replica count ${replicaCount}`);
+  }
+});
+
 test('ConfigurationManager environment variables', async (t) => {
   ConfigurationManager.resetInstance();
 

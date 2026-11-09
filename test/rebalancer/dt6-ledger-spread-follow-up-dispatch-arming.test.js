@@ -48,11 +48,10 @@ function createCoordinatorFixture(t, {deliveries}) {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -66,7 +65,9 @@ function createCoordinatorFixture(t, {deliveries}) {
         return {success: true, rows: [], affectedRows: 0};
       },
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
   });

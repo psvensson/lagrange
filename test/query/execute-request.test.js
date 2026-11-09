@@ -18,6 +18,7 @@ import {createRuntimeStartupWiring} from
 import {ModuleMirror} from '../../src/wasm-service/module-mirror.js';
 import {WasmExecutor} from '../../src/wasm-service/wasm-executor.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -80,6 +81,7 @@ function createEngine() {
   const moduleMirror = new ModuleMirror();
   const wasmExecutor = new WasmExecutor({moduleMirror});
   return new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache(),
     messageRouter: createMockMessageRouter(),
     runtimeDriverRegistry: runtimeWiring.runtimeDriverRegistry,

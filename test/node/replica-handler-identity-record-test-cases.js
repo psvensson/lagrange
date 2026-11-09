@@ -58,7 +58,7 @@ function portRequest(options, db, overrides = {}) {
     [REQUEST.PEER_ID]: options.replicaId,
     [REQUEST.PEER_ADDRESS]: addressOf(options.replicaId),
     [REQUEST.BOOTSTRAP_PEER_IDS]: [options.replicaId],
-    [REQUEST.BOOTSTRAP_MEMBERSHIP]: genesisStamp([options.replicaId]),
+    [REQUEST.BOOTSTRAP_MEMBERSHIP]: genesisStamp([options.replicaId], {}),
     [REQUEST.IDENTITY_EXISTED]: options.identityExisted,
     ...(options.identityRecorded === undefined ? {} :
       {[REQUEST.IDENTITY_RECORDED]: options.identityRecorded}),
@@ -104,6 +104,11 @@ function realPortFactory(directory, opened, overridesFor = () => ({})) {
         }
       },
       async syncFromLeader() {},
+      // A CREATE target asks its leader to admit it after its SYNCING commit
+      // (replica-admission-from-committed-operation); this double admits.
+      async requestReplicaAdmission(operationId) {
+        return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+      },
     }, options);
   };
 }
@@ -228,7 +233,6 @@ export async function registerReplicaHandlerIdentityRecordTests({
         partitionId: PARTITION_ID,
         replicaId,
         bootstrapReplicaIds: [],
-        bootstrapPeerAddresses: [],
         bootstrapTableMetadata: null,
         bootstrapPartitionMetadata: null,
         ...request,

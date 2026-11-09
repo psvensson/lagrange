@@ -11,16 +11,18 @@ import {
   resolveStartupAuthorityNodeIdSet,
 } from '../control-plane/startup-authority-placement-eligibility.js';
 import {
-  isEvidenceAbsentReadinessDenialSnapshot,
-} from '../control-plane/readiness-denial-classification.js';
-import {
   resolvePublishedActiveNodeIds,
 } from '../control-plane/active-node-publication-snapshots.js';
+import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
+import {projectNodeLivenessSemantics} from
+  '../control-plane/node-liveness-semantic-projection.js';
 import {
-  AVAILABLE_PLANNING_SURFACE_ORDER,
   hasAvailablePriorityRecoveryPlanningProvider as hasAvailablePlanningProvider,
   readAvailablePriorityRecoveryPlanningSnapshot as readAvailablePlanningSnapshot,
 } from './priority-recovery-planning-read.js';
+import {
+  readPriorityRecoveryPlanningAnswerSync,
+} from '../control-plane/priority-recovery-planning-answer-origin.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -30,6 +32,7 @@ const {
   buildPriorityRecoveryOperationAssessment,
   classifySystemPartition,
   getPartitionRowFromCache,
+  ownerNowMs,
   resolvePriorityRecoveryActiveNodeCohort,
 } = UNIFIED_REBALANCER_SHARED;
 
@@ -84,13 +87,6 @@ const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE_TABLE = Object.freeze([
       evidence.recoveryActive === true,
   }),
 ]);
-
-// The rebalancer's readiness service is the node's one service, a named
-// collaborator required at construction (requireControlPlaneReadinessService)
-// and only ever replaced by the coordinator's: every read below calls it.
-function isNodeReadyNow(readinessService, nodeId) {
-  return readinessService.projectNodeLiveness(nodeId)?.readyNow === true;
-}
 
 class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
   getReservedPriorityRecoveryMoveSlots() {
@@ -190,7 +186,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
   }
 
   /**
-   * Filter cache-backed nodes through canonical readiness, optionally
+   * Filter committed nodes through canonical readiness, optionally
    * constraining membership to a caller-provided node-id set.
    *
    * @param {Set<string>|null} constrainedNodeIds
@@ -217,12 +213,11 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     }
     const readinessDecisionDimension =
       this.resolveNodeReadinessDecisionDimension();
-    return this.systemTableCache.filter(SYSTEM_TABLE_NAME.NODES, (node) => {
+    const candidateRows = this.resolveAvailableNodeCandidateRows();
+    const now = ownerNowMs(this);
+    return candidateRows.filter((node) => {
       const nodeId = node?.node_id || null;
-      if (!nodeId) {
-        return false;
-      }
-      if (effectiveNodeIds instanceof Set && !effectiveNodeIds.has(nodeId)) {
+      if (!nodeId || (effectiveNodeIds instanceof Set && !effectiveNodeIds.has(nodeId))) {
         return false;
       }
       const readinessOptions = {
@@ -231,7 +226,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       if (this.isFormationLivenessDependencyPartition()) {
         readinessOptions.allowStaleOnCacheChange = false;
       }
-      const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
+      const readiness = this.resolveNodeReadinessSyncSnapshot(
         nodeId,
         readinessOptions,
       );
@@ -241,34 +236,71 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
           readinessDecisionDimension,
         )
       ) {
-        return true;
-      }
-      if (
-        !this.isReadinessDimensionSatisfied(
+        return this.isStartupAuthorityPlacementDispatchReady(
+          nodeId,
           readiness,
           readinessDecisionDimension,
-        )
-      ) {
-        // Formation placement carve-out: for the control-plane priority
-        // ledger family and the formation-liveness nodes partition — the
-        // partitions whose spread the join barrier waits on — a node whose
-        // readiness denial is exclusively evidence-absent (a barrier-held
-        // joiner whose planning snapshot has not converged) stays
-        // placement-eligible. Cold formation otherwise deadlocks: the
-        // ledger spread needs a target, targets need readiness, and joiner
-        // readiness waits on the barrier the spread releases. Substantive
-        // denials and every other partition class keep the strict filter;
-        // downstream drain and promotion safety gates (peer-ping, quorum
-        // floor, promotion guard) still apply.
-        return (
-          this.isControlPlanePriorityPartition() ||
-          this.isFormationLivenessDependencyPartition()
-        ) && isEvidenceAbsentReadinessDenialSnapshot(readiness);
+        );
       }
-      return readinessDecisionDimension !==
-        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE ||
-        isNodeReadyNow(this.controlPlaneReadinessService, nodeId);
+      return this.isCandidateActiveLeasedNode(
+        node,
+        readiness,
+        readinessDecisionDimension,
+        now,
+      );
     });
+  }
+
+  /**
+   * Decide whether one active node with a non-expired ready lease satisfies
+   * the requested readiness decision dimension.
+   *
+   * @param {Object} node
+   * @param {Object|null} readiness
+   * @param {string} readinessDecisionDimension
+   * @param {number} now
+   * @return {boolean}
+   * @private
+   */
+  isCandidateActiveLeasedNode(
+    node,
+    readiness,
+    readinessDecisionDimension,
+    now,
+  ) {
+    const liveness = projectNodeLivenessSemantics({nodeRow: node, nowMs: now}).projection;
+    if (liveness.readyNow !== true) {
+      return false;
+    }
+    if (
+      !this.isReadinessDimensionSatisfied(
+        readiness,
+        readinessDecisionDimension,
+      )
+    ) {
+      return false;
+    }
+    return (
+      readinessDecisionDimension !==
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE ||
+      readiness?.dimensions?.[
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
+      ] === true
+    );
+  }
+
+  // The rebalancer's readiness service is the node's one service, a named
+  // collaborator required at construction (requireControlPlaneReadinessService)
+  // and only ever replaced by the coordinator's: every read here calls it.
+  resolveAvailableNodeCandidateRows() {
+    const answer = this.controlPlaneReadinessService.answerCommittedNodes();
+    if (
+      answer?.state === SERVE_ELIGIBILITY_STATE.READY &&
+      Array.isArray(answer.nodeRows)
+    ) {
+      return answer.nodeRows;
+    }
+    return [];
   }
 
   getStartupAuthorityNodeIdSet() {
@@ -425,15 +457,11 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       return null;
     }
     const readinessService = this.controlPlaneReadinessService;
-    // This family has always accepted the candidate derivation as its last
-    // AVAILABLE resort; the surface order says so rather than the mixin chain.
-    const surfaces = AVAILABLE_PLANNING_SURFACE_ORDER.BEST_EFFORT_THEN_CANDIDATE;
-    if (!hasAvailablePlanningProvider(readinessService, surfaces)) {
+    if (!hasAvailablePlanningProvider(readinessService)) {
       return null;
     }
     return readAvailablePlanningSnapshot({
       readinessService,
-      surfaces,
       publicationNodeId: this.nodeId,
       observedAt: readinessService.now(),
     });
@@ -489,14 +517,11 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       Math.floor(options.observedAt) :
       readinessService.now();
 
-    const planningSnapshot =
-      readinessService.getPriorityRecoveryPlanningAnswerSync(
-        publicationNodeId,
-        observedAt,
-      );
-    return planningSnapshot && typeof planningSnapshot === 'object' ?
-      planningSnapshot :
-      null;
+    return readPriorityRecoveryPlanningAnswerSync(
+      readinessService,
+      publicationNodeId,
+      observedAt,
+    );
   }
 
   /**

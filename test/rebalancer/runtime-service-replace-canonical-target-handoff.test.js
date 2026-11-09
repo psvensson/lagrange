@@ -205,6 +205,10 @@ function createRuntimeHandler({
     nodeId,
     systemTableCache: cache,
     cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: {async readAuthoritativeRows(table, _sql, [id]) {
+      const row = cache.get(table, id);
+      return {success: true, rows: row ? [row] : []};
+    }},
     serviceLifecycleManager: createLifecycleManager(
       cache,
       activeEffects,

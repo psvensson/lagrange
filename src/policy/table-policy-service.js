@@ -10,14 +10,14 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {TABLES} from '../constants/index.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {
-  CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_READ_STRATEGY,
 } from '../control-plane/control-plane-system-table-gateway.js';
-import {requireConfirmedSingleRowMutation} from
-  '../control-plane/control-plane-single-row-confirmation.js';
+import {
+  readCommittedPolicyBase,
+  writePolicyConditionally,
+} from './table-policy-committed-base.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
-import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {assertTablePolicyCdcRequestSupported} from '../cache/cdc-table-policy.js';
 import {
   DEFAULT_MESSAGE_GROUP_POLICY,
@@ -27,50 +27,41 @@ import {
   POLICY_ERROR_MSG,
   POLICY_EVENT,
   POLICY_LOG_MSG,
+  POLICY_READ_REASON,
   POLICY_SUBSYSTEM,
   POLICY_VALUE,
 } from './policy-constants.js';
 import {
+  assertValidMessageGroupPolicy,
+  assertValidTablePolicy,
   extractStorageConstraints,
   validateMessageGroupPolicy as validateMessageGroupPolicyFields,
   validatePlacementConstraints as validatePolicyPlacementConstraints,
   validateTablePolicy,
+  policyRefusalReason,
 } from './table-policy-validation.js';
 import {
+  buildPolicyRefusal,
   mergeStoredTablePolicyOverrides,
+  policyReadUnavailable,
+  readConfiguredMessageGroupPolicy,
+  readConfiguredPartitionPolicy,
+  readConfiguredTablePolicy,
   resolveConfiguredTablePolicyDefaults,
+  resolveServiceMessageGroupPolicyFact,
+  resolveServicePartitionPolicyFact,
+  resolveServiceTablePolicyFact,
 } from './table-policy-resolution.js';
 
 const LOCAL_STR_PLACEMENTCONSTRAINTS = 'placementConstraints';
 const LOCAL_STR_OBJECT = 'object';
 const TABLE_POLICY_FUNCTION_TYPE = 'function';
-const LOCAL_STR_COMMA_SPACE = ', ';
-const LOCAL_STR_CRITICAL = 'critical';
-const POLICY_MUTATION_CONFIRMATION = Object.freeze({
-  ownerName: POLICY_SUBSYSTEM.TABLE_POLICY,
-  tableName: TABLES.TABLES,
-  changed: Object.freeze({code: POLICY_ERROR_CODE.OBSERVATION_CHANGED,
-    message: 'The table policy mutation affected no row'}),
-  unconfirmed: Object.freeze({code: POLICY_ERROR_CODE.OUTCOME_UNCONFIRMED,
-    message: 'The table policy mutation application is not confirmed'}),
-});
 
 /**
  * TablePolicyService manages table policies for partition behavior.
- * Policies control splitting thresholds, merging criteria, and replication factors.
+ * Table policies control thresholds, placement constraints and safety limits.
+ * Partition declarations supply replication targets through their sole decoder.
  */
-/**
- * A typed refusal of a policy write: nothing was written.
- * @param {string} code - POLICY_ERROR_CODE value.
- * @param {string} message - Refusal message.
- * @return {Error}
- */
-function buildPolicyRefusal(code, message) {
-  const error = new Error(message);
-  error.code = code;
-  return error;
-}
-
 class TablePolicyService extends EventEmitter {
   /**
    * Create a new TablePolicyService.
@@ -86,6 +77,9 @@ class TablePolicyService extends EventEmitter {
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway || null;
+    this.hasExplicitControlPlaneSystemTableGateway = Boolean(
+      options.controlPlaneSystemTableGateway,
+    );
     // The clock the policy cache's TTL is measured on: injectable so a
     // virtual clock drives expiry (formation-sim); the default is the
     // ambient clock, byte-identical in production. Row stamps written to
@@ -95,7 +89,6 @@ class TablePolicyService extends EventEmitter {
     // Configuration
     const config = ConfigurationManager.getInstance();
     this.defaultTablePolicy = resolveConfiguredTablePolicyDefaults(config);
-    this.defaultReplicaCount = this.defaultTablePolicy.replicaCount;
 
     // Logging
     const loggingService = LoggingService.getInstance();
@@ -136,16 +129,53 @@ class TablePolicyService extends EventEmitter {
     };
   }
 
-  applyCommittedPolicyFence(tableId, row) {
-    const fence = this.committedPolicyFences.get(tableId);
-    if (!fence) {
-      return row;
+  isSupersededByCommittedPolicyFence(fence, row) {
+    if (!row) {
+      return true;
+    }
+    const rowPolicies = row.table_policies ?? null;
+    const rowUpdatedAt = row.updated_at ?? null;
+    if (
+      rowPolicies === fence.table_policies &&
+      rowUpdatedAt === fence.updated_at
+    ) {
+      return false;
     }
     if (
-      row &&
-      (row.table_policies ?? null) === fence.previousTablePolicies &&
-      (row.updated_at ?? null) === fence.previousUpdatedAt
+      Array.isArray(fence.supersededSnapshots) &&
+      fence.supersededSnapshots.some(
+        (snapshot) =>
+          snapshot.table_policies === rowPolicies &&
+          snapshot.updated_at === rowUpdatedAt,
+      )
     ) {
+      return true;
+    }
+    return (
+      Number.isFinite(rowUpdatedAt) &&
+      Number.isFinite(fence.updated_at) &&
+      rowUpdatedAt < fence.updated_at
+    );
+  }
+
+  isStaleAgainstCommittedPolicyFence(tableId, row) {
+    const fence = this.committedPolicyFences.get(tableId);
+    if (!fence) {
+      return false;
+    }
+    if (this.isSupersededByCommittedPolicyFence(fence, row)) {
+      return true;
+    }
+    this.committedPolicyFences.delete(tableId);
+    return false;
+  }
+
+  applyCommittedPolicyFence(tableId, row) {
+    const fence = this.committedPolicyFences.get(tableId);
+    if (!fence || !row) {
+      return row;
+    }
+    if (this.isSupersededByCommittedPolicyFence(fence, row)) {
       return {
         ...row,
         table_policies: fence.table_policies,
@@ -216,49 +246,59 @@ class TablePolicyService extends EventEmitter {
     return null;
   }
 
+  hasCachedReadSource() {
+    return Boolean(this.systemTableCache);
+  }
+
+  hasSystemTableGatewayReadSource() {
+    return Boolean(
+      this.sqlQueryEngine ||
+      this.cdcIntegrationService?.executeAuthoritativeSystemTableRead ||
+      this.hasExplicitControlPlaneSystemTableGateway,
+    );
+  }
+
+  hasConfiguredReadSource() {
+    return this.hasCachedReadSource() || this.hasSystemTableGatewayReadSource();
+  }
+
+  hasAuthoritativeSystemTableReadSource() {
+    return Boolean(
+      typeof this.cdcIntegrationService?.executeAuthoritativeSystemTableRead ===
+        TABLE_POLICY_FUNCTION_TYPE ||
+      (this.hasExplicitControlPlaneSystemTableGateway &&
+        typeof this.controlPlaneSystemTableGateway?.readAuthoritativeRows ===
+          TABLE_POLICY_FUNCTION_TYPE),
+    );
+  }
+
+  async resolveTablePolicyFact(tableId, options = {}) {
+    return resolveServiceTablePolicyFact(this, tableId, options);
+  }
+
+  async resolvePartitionPolicyFact(partitionId, options = {}) {
+    return resolveServicePartitionPolicyFact(this, partitionId, options);
+  }
+
   /**
    * Get the policy for a specific table.
    * @param {string} tableId - Table ID.
    * @return {Promise<Object>} Table policy (merged with defaults).
    */
   async getTablePolicy(tableId) {
-    if (!tableId) {
-      return this.getDefaultPolicy();
+    if (!this.hasConfiguredReadSource()) {
+      throw policyReadUnavailable(POLICY_READ_REASON.TABLE_UNAVAILABLE, {
+        tableId,
+      });
     }
-
-    // Check local cache first
-    const cached = this.policyCache.get(tableId);
-    const cachedTableRow = this.lookupCachedTable(tableId);
-    if (
-      cached &&
-      this.now() - cached.timestamp < this.cacheTTLMs &&
-      (!cachedTableRow ||
-        (cachedTableRow.table_policies ?? null) === cached.rawTablePolicies)
-    ) {
-      return cached.policy;
-    }
-
-    const table = await this.readTableRow(tableId);
-    if (!table) {
-      this.logger.debug(
-        POLICY_LOG_MSG.TABLE_NOT_FOUND_DEFAULT, {tableId},
+    try {
+      return await readConfiguredTablePolicy(this, tableId);
+    } catch (cause) {
+      throw policyReadUnavailable(
+        policyRefusalReason(cause, POLICY_READ_REASON.READ_FAILED),
+        {cause, tableId},
       );
-      return this.getDefaultPolicy();
     }
-
-    const storedPolicy = this.parseStoredTablePolicy(table, tableId);
-
-    // Merge with defaults
-    const mergedPolicy = this.mergeWithDefaults(storedPolicy);
-
-    // Update cache
-    this.policyCache.set(tableId, {
-      policy: mergedPolicy,
-      rawTablePolicies: table.table_policies ?? null,
-      timestamp: this.now(),
-    });
-
-    return mergedPolicy;
   }
 
   /**
@@ -267,16 +307,19 @@ class TablePolicyService extends EventEmitter {
    * @return {Promise<Object>} Table policy for the partition's table.
    */
   async getPolicyForPartition(partitionId) {
-    const partition = await this.readPartitionRow(partitionId);
-    if (!partition) {
-      this.logger.debug(
-        POLICY_LOG_MSG.PARTITION_NOT_FOUND_DEFAULT,
-        {partitionId},
-      );
-      return this.getDefaultPolicy();
+    if (!this.hasConfiguredReadSource()) {
+      throw policyReadUnavailable(POLICY_READ_REASON.PARTITION_UNAVAILABLE, {
+        partitionId,
+      });
     }
-
-    return this.getTablePolicy(partition.table_id);
+    try {
+      return await readConfiguredPartitionPolicy(this, partitionId);
+    } catch (cause) {
+      throw policyReadUnavailable(
+        policyRefusalReason(cause, POLICY_READ_REASON.READ_FAILED),
+        {cause, partitionId},
+      );
+    }
   }
 
   /**
@@ -302,18 +345,17 @@ class TablePolicyService extends EventEmitter {
   }
 
   parseStoredTablePolicy(table, tableId) {
-    if (!table?.table_policies) {
-      return POLICY_VALUE.EMPTY_POLICY;
-    }
     try {
-      return typeof table.table_policies === 'string' ?
-        JSON.parse(table.table_policies) : table.table_policies;
+      const raw = table.table_policies ?? POLICY_VALUE.EMPTY_POLICY;
+      return assertValidTablePolicy(typeof raw === 'string' ? JSON.parse(raw) : raw);
     } catch (error) {
       this.logger.warn(POLICY_LOG_MSG.POLICY_PARSE_FAILED, {
         tableId,
         error: error.message,
       });
-      throw error;
+      throw policyReadUnavailable(POLICY_READ_REASON.POLICY_INVALID, {
+        cause: error, tableId,
+      });
     }
   }
 
@@ -353,34 +395,22 @@ class TablePolicyService extends EventEmitter {
         POLICY_ERROR_MSG.TABLE_ID_REQUIRED);
     }
 
+    // Validate the policy updates; a request for external CDC is refused typed.
+    assertTablePolicyCdcRequestSupported(policyUpdates);
+    assertValidTablePolicy(policyUpdates);
+
     if (!this.cdcIntegrationService) {
       throw new Error(POLICY_ERROR_MSG.CDC_REQUIRED_FOR_UPDATE);
     }
 
-    // Validate the policy updates; a request for external CDC is refused typed.
-    assertTablePolicyCdcRequestSupported(policyUpdates);
-    const validation = this.validatePolicy(policyUpdates);
-    if (!validation.valid) {
-      throw buildPolicyRefusal(POLICY_ERROR_CODE.POLICY_INVALID,
-        `${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_COMMA_SPACE)}`);
-    }
-
-    const table = await this.readTableRow(tableId);
+    const table = await readCommittedPolicyBase(this, tableId);
     const storedPolicy = this.parseStoredTablePolicy(table, tableId);
     const currentPolicy = this.mergeWithDefaults(storedPolicy);
     const updatedStoredPolicy = mergeStoredTablePolicyOverrides(
       storedPolicy,
       policyUpdates,
     );
-    const newPolicy = this.mergeWithDefaults(updatedStoredPolicy);
-
-    // Validate the merged policy
-    const mergedValidation = this.validatePolicy(newPolicy);
-    if (!mergedValidation.valid) {
-      throw buildPolicyRefusal(POLICY_ERROR_CODE.POLICY_INVALID,
-        `${POLICY_ERROR_MSG.INVALID_MERGED_POLICY_PREFIX}${mergedValidation.errors.join(LOCAL_STR_COMMA_SPACE)}`,
-      );
-    }
+    const newPolicy = assertValidTablePolicy(this.mergeWithDefaults(updatedStoredPolicy));
 
     this.logger.info(POLICY_LOG_MSG.UPDATE_TABLE_POLICY, {
       tableId,
@@ -391,26 +421,26 @@ class TablePolicyService extends EventEmitter {
       const serializedPolicy = JSON.stringify(updatedStoredPolicy);
       const updatedAt = Date.now();
       // Update via CDC integration service
-      const mutationResult = await this.getControlPlaneSystemTableGateway().submitMutation({
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-        tableName: TABLES.TABLES,
-        whereClause: {table_id: tableId},
-        data: {
-          table_policies: serializedPolicy,
-          updated_at: updatedAt,
-        },
-      }, {
-        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: LOCAL_STR_CRITICAL,
-        expectedCacheFields: {table_policies: serializedPolicy},
-        minimumCacheFields: {updated_at: updatedAt},
-      });
+      await writePolicyConditionally(this, tableId, table, serializedPolicy,
+        updatedAt);
 
-      requireConfirmedSingleRowMutation(mutationResult, POLICY_MUTATION_CONFIRMATION);
-
+      const existingFence = this.committedPolicyFences.get(tableId);
+      const priorSnapshot = {
+        table_policies: table?.table_policies ?? null,
+        updated_at: table?.updated_at ?? null,
+      };
+      const supersededSnapshots = existingFence ?
+        [
+          ...(existingFence.supersededSnapshots || []),
+          {
+            table_policies: existingFence.table_policies,
+            updated_at: existingFence.updated_at,
+          },
+          priorSnapshot,
+        ] :
+        [priorSnapshot];
       this.committedPolicyFences.set(tableId, {
-        previousTablePolicies: table?.table_policies ?? null,
-        previousUpdatedAt: table?.updated_at ?? null,
+        supersededSnapshots,
         table_policies: serializedPolicy,
         updated_at: updatedAt,
       });
@@ -436,29 +466,6 @@ class TablePolicyService extends EventEmitter {
       });
       throw error;
     }
-  }
-
-  /**
-   * Set the complete policy for a table (replaces existing).
-   * @param {string} tableId - Table ID.
-   * @param {Object} policy - Complete policy object.
-   * @return {Promise<Object>} Update result.
-   */
-  async setTablePolicy(tableId, policy) {
-    if (!tableId) {
-      throw new Error(POLICY_ERROR_MSG.TABLE_ID_REQUIRED);
-    }
-
-    // Merge with defaults to ensure all fields are present
-    const completePolicy = this.mergeWithDefaults(policy);
-
-    // Validate
-    const validation = this.validatePolicy(completePolicy);
-    if (!validation.valid) {
-      throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_COMMA_SPACE)}`);
-    }
-
-    return this.updateTablePolicy(tableId, completePolicy);
   }
 
   /**
@@ -488,20 +495,6 @@ class TablePolicyService extends EventEmitter {
   }
 
   /**
-   * Get replication settings for a table.
-   * @param {string} tableId - Table ID.
-   * @return {Promise<Object>} Replication settings.
-   */
-  async getReplicationSettings(tableId) {
-    const policy = await this.getTablePolicy(tableId);
-    return {
-      replicaCount: policy.replicaCount,
-      minReplicaCount: policy.minReplicaCount,
-      maxReplicaCount: policy.maxReplicaCount,
-    };
-  }
-
-  /**
    * Get placement constraints for a table.
    * @param {string} tableId - Table ID.
    * @return {Promise<Object>} Placement constraints.
@@ -523,6 +516,27 @@ class TablePolicyService extends EventEmitter {
     };
   }
 
+  parseStoredMessageGroupPolicy(group, groupId) {
+    try {
+      const raw = group.policy ?? POLICY_VALUE.EMPTY_POLICY;
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return assertValidMessageGroupPolicy(parsed);
+    } catch (error) {
+      this.logger.warn(POLICY_LOG_MSG.POLICY_PARSE_FAILED, {
+        groupId,
+        error: error.message,
+      });
+      throw policyReadUnavailable(POLICY_READ_REASON.POLICY_INVALID, {
+        cause: error,
+        groupId,
+      });
+    }
+  }
+
+  async resolveMessageGroupPolicyFact(groupId, options = {}) {
+    return resolveServiceMessageGroupPolicyFact(this, groupId, options);
+  }
+
   /**
    * Get the policy for a specific message group.
    * Reads from the message_groups table and merges with defaults.
@@ -530,54 +544,20 @@ class TablePolicyService extends EventEmitter {
    * @return {Promise<Object>} Message group policy (merged with defaults).
    */
   async getMessageGroupPolicy(groupId) {
-    if (!groupId) {
-      return this.getDefaultMessageGroupPolicy();
-    }
-
-    // Check local cache
-    const cacheKey = `mg:${groupId}`;
-    const cached = this.policyCache.get(cacheKey);
-    if (cached && this.now() - cached.timestamp < this.cacheTTLMs) {
-      return cached.policy;
-    }
-
-    // Prefer the propagated system cache when available. Joining nodes may
-    // observe newly registered self-hosted message-group metadata here before
-    // a routed SQL engine is available.
-    const group = await this.readMessageGroupRow(groupId);
-    if (!group) {
-      this.logger.debug(
-        POLICY_LOG_MSG.MESSAGE_GROUP_NOT_FOUND_DEFAULT, {groupId},
+    if (!this.hasConfiguredReadSource()) {
+      throw policyReadUnavailable(
+        POLICY_READ_REASON.MESSAGE_GROUP_UNAVAILABLE,
+        {groupId},
       );
-      return this.getDefaultMessageGroupPolicy();
     }
-
-    // Parse stored policy
-    let storedPolicy = POLICY_VALUE.EMPTY_POLICY;
-    if (group.policy) {
-      try {
-        storedPolicy = typeof group.policy === 'string' ?
-          JSON.parse(group.policy) : group.policy;
-      } catch (error) {
-        this.logger.warn(POLICY_LOG_MSG.POLICY_PARSE_FAILED, {
-          groupId,
-          error: error.message,
-        });
-        throw error;
-      }
+    try {
+      return await readConfiguredMessageGroupPolicy(this, groupId);
+    } catch (cause) {
+      throw policyReadUnavailable(
+        policyRefusalReason(cause, POLICY_READ_REASON.READ_FAILED),
+        {cause, groupId},
+      );
     }
-
-    // Merge with defaults
-    const mergedPolicy =
-      this.mergeMessageGroupWithDefaults(storedPolicy);
-
-    // Update cache
-    this.policyCache.set(cacheKey, {
-      policy: mergedPolicy,
-      timestamp: this.now(),
-    });
-
-    return mergedPolicy;
   }
 
   /**
@@ -698,14 +678,20 @@ class TablePolicyService extends EventEmitter {
           return row ? [row] : [];
         },
       });
-      return result.rows?.[0] || null;
+      if (!result || result.success === false || !Array.isArray(result.rows)) {
+        throw policyReadUnavailable(POLICY_READ_REASON.READ_FAILED, {tableId});
+      }
+      return result.rows[0] || null;
     }
     const result = await this.getControlPlaneSystemTableGateway().readRows(
       TABLES.TABLES,
       'SELECT * FROM tables WHERE table_id = ?',
       [tableId],
     );
-    return result.rows?.[0] || null;
+    if (!result || result.success === false || !Array.isArray(result.rows)) {
+      throw policyReadUnavailable(POLICY_READ_REASON.READ_FAILED, {tableId});
+    }
+    return result.rows[0] || null;
   }
 
   async readPartitionRow(partitionId) {
@@ -718,14 +704,24 @@ class TablePolicyService extends EventEmitter {
           return row ? [row] : [];
         },
       });
-      return result.rows?.[0] || null;
+      if (!result || result.success === false || !Array.isArray(result.rows)) {
+        throw policyReadUnavailable(POLICY_READ_REASON.READ_FAILED, {
+          partitionId,
+        });
+      }
+      return result.rows[0] || null;
     }
     const result = await this.getControlPlaneSystemTableGateway().readRows(
       TABLES.PARTITIONS,
       'SELECT * FROM partitions WHERE partition_id = ?',
       [partitionId],
     );
-    return result.rows?.[0] || null;
+    if (!result || result.success === false || !Array.isArray(result.rows)) {
+      throw policyReadUnavailable(POLICY_READ_REASON.READ_FAILED, {
+        partitionId,
+      });
+    }
+    return result.rows[0] || null;
   }
 
   async readMessageGroupRow(groupId) {
@@ -738,14 +734,20 @@ class TablePolicyService extends EventEmitter {
           return row ? [row] : [];
         },
       });
-      return result.rows?.[0] || null;
+      if (!result || result.success === false || !Array.isArray(result.rows)) {
+        throw policyReadUnavailable(POLICY_READ_REASON.READ_FAILED, {groupId});
+      }
+      return result.rows[0] || null;
     }
     const result = await this.getControlPlaneSystemTableGateway().readRows(
       TABLES.MESSAGE_GROUPS,
       'SELECT * FROM message_groups WHERE group_id = ?',
       [groupId],
     );
-    return result.rows?.[0] || null;
+    if (!result || result.success === false || !Array.isArray(result.rows)) {
+      throw policyReadUnavailable(POLICY_READ_REASON.READ_FAILED, {groupId});
+    }
+    return result.rows[0] || null;
   }
 
   getControlPlaneSystemTableGateway() {

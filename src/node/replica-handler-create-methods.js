@@ -1,4 +1,6 @@
 import {WORKFLOW_STEP} from '../constants/index.js';
+import {REPLICA_CREATE_PHASE, failedReplicaCreateClaimsCleanup,
+  replicaCreatePhaseAfterResume} from './replica-create-admission-input.js';
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
 import {
   ReplicaOperationMessageType,
@@ -12,6 +14,10 @@ import {
 } from './replica-create-admission-owner.js';
 import {assignReplicaHandlerCreateAdmissionMethods} from
   './replica-handler-create-admission-methods.js';
+import {
+  isSupersededAdmissionError,
+  retireSupersededCreateAdmissionRuntime,
+} from './replica-create-admission-retained-recovery.js';
 import {REPLICA_CLEANUP_ERROR_CODE} from
   './replica-cleanup-tombstone-owner.js';
 import * as priorExistence from './replica-prior-existence.js';
@@ -92,16 +98,59 @@ function armCreateAdmissionRecoveryRearm(handler) {
   );
 }
 
-async function settleCreateAdmissionProgress(handler, evidence, nextState) {
-  if (!evidence) return;
+function lostBootPhysicalWorkerError(message) {
+  return Object.assign(
+    new Error(message),
+    {
+      code: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+      errorCode: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+      deferRetry: true,
+      bootAuthorityUnavailable: true,
+      bootIncarnationSuperseded: true,
+    },
+  );
+}
+
+async function settleCreateAdmissionProgress(
+  handler,
+  evidence,
+  nextState,
+  {replicaId = null, partitionId = null, partitionService = null} = {},
+) {
+  if (!evidence) return true;
   try {
     const progressed = await handler.getReplicaCreateAdmissionOwner()
       .markProgress(evidence, nextState);
     if (!progressed) armCreateAdmissionRecoveryRearm(handler);
+    return true;
   } catch (error) {
-    if (error?.bootAuthorityUnavailable === true) throw error;
-    armCreateAdmissionRecoveryRearm(handler);
+    return settleCreateAdmissionProgressFailure(handler, evidence, error,
+      {replicaId, partitionId, partitionService});
   }
+}
+
+// A progress mark that threw: a superseded admission retires its runtime
+// (the create does not proceed); any other failure re-arms recovery.
+async function settleCreateAdmissionProgressFailure(
+  handler,
+  evidence,
+  error,
+  {replicaId, partitionId, partitionService},
+) {
+  if (isSupersededAdmissionError(error)) {
+    await retireSupersededCreateAdmissionRuntime(handler, {
+      replicaId,
+      partitionId,
+      operationId: evidence.operationId,
+      admissionToken: evidence.admissionToken,
+      attemptToken: evidence.attemptToken,
+      partitionService,
+      error,
+    });
+    return false;
+  }
+  armCreateAdmissionRecoveryRearm(handler);
+  return true;
 }
 
 function assignReplicaHandlerCreateMethods(ReplicaHandler) {
@@ -198,16 +247,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               const evidence = request?.createAdmissionEvidence;
               if (evidence && !await this.getReplicaCreateAdmissionOwner()
                 .revalidatePhysicalWorker(request.createPhysicalWorkerClaim)) {
-                throw Object.assign(
-                  new Error(
-                    `Current boot lost before queued CREATE ${operationId}`,
-                  ),
-                  {
-                    code: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-                    errorCode: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-                    deferRetry: true,
-                    bootAuthorityUnavailable: true,
-                  },
+                throw lostBootPhysicalWorkerError(
+                  `Current boot lost before queued CREATE ${operationId}`,
                 );
               }
               createStarted = true;
@@ -220,6 +261,10 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
                 this.inProgressOperations.delete(operationId);
                 this.localServices.delete(replicaId);
                 this.localReplicas.delete(replicaId);
+                if (error?.bootAuthorityUnavailable === true &&
+                    error?.bootIncarnationSuperseded !== true) {
+                  armCreateAdmissionRecoveryRearm(this);
+                }
               }
               this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED, {
                 operationId,
@@ -263,7 +308,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         partitionId,
         replicaId,
         bootstrapReplicaIds,
-        bootstrapPeerAddresses,
         bootstrapTableMetadata,
         bootstrapPartitionMetadata,
         bootstrapMembership,
@@ -281,6 +325,10 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         peerTotal: 0,
       });
       let partitionService = null;
+      // A restart of this identity's own admissible durable row (B1) already
+      // carries published admission input before any step of this attempt.
+      let createPhase = replicaCreatePhaseAfterResume(
+        REPLICA_CREATE_PHASE.BEFORE_RUNTIME, request.resumedLifecycleStatus);
       try {
         this.throwIfShuttingDown();
         await this.settlePendingReplicaRuntimeCleanup(replicaId, partitionId);
@@ -310,6 +358,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           createAdmissionEvidence =
             initialStatusOptions.createAdmissionEvidence;
           createAttemptToken = initialStatusOptions.createAttemptToken;
+          createPhase = replicaCreatePhaseAfterResume(
+            createPhase, initialStatusOptions.resumedLifecycleStatus);
         } else {
           this.setLocalReplica(replicaId, {
             replicaId,
@@ -330,7 +380,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           replicaId,
           {
             bootstrapReplicaIds,
-            bootstrapPeerAddresses,
             bootstrapTableMetadata,
             bootstrapPartitionMetadata,
             bootstrapMembership,
@@ -343,9 +392,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           tableId,
           schema,
           keyRange,
-          leaderAddress,
           replicaIds,
-          peerAddresses,
           existingReplicaCount,
         } = context;
         // Generate database path
@@ -362,25 +409,16 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         if (createAdmissionEvidence &&
             !await this.getReplicaCreateAdmissionOwner()
               .revalidatePhysicalWorker(request.createPhysicalWorkerClaim)) {
-          throw Object.assign(
-            new Error(`Current boot lost before physical CREATE ${operationId}`),
-            {
-              code: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-              errorCode: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-              deferRetry: true,
-              bootAuthorityUnavailable: true,
-            },
+          throw lostBootPhysicalWorkerError(
+            `Current boot lost before physical CREATE ${operationId}`,
           );
         }
         partitionService = await this.createPartitionService({
           partitionId, tableId, tableName, schema, keyRange,
           replicaId,
           replicaIds,
-          peerAddresses: peerAddresses || [],
-          // Pass unified peer addresses for routing
           nodeId: this.nodeId,
           dbPath,
-          leaderAddress,
           isJoiningExistingGroup,
           bootstrapMembership: context.bootstrapMembership,
           identityExisted: existed,
@@ -392,6 +430,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             this.updateReplicaCreationProgress(progress, stageEvent),
           resolveHandlerRetirementLane: () => this.replicaStateMachine,
         });
+        createPhase = REPLICA_CREATE_PHASE.RUNTIME_OPENED;
         if (
           this.shuttingDown &&
           typeof partitionService.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION
@@ -400,12 +439,28 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         }
         this.throwIfShuttingDown();
         // Store service reference in localServices
+        const admissionOperationId =
+          createAdmissionEvidence?.operationId || operationId || null;
+        const admissionToken =
+          createAdmissionEvidence?.admissionToken || null;
+        const admissionAttemptToken =
+          createAdmissionEvidence?.attemptToken ||
+          request.createAttemptToken ||
+          null;
+        if (partitionService && typeof partitionService === REPLICA_HANDLER_TYPEOF.OBJECT) {
+          partitionService.createAdmissionOperationId = admissionOperationId;
+          partitionService.createAdmissionToken = admissionToken;
+          partitionService.createAttemptToken = admissionAttemptToken;
+        }
         this.localServices.set(replicaId, partitionService);
         this.setLocalReplica(replicaId, {
           replicaId,
           partitionId,
           tableName,
           service: partitionService,
+          createAdmissionOperationId: admissionOperationId,
+          createAdmissionToken: admissionToken,
+          createAttemptToken: admissionAttemptToken,
         });
         // Emit syncing outcome - coordinator will transition workflow.
         this.emitExecutorOutcome(
@@ -428,12 +483,14 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             service: partitionService,
           });
         }
-        // Sync from leader if address provided
-        const service = this.localServices.get(replicaId);
-        if (service && leaderAddress) {
-          if (typeof service.syncFromLeader === REPLICA_HANDLER_TYPEOF.FUNCTION) {
-            await service.syncFromLeader(leaderAddress);
-          }
+        // The SYNCING fact is committed: ask the partition leader to admit
+        // this replica from its committed operation (quest
+        // replica-admission-from-committed-operation). A pending answer is
+        // re-sent on the learner-promotion cadence; it never fails the
+        // create.
+        if (isJoiningExistingGroup && !skipLifecycleStatusPersistence &&
+            typeof operationId === 'string' && operationId.length > 0) {
+          await partitionService.requestReplicaAdmission(operationId);
         }
         this.throwIfShuttingDown();
         if (
@@ -492,11 +549,21 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               createAttemptToken,
             },
           );
-          await settleCreateAdmissionProgress(
+          const settled = await settleCreateAdmissionProgress(
             this,
             createAdmissionEvidence,
             CREATE_ADMISSION_STATE.ACTIVE,
+            {replicaId, partitionId, partitionService},
           );
+          if (settled === false) {
+            this.failReplicaCreationProgress(progress, null);
+            if (operationId) {
+              this.inProgressOperations.delete(operationId);
+              this.getReplicaCreateAdmissionOwner()
+                .releasePhysicalWorker(request.createPhysicalWorkerClaim);
+            }
+            return;
+          }
         } else {
           this.setLocalReplica(replicaId, {
             replicaId,
@@ -578,6 +645,9 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           }
           this.localServices.delete(replicaId);
           this.localReplicas.delete(replicaId);
+          if (error?.bootIncarnationSuperseded !== true) {
+            armCreateAdmissionRecoveryRearm(this);
+          }
           throw error;
         }
         await this.fenceFailedReplicaCreateRuntime(
@@ -594,6 +664,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           error: error.message,
           stack: error.stack,
         });
+        const claimCleanup = failedReplicaCreateClaimsCleanup(createPhase, error);
         const failedOutcomeOptions = {
           replicaId,
           partitionId,
@@ -614,7 +685,9 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         ) {
           failedOutcomeOptions.retryAfterMs = Math.floor(error.retryAfterMs);
         }
-        if (error?.deferRetry === true) {
+        // A claimed failure is terminal for its identity: the failed-create
+        // cleanup owner removes it, so the coordinator must not re-dispatch it.
+        if (error?.deferRetry === true && !claimCleanup) {
           failedOutcomeOptions.deferRetry = true;
         }
         try {
@@ -625,7 +698,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               replicaId,
               partitionId,
               errorMessage: error.message,
-              claimCleanup: error?.deferRetry !== true,
+              claimCleanup,
               createAdmissionEvidence,
               createAttemptToken,
             });

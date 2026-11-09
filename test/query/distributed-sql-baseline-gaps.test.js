@@ -12,6 +12,7 @@ import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
@@ -160,6 +161,7 @@ test('baseline gap: SQLQueryEngine JOIN requires explicit join partition plannin
   });
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createJoinDataRouter(partitionData),
   });
@@ -199,6 +201,7 @@ test('baseline gap: parameterized pruning should route to a single partition', a
   dataByPartition.set('p2', [{id: 'zack', name: 'zack'}]);
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: cache,
     messageRouter: createJoinDataRouter(dataByPartition),
   });
@@ -219,6 +222,7 @@ test('baseline gap: executeSelect must not truncate target partitions', async (t
     partitionIds.map((partitionId, idx) => [partitionId, [{id: idx}]]),
   );
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createJoinDataRouter(dataByPartition),
     systemCache: createSystemCache({
       services: createPartitionServiceRows(partitionIds),
@@ -253,6 +257,7 @@ test('baseline gap: distributed read should fail-closed on required participant 
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: failingRouter,
     systemCache: createSystemCache({
       partitions: createCanonicalPartitionRows(['p1', 'p2']),
@@ -291,6 +296,7 @@ test('baseline gap: multi-partition UPDATE surfaces partial failure', async (t) 
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: failingRouter,
     systemCache: createSystemCache({
       partitions: createCanonicalPartitionRows(['p1', 'p2']),

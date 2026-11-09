@@ -194,12 +194,10 @@ test('PartitionService - publishes leader state as follower metadata in services
   );
 
   t.ok(roleUpdate, 'raft role update should be persisted via CDC');
-  t.same(
+  t.equal(
     roleUpdate?.options?.expectedCacheFields,
-    {
-      raft_role: RaftRole.FOLLOWER,
-    },
-    'cache visibility should converge only the published role field',
+    undefined,
+    'the role update carries no projection-field wait: writes answer at their commit',
   );
   t.equal(
     roleUpdate?.options?.routingReadinessDimension,
@@ -358,12 +356,10 @@ test('PartitionService - retries raft role persistence after cache visibility fa
     let roleUpdates = updates.filter(
       (update) => update.tableName === SYSTEM_TABLE_NAME.SERVICES,
     );
-    t.same(
+    t.equal(
       roleUpdates[0]?.options?.expectedCacheFields,
-      {
-        raft_role: RaftRole.FOLLOWER,
-      },
-      'retryable role persistence should only wait for the published role visibility',
+      undefined,
+      'retryable role persistence carries no projection-field wait: writes answer at their commit',
     );
 
     await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -715,7 +711,7 @@ test(
       deleteSystemTableRow: async () => ({success: true}),
     };
     partition.tablePolicyService = {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
     };
     partition.messageRouter = {
       getConnectionState: () => 'connected',
@@ -783,7 +779,7 @@ test(
       deleteSystemTableRow: async () => ({success: true}),
     };
     partition.tablePolicyService = {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
     };
     partition.messageRouter = {
       getConnectionState: () => 'connected',
@@ -876,10 +872,10 @@ test('PartitionService - persists leader node updates to partitions table', asyn
   );
 
   t.ok(leaderUpdate, 'leader node update should be persisted via CDC');
-  t.same(
+  t.equal(
     leaderUpdate?.options?.expectedCacheFields,
-    {leader_node_id: 'seed-node'},
-    'cache visibility should only depend on leader identity',
+    undefined,
+    'the leader update carries no projection-field wait: writes answer at their commit',
   );
   t.equal(
     leaderUpdate?.options?.routingReadinessDimension,
@@ -1144,6 +1140,12 @@ test('PartitionService - retries leader node persistence after cache visibility 
     const updates = [];
     const mockCdcIntegrationService = {
       updateSystemTableRow: async (tableName, whereClause, data, options) => {
+        // The leader's own size_bytes writes no longer wait on the
+        // projection's partition row (census site 7), so only the
+        // leader_node_id writes are this witness's subject.
+        if (!(COLUMN.LEADER_NODE_ID in data)) {
+          return {success: true, partitionResult: {affectedRows: 1}};
+        }
         updates.push({tableName, whereClause, data, options});
         if (updates.length === 1) {
           throw new Error(
@@ -1186,10 +1188,10 @@ test('PartitionService - retries leader node persistence after cache visibility 
     await partition.initialize();
     await new Promise((resolve) => setImmediate(resolve));
 
-    t.same(
+    t.equal(
       updates[0]?.options?.expectedCacheFields,
-      {leader_node_id: 'seed-node'},
-      'retryable leader persistence should only wait on leader_node_id visibility',
+      undefined,
+      'retryable leader persistence carries no projection-field wait: writes answer at their commit',
     );
 
     await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -1289,7 +1291,7 @@ test('PartitionService - initializeRebalancer passes sqlQueryEngine to gateway',
       deleteSystemTableRow: async () => ({success: true}),
     };
     const mockTablePolicyService = {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
     };
     const mockMessageRouter = {
       getConnectionState: () => 'connected',
@@ -1373,7 +1375,7 @@ async (t) => {
     deleteSystemTableRow: async () => ({success: true}),
   };
   const mockTablePolicyService = {
-    getPolicyForPartition: () => ({targetReplicaCount: 3}),
+    getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
   };
   const mockMessageRouter = {
     getConnectionState: () => 'connected',

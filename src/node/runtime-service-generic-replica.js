@@ -7,41 +7,48 @@ import {ReplicaOperationMessageType, ReplicaOperationResponseStatus} from
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
 import {currentExecution, releaseExecution, executionRefusal,
   replyToGenericExecutionGate} from './runtime-service-creation-execution.js';
-import {RUNTIME_SERVICE_HANDLER_ERROR_MSG, RUNTIME_SERVICE_HANDLER_LOG_MSG} from
+import {RUNTIME_SERVICE_HANDLER_LOG_MSG} from
   './runtime-service-handler-constants.js';
 
-function genericCreateHandle(handler, entityId, replicaId) {
-  const definition = handler.resolveServiceDefinition(entityId);
-  if (!definition) {
-    const definitionNotFound =
-      RUNTIME_SERVICE_HANDLER_ERROR_MSG.DEFINITION_NOT_FOUND;
-    throw new Error(definitionNotFound(entityId));
-  }
+const BOOLEAN_TYPE = 'boolean';
+
+function buildGenericFailedOutcomeOptions(replicaId, error) {
+  return {
+    replicaId,
+    errorMessage: error.message,
+    ...(error?.errorCode ? {errorCode: error.errorCode} : {}),
+    ...(typeof error?.deferRetry === BOOLEAN_TYPE ?
+      {deferRetry: error.deferRetry} :
+      {}),
+  };
+}
+
+function genericCreateHandle(handler, entityId, replicaId, resolution) {
+  const definition = resolution.definition;
 
   return {
+    ...definition,
     serviceId: replicaId,
     serviceType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
     replicaId,
     entityId,
     nodeId: handler.nodeId,
-    ...definition,
     // service_definitions rows are stored snake_case, but the runtime
     // descriptor validator (and adapter) read camelCase. Provide the
-    // camelCase runtime fields additively so a placed replica validates;
-    // without this every runtime-service create fails "runtime_kind is
-    // required". (Accept an already-camelCase definition too.)
-    runtimeKind: definition.runtime_kind ?? definition.runtimeKind ?? null,
-    runtimeRef: definition.runtime_ref ?? definition.runtimeRef ?? null,
+    // camelCase runtime fields at this representation boundary.
+    runtimeKind: definition.runtime_kind ?? null,
+    runtimeRef: definition.runtime_ref ?? null,
     runtimeConfig:
-        definition.runtime_config ?? definition.runtimeConfig ?? null,
+        definition.runtime_config ?? null,
   };
 }
 
-async function createGenericReplica(handler, params, entry) {
+async function createGenericReplica(handler, params, entry, resolution) {
   if (!currentExecution(handler, entry) || entry.params !== params) return;
   const {operationId, entityId, replicaId} = params;
   try {
-    const replicaHandle = genericCreateHandle(handler, entityId, replicaId);
+    const replicaHandle = genericCreateHandle(handler, entityId, replicaId, resolution);
+    if (!currentExecution(handler, entry)) return;
 
     await handler.serviceLifecycleManager.createReplica(
       replicaHandle, {nodeId: handler.nodeId},
@@ -74,7 +81,10 @@ async function createGenericReplica(handler, params, entry) {
   } catch (error) {
     if (!currentExecution(handler, entry)) return;
     handler.localReplicas.set(replicaId, {
-      replicaId, entityId, status: ReplicaStatus.FAILED,
+      replicaId,
+      entityId,
+      status: ReplicaStatus.FAILED,
+      ...(error?.deferRetry === true ? {deferRetry: true} : {}),
     });
 
     // Emit failed outcome — coordinator will transition workflow.
@@ -82,7 +92,7 @@ async function createGenericReplica(handler, params, entry) {
       EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_FAILED,
       operationId,
       WORKFLOW_STEP.FAILED,
-      {replicaId, errorMessage: error.message},
+      buildGenericFailedOutcomeOptions(replicaId, error),
     );
 
     handler.logger.error(

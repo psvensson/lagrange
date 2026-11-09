@@ -725,7 +725,7 @@ test('SN1/F5: lagging established follower catches up via snapshot install, ' +
     const decisions = [];
     r1.onSnapshotCatchupNeeded = (decision) => decisions.push(decision);
     router.register(r3.getUnifiedAddress(), r3.transportHandler);
-    await turnChainValue(r1.raft.probePeerProgress(r3.getUnifiedAddress()));
+    await turnChainValue(r1.raft.probePeerProgress(r3.replicaId));
     await waitFor(
       () => decisions.length > 0,
       'leader emits INSTALL_SNAPSHOT catch-up decision for lagging r3');
@@ -806,7 +806,7 @@ test('SN1/F5: lagging established follower catches up via snapshot install, ' +
 
     // Now drive a heartbeat/probe from r1 to replacementR3 so raft-rs exits
     // ProgressState::Snapshot and replicates suffix rows 5 and 6!
-    await turnChainValue(r1.raft.probePeerProgress(replacementR3.getUnifiedAddress()));
+    await turnChainValue(r1.raft.probePeerProgress(replacementR3.replicaId));
     await waitFor(
       () => replacementR3.raft.readStatus().appliedIndex === headIndex &&
         readUserRows(replacementR3.db).length === 6,

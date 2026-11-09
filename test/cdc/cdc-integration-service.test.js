@@ -22,22 +22,8 @@ import {
   PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
 import {
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
-} from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
-import {
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
-import {
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
-} from '../../src/control-plane/owner-contract-outcome.js';
-import {
-} from '../../src/control-plane/timeout-budget.js';
-import {CDC_EVENT} from '../../src/cdc/cdc-constants.js';
-import {
-  READ_MODEL_DIVERGENCE_TYPE,
-  SQL_RECONCILIATION_REASON,
-} from '../../src/control-plane/read-model-contract.js';
 import {
   createMockSqlQueryEngine,
   createCacheWaitProbe,
@@ -62,7 +48,6 @@ afterEach(() => {
   LoggingService.resetInstance();
 });
 
-const TEST_RETRY_AFTER_MS = 125;
 
 test('CDCIntegrationService - constructor', async (t) => {
   const service = new CDCIntegrationService({
@@ -266,7 +251,6 @@ test('CDCIntegrationService - coalesces identical in-flight upserts into ' +
     SYSTEM_TABLE_NAME.NODES,
     row,
     {
-      skipCacheWait: true,
       workClass: 'background',
       allowPressureDefer: true,
       deliveryPriority: 'background',
@@ -276,7 +260,6 @@ test('CDCIntegrationService - coalesces identical in-flight upserts into ' +
     SYSTEM_TABLE_NAME.NODES,
     {...row},
     {
-      skipCacheWait: true,
       workClass: 'background',
       allowPressureDefer: true,
       deliveryPriority: 'background',
@@ -334,7 +317,6 @@ test('CDCIntegrationService - forwards pressure admission metadata to routed ' +
       updated_at: 2,
     },
     {
-      skipCacheWait: true,
       workClass: 'critical',
       allowPressureDefer: true,
       pressureRetryAfterMs: 777,
@@ -397,7 +379,6 @@ test('CDCIntegrationService - derives routed SQL admission defaults from one ' +
       updated_at: 2,
     },
     {
-      skipCacheWait: true,
       workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION,
     },
   );
@@ -473,7 +454,6 @@ test('CDCIntegrationService - derives publication mutation pressure admission ' 
       status: 'OPEN',
     },
     {
-      skipCacheWait: true,
       workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
     },
   );
@@ -528,7 +508,6 @@ test('CDCIntegrationService canonicalizes control_plane_publications upserts ' +
       reasonCode: 'authoritative_membership_changed',
     },
     {
-      skipCacheWait: true,
     },
   );
 
@@ -583,7 +562,6 @@ test('CDCIntegrationService - defers routed writes under pressure when allowed',
         {service_id: 'svc-1'},
         {status: 'active', updated_at: 1234},
         {
-          skipCacheWait: true,
           workClass: 'background',
           deliveryPriority: 'background',
         },
@@ -653,7 +631,6 @@ test('CDCIntegrationService logs retryable table-write failures as warnings',
         {service_id: 'svc-1'},
         {status: 'active'},
         {
-          skipCacheWait: true,
           causeId: 'cdc-write-failure:test',
         },
       ),
@@ -720,7 +697,6 @@ test('CDCIntegrationService preserves explicit deferRetry on routed SQL errors',
         {service_id: 'svc-1'},
         {status: 'active'},
         {
-          skipCacheWait: true,
         },
       ),
       'explicit routed deferrals should be preserved when CDC wraps failures',
@@ -738,498 +714,31 @@ test('CDCIntegrationService preserves explicit deferRetry on routed SQL errors',
       'wrapped error should preserve the canonical first failed participant');
   });
 
-test('CDCIntegrationService - insertSystemTableRow waits for propagated tables', async (t) => {
-  const mockSqlEngine = createMockSqlQueryEngine();
-  const {cache, state} = createCacheWaitProbe();
-  const service = new CDCIntegrationService({
-    nodeId: 'test-node',
-    sqlQueryEngine: mockSqlEngine,
-    systemTableCache: cache,
-  });
-  service.initialize();
-
-  const data = {
-    node_id: 'node-1',
-    node_address: 'localhost:8080',
-  };
-
-  await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, data);
-
-  t.equal(state.onCacheChangeCalls, 1, 'should subscribe to cache waits for nodes table');
-  t.ok(state.offCacheChangeCalls >= 1, 'should clean up cache wait subscription');
-  t.end();
-});
-
-test('CDCIntegrationService - waitForCacheUpdate skips in bootstrap mode', async (t) => {
-  const mockSqlEngine = createMockSqlQueryEngine();
-  const {cache, state} = createCacheWaitProbe();
-  const service = new CDCIntegrationService({
-    nodeId: 'test-node',
-    sqlQueryEngine: mockSqlEngine,
-    systemTableCache: cache,
-  });
-  service.initialize();
-
-  // Enable bootstrap mode with local partition map to match seed registration path.
-  service.setBootstrapMode(true, new Map());
-
-  await service.waitForCacheUpdate(SYSTEM_TABLE_NAME.NODES, 'node-1', true);
-
-  t.equal(
-    state.onCacheChangeCalls,
-    0,
-    'should not subscribe to cache waits while bootstrap mode is enabled',
-  );
-  t.equal(state.offCacheChangeCalls, 0, 'should not register cache wait listeners');
-  t.end();
-});
-
-test('CDCIntegrationService - waitForCacheUpdate accepts monotonic minimum fields',
+// Re-derived from the deleted post-write cache wait (quest
+// replica-admission-from-committed-operation, attempt 2): a routed write on a
+// propagated table answers at its commit and never subscribes to the cache,
+// (the bootstrap bypass of the wait is deleted with it). The wait's retry, pending and
+// deferred-visibility answers have no reachable counterpart (their path is
+// deleted); the projection wait's own semantics are witnessed in
+// test/cdc/routed-system-table-write-answers-at-commit.test.js.
+{
+  test('CDCIntegrationService - insertSystemTableRow answers at its commit ' +
+    'without subscribing to the cache',
   async (t) => {
-    const operationId = 'op-monotonic-1';
-    const expectedUpdatedAt = 1000;
-    const authoritativeRow = {
-      operation_id: operationId,
-      status: 'creating',
-      workflow_step: 'CREATING',
-      updated_at: 1200,
-    };
-    const listeners = new Set();
-    const state = {
-      row: null,
-      onCacheChangeCalls: 0,
-      offCacheChangeCalls: 0,
-    };
-    const cache = {
-      has(tableName, key) {
-        return tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
-          key === operationId &&
-          Boolean(state.row);
-      },
-      get(tableName, key) {
-        if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
-          key !== operationId) {
-          return null;
-        }
-        return state.row;
-      },
-      onCacheChange(listener) {
-        state.onCacheChangeCalls++;
-        listeners.add(listener);
-      },
-      offCacheChange(listener) {
-        state.offCacheChangeCalls++;
-        listeners.delete(listener);
-      },
-    };
-    const cacheMutationTarget = {
-      applySystemTableChange(_tableName, _operation, record) {
-        state.row = {...record};
-        for (const listener of listeners) {
-          listener(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS);
-        }
-      },
-    };
-    const sqlQueryEngine = {
-      queryExecutor: {
-        async executeOnPartition() {
-          return {
-            success: true,
-            participantNodeId: 'node-owner',
-            rows: [{...authoritativeRow}],
-          };
-        },
-        getPartitionRoutingSnapshot() {
-          return {
-            canonicalLeaderNodeId: 'node-owner',
-            serviceRowCount: 1,
-            routableServiceCount: 1,
-            deniedByNodeId: {},
-          };
-        },
-      },
-    };
+    const {cache, state} = createCacheWaitProbe();
     const service = new CDCIntegrationService({
       nodeId: 'test-node',
-      sqlQueryEngine,
+      sqlQueryEngine: createMockSqlQueryEngine(),
       systemTableCache: cache,
-      cacheMutationTarget,
     });
-    const divergenceEvents = [];
     service.initialize();
-    service.on(CDC_EVENT.READ_MODEL_DIVERGENCE, (event) => {
-      divergenceEvents.push(event);
-    });
-
-    await service.waitForCacheUpdate(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      operationId,
-      true,
-      {
-        expectedFields: {updated_at: expectedUpdatedAt},
-        minimumFields: {updated_at: expectedUpdatedAt},
-        timeoutMs: 5,
-      },
-    );
-
-    t.same(
-      state.row,
-      authoritativeRow,
-      'authoritative confirmation should repair the writable cache target',
-    );
-    t.equal(state.onCacheChangeCalls > 0, true, 'should subscribe to cache changes');
-    t.equal(state.offCacheChangeCalls > 0, true, 'should clean up cache listener');
-    t.equal(divergenceEvents.length, 1,
-      'projection lag should emit one divergence event');
-    t.equal(divergenceEvents[0]?.divergenceType,
-      READ_MODEL_DIVERGENCE_TYPE.CACHE_MISSING);
-    t.equal(divergenceEvents[0]?.reconciliationReason,
-      SQL_RECONCILIATION_REASON.DIAGNOSTICS_CACHE_RECONCILE);
+    const result = await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES,
+      {node_id: 'node-1', node_address: 'localhost:8080'});
+    t.equal(result.committed, true, 'the insert answers committed');
+    t.equal(state.onCacheChangeCalls, 0, 'no cache subscription');
     t.end();
-  },
-);
-
-test('CDCIntegrationService - waitForCacheUpdate retries authoritative confirmation within the reserved fallback budget',
-  async (t) => {
-    const operationId = 'op-authoritative-retry';
-    const authoritativeRow = {
-      operation_id: operationId,
-      status: 'creating',
-      workflow_step: 'CREATING',
-      updated_at: 1200,
-    };
-    const listeners = new Set();
-    const state = {
-      row: null,
-      onCacheChangeCalls: 0,
-      offCacheChangeCalls: 0,
-      authoritativeReads: 0,
-    };
-    const cache = {
-      has(tableName, key) {
-        return tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
-          key === operationId &&
-          Boolean(state.row);
-      },
-      get(tableName, key) {
-        if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
-          key !== operationId) {
-          return null;
-        }
-        return state.row;
-      },
-      onCacheChange(listener) {
-        state.onCacheChangeCalls++;
-        listeners.add(listener);
-      },
-      offCacheChange(listener) {
-        state.offCacheChangeCalls++;
-        listeners.delete(listener);
-      },
-    };
-    const cacheMutationTarget = {
-      applySystemTableChange(_tableName, _operation, record) {
-        state.row = {...record};
-        for (const listener of listeners) {
-          listener(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS);
-        }
-      },
-    };
-    const sqlQueryEngine = {
-      queryExecutor: {
-        async executeOnPartition() {
-          state.authoritativeReads++;
-          return {
-            success: true,
-            participantNodeId: 'node-owner',
-            rows: state.authoritativeReads >= 2 ? [{...authoritativeRow}] : [],
-          };
-        },
-        getPartitionRoutingSnapshot() {
-          return {
-            canonicalLeaderNodeId: 'node-owner',
-            serviceRowCount: 1,
-            routableServiceCount: 1,
-            deniedByNodeId: {},
-          };
-        },
-      },
-    };
-    const service = new CDCIntegrationService({
-      nodeId: 'test-node',
-      sqlQueryEngine,
-      systemTableCache: cache,
-      cacheMutationTarget,
-      authoritativeFallbackRepairBudgetMs: 10,
-      authoritativeFallbackRetryDelayMs: 1,
-    });
-    service.initialize();
-
-    await service.waitForCacheUpdate(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      operationId,
-      true,
-      {
-        expectedFields: {updated_at: 1000},
-        minimumFields: {updated_at: 1000},
-        timeoutMs: 20,
-      },
-    );
-
-    t.equal(
-      state.authoritativeReads,
-      2,
-      'authoritative repair should retry once when the first read still misses the row',
-    );
-    t.same(
-      state.row,
-      authoritativeRow,
-      'the later authoritative confirmation should still repair the writable cache target',
-    );
-    t.equal(state.onCacheChangeCalls, 1,
-      'cache wait should subscribe once before the fallback tail begins');
-    t.equal(state.offCacheChangeCalls, 1,
-      'cache wait should clean up its listener after the retry succeeds');
-    t.end();
-  },
-);
-
-test('CDCIntegrationService - waitForCacheUpdate can return pending visibility after authoritative confirmation',
-  async (t) => {
-    const operationId = 'op-pending-visibility';
-    const authoritativeRow = {
-      operation_id: operationId,
-      status: 'creating',
-      workflow_step: 'CREATING',
-      updated_at: 1200,
-    };
-    const listeners = new Set();
-    const state = {
-      row: null,
-      authoritativeReads: 0,
-    };
-    const cache = {
-      has(tableName, key) {
-        return tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
-          key === operationId &&
-          Boolean(state.row);
-      },
-      get(tableName, key) {
-        if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
-          key !== operationId) {
-          return null;
-        }
-        return state.row;
-      },
-      onCacheChange(listener) {
-        listeners.add(listener);
-      },
-      offCacheChange(listener) {
-        listeners.delete(listener);
-      },
-    };
-    const sqlQueryEngine = {
-      queryExecutor: {
-        async executeOnPartition() {
-          state.authoritativeReads++;
-          return {
-            success: true,
-            participantNodeId: 'node-owner',
-            rows: [{...authoritativeRow}],
-          };
-        },
-        getPartitionRoutingSnapshot() {
-          return {
-            canonicalLeaderNodeId: 'node-owner',
-            serviceRowCount: 1,
-            routableServiceCount: 1,
-            deniedByNodeId: {},
-          };
-        },
-      },
-    };
-    const service = new CDCIntegrationService({
-      nodeId: 'test-node',
-      sqlQueryEngine,
-      systemTableCache: cache,
-      authoritativeFallbackRepairBudgetMs: 10,
-      authoritativeFallbackRetryDelayMs: 1,
-    });
-    service.initialize();
-
-    const result = await service.waitForCacheUpdate(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      operationId,
-      true,
-      {
-        allowPendingVisibility: true,
-        timeoutMs: 20,
-      },
-    );
-
-    t.equal(
-      result.visibilityState,
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY,
-      'authoritative confirmation without writable cache repair should return pending visibility',
-    );
-    t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
-    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
-    t.equal(
-      result.authoritativeVisibilityConfirmed,
-      true,
-      'pending visibility should retain the authoritative confirmation signal',
-    );
-    t.equal(
-      state.authoritativeReads,
-      1,
-      'pending visibility should confirm once instead of looping until timeout',
-    );
-  },
-);
-
-
-test(
-  'CDCIntegrationService allows pending visibility callers to continue ' +
-    'when authoritative confirmation is still pending',
-  async (t) => {
-    const operationId = 'op-confirmation-pending';
-    const state = {
-      authoritativeReads: 0,
-    };
-    const cache = {
-      get(tableName, key) {
-        if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
-          key !== operationId) {
-          return null;
-        }
-        return null;
-      },
-      onCacheChange() {},
-      offCacheChange() {},
-    };
-    const sqlQueryEngine = {
-      queryExecutor: {
-        async executeOnPartition() {
-          state.authoritativeReads += 1;
-          return {
-            success: true,
-            participantNodeId: 'node-owner',
-            rows: [{
-              operation_id: operationId,
-              status: 'preparing',
-            }],
-          };
-        },
-        getPartitionRoutingSnapshot() {
-          return {
-            canonicalLeaderNodeId: 'node-owner',
-            serviceRowCount: 1,
-            routableServiceCount: 1,
-            deniedByNodeId: {},
-          };
-        },
-      },
-    };
-    const service = new CDCIntegrationService({
-      nodeId: 'test-node',
-      sqlQueryEngine,
-      systemTableCache: cache,
-      authoritativeFallbackRepairBudgetMs: 10,
-      authoritativeFallbackRetryDelayMs: 1,
-    });
-    service.initialize();
-
-    const result = await service.waitForCacheUpdate(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      operationId,
-      true,
-      {
-        allowPendingVisibility: true,
-        timeoutMs: 20,
-        expectedFields: {status: 'committed'},
-      },
-    );
-
-    t.equal(
-      result.visibilityState,
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE
-        .AUTHORITATIVE_CONFIRMATION_PENDING,
-      'allowPendingVisibility should return one explicit confirmation-pending state instead of timing out',
-    );
-    t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
-    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
-    t.equal(
-      result.authoritativeVisibilityConfirmed,
-      false,
-      'confirmation-pending visibility should not claim authoritative confirmation',
-    );
-    t.ok(
-      state.authoritativeReads >= 1,
-      'confirmation-pending visibility should still attempt authoritative confirmation before yielding',
-    );
-  },
-);
-
-test(
-  'CDCIntegrationService maps deferred visibility confirmation to retryable ' +
-    'contract outcomes',
-  async (t) => {
-    const operationId = 'op-visibility-deferred';
-    const cache = {
-      get() {
-        return null;
-      },
-      onCacheChange() {},
-      offCacheChange() {},
-    };
-    const sqlQueryEngine = {
-      queryExecutor: {
-        async executeOnPartition() {
-          return {
-            success: false,
-            pressureAction: 'defer',
-            pressureReason: 'transport_backpressure',
-            retryAfterMs: TEST_RETRY_AFTER_MS,
-          };
-        },
-        getPartitionRoutingSnapshot() {
-          return {
-            canonicalLeaderNodeId: 'node-owner',
-            serviceRowCount: 1,
-            routableServiceCount: 1,
-            deniedByNodeId: {},
-          };
-        },
-      },
-    };
-    const service = new CDCIntegrationService({
-      nodeId: 'test-node',
-      sqlQueryEngine,
-      systemTableCache: cache,
-      authoritativeFallbackRepairBudgetMs: 10,
-      authoritativeFallbackRetryDelayMs: 1,
-    });
-    service.initialize();
-
-    const result = await service.waitForCacheUpdate(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      operationId,
-      true,
-      {
-        allowPendingVisibility: true,
-        timeoutMs: 20,
-      },
-    );
-
-    t.equal(
-      result.visibilityState,
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE,
-    );
-    t.equal(result.contractState, OWNER_CONTRACT_STATE.DEFERRED);
-    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.RETRY);
-    t.equal(result.retryAfterMs, TEST_RETRY_AFTER_MS);
-  },
-);
+  });
+}
 
 test('CDCIntegrationService - authoritative fallback diagnostics track phase windows',
   async (t) => {
@@ -1344,7 +853,7 @@ test('CDCIntegrationService - steady-state system table writes prefer local part
       SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1'},
       {status: 'ready'},
-      {skipCacheWait: true},
+      {},
     );
 
     t.equal(localWrites.length, 1, 'should execute through a local partition service');
@@ -1384,7 +893,7 @@ test('CDCIntegrationService - local system table writes do not require SQL engin
       SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1'},
       {status: 'ready'},
-      {skipCacheWait: true},
+      {},
     );
 
     t.equal(

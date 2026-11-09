@@ -52,6 +52,12 @@ const LEARNER_PROMOTION_PROOF_DECISION = Object.freeze({
 const LEARNER_PROMOTION_PROOF_REASON = Object.freeze({
   // Leader-side refusals (evaluateLearnerPromotionProof)
   NOT_LEADER: 'not_leader',
+  // The leader's committed configuration does not name the requesting
+  // replica (as a voter or learner under exactly that replica identity).
+  NOT_IN_CONFIGURATION: 'not_in_configuration',
+  // The leader could not read its committed configuration this turn (its
+  // committed-membership read refused; the read's reason is the cause).
+  CONFIGURATION_UNAVAILABLE: 'configuration_unavailable',
   TERM_UNAVAILABLE: 'term_unavailable',
   EPOCH_UNAVAILABLE: 'epoch_unavailable',
   EPOCH_MISMATCH: 'epoch_mismatch',
@@ -91,11 +97,9 @@ const LEARNER_CATCH_UP_ACKNOWLEDGEMENT = Object.freeze({
 
 // Typed cause carried by every channel-level refusal (quest
 // learner-promotion-proof-channel-wake): the leader's and the learner's
-// mints of one reason are distinguishable, so the learner can react to
-// the cause (re-assert its services row) instead of blind re-polling.
+// mints of one reason are distinguishable.
 const LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE = Object.freeze({
   // REQUEST_INVALID
-  LEARNER_ADDRESS_UNRESOLVABLE: 'learner_address_unresolvable',
   REQUEST_SHAPE: 'request_shape',
   RESPONSE_BINDING_MISMATCH: 'response_binding_mismatch',
   // TRANSPORT_FAILED

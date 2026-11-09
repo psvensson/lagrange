@@ -201,7 +201,6 @@ test(
         replicaId: 'mg-join-existing-r2',
         nodeId,
         replicaIds: ['mg-join-existing-r1', 'mg-join-existing-r2'],
-        peerAddresses: ['seed-node-1/message-group/mg-join-existing-r1'],
         transport: router,
         deferElection: true,
         isJoiningExistingGroup: true,
@@ -246,7 +245,6 @@ test(
         replicaId: 'mg-join-append-r2',
         nodeId,
         replicaIds: ['mg-join-append-r1', 'mg-join-append-r2'],
-        peerAddresses: ['seed-node-1/message-group/mg-join-append-r1'],
         transport: router,
         deferElection: true,
         isJoiningExistingGroup: true,
@@ -281,7 +279,6 @@ test(
         replicaId: 'mg-join-release-r2',
         nodeId,
         replicaIds: ['mg-join-release-r1', 'mg-join-release-r2'],
-        peerAddresses: ['seed-node-1/message-group/mg-join-release-r1'],
         transport: router,
         deferElection: true,
         isJoiningExistingGroup: true,
@@ -335,11 +332,6 @@ test(
           'mg-self-hosted-release-r1',
           'mg-self-hosted-release-r2',
         ],
-        peerAddresses: [
-          `${nodeId}/message-group/mg-self-hosted-release-r0`,
-          `${nodeId}/message-group/mg-self-hosted-release-r1`,
-          `${nodeId}/message-group/mg-self-hosted-release-r2`,
-        ],
         transport: router,
         deferElection: true,
         deferElectionUntilJoinConvergence: true,
@@ -383,6 +375,57 @@ test(
 );
 
 test(
+  'MessageGroupService - completeJoinConvergence enables role and leader metadata publication when requested',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
+        groupId: 'mg-self-hosted-meta',
+        replicaId: 'mg-self-hosted-meta-r0',
+        nodeId,
+        replicaIds: [
+          'mg-self-hosted-meta-r0',
+          'mg-self-hosted-meta-r1',
+          'mg-self-hosted-meta-r2',
+        ],
+        transport: router,
+        deferElection: false,
+        deferElectionUntilJoinConvergence: false,
+        publishRoleMetadata: false,
+        publishLeaderNodeMetadata: false,
+      }, port);
+
+      await service.initialize();
+      service.role = 'leader';
+      service.isLeader = true;
+      const queuedRoles = [];
+      const queuedLeaders = [];
+      service.queueRoleUpdate = (role) => queuedRoles.push(role);
+      service.queueLeaderNodeUpdate = (leaderNodeId) => queuedLeaders.push(leaderNodeId);
+
+      // Without enableMetadataPublication, standalone suppressed replicas stay suppressed.
+      service.completeJoinConvergence();
+      t.equal(service.publishRoleMetadata, false);
+      t.equal(service.publishLeaderNodeMetadata, false);
+      t.same(queuedRoles, []);
+      t.same(queuedLeaders, []);
+
+      // With enableMetadataPublication: true (join finalization), metadata publication is enabled and queued.
+      service.completeJoinConvergence({enableMetadataPublication: true});
+      t.equal(service.publishRoleMetadata, true);
+      t.equal(service.publishLeaderNodeMetadata, true);
+      t.same(queuedRoles, ['leader']);
+      t.same(queuedLeaders, [nodeId]);
+
+      await service.shutdown();
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
   'MessageGroupService - deferred self-hosted followers stay unscheduled until join convergence',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
@@ -396,11 +439,6 @@ test(
           'mg-self-hosted-suppressed-r0',
           'mg-self-hosted-suppressed-r1',
           'mg-self-hosted-suppressed-r2',
-        ],
-        peerAddresses: [
-          `${nodeId}/message-group/mg-self-hosted-suppressed-r0`,
-          `${nodeId}/message-group/mg-self-hosted-suppressed-r1`,
-          `${nodeId}/message-group/mg-self-hosted-suppressed-r2`,
         ],
         transport: router,
         deferElection: true,
@@ -683,6 +721,15 @@ test(
       }));
 
       service.initialized = true;
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: 'mg-strict-cache-ready-gate',
+        replicaIdentity: 'mg-strict-cache-ready-gate-r3',
+        peers: [{
+          replicaIdentity: 'mg-strict-cache-ready-gate-r1',
+          address: 'peer-node-b/message-group/mg-strict-cache-ready-gate-r1',
+        }],
+      });
       router.getConnectionState = (targetNodeId) => {
         return targetNodeId === 'peer-node-b' ? STATE.CONNECTED : STATE.CONNECTED;
       };
@@ -883,7 +930,7 @@ test(
 );
 
 test(
-  'MessageGroupService - strict CDC uses canonical bootstrap peer hints during move convergence when services cache lags',
+  'MessageGroupService - strict CDC targets the live leader at its committed address during move convergence when services cache lags',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
@@ -896,16 +943,23 @@ test(
           'mg-move-bootstrap-ingress-r2',
           'mg-move-bootstrap-ingress-r3',
         ],
-        peerAddresses: [
-          'seed-node/message-group/mg-move-bootstrap-ingress-r1',
-          'seed-node/message-group/mg-move-bootstrap-ingress-r2',
-          'seed-node/message-group/mg-move-bootstrap-ingress-r3',
-        ],
         transport: router,
       }));
 
       service.initialized = true;
       service.isJoiningExistingGroup = true;
+      // The joiner's own status names the live leader at the address its
+      // committed configuration places it; no hint list exists.
+      service.raft = reportingConsensusPort({
+        groupId: 'mg-move-bootstrap-ingress',
+        replicaIdentity: 'mg-move-bootstrap-ingress-r1',
+        role: RAFT_ROLE.FOLLOWER,
+        leaderId: 'mg-move-bootstrap-ingress-r2',
+        peers: [{
+          address: 'seed-node/message-group/mg-move-bootstrap-ingress-r2',
+          replicaIdentity: 'mg-move-bootstrap-ingress-r2',
+        }],
+      });
       router.getConnectionState = (targetNodeId) => {
         return targetNodeId === 'seed-node' ? STATE.CONNECTED : null;
       };
@@ -940,12 +994,12 @@ test(
       t.equal(
         readiness.ready,
         true,
-        'join convergence should keep strict metadata ingress available from canonical bootstrap peer hints while services cache catches up',
+        'join convergence keeps strict metadata ingress available toward the live leader while services cache catches up',
       );
       t.equal(
         selection.targets[0]?.address,
-        'seed-node/message-group/mg-move-bootstrap-ingress-r1',
-        'strict selection should target the canonical leader-node bootstrap peer when no services row is available yet',
+        'seed-node/message-group/mg-move-bootstrap-ingress-r2',
+        'strict selection targets the live leader at its committed address when no services row is available yet',
       );
     } finally {
       await cleanup();
@@ -966,11 +1020,6 @@ test(
           'mg-join-live-hint-r1',
           'mg-join-live-hint-r2',
           'mg-join-live-hint-r3',
-        ],
-        peerAddresses: [
-          'seed-node/message-group/mg-join-live-hint-r1',
-          'seed-node/message-group/mg-join-live-hint-r2',
-          'seed-node/message-group/mg-join-live-hint-r3',
         ],
         transport: router,
       }));
@@ -1033,12 +1082,24 @@ test(
       nodeId: 'node-local',
       transport,
     }));
+    service.raft = reportingConsensusPort({
+      role: RaftRole.FOLLOWER,
+      groupId: 'mg-1',
+      replicaIdentity: 'mg-1-r2',
+      peers: [{
+        replicaIdentity: 'mg-1-r1',
+        address: 'seed-node/message-group/mg-1-r1',
+      }],
+    });
     const forwarded = [];
 
     service.resolveMetadataIngressForwardSelection = async () => ({
       strictForwarding: true,
       strictForwardRetryAfterMs: 250,
-      targets: [{address: 'seed-node/message-group/mg-1-r1'}],
+      targets: [{
+        serviceId: 'mg-1-r1',
+        address: 'seed-node/message-group/mg-1-r1',
+      }],
       suppressedCount: 0,
     });
     service.sendMessage = async (targetAddress, payload) => {

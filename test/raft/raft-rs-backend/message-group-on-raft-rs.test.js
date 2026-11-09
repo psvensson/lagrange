@@ -195,10 +195,11 @@ async function createGroupHost() {
       replicaId,
       nodeId: NODE_ID,
       replicaIds,
-      // The bootstrap peer hints production construction hands every
-      // replica: the consensus port places its peers from these until the
-      // services cache names them.
-      peerAddresses: replicaIds.map((id) => `${NODE_ID}/message-group/${id}`),
+      // The founding placement production construction hands every
+      // founder: the GENESIS stamp commits each founder's node, and the
+      // consensus port addresses its peers from it.
+      founderNodeIds: Object.fromEntries(
+        replicaIds.map((id) => [id, NODE_ID])),
       transport: router,
       nodeService: {
         getSystemTableCache: () => cache,

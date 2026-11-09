@@ -659,9 +659,13 @@ test('A4: a mutation that changes the verdicts of nodes A and C rebuilds ' +
     t.equal(nodeBuilds(cluster, nodeId), 2, `${nodeId}: rebuilt`);
     t.not(cluster.coreOf(after[nodeId]), cluster.coreOf(before[nodeId]),
       `${nodeId}: new core`);
-    t.not(after[nodeId].dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE],
-      before[nodeId].dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE],
-      `${nodeId}: the serve verdict actually changed`);
+    // Serving is the committed-epoch answer (quest
+    // serve-eligibility-committed-epoch-read), so a stopped service row
+    // changes the projected verdicts, not serving.
+    t.ok(Object.keys(after[nodeId].dimensions).some((dimension) =>
+      after[nodeId].dimensions[dimension] !==
+        before[nodeId].dimensions[dimension]),
+    `${nodeId}: a projected verdict actually changed`);
   }
   for (const nodeId of NODE_IDS.filter((id) => id !== a && id !== c)) {
     t.equal(nodeBuilds(cluster, nodeId), 1, `${nodeId}: no rebuild`);

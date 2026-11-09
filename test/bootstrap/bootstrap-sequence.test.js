@@ -165,15 +165,17 @@ test('BootstrapService retains lifecycle catalog owners for SQL handoff',
     initializeTestEnvironment();
     const originalCreate = ControlPlaneSetup.create;
     const commandOwner = {ownerId: 'seed-command-owner'};
+    let controlPlaneSystemTableGateway = {readAuthoritativeRows: async () => ({rows: []})};
     const systemMetadataOwners = {ownerId: 'seed-metadata-owners'};
     ControlPlaneSetup.create = async () => ({
       dispatchService: null,
       endpointService: null,
-      heartbeatService: {},
+      heartbeatService: {stop() {}},
       leaseService: null,
       rebalanceCoordinator: {},
       serviceLifecycleCommandOwner: commandOwner,
       systemMetadataOwners,
+      controlPlaneSystemTableGateway,
     });
 
     try {
@@ -192,6 +194,15 @@ test('BootstrapService retains lifecycle catalog owners for SQL handoff',
 
       t.equal(bootstrap.serviceLifecycleCommandOwner, commandOwner);
       t.equal(bootstrap.systemMetadataOwners, systemMetadataOwners);
+      t.equal(bootstrap.controlPlaneSystemTableGateway, controlPlaneSystemTableGateway,
+        'seed retains the exact authoritative read owner for runtime setup');
+      bootstrap.seedCleanupHandler.delegates.stopAndClearControlPlaneServices();
+      t.equal(bootstrap.controlPlaneSystemTableGateway, null,
+        'seed cleanup clears the retained read owner');
+      controlPlaneSystemTableGateway = {readAuthoritativeRows: async () => ({rows: []})};
+      await bootstrap.initializeControlPlaneService();
+      t.equal(bootstrap.controlPlaneSystemTableGateway, controlPlaneSystemTableGateway,
+        'next seed initialization installs its fresh exact owner');
     } finally {
       ControlPlaneSetup.create = originalCreate;
     }

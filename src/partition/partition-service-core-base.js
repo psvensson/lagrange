@@ -7,14 +7,17 @@ import {
 } from './partition-service-metadata-mutation-helpers.js';
 import {
   retireRaftPeerFromAuthoritativeServiceChange,
-  resolveLiveRaftLeaderAddressForPeer,
 } from './partition-service-raft-peer-cache-reconciliation.js';
+import {PARTITION_LEADER_ADDRESS_REFUSAL} from './partition-service-constants.js';
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {PEER_ADDRESS_STATUS} from '../raft/raft-rs-runtime-owner-constants.js';
 import {createRaftRsOperationPort} from '../raft/raft-rs-operation-port.js';
 import {RAFT_OPERATION_PORT_REQUEST} from '../raft/raft-operation-port-request.js';
 import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
 import {isLivePartitionServiceRow} from '../constants/service.js';
 import {PartitionWriteTraffic} from './partition-write-traffic.js';
+import {isSystemTableName} from '../bootstrap/system-table-schema-shared-constants.js';
 const {
   AddressManager,
   CDCEventBuffer,
@@ -30,7 +33,6 @@ const {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LITERAL,
-  PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_TYPE,
   PARTITION_SUBSYSTEM,
   PartitionCDCDelivery,
@@ -81,6 +83,8 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.partitionId = options.partitionId;
     this.tableId = options.tableId;
     this.tableName = options.tableName || options.tableId;
+    this.isSystemTable =
+      options.isSystemTable === true || isSystemTableName(this.tableName);
     this.schema = options.schema || null;
     this.keyRange = options.keyRange || {
       start: PARTITION_SERVICE_DEFAULT.KEY_RANGE_START,
@@ -91,11 +95,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.nodeId = options.nodeId || PARTITION_SERVICE_DEFAULT.NODE_ID;
     this.transport = options.transport || null;
     this.dbPath = options.dbPath || PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH;
-    this.leaderAddressHint =
-      typeof options.leaderAddress === 'string' &&
-      options.leaderAddress.length > 0 ?
-        options.leaderAddress :
-        null;
     const addressManager = AddressManager.getInstance();
     this.unifiedAddress = addressManager.format(
       this.nodeId,
@@ -238,7 +237,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     });
     this.systemTableCacheChangeListener =
       this.handleSystemTableCacheChange.bind(this);
-    this.peerReconciliationScheduled = false;
     this.rebalancer = null;
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
     this.ownsRebalanceCoordinator = false;
@@ -287,7 +285,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.replicaStateMachine = options.replicaStateMachine || null;
     this.resolveHandlerRetirementLane =
       options.resolveHandlerRetirementLane || null;
-    this.peerAddresses = options.peerAddresses || [];
     this.learnerCatchUpCheckIntervalMs =
       options.learnerCatchUpCheckIntervalMs ||
       PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;
@@ -335,7 +332,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     ) {
       systemTableCache.onCacheChange(this.systemTableCacheChangeListener);
     }
-    this.scheduleRaftPeerReconciliation();
   }
   get cdcIntegrationService() {
     return this._cdcIntegrationService || null;
@@ -533,99 +529,53 @@ class PartitionServiceCoreBase extends EventEmitter {
     return this.unifiedAddress;
   }
   /**
-   * Build a unified address for a peer replica.
-   * Looks up the nodeId from the system table cache if available.
-   * Throws if a unified address cannot be resolved.
-   * All addresses use fully qualified network identity format: {nodeId}/partition/{replicaId}
-   * Requirements: 1.1, 1.4, 3.1, 3.2, 3.3, 9.1
-   * @param {string} peerId - Peer replica ID.
-   * @return {string} Unified address for the peer.
-   */
-  buildPeerAddress(peerId) {
-    const address = this.resolveKnownPeerAddress(peerId);
-    if (address === null) {
-      throw new Error(`Unable to resolve unified peer address for ${peerId}`);
-    }
-    return address;
-  }
-  /**
-   * The unified address the address book (dispatched hints, the services
-   * cache) holds for a peer, or null while discovery cannot place it.
-   * @param {string} peerId - Peer replica ID.
-   * @return {string|null} Unified address, or null.
-   */
-  resolveKnownPeerAddress(peerId) {
-    const addressManager = AddressManager.getInstance();
-    const cacheAddress = this.resolvePeerAddressFromCache(peerId);
-    if (peerId.includes(PARTITION_SERVICE_ADDRESS.SEPARATOR)) {
-      const validation = addressManager.validate(peerId);
-      if (validation.valid) {
-        return peerId;
-      }
-      this.logger.error(PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_NOT_UNIFIED, {
-        peerId,
-        partitionId: this.partitionId,
-        replicaId: this.replicaId,
-        error: validation.error,
-      });
-      throw new Error(`Peer address must be unified: ${peerId}`);
-    }
-    if (this.peerAddresses && this.peerAddresses.length > 0) {
-      const separator = PARTITION_SERVICE_ADDRESS.SEPARATOR;
-      const partitionPeerSuffix =
-        `${separator}${ENTITY_TYPE.PARTITION}${separator}${peerId}`;
-      const peerSuffix = `${separator}${peerId}`;
-      for (const addr of this.peerAddresses) {
-        const validation = addressManager.validate(addr);
-        if (!validation.valid) {
-          this.logger.error(
-            PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_NOT_UNIFIED,
-            {
-              peerId: addr,
-              partitionId: this.partitionId,
-              replicaId: this.replicaId,
-              error: validation.error,
-            },
-          );
-          throw new Error(`Peer address must be unified: ${addr}`);
-        }
-        if (addr.endsWith(partitionPeerSuffix) || addr.endsWith(peerSuffix)) {
-          if (cacheAddress) {
-            return cacheAddress;
-          }
-          this.logger.debug(PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_FROM_LIST, {
-            peerId,
-            address: addr,
-            partitionId: this.partitionId,
-          });
-          return addr;
-        }
-      }
-    }
-    return cacheAddress || null;
-  }
-  /**
-   * Resolve the leader's unified address for write forwarding.
-   * @return {string|null} Unified leader address or null if unavailable.
+   * This replica's own live raft status, when it is a usable observation of
+   * this replica in this group; else null.
+   * @return {Object|null}
    * @private
    */
+  readOwnRaftStatus() {
+    let status;
+    try {
+      status = this.raft?.readStatus?.();
+    } catch (error) {
+      // A status that could not be read is the port's host failure.
+      status = {outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE, error};
+    }
+    const usable = status?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+      status.groupId === this.partitionId &&
+      status.replicaIdentity === this.replicaId;
+    return usable ? status : null;
+  }
+  /**
+   * The live raft leader's replica identity, or null without a live leader.
+   * @return {string|null}
+   */
+  readLiveRaftLeaderId() {
+    const leaderId = this.readOwnRaftStatus()?.leaderId;
+    return typeof leaderId === 'string' && leaderId.length > 0 ? leaderId : null;
+  }
+  /**
+   * The leader's unified address for write forwarding, redirects,
+   * split/merge forwarding, the learner promotion proof and the replica
+   * admission request: the live raft leader this replica's own status names,
+   * at the address its committed configuration places it. Never a cached
+   * row, a cached leader id or a hint.
+   * @return {string} The live leader's committed address.
+   * @throws {Error} PARTITION_LEADER_ADDRESS_REFUSAL (typed, as message and
+   *   code): STATUS_UNAVAILABLE, NO_LEADER or LEADER_UNADDRESSED.
+   */
   resolveLeaderAddress() {
-    const leaderReplicaId = this.normalizeLeaderReplicaId(this.leaderId);
-    if (!leaderReplicaId) {
-      return null;
+    const status = this.readOwnRaftStatus();
+    const refusal = status === null ?
+      PARTITION_LEADER_ADDRESS_REFUSAL.STATUS_UNAVAILABLE :
+      !status.leaderId ? PARTITION_LEADER_ADDRESS_REFUSAL.NO_LEADER :
+        status.leaderAddressStatus !== PEER_ADDRESS_STATUS.RESOLVED ?
+          PARTITION_LEADER_ADDRESS_REFUSAL.LEADER_UNADDRESSED : null;
+    if (refusal !== null) {
+      throw Object.assign(new Error(refusal), {code: refusal});
     }
-    const cacheAddress = this.resolvePeerAddressFromCache(leaderReplicaId);
-    if (cacheAddress) {
-      return cacheAddress;
-    }
-    const liveRaftLeaderAddress =
-      resolveLiveRaftLeaderAddressForPeer(this, leaderReplicaId);
-    if (liveRaftLeaderAddress) {
-      return liveRaftLeaderAddress;
-    }
-    throw new Error(
-      `Unable to resolve unified peer address for ${leaderReplicaId}`,
-    );
+    return status.leaderAddress;
   }
   /**
    * Normalize one raw leader identifier into the canonical replica ID.
@@ -657,39 +607,10 @@ class PartitionServiceCoreBase extends EventEmitter {
     return candidate;
   }
   /**
-   * Resolve one peer address from authoritative services cache state.
-   * Cache-backed rows override stale bootstrap peer hints when ownership moves.
-   * @param {string} peerId
-   * @return {string|null}
-   * @private
-   */
-  resolvePeerAddressFromCache(peerId) {
-    if (
-      !this.systemTableCache ||
-      typeof this.systemTableCache.get !== PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
-      return null;
-    }
-    const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
-    if (!isLivePartitionServiceRow(service) || !service.node_id) {
-      return null;
-    }
-    const address = AddressManager.getInstance().format(
-      service.node_id,
-      ENTITY_TYPE.PARTITION,
-      peerId,
-    );
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_FROM_CACHE, {
-      peerId,
-      nodeId: service.node_id,
-      address,
-      partitionId: this.partitionId,
-    });
-    return address;
-  }
-  /**
-   * React to authoritative services cache changes for this partition.
-   * Existing voters need this to discover newly added or moved peers.
+   * React to authoritative services cache changes for this partition: a
+   * retiring row may retire the configured peer it names. Rows never admit
+   * a peer (admission is answered from the committed replica operation,
+   * partition-replica-admission.js).
    * @param {string} tableName
    * @param {string} operation
    * @param {Object} record
@@ -711,30 +632,6 @@ class PartitionServiceCoreBase extends EventEmitter {
       return;
     }
     retireRaftPeerFromAuthoritativeServiceChange(this, operation, record);
-    this.scheduleRaftPeerReconciliation();
-  }
-  /**
-   * Coalesce peer reconciliation work triggered by cache updates.
-   * @private
-   */
-  scheduleRaftPeerReconciliation() {
-    if (this.peerReconciliationScheduled) {
-      return;
-    }
-    this.peerReconciliationScheduled = true;
-    // The coalescing hop is this replica's next turn. A node that owns a
-    // clock takes it from there; otherwise setImmediate stays, because a
-    // zero-delay timer is a DIFFERENT event-loop phase and swapping one for
-    // the other would change production's ordering, not just its substrate.
-    const hop = () => {
-      this.peerReconciliationScheduled = false;
-      this.reconcileRaftPeersFromCache();
-    };
-    if (this.providedTimeSource) {
-      this.providedTimeSource.setTimeout(hop, 0);
-      return;
-    }
-    setImmediate(hop);
   }
 }
 export {PartitionServiceCoreBase};

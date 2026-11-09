@@ -155,7 +155,9 @@ const LATE_BOUND_COLLABORATOR_MEMBERS = Object.freeze({
     'getCapacitySnapshotForNode', 'getCapacitySnapshotForNodeSync',
   ]),
   [COLLABORATOR.NODE_LIFECYCLE]: Object.freeze(['getState']),
-  [COLLABORATOR.AUTHORITATIVE_VIEW]: Object.freeze(['syncOwnerDependencies']),
+  [COLLABORATOR.AUTHORITATIVE_VIEW]: Object.freeze([
+    'syncOwnerDependencies', 'readReadinessOwnerRows',
+  ]),
   [COLLABORATOR.EVIDENCE_RECONCILER]: Object.freeze(['syncOwnerDependencies']),
 });
 const EXPECT_INTERFACE_PREFIX = 'an object with ';

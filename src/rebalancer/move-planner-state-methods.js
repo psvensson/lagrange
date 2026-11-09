@@ -1,3 +1,5 @@
+import {requirePolicyTargetReplicaCount} from '../policy/table-policy-resolution.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const EMPTY_REPLICA_LIST = Object.freeze([]);
 const PLANNER_INVENTORY_OBSERVATION_STATE = Object.freeze({
@@ -129,6 +131,9 @@ function createMovePlannerStateMethods(deps = {}) {
      * @return {number}
      */
     validateReplicaCount(count, policy) {
+      if (this.entityType === EntityType.PARTITION) {
+        return this.getPolicyTargetReplicaCount(policy);
+      }
       const defaultMin =
         this.entityType === EntityType.RUNTIME_SERVICE ? 1 : NUM.THREE;
       const defaultMax = this.entityType === EntityType.RUNTIME_SERVICE ?
@@ -161,15 +166,9 @@ function createMovePlannerStateMethods(deps = {}) {
      * @return {number}
      */
     getPolicyTargetReplicaCount(policy) {
-      const defaultTarget =
-        this.entityType === EntityType.RUNTIME_SERVICE ? 1 : NUM.THREE;
-      // `||` would coerce an EXPLICIT 0 (ship-not-started) to the
-      // default — resolve explicit finite values first.
-      const explicitTarget = [
-        policy.targetReplicaCount,
-        policy.replicaCount,
-      ].find((value) => Number.isFinite(value) && value >= 0);
-      return explicitTarget !== undefined ? explicitTarget : defaultTarget;
+      return requirePolicyTargetReplicaCount(
+        policy, this.entityType === EntityType.RUNTIME_SERVICE,
+      );
     }
 
     /**
@@ -193,6 +192,9 @@ function createMovePlannerStateMethods(deps = {}) {
      * @return {number}
      */
     calculateTargetReplicaCount(currentReplicas, policy) {
+      if (this.entityType === EntityType.PARTITION) {
+        return this.getPolicyTargetReplicaCount(policy);
+      }
       const healthyCount = this.getHealthyReplicas(currentReplicas).length;
       const targetCount = this.getPolicyTargetReplicaCount(policy);
       const minCount = policy.minReplicaCount || NUM.THREE;

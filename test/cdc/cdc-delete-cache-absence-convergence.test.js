@@ -204,7 +204,6 @@ test(
       systemTableCache: cache,
     });
     service.initialize();
-    service.cacheWaitTimeoutMs = 10;
     const gateway = createControlPlaneRuntimeBundle({
       nodeId: SOURCE_NODE_ID,
       cdcIntegrationService: service,
@@ -213,12 +212,17 @@ test(
     await gateway.deleteSystemTableRow(
       SYSTEM_TABLE_NAME.SERVICES,
       {service_id: serviceId},
-      {allowCoalescing: false, skipCacheWait: true},
+      {allowCoalescing: false},
     );
+    // The committed zero-row deletion triggers its projection reconcile;
+    // the write answered at its commit without waiting for it.
+    for (let turn = 0; turn < 20 && ownerReads.length === 0; turn += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
 
     t.equal(ownerReads.length, 1,
       'owner-to-gateway zero-row cleanup should trigger one exact ' +
-        'authoritative read despite the owner skipCacheWait option');
+        'authoritative reconcile read after its commit');
     t.equal(ownerReads[0]?.observedPartitionId, SERVICES_PARTITION_ID,
       'repair should read the canonical SERVICES owner partition');
     t.equal(ownerReads[0]?.preferLeader, true,
@@ -600,3 +604,38 @@ test(
     t.end();
   },
 );
+
+// A conditional delete that removed nothing is a failed comparison: the
+// row stands, so no absence repair starts. Only a primary-key-only delete
+// proves the row is gone.
+test('CDCIntegrationService - a zero-row conditional delete starts no ' +
+  'absence repair', async (t) => {
+  const serviceId = 'services-p1-conditional-delete';
+  const cache = new SystemTableCache();
+  seedStaleServiceCacheRow(cache, serviceId);
+  const service = new CDCIntegrationService({
+    nodeId: SOURCE_NODE_ID,
+    systemTableCache: cache,
+    sqlQueryEngine: {
+      executeQuery: async () => ({success: true, affectedRows: 0}),
+    },
+  });
+  service.initialize();
+  const repairs = [];
+  service.repairCacheVisibilityHole = async (...args) => {
+    repairs.push(args);
+    return {};
+  };
+
+  const answer = await service.deleteSystemTableRow(
+    SYSTEM_TABLE_NAME.SERVICES,
+    {service_id: serviceId, status: 'draining'});
+  t.equal(answer.success, true);
+  t.equal(answer.position, null, 'a zero-row delete has no position');
+  t.same(repairs, [], 'a failed comparison repairs nothing');
+
+  await service.deleteSystemTableRow(SYSTEM_TABLE_NAME.SERVICES,
+    {service_id: serviceId});
+  t.equal(repairs.length, 1, 'a primary-key-only zero-row delete repairs');
+  service.markShuttingDown();
+});

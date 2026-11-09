@@ -412,6 +412,22 @@ test(
         expected: false,
       },
       {
+        name: 'ACTIVE target with learner raft_role',
+        serviceRows: [buildTargetServiceRow({
+          status: 'active',
+          raft_role: 'learner',
+        })],
+        expected: true,
+      },
+      {
+        name: 'ACTIVE target with missing raft_role',
+        serviceRows: [buildTargetServiceRow({
+          status: 'active',
+          raft_role: null,
+        })],
+        expected: true,
+      },
+      {
         name: 'removed target',
         serviceRows: [buildTargetServiceRow({status: 'removed'})],
         expected: false,
@@ -486,6 +502,139 @@ test(
       replayObservation.operationIds,
       [TEST_OPERATION_ID],
       'duplicate/replayed ledger rows should retain one repair witness',
+    );
+  },
+);
+
+test(
+  'degraded control snapshot repair refreshes the local snapshot after the ' +
+  'repair await completes on both thrown and unapplied repair paths',
+  async (t) => {
+    const staleSnapshot = {
+      capturedAt: TEST_NOW_MS,
+      replicaOperations: {inFlightCount: 1},
+      controlPlaneDiagnostics: {},
+    };
+    const postAwaitFreshSnapshot = {
+      capturedAt: TEST_NOW_MS + 2000,
+      replicaOperations: {inFlightCount: 0},
+      controlPlaneDiagnostics: {},
+    };
+    for (const mode of ['thrown', 'unapplied']) {
+      let currentSnapshot = staleSnapshot;
+      const cache = createAuthoritativeRepairCache('node-local');
+      const controlSnapshot = new AdminControlSnapshot({
+        systemTableCache: cache,
+        cacheMutationTarget: cache,
+        nodeId: 'node-local',
+        nowFn: () => currentSnapshot.capturedAt,
+        ensureAuthoritativeDiscoveryCacheRepair: async () => {
+          cache.applySystemTableChange(
+            TABLES.REPLICA_OPERATIONS,
+            'UPDATE',
+            buildTerminalOperationRow(),
+          );
+          currentSnapshot = postAwaitFreshSnapshot;
+          if (mode === 'thrown') {
+            const error = new Error('repair rpc timed out');
+            error.failedTables = [TABLES.REPLICA_OPERATIONS];
+            throw error;
+          }
+          return {
+            applied: false,
+            failedTables: [TABLES.REPLICA_OPERATIONS],
+          };
+        },
+      });
+      controlSnapshot.buildLocalControlSnapshot = async () => ({
+        ...currentSnapshot,
+      });
+      controlSnapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
+        shouldRepair: true,
+        triggerCodes: [
+          AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATION_IN_FLIGHT,
+        ],
+        tableNames: [TABLES.REPLICA_OPERATIONS],
+      });
+      const resolved = await controlSnapshot.resolveLocalControlSnapshot({
+        allowAuthoritativeRepair: true,
+      });
+      t.equal(
+        resolved.capturedAt,
+        TEST_NOW_MS + 2000,
+        `${mode} degraded repair returns post-await refreshed local snapshot`,
+      );
+      t.equal(
+        resolved.replicaOperations?.inFlightCount,
+        0,
+        `${mode} degraded repair reflects cache updates that arrived during repair await`,
+      );
+    }
+  },
+);
+
+test(
+  'scheduled completed-placement handoff repair bypasses the 5000ms reuse window for subsequent priority partition completions',
+  async (t) => {
+    const scheduledRepairOptions = [];
+    const controlSnapshot = {
+      canRunAuthoritativeControlSnapshotRepair: () => true,
+      evaluateAuthoritativeControlSnapshotRepair: () => ({
+        shouldRepair: true,
+        triggerCodes: [
+          AUTHORITATIVE_REPAIR_TRIGGER
+            .PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP,
+        ],
+      }),
+    };
+    const serviceDiscovery = {
+      buildAuthoritativeDiscoveryRepairScheduleDecision: () => ({
+        state: 'scheduled',
+        repair: null,
+      }),
+      scheduleAuthoritativeDiscoveryCacheRepair: (options) => {
+        scheduledRepairOptions.push(options);
+        return {state: 'scheduled', repair: null};
+      },
+    };
+    const owner = new ControlPlaneSnapshotOwner({
+      controlSnapshot,
+      serviceDiscovery,
+    });
+
+    await owner.resolveControlSnapshot(
+      {capturedAt: TEST_NOW_MS},
+      {allowAuthoritativeRepair: false},
+    );
+    t.equal(
+      scheduledRepairOptions.length,
+      0,
+      'ordinary non-repair control-snapshot observation must not schedule handoff repair',
+    );
+
+    await owner.resolveControlSnapshot(
+      {capturedAt: TEST_NOW_MS + 500},
+      {allowAuthoritativeRepair: true},
+    );
+    await owner.resolveControlSnapshot(
+      {capturedAt: TEST_NOW_MS + 1000},
+      {allowAuthoritativeRepair: true},
+    );
+
+    t.equal(
+      scheduledRepairOptions.length,
+      2,
+      'allowed control-snapshot paths schedule handoff repair on each completion',
+    );
+    t.equal(
+      scheduledRepairOptions[0]?.bypassReuse,
+      true,
+      'first allowed handoff-gap schedule bypasses the 5s reuse window',
+    );
+    t.equal(
+      scheduledRepairOptions[1]?.bypassReuse,
+      true,
+      'subsequent allowed control-snapshot schedule bypasses the 5s reuse window on handoff gap',
     );
   },
 );

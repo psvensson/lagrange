@@ -314,7 +314,7 @@ test('F-2 (the gate clause): a replica whose applied view omits it below ' +
       'setup: a leader');
     cluster.addReplica(outsider, [...founders, outsider],
       {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
-        genesisStamp(founders)});
+        genesisStamp(founders, {})});
     const status = cluster.node(outsider).readStatus();
     assert.equal(status.gateOpen, false, 'setup: never admitted, closed');
     const own = await readPartitionReplicaMembership(

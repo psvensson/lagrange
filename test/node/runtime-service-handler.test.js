@@ -117,6 +117,7 @@ function createHandler(overrides = {}) {
       {
         service_id: 'sys-postgres-wire',
         service_type: 'runtime_service',
+        status: 'active', replica_count: 1,
         runtime_kind: 'native_js',
         runtime_ref: 'postgres-wire-runtime',
         runtime_config: JSON.stringify({
@@ -136,6 +137,12 @@ function createHandler(overrides = {}) {
     nodeId: overrides.nodeId || 'test-node',
     systemTableCache: cache,
     cdcIntegrationService: cdc,
+    controlPlaneSystemTableGateway: overrides.gateway ?? {
+      async readAuthoritativeRows(_table, _sql, [id]) {
+        const row = cache.get('service_definitions', id);
+        return {success: true, rows: row ? [row] : []};
+      },
+    },
     serviceLifecycleManager: lifecycle,
     executorOutcomeEmitter: overrides.executorOutcomeEmitter || null,
     legacyRemovalAuthority: overrides.legacyRemovalAuthority,
@@ -1186,5 +1193,232 @@ describe('RuntimeServiceHandler shutdown', () => {
     handler.shutdown();
     assert.equal(handler.localReplicas.size, 0);
     assert.equal(handler.inProgressOperations.size, 0);
+  });
+
+  it('refreshes stale ship-not-started (replica_count=0) service_definitions from authority on CREATE_REPLICA', async () => {
+    const staleRow = {
+      status: 'active',
+      service_id: 'sys-postgres-wire',
+      service_type: 'runtime_service',
+      replica_count: 0,
+      runtime_kind: 'native_js',
+      runtime_ref: 'postgres-wire-runtime',
+      runtime_config: JSON.stringify({
+        host: '127.0.0.1',
+        authMode: 'trust',
+        tlsMode: 'disable',
+      }),
+    };
+    const scaledRow = {
+      ...staleRow,
+      replica_count: 1,
+      runtime_config: JSON.stringify({
+        host: '0.0.0.0',
+        authMode: 'password',
+        tlsMode: 'disable',
+      }),
+    };
+    const cache = createMockCache({
+      service_definitions: [staleRow],
+      replica_operations: [],
+    });
+    const appliedChanges = [];
+    const origGet = cache.get.bind(cache);
+    let updatedDef = null;
+    cache.get = (tableName, key) => {
+      if (tableName === 'service_definitions' && key === 'sys-postgres-wire' && updatedDef) {
+        return updatedDef;
+      }
+      return origGet(tableName, key);
+    };
+    cache.applySystemTableChange = (tableName, op, row) => {
+      appliedChanges.push({tableName, op, row});
+      if (tableName === 'service_definitions') {
+        updatedDef = row;
+      }
+    };
+    const gateway = {
+      async readAuthoritativeRows(tableName, sql, params) {
+        assert.equal(tableName, 'service_definitions');
+        assert.match(sql, /FROM service_definitions WHERE service_id = \?/);
+        assert.deepEqual(params, ['sys-postgres-wire']);
+        return {success: true, rows: [scaledRow]};
+      },
+    };
+    const {handler, lifecycle} = createHandler({cache, gateway});
+
+    const response = await handler.handleMessage({
+      correlationId: 'corr-stale-def-1',
+      payload: {
+        [ReplicaOperationField.TYPE]:
+          ReplicaOperationMessageType.CREATE_REPLICA,
+        [ReplicaOperationField.OPERATION_ID]: 'op-stale-def-1',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
+      },
+    });
+    assert.equal(response.status, ReplicaOperationResponseStatus.INITIATED);
+
+    await flushImmediate();
+    await flushImmediate();
+    await flushImmediate();
+
+    const replica = handler.getLocalReplica('sys-postgres-wire-r1');
+    assert.equal(replica?.status, ReplicaStatus.ACTIVE);
+    assert.equal(lifecycle.calls[0]?.definition?.runtimeConfig, scaledRow.runtime_config);
+    assert.equal(appliedChanges.length, 1);
+  });
+
+  it('refuses CREATE_REPLICA when service_definitions remains replica_count=0 in authority', async () => {
+    const disabledRow = {
+      status: 'active',
+      service_id: 'sys-postgres-wire',
+      service_type: 'runtime_service',
+      replica_count: 0,
+      runtime_kind: 'native_js',
+      runtime_ref: 'postgres-wire-runtime',
+      runtime_config: JSON.stringify({
+        host: '127.0.0.1',
+        authMode: 'trust',
+        tlsMode: 'disable',
+      }),
+    };
+    const cache = createMockCache({
+      service_definitions: [disabledRow],
+      replica_operations: [],
+    });
+    const gateway = {
+      async readAuthoritativeRows() {
+        return {success: true, rows: [disabledRow]};
+      },
+    };
+    const {handler, lifecycle} = createHandler({cache, gateway});
+
+    await handler.handleMessage({
+      correlationId: 'corr-disabled-def-1',
+      payload: {
+        [ReplicaOperationField.TYPE]:
+          ReplicaOperationMessageType.CREATE_REPLICA,
+        [ReplicaOperationField.OPERATION_ID]: 'op-disabled-def-1',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
+      },
+    });
+
+    await flushImmediate();
+    await flushImmediate();
+    await flushImmediate();
+
+    const replica = handler.getLocalReplica('sys-postgres-wire-r1');
+    assert.equal(replica?.status, ReplicaStatus.FAILED);
+    assert.equal(lifecycle.calls.length, 0);
+  });
+
+  it('authoritative service_definitions overrides stale-positive cache and defers on temporary authority failure', async () => {
+    const staleActiveRow = {
+      status: 'active',
+      service_id: 'sys-postgres-wire',
+      service_type: 'runtime_service',
+      replica_count: 1,
+      runtime_kind: 'native_js',
+      runtime_ref: 'postgres-wire-runtime',
+      runtime_config: JSON.stringify({
+        host: '127.0.0.1',
+        authMode: 'trust',
+        tlsMode: 'disable',
+      }),
+    };
+    const committedDisabledRow = {
+      ...staleActiveRow,
+      replica_count: 0,
+    };
+    const observedReadAuthorities = [];
+    const emittedOutcomes = [];
+    let authorityResponse = {
+      success: true,
+      rows: [committedDisabledRow],
+    };
+    const cache = createMockCache({
+      service_definitions: [staleActiveRow],
+      replica_operations: [],
+    });
+    const gateway = {
+      async readAuthoritativeRows(_tableName, _sql, _params, options) {
+        observedReadAuthorities.push(options?.readAuthority);
+        return authorityResponse;
+      },
+    };
+    const {handler, lifecycle} = createHandler({
+      cache,
+      gateway,
+      executorOutcomeEmitter: {
+        emitOutcome(outcomeType, operationId, workflowStep, options) {
+          emittedOutcomes.push({
+            outcomeType,
+            operationId,
+            workflowStep,
+            options,
+          });
+        },
+      },
+    });
+
+    await handler.handleMessage({
+      correlationId: 'corr-stale-positive-1',
+      payload: {
+        [ReplicaOperationField.TYPE]:
+          ReplicaOperationMessageType.CREATE_REPLICA,
+        [ReplicaOperationField.OPERATION_ID]: 'op-stale-positive-1',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
+      },
+    });
+    await flushImmediate();
+    await flushImmediate();
+    await flushImmediate();
+
+    assert.equal(lifecycle.calls.length, 0,
+      'stale-positive cached replica_count=1 must not start replica when authority has replica_count=0');
+    assert.equal(Object.isFrozen(observedReadAuthorities[0]), true,
+      'must pass frozen buildControlPlaneReadAuthority token');
+    assert.equal(
+      emittedOutcomes.at(-1)?.options?.errorCode,
+      'service_definition_ineligible',
+    );
+    assert.equal(emittedOutcomes.at(-1)?.options?.deferRetry, false);
+
+    authorityResponse = {
+      success: false,
+      error: 'control_plane_leader_unreachable',
+    };
+    await handler.handleMessage({
+      correlationId: 'corr-authority-unavailable-1',
+      payload: {
+        [ReplicaOperationField.TYPE]:
+          ReplicaOperationMessageType.CREATE_REPLICA,
+        [ReplicaOperationField.OPERATION_ID]: 'op-authority-unavailable-1',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
+      },
+    });
+    await flushImmediate();
+    await flushImmediate();
+    await flushImmediate();
+
+    assert.equal(lifecycle.calls.length, 0);
+    assert.equal(
+      emittedOutcomes.at(-1)?.options?.errorCode,
+      'service_definition_authority_unavailable',
+      'temporary authority failure must not be misclassified as DEFINITION_NOT_FOUND',
+    );
+    assert.equal(
+      emittedOutcomes.at(-1)?.options?.deferRetry,
+      true,
+      'temporary authority failure must defer retry',
+    );
+    assert.equal(
+      handler.getLocalReplica('sys-postgres-wire-r1')?.deferRetry,
+      true,
+    );
   });
 });

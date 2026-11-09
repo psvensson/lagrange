@@ -1,0 +1,18 @@
+{
+  "base": "04459151a2813fe24e0cc99e2d3eda431f8902a7",
+  "scope": "Bounded bulk domain correction only; planning cost and missing-both-rows grace separate",
+  "files": [
+    {
+      "path": "src/control-plane/control-plane-readiness-service-node-methods.js",
+      "sha256": "d558b1ce3fa215b25586767d8f88663709f00d0f333cc0193a63820f4c26a922"
+    },
+    {
+      "path": "test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js",
+      "sha256": "c3e73eceefb2453ecec9f4f145827256c30bfa0a1ac4c2b642493f510baea3be"
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "sha256": "c9e51afa08ecae90db4e4378110f3401f2a7f845002aa50027223ba04d528f2c"
+    }
+  ]
+}

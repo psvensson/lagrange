@@ -6,9 +6,10 @@
 //     as the read answered it: {kind, voters, votersOutgoing, learners,
 //     learnersNext, appliedIndex (j), configurationKey,
 //     membershipGenerationIndex, commitIndex, term, leaderId, gateOpen,
-//     identities};
+//     identities, nodeIds} (nodeIds: every id's committed node, or null);
 //   GENESIS - a founding set of a partition no group exists for:
-//     {kind, founders} (replica identities).
+//     {kind, founders, founderNodeIds} (replica identities, and the node
+//     each founder is placed on, as its founding provisioner placed it).
 //
 // The two stamp origins are the creation owner's bootstrap read (COMMITTED,
 // joins) and the founding provisioner (GENESIS). The target validates a stamp
@@ -86,8 +87,9 @@ const COMMITTED_STAMP_FIELDS = Object.freeze([
   'leaderId',
   'gateOpen',
   'identities',
+  'nodeIds',
 ]);
-const GENESIS_STAMP_FIELDS = Object.freeze(['kind', 'founders']);
+const GENESIS_STAMP_FIELDS = Object.freeze(['kind', 'founders', 'founderNodeIds']);
 const DURABLE_RECORD_FIELDS = Object.freeze(['kind']);
 const REPLACE_MEMBERSHIP_STATE_VOTER = 'voter';
 const REPLACE_MEMBERSHIP_STATE_ABSENT = 'absent';
@@ -225,6 +227,47 @@ function canonicalIdentities(value, peerIds) {
   return {identities: Object.freeze(identities)};
 }
 
+function isNodeId(value) {
+  return typeof value === TYPE_STRING && value.length > 0;
+}
+
+// Every id's committed node (a node id, or null where the answering replica
+// holds none): exactly the configuration's ids, nothing else.
+function canonicalNodeIds(value, peerIds) {
+  if (!isOrdinaryRecord(value) ||
+      !hasBoundedExactKeyCount(ownKeys(value), peerIds.length)) {
+    return null;
+  }
+  const nodeIds = Object.create(null);
+  for (let index = 0; index < peerIds.length; index += 1) {
+    const nodeId = ownDataValue(value, peerIds[index]);
+    if (nodeId === null || (nodeId.value !== null && !isNodeId(nodeId.value))) {
+      return null;
+    }
+    nodeIds[peerIds[index]] = nodeId.value;
+  }
+  return Object.freeze(nodeIds);
+}
+
+// The founders' placed nodes: keys are founders, values node ids.
+function canonicalFounderNodeIds(value, founders) {
+  if (!isOrdinaryRecord(value)) {
+    return null;
+  }
+  const keys = ownKeys(value);
+  const nodeIds = Object.create(null);
+  for (let index = 0; index < keys.length; index += 1) {
+    const nodeId = typeof keys[index] === TYPE_STRING ?
+      ownDataValue(value, keys[index]) : null;
+    if (nodeId === null || !founders.includes(keys[index]) ||
+        !isNodeId(nodeId.value)) {
+      return null;
+    }
+    nodeIds[keys[index]] = nodeId.value;
+  }
+  return Object.freeze(nodeIds);
+}
+
 function uniquePeerIds(...sets) {
   const result = [];
   const seen = Object.create(null);
@@ -350,12 +393,17 @@ function canonicalCommittedStamp(stamp) {
   if (leaderDefect !== null) {
     return invalid(leaderDefect);
   }
+  const nodeIds = canonicalNodeIds(ownDataValue(stamp, 'nodeIds').value,
+    peerIds);
+  if (nodeIds === null) {
+    return invalid(COMMITTED_MEMBERSHIP_STAMP_DEFECT.MALFORMED);
+  }
   return Object.freeze({valid: true, stamp: Object.freeze(Object.assign(
     Object.create(null), {kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED,
       voters, votersOutgoing: outgoing, learners, learnersNext, appliedIndex,
       configurationKey,
       membershipGenerationIndex, commitIndex, term, leaderId, gateOpen,
-      identities: resolved.identities}))});
+      identities: resolved.identities, nodeIds}))});
 }
 
 function canonicalGenesisStamp(stamp) {
@@ -370,9 +418,14 @@ function canonicalGenesisStamp(stamp) {
   if (founders.length === 0) {
     return invalid(COMMITTED_MEMBERSHIP_STAMP_DEFECT.NO_FOUNDERS);
   }
+  const founderNodeIds = canonicalFounderNodeIds(
+    ownDataValue(stamp, 'founderNodeIds').value, founders);
+  if (founderNodeIds === null) {
+    return invalid(COMMITTED_MEMBERSHIP_STAMP_DEFECT.MALFORMED);
+  }
   return Object.freeze({valid: true, stamp: Object.freeze(Object.assign(
     Object.create(null), {kind: COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS,
-      founders}))});
+      founders, founderNodeIds}))});
 }
 
 /**
@@ -568,11 +621,15 @@ function committedStampOfAnswer(answer) {
 /**
  * The GENESIS stamp of a founding set.
  * @param {Array<string>} founders - The founding replica identities.
- * @return {Object} Frozen {kind: GENESIS, founders}.
+ * @param {Object} founderNodeIds - {replicaIdentity: nodeId}: the node each
+ *   founder is placed on, as the founding provisioner placed it (partition
+ *   and message-group founders alike). A founder left out has no committed
+ *   node: it is addressed only once a committed fact places it.
+ * @return {Object} Frozen {kind: GENESIS, founders, founderNodeIds}.
  */
-function genesisStamp(founders) {
+function genesisStamp(founders, founderNodeIds) {
   return deepFreeze({kind: COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS,
-    founders: [...founders]});
+    founders: [...founders], founderNodeIds: {...founderNodeIds}});
 }
 
 /**

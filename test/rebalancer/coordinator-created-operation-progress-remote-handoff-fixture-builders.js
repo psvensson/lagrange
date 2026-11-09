@@ -482,7 +482,7 @@ export function buildRemotePriorityDispatchPendingTimeoutPlanningSnapshot() {
 
 export function createRemotePriorityVisibilityCoordinator() {
   const controlPlaneReadinessService = {
-    ...createMockControlPlaneReadinessService(),
+    ...createMockControlPlaneReadinessService({defaultRepairEligible: true}),
     async getPriorityRecoveryPlanningSnapshotBestEffort() {
       return buildRemotePriorityVisibilityPlanningSnapshot();
     },
@@ -501,7 +501,6 @@ export function createRemotePriorityVisibilityCoordinator() {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
         return {success: true, rows: [], affectedRows: 0};
       },
@@ -513,7 +512,7 @@ export function createRemotePriorityVisibilityCoordinator() {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     sqlQueryEngine: {
@@ -547,7 +546,6 @@ export function createRemoteHandoffCoordinator({
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
         sql,
@@ -574,7 +572,7 @@ export function createRemoteHandoffCoordinator({
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     storageAccountingService: {
@@ -586,7 +584,9 @@ export function createRemoteHandoffCoordinator({
     messageRouter: {
       deliver,
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     setTimeoutFn(fn, delayMs) {
       const handle = {fn, delayMs};
@@ -665,7 +665,6 @@ export function createRecentIntentPolicyCoordinator() {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
         return {success: true, rows: [], affectedRows: 0};
       },
@@ -677,7 +676,7 @@ export function createRecentIntentPolicyCoordinator() {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     sqlQueryEngine: {
@@ -685,7 +684,9 @@ export function createRecentIntentPolicyCoordinator() {
         return {success: true, rows: [], affectedRows: 0};
       },
     },
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
   });

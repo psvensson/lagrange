@@ -562,6 +562,14 @@ function deriveBindingVersionId(bindingId, generation = DEPLOYMENT_BINDING_GENER
   return `binding-version-${digest({bindingId, generation})}`;
 }
 
+function isBindingVersionId(value) {
+  return typeof value === 'string' && /^binding-version-[a-f0-9]{64}$/.test(value);
+}
+
+function deriveBindingDeclarationDigest(declaration) {
+  return `sha256:${digest(declaration)}`;
+}
+
 // The row's export_name is the fixed export the invocation path
 // resolves: authored for v2 targets, derived through the interface
 // mapping for v3 targets (whose declarations carry no export_name).
@@ -624,9 +632,7 @@ function buildBindingRow(
     tenant_id: context.tenantId,
     binding_name: declaration.name,
     generation,
-    binding_digest: `sha256:${createHash(HASH_ALGORITHM)
-      .update(normalizedBinding)
-      .digest(HASH_ENCODING)}`,
+    binding_digest: deriveBindingDeclarationDigest(declaration),
     package_id: declaration.target.package_id,
     manifest_digest: declaration.target.manifest_digest,
     export_name: declarationExportName(declaration),
@@ -685,9 +691,7 @@ function bindingRowHasInspectableValues(row) {
 
 function bindingRowMatchesDeclaration(row, declaration) {
   const bindingId = deriveBindingId(row.tenant_id, declaration.name);
-  const expectedDigest = `sha256:${createHash(HASH_ALGORITHM)
-    .update(row.normalized_binding)
-    .digest(HASH_ENCODING)}`;
+  const expectedDigest = deriveBindingDeclarationDigest(declaration);
   const validGeneration = Number.isSafeInteger(row.generation) && row.generation >= 1;
   const exactValues = [
     [validGeneration, true],
@@ -776,10 +780,12 @@ export {
   canonicalJson,
   canonicalizeAdmittedRequestUrl,
   declarationExportName,
+  deriveBindingDeclarationDigest,
   deriveBindingId,
   deriveBindingVersionId,
   expectedSourceInterface,
   inspectBindingRow,
+  isBindingVersionId,
   isDeploymentBindingCellSourceKind,
   matchesMountPathPrefix,
   mountsOverlap,

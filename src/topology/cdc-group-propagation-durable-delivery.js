@@ -31,6 +31,189 @@ const DURABLE_PROPAGATION_CAUSE = Object.freeze({
   RESPONSE: 'response',
   ERROR: 'error',
 });
+const CONTENDED_TABLE_SLICE_WAVES = 4;
+const CONTENDED_SLICE_YIELD_HOLD_MS = 300;
+const BUSY_CONTENDED_RETRY_AFTER_MS = 10;
+const MIN_YIELD_HOLD_RETRY_AFTER_MS = 5;
+
+function isWaitingSliceTableExpired(owner, table) {
+  const isLive = owner.waitingDurableSliceTableLifecycles?.get?.(table);
+  return typeof isLive === 'function' && isLive() === false;
+}
+
+function clearWaitingSliceTableMetadata(owner, table) {
+  owner.waitingDurableSliceTableTimestamps?.delete?.(table);
+  owner.waitingDurableSliceTableLifecycles?.delete?.(table);
+  owner.creditedWaitingDurableSliceTables?.delete?.(table);
+}
+
+function pruneStaleWaitingDurableSliceTables(owner) {
+  if (!Array.isArray(owner.waitingDurableSliceTables) ||
+      owner.waitingDurableSliceTables.length === 0) {
+    return;
+  }
+  owner.waitingDurableSliceTables = owner.waitingDurableSliceTables.filter(
+    (table) => {
+      if (isWaitingSliceTableExpired(owner, table)) {
+        clearWaitingSliceTableMetadata(owner, table);
+        return false;
+      }
+      return true;
+    },
+  );
+  if (owner.waitingDurableSliceTables.length === 0) {
+    owner.durableSliceContended = false;
+  }
+}
+
+function enqueueWaitingDurableSliceTable(owner, tableName, deliveryContext = null) {
+  if (
+    typeof tableName !== 'string' ||
+    tableName.length === 0 ||
+    tableName === owner.durableSliceTable
+  ) {
+    return;
+  }
+  pruneStaleWaitingDurableSliceTables(owner);
+  if (!Array.isArray(owner.waitingDurableSliceTables)) {
+    owner.waitingDurableSliceTables = [];
+  }
+  if (!(owner.waitingDurableSliceTableTimestamps instanceof Map)) {
+    owner.waitingDurableSliceTableTimestamps = new Map();
+  }
+  if (!(owner.waitingDurableSliceTableLifecycles instanceof Map)) {
+    owner.waitingDurableSliceTableLifecycles = new Map();
+  }
+  owner.waitingDurableSliceTableTimestamps.set(tableName, owner.now());
+  const lifecycle =
+    typeof deliveryContext?.registerContentionOwner === 'function' ?
+      deliveryContext.registerContentionOwner(owner, tableName) :
+      null;
+  if (typeof lifecycle === 'function') {
+    owner.waitingDurableSliceTableLifecycles.set(tableName, lifecycle);
+  }
+  if (!owner.waitingDurableSliceTables.includes(tableName)) {
+    owner.waitingDurableSliceTables.push(tableName);
+  }
+}
+
+function dequeueWaitingDurableSliceTable(owner, tableName) {
+  if (!Array.isArray(owner.waitingDurableSliceTables) || !tableName) {
+    return;
+  }
+  const index = owner.waitingDurableSliceTables.indexOf(tableName);
+  if (index !== -1) {
+    owner.waitingDurableSliceTables.splice(index, 1);
+  }
+  if (owner.waitingDurableSliceTableTimestamps instanceof Map) {
+    owner.waitingDurableSliceTableTimestamps.delete(tableName);
+  }
+  if (owner.waitingDurableSliceTableLifecycles instanceof Map) {
+    owner.waitingDurableSliceTableLifecycles.delete(tableName);
+  }
+  if (owner.creditedWaitingDurableSliceTables instanceof Set) {
+    owner.creditedWaitingDurableSliceTables.delete(tableName);
+  }
+}
+
+function notifyNextWaitingDurableSliceTable(owner) {
+  if (
+    owner?.activeDurablePropagation !== null ||
+    !Array.isArray(owner?.waitingDurableSliceTables) ||
+    owner.waitingDurableSliceTables.length === 0
+  ) {
+    return;
+  }
+  pruneStaleWaitingDurableSliceTables(owner);
+  const headTable = owner.waitingDurableSliceTables[0];
+  if (!headTable) return;
+  const lifecycle = owner.waitingDurableSliceTableLifecycles?.get?.(headTable);
+  if (typeof lifecycle?.onSliceTurnReady === 'function') {
+    lifecycle.onSliceTurnReady();
+  }
+}
+
+function clearActiveDurableSliceIfMatching(owner, tableName) {
+  if (owner.durableSliceTable !== tableName) return false;
+  owner.durableSliceTable = null;
+  owner.durableSliceWaves = 0;
+  if (
+    Array.isArray(owner.waitingDurableSliceTables) &&
+    owner.waitingDurableSliceTables.length > 0
+  ) {
+    owner.yieldedDurableSliceTable = tableName;
+    owner.yieldedDurableSliceUntilMs =
+      owner.now() + CONTENDED_SLICE_YIELD_HOLD_MS;
+  } else if (owner.yieldedDurableSliceTable === null) {
+    owner.yieldedDurableSliceUntilMs = 0;
+  }
+  return true;
+}
+
+function releaseWaitingDurableSliceContender(owner, tableName) {
+  if (!owner || typeof tableName !== 'string' || tableName.length === 0) {
+    return false;
+  }
+  const wasActiveSlice = clearActiveDurableSliceIfMatching(owner, tableName);
+  const waiting = owner.waitingDurableSliceTables;
+  const wasHead = Array.isArray(waiting) && waiting[0] === tableName;
+  const wasQueued = Array.isArray(waiting) && waiting.includes(tableName);
+  dequeueWaitingDurableSliceTable(owner, tableName);
+  if (!Array.isArray(waiting) || waiting.length === 0) {
+    owner.durableSliceContended = false;
+    owner.yieldedDurableSliceUntilMs = 0;
+    owner.yieldedDurableSliceTable = null;
+  } else if (wasHead || wasActiveSlice) {
+    notifyNextWaitingDurableSliceTable(owner);
+  }
+  return wasQueued || wasActiveSlice;
+}
+
+function expireYieldedSliceHoldIfElapsed(owner) {
+  pruneStaleWaitingDurableSliceTables(owner);
+  if (
+    Number.isFinite(owner.yieldedDurableSliceUntilMs) &&
+    owner.yieldedDurableSliceUntilMs > 0 &&
+    owner.now() >= owner.yieldedDurableSliceUntilMs
+  ) {
+    owner.yieldedDurableSliceUntilMs = 0;
+    owner.yieldedDurableSliceTable = null;
+    if (Array.isArray(owner.waitingDurableSliceTables) &&
+        owner.waitingDurableSliceTables.length > 0) {
+      const headTable = owner.waitingDurableSliceTables[0];
+      if (!(owner.creditedWaitingDurableSliceTables instanceof Set)) {
+        owner.creditedWaitingDurableSliceTables = new Set();
+      }
+      owner.creditedWaitingDurableSliceTables.add(headTable);
+      if (owner.waitingDurableSliceTableTimestamps instanceof Map) {
+        owner.waitingDurableSliceTableTimestamps.set(headTable, owner.now());
+      }
+    }
+  }
+}
+
+function isYieldHoldWindowActive(owner) {
+  return (
+    Number.isFinite(owner.yieldedDurableSliceUntilMs) &&
+    owner.yieldedDurableSliceUntilMs > 0 &&
+    owner.now() < owner.yieldedDurableSliceUntilMs
+  );
+}
+
+function isYieldedSliceTableDeferred(owner, tableName) {
+  expireYieldedSliceHoldIfElapsed(owner);
+  if (!isYieldHoldWindowActive(owner)) return false;
+  const candidateTable = tableName ?? null;
+  if (owner.durableSliceTable !== null && candidateTable === owner.durableSliceTable) {
+    return false;
+  }
+  const nextWaitingTable = owner.waitingDurableSliceTables?.[0] ?? null;
+  if (nextWaitingTable !== null) {
+    return candidateTable !== nextWaitingTable;
+  }
+  return owner.yieldedDurableSliceTable !== null &&
+    candidateTable === owner.yieldedDurableSliceTable;
+}
 
 function decideDurablePropagationAdmission(occupied, sourceMismatch = false) {
   if (occupied) return DURABLE_PROPAGATION_ADMISSION.BUSY;
@@ -38,14 +221,111 @@ function decideDurablePropagationAdmission(occupied, sourceMismatch = false) {
     DURABLE_PROPAGATION_ADMISSION.ADMIT;
 }
 
-function durablePropagationRefusal(owner, admission) {
+function shouldPreemptActiveDurableSlice(owner, incomingTable) {
+  if ((owner.durableSliceWaves ?? 0) >= CONTENDED_TABLE_SLICE_WAVES) {
+    return true;
+  }
+  return Boolean(owner.creditedWaitingDurableSliceTables?.has?.(incomingTable));
+}
+
+function computeBusyRetryAfterMs(owner, incomingTable, deliveryContext = null) {
+  if (owner.activeDurablePropagation !== null) {
+    if (incomingTable !== owner.durableSliceTable) {
+      enqueueWaitingDurableSliceTable(owner, incomingTable, deliveryContext);
+      owner.durableSliceContended = true;
+      if (shouldPreemptActiveDurableSlice(owner, incomingTable)) {
+        owner.activeDurablePropagation?.context?.markContended?.();
+      }
+    }
+    return Math.min(owner.deliveryRetryDelayMs, BUSY_CONTENDED_RETRY_AFTER_MS);
+  }
+  if (
+    incomingTable !== owner.yieldedDurableSliceTable ||
+    (Array.isArray(owner.waitingDurableSliceTables) &&
+      owner.waitingDurableSliceTables.length > 0)
+  ) {
+    enqueueWaitingDurableSliceTable(owner, incomingTable, deliveryContext);
+  }
+  notifyNextWaitingDurableSliceTable(owner);
+  return Math.max(
+    MIN_YIELD_HOLD_RETRY_AFTER_MS,
+    Math.min(
+      owner.deliveryRetryDelayMs,
+      (owner.yieldedDurableSliceUntilMs ?? 0) - owner.now(),
+    ),
+  );
+}
+
+function durablePropagationRefusal(owner, admission, options = null) {
   if (admission === DURABLE_PROPAGATION_ADMISSION.BUSY) {
-    owner.activeDurablePropagation?.context?.markContended?.();
-    return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
-      retryAfterMs: owner.deliveryRetryDelayMs};
+    const incomingTable = options?.tableName ?? null;
+    return {
+      ...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
+      retryAfterMs: computeBusyRetryAfterMs(
+        owner,
+        incomingTable,
+        options?.deliveryContext ?? null,
+      ),
+    };
   }
   return {...unknownCdcAcceptance(),
     fallbackReason: CDC_GROUP_PROPAGATION_REASON.SOURCE_GROUP_MISMATCH};
+}
+
+function shouldMarkSliceContended(owner, wasCredited) {
+  const hasOtherCreditedContender =
+    !wasCredited &&
+    owner.creditedWaitingDurableSliceTables instanceof Set &&
+    owner.creditedWaitingDurableSliceTables.size > 0;
+  return (
+    hasOtherCreditedContender ||
+    (owner.durableSliceContended &&
+      owner.durableSliceWaves >= CONTENDED_TABLE_SLICE_WAVES)
+  );
+}
+
+function advanceDurablePropagationSlice(
+  owner, tableName, context, deliveryContext = null,
+) {
+  expireYieldedSliceHoldIfElapsed(owner);
+  const wasCredited = Boolean(
+    owner.creditedWaitingDurableSliceTables?.has?.(tableName),
+  );
+  dequeueWaitingDurableSliceTable(owner, tableName);
+  deliveryContext?.registerContentionOwner?.(owner, tableName);
+  owner.yieldedDurableSliceTable = null;
+  owner.yieldedDurableSliceUntilMs = 0;
+  if (owner.durableSliceTable === tableName) {
+    owner.durableSliceWaves = (owner.durableSliceWaves ?? 0) + 1;
+  } else {
+    owner.durableSliceTable = tableName ?? null;
+    owner.durableSliceWaves = 1;
+    owner.durableSliceContended =
+      Array.isArray(owner.waitingDurableSliceTables) &&
+      owner.waitingDurableSliceTables.length > 0;
+  }
+  if (shouldMarkSliceContended(owner, wasCredited)) {
+    context.markContended?.();
+  }
+}
+
+function finishDurablePropagationSliceWave(owner, context) {
+  if (context.isContended?.() === true) {
+    owner.yieldedDurableSliceTable = owner.durableSliceTable;
+    owner.durableSliceTable = null;
+    owner.yieldedDurableSliceUntilMs =
+      owner.now() + CONTENDED_SLICE_YIELD_HOLD_MS;
+    owner.durableSliceWaves = 0;
+    owner.durableSliceContended = false;
+    return;
+  }
+  if (
+    Array.isArray(owner.waitingDurableSliceTables) &&
+    owner.waitingDurableSliceTables.length > 0
+  ) {
+    owner.yieldedDurableSliceUntilMs =
+      owner.now() + CONTENDED_SLICE_YIELD_HOLD_MS;
+  }
 }
 
 function bindWaveProgress(owner, source, events, context, plan) {
@@ -77,7 +357,12 @@ async function deliverTarget(owner, source, events, leaf, context) {
   if (owner.resolvePropagationPressure(events).action === PRESSURE_GOVERNOR_ACTION.DEFER) {
     return notSentTarget(CDC_COMPLETION.BACKPRESSURE);
   }
-  if (!owner.messageRouter || typeof owner.messageRouter.deliver !== 'function') {
+  if (
+    !owner.messageRouter ||
+    typeof owner.messageRouter.deliver !== 'function' ||
+    typeof leaf.route?.address !== 'string' ||
+    leaf.route.address.length === 0
+  ) {
     return notSentTarget();
   }
   const profile = resolveCdcPropagationDeliveryProfile(events);
@@ -136,6 +421,7 @@ function prepareDurableForegroundWave(owner, wave, events, plan) {
     const answer = progress.result();
     return complete(answer) ? propagationResult(owner, source, plan, progress, answer) :
       {...propagationResult(owner, source, plan, progress, unknownCdcAcceptance()),
+        failedTargetGroupIds: progress.failedTargetGroupIds(),
         cause: lastFailure};
   };
   return {
@@ -155,10 +441,7 @@ function prepareDurableForegroundWave(owner, wave, events, plan) {
       return {state: retryDelayMs < remainingMs ? CDC_GROUP_FOREGROUND_RETRY_STATE.ADVANCE :
         CDC_GROUP_FOREGROUND_RETRY_STATE.INSUFFICIENT_DURATION, retryDelayMs, remainingMs};
     },
-    wait: (delayMs) => {
-      if (plan.useGrouped) progress.refreshRoutes(plan.safeTargets, {fallback: true});
-      return context.run(() => owner.sleep(delayMs));
-    },
+    wait: (delayMs) => context.run(() => owner.sleep(delayMs)),
     // Unresolved debt returns to the source owner: the original source lane
     // retains the next invocation and this child scope retains actual cleanup.
   };
@@ -194,17 +477,24 @@ function publicationModeOf(plan) {
 async function propagateDurableCdcEvent(owner, options) {
   const parent = options.deliveryContext;
   assertCdcDeliveryInvocation(parent);
-  const admission = decideDurablePropagationAdmission(owner.activeDurablePropagation !== null);
+  const admission = decideDurablePropagationAdmission(
+    owner.activeDurablePropagation !== null ||
+      isYieldedSliceTableDeferred(owner, options.tableName),
+  );
   if (admission !== DURABLE_PROPAGATION_ADMISSION.ADMIT) {
-    return durablePropagationRefusal(owner, admission);
+    return durablePropagationRefusal(owner, admission, options);
   }
   // Admission precedes immutable capture, target capture, source effects and
   // every await. The slot is released by actual local cleanup, not response.
   const context = openCdcDeliveryChildScope(parent);
   const wave = {context, source: options.sourceMessageGroupService};
   owner.activeDurablePropagation = wave;
+  advanceDurablePropagationSlice(owner, options.tableName, context, parent);
   context.cleanup.then(() => {
-    if (owner.activeDurablePropagation === wave) owner.activeDurablePropagation = null;
+    if (owner.activeDurablePropagation === wave) {
+      owner.activeDurablePropagation = null;
+      notifyNextWaitingDurableSliceTable(owner);
+    }
   });
   try {
     context.assertCurrent();
@@ -226,8 +516,9 @@ async function propagateDurableCdcEvent(owner, options) {
     }
     return result;
   } finally {
+    finishDurablePropagationSliceWave(owner, context);
     context.finish();
   }
 }
 
-export {propagateDurableCdcEvent};
+export {propagateDurableCdcEvent, releaseWaitingDurableSliceContender};

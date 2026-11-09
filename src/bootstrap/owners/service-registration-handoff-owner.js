@@ -386,7 +386,6 @@ class ServiceRegistrationHandoffOwner {
     return runRetryableControlPlaneWrite(
       (attemptIdentity) => this.delegates.executeBootstrapControlPlaneMutation(
         mutation, {
-          skipCacheWait: true,
           ...attemptIdentity,
         }),
       {

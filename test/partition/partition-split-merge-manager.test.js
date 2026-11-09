@@ -506,7 +506,7 @@ test('PartitionSplitMergeManager - evaluates managed cache-backed partitions and
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {splitStorageThreshold: 64};
+          return {targetReplicaCount: 3, minReplicaCount: 3, splitStorageThreshold: 64};
         },
       },
     });
@@ -560,7 +560,7 @@ test('PartitionSplitMergeManager - allows managed execution callback to invoke s
     }),
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {splitStorageThreshold: 64};
+        return {targetReplicaCount: 3, minReplicaCount: 3, splitStorageThreshold: 64};
       },
     },
   });
@@ -598,7 +598,7 @@ test('PartitionSplitMergeManager - records unsuccessful managed split executions
       }),
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {splitStorageThreshold: 64};
+          return {targetReplicaCount: 3, minReplicaCount: 3, splitStorageThreshold: 64};
         },
       },
     });
@@ -640,7 +640,7 @@ test('PartitionSplitMergeManager - records deferred managed split executions as 
       }),
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {splitStorageThreshold: 64};
+          return {targetReplicaCount: 3, minReplicaCount: 3, splitStorageThreshold: 64};
         },
       },
     });
@@ -694,7 +694,7 @@ test('PartitionSplitMergeManager - schedules deferred managed split retries ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {splitStorageThreshold: 64};
+        return {targetReplicaCount: 3, minReplicaCount: 3, splitStorageThreshold: 64};
       },
     },
   });
@@ -753,7 +753,7 @@ test('PartitionSplitMergeManager - limits automatic split execution per ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {splitStorageThreshold: 64};
+        return {targetReplicaCount: 3, minReplicaCount: 3, splitStorageThreshold: 64};
       },
     },
   });
@@ -917,7 +917,7 @@ test('PartitionSplitMergeManager - defers split evaluation under local ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {splitStorageThreshold: 64};
+        return {targetReplicaCount: 3, minReplicaCount: 3, splitStorageThreshold: 64};
       },
     },
   });
@@ -981,7 +981,7 @@ test('PartitionSplitMergeManager - executes reactive write-activity split ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {splitStorageThreshold: 64};
+        return {targetReplicaCount: 3, minReplicaCount: 3, splitStorageThreshold: 64};
       },
     },
   });
@@ -1048,7 +1048,7 @@ async (t) => {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {splitStorageThreshold: 64};
+        return {targetReplicaCount: 3, minReplicaCount: 3, splitStorageThreshold: 64};
       },
     },
   });

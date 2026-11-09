@@ -72,9 +72,7 @@ async function hostAt(root) {
     const cache = new SystemTableCache();
     caches.set(replica, cache);
     const service = new MessageGroupService({groupId: GROUP, replicaId: replica,
-      nodeId: NODE, replicaIds: [...FOUNDERS, TARGET],
-      peerAddresses: [...FOUNDERS, TARGET].map(
-        (id) => `${NODE}/message-group/${id}`), transport: router,
+      nodeId: NODE, replicaIds: [...FOUNDERS, TARGET], transport: router,
       nodeService: {getSystemTableCache: () => cache,
         getReadOnlySystemTableCache: () => cache}, dbPath: dbPath(replica),
       ...extra});
@@ -140,8 +138,8 @@ test('fresh message-group learner installs a transferred raft-rs image and ' +
     const founders = [];
     for (const replica of FOUNDERS) {
       founders.push(await host.open(replica,
-        {replicaIds: FOUNDERS, peerAddresses: FOUNDERS.map(
-          (id) => `${NODE}/message-group/${id}`)}));
+        {replicaIds: FOUNDERS, founderNodeIds: Object.fromEntries(
+          FOUNDERS.map((id) => [id, NODE]))}));
     }
     assert.equal(await waitFor(() => founders.filter((service) =>
       service.raft.readStatus().role === 'leader').length === 1), true);
@@ -150,7 +148,7 @@ test('fresh message-group learner installs a transferred raft-rs image and ' +
     const targetPeer = new RaftRsPeerIdentityRegistry(leader.db)
       .registerReplica(TARGET);
     const proposed = await turnChainValue(leader.raft.proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: TARGET}));
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: TARGET, nodeId: NODE}));
     assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.equal(await waitFor(() => leader.raft.readStatus().confState.learners
       .includes(targetPeer)), true, 'the live leader commits the learner');

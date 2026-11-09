@@ -1,3 +1,5 @@
+import {createRequestBindingFixture} from
+  '../../control-plane/request-binding-service-definition-fixture.js';
 import {test} from '../../../src/test-helpers/tap.js';
 import {RemoteCache} from '../../../src/cli/core/remote-cache.js';
 
@@ -250,7 +252,7 @@ test('RemoteCache - getLogicalServices aggregates definitions and endpoints',
           service_name: 'sys-admin-meta',
           runtime_kind: 'native_js',
           runtime_ref: 'builtin://sys-admin-meta',
-          replica_count: 2,
+          status: 'active', replica_count: 2,
         },
       ],
       service_endpoints: [
@@ -287,18 +289,15 @@ test('RemoteCache - getLogicalServices aggregates definitions and endpoints',
       'marks service healthy when desired replicas are healthy');
   });
 
-test('RemoteCache - reports system-policy targets for Binding Cells',
+test('RemoteCache - reports system-policy targets for producer-derived Binding Cells',
   async (t) => {
     const cache = new RemoteCache();
-    const serviceId = `binding-service-${'a'.repeat(64)}`;
+    const producer = await createRequestBindingFixture();
+    const {serviceDefinition} = await producer.owners.serviceDefinitionsOwner
+      .reconcileRequestBinding(producer.bindingRow);
+    const serviceId = serviceDefinition.service_id;
     cache.loadFromDump({
-      service_definitions: [{
-        service_id: serviceId,
-        service_name: 'orders-api',
-        runtime_kind: 'wasm_component',
-        replica_count: 0,
-        binding_version_id: `binding-version-${'b'.repeat(64)}`,
-      }],
+      service_definitions: [serviceDefinition],
       service_endpoints: [{
         endpoint_id: 'orders-api-node-1',
         service_id: serviceId,
@@ -318,8 +317,8 @@ test('RemoteCache - getLogicalServices supports nodeId filter', async (t) => {
   const cache = new RemoteCache();
   cache.loadFromDump({
     service_definitions: [
-      {service_id: 'svc-a', service_name: 'svc-a', replica_count: 1},
-      {service_id: 'svc-b', service_name: 'svc-b', replica_count: 1},
+      {service_id: 'svc-a', service_name: 'svc-a', status: 'active', replica_count: 1},
+      {service_id: 'svc-b', service_name: 'svc-b', status: 'active', replica_count: 1},
     ],
     service_endpoints: [
       {endpoint_id: 'a-1', service_id: 'svc-a', node_id: 'node-1', health_status: 'healthy'},

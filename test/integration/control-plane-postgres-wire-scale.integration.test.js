@@ -23,7 +23,7 @@ import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sq
 import {TABLES} from '../../src/constants/index.js';
 import {RuntimeServiceRebalancerOwner} from
   '../../src/bootstrap/shared/runtime-service-rebalancer-setup.js';
-import {resolveRuntimeServiceTargetReplicaCount} from '../../src/rebalancer/runtime-service-policy.js';
+import {resolveRuntimeServiceDefinitionPolicy} from '../../src/rebalancer/runtime-service-policy.js';
 
 ConfigurationManager.getInstance().initialize();
 LoggingService.getInstance().initialize({level: 'error'});
@@ -68,8 +68,8 @@ function createFixture(t, beforeUpdate = () => {}) {
     messageRouter: {}, rebalanceCoordinator: {}, serviceDefinitionsOwner: owner,
     createRebalancer: () => ({initialize() {}, setLeader() {}, shutdown() {},
       enqueueRebalanceCheck() {
-        targets.push(resolveRuntimeServiceTargetReplicaCount(
-          cache.get(TABLES.SERVICE_DEFINITIONS, SERVICE_ID)));
+        targets.push(resolveRuntimeServiceDefinitionPolicy(
+          cache.get(TABLES.SERVICE_DEFINITIONS, SERVICE_ID)).targetReplicaCount);
       }}),
   });
   placementOwner.setLeader(true);

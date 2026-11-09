@@ -1,14 +1,13 @@
 import {OperationWorkflowDispatchExecution} from './operation-workflow-dispatch-execution.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
-import {
-  isEvidenceAbsentReadinessDenialSnapshot,
-} from '../control-plane/readiness-denial-classification.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {UNIFIED_SERVICE_TYPE} from
   '../constants/unified-service-lifecycle.js';
 
 import {isReplaceRemovalIntentDurable} from './operation-workflow-replace-owner.js';
+const mapPrototypeGet = Function.call.bind(Map.prototype.get);
+
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -132,53 +131,12 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
     return isVoterRaftRole(replicaRow.raft_role);
   }
 
-  // Evidence-absent readiness denial: the planning snapshot has not
-  // converged for this node, so readiness has no verdict at all — the
-  // denial consists exclusively of planning_snapshot_refresh_pending /
-  // owner_evidence_missing; an empty reason list stays ambiguous and fails
-  // closed. Mirrors the approved routing fail-open discipline: any
-  // substantive denial keeps every guard closed.
-  isEvidenceAbsentReadinessDenial(nodeId, options = {}) {
-    if (
-      !nodeId ||
-      !this.controlPlaneReadinessService ||
-      typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
-        'function'
-    ) {
-      return false;
-    }
-    const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
-      nodeId,
-      {
-        decisionDimension:
-          typeof options?.decisionDimension === 'string' &&
-          options.decisionDimension.length > 0 ?
-            options.decisionDimension :
-            this.resolveOperationReadinessDecisionDimension(
-              options?.partitionId || null,
-            ),
-      },
-    );
-    return isEvidenceAbsentReadinessDenialSnapshot(readiness);
-  }
-
-  // Floor accounting for critical-partition remove safety ONLY: a replica
-  // whose raft topology is voter-ready counts toward the quorum floor when
-  // its node's readiness denial is evidence-absent (a barrier-held joiner
-  // whose planning snapshot has not converged). Without this, cold
-  // formation deadlocks: the barrier withholds the joiner's READY lease,
-  // the joiner's healthy promoted voters are invisible to the floor, the
-  // surplus drain is refused, and the spread the barrier waits for can
-  // never happen. Routing, planning, promotion, and every substantive
-  // denial keep using the strict isVoterReadyRoutableReplica.
+  // A floor sample comes from one committed-node owner read for this entire
+  // evaluation. Strict participation remains a separate replacement guard.
   isVoterReadyFloorCountableReplica(replicaRow, options = {}) {
-    if (this.isVoterReadyRoutableReplica(replicaRow, options)) {
-      return true;
-    }
-    if (!this.isVoterReadyReplicaTopology(replicaRow)) {
-      return false;
-    }
-    return this.isEvidenceAbsentReadinessDenial(replicaRow.node_id, options);
+    const nodes = options.committedNodeFloor?.nodeSemanticsById;
+    return this.isVoterReadyReplicaTopology(replicaRow) && nodes !== null &&
+      nodes !== undefined && mapPrototypeGet(nodes, replicaRow.node_id)?.readyNow === true;
   }
 
   isVoterReadyRoutableReplica(replicaRow, options = {}) {

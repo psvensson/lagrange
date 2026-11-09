@@ -12,7 +12,6 @@
  */
 import {COLUMN, TABLES} from '../constants/index.js';
 import {isLoadReadyReplicaRaftRole} from '../node/replica-state-machine-constants.js';
-import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {
   isReplicaOperationInFlight,
   isReplicaOperationStale,
@@ -491,20 +490,14 @@ class AdminControlSnapshot extends AdminControlSnapshotMembershipPublicationReco
         null;
     const serviceRows = Array.isArray(options.serviceRows) ?
       options.serviceRows :
-      typeof this.systemTableCache?.getAll === 'function' ?
-        readAllSharedRows(this.systemTableCache, TABLES.SERVICES) :
-        ADMIN_CACHE_DUMP.EMPTY;
-    const isStartup =
-      this.startupRecoveryCoordinator &&
-      typeof this.startupRecoveryCoordinator.evaluate === 'function' ?
-        this.startupRecoveryCoordinator.evaluate()?.ready !== true :
-        false;
+      ADMIN_CACHE_DUMP.EMPTY;
     const livenessOptions = {
       partitionIds: scopedPartitionIds,
       serviceRows,
       nowMs: this.nowFn(),
       includeTimeline: true,
-      ignorePreRestart: isStartup || options.ignorePreRestart === true,
+      ignorePreRestart: options.ignorePreRestart === true,
+      localNodeId: this.nodeId || options.localNodeId || null,
     };
     const livenessSummary = summarizeReplicaOperationLiveness(
       replicaOperationRows,

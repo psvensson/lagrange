@@ -183,27 +183,6 @@ class MessageGroupForwardingOwnerRoutingMethods {
     return candidate;
   }
 
-  // The address this replica's own consensus configuration places a peer
-  // at: the runtime's resolution of a configured voter or learner.
-  resolveLivePeerAddressFromConsensus(peerId) {
-    const service = this.service;
-    if (typeof peerId !== 'string' || peerId.length === 0 || !service.raft) {
-      return null;
-    }
-    const status = service.raft.readStatus();
-    if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK ||
-        status.groupId !== service.groupId || status.replicaIdentity !== service.replicaId) {
-      return null;
-    }
-    const peers = status.peers;
-    const peer = Array.isArray(peers) ?
-      peers.find((candidate) => candidate?.replicaIdentity === peerId) :
-      undefined;
-    return typeof peer?.address === 'string' && peer.address.length > 0 ?
-      peer.address :
-      null;
-  }
-
   resolveCDCForwardSelection(logContext = {}) {
     const service = this.service;
     const strictForwarding = service.shouldUseStrictCDCForwarding(logContext);
@@ -249,7 +228,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
       this.resolveStrictCdcRecoveryRoutingContract(logContext) :
       null;
     const canonicalLeaderIdentity =
-      this.resolveCanonicalLeaderIdentityFromCache();
+      this.resolveCanonicalLeaderIdentity();
     const {
       targets,
       suppressedCount,
@@ -597,7 +576,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
       return true;
     }
 
-    return this.resolveCanonicalLeaderIdentityFromCache().leaderNodeId ===
+    return this.resolveCanonicalLeaderIdentity().leaderNodeId ===
       service.nodeId;
   }
 }

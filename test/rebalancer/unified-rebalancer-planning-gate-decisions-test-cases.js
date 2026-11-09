@@ -1,4 +1,3 @@
-import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
   const {
     CONTROL_PLANE_READINESS_DIMENSION,
@@ -6,7 +5,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
     createMockCache,
     createMockCoordinator,
     createMockMembershipPublicationService,
-    createMockReadinessService,
+    createMockControlPlaneReadinessService,
     createTestRebalancer,
     EntityType,
     initializeTestEnvironment,
@@ -58,7 +57,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
         nodes: [
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
         ],
-        controlPlaneReadinessService: partialReadinessFake({
+        readinessFixture: {callbacks: {
           getNodeReadinessSync() {
             return {
               nodeId: 'node-1',
@@ -81,7 +80,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
               ],
             };
           },
-        }),
+        }},
       });
 
       rebalancer.initialize();
@@ -143,7 +142,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
         nodes: [
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
         ],
-        controlPlaneReadinessService: partialReadinessFake({
+        readinessFixture: {callbacks: {
           getNodeReadinessSync() {
             return {
               nodeId: 'node-1',
@@ -166,7 +165,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
               ],
             };
           },
-        }),
+        }},
       });
 
       rebalancer.initialize();
@@ -288,7 +287,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
         partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
         table_id: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       }],
-      controlPlaneReadinessService: {
+      readinessFixture: {callbacks: {
         getNodeReadinessSync() {
           return {
             nodeId: PRIORITY_FOLLOW_UP_NODE_ID_A,
@@ -314,7 +313,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
         getPriorityRecoveryPlanningAnswerSync() {
           return priorityRecoveryPlanningSnapshot;
         },
-      },
+      }},
     });
 
     rebalancer.initialize();
@@ -397,7 +396,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
           };
         },
       },
-      controlPlaneReadinessService: partialReadinessFake({
+      readinessFixture: {callbacks: {
         getNodeReadinessSync() {
           return {
             nodeId: PRIORITY_FOLLOW_UP_NODE_ID_A,
@@ -419,7 +418,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
             ],
           };
         },
-      }),
+      }},
     });
 
     rebalancer.initialize();
@@ -448,11 +447,11 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
       initializeTestEnvironment();
 
       const readinessService = {
-        ...createMockReadinessService(createMockCache([
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache([
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
-        ])),
+        ])}),
         getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
@@ -771,7 +770,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
         },
       ];
       const readinessService = {
-        ...createMockReadinessService(createMockCache(nodes)),
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache(nodes)}),
         getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIds: nodes.map((node) => node.node_id),
@@ -1106,11 +1105,11 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
       initializeTestEnvironment();
 
       const readinessService = {
-        ...createMockReadinessService(createMockCache([
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache([
           {node_id: REBALANCER_TEST_NODE_ID_A, status: NodeStatus.ACTIVE},
           {node_id: REBALANCER_TEST_NODE_ID_B, status: NodeStatus.ACTIVE},
           {node_id: REBALANCER_TEST_NODE_ID_C, status: NodeStatus.ACTIVE},
-        ])),
+        ])}),
         getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIds: [
@@ -1179,11 +1178,11 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
     async (t) => {
       initializeTestEnvironment();
 
-      const readinessService = partialReadinessFake({
-        ...createMockReadinessService(createMockCache([
+      const readinessService = {
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache([
           {node_id: REBALANCER_TEST_NODE_ID_A, status: NodeStatus.ACTIVE},
           {node_id: REBALANCER_TEST_NODE_ID_B, status: NodeStatus.ACTIVE},
-        ])),
+        ])}),
         membershipPublicationService: createMockMembershipPublicationService(
           [REBALANCER_TEST_NODE_ID_A, REBALANCER_TEST_NODE_ID_B],
           PRIORITY_RECOVERY_PUBLICATION_EPOCH,
@@ -1200,7 +1199,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
             },
           },
         ),
-      });
+      };
       const rebalancer = createTestRebalancer({
         entityId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
         entityType: EntityType.PARTITION,
@@ -1240,11 +1239,11 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
     async (t) => {
       initializeTestEnvironment();
 
-      const readinessService = partialReadinessFake({
-        ...createMockReadinessService(createMockCache([
+      const readinessService = {
+        ...createMockControlPlaneReadinessService({systemTableCache: createMockCache([
           {node_id: REBALANCER_TEST_NODE_ID_A, status: NodeStatus.ACTIVE},
           {node_id: REBALANCER_TEST_NODE_ID_B, status: NodeStatus.ACTIVE},
-        ])),
+        ])}),
         membershipPublicationService: createMockMembershipPublicationService(
           [REBALANCER_TEST_NODE_ID_A, REBALANCER_TEST_NODE_ID_B],
           PRIORITY_RECOVERY_PUBLICATION_EPOCH,
@@ -1255,7 +1254,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
             },
           },
         ),
-      });
+      };
       const rebalancer = createTestRebalancer({
         entityId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
         entityType: EntityType.PARTITION,
@@ -1289,49 +1288,51 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
     async (t) => {
       initializeTestEnvironment();
 
-      const readinessService = partialReadinessFake({
-        ...createMockReadinessService(createMockCache([
+      const readinessService = createMockControlPlaneReadinessService({
+        systemTableCache: createMockCache([
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
-        ])),
-        getNodeReadinessSync() {
-          return {
-            nodeId: 'node-1',
-            dimensions: {
-              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
-              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
-              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
-              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
-              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
-              [CONTROL_PLANE_READINESS_DIMENSION
-                .METADATA_PUBLICATION_HEALTHY]: true,
-              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
-              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
-            },
-            reasons: [],
-            priorityControlPlaneRecovery: {
-              active: true,
-              reasonCodes: ['priority_partitions_not_spread'],
-            },
-          };
-        },
-        membershipPublicationService: createMockMembershipPublicationService(
-          ['node-1', 'node-2', 'node-3'],
-          7,
-          {
-            priorityPartitionSummary: {
-              satisfied: false,
-              blockedPartitions: [{
-                partitionId: 'replica_operations-p1',
-                readyReplicaCount: 2,
-                readyDistinctNodeCount: 1,
-                spreadGap: 1,
-              }],
-            },
+        ]),
+        callbacks: {
+          getNodeReadinessSync() {
+            return {
+              nodeId: 'node-1',
+              dimensions: {
+                [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION
+                  .METADATA_PUBLICATION_HEALTHY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+              },
+              reasons: [],
+              priorityControlPlaneRecovery: {
+                active: true,
+                reasonCodes: ['priority_partitions_not_spread'],
+              },
+            };
           },
-        ),
+          membershipPublicationService: createMockMembershipPublicationService(
+            ['node-1', 'node-2', 'node-3'],
+            7,
+            {
+              priorityPartitionSummary: {
+                satisfied: false,
+                blockedPartitions: [{
+                  partitionId: 'replica_operations-p1',
+                  readyReplicaCount: 2,
+                  readyDistinctNodeCount: 1,
+                  spreadGap: 1,
+                }],
+              },
+            },
+          ),
+        },
       });
 
       // A user partition: message-group planning is parked (C3 refusal).

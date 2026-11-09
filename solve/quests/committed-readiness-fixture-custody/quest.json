@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "committed-readiness-fixture-custody",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Readiness test fixtures have one explicit construction owner. Caller-supplied readiness ports retain exact identity, descriptors, receiver and callback behavior; helpers never mutate or complete them into authority. Helper-owned doubles read one declared live world through canonical committed-node, readiness and planning answers. Affected formation tests exercise the current committed lease contract rather than retired projection fallbacks.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/committed-readiness-fixture-custody/evidence/receipt.json",
+      "requiredReceipts": [
+        "single-construction-and-caller-custody",
+        "committed-evidence-fixture-regressions",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-fixture-owner",
+      "statement": "Follow the independently reviewed fixture design in evidence/design-review.md. Remove withFixtureCommittedNodes and fixtureSystemTableCache. Construct controlled ports only at createMockControlPlaneReadinessService, with closure-held world/read callbacks and explicit fixture overrides. No extensibility branch, proxy, clone of a supplied real owner or implicit rebind. A deliberately incomplete or unavailable supplied port stays so."
+    },
+    {
+      "id": "preserve-current-production-authority",
+      "statement": "No production changes belong to this Quest. Keep committed node availability and lease meaning with their current semantic owners. Update stale fixtures/expectations to canonical inputs while retaining expired-lease, missing/unavailable/empty committed-reader and conflicting-positive-projection negatives. Do not reinstate the removed local-serve/evidence-absence branches."
+    },
+    {
+      "id": "bounded-caller-convergence",
+      "statement": "The 205b5683f focused run and same-host 4024a23e7 controls preserve the red failures. Exercise frozen/receiver-sensitive ports, no descriptor writes, live rows, callback delivery/unsubscribe, default shared-port composition, and the affected caller cone. Record distinct runtime Cell/create-lane and operation-authority observation gaps separately; fixture greens do not establish physical formation."
+    },
+    {
+      "id": "no-acceptance-weakening",
+      "statement": "No skip, deadline extension, synthetic terminal state or automatic success row may replace the declared owner behavior. E8, the full corpus, unchanged E9, publication, main merge and comparative measurements retain their separate gates."
+    }
+  ],
+  "sealedAt": "205b5683f36a3f667bcec7499d04df43cc33da33"
+}

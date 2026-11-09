@@ -20,6 +20,8 @@ import {
   getOperationMetadataObject,
   getOperationMetadataStringArray,
 } from '../rebalancer/replica-status.js';
+import {buildFailedCreateCleanupToken} from
+  '../rebalancer/failed-create-cleanup-token.js';
 import {
   CREATE_ADMISSION_ERROR_CODE,
   CREATE_ADMISSION_STATE,
@@ -31,8 +33,10 @@ import {REPLICA_CLEANUP_ERROR_CODE} from
 import {observeAuthoritativeReplicaLifecycle} from
   './replica-state-machine-lifecycle-observation.js';
 import {durableRowVersion} from './replica-state-machine-recovery.js';
-import {recoverRetainedCreateAdmissionRow} from
-  './replica-create-admission-retained-recovery.js';
+import {
+  reconcileCreateAdmissionProgress,
+  recoverRetainedCreateAdmissionRows,
+} from './replica-create-admission-retained-recovery.js';
 import {
   REPLICA_HANDLER_CREATE_DECISION,
   REPLICA_HANDLER_ERROR_MSG,
@@ -84,10 +88,6 @@ function buildRetainedCreateRequest(row, evidence) {
     stepsHistory,
     OPERATION_METADATA_KEY.REPLICA_IDS,
   );
-  const peerAddresses = getOperationMetadataStringArray(
-    stepsHistory,
-    OPERATION_METADATA_KEY.PEER_ADDRESSES,
-  );
   const metadata = [
     [ReplicaOperationField.BOOTSTRAP_TABLE_METADATA,
       OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA],
@@ -98,9 +98,6 @@ function buildRetainedCreateRequest(row, evidence) {
   ];
   if (replicaIds.length > 0) {
     request[ReplicaOperationField.REPLICA_IDS] = replicaIds;
-  }
-  if (peerAddresses.length > 0) {
-    request[ReplicaOperationField.PEER_ADDRESSES] = peerAddresses;
   }
   for (const [field, key] of metadata) {
     const value = getOperationMetadataObject(stepsHistory, key);
@@ -291,17 +288,14 @@ async function reconcileCreateAdmissionLifecycle(handler, evidence) {
       CREATE_ADMISSION_ERROR_CODE.STALE,
     );
   }
-  let currentEvidence = evidence;
-  if (evidence.admissionState === CREATE_ADMISSION_STATE.ADMITTED) {
-    currentEvidence = await handler.getReplicaCreateAdmissionOwner()
-      .markMaterialized(evidence);
-    if (!currentEvidence) {
-      throw createAdmissionLifecycleError(
-        `CREATE admission materialization deferred ${evidence.operationId}`,
-        CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-        true,
-      );
-    }
+  const currentEvidence = await reconcileCreateAdmissionProgress(
+    handler.getReplicaCreateAdmissionOwner(), evidence, observation.row.status);
+  if (!currentEvidence) {
+    throw createAdmissionLifecycleError(
+      `CREATE admission lifecycle progress deferred ${evidence.operationId}`,
+      CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+      true,
+    );
   }
   installCreateAdmissionLifecycleSnapshot(
     handler,
@@ -427,10 +421,6 @@ async function buildPreparedCreateRequest(handler, request, admissionEvidence) {
       request,
       ReplicaOperationField.REPLICA_IDS,
     ),
-    bootstrapPeerAddresses: optionalArrayField(
-      request,
-      ReplicaOperationField.PEER_ADDRESSES,
-    ),
     bootstrapTableMetadata: optionalObjectField(
       request,
       ReplicaOperationField.BOOTSTRAP_TABLE_METADATA,
@@ -478,6 +468,16 @@ async function terminalFailedCreateResponse(handler, prepared) {
   const {createRequest, reconciledAdmission} = prepared;
   if (reconciledAdmission.evidence?.operationTerminal !== true ||
       reconciledAdmission.row?.status !== ReplicaStatus.FAILED) return null;
+  if (reconciledAdmission.row.cleanup_token === null &&
+      typeof reconciledAdmission.evidence.attemptToken === 'string' &&
+      reconciledAdmission.evidence.attemptToken.length > 0 &&
+      reconciledAdmission.row.create_attempt_token ===
+        reconciledAdmission.evidence.attemptToken) {
+    await handler.replicaStateMachine?.claimFailedCreateCleanup?.(
+      reconciledAdmission.row,
+      buildFailedCreateCleanupToken(reconciledAdmission.evidence.operationId),
+    );
+  }
   await handler.getReplicaCreateAdmissionOwner().markProgress(
     reconciledAdmission.evidence,
     CREATE_ADMISSION_STATE.FAILED,
@@ -568,6 +568,9 @@ async function restartPendingCreate(handler, existingReplica, createRequest,
   );
   createRequest.pendingStatusPersisted =
     existingReplica.status === ReplicaStatus.PENDING;
+  // The restarted row's status reaches the create's admission-input owner
+  // before any step of the attempt (verifier finding B1).
+  createRequest.resumedLifecycleStatus = existingReplica.status;
   handler.startCreateReplicaAsync(createRequest);
   return handler.buildReplicaOperationResponse(
     ReplicaOperationResponseStatus.INITIATED,
@@ -712,30 +715,20 @@ function assignReplicaHandlerCreateAdmissionMethods(ReplicaHandler) {
       this.throwIfShuttingDown();
       const owner = this.getReplicaCreateAdmissionOwner();
       const rows = await owner.snapshotTargetAdmissions(SERVICE_TYPE.PARTITION);
-      const deferredOperationIds = [];
-      for (const row of rows) {
-        this.throwIfShuttingDown();
-        if (row.create_admission_state === CREATE_ADMISSION_STATE.CLOSED) {
-          continue;
-        }
-        try {
-          await recoverRetainedCreateAdmissionRow(this, owner, row, {
-            buildRequest: buildRetainedCreateRequest,
-            reconcileLifecycle: reconcileCreateAdmissionLifecycle,
-          });
-        } catch (error) {
-          this.throwIfShuttingDown();
-          if (error?.deferRetry === true ||
-              error?.code === CREATE_ADMISSION_ERROR_CODE.DEFERRED) {
-            deferredOperationIds.push(row.operation_id);
-            continue;
-          }
-          this.logger.warn(
-            REPLICA_HANDLER_LOG_MSG.CREATE_ADMISSION_RECOVERY_FAILED,
-            {operationId: row.operation_id, error: error.message},
-          );
-        }
-      }
+      const deferredOperationIds = await recoverRetainedCreateAdmissionRows(
+        this,
+        owner,
+        rows,
+        {
+          buildRequest: buildRetainedCreateRequest,
+          reconcileLifecycle: reconcileCreateAdmissionLifecycle,
+          onFailure: (row, error) =>
+            this.logger.warn(
+              REPLICA_HANDLER_LOG_MSG.CREATE_ADMISSION_RECOVERY_FAILED,
+              {operationId: row.operation_id, error: error.message},
+            ),
+        },
+      );
       if (deferredOperationIds.length > 0) {
         const error = createAdmissionLifecycleError(
           `CREATE admission recovery deferred for ${deferredOperationIds.join(',')}`,

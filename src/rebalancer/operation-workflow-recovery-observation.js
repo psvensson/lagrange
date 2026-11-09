@@ -1,4 +1,7 @@
 import {PriorityRecoverySupersededTarget} from './priority-recovery-superseded-target.js';
+import {isUnclaimedPreRuntimeFailedCreateRow} from
+  './failed-create-cleanup-token.js';
+import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
   clearStoppingObservationDeferrals,
@@ -148,95 +151,75 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     );
   }
 
-  hasObservedOperationRowTargetProgress(operation) {
-    if (
-      !operation ||
-      !this.repository ||
-      typeof this.repository.getObservedReplicaStatusFromCache !==
-        'function'
-    ) {
-      return false;
-    }
-
-    const observedTargetStatus =
-      this.repository.getObservedReplicaStatusFromCache(
-        operation.replicaId,
-        operation.partitionId,
-        operation.targetNodeId,
-        EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
-      );
-    return OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES.has(
-      observedTargetStatus,
+  isPreSyncCreateOperation(operation) {
+    return Boolean(
+      operation &&
+      (operation.type === OperationType.ADD ||
+        operation.type === OperationType.REPLACE) &&
+      PRE_SYNC_WORKFLOW_STEPS.has(operation.workflowStep),
     );
   }
 
+  buildObservedTargetReplicaObservationOptions(operation) {
+    return this.isPreSyncCreateOperation(operation) ?
+      {
+        ...EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+        ignoreUnclaimedPreRuntimeFailedCreate: true,
+      } :
+      EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS;
+  }
+
+  hasObservedOperationRowTargetProgress(operation) {
+    if (!operation ||
+        typeof this.repository?.getObservedReplicaStatusFromCache !== 'function') {
+      return false;
+    }
+    const observedTargetStatus = this.repository.getObservedReplicaStatusFromCache(
+      operation.replicaId,
+      operation.partitionId,
+      operation.targetNodeId,
+      this.buildObservedTargetReplicaObservationOptions(operation),
+    );
+    return OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES.has(observedTargetStatus);
+  }
+
   getObservedOperationRowTargetProgressStatus(operation) {
-    if (
-      !operation ||
-      !this.repository ||
-      typeof this.repository.getObservedReplicaStatusFromCache !==
-        'function'
-    ) {
+    if (!operation ||
+        typeof this.repository?.getObservedReplicaStatusFromCache !== 'function') {
       return RECONCILED_REPLICA_STATUS_OBSERVED_TARGET_UNAVAILABLE;
     }
-
     return this.repository.getObservedReplicaStatusFromCache(
       operation.replicaId,
       operation.partitionId,
       operation.targetNodeId,
-      EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+      this.buildObservedTargetReplicaObservationOptions(operation),
     );
   }
 
-  findObservedOperationRowProgressOperationIds(
-    operationRow,
-    cacheOperation,
-  ) {
-    if (
-      !operationRow ||
-      typeof operationRow !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT ||
-      cacheOperation === OPERATION_WORKFLOW_OWNER_LITERAL.DELETE ||
-      !this.repository ||
-      typeof this.repository.rowToOperation !== 'function'
-    ) {
+  findObservedOperationRowProgressOperationIds(operationRow, cacheOperation) {
+    if (!operationRow ||
+        typeof operationRow !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT ||
+        cacheOperation === OPERATION_WORKFLOW_OWNER_LITERAL.DELETE ||
+        typeof this.repository?.rowToOperation !== 'function') {
       return [];
     }
-
     const operation = this.repository.rowToOperation(operationRow);
-    if (
-      !this.isObservedOperationRowTargetProgressShapeCandidate(operation) ||
-      !this.hasObservedOperationRowTargetProgress(operation)
-    ) {
+    if (!this.isObservedOperationRowTargetProgressShapeCandidate(operation) ||
+        !this.hasObservedOperationRowTargetProgress(operation)) {
       return [];
     }
-
     const operationId =
       operation.operationId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
-    if (
-      typeof operationId !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING ||
-      operationId.length === 0
-    ) {
-      return [];
-    }
-    return [operationId];
+    return typeof operationId === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
+      operationId.length > 0 ? [operationId] : [];
   }
 
-  resolveObservedProgressOperationIds(
-    tableState,
-    record,
-    cacheOperation,
-  ) {
+  resolveObservedProgressOperationIds(tableState, record, cacheOperation) {
     switch (tableState) {
     case OBSERVED_PROGRESS_TABLE_STATE.SERVICE_REPLICA_STATE:
-      return this.findObservedProgressOperationIds(
-        record,
-        cacheOperation,
-      );
+      return this.findObservedProgressOperationIds(record, cacheOperation);
     case OBSERVED_PROGRESS_TABLE_STATE.OPERATION_WORKFLOW_STATE:
-      return this.findObservedOperationRowProgressOperationIds(
-        record,
-        cacheOperation,
-      );
+      return this.findObservedOperationRowProgressOperationIds(record, cacheOperation);
     case OBSERVED_PROGRESS_TABLE_STATE.IGNORED:
     default:
       return [];
@@ -244,80 +227,46 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
   }
 
   findObservedProgressOperationIds(serviceRow, cacheOperation) {
-    if (
-      !serviceRow ||
-      typeof serviceRow !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT
-    ) {
+    if (!serviceRow || typeof serviceRow !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT) {
       return [];
     }
-
     if (cacheOperation !== OPERATION_WORKFLOW_OWNER_LITERAL.DELETE) {
       const status = String(serviceRow.status || '').toLowerCase();
-      if (!OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES.has(status)) {
-        return [];
-      }
+      if (!OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES.has(status)) return [];
     }
-
     const targetNodeId = String(serviceRow.node_id || serviceRow.nodeId || '');
     const replicaId = String(
-      serviceRow.service_id ||
-        serviceRow.serviceId ||
-        serviceRow.replica_id ||
-        serviceRow.replicaId ||
-        '',
+      serviceRow.service_id || serviceRow.serviceId ||
+      serviceRow.replica_id || serviceRow.replicaId || '',
     );
-    const partitionId = String(
-      serviceRow.partition_id || serviceRow.partitionId || '',
-    );
-    if (
-      targetNodeId.length === 0 ||
-      (replicaId.length === 0 && partitionId.length === 0)
-    ) {
+    const partitionId = String(serviceRow.partition_id || serviceRow.partitionId || '');
+    if (targetNodeId.length === 0 || (replicaId.length === 0 && partitionId.length === 0)) {
       return [];
     }
-
+    const unclaimedPreRuntimeFailedCreate =
+      cacheOperation !== OPERATION_WORKFLOW_OWNER_LITERAL.DELETE &&
+      isUnclaimedPreRuntimeFailedCreateRow(serviceRow);
     const matchingRows =
       this.repository.filterReplicaOperationRowsFromCache((row) => {
         if (!this.canObservedProgressOperationRowMatchService(
-          row,
-          targetNodeId,
-          replicaId,
-          partitionId,
-        )) return false;
+          row, targetNodeId, replicaId, partitionId)) return false;
         const operation = this.repository.rowToOperation(row);
-        if (!this.isObservedProgressOperationShapeCandidate(operation)) {
+        if (!this.isObservedProgressOperationShapeCandidate(operation)) return false;
+        if (this.isObservedProgressReplaceSourceMatch(
+          operation, targetNodeId, replicaId, partitionId)) return true;
+        if (operation.targetNodeId !== targetNodeId) return false;
+        if (unclaimedPreRuntimeFailedCreate && this.isPreSyncCreateOperation(operation)) {
           return false;
         }
-        if (
-          this.isObservedProgressReplaceSourceMatch(
-            operation,
-            targetNodeId,
-            replicaId,
-            partitionId,
-          )
-        ) {
-          return true;
-        }
-        if (operation.targetNodeId !== targetNodeId) {
-          return false;
-        }
-        if (replicaId.length > 0 && operation.replicaId === replicaId) {
-          return true;
-        }
-        return (
-          partitionId.length > 0 && operation.partitionId === partitionId
-        );
+        if (replicaId.length > 0 && operation.replicaId === replicaId) return true;
+        return partitionId.length > 0 && operation.partitionId === partitionId;
       }) || [];
-
     return [
       ...new Set(
         matchingRows
           .map((row) => row?.operation_id || row?.operationId || null)
-          .filter(
-            (opId) =>
-              typeof opId === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-              opId.length > 0,
-          ),
+          .filter((opId) =>
+            typeof opId === OPERATION_WORKFLOW_OWNER_LITERAL.STRING && opId.length > 0),
       ),
     ];
   }

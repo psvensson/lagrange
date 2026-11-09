@@ -35,6 +35,115 @@ const arrayMap = Function.call.bind(Array.prototype.map);
 // output root, so a directory listing is not this run's evidence. Only the
 // nodes this run's own event stream created (node.created) are read; a
 // listing is used only when no event stream names the run's nodes.
+const stringTrim = Function.call.bind(String.prototype.trim);
+
+function trimText(value) {
+  return typeof value === 'string' ? stringTrim(value) : '';
+}
+
+function firstCoordinatorOperationId(coordinator) {
+  const operationIds = coordinator?.operationIds;
+  return Array.isArray(operationIds) ? trimText(operationIds[ZERO]) : '';
+}
+
+function resolveSnapshotOperationId(snapshot) {
+  if (!isRecord(snapshot)) {
+    return null;
+  }
+  const coordinatorOp = snapshot?.coordinator?.operation;
+  const candidates = [
+    snapshot.operationId,
+    snapshot.operation_id,
+    coordinatorOp?.operationId,
+    coordinatorOp?.operation_id,
+    firstCoordinatorOperationId(snapshot.coordinator),
+  ];
+  for (const candidate of candidates) {
+    const trimmed = trimText(candidate);
+    if (trimmed.length > ZERO) {
+      return trimmed;
+    }
+  }
+  return null;
+}
+
+function collectPrimaryOperationIdsByPartitionId(primarySnapshots) {
+  const byPartitionId = new Map();
+  const snapshots = isRecord(primarySnapshots) &&
+    Array.isArray(primarySnapshots.snapshots) ?
+    primarySnapshots.snapshots :
+    [];
+  for (const snapshot of snapshots) {
+    const partitionId = trimText(snapshot?.partitionId);
+    const operationId = resolveSnapshotOperationId(snapshot);
+    if (partitionId.length === ZERO || !operationId) {
+      continue;
+    }
+    let set = byPartitionId.get(partitionId);
+    if (!set) {
+      set = new Set();
+      byPartitionId.set(partitionId, set);
+    }
+    set.add(operationId);
+  }
+  return byPartitionId;
+}
+
+function shouldKeepFallbackSnapshot(
+  snapshot,
+  terminalSet,
+  primaryOperationIdsByPartitionId,
+) {
+  const operationId = resolveSnapshotOperationId(snapshot);
+  if (!operationId) {
+    return true;
+  }
+  if (terminalSet.has(operationId)) {
+    return false;
+  }
+  const partitionId = trimText(snapshot?.partitionId);
+  const activePrimaryIds = primaryOperationIdsByPartitionId.get(partitionId);
+  return !activePrimaryIds ||
+    activePrimaryIds.size === ZERO ||
+    activePrimaryIds.has(operationId);
+}
+
+function reconcilePlaybackDecisionSnapshotsWithStartupFallback(
+  primarySnapshots,
+  fallbackSnapshots,
+  terminalOperationIds = [],
+) {
+  if (!isRecord(fallbackSnapshots) || !Array.isArray(fallbackSnapshots.snapshots)) {
+    return {primarySnapshots, fallbackSnapshots};
+  }
+  const terminalSet = new Set(
+    Array.isArray(terminalOperationIds) ? terminalOperationIds : [],
+  );
+  const primaryOperationIdsByPartitionId =
+    collectPrimaryOperationIdsByPartitionId(primarySnapshots);
+  const prunedFallbackList = [];
+  for (const snapshot of fallbackSnapshots.snapshots) {
+    if (
+      shouldKeepFallbackSnapshot(
+        snapshot,
+        terminalSet,
+        primaryOperationIdsByPartitionId,
+      )
+    ) {
+      prunedFallbackList.push(snapshot);
+    }
+  }
+
+  return {
+    primarySnapshots,
+    fallbackSnapshots: {
+      ...fallbackSnapshots,
+      snapshots: prunedFallbackList,
+      snapshotCount: prunedFallbackList.length,
+    },
+  };
+}
+
 function selectRunNodeLogIds(relevantNodeIds, nodeLogCandidates,
   playbackInsights) {
   if (relevantNodeIds.length > ZERO) {
@@ -234,17 +343,38 @@ async function collectScenarioLogArtifacts(
   const playbackSnapshotInsights = await collectPlaybackSnapshotInsights(
     scenarioDir,
     entry,
+    result.playbackControlPlane,
   );
   if (playbackSnapshotInsights?.controlPlaneFallback) {
+    const reconciledSnapshots =
+      reconcilePlaybackDecisionSnapshotsWithStartupFallback(
+        playbackSnapshotInsights.controlPlaneFallback
+          .priorityRecoveryDecisionSnapshots,
+        result.playbackControlPlane?.priorityRecoveryDecisionSnapshots || null,
+        playbackSnapshotInsights.terminalOperationIds,
+      );
+    const mergedPriorityRecoveryDecisionSnapshots =
+      mergePriorityRecoveryDecisionSnapshots(
+        reconciledSnapshots.primarySnapshots,
+        reconciledSnapshots.fallbackSnapshots,
+      );
     const mergedPlaybackControlPlane = {
       ...(isRecord(result.playbackControlPlane) ? result.playbackControlPlane : {}),
       ...playbackSnapshotInsights.controlPlaneFallback,
-      priorityRecoveryDecisionSnapshots: mergePriorityRecoveryDecisionSnapshots(
-        playbackSnapshotInsights.controlPlaneFallback.priorityRecoveryDecisionSnapshots,
-        result.playbackControlPlane?.priorityRecoveryDecisionSnapshots || null,
-      ),
+      priorityRecoveryDecisionSnapshots:
+        mergedPriorityRecoveryDecisionSnapshots,
     };
     result.playbackControlPlane = mergedPlaybackControlPlane;
+    if (isRecord(result.playbackControlSnapshotByNodeId)) {
+      for (const snapshotEntry of Object.values(
+        result.playbackControlSnapshotByNodeId,
+      )) {
+        if (isRecord(snapshotEntry?.controlPlaneDiagnostics)) {
+          snapshotEntry.controlPlaneDiagnostics.priorityRecoveryDecisionSnapshots =
+            mergedPriorityRecoveryDecisionSnapshots;
+        }
+      }
+    }
   }
 
   const logPriorityRecoveryObservation =

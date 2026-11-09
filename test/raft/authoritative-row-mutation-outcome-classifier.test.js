@@ -9,7 +9,6 @@ import {
 const EXPECTED_REASON_BY_OUTCOME = Object.freeze({
   [CONTROL_PLANE_MUTATION_OUTCOME.APPLIED]: 'applied',
   [CONTROL_PLANE_MUTATION_OUTCOME.NO_OP]: 'noop',
-  [CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY]: 'applied',
   [CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED]: 'deferred',
   [CONTROL_PLANE_MUTATION_OUTCOME.REJECTED]: 'rejected',
   [CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY]: 'owner-not-ready',
@@ -65,8 +64,7 @@ test('Raft authoritative-row completion has an explicit disposition for ' +
   for (const outcome of Object.values(CONTROL_PLANE_MUTATION_OUTCOME)) {
     const {helper, result, scheduled, getRefreshCount} =
       await flushMutationResult({outcome});
-    const applied = outcome === CONTROL_PLANE_MUTATION_OUTCOME.APPLIED ||
-      outcome === CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY;
+    const applied = outcome === CONTROL_PLANE_MUTATION_OUTCOME.APPLIED;
     t.equal(result.reason, EXPECTED_REASON_BY_OUTCOME[outcome],
       `${outcome} should retain its Raft disposition`);
     t.equal(result.applied, applied,
@@ -105,10 +103,6 @@ test('Raft authoritative-row completion preserves valid legacy results and ' +
     }, reason: 'rejected'},
     {label: 'contradictory applied failure', value: {
       outcome: CONTROL_PLANE_MUTATION_OUTCOME.APPLIED, success: false,
-    }, reason: 'rejected'},
-    {label: 'contradictory pending failure', value: {
-      outcome: CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
-      success: false,
     }, reason: 'rejected'},
     {label: 'string row count', value: {
       success: true, affectedRows: '1',

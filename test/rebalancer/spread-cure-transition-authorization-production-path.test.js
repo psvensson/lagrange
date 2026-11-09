@@ -373,11 +373,11 @@ test('one authorization travels the real planner, coordinator and row',
 // which main reads no partition row at all. The row is now resolved lazily,
 // once, and only after a cure condition has already held.
 //
-// The totals below retain main's planner reads except for the removed
+// The totals below retain the baseline fixture's planner reads except for the removed
 // per-plan failed-operation scan. Failed-create cleanup authority is now
 // refreshed once by the rebalance owner before planning; the planner consumes
 // that decision without rescanning replica_operations. The fourth state - the
-// state that reaches the cure - is main's plus ONE partition-row read.
+// state that reaches the cure - is the baseline fixture's plus ONE partition-row read.
 //
 // The boundary is the CURE CONDITION, not the mint. The policy owner calls
 // the resolver once its own condition has held, and it may then still refuse
@@ -389,19 +389,21 @@ test('one authorization travels the real planner, coordinator and row',
 // witness says "reaches no cure" rather than "mints nothing".
 // ---------------------------------------------------------------------------
 
-const MAIN_PLAN_READS = Object.freeze({
+// Node accesses are made by the controlled committed/readiness fixture. Its
+// shared reader uses getAll (6/30 calls), replacing filter+get (1+5/5+25).
+// Keep the original exact partition/operation budgets and the one-row cure
+// increment; these counters do not measure native consensus proposals.
+const CONTROLLED_PLAN_READS = Object.freeze({
   'message-group': Object.freeze({'filter:replica_operations': 8}),
   'runtime-service': Object.freeze({'filter:replica_operations': 8}),
   'partition-no-cure': Object.freeze({
     'get:partitions': 24,
-    'filter:nodes': 1,
-    'get:nodes': 5,
+    'getAll:nodes': 6,
     'filter:replica_operations': 10,
   }),
   'partition-over-target-cure': Object.freeze({
     'get:partitions': 113,
-    'filter:nodes': 5,
-    'get:nodes': 25,
+    'getAll:nodes': 30,
     'filter:replica_operations': 13,
   }),
 });
@@ -494,7 +496,7 @@ const OWN_PARTITION_ROWS = Object.freeze([Object.freeze({
   replica_count: DECLARED_REPLICATION_FACTOR,
 })]);
 
-test('a plan that reaches no cure costs exactly main\'s cache reads',
+test('planner keeps its exact cache-read budget with the declared committed-reader fixture',
   async () => {
     const scenarios = [
       ['message-group', {
@@ -523,14 +525,14 @@ test('a plan that reaches no cure costs exactly main\'s cache reads',
       }],
     ];
     for (const [name, scenario] of scenarios) {
-      assert.deepEqual(countOnePlansReads(scenario), {...MAIN_PLAN_READS[name]},
-        `${name}: every cache read is main's, exactly`);
+      assert.deepEqual(countOnePlansReads(scenario), {...CONTROLLED_PLAN_READS[name]},
+        `${name}: every controlled cache read stays in the exact budget`);
     }
     // The two entity classes for which main reads no partition row at all
     // must still read none: a message group planning against a cluster with
     // thousands of partition rows must not scan them.
     for (const [name] of scenarios.slice(0, 2)) {
-      assert.equal(MAIN_PLAN_READS[name][PARTITION_ROW_READ], undefined,
+      assert.equal(CONTROLLED_PLAN_READS[name][PARTITION_ROW_READ], undefined,
         `${name}: main reads no partition row`);
       assert.equal(
         countOnePlansReads(scenarios.find(
@@ -547,20 +549,20 @@ test('a plan that reaches no cure costs exactly main\'s cache reads',
       partitions: OWN_PARTITION_ROWS,
       targetState: SETTLED_TARGET_STATE,
     });
-    const mainCureReads = MAIN_PLAN_READS['partition-over-target-cure'];
+    const mainCureReads = CONTROLLED_PLAN_READS['partition-over-target-cure'];
     assert.equal(cureReads[PARTITION_ROW_READ],
       mainCureReads[PARTITION_ROW_READ] + 1,
       'the minting plan reads the policy row exactly once more than main');
     for (const key of Object.keys(mainCureReads)) {
       if (key === PARTITION_ROW_READ) continue;
       assert.equal(cureReads[key], mainCureReads[key],
-        `partition-over-target-cure: ${key} is main's`);
+        `partition-over-target-cure: ${key} is the baseline fixture's`);
     }
     assert.deepEqual(Object.keys(cureReads).sort(),
       Object.keys(mainCureReads).sort(),
       'and it reads no table main does not');
 
-    // The planning context is optional in the way main's two-argument call
+    // The planning context is optional in the way the baseline fixture's two-argument call
     // is optional. A default parameter covers only `undefined`, so an
     // explicit null - a caller stating "this plan has no cycle facts" - must
     // plan exactly as the two-argument call does, not throw.
@@ -573,7 +575,7 @@ test('a plan that reaches no cure costs exactly main\'s cache reads',
       const emptyContext = isolated.planner.calculateMoves(
         isolated.currentReplicas, SETTLED_TARGET_STATE, {});
       assert.deepEqual(explicitNull, twoArgument,
-        'an explicit null planning context plans as main\'s two-argument call');
+        'an explicit null planning context plans as the baseline fixture\'s two-argument call');
       assert.deepEqual(emptyContext, twoArgument,
         'and so does an empty one');
       for (const plan of [twoArgument, explicitNull, emptyContext]) {

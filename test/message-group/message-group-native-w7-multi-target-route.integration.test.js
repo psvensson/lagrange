@@ -2,7 +2,7 @@
 // 3 RF5 target groups, 2 connected routers (window 2) and 2 subscribers.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {CDC_OPERATION, TABLES, SERVICE_STATUS} from '../../src/constants/index.js';
+import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {PEER_ADDRESS_STATUS} from '../../src/raft/raft-rs-runtime-owner-constants.js';
 import {
@@ -43,6 +43,7 @@ import {
   pumpMulti,
   driveWithPump,
   prepareMultiTargetProvisionalFixture,
+  releaseFollowers,
   recordOf,
   payloadOf,
   cdcEvents,
@@ -64,18 +65,18 @@ function assertTargetGroupsPremise(f) {
     assert.notEqual(firstStatus.role, RAFT_ROLE.LEADER);
     assert.equal(firstStatus.leaderId, null);
     assert.equal(firstStatus.leaderAddressStatus, PEER_ADDRESS_STATUS.NO_LEADER);
+    // No live leader yet: the reopened follower has heard nothing.
     assert.equal(followerStatus.role, RAFT_ROLE.FOLLOWER);
-    assert.equal(followerStatus.leaderId, info.leaderId);
+    assert.equal(followerStatus.leaderId, null);
     assert.equal(followerStatus.leaderAddress, null);
     assert.equal(
       followerStatus.leaderAddressStatus,
-      PEER_ADDRESS_STATUS.UNAVAILABLE,
+      PEER_ADDRESS_STATUS.NO_LEADER,
     );
     assert.equal(
       info.follower.systemTableCache.get(TABLES.SERVICES, info.leaderId),
       undefined,
     );
-    assert.deepEqual(info.follower.peerAddresses, []);
     assert.equal(info.leader.raft.readStatus().role, RAFT_ROLE.LEADER);
     assert.equal(
       info.first.resolveCDCForwardSelection({
@@ -133,8 +134,8 @@ async function seedW7DebtsAndSubscribers(f) {
   return {debtA, debtsB, subJoin};
 }
 
-function assertProvisionalRoutesHydrated(f, capturedTargets) {
-  for (const [groupId, info] of f.targetGroups.entries()) {
+function assertProvisionalRoutesReleased(f, capturedTargets) {
+  for (const info of f.targetGroups.values()) {
     const after = info.follower.raft.readStatus();
     assert.equal(info.follower.raft === info.beforePort, true);
     assert.equal(
@@ -147,20 +148,6 @@ function assertProvisionalRoutesHydrated(f, capturedTargets) {
     assert.equal(after.leaderId, info.leaderId);
     assert.equal(after.leaderAddressStatus, PEER_ADDRESS_STATUS.RESOLVED);
     assert.equal(after.leaderAddress, nodeAddressOf(NODE_B, info.leaderId));
-    const hydratedRow = info.follower.systemTableCache.get(
-      TABLES.SERVICES,
-      info.leaderId,
-    );
-    assert.equal(hydratedRow?.status, SERVICE_STATUS.STOPPED);
-    assert.ok(
-      f.events.some(
-        (e) =>
-          e.kind === 'actual-peer-reconciliation' &&
-          e.groupId === groupId &&
-          e.row?.service_id === info.leaderId,
-      ),
-      `peer reconciliation invoked for ${groupId}`,
-    );
   }
   assert.deepEqual(
     buildSafeTargets({
@@ -578,7 +565,10 @@ test(
     const cleanAttempt2Result = await driveWithPump(f, () => cleanAttempt2Promise);
     assert.equal(cleanAttempt2Result.state, DRIVE.PROVISIONAL);
 
-    assertProvisionalRoutesHydrated(f, capturedTargets);
+    // The followers hear their leaders again; each route is the leader's
+    // committed address.
+    await releaseFollowers(f);
+    assertProvisionalRoutesReleased(f, capturedTargets);
 
     // --- Step 4: Temporary pressure episode + fresh native redrive + source ACK ---
     f.interceptSend = null;

@@ -3,6 +3,7 @@ import {describe, test} from 'node:test';
 
 import {
   RUNTIME_ACCESS_POLICY_DECISION,
+  RUNTIME_ACCESS_POLICY_ERROR_CODE,
   RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS,
   RUNTIME_ACCESS_POLICY_REASON,
   RUNTIME_ACCESS_POLICY_STATUS,
@@ -10,26 +11,70 @@ import {
   isOutboundCallAllowed,
   statementAccesses,
 } from '../../src/control-plane/owners/runtime-access-policy-owner.js';
+import {deriveRequestServiceDefinitionId} from
+  '../../src/control-plane/owners/request-binding-service-definition-contract.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 
 const SERVICE_ID = `binding-service-${'a'.repeat(64)}`;
+const SERVICE_ID_FOR_ORDERS =
+  deriveRequestServiceDefinitionId('binding-version-orders');
 const SECURITY_CONTEXT = Object.freeze({
   principal: 'alice',
   roles: Object.freeze(['deployer']),
   tenantId: 'tenant-a',
 });
 
+// The fake gateway separates the commit from this node's projection
+// (`rows`, what the cache reads): a write answers at its commit with its
+// position, and the projection applies it at once unless paused. Its
+// awaitProjectionAt stands in for the one projection wait owner.
+const COMMIT_HLC = '1793615397288-1-seam-node';
+
 class PolicyGateway {
   constructor() {
     this.rows = new Map();
+    this.committed = new Map();
     this.failReads = false;
     this.lastUpsertOptions = null;
+    this.paused = false;
+    this.waits = [];
+    this.waitRefusal = null;
   }
 
-  async upsertSystemTableRow(_tableName, row, options) {
+  async upsertSystemTableRow(tableName, row, options) {
     this.lastUpsertOptions = structuredClone(options);
-    this.rows.set(row.config_key, structuredClone(row));
-    return {affectedRows: 1, success: true};
+    this.committed.set(row.config_key, structuredClone(row));
+    if (!this.paused) this.rows.set(row.config_key, structuredClone(row));
+    return {affectedRows: 1, success: true, committed: true,
+      position: Object.freeze({tableName, key: row.config_key,
+        originHlc: COMMIT_HLC})};
+  }
+
+  awaitProjectionAt(position) {
+    if (this.waitRefusal !== null) {
+      return Promise.reject(Object.assign(new Error('projection wait ended'),
+        {code: this.waitRefusal}));
+    }
+    if (this.rows.has(position.key)) {
+      return Promise.resolve({outcome: 'reached', position});
+    }
+    return new Promise((resolve, reject) => {
+      this.waits.push({position, resolve, reject});
+    });
+  }
+
+  resumeProjection() {
+    this.paused = false;
+    for (const [key, row] of this.committed) this.rows.set(key, row);
+    for (const wait of this.waits.splice(0)) {
+      wait.resolve({outcome: 'reached', position: wait.position});
+    }
+  }
+
+  endWaits(code) {
+    for (const wait of this.waits.splice(0)) {
+      wait.reject(Object.assign(new Error('projection wait ended'), {code}));
+    }
   }
 
   async readProjectionRows(_tableName, options) {
@@ -121,10 +166,9 @@ describe('runtime access policy owner', () => {
         JSON.parse(row.config_value).binding_version_id,
         'binding-version-orders',
       );
-      assert.deepEqual(gateway.lastUpsertOptions.expectedCacheFields, {
-        config_value: row.config_value,
-        updated_at: 1000,
-      });
+      // no projection-field wait: writes answer at their commit.
+      assert.equal(
+        Object.hasOwn(gateway.lastUpsertOptions, 'expectedCacheFields'), false);
     });
 
   test('authorizes parsed table operations and fails closed without valid policy',
@@ -366,10 +410,6 @@ describe('runtime access policy schema v2 outbound calls', () => {
         {binding: 'zeta-worker'},
       ]);
       const firstBytes = row.config_value;
-      assert.equal(
-        gateway.lastUpsertOptions.expectedCacheFields.config_value,
-        firstBytes,
-      );
 
       const replayed = await owner.configureBindingAccess(v2Payload([
         {binding: 'alpha-worker'},
@@ -377,20 +417,14 @@ describe('runtime access policy schema v2 outbound calls', () => {
       ]), SECURITY_CONTEXT);
       const [replayRow] = [...gateway.rows.values()];
       assert.equal(replayRow.config_value, firstBytes);
-      assert.equal(
-        gateway.lastUpsertOptions.expectedCacheFields.config_value,
-        firstBytes,
-      );
       assert.deepEqual(replayed.calls, configured.calls);
 
       await owner.configureBindingAccess(
         v2Payload([{binding: 'other-worker'}]),
         SECURITY_CONTEXT,
       );
-      assert.notEqual(
-        gateway.lastUpsertOptions.expectedCacheFields.config_value,
-        firstBytes,
-      );
+      const [changedRow] = [...gateway.rows.values()];
+      assert.notEqual(changedRow.config_value, firstBytes);
     });
 
   test('accepts an empty allowlist and the exact call target bound',
@@ -593,4 +627,96 @@ describe('runtime access policy schema v2 outbound calls', () => {
       );
       assert.equal(gateway.rows.size, 0);
     });
+
+  // Lead decision (a1), quest replica-admission-from-committed-operation
+  // attempt 2: CONFIGURE answers the client only once this node's projection
+  // holds its own committed write (awaitProjectionAt at the write's
+  // position); other nodes stay eventually consistent.
+  test('(a1) with the projection paused, configure does not answer and an ' +
+    'invoke made meanwhile is denied policy_not_found', async () => {
+    const {gateway, owner} = createOwner();
+    gateway.paused = true;
+    let answered = false;
+    const configuring = owner.configureBindingAccess(
+      v2Payload([{binding: 'inner-worker'}]), SECURITY_CONTEXT)
+      .then((policy) => {
+        answered = true;
+        return policy;
+      });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(gateway.committed.size, 1, 'the policy write committed');
+    assert.equal(answered, false,
+      'the DDL does not answer while its write is not projected here');
+    assert.equal(gateway.waits.length, 1,
+      'it waits at its own write\'s position');
+    assert.equal(gateway.waits[0].position.key,
+      owner.configKey(SERVICE_ID_FOR_ORDERS));
+    const meanwhile = await owner.getRuntimePolicy(SERVICE_ID_FOR_ORDERS);
+    assert.deepEqual(meanwhile, {
+      reason: RUNTIME_ACCESS_POLICY_REASON.POLICY_NOT_FOUND,
+      status: RUNTIME_ACCESS_POLICY_STATUS.DENIED,
+    }, 'an invoke made meanwhile is denied policy_not_found');
+
+    gateway.resumeProjection();
+    const policy = await configuring;
+    assert.equal(answered, true, 'the DDL answers once projected');
+    const after = await owner.getRuntimePolicy(policy.serviceId);
+    assert.equal(after.status, RUNTIME_ACCESS_POLICY_STATUS.RESOLVED,
+      'configure then invoke on this node is allowed');
+  });
+
+  for (const code of ['shutdown', 'position_unknown', 'position_invalid',
+    'projection_unavailable']) {
+    test(`(a1) a projection wait ended ${code} answers the DDL typed ` +
+      'unavailable, not success', async () => {
+      const {gateway, owner} = createOwner();
+      if (code === 'shutdown') {
+        gateway.paused = true;
+      } else {
+        gateway.waitRefusal = code;
+      }
+      const configuring = owner.configureBindingAccess(
+        v2Payload([{binding: 'inner-worker'}]), SECURITY_CONTEXT);
+      if (code === 'shutdown') {
+        await new Promise((resolve) => setImmediate(resolve));
+        gateway.endWaits(code);
+      }
+      await assert.rejects(configuring, (error) => {
+        assert.equal(error.name, 'RuntimeAccessPolicyError');
+        assert.equal(error.code,
+          RUNTIME_ACCESS_POLICY_ERROR_CODE.PROJECTION_UNAVAILABLE);
+        assert.equal(error.detail?.projectionOutcome, code);
+        return true;
+      });
+      assert.equal(gateway.committed.size, 1,
+        'the committed write is not reinterpreted: it stays committed');
+    });
+  }
+
+  test('(a1) the write path itself reads no projection: the only cache ' +
+    'read of the policy row comes after the projection wait', async () => {
+    const gateway = new PolicyGateway();
+    const {owner} = createOwner(gateway);
+    const events = [];
+    const upsert = gateway.upsertSystemTableRow.bind(gateway);
+    gateway.upsertSystemTableRow = async (...args) => {
+      events.push('write');
+      return upsert(...args);
+    };
+    const wait = gateway.awaitProjectionAt.bind(gateway);
+    gateway.awaitProjectionAt = (position) => {
+      events.push('await');
+      return wait(position);
+    };
+    const get = owner.systemTableCache.get;
+    owner.systemTableCache.get = (...args) => {
+      events.push('read');
+      return get(...args);
+    };
+    await owner.configureBindingAccess(
+      v2Payload([{binding: 'inner-worker'}]), SECURITY_CONTEXT);
+    assert.deepEqual(events, ['write', 'await'],
+      'configure writes, then waits at its position; it reads no projection');
+  });
 });

@@ -489,6 +489,7 @@ function buildCleanupDelegates(service) {
         self.dispatchService.stop();
         self.dispatchService = null;
       }
+      self.controlPlaneSystemTableGateway = null;
     },
     clearRpcClient: async () => {
       if (self.rpcClient) {

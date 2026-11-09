@@ -20,12 +20,43 @@ const COMPLETED_PLACEMENT_TRANSITIONAL_TARGET_STATUSES = new Set([
   ReplicaStatus.SYNCING,
 ]);
 
+const COMPLETED_PLACEMENT_VOTER_RAFT_ROLES = new Set([
+  'leader',
+  'follower',
+  'candidate',
+  'pre_candidate',
+]);
+
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
 function normalizeServiceStatus(serviceRow) {
   return normalizeString(serviceRow?.status).toLowerCase();
+}
+
+function normalizeServiceRaftRole(serviceRow) {
+  return normalizeString(
+    serviceRow?.raft_role ?? serviceRow?.raftRole,
+  ).toLowerCase();
+}
+
+function isVoterReadyActiveTargetServiceRow(serviceRow) {
+  return normalizeServiceStatus(serviceRow) === ReplicaStatus.ACTIVE &&
+    COMPLETED_PLACEMENT_VOTER_RAFT_ROLES.has(
+      normalizeServiceRaftRole(serviceRow),
+    );
+}
+
+function isTransitionalPriorityPlacementTargetRow(serviceRow) {
+  const status = normalizeServiceStatus(serviceRow);
+  if (COMPLETED_PLACEMENT_TRANSITIONAL_TARGET_STATUSES.has(status)) {
+    return true;
+  }
+  return status === ReplicaStatus.ACTIVE &&
+    !COMPLETED_PLACEMENT_VOTER_RAFT_ROLES.has(
+      normalizeServiceRaftRole(serviceRow),
+    );
 }
 
 function arrayOrEmpty(value) {
@@ -75,6 +106,10 @@ function buildCompletedPriorityPlacementHandoffObservation(options = {}) {
     const operation = normalizeReplicaOperationRecord(operationRow, {
       nowMs: options.nowMs,
     });
+    const targetServiceRows = findObservedTargetReplicaServiceRows(
+      operation,
+      {serviceRows},
+    );
     if (
       !isReplicaOperationTerminalSuccess(operation) ||
       (
@@ -85,19 +120,14 @@ function buildCompletedPriorityPlacementHandoffObservation(options = {}) {
       classifySystemPartition({
         partitionId: operation.partitionId,
       }).priorityControlPlane !== true ||
-      hasObservedCompletedReplicaOperation(operation, {serviceRows})
+      (
+        hasObservedCompletedReplicaOperation(operation, {serviceRows}) &&
+        targetServiceRows.some(isVoterReadyActiveTargetServiceRow)
+      )
     ) {
       continue;
     }
-    const targetServiceRows = findObservedTargetReplicaServiceRows(
-      operation,
-      {serviceRows},
-    );
-    if (!targetServiceRows.some((serviceRow) =>
-      COMPLETED_PLACEMENT_TRANSITIONAL_TARGET_STATUSES.has(
-        normalizeServiceStatus(serviceRow),
-      ),
-    )) {
+    if (!targetServiceRows.some(isTransitionalPriorityPlacementTargetRow)) {
       continue;
     }
     operationIds.add(operation.operationId);

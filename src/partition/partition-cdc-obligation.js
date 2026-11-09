@@ -62,6 +62,45 @@ import {registerCdcAcknowledgementProposer} from
 import {eventCdcSourceScope} from '../cdc/cdc-source-scope-evidence.js';
 import {CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
 import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
+import {applyCommittedPartitionCdcEventToCache} from
+  '../control-plane/control-plane-system-table-gateway-cache-reconciliation.js';
+
+const FAILED_LOCAL_COMMITTED_CDC_APPLY =
+  'Failed local committed CDC apply';
+
+function resolveServiceWritableCache(service) {
+  return service?.cdcIntegrationService?.cacheMutationTarget ||
+    service?.systemTableCache ||
+    null;
+}
+
+function applySingleCommittedEventToCache(service, writableCache, event, timestamp) {
+  if (!event?.cdcEvent) {
+    return;
+  }
+  try {
+    applyCommittedPartitionCdcEventToCache(
+      writableCache,
+      event.cdcEvent,
+      timestamp,
+    );
+  } catch (err) {
+    service?.logger?.debug?.(FAILED_LOCAL_COMMITTED_CDC_APPLY, {
+      error: err?.message,
+    });
+  }
+}
+
+function applyCommittedEventsToPartitionState(service, events) {
+  const writableCache = resolveServiceWritableCache(service);
+  if (!writableCache) {
+    return;
+  }
+  const timestamp = service?.timeSource?.now?.() ?? Date.now();
+  for (const event of events) {
+    applySingleCommittedEventToCache(service, writableCache, event, timestamp);
+  }
+}
 
 /**
  * @param {*} type - A command's type.
@@ -134,6 +173,7 @@ function captureCommittedOperationCdc(service, committed, {operation, result, or
     term,
     ordinal,
     entryId: command.entryId,
+    cdcEvent: built.cdcEvent,
     eventJson: JSON.stringify({...built.cdcEvent,
       ...(sourceScope === null ? {} : {sourceScope})}),
   });
@@ -168,6 +208,7 @@ function recordCommittedStatementCdc(service, committed, {entryKey, result}) {
   const sourceScope = eventCdcSourceScope(service);
   return recordCommittedOperationCdc(service, committed, [{eventKey: entryKey,
     logIndex: index, term, ordinal: 0, entryId: command.entryId,
+    cdcEvent: built.cdcEvent,
     eventJson: JSON.stringify({...built.cdcEvent,
       ...(sourceScope === null ? {} : {sourceScope})})}]);
 }
@@ -205,6 +246,7 @@ function recordCommittedOperationCdc(service, committed, events) {
   ensureCdcObligationLedger(service.db);
   for (const event of events) insertCdcObligation(service.db, event);
   committed.afterCommit(() => {
+    applyCommittedEventsToPartitionState(service, events);
     for (let ordinal = 0; ordinal < recorded; ordinal += 1) {
       service.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_GENERATED);
     }

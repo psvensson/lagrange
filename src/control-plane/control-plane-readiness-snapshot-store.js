@@ -534,6 +534,9 @@ const controlPlaneReadinessSnapshotStoreMethods = {
     // invalidation remain owned by the deferred change notification.
     this.cacheApplyChangeListener =
       (tableName, operation, record, metadata) => {
+        // The committed serve record learns in the applying turn that a
+        // projected change may have outdated it (trigger only).
+        this.noteServeEligibilitySourceChange(tableName, record);
         this.classifyCacheChangeForPlanning(tableName, operation, record,
           metadata);
       };
@@ -572,6 +575,12 @@ const controlPlaneReadinessSnapshotStoreMethods = {
     const capturePlanningSourceError = (error) => {
       firstPlanningSourceError = firstPlanningSourceError || error;
     };
+    // A projected change is a trigger for the committed serve record only:
+    // it can make the record stale, never grant or deny. A cache with an
+    // apply channel delivered it there, in the applying turn.
+    if (!this.cacheApplyChangeListener) {
+      this.noteServeEligibilitySourceChange(tableName, record);
+    }
     this.readinessPlanningSnapshotOwner?.beginCacheChangeTransaction();
     try {
       try {

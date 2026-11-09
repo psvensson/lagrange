@@ -10,7 +10,7 @@ export const HISTORY_ID = Object.freeze({groupId: 'native-history', peerId: 'his
 function historyRequest(db, overrides = {}) {
   return {groupId: HISTORY_ID.groupId, peerId: HISTORY_ID.peerId,
     peerAddress: 'history://r1', bootstrapPeerIds: [HISTORY_ID.peerId],
-    bootstrapMembership: genesisStamp([HISTORY_ID.peerId]), durableStorage: db,
+    bootstrapMembership: genesisStamp([HISTORY_ID.peerId], {}), durableStorage: db,
     timing: {heartbeatMs: 50, electionMinMs: 150, electionMaxMs: 300, tickIntervalMs: 10},
     substrate: {timeSource: new VirtualTimeSource({startMs: 1000})}, deferElection: true,
     sendToPeer: () => undefined, resolvePeerAddress: () => 'history://r1',

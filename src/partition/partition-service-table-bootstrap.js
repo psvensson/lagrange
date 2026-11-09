@@ -1,7 +1,6 @@
 // Partition state-table bootstrap: schema-driven CREATE TABLE, the
 // nodes-table column upgrades, and index creation, extracted verbatim from
-// partition-service-raft-init-base.js (S4 file-size relief; the
-// reconcileRaftPeersFromCacheForService module precedent). The service owns
+// partition-service-raft-init-base.js (S4 file-size relief). The service owns
 // the open database handle and schema; this module owns only the DDL.
 
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';

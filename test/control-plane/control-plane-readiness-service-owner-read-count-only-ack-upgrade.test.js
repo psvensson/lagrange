@@ -95,10 +95,7 @@ function createOwnerReadCountOnlyAckUpgradeService(mode) {
   const observedAt = TEST_OWNER_READ_COUNT_ONLY_ACK_UPGRADE_OBSERVED_AT[mode];
   const membershipPublicationService = mode === 'ASYNC' ?
     {
-      async getLatestPublicationForNode(targetNodeId) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      async getLatestClusterPublication() {
         return {
           publicationEpoch:
             TEST_OWNER_READ_COUNT_ONLY_ACK_UPGRADE_PUBLICATION_EPOCH,
@@ -135,10 +132,7 @@ function createOwnerReadCountOnlyAckUpgradeService(mode) {
       },
     } :
     {
-      getLatestPublicationForNodeSync(targetNodeId) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      getLatestClusterPublicationSync() {
         return {
           publicationEpoch:
             TEST_OWNER_READ_COUNT_ONLY_ACK_UPGRADE_PUBLICATION_EPOCH,

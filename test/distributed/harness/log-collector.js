@@ -410,6 +410,7 @@ class LogCollector {
     this._subscriptionActive = false;
     this._unsubscribeLiveStream = null;
     this._seenLogIds = new Set();
+    this._retainedContainerNodeIds = new Set();
     this._entrySink = null;
   }
 
@@ -493,6 +494,36 @@ class LogCollector {
   }
 
   /**
+   * Retain full container log lines already fetched for a node before
+   * teardown so fallback collection does not replace or duplicate them
+   * with a truncated tail.
+   * @param {string} nodeId
+   * @param {Array<string>} lines
+   */
+  retainContainerLogLines(nodeId, lines) {
+    if (typeof nodeId !== 'string' || nodeId.length === ZERO ||
+      !Array.isArray(lines)) {
+      return;
+    }
+    const fallbackTimestamp = new Date().toISOString();
+    for (const line of lines) {
+      if (typeof line !== 'string' || line.length === ZERO) {
+        continue;
+      }
+      this._appendEntry({
+        [FIELD_NODE_ID]: nodeId,
+        [FIELD_MESSAGE]: line,
+        [FIELD_TIMESTAMP]: resolveContainerLogTimestamp(
+          line, fallbackTimestamp,
+        ),
+        [FIELD_LEVEL]: DEFAULT_LEVEL,
+        [FIELD_SOURCE]: SOURCE_CONTAINER,
+      });
+    }
+    this._retainedContainerNodeIds.add(nodeId);
+  }
+
+  /**
    * Fall back to Docker container stdout/stderr collection.
    * Used when cluster is unreachable for live queries.
    * Each node's logs are read through the node's OWN provider
@@ -512,13 +543,19 @@ class LogCollector {
     maxRetainedBytes = LOG_WINDOW_COVERAGE.MAX_RETAINED_BYTES,
   } = {}) {
     for (const node of nodes) {
+      if (node?.id && this._retainedContainerNodeIds.has(node.id)) {
+        continue;
+      }
       try {
         const window = await node.getLogWindow({maxRetainedBytes});
+        const fallbackTimestamp = new Date().toISOString();
         for (const line of window.lines) {
           this._appendEntry({
             [FIELD_NODE_ID]: node.id,
             [FIELD_MESSAGE]: line,
-            [FIELD_TIMESTAMP]: new Date().toISOString(),
+            [FIELD_TIMESTAMP]: resolveContainerLogTimestamp(
+              line, fallbackTimestamp,
+            ),
             [FIELD_LEVEL]: DEFAULT_LEVEL,
             [FIELD_SOURCE]: SOURCE_CONTAINER,
           });
@@ -779,6 +816,25 @@ function isUnsupportedLiveSelectError(err) {
   const message = String(err?.message || err || '').toLowerCase();
   return message.includes(LIVE_SELECT_UNSUPPORTED_TOKEN_SYNTAX) ||
     message.includes(LIVE_SELECT_UNSUPPORTED_TOKEN_PARSE);
+}
+
+function resolveContainerLogTimestamp(line, fallbackTimestamp) {
+  if (typeof line !== 'string' || !stringStartsWith(line, '{')) {
+    return fallbackTimestamp;
+  }
+  try {
+    const parsed = JSON.parse(line);
+    if (typeof parsed?.time === 'string' && parsed.time.length > ZERO) {
+      return parsed.time;
+    }
+    if (typeof parsed?.timestamp === 'string' &&
+      parsed.timestamp.length > ZERO) {
+      return parsed.timestamp;
+    }
+  } catch (_err) {
+    // Non-JSON line uses the collection timestamp.
+  }
+  return fallbackTimestamp;
 }
 
 function extractContainerLogLines(logs) {

@@ -1,0 +1,13 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "questId": "management-v1-fail-closed-authority",
+  "receipts": [
+    {"id": "unauthorized-refused-before-owner-effects", "passed": true},
+    {"id": "absent-credentials-refused", "passed": true},
+    {"id": "cluster-identity-never-fabricated", "passed": true},
+    {"id": "capability-absent-unsupported-no-effect", "passed": true},
+    {"id": "identity-survives-restart-and-restore", "passed": true},
+    {"id": "independent-verification", "passed": true}
+  ]
+}

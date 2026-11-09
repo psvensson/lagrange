@@ -144,10 +144,15 @@ test(
     t.match(
       result.rows[0].snapshotObservation,
       {
-        state: CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH,
-        refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED,
+        state: CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.STALE_BUT_USABLE,
+        refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.IDLE,
       },
-      'degraded local snapshot should report deferred repair state explicitly',
+      'degraded local snapshot should report stale-but-usable state without scheduling repair',
+    );
+    t.equal(
+      result.rows[0].adminObservation?.repair?.deferred,
+      true,
+      'degraded local snapshot should still mark admin repair observation as deferred',
     );
   },
 );
@@ -218,10 +223,15 @@ test(
     t.match(
       result?.rows?.[0]?.snapshotObservation,
       {
-        state: CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH,
-        refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED,
+        state: CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.STALE_BUT_USABLE,
+        refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.IDLE,
       },
-      'transport-only control snapshots should expose deferred repair state',
+      'transport-only control snapshots should expose stale-but-usable state without scheduling repair',
+    );
+    t.equal(
+      result?.rows?.[0]?.adminObservation?.repair?.deferred,
+      true,
+      'transport-only control snapshots should still mark admin repair observation as deferred',
     );
   },
 );
@@ -270,8 +280,8 @@ test(
     });
     t.equal(
       firstResult?.rows?.[0]?.replicaOperations?.staleInFlightCount,
-      0,
-      'first repaired snapshot should omit unverified stale operation liveness',
+      1,
+      'first snapshot should expose the persistent stale replica operation',
     );
     const firstRepairReadCount = repairEngine.executeRequestCalls.length;
     t.equal(firstRepairReadCount > 0, true,
@@ -283,8 +293,8 @@ test(
     });
     t.equal(
       secondResult?.rows?.[0]?.replicaOperations?.staleInFlightCount,
-      0,
-      'second repaired snapshot should preserve verified operation liveness',
+      1,
+      'second snapshot should still reflect the persistent stale replica operation',
     );
     t.equal(
       repairEngine.executeRequestCalls.length,

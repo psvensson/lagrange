@@ -111,7 +111,7 @@ test('most-caught-up never names a learner, even one further ahead than ' +
     driver.cluster.addReplica(LEARNER, REPLICAS);
     const learnerId = driver.raftIdAt(A, LEARNER);
     assert.equal(driver.port(A).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: LEARNER,
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: LEARNER, nodeId: 'node-test',
     }).result.outcome, CORE_OK);
     driver.deliver();
     assert.notEqual(driver.roundsUntil(() =>
@@ -123,8 +123,7 @@ test('most-caught-up never names a learner, even one further ahead than ' +
       driver.propose(A, {learnerOnly: write});
     }
     const progress = driver.status(A).followerProgress;
-    const matchedOf = (replicaId) => progress[driver.cluster.addressOf(
-      replicaId)];
+    const matchedOf = (replicaId) => progress[replicaId];
     assert.ok([B, C].every((voter) =>
       matchedOf(LEARNER) > matchedOf(voter)),
     'precondition: the learner is further ahead than every voter');

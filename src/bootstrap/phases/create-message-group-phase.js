@@ -36,10 +36,8 @@ import {
   JOINING_UNIFIED_RECONCILE,
 } from '../node-joining-constants.js';
 import {
-  ADDRESS,
   CDC_OPERATION,
   COLUMN,
-  ENTITY_TYPE,
   SERVICE_STATUS,
   TABLES,
   UNIFIED_SERVICE_TYPE,
@@ -289,15 +287,13 @@ class CreateMessageGroupPhase {
       assignment.existingPeerIds :
       replicaIds;
 
-    const peerAddresses = Array.isArray(assignment.peerAddresses) &&
-      assignment.peerAddresses.length > 0 ?
-      assignment.peerAddresses :
-      allReplicaIds.map(
-        (replicaId) =>
-          `${this.nodeId}${ADDRESS.SEPARATOR}` +
-          `${ENTITY_TYPE.MESSAGE_GROUP}` +
-          `${ADDRESS.SEPARATOR}${replicaId}`,
-      );
+    // The founding placement a GENESIS opening commits: only the replicas
+    // this node creates, on this node. The assignment's peer addresses are
+    // built from bootstrap-admission SERVICES rows (a projection), so they
+    // never become a committed node; a founder placed elsewhere is
+    // addressed only once a committed fact names its node.
+    const founderNodeIds = Object.fromEntries(replicaIds.map((replicaId) =>
+      [replicaId, this.nodeId]));
 
     this.delegates.resetJoinMessageGroupReplicas();
     for (
@@ -319,7 +315,7 @@ class CreateMessageGroupPhase {
           replicaId,
           replicaIds: allReplicaIds,
           replicaIndex: replicaIndex >= 0 ? replicaIndex : index,
-          peerAddresses,
+          founderNodeIds,
           ...this.observeJoinReplicaIdentity(replicaId, startupReplicaIds),
           deferElection: true,
           deferElectionUntilJoinConvergence:

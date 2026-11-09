@@ -116,7 +116,7 @@ function createRebalancer(systemTableCache, messageRouter) {
     systemTableCache,
     cdcIntegrationService: {},
     tablePolicyService: {
-      getPolicyForPartition: () => ({
+      getPolicyForPartition: () => ({minReplicaCount: 3,
         targetReplicaCount: 3,
         placementConstraints: {},
       }),

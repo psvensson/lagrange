@@ -46,10 +46,14 @@ function committedRows(cache, partitionId) {
  */
 function fixtureCommittedMembershipAnswer(cache, partitionId) {
   const identities = {};
+  const nodeIds = {};
   for (const row of committedRows(cache, partitionId)) {
     const replicaId = row.replica_id || row.service_id;
     if (typeof replicaId === 'string' && replicaId.length > 0) {
       identities[deriveRaftRsPeerId(replicaId)] = replicaId;
+      nodeIds[deriveRaftRsPeerId(replicaId)] =
+        typeof row.node_id === 'string' && row.node_id.length > 0 ?
+          row.node_id : null;
     }
   }
   if (Object.keys(identities).length === 0) {
@@ -57,6 +61,7 @@ function fixtureCommittedMembershipAnswer(cache, partitionId) {
     // group: one committed voter the fixture never names.
     const unnamed = `${FIXTURE_UNNAMED_VOTER_PREFIX}${partitionId}`;
     identities[deriveRaftRsPeerId(unnamed)] = unnamed;
+    nodeIds[deriveRaftRsPeerId(unnamed)] = null;
   }
   const voters = Object.keys(identities);
   const confState = {voters, votersOutgoing: [], learners: [],
@@ -72,6 +77,7 @@ function fixtureCommittedMembershipAnswer(cache, partitionId) {
     leaderId: Object.values(identities)[0],
     gateOpen: true,
     identities,
+    nodeIds,
   };
 }
 

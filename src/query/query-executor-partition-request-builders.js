@@ -152,6 +152,10 @@ function resolvePartitionExecutionBuilders({
         success: true,
         rows: response.rows || [],
         changes: response.changes,
+        ...(typeof response.rowSetComplete === 'boolean' ?
+          {rowSetComplete: response.rowSetComplete} :
+          {}),
+        ...(response.partial === true ? {partial: true} : {}),
         ...(response.settledReplay === undefined ? {} :
           {settledReplay: response.settledReplay}),
         durableCommitWitness: response.durableCommitWitness,
@@ -159,6 +163,9 @@ function resolvePartitionExecutionBuilders({
         acceptingNodeId: response.acceptingNodeId,
         acknowledgedAtMs: response.acknowledgedAtMs,
         readAuthorityWitness: response.readAuthorityWitness,
+        ...(response.authoritativeObservation ?
+          {authoritativeObservation: response.authoritativeObservation} :
+          {}),
       });
   return Object.freeze({
     buildRequest,

@@ -255,9 +255,12 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
       if (
         typeof messageGroupService?.completeJoinConvergence === 'function'
       ) {
-        messageGroupService.completeJoinConvergence();
+        messageGroupService.completeJoinConvergence({
+          enableMetadataPublication: true,
+        });
       }
     }
+    void this.retryDeferredMessageGroupServiceRowsIfNeeded?.().catch(() => {});
     this.disableSteadyStateControlPlaneReporter();
     activateSteadyStateRuntimeHandoff({
       owner: this.runtimeHandoffOwner,
@@ -367,6 +370,7 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
           await startupPipelineRunner.run({
             phases: joinPlan.segments[JOIN_PLAN_SEGMENT.READINESS],
           });
+          await this.retryDeferredMessageGroupServiceRowsIfNeeded?.();
           await this.signalReadyForReplicas();
         },
       },

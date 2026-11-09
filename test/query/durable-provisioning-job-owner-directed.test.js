@@ -269,7 +269,6 @@ function createRuntime(options) {
       async upsertSystemTableRow() {
         return {success: true, affectedRows: 1};
       },
-      async waitForCacheUpdate() {},
       // Terminal ACTIVE completion requires the authoritative cache-row
       // refresh to succeed (b52aa01d) before the operation may finish.
       async refreshAuthoritativeCacheRow() {
@@ -279,7 +278,7 @@ function createRuntime(options) {
     messageRouter,
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {replicaCount: NODE_IDS.length, minReplicaCount: 2};
+        return {targetReplicaCount: NODE_IDS.length, minReplicaCount: 2};
       },
     },
     sqlQueryEngine: sqlPersistence,

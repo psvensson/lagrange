@@ -477,7 +477,6 @@ function createEventDrivenCoordinator(
     transactionCoordinator: buildTransactionCoordinator(),
     systemTableCache: createMockCache(),
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
         return {
           success: true,
@@ -487,18 +486,16 @@ function createEventDrivenCoordinator(
       },
     },
     controlPlaneReadinessService: {
-      getPriorityRecoveryPlanningSnapshotBestEffort() {
-        return buildEventDrivenPlanningSnapshot(planningOptions);
-      },
+      getPriorityRecoveryPlanningAnswerSync: () =>
+        buildEventDrivenPlanningSnapshot(planningOptions),
+      getPriorityRecoveryPlanningSnapshotBestEffort: () =>
+        buildEventDrivenPlanningSnapshot(planningOptions),
       getNodeReadinessSync(nodeId) {
-        return {
-          nodeId,
-          dimensions: {
-            controlPlaneRecoveryEligible: true,
-            repairEligible: true,
-            serveEligible: true,
-          },
-        };
+        return {nodeId, dimensions: {
+          controlPlaneRecoveryEligible: true,
+          repairEligible: true,
+          serveEligible: true,
+        }};
       },
     },
     messageRouter: {
@@ -511,7 +508,7 @@ function createEventDrivenCoordinator(
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+        return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
       },
     },
     setTimeoutFn(fn, delayMs) {

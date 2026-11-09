@@ -91,11 +91,15 @@ class PartitionNodeCluster {
    * @param {Object} options - The partition's shape.
    * @param {string} options.partitionId - The group.
    * @param {Array<string>} options.replicaIds - Logical Lagrange replica ids.
+   * @param {Object} [options.founderNodeIds] - The founding placement the
+   *   GENESIS stamp commits ({replicaId: nodeId}); none by default.
    */
   constructor({partitionId, replicaIds, substrateFor = null,
     sendFor = null, resolveFor = null, applyFor = null,
-    wrapDatabase = null, timingFor = null, tempRoot = os.tmpdir()}) {
+    wrapDatabase = null, timingFor = null, tempRoot = os.tmpdir(),
+    founderNodeIds = {}}) {
     this.partitionId = partitionId;
+    this.founderNodeIds = Object.freeze({...founderNodeIds});
     this.replicaIds = [...replicaIds];
     this.substrateFor = substrateFor;
     this.sendFor = sendFor;
@@ -161,7 +165,9 @@ class PartitionNodeCluster {
       // the seed phase hand it (a join passes its own stamp in extraRequest;
       // the port refuses an absent one).
       [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
-        genesisStamp(bootstrapReplicaIds),
+        genesisStamp(bootstrapReplicaIds, Object.fromEntries(
+          Object.entries(this.founderNodeIds).filter(([replicaId]) =>
+            bootstrapReplicaIds.includes(replicaId)))),
       [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: db,
       [RAFT_OPERATION_PORT_REQUEST.TIMING]: this.timingFor === null ?
         PARTITION_TIMING : this.timingFor(replicaId),

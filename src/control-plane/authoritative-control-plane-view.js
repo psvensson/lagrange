@@ -98,6 +98,30 @@ function freezeRows(rows) {
   }));
 }
 
+function freezeWitness(witness) {
+  return witness && typeof witness === 'object' && !Array.isArray(witness) ?
+    Object.freeze({...witness}) :
+    null;
+}
+
+function freezeWitnesses(result) {
+  if (Array.isArray(result?.readAuthorityWitnesses)) {
+    return Object.freeze(
+      result.readAuthorityWitnesses
+        .map((witness) => freezeWitness(witness))
+        .filter((witness) => witness !== null),
+    );
+  }
+  const singleWitness = freezeWitness(result?.readAuthorityWitness);
+  return singleWitness ?
+    Object.freeze([singleWitness]) :
+    Object.freeze([]);
+}
+
+function resolveRowSetComplete(result) {
+  return result?.rowSetComplete === true;
+}
+
 function resolveAuthoritativeReadWorkloadProfile(
   tableName,
   resolvedOptions = {},
@@ -387,7 +411,12 @@ class AuthoritativeControlPlaneView {
           success: false,
           tableName,
           rows: Object.freeze([]),
+          count: 0,
           rowCount: 0,
+          rowSetComplete: false,
+          readAuthorityWitness: null,
+          readAuthorityWitnesses: Object.freeze([]),
+          authoritativeObservation: null,
           source: AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.UNAVAILABLE,
           usedSqlFallback: false,
           snapshotVersion: null,
@@ -405,7 +434,12 @@ class AuthoritativeControlPlaneView {
         return Object.freeze({
           ...failure,
           rows: freezeRows(failure.rows),
+          count: 0,
           rowCount: 0,
+          rowSetComplete: false,
+          readAuthorityWitness: null,
+          readAuthorityWitnesses: Object.freeze([]),
+          authoritativeObservation: null,
           source: AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.UNAVAILABLE,
           usedSqlFallback: false,
           snapshotVersion: null,
@@ -427,12 +461,26 @@ class AuthoritativeControlPlaneView {
         );
       const rows = freezeRows(result?.rows);
       const source = normalizeReadSource(result?.source);
+      const readAuthorityWitnesses = freezeWitnesses(result);
+      const readAuthorityWitness =
+        readAuthorityWitnesses[0] || freezeWitness(result?.readAuthorityWitness);
+      const rowSetComplete = resolveRowSetComplete(result);
+      const authoritativeObservation =
+        result?.authoritativeObservation &&
+          typeof result.authoritativeObservation === 'object' ?
+          Object.freeze({...result.authoritativeObservation}) :
+          null;
 
       return Object.freeze({
         success: result?.success === true,
         tableName,
         rows,
+        count: rows.length,
         rowCount: rows.length,
+        rowSetComplete,
+        readAuthorityWitness,
+        readAuthorityWitnesses,
+        authoritativeObservation,
         source,
         localReadHit: result?.localReadHit === true,
         localReplicaFallbackHit: result?.localReplicaFallbackHit === true,

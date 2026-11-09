@@ -87,6 +87,7 @@ const QUERY_ERROR_CODE = Object.freeze({
   SYSTEM_TABLE_NAME_RESERVED: 'SYSTEM_TABLE_NAME_RESERVED',
   TABLE_PARTITION_PROVISIONING_RETRYABLE:
     'TABLE_PARTITION_PROVISIONING_RETRYABLE',
+  PROVISIONING_UNAVAILABLE: 'PROVISIONING_UNAVAILABLE',
   DISTRIBUTED_PARTICIPANT_FAILURE: 'DISTRIBUTED_PARTICIPANT_FAILURE',
   RUNTIME_ACCESS_DENIED: 'RUNTIME_ACCESS_DENIED',
   // A client-originated INSERT/UPDATE/DELETE on a system table (or a client
@@ -215,8 +216,6 @@ const QUERY_ERROR_MSG = Object.freeze({
     'Timed out waiting for table partition metadata for partition ',
   TABLE_PARTITION_SERVICE_METADATA_TIMEOUT_PREFIX:
     'Timed out waiting for partition service metadata for replica ',
-  TABLE_PARTITION_TARGET_NODE_TIMEOUT_PREFIX:
-    'Timed out waiting for active provisioning target nodes for partition ',
   TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX:
     'Timed out waiting for routable partition service for partition ',
   TABLE_PARTITION_LEADER_TIMEOUT_PREFIX:
@@ -318,8 +317,6 @@ const QUERY_LOG_MSG = Object.freeze({
   TABLE_PARTITION_PROVISION_START: 'Provisioning initial table partition replica',
   TABLE_PARTITION_PROVISION_SUCCESS: 'Initial table partition provisioning completed',
   TABLE_PARTITION_PROVISION_FAILED: 'Initial table partition provisioning failed',
-  TABLE_PARTITION_TARGET_NODE_FALLBACK_USED:
-    'Using degraded provisioning target-node fallback',
   TABLE_PARTITION_TRANSIENT_HOLD_WAIT:
     'Whole-cluster transient provisioning hold; waiting it out under the ' +
     'provisioning budget instead of failing the create',
@@ -357,12 +354,11 @@ const QUERY_ROUTING_DIAGNOSTIC_REASON = Object.freeze({
   NO_ACTIVE_ADDRESSED_SERVICES: 'no_active_addressed_services',
   ALL_SERVICES_FILTERED_BY_READINESS:
     'all_services_filtered_by_readiness',
-  SYSTEM_TABLE_LEADER_FAIL_OPEN:
-    'system_table_leader_readiness_fail_open',
   SERVICE_INACTIVE: 'service_inactive',
   SERVICE_ADDRESS_MISSING: 'service_address_missing',
   READINESS_UNAVAILABLE: 'readiness_unavailable',
   NODE_NOT_ELIGIBLE: 'node_not_eligible',
+  SERVE_ELIGIBILITY_UNAVAILABLE: 'serve_eligibility_unavailable',
 });
 
 const QUERY_ROUTING_REPAIR_REASON = Object.freeze({

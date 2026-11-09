@@ -4,6 +4,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 function parseSQL(sql) {
   const parser = new SQLParser(sql);
   return parser.parse();
@@ -66,6 +67,7 @@ test('system writes stay routable across transient leader gaps', async (t) => {
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: 'seed-node',
     messageRouter,
     systemCache,
@@ -147,6 +149,7 @@ test('split routing fails closed when canonical leader owner metadata is missing
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       nodeId: 'seed-node',
       messageRouter: {
         deliver: async (address) => {

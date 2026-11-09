@@ -1,3 +1,5 @@
+import {REPLICA_OPERATION_VISIBILITY_READ_MODE} from
+  '../../src/rebalancer/replica-operation-repository.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionTests({
@@ -27,10 +29,9 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         get: () => null,
       },
       cdcIntegrationService: {
-        waitForCacheUpdate: async () => {},
       },
       tablePolicyService: {
-        getPolicyForPartition: async () => ({minReplicaCount: 1}),
+        getPolicyForPartition: async () => ({targetReplicaCount: 3, minReplicaCount: 1}),
       },
       messageRouter: {
         deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
@@ -94,11 +95,10 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -115,14 +115,16 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         enableTimeouts: false,
       }));
       coordinator.initialize();
-      coordinator.repository.getOperationsByEntityAuthoritative = async () => ([
-        {
-          operationId: 'op-critical-existing',
-          type: 'REPLACE',
-          workflowStep: WORKFLOW_STEP.CREATING,
-          status: 'creating',
-        },
-      ]);
+      coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+        async (entityType, entityId) => (
+          coordinator.repository.buildEntityOperationVisibilityObservation([
+            {entityType, entityId,
+              operationId: 'op-critical-existing',
+              type: 'REPLACE',
+              workflowStep: WORKFLOW_STEP.CREATING,
+              status: 'creating',
+            },
+          ], null));
 
       try {
         try {
@@ -163,11 +165,10 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -185,14 +186,16 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
     }));
     coordinator.initialize();
     coordinator.repository.getOperationsByEntity = async () => [];
-    coordinator.repository.getOperationsByEntityAuthoritative = async () => ([
-      {
-        operationId: 'op-authoritative-existing',
-        type: 'REPLACE',
-        workflowStep: WORKFLOW_STEP.CREATING,
-        status: 'creating',
-      },
-    ]);
+    coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+        async (entityType, entityId) => (
+          coordinator.repository.buildEntityOperationVisibilityObservation([
+            {entityType, entityId,
+              operationId: 'op-authoritative-existing',
+              type: 'REPLACE',
+              workflowStep: WORKFLOW_STEP.CREATING,
+              status: 'creating',
+            },
+          ], null));
 
     try {
       try {
@@ -236,11 +239,10 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -258,17 +260,11 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
     }));
     coordinator.initialize();
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
-      async () => ({
-        state: 'deferred',
-        operationCount: 0,
-        operations: [],
-        deferredOutcome: {
-          completionState: 'operation_visibility_deferred',
-          reasonCode: 'operation_visibility_deferred',
-          retryAfterMs: 250,
-        },
+      async () => (coordinator.repository.buildEntityOperationVisibilityObservation([], {
+        completionState: 'operation_visibility_deferred',
+        reasonCode: 'operation_visibility_deferred',
         retryAfterMs: 250,
-      });
+      }));
 
     try {
       try {
@@ -312,11 +308,10 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -337,17 +332,11 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
     }));
     coordinator.initialize();
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
-      async () => ({
-        state: 'deferred',
-        operationCount: 0,
-        operations: [],
-        deferredOutcome: {
-          completionState: 'operation_visibility_deferred',
-          reasonCode: 'operation_visibility_deferred',
-          retryAfterMs: 250,
-        },
+      async () => (coordinator.repository.buildEntityOperationVisibilityObservation([], {
+        completionState: 'operation_visibility_deferred',
+        reasonCode: 'operation_visibility_deferred',
         retryAfterMs: 250,
-      });
+      }));
 
     try {
       await coordinator.ensureCriticalPartitionCreateLaneAvailable({
@@ -386,11 +375,10 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -427,36 +415,49 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         isEmergencyPriorityPartition: () => false,
       });
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
-      async () => ({
-        state: 'deferred',
-        operationCount: 0,
-        operations: [],
-        deferredOutcome: {
-          completionState: 'operation_visibility_deferred',
-          reasonCode: 'operation_visibility_deferred',
-          retryAfterMs: 125,
-        },
+      async () => (coordinator.repository.buildEntityOperationVisibilityObservation([], {
+        completionState: 'operation_visibility_deferred',
+        reasonCode: 'operation_visibility_deferred',
         retryAfterMs: 125,
-      });
+      }));
     coordinator.queryCachedIncompleteOperations = async () => [];
     coordinator.getConcurrentAddCountByPriorityClass = async () => ({
       priorityCount: 0,
       ordinaryPriorityCount: 0,
       nonPriorityCount: 0,
     });
-    coordinator.getIncompleteOperationObservation = () => ({
-      state: 'deferred',
-      operationCount: 0,
-      operations: [],
-      deferredOutcome: {
+    coordinator.getIncompleteOperationObservation = () =>
+      (coordinator.repository.buildEntityOperationVisibilityObservation([], {
         completionState: 'operation_visibility_deferred',
         reasonCode: 'operation_visibility_deferred',
         retryAfterMs: 125,
-      },
-      retryAfterMs: 125,
-    });
+      }));
+
+    const identityReads = [];
+    for (const method of ['getEntityAllocatedOperationReplicaIds',
+      'getEntityRetiredReplaceSourceReplicaIds']) {
+      const ownerRead = coordinator[method].bind(coordinator);
+      coordinator[method] = async (input) => {
+        const result = await ownerRead(input);
+        identityReads.push(method);
+        return result;
+      };
+    }
+    const boundedObservations = [];
+    const recoveryRead = coordinator.getEntityRecoveryOperationObservation.bind(coordinator);
+    coordinator.getEntityRecoveryOperationObservation = async (...args) => {
+      const observation = await recoveryRead(...args);
+      boundedObservations.push(observation);
+      return observation;
+    };
 
     try {
+      const targetReplicaId = await coordinator.allocateCanonicalReplicaId({
+        partitionId: BLOCKED_PRIORITY_PARTITION_ID,
+        entityType: 'partition',
+        entityId: BLOCKED_PRIORITY_PARTITION_ID,
+        excludeReplicaIds: [`${BLOCKED_PRIORITY_PARTITION_ID}-r4`],
+      });
       const operation = await coordinator.createOperation({
         type: OperationType.REPLACE,
         partitionId: BLOCKED_PRIORITY_PARTITION_ID,
@@ -464,6 +465,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         entityId: BLOCKED_PRIORITY_PARTITION_ID,
         nodeId: 'node-remote',
         replicaId: `${BLOCKED_PRIORITY_PARTITION_ID}-r4`,
+        replicaIntentId: targetReplicaId,
         enforceConcurrentOperationBudget: true,
       });
 
@@ -471,6 +473,33 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         operation?.operationId,
         'blocked ordinary priority partition should still admit the next replace step when only contained background pressure deferred visibility',
       );
+      t.equal(operation.replicaId, targetReplicaId, 'creation used the owner-allocated target');
+      t.ok(identityReads.includes('getEntityAllocatedOperationReplicaIds'),
+        'the target ID supplied to creation came from the canonical allocator');
+      t.ok(identityReads.includes('getEntityRetiredReplaceSourceReplicaIds'),
+        'the actual creation checked retired-source safety through the same owner');
+      t.ok(boundedObservations.length >= 2);
+      t.ok(boundedObservations.every((observation) =>
+        observation.state === 'bounded_usable' && observation.deferredOutcome &&
+        observation.operationCount === 0),
+      'the existing pressure owner explicitly authorized every recovery identity observation');
+      await t.rejects(coordinator.getOperationsByEntity(
+        'partition', BLOCKED_PRIORITY_PARTITION_ID,
+        {visibilityReadMode: REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED},
+      ), {rebalanceSkipReason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING},
+      'the strict consumer still refuses under the same contained pressure');
+      coordinator.repository.getOperationsByEntityAuthoritativeObservation = async () =>
+        coordinator.repository.buildEntityOperationVisibilityObservation([operation], {
+          completionState: 'operation_visibility_deferred',
+          reasonCode: 'operation_visibility_deferred', retryAfterMs: 125,
+        });
+      const retained = await coordinator.getEntityRecoveryOperationObservation(
+        'partition', BLOCKED_PRIORITY_PARTITION_ID,
+      );
+      t.equal(retained.state, 'present', 'nonzero retained work cannot acquire bounded use');
+      t.throws(() => coordinator.requireEntityOperationRows(
+        retained, 'partition', BLOCKED_PRIORITY_PARTITION_ID,
+      ), {rebalanceSkipReason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING});
     } finally {
       await coordinator.shutdown();
     }
@@ -487,11 +516,10 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -509,17 +537,11 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
     }));
     coordinator.initialize();
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
-      async () => ({
-        state: 'deferred',
-        operationCount: 0,
-        operations: [],
-        deferredOutcome: {
-          completionState: 'operation_visibility_deferred',
-          reasonCode: 'operation_visibility_deferred',
-          retryAfterMs: 125,
-        },
+      async () => (coordinator.repository.buildEntityOperationVisibilityObservation([], {
+        completionState: 'operation_visibility_deferred',
+        reasonCode: 'operation_visibility_deferred',
         retryAfterMs: 125,
-      });
+      }));
 
     try {
       try {
@@ -560,11 +582,10 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -585,17 +606,11 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
     }));
     coordinator.initialize();
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
-      async () => ({
-        state: 'deferred',
-        operationCount: 0,
-        operations: [],
-        deferredOutcome: {
-          completionState: 'operation_visibility_deferred',
-          reasonCode: 'operation_visibility_deferred',
-          retryAfterMs: 125,
-        },
+      async () => (coordinator.repository.buildEntityOperationVisibilityObservation([], {
+        completionState: 'operation_visibility_deferred',
+        reasonCode: 'operation_visibility_deferred',
         retryAfterMs: 125,
-      });
+      }));
 
     try {
       await coordinator.ensureNoConflictingInFlightReplaceForRemove({
@@ -627,11 +642,10 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -650,7 +664,9 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
     coordinator.initialize();
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
       async () => ({
-        state: 'available',
+        state: 'present',
+        deferredOutcome: null,
+        retryAfterMs: null,
         operationCount: 1,
         operations: [
           {
@@ -709,11 +725,10 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -730,14 +745,16 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         enableTimeouts: false,
       }));
       coordinator.initialize();
-      coordinator.repository.getOperationsByEntityAuthoritative = async () => ([
-        {
-          operationId: 'op-critical-remove-phase',
-          type: 'REPLACE',
-          workflowStep: WORKFLOW_STEP.STOPPING,
-          status: 'removing',
-        },
-      ]);
+      coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+        async (entityType, entityId) => (
+          coordinator.repository.buildEntityOperationVisibilityObservation([
+            {entityType, entityId,
+              operationId: 'op-critical-remove-phase',
+              type: 'REPLACE',
+              workflowStep: WORKFLOW_STEP.STOPPING,
+              status: 'removing',
+            },
+          ], null));
 
       try {
         await coordinator.ensureCriticalPartitionCreateLaneAvailable({
@@ -774,11 +791,10 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       messageRouter: {
@@ -797,7 +813,8 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
     coordinator.initialize();
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
         async () => ({
-          state: 'ready',
+          state: 'present',
+          retryAfterMs: null,
           operationCount: 1,
           operations: [{
             operationId: 'replace-op-remove-phase',
@@ -893,11 +910,10 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
           },
         },
         cdcIntegrationService: {
-          async waitForCacheUpdate() {},
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         messageRouter: {
@@ -914,23 +930,24 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         enableTimeouts: false,
       });
       coordinator.initialize();
-      coordinator.repository.getOperationsByEntityAuthoritative = async () => ([
-        {
-          operationId: 'op-critical-superseded',
-          type: 'REPLACE',
-          partitionId: 'sql_write_operations-p1',
-          entityType: 'partition',
-          entityId: 'sql_write_operations-p1',
-          sourceNodeId: 'node-a',
-          targetNodeId: 'node-c',
-          workflowStep: WORKFLOW_STEP.SENDING,
-          status: 'pending',
-          stepsHistory: [
-            {step: 'PENDING', status: 'pending', inFlight: true},
-            {step: 'SENDING', status: 'pending', inFlight: true},
-          ],
-        },
-      ]);
+      coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+        async () => (coordinator.repository.buildEntityOperationVisibilityObservation([
+          {
+            operationId: 'op-critical-superseded',
+            type: 'REPLACE',
+            partitionId: 'sql_write_operations-p1',
+            entityType: 'partition',
+            entityId: 'sql_write_operations-p1',
+            sourceNodeId: 'node-a',
+            targetNodeId: 'node-c',
+            workflowStep: WORKFLOW_STEP.SENDING,
+            status: 'pending',
+            stepsHistory: [
+              {step: 'PENDING', status: 'pending', inFlight: true},
+              {step: 'SENDING', status: 'pending', inFlight: true},
+            ],
+          },
+        ], null));
 
       try {
         await t.rejects(

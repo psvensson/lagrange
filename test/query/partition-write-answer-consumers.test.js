@@ -59,6 +59,7 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RAFT_RS_SQL} from '../../src/raft/raft-rs-durable-store-constants.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TEMP_PREFIX = 'partition-write-answer-consumers-';
 const TEST_TIMEOUT_MS = 30000;
 const GROUP_BUDGET_MS = 10000;
@@ -187,6 +188,7 @@ test('B7 / F-am: the SQL engine never records a partition write released ' +
     // The partition answers the routed write when its own clock passes its
     // pending-commit deadline (its proposal is accepted, never committed).
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: systemCacheOf({partitionId, leaderNodeId: nodeId,
         services: [serviceRow({replicaId, nodeId, address,
           role: 'leader'})]}),
@@ -366,6 +368,7 @@ test('F-aj: the query executor re-delivers an unknown outcome under the ' +
 
     const sent = [];
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: systemCacheOf({partitionId, leaderNodeId: members[0][1],
         services: members.map((member, index) => serviceRow({
           replicaId: member[0], nodeId: member[1],

@@ -587,6 +587,7 @@ class ControlPlaneSetup {
     });
 
     return {
+      controlPlaneSystemTableGateway,
       heartbeatService,
       leaseService,
       endpointService,
@@ -597,6 +598,17 @@ class ControlPlaneSetup {
       systemMetadataOwners,
       serviceLifecycleCommandOwner,
     };
+  }
+
+  /**
+   * Retain the exact setup-owned authorities for seed and join runtime setup.
+   * @param {Object} service - Startup lifecycle retaining these references.
+   * @param {Object} controlPlane - Result returned by create.
+   */
+  static retainRuntimeAuthorities(service, controlPlane) {
+    service.serviceLifecycleCommandOwner = controlPlane.serviceLifecycleCommandOwner;
+    service.systemMetadataOwners = controlPlane.systemMetadataOwners;
+    service.controlPlaneSystemTableGateway = controlPlane.controlPlaneSystemTableGateway;
   }
 
   /**

@@ -161,7 +161,7 @@ function commitChange(cluster, type, replicaId, tickers) {
   for (let attempt = 0; attempt < PROPOSAL_ATTEMPTS && !shows();
     attempt += 1) {
     cluster.node(leaderOf(cluster)).proposeConfChange({
-      type, replicaIdentity: replicaId});
+      type, replicaIdentity: replicaId, nodeId: 'node-test'});
     cluster.settle(shows, {rounds: RETRY_ROUNDS});
   }
   assert.ok(settle(cluster, shows, tickers),

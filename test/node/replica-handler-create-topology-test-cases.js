@@ -93,6 +93,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -160,6 +165,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -222,16 +232,25 @@ export async function registerReplicaHandlerCreateTopologyTests({
       const context = handler.resolveReplicaContext(partitionId, 'replica-1',
         {bootstrapMembership: genesisStampFor(['replica-1', 'replica-2', 'replica-3'])});
 
-      t.equal(
-        context.leaderAddress,
-        null,
-        'should not infer a leader from missing raft_role metadata',
-      );
+      t.notOk(Object.hasOwn(context, 'leaderAddress'),
+        'the context carries no leader address: rows never name the leader ' +
+        '(C4; the target asks the leader its committed stamp names)');
       t.equal(
         context.existingReplicaCount,
         0,
         'should not count roleless active rows as established voters',
       );
+      t.notOk(Object.hasOwn(context, 'peerAddresses'),
+        'the creation context carries no peer-address hint list: peers are ' +
+          'addressed from their committed nodes');
+      const hinted = handler.resolveReplicaContext(partitionId, 'replica-1', {
+        bootstrapMembership: genesisStampFor(
+          ['replica-1', 'replica-2', 'replica-3']),
+        bootstrapPeerAddresses: ['node-x/partition/replica-9'],
+      });
+      t.same(hinted, context,
+        'bootstrapPeerAddresses is not part of the context contract: a ' +
+          'dispatched hint list changes nothing');
 
       handler.shutdown();
     },
@@ -294,11 +313,8 @@ export async function registerReplicaHandlerCreateTopologyTests({
         0,
         'fresh partitions without persisted leader metadata should keep the initial cohort in bootstrap mode',
       );
-      t.equal(
-        context.leaderAddress,
-        null,
-        'without canonical leader_node_id the handler should not invent a leader address',
-      );
+      t.notOk(Object.hasOwn(context, 'leaderAddress'),
+        'the handler never derives a leader address from rows (C4)');
 
       handler.shutdown();
     },
@@ -367,6 +383,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -387,11 +408,8 @@ export async function registerReplicaHandlerCreateTopologyTests({
       await created;
 
       t.ok(capturedOptions, 'partition factory should receive create options');
-      t.equal(
-        capturedOptions.leaderAddress,
-        null,
-        'expired node readiness should suppress stale leader addresses',
-      );
+      t.notOk(Object.hasOwn(capturedOptions, 'leaderAddress'),
+        'the partition is created with no row-derived leader address (C4)');
       t.equal(
         capturedOptions.isJoiningExistingGroup,
         true,
@@ -499,6 +517,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             role: RAFT_ROLE.FOLLOWER,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -528,23 +551,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
       await factoryCalled;
 
       t.ok(capturedOptions, 'partition factory should receive create options');
-      t.equal(
-        capturedOptions.leaderAddress,
-        null,
-        'disconnected priority leader should not be used as a join target',
-      );
-      t.notOk(
-        capturedOptions.peerAddresses.includes(
-          'dead-node/partition/replica_operations-p1-r3',
-        ),
-        'disconnected stale peer should be excluded from priority recovery topology',
-      );
-      t.ok(
-        capturedOptions.peerAddresses.includes(
-          'live-node/partition/replica_operations-p1-r5',
-        ),
-        'connected peer should remain available for priority recovery topology',
-      );
+      t.notOk(Object.hasOwn(capturedOptions, 'leaderAddress'),
+        'no row-derived join target is passed (C4)');
+      t.equal(capturedOptions.peerAddresses, undefined,
+        'the partition takes no address hint list: its peers are addressed ' +
+          'from their committed nodes');
       t.equal(
         capturedOptions.isJoiningExistingGroup,
         true,
@@ -593,6 +604,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -613,11 +629,9 @@ export async function registerReplicaHandlerCreateTopologyTests({
       await created;
 
       t.ok(capturedOptions, 'partition factory should receive create options');
-      t.equal(
-        capturedOptions.leaderAddress,
-        'leader-node/partition/leader-replica',
-        'ready leader metadata should still provide a join target',
-      );
+      t.notOk(Object.hasOwn(capturedOptions, 'leaderAddress'),
+        'ready leader rows provide no join target either: the target asks the ' +
+        'leader its committed stamp names (C4)');
       t.equal(
         capturedOptions.isJoiningExistingGroup,
         true,
@@ -667,6 +681,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -694,11 +713,9 @@ export async function registerReplicaHandlerCreateTopologyTests({
         bootstrapReplicaIds.slice().sort(),
         'fresh bootstrap uses the GENESIS founding cohort',
       );
-      t.same(
-        capturedOptions.peerAddresses.slice().sort(),
-        bootstrapPeerAddresses.slice().sort(),
-        'fresh bootstrap should use the explicit peer addresses for the cohort',
-      );
+      t.equal(capturedOptions.peerAddresses, undefined,
+        'fresh bootstrap hands no address hint list; the GENESIS stamp ' +
+          'commits the founders\' nodes');
       t.equal(
         capturedOptions.isJoiningExistingGroup,
         false,
@@ -770,6 +787,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -797,11 +819,9 @@ export async function registerReplicaHandlerCreateTopologyTests({
         bootstrapReplicaIds.slice().sort(),
         'the stamped committed members plus the target, whatever the cache',
       );
-      t.same(
-        capturedOptions.peerAddresses.slice().sort(),
-        bootstrapPeerAddresses.slice().sort(),
-        'dispatched peer addresses consumed',
-      );
+      t.equal(capturedOptions.peerAddresses, undefined,
+        'no address hint list: the COMMITTED stamp carries the members\' ' +
+          'committed nodes');
       t.equal(
         capturedOptions.isJoiningExistingGroup,
         true,
@@ -860,12 +880,6 @@ export async function registerReplicaHandlerCreateTopologyTests({
       // target; the REPLACE source (r3 here) is in it while it is a member.
       const targetReplicaId = 'replica_operations-p1-r5';
       const bootstrapReplicaIds = [...stampedReplicaIds, targetReplicaId];
-      const bootstrapPeerAddresses = [
-        'node-1/partition/replica_operations-p1-r1',
-        'node-2/partition/replica_operations-p1-r4',
-        'node-3/partition/replica_operations-p1-r3',
-        `node-target/partition/${targetReplicaId}`,
-      ];
       const handler = new ReplicaHandler({
         nodeId: 'node-target',
         cdcIntegrationService: createMockCDCService(cache),
@@ -878,7 +892,6 @@ export async function registerReplicaHandlerCreateTopologyTests({
         handler.resolveReplicaContext(partitionId, targetReplicaId, {
           explicitOperationType,
           bootstrapReplicaIds,
-          bootstrapPeerAddresses,
           bootstrapMembership: committedStampFor(stampedReplicaIds),
         });
 
@@ -888,11 +901,6 @@ export async function registerReplicaHandlerCreateTopologyTests({
         replaceContext.replicaIds.slice().sort(),
         addContext.replicaIds.slice().sort(),
         'a REPLACE target resolves the membership an ADD target resolves',
-      );
-      t.same(
-        replaceContext.peerAddresses.slice().sort(),
-        addContext.peerAddresses.slice().sort(),
-        'and the same peer addresses',
       );
       for (const replicaId of bootstrapReplicaIds) {
         t.ok(
@@ -960,6 +968,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });
@@ -1027,6 +1040,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
+            // A CREATE target asks its leader to admit it after its SYNCING commit
+            // (replica-admission-from-committed-operation); this double admits.
+            async requestReplicaAdmission(operationId) {
+              return {operationId, state: 'admitted', lastOutcome: 'proposed'};
+            },
           }, options);
         },
       });

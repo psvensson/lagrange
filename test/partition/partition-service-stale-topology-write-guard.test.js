@@ -13,8 +13,7 @@
  * the rest of the run.
  *
  * The guard: a write reaching a replica whose self-only replica list is
- * contradicted by independent topology witnesses (a known remote leader, or
- * the partition row's replica_count) must be REJECTED — no local raft log
+ * contradicted by a known remote leader must be REJECTED — no local raft log
  * append, no table mutation — so the caller re-routes to the true leader.
  */
 
@@ -238,12 +237,10 @@ test('single-replica placement under a replica_count>1 partition row keeps accep
     await partition.initialize();
     await resumeFixtureParticipantAdmission(partition);
 
-    // The single-node-cluster shape: CREATE TABLE writes replica_count from
-    // the config default (minimum 3) BEFORE placement clamps to one visible
-    // node, and nothing writes the placed count back. The partition row is
-    // a TARGET; with no actual remote leader (pointer names THIS node) the
-    // lone replica must keep serving writes — rejecting here bricked every
-    // user table on default-config single-node clusters.
+    // This fixture already has actual singleton Raft membership. The row's
+    // replica_count is a placement target, not a remote-leader witness, so
+    // it cannot reject this established group's writes. Initial RF3 table
+    // provisioning on one eligible node is separately refused at its owner.
     partition.systemTableCache = {
       get: (tableName, key) =>
         tableName === 'partitions' && key === 'single-node-target-3' ?

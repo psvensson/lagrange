@@ -1,3 +1,4 @@
+import {createMockCoordinator} from './test-helpers.js';
 // Seam proof (formation-sim, bounded-seams constraint): the unified
 // rebalancer's first eligible instant and its stabilisation anchor are drawn
 // from the owner's own clock and random seams, so a virtual clock and a seed
@@ -12,10 +13,9 @@ import {
 import {
   createMockCache,
   createMockCdcService,
-  createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 
@@ -32,14 +32,14 @@ function buildRebalancer({nowMs, draw}) {
     nodeId: 'node-1',
     systemTableCache: cache,
     cdcIntegrationService: createMockCdcService(),
-    tablePolicyService: createMockPolicyService([], []),
+    tablePolicyService: createMockPolicyService({partitions: [], tables: []}),
     messageRouter: createMockMessageRouter(CONNECTED),
     rebalanceCoordinator: createMockCoordinator(),
     sqlQueryEngine: {async executeQuery() {
       return {success: true, rows: []};
     }},
     controlPlaneSystemTableGateway: null,
-    controlPlaneReadinessService: createMockReadinessService(cache),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({systemTableCache: cache}),
     nowFn: () => nowMs,
     randomSource: {random: () => draw},
   });

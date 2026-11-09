@@ -430,6 +430,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       return this.handleStartMergeReplication(payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.LEARNER_PROMOTION_PROOF:
       return this.handleLearnerPromotionProofRequest(payload);
+    case PARTITION_SERVICE_MESSAGE_TYPE.ADMIT_REPLICA:
+      return this.handleReplicaAdmissionRequest(payload);
     default:
       this.logger.debug(PARTITION_SERVICE_LOG_MSG.UNKNOWN_MESSAGE_TYPE, {
         type: payload.type,

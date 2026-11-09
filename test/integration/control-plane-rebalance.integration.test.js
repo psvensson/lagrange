@@ -187,24 +187,30 @@ test('Control plane dispatch integration', async (t) => {
 
       // Ensure the target node exists in SQL (ReplicaDispatchService uses SQLQueryEngine
       // to validate handler registration).
-      await cdcIntegrationService.upsertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {
-        node_id: targetNodeId,
-        node_address: 'ws://node-target-dispatch:9001',
-        cpu_cores: 4,
-        memory_mb: 1024,
-        disk_gb: 10,
-        storage_budget_bytes: 10 * 1024 * 1024 * 1024,
-        cpu_usage_percent: 10,
-        memory_usage_percent: 10,
-        disk_usage_percent: 10,
-        status: NodeStatus.ACTIVE,
-        connection_state: STATE.READY,
-        capabilities: '[]',
-        last_heartbeat: now,
-        ready_lease_expires_at: now + 10000,
-        created_at: now,
-        updated_at: now,
-      });
+      const upsertResult = await cdcIntegrationService.upsertSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES,
+        {
+          node_id: targetNodeId,
+          node_address: 'ws://node-target-dispatch:9001',
+          cpu_cores: 4,
+          memory_mb: 1024,
+          disk_gb: 10,
+          storage_budget_bytes: 10 * 1024 * 1024 * 1024,
+          cpu_usage_percent: 10,
+          memory_usage_percent: 10,
+          disk_usage_percent: 10,
+          status: NodeStatus.ACTIVE,
+          connection_state: STATE.READY,
+          capabilities: '[]',
+          last_heartbeat: now,
+          ready_lease_expires_at: now + 10000,
+          created_at: now,
+          updated_at: now,
+        },
+      );
+      if (upsertResult?.position) {
+        await cdcIntegrationService.awaitProjectionAt(upsertResult.position);
+      }
 
       // Target the operation-ledger partition (replica_operations-p1).
       // An ADD onto an emergency control-plane spine partition is exempt

@@ -100,9 +100,9 @@ test('ReplicaDispatchService updates existing node rows for NODE_STATE_UPDATE',
       'targets the exact registered node generation and observed source',
     );
     t.equal(
-      updates[0].options?.skipCacheWait,
-      true,
-      'node-state updates should not wait on cache convergence',
+      'skipCacheWait' in (updates[0].options ?? {}),
+      false,
+      'node-state updates carry no cache-wait opt-out (no cache-wait opt-out exists: writes answer at their commit)',
     );
     t.equal(
       updates[0].options?.allowCoalescing,
@@ -227,7 +227,7 @@ test('ReplicaDispatchService routes READY heartbeat-only node-state updates to t
   });
 
   t.equal(updates.length, 1, 'persists one heartbeat-only nodes row update');
-  t.equal(updates[0].options?.skipCacheWait, true);
+  t.equal('skipCacheWait' in (updates[0].options ?? {}), false);
   t.equal(
     updates[0].options?.deliveryPriority,
     'background',

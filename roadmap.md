@@ -42,7 +42,7 @@ for availability and [CHANGELOG.md](CHANGELOG.md) for released changes.
 | Version | Milestone | Completion outcome |
 | --- | --- | --- |
 | 0.4.0 | Published implementation baseline | Released alpha implementation; outstanding feature and comparison acceptance remains explicit. |
-| 0.4.1 | Bounded correctness and claim repairs | Complete admitted generic results or refuse them explicitly, enforce byte bounds, repair stale checks and align published claims with measured support. |
+| 0.4.1 | Bounded correctness, operation integrity and claim repairs | Complete admitted generic results or refuse them explicitly, enforce byte bounds, preserve end-to-end operation contracts for reliable three-node formation and user-table routability, repair stale checks and align published claims with measured support. |
 | 0.5 | Standard HTTP services and pilot-ready operation | Hono/Fetch authoring, remaining query and practical-service journeys, reproducible measured comparisons, working latency groups with topology-scoped locality diagnostics, and a secure, recoverable pilot envelope (not yet named cross-region qualification). |
 | 0.6 | Native OCI Call Cells | Real managed native services execute functions at the data through the same service model. |
 | 0.7 | Transport independence and NATS | Complete NATS-only cluster operation and effective Raft timing profiles follow a measured transport baseline. |
@@ -110,9 +110,18 @@ separate from completing the broader practical-service and comparison promises.
 Those unfinished obligations, including inherited 0.3.1/0.3.2 work, retain their
 existing acceptance owners under the 0.4.1 and 0.5 allocations below.
 
-## Next - 0.4.1 Bounded correctness and claim repairs
+## Next - 0.4.1 Bounded correctness, operation integrity and claim repairs
 
-Repair current admitted behavior before broadening the service API. Generic
+Repair current admitted behavior and enforce one coherent operation contract
+across authority, readiness, lifecycle, configuration, CDC propagation and
+diagnostics before broadening the service API. A fresh three-node cluster must
+form through the public startup path, open each serve lane under its committed
+authority contract, spread required priority partitions, settle replica
+operations to quiet, and complete `CREATE TABLE`, `SELECT COUNT(*)`, `INSERT`
+and readback through every node. Preserve the approved `CREATE TABLE` cohort
+contract (`under_replicated` at the sealed quorum minimum, typed `57P03`
+unavailability below quorum, and retained replication responsibility), while
+keeping observation causally read-only. Generic
 reduction must include every admitted contribution or return an explicit bound
 error; an internal result limit must not silently discard contributions. Apply
 byte bounds before oversized partials consume the protected resource. Correct

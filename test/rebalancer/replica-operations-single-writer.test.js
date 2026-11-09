@@ -184,11 +184,10 @@ function createTestCoordinator(options = {}) {
       return null;
     }},
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: messageRouter || {
@@ -214,7 +213,9 @@ function createTestCoordinator(options = {}) {
     executorOutcomeEmitter: emitter,
     transactionCoordinator:
       transactionCoordinator || createMockTransactionCoordinator(),
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
     enableTimeouts: false,
   });
   coordinator.initialize();

@@ -11,6 +11,13 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 
 import {
+  SERVE_ELIGIBILITY_STATE,
+  SERVE_ELIGIBILITY_UNAVAILABLE_REASON,
+} from '../../src/control-plane/serve-eligibility-owner.js';
+import {
+  TOKEN_STATUS,
+} from '../../src/control-plane/readiness-planning-version-contract.js';
+import {
   deriveMembershipPublicationCandidate,
 } from '../../src/control-plane/membership-publication-coordinator.js';
 import {
@@ -113,7 +120,7 @@ test('UnifiedRebalancer uses readiness-owned startup cohort for startup-sensitiv
       updateSystemTableRow: async () => ({success: true}),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
       getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
     },
     messageRouter: {
@@ -140,6 +147,17 @@ test('UnifiedRebalancer uses readiness-owned startup cohort for startup-sensitiv
       },
     },
     controlPlaneReadinessService: {
+      answerCommittedNodes() {
+        return {
+          state: SERVE_ELIGIBILITY_STATE.READY,
+          epoch: {
+            publicationEpoch: 1,
+            publicationId: 'cluster_membership-1',
+            readAtMs: 0,
+          },
+          nodeRows: cache.getAll('nodes'),
+        };
+      },
       getNodeReadinessSync(nodeId) {
         return {
           nodeId,
@@ -276,6 +294,32 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter,
+    authoritativeControlPlaneView: {
+      async readReadinessOwnerRows(tableName) {
+        if (tableName === TABLES.NODES) {
+          return {success: true, rows: nodeRows};
+        }
+        if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+          return {
+            success: true,
+            rows: [
+              {
+                publication_id: 'cluster_membership-16',
+                publication_kind: 'cluster_membership',
+                publication_epoch: 16,
+                status: 'PUBLISHED',
+                published_active_node_ids: ['seed-node'],
+                required_ack_node_ids: ['seed-node'],
+                acknowledged_node_ids: ['seed-node'],
+                priority_partition_summary: {satisfied: false},
+              },
+            ],
+          };
+        }
+        return {success: false, rows: []};
+      },
+      canRead: () => true,
+    },
     cdcGroupPropagationService: {
       getPublicationModeDiagnostics() {
         return {
@@ -293,6 +337,7 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
     },
     now: () => readinessNowMs,
   });
+  await readinessService.readServeEligibility();
   const candidateOptions = {
     publisherNodeId: 'seed-node',
     latestPublicationRow: {
@@ -321,6 +366,12 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
   let readinessEntries = nodeRows.map((nodeRow) =>
     readinessService.getNodeReadinessSync(nodeRow.node_id),
   );
+  for (const nodeRow of nodeRows) {
+    readinessService.getNodeReadinessSync(nodeRow.node_id, {
+      decisionDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    });
+  }
   await drainReadinessPlanning(readinessService);
   readinessEntries = nodeRows.map((nodeRow) =>
     readinessService.getNodeReadinessSync(nodeRow.node_id),
@@ -384,7 +435,7 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
       updateSystemTableRow: async () => ({success: true}),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
       getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
     },
     messageRouter,
@@ -491,7 +542,7 @@ test('UnifiedRebalancer does not use local startup bypass as placement readiness
       updateSystemTableRow: async () => ({success: true}),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
       getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
     },
     messageRouter: {
@@ -523,6 +574,17 @@ test('UnifiedRebalancer does not use local startup bypass as placement readiness
       }),
     },
     controlPlaneReadinessService: {
+      answerCommittedNodes() {
+        return {
+          state: SERVE_ELIGIBILITY_STATE.READY,
+          epoch: {
+            publicationEpoch: 1,
+            publicationId: 'cluster_membership-1',
+            readAtMs: 0,
+          },
+          nodeRows: cache.getAll('nodes'),
+        };
+      },
       getNodeReadinessSync(nodeId) {
         return {
           nodeId,
@@ -575,7 +637,7 @@ async (t) => {
       updateSystemTableRow: async () => ({success: true}),
     },
     tablePolicyService: {
-      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
       getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
     },
     messageRouter: {
@@ -605,6 +667,17 @@ async (t) => {
       },
     },
     controlPlaneReadinessService: {
+      answerCommittedNodes() {
+        return {
+          state: SERVE_ELIGIBILITY_STATE.READY,
+          epoch: {
+            publicationEpoch: 1,
+            publicationId: 'cluster_membership-1',
+            readAtMs: 0,
+          },
+          nodeRows: cache.getAll('nodes'),
+        };
+      },
       getNodeReadinessSync(nodeId) {
         return {
           nodeId,
@@ -643,3 +716,189 @@ async (t) => {
   );
   t.end();
 });
+
+test(
+  'UnifiedRebalancer placement eligibility reads committed ready lease instead of serve eligibility',
+  async (t) => {
+    initEnv();
+    const cache = createCache({
+      nodes: [
+        {node_id: 'seed-node', status: 'active', ready_lease_expires_at: Date.now() + 60000},
+        {node_id: 'node-2', status: 'active', ready_lease_expires_at: Date.now() + 60000},
+        {node_id: 'node-3', status: 'active', ready_lease_expires_at: Date.now() - 60000},
+      ],
+    });
+    const rebalancer = new UnifiedRebalancer({
+      entityId: 'control_plane_publications-p1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'seed-node',
+      systemTableCache: cache,
+      cdcIntegrationService: {
+        insertSystemTableRow: async () => ({success: true}),
+        updateSystemTableRow: async () => ({success: true}),
+      },
+      tablePolicyService: {
+        getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
+        getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
+      },
+      messageRouter: {
+        getConnectionState: () => 'connected',
+        isOutboundQueueAvailable: () => true,
+        getConnectedNodes: () => ['seed-node', 'node-2'],
+      },
+      rebalanceCoordinator: {
+        getMoveSafetyError: () => null,
+        createOperation: async () => ({}),
+        executeOperation: async () => ({success: true}),
+        canStartAddOperation: async () => true,
+        canStartRemoveOperation: async () => true,
+        getStats: () => ({inFlightOperations: 0, totalOperations: 0}),
+        storageAccountingService: {estimateReplicaBytes: () => 1},
+        storageAdmissionService: {
+          checkAdd: async () => ({decision: 'allow'}),
+          checkReplace: async () => ({decision: 'allow'}),
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: []};
+        },
+      },
+      controlPlaneReadinessService: {
+        answerCommittedNodes() {
+          return {
+            state: SERVE_ELIGIBILITY_STATE.READY,
+            epoch: {
+              publicationEpoch: 1,
+              publicationId: 'cluster_membership-1',
+              readAtMs: 0,
+            },
+            nodeRows: cache.getAll('nodes'),
+          };
+        },
+        getNodeReadinessSync(nodeId) {
+          // Placement eligibility does not require serve eligibility
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            },
+            reasons: [],
+          };
+        },
+        getStartupAuthoritySnapshotSync() {
+          return null;
+        },
+      },
+    });
+
+    const availableNodeIds = rebalancer.getAvailableNodes().map((node) => node.node_id).sort();
+    t.same(
+      availableNodeIds,
+      ['node-2', 'seed-node'],
+      'nodes with active status and current committed lease are placement-eligible',
+    );
+    t.end();
+  },
+);
+
+test(
+  'UnifiedRebalancer does not fall back to systemTableCache nodes when answerCommittedNodes is unavailable or to dimensionless readiness when deferred',
+  async (t) => {
+    initEnv();
+    let nodesCacheReads = 0;
+    const baseCache = createCache();
+    const cache = {
+      ...baseCache,
+      getAll(tableName) {
+        if (tableName === TABLES.NODES) {
+          nodesCacheReads += 1;
+        }
+        return baseCache.getAll(tableName);
+      },
+    };
+    const readinessCalls = [];
+    const deferredSnapshot = Object.freeze({
+      nodeId: 'seed-node',
+      readinessPlanningTokenStatus: TOKEN_STATUS.STALE,
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+          false,
+      },
+      reasons: [],
+    });
+    const noopAsync = async () => ({success: true});
+    const rebalancer = new UnifiedRebalancer({
+      entityId: 'control_plane_publications-p1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'seed-node',
+      systemTableCache: cache,
+      cdcIntegrationService: {
+        insertSystemTableRow: noopAsync,
+        updateSystemTableRow: noopAsync,
+      },
+      tablePolicyService: {
+        getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
+      },
+      messageRouter: {
+        getConnectedNodes: () => ['seed-node', 'node-2'],
+      },
+      rebalanceCoordinator: {
+        getStats: () => ({inFlightOperations: 0, totalOperations: 0}),
+      },
+      sqlQueryEngine: {executeQuery: noopAsync},
+      controlPlaneReadinessService: {
+        answerCommittedNodes: () => ({
+          state: SERVE_ELIGIBILITY_STATE.UNAVAILABLE,
+          reason: SERVE_ELIGIBILITY_UNAVAILABLE_REASON.STALE,
+          epoch: null,
+          retryAfterMs: 1000,
+          nodeRows: [],
+        }),
+        getNodeReadinessSync(nodeId, readinessOptions) {
+          readinessCalls.push({nodeId, readinessOptions});
+          if (readinessOptions !== undefined) {
+            return deferredSnapshot;
+          }
+          throw new Error('must not fall back to dimensionless getNodeReadinessSync');
+        },
+        getStartupAuthoritySnapshotSync: () => null,
+      },
+    });
+
+    nodesCacheReads = 0;
+    t.same(
+      rebalancer.resolveAvailableNodeCandidateRows(),
+      [],
+      'resolveAvailableNodeCandidateRows returns [] when answerCommittedNodes is unavailable',
+    );
+    t.equal(
+      nodesCacheReads,
+      0,
+      'resolveAvailableNodeCandidateRows does not read systemTableCache.getAll("nodes") on unavailable committed nodes',
+    );
+
+    const readinessOptions = {
+      decisionDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    };
+    const resolvedSnapshot = rebalancer.resolveNodeReadinessSyncSnapshot(
+      'seed-node',
+      readinessOptions,
+    );
+    t.equal(
+      resolvedSnapshot,
+      deferredSnapshot,
+      'resolveNodeReadinessSyncSnapshot returns the exact deferred snapshot for an explicit dimension',
+    );
+    t.equal(
+      readinessCalls.length,
+      1,
+      'resolveNodeReadinessSyncSnapshot does not perform a second dimensionless fallback call',
+    );
+    t.end();
+  },
+);
+

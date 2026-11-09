@@ -586,7 +586,6 @@ export function registerAdminControlSnapshotRepairHandoffReplayOutcomeTestCases(
           publishedActiveNodeIds: ['node-1', 'node-2'],
           requiredAckNodeIds: ['node-1', 'node-2'],
           acknowledgedNodeIds: ['node-1', 'node-2'],
-          allowPendingVisibility: true,
           readProfile:
             ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
           skipPublicationWriteReadback:
@@ -726,9 +725,34 @@ export function registerAdminControlSnapshotRepairHandoffReplayOutcomeTestCases(
         buildOptions.push(options);
         return buildOptions.length === 1 ? staleSnapshot : refreshedSnapshot;
       };
-      snapshot.canRunAuthoritativeControlSnapshotRepair = () => false;
+      snapshot.canRunAuthoritativeControlSnapshotRepair = () => true;
+      snapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
+        shouldRepair: true,
+        triggerCodes: ['cache_stale_watermark'],
+        nodeCoverage: {
+          activeProjection: {
+            hasCoverageGap: false,
+          },
+        },
+      });
+      snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () => ({
+        applied: false,
+        failedTables: [TABLES.SERVICES],
+        causeChain: [
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE
+            .ACTIVE_GATE_HANDOFF_RECONCILE_CONTROL_PLANE_BACKPRESSURE_CAUSE,
+        ],
+        localQueryTransport: {
+          state:
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_QUERY_TRANSPORT_READY_STATE,
+          ready: true,
+        },
+      });
 
-      const result = await snapshot.resolveLocalControlSnapshot();
+      const result = await snapshot.resolveLocalControlSnapshot({
+        allowAuthoritativeRepair: true,
+      });
 
       t.equal(
         buildOptions.length,

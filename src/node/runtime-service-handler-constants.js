@@ -83,6 +83,12 @@ const RUNTIME_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
     'RuntimeServiceHandler requires systemTableCache',
   DEFINITION_NOT_FOUND: (entityId) =>
     `Service definition not found: ${entityId}`,
+  DEFINITION_NOT_FOUND_CODE: 'service_definition_not_found',
+  DEFINITION_INELIGIBLE: 'service_definition_ineligible',
+  DEFINITION_AUTHORITY_UNAVAILABLE: (entityId) =>
+    `Service definition authority unavailable: ${entityId}`,
+  DEFINITION_AUTHORITY_UNAVAILABLE_CODE:
+    'service_definition_authority_unavailable',
   // A bound-class definition whose CREATE names no retained creation (D0, RV2.2).
   BOUND_ROUTE_REQUIRED: 'runtime_service_bound_route_required',
   // A CREATE for a replica whose bound retirement is in progress (RV6.3).

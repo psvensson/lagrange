@@ -18,6 +18,7 @@ import {
 import {
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
+  QUERY_ERROR_CODE,
 } from '../../src/query/query-constants.js';
 import {
   TABLES,
@@ -52,6 +53,10 @@ import {
 } from './sql-query-engine-test-support.js';
 
 
+import {
+  createCommittedServeEligibilityOwner,
+  serveEligibilityAnswer,
+} from '../control-plane/serve-eligibility-test-support.js';
 // Mock system cache with services for routing
 
 
@@ -330,463 +335,14 @@ test('SQLQueryEngine - waitForProvisionTargetNodeIds exposes the shared ' +
     maxWaitMs: 10,
   });
 
-  t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
-  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
-  t.same(
-    result.reasonCodes,
-    ['table_partition_target_node_wait_timeout'],
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.DEFERRED);
+  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.RETRY);
+  t.ok(
+    result.reasonCodes.includes('ready_lease_expired') ||
+    result.reasonCodes.includes('provisioning_unavailable'),
   );
   t.ok(result.retryAfterMs > 0);
   t.equal(result.timedOut, true);
-});
-
-test('SQLQueryEngine - provisionInitialTablePartition waits for active node ' +
-  'cache convergence before sizing the initial replica cohort', async (t) => {
-  const tableId = 'tbl-cache-convergence';
-  const partitionId = 'tbl-cache-convergence-p1';
-  const localNodeId = 'node-a';
-  const createdTargetNodeIds = [];
-  const nodes = [
-    {node_id: localNodeId, status: 'active'},
-    {node_id: 'node-b', status: 'active'},
-  ];
-  const services = [];
-  let sleepCalls = 0;
-  let injectedThirdNode = false;
-
-  const cache = {
-    onCacheChange() {},
-    offCacheChange() {},
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
-
-  const rebalanceCoordinator = {
-    async createOperation(move) {
-      createdTargetNodeIds.push(move.nodeId);
-      return {
-        operationId: `op-${move.nodeId}`,
-        ...move,
-      };
-    },
-    async executeOperation(operation) {
-      const targetNodeId = operation.targetNodeId || operation.nodeId;
-      services.push({
-        service_id: operation.replicaId || `${operation.partitionId}-${targetNodeId}`,
-        replica_id: operation.replicaId || `${operation.partitionId}-${targetNodeId}`,
-        partition_id: operation.partitionId,
-        service_type: 'partition',
-        status: 'active',
-        node_id: targetNodeId,
-        raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
-        address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
-      return {success: true};
-    },
-  };
-
-  const engine = new SQLQueryEngine({
-    nodeId: localNodeId,
-    systemCache: cache,
-    controlPlaneReadinessService: createProvisioningReadyService(nodes),
-    messageRouter: createMockMessageRouter(),
-    rebalanceCoordinator,
-    tablePartitionProvisioningTimeoutMs: 50,
-    tablePartitionProvisioningPollIntervalMs: 1,
-  });
-  engine.sleep = async () => {
-    sleepCalls += 1;
-    if (!injectedThirdNode) {
-      nodes.push({node_id: 'node-c', status: 'active'});
-      injectedThirdNode = true;
-    }
-  };
-  engine.waitForRoutablePartitionServiceCount = async () => {};
-  engine.waitForPartitionLeaderService = async () => {};
-
-  await engine.provisionInitialTablePartition({
-    tableId,
-    partitionId,
-    replicaCount: 3,
-  });
-
-  t.same(
-    createdTargetNodeIds,
-    ['node-a', 'node-b', 'node-c'],
-    'initial provisioning should wait for the third active node instead of silently downscaling',
-  );
-  t.ok(
-    sleepCalls > 0,
-    'provisioning should poll for active-node convergence before selecting final targets',
-  );
-  t.equal(
-    engine.getRoutablePartitionServiceNodeIds(partitionId).length,
-    3,
-    'all requested initial replicas should become routable',
-  );
-});
-
-test('SQLQueryEngine - provisionInitialTablePartition waits for admission ' +
-  'convergence before planning the initial replica cohort', async (t) => {
-  const partitionId = 'tbl-admission-convergence-p1';
-  const localNodeId = 'node-a';
-  const createdTargetNodeIds = [];
-  const nodes = [
-    {node_id: localNodeId, status: 'active'},
-    {node_id: 'node-b', status: 'active'},
-    {node_id: 'node-c', status: 'active'},
-  ];
-  const services = [];
-  let sleepCalls = 0;
-  let admissionConverged = false;
-
-  const cache = {
-    onCacheChange() {},
-    offCacheChange() {},
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
-
-  const rebalanceCoordinator = {
-    async checkProvisioningAdmission(move) {
-      const allowed = move.nodeId === localNodeId || admissionConverged;
-      if (allowed) {
-        return {
-          allowed: true,
-          decisionType: 'admitted',
-          admissionResult: {
-            allowed: true,
-            decisionType: 'admitted',
-          },
-        };
-      }
-      return {
-        allowed: false,
-        decisionType: 'deferred',
-        admissionResult: {
-          allowed: false,
-          decisionType: 'deferred',
-          blockingReasons: ['insufficient_placement_eligible_nodes'],
-          ineligibleNodes: [{
-            nodeId: move.nodeId,
-            failedDimensions: ['clusterMemberHealthy'],
-            reasonCodes: ['cluster_member_unhealthy'],
-          }],
-        },
-      };
-    },
-    async createOperation(move) {
-      createdTargetNodeIds.push(move.nodeId);
-      return {
-        operationId: `op-${move.nodeId}`,
-        ...move,
-      };
-    },
-    async executeOperation(operation) {
-      const targetNodeId = operation.targetNodeId || operation.nodeId;
-      services.push({
-        service_id: operation.replicaId || `${operation.partitionId}-${targetNodeId}`,
-        replica_id: operation.replicaId || `${operation.partitionId}-${targetNodeId}`,
-        partition_id: operation.partitionId,
-        service_type: 'partition',
-        status: 'active',
-        node_id: targetNodeId,
-        raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
-        address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
-      return {success: true};
-    },
-  };
-
-  const engine = new SQLQueryEngine({
-    nodeId: localNodeId,
-    systemCache: cache,
-    controlPlaneReadinessService: createProvisioningReadyService(nodes),
-    messageRouter: createMockMessageRouter(),
-    rebalanceCoordinator,
-    tablePartitionProvisioningTimeoutMs: 50,
-    tablePartitionProvisioningPollIntervalMs: 1,
-    tablePartitionTargetNodeConvergenceTimeoutMs: 10,
-  });
-  engine.sleep = async () => {
-    sleepCalls += 1;
-    admissionConverged = true;
-  };
-  engine.waitForRoutablePartitionServiceCount = async () => {};
-  engine.waitForPartitionLeaderService = async () => {};
-
-  await engine.provisionInitialTablePartition({
-    partitionId,
-    replicaCount: 3,
-  });
-
-  t.ok(
-    sleepCalls > 0,
-    'provisioning should poll for admission convergence before planning',
-  );
-  t.same(
-    createdTargetNodeIds,
-    ['node-a', 'node-b', 'node-c'],
-    'provisioning should wait for newly admissible peers instead of failing early',
-  );
-});
-
-test('SQLQueryEngine - provisionInitialTablePartition extends the default ' +
-  'convergence wait when enough active nodes exist but admission settles late',
-async (t) => {
-  const partitionId = 'tbl-admission-convergence-default-window-p1';
-  const localNodeId = 'node-a';
-  const createdTargetNodeIds = [];
-  const nodes = [
-    {node_id: localNodeId, status: 'active'},
-    {node_id: 'node-b', status: 'active'},
-    {node_id: 'node-c', status: 'active'},
-  ];
-  const services = [];
-  let sleepCalls = 0;
-  let fakeNow = 1000;
-  let admissionConverged = false;
-
-  const cache = {
-    onCacheChange() {},
-    offCacheChange() {},
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
-
-  const rebalanceCoordinator = {
-    async checkProvisioningAdmission(move) {
-      const allowed = move.nodeId === localNodeId || admissionConverged;
-      if (allowed) {
-        return {
-          allowed: true,
-          decisionType: 'admitted',
-          admissionResult: {
-            allowed: true,
-            decisionType: 'admitted',
-          },
-        };
-      }
-      return {
-        allowed: false,
-        decisionType: 'deferred',
-        admissionResult: {
-          allowed: false,
-          decisionType: 'deferred',
-          blockingReasons: ['cluster_member_unhealthy'],
-          ineligibleNodes: [{
-            nodeId: move.nodeId,
-            failedDimensions: ['clusterMemberHealthy'],
-            reasonCodes: ['cluster_member_unhealthy'],
-          }],
-        },
-      };
-    },
-    async createOperation(move) {
-      createdTargetNodeIds.push(move.nodeId);
-      return {
-        operationId: `op-${move.nodeId}`,
-        ...move,
-      };
-    },
-    async executeOperation(operation) {
-      const targetNodeId = operation.targetNodeId || operation.nodeId;
-      services.push({
-        service_id: operation.replicaId || `${operation.partitionId}-${targetNodeId}`,
-        replica_id: operation.replicaId || `${operation.partitionId}-${targetNodeId}`,
-        partition_id: operation.partitionId,
-        service_type: 'partition',
-        status: 'active',
-        node_id: targetNodeId,
-        raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
-        address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
-      return {success: true};
-    },
-  };
-
-  const engine = new SQLQueryEngine({
-    nodeId: localNodeId,
-    systemCache: cache,
-    controlPlaneReadinessService: createProvisioningReadyService(nodes),
-    messageRouter: createMockMessageRouter(),
-    rebalanceCoordinator,
-    tablePartitionProvisioningTimeoutMs: 5000,
-    tablePartitionProvisioningPollIntervalMs: 400,
-    nowFn: () => fakeNow,
-  });
-  engine.sleep = async (ms) => {
-    sleepCalls += 1;
-    fakeNow += ms;
-    if (fakeNow >= 2200) {
-      admissionConverged = true;
-    }
-  };
-  engine.waitForRoutablePartitionServiceCount = async () => {};
-  engine.waitForPartitionLeaderService = async () => {};
-
-  await engine.provisionInitialTablePartition({
-    partitionId,
-    replicaCount: 3,
-  });
-
-  t.ok(
-    sleepCalls >= 3,
-    'default convergence wait should keep polling past the legacy one-second window',
-  );
-  t.same(
-    createdTargetNodeIds,
-    ['node-a', 'node-b', 'node-c'],
-    'bootstrap should preserve the full cohort once delayed admission converges',
-  );
-});
-
-test('SQLQueryEngine - provisionInitialTablePartition does not block on full ' +
-  'provisioning timeout when only one active target node is visible',
-async (t) => {
-  const partitionId = 'tbl-single-node-bootstrap-p1';
-  const localNodeId = 'node-a';
-  const createdTargetNodeIds = [];
-  const nodes = [{node_id: localNodeId, status: 'active'}];
-  const services = [];
-  let sleepCalls = 0;
-
-  const cache = {
-    onCacheChange() {},
-    offCacheChange() {},
-    filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
-    },
-    getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
-    },
-  };
-
-  const rebalanceCoordinator = {
-    async createOperation(move) {
-      createdTargetNodeIds.push(move.nodeId);
-      return {
-        operationId: `op-${move.nodeId}`,
-        ...move,
-      };
-    },
-    async executeOperation(operation) {
-      const targetNodeId = operation.targetNodeId || operation.nodeId;
-      services.push({
-        service_id: operation.replicaId || `${operation.partitionId}-${targetNodeId}`,
-        replica_id: operation.replicaId || `${operation.partitionId}-${targetNodeId}`,
-        partition_id: operation.partitionId,
-        service_type: 'partition',
-        status: 'active',
-        node_id: targetNodeId,
-        raft_role: 'leader',
-        address: `${targetNodeId}/partition/${operation.partitionId}`,
-      });
-      return {success: true};
-    },
-  };
-
-  const engine = new SQLQueryEngine({
-    nodeId: localNodeId,
-    systemCache: cache,
-    controlPlaneReadinessService: createProvisioningReadyService(nodes),
-    messageRouter: createMockMessageRouter(),
-    rebalanceCoordinator,
-    tablePartitionProvisioningTimeoutMs: 200,
-    tablePartitionProvisioningPollIntervalMs: 5,
-    tablePartitionTargetNodeConvergenceTimeoutMs: 20,
-  });
-  engine.sleep = async () => {
-    sleepCalls += 1;
-  };
-  engine.waitForRoutablePartitionServiceCount = async () => {};
-  engine.waitForPartitionLeaderService = async () => {};
-
-  const startedAtMs = Date.now();
-  await engine.provisionInitialTablePartition({
-    partitionId,
-    replicaCount: 3,
-  });
-  const elapsedMs = Date.now() - startedAtMs;
-
-  t.same(
-    createdTargetNodeIds,
-    [localNodeId],
-    'single-node bootstrap should degrade the initial cohort to the visible target node',
-  );
-  t.equal(
-    engine.getRoutablePartitionServiceNodeIds(partitionId).length,
-    1,
-    'single-node bootstrap should publish one routable replica',
-  );
-  t.ok(
-    sleepCalls > 0,
-    'provisioning should still poll briefly for cache convergence',
-  );
-  t.ok(
-    elapsedMs < 120,
-    'provisioning should not wait for the full table-partition provisioning timeout',
-  );
 });
 
 test('SQLQueryEngine - provisionInitialTablePartition attaches bootstrap ' +
@@ -914,8 +470,39 @@ test('SQLQueryEngine - provisionInitialTablePartition attaches bootstrap ' +
   );
 });
 
+// Re-derived for answers at commit (quest
+// replica-admission-from-committed-operation, attempt 2): the write path's
+// cache wait (waitForCacheUpdate) is deleted, so a created service row's
+// metadata wait has one path - the engine's poll of its local view inside the
+// provisioning budget. The seam is the poll's sleep: each sleep is one turn
+// in which the projection applies the rows the polls asked for. Whether this
+// routing-readiness read becomes awaitProjectionAt or a commit read is Group
+// A's decision (C5); these witness what exists.
+function serviceRowPollSeam(engine, services, rowFor, options = {}) {
+  const polled = new Set();
+  const sleeps = [];
+  const cache = engine.systemCache;
+  const get = cache.get?.bind(cache);
+  cache.get = (type, key) => {
+    const row = get ? get(type, key) : null;
+    if (type === TABLES.SERVICES && !row) polled.add(key);
+    return row;
+  };
+  engine.sleep = async (ms) => {
+    sleeps.push(ms);
+    if (options.beforeApply) await options.beforeApply([...polled]);
+    for (const key of polled) {
+      if (!services.some((row) => row.service_id === key)) {
+        services.push(rowFor(key));
+      }
+    }
+  };
+  return {polled, sleeps};
+}
+
 test('SQLQueryEngine - provisionInitialTablePartition waits for created ' +
-  'service rows through CDC cache repair before final routing checks', async (t) => {
+  'service rows by polling the local view before final routing checks',
+async (t) => {
   const partitionId = 'tbl-service-visibility-p1';
   const localNodeId = 'node-a';
   const nodes = [
@@ -923,10 +510,15 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for created ' +
     {node_id: 'node-b', status: 'active'},
   ];
   const services = [];
-  const waitCalls = [];
 
   const cache = {
     onCacheChange() {},
+    get(type, key) {
+      if (type === TABLES.SERVICES) {
+        return services.find((row) => row.service_id === key) || null;
+      }
+      return null;
+    },
     filter(type, predicate) {
       if (type === TABLES.NODES) {
         return nodes.filter(predicate);
@@ -968,64 +560,32 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for created ' +
     controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
-    cdcIntegrationService: {
-      async waitForCacheUpdate(tableName, key, expectPresent, options) {
-        waitCalls.push({tableName, key, expectPresent, options});
-        if (tableName === TABLES.SERVICES && expectPresent === true) {
-          const existing = services.find((row) =>
-            row.service_id === key || row.replica_id === key,
-          );
-          if (!existing) {
-            services.push({
-              service_id: key,
-              replica_id: key,
-              partition_id: partitionId,
-              service_type: 'partition',
-              status: 'active',
-              node_id: localNodeId,
-              address: `${localNodeId}/partition/${key}`,
-            });
-          }
-        }
-      },
-    },
   });
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
+  const seam = serviceRowPollSeam(engine, services, (key) => ({
+    service_id: key,
+    replica_id: key,
+    partition_id: partitionId,
+    service_type: 'partition',
+    status: 'active',
+    node_id: localNodeId,
+    address: `${localNodeId}/partition/${key}`,
+  }));
 
   await engine.provisionInitialTablePartition({
     partitionId,
     replicaCount: 2,
   });
 
-  t.equal(waitCalls.length, 2);
-  t.same(waitCalls.map((call) => ({
-    tableName: call.tableName,
-    key: call.key,
-    expectPresent: call.expectPresent,
-    fallbackPhase: call.options?.fallbackPhase,
-  })), [
-    {
-      tableName: TABLES.SERVICES,
-      key: `${partitionId}-r1`,
-      expectPresent: true,
-      fallbackPhase: 'steady_state',
-    },
-    {
-      tableName: TABLES.SERVICES,
-      key: `${partitionId}-r2`,
-      expectPresent: true,
-      fallbackPhase: 'steady_state',
-    },
-  ]);
-  for (const call of waitCalls) {
-    t.ok(
-      Number.isFinite(call.options?.timeoutMs) &&
-      call.options.timeoutMs > 0 &&
-      call.options.timeoutMs <= 30000,
-      'cache wait should use the remaining 30s provisioning budget',
-    );
-  }
+  t.same([...seam.polled].sort(),
+    [`${partitionId}-r1`, `${partitionId}-r2`],
+    'each created service row is waited for in the local view');
+  t.ok(seam.sleeps.length > 0 &&
+    seam.sleeps.every((ms) => ms > 0 && ms <= 30000),
+  'the polls sleep inside the remaining 30s provisioning budget');
+  t.same(services.map((row) => row.service_id).sort(),
+    [`${partitionId}-r1`, `${partitionId}-r2`]);
 });
 
 test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
@@ -1034,7 +594,6 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
   const localNodeId = 'node-a';
   const targetNodeIds = [localNodeId, 'node-b', 'node-c'];
   const services = [];
-  const waitCalls = [];
   const replicaIdByNodeId = {
     'node-a': `${partitionId}-r1`,
     'node-b': `${partitionId}-r2`,
@@ -1083,37 +642,40 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
   };
 
   const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+      projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
+    }),
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
-    cdcIntegrationService: {
-      async waitForCacheUpdate(tableName, key, expectPresent, options = {}) {
-        waitCalls.push({tableName, key, expectPresent, options});
-        if (tableName !== TABLES.SERVICES || expectPresent !== true) {
-          return;
-        }
-        if (!services.some((row) => row.service_id === key)) {
-          services.push({
-            service_id: key,
-            replica_id: key,
-            partition_id: partitionId,
-            service_type: 'partition',
-            status: 'active',
-            node_id: nodeIdByReplicaId[key],
-            address: `${nodeIdByReplicaId[key]}/partition/${key}`,
-          });
-        }
-      },
-    },
     tablePartitionProvisioningTimeoutMs: scaleByMachineFactor(30),
     tablePartitionProvisioningPollIntervalMs: 1,
   });
   engine.queryExecutor.isRoutablePartitionService = (service) =>
     service?.node_id !== localNodeId;
-  engine.waitForCondition = async () => {
-    throw new Error('per-replica routability wait should not run');
+  // The service-row metadata wait is the one condition wait allowed here;
+  // a per-replica routability wait must not run.
+  const conditionWaits = [];
+  const waitForCondition = engine.waitForCondition.bind(engine);
+  engine.waitForCondition = async (predicate, timeoutMs, intervalMs,
+    timeoutError, timeoutOptions = {}) => {
+    conditionWaits.push(timeoutOptions.nestedOperation);
+    if (timeoutOptions.nestedOperation !== 'partition_service_metadata_wait') {
+      throw new Error('per-replica routability wait should not run');
+    }
+    return waitForCondition(predicate, timeoutMs, intervalMs, timeoutError,
+      timeoutOptions);
   };
+  const seam = serviceRowPollSeam(engine, services, (key) => ({
+    service_id: key,
+    replica_id: key,
+    partition_id: partitionId,
+    service_type: 'partition',
+    status: 'active',
+    node_id: nodeIdByReplicaId[key],
+    address: `${nodeIdByReplicaId[key]}/partition/${key}`,
+  }));
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
 
@@ -1127,34 +689,18 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
   );
 
   t.same(
-    waitCalls.map((call) => ({
-      tableName: call.tableName,
-      key: call.key,
-      expectPresent: call.expectPresent,
-      expectedFields: call.options?.expectedFields || null,
-    })),
+    [...seam.polled].sort(),
     [
-      {
-        tableName: TABLES.SERVICES,
-        key: replicaIdByNodeId['node-a'],
-        expectPresent: true,
-        expectedFields: null,
-      },
-      {
-        tableName: TABLES.SERVICES,
-        key: replicaIdByNodeId['node-b'],
-        expectPresent: true,
-        expectedFields: null,
-      },
-      {
-        tableName: TABLES.SERVICES,
-        key: replicaIdByNodeId['node-c'],
-        expectPresent: true,
-        expectedFields: null,
-      },
+      replicaIdByNodeId['node-a'],
+      replicaIdByNodeId['node-b'],
+      replicaIdByNodeId['node-c'],
     ],
-    'per-replica waits should only hydrate service rows before the later routing owners run',
+    'per-replica waits only wait for the service rows before the later ' +
+      'routing owners run',
   );
+  t.ok(conditionWaits.every((name) =>
+    name === 'partition_service_metadata_wait'),
+  'the only condition waits are the service-row metadata waits');
 });
 
 // The claim under test is ORDERING: both CREATE_REPLICA dispatches happen
@@ -1251,58 +797,38 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
     },
   };
 
-  const cdcIntegrationService = {
-    async waitForCacheUpdate(tableName, key, expectPresent, options = {}) {
-      cacheWaitCalls.push({
-        tableName,
-        key,
-        expectPresent,
-        timeoutMs: options.timeoutMs,
-      });
-      if (tableName !== TABLES.SERVICES || expectPresent !== true) {
-        return;
-      }
-
-      if (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0) {
-        throw new Error(
-          `cache wait budget ${String(options.timeoutMs)}ms is not usable ` +
-          `for ${key}`,
-        );
-      }
-
-      // Block until the test releases this replica, recording what had already
-      // been dispatched at the instant the wait began.
-      dispatchedWhenWaitBegan.push([...executedTargetNodeIds]);
-      await new Promise((resolve) => {
-        releaseWait.push(resolve);
-        if (releaseWait.length === REPLICA_COUNT) bothWaitsPending();
-      });
-      if (!services.some((row) => row.service_id === key)) {
-        services.push({
-          service_id: key,
-          replica_id: key,
-          partition_id: partitionId,
-          service_type: 'partition',
-          status: 'active',
-          node_id: key === replicaIdByNodeId['node-a'] ? 'node-a' : 'node-b',
-          address: `node/${key}`,
-        });
-      }
-    },
-  };
-
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
     controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
-    cdcIntegrationService,
     tablePartitionProvisioningTimeoutMs: PROVISIONING_BUDGET_MS,
     tablePartitionProvisioningPollIntervalMs: 1,
   });
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
+  // Each replica's metadata wait polls once, then blocks in its sleep on a
+  // barrier the test releases, recording what had already been dispatched
+  // at the instant the wait began.
+  serviceRowPollSeam(engine, services, (key) => ({
+    service_id: key,
+    replica_id: key,
+    partition_id: partitionId,
+    service_type: 'partition',
+    status: 'active',
+    node_id: key === replicaIdByNodeId['node-a'] ? 'node-a' : 'node-b',
+    address: `node/${key}`,
+  }), {
+    async beforeApply(polledKeys) {
+      cacheWaitCalls.push(polledKeys);
+      dispatchedWhenWaitBegan.push([...executedTargetNodeIds]);
+      await new Promise((resolve) => {
+        releaseWait.push(resolve);
+        if (releaseWait.length === REPLICA_COUNT) bothWaitsPending();
+      });
+    },
+  });
 
   const provisioning = engine.provisionInitialTablePartition({
     partitionId,
@@ -1332,6 +858,503 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
   t.equal(
     cacheWaitCalls.length,
     REPLICA_COUNT,
-    'each replica should still wait for authoritative service-row visibility',
+    'each replica waits for its service row in the local view',
   );
 });
+
+test('SQLQueryEngine - attempt 2: RF3 with 2 eligible nodes completes under_replicated with no degraded fallback', async (t) => {
+  const localNodeId = 'node-a';
+  const partitionId = 'tbl-users-p1';
+  const createdTargetNodeIds = [];
+  const nodes = [
+    {node_id: localNodeId, status: 'active'},
+    {node_id: 'node-b', status: 'active'},
+    {node_id: 'node-c', status: 'active'},
+  ];
+  const cache = {
+    onCacheChange() {},
+    offCacheChange() {},
+    has: () => true,
+    get: () => null,
+    filter: (type, predicate) => (type === TABLES.NODES ? nodes.filter(predicate) : []),
+    getAll: (type) => (type === TABLES.NODES ? nodes : []),
+  };
+  const readiness = createCommittedServeEligibilityOwner({
+    answers: {
+      'node-a': serveEligibilityAnswer(true),
+      'node-b': serveEligibilityAnswer(true),
+      'node-c': serveEligibilityAnswer(false, {reasons: ['ready_lease_expired']}),
+    },
+  });
+  readiness.getProvisioningNodeTrustViewSync = () => [
+    {nodeId: 'node-a', repairEligible: true, serveEligible: true},
+    {nodeId: 'node-b', repairEligible: true, serveEligible: true},
+    {nodeId: 'node-c', repairEligible: true, serveEligible: false},
+  ];
+
+  let routable = false;
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    controlPlaneReadinessService: readiness,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator: {
+      checkProvisioningAdmission: async (move) => ({
+        allowed: true,
+        decisionType: 'admitted',
+        operationCreationAdmission: {
+          allowed: true,
+          contractState: OWNER_CONTRACT_STATE.READY,
+          nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
+          operationIntentId: move.operationIntentId,
+        },
+      }),
+      createOperation: async (move) => {
+        createdTargetNodeIds.push(move.nodeId);
+        return {operationId: `op-${move.nodeId}`, ...move};
+      },
+      executeOperation: async () => {
+        routable = true;
+        return {success: true};
+      },
+    },
+  });
+  engine.waitForRoutablePartitionServiceCount = async () => {};
+  engine.waitForPartitionLeaderService = async () => {};
+  engine.getRoutablePartitionServiceNodeIds = () => (routable ? ['node-a', 'node-b'] : []);
+
+  const outcome = await engine.provisionInitialTablePartition({
+    partitionId,
+    replicaCount: 3,
+    minimumRoutableReplicaCount: 2,
+    minimumRoutableReplicaCountWasDefaulted: true,
+  });
+
+  t.same(createdTargetNodeIds, ['node-a', 'node-b'],
+    'no ADD targets the third node (degraded fallback deleted)');
+  t.equal(outcome.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED,
+    'outcome contractState is under_replicated when quorum reached below RF');
+  t.equal(outcome.missingReplicaCount, 1,
+    'outcome missingReplicaCount is 1');
+});
+
+test('SQLQueryEngine - attempt 2: cohort below quorum fails with PROVISIONING_UNAVAILABLE', async (t) => {
+  const localNodeId = 'node-a';
+  const partitionId = 'tbl-users-p1';
+  const nodes = [
+    {node_id: localNodeId, status: 'active'},
+    {node_id: 'node-b', status: 'active'},
+    {node_id: 'node-c', status: 'active'},
+  ];
+  const cache = {
+    onCacheChange() {},
+    offCacheChange() {},
+    has: () => true,
+    get: () => null,
+    filter: (type, predicate) => (type === TABLES.NODES ? nodes.filter(predicate) : []),
+    getAll: (type) => (type === TABLES.NODES ? nodes : []),
+  };
+  const readiness = createCommittedServeEligibilityOwner({
+    answers: {
+      'node-a': serveEligibilityAnswer(true),
+      'node-b': serveEligibilityAnswer(false, {reasons: ['ready_lease_expired']}),
+      'node-c': serveEligibilityAnswer(false, {reasons: ['ready_lease_expired']}),
+    },
+  });
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    controlPlaneReadinessService: readiness,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator: {
+      checkProvisioningAdmission: async () => ({allowed: true}),
+      createOperation: async (move) => ({operationId: `op-${move.nodeId}`, ...move}),
+      executeOperation: async () => ({success: true}),
+    },
+  });
+
+  let threw = null;
+  try {
+    await engine.provisionInitialTablePartition({
+      partitionId,
+      replicaCount: 3,
+    });
+  } catch (err) {
+    threw = err;
+  }
+  t.ok(threw, 'below quorum must throw');
+  t.equal(threw?.code, QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
+    'error code must be PROVISIONING_UNAVAILABLE');
+  t.ok(threw?.epoch, 'error must carry epoch');
+});
+
+test('SQLQueryEngine - RF3 with sealed quorum minimum (2) never lowers minimumRoutableReplicaCount below quorum on a 3-node cluster with 1 eligible node', async (t) => {
+  const localNodeId = 'node-a';
+  const partitionId = 'tbl-users-sealed-quorum-p1';
+  const nodes = [
+    {node_id: localNodeId, status: 'active'},
+    {node_id: 'node-b', status: 'active'},
+    {node_id: 'node-c', status: 'active'},
+  ];
+  const cache = {
+    onCacheChange() {},
+    offCacheChange() {},
+    has: () => true,
+    get: () => null,
+    filter: (type, predicate) => (type === TABLES.NODES ? nodes.filter(predicate) : []),
+    getAll: (type) => (type === TABLES.NODES ? nodes : []),
+  };
+  const readiness = createCommittedServeEligibilityOwner({
+    answers: {
+      'node-a': serveEligibilityAnswer(true),
+      'node-b': serveEligibilityAnswer(false, {reasons: ['ready_lease_expired']}),
+      'node-c': serveEligibilityAnswer(false, {reasons: ['ready_lease_expired']}),
+    },
+  });
+  readiness.getProvisioningNodeTrustViewSync = () => [
+    {nodeId: 'node-a', repairEligible: true, serveEligible: true},
+    {nodeId: 'node-b', repairEligible: true, serveEligible: false},
+    {nodeId: 'node-c', repairEligible: true, serveEligible: false},
+  ];
+  const createdTargetNodeIds = [];
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    controlPlaneReadinessService: readiness,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator: {
+      createOperation: async (move) => {
+        createdTargetNodeIds.push(move.nodeId);
+        return {operationId: `op-${move.nodeId}`, ...move};
+      },
+      executeOperation: async () => ({success: true}),
+    },
+  });
+
+  for (const minimumRoutableReplicaCountWasDefaulted of [true, false]) {
+    let threw = null;
+    try {
+      await engine.provisionInitialTablePartition({
+        partitionId,
+        replicaCount: 3,
+        minimumRoutableReplicaCount: 2,
+        minimumRoutableReplicaCountWasDefaulted,
+      });
+    } catch (err) {
+      threw = err;
+    }
+    t.ok(
+      threw,
+      `1 eligible node in 3-node cluster must fail (defaulted=${minimumRoutableReplicaCountWasDefaulted})`,
+    );
+    t.equal(
+      threw?.code,
+      QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
+      'must reject with PROVISIONING_UNAVAILABLE rather than lowering minimumRoutableReplicaCount to 1',
+    );
+  }
+  t.same(
+    createdTargetNodeIds,
+    [],
+    'no operations are created when sealed quorum minimum cannot be satisfied',
+  );
+
+  // Observed-singleton RF3 negative control: even if the local node cache and cohort
+  // transiently observe only 1 node (node-a), RF3 must NOT downgrade quorum from 2 to 1.
+  const singletonNodes = [{node_id: localNodeId, status: 'active'}];
+  const singletonCache = {
+    onCacheChange() {},
+    offCacheChange() {},
+    has: () => true,
+    get: () => null,
+    filter: (type, predicate) => (type === TABLES.NODES ? singletonNodes.filter(predicate) : []),
+    getAll: (type) => (type === TABLES.NODES ? singletonNodes : []),
+  };
+  const singletonReadiness = createCommittedServeEligibilityOwner({
+    answers: {
+      'node-a': serveEligibilityAnswer(true),
+    },
+  });
+  singletonReadiness.getProvisioningNodeTrustViewSync = () => [
+    {nodeId: 'node-a', repairEligible: true, serveEligible: true},
+  ];
+  const singletonEngine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: singletonCache,
+    controlPlaneReadinessService: singletonReadiness,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator: {
+      createOperation: async (move) => {
+        createdTargetNodeIds.push(move.nodeId);
+        return {operationId: `op-${move.nodeId}`, ...move};
+      },
+      executeOperation: async () => ({success: true}),
+    },
+  });
+  let singletonRf3Threw = null;
+  try {
+    await singletonEngine.provisionInitialTablePartition({
+      partitionId: `${partitionId}-singleton`,
+      replicaCount: 3,
+      minimumRoutableReplicaCount: 2,
+      minimumRoutableReplicaCountWasDefaulted: true,
+    });
+  } catch (err) {
+    singletonRf3Threw = err;
+  }
+  t.ok(
+    singletonRf3Threw,
+    'RF3 with only 1 observed node in cache/cohort must still reject below quorum (2)',
+  );
+  t.equal(
+    singletonRf3Threw?.code,
+    QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
+    'RF3 observed-singleton must fail with PROVISIONING_UNAVAILABLE',
+  );
+});
+
+test('QueryExecutor - awaitPostOverlayRoutingRepair passes positional routingReadinessDimension and drives serve-eligibility refresh chain', async (t) => {
+  const {CONTROL_PLANE_READINESS_DIMENSION} = await import(
+    '../../src/control-plane/control-plane-readiness-constants.js'
+  );
+  const {
+    SERVE_ELIGIBILITY_DECISION,
+    SERVE_ELIGIBILITY_STATE,
+  } = await import(
+    '../../src/control-plane/serve-eligibility-owner.js'
+  );
+  const localNodeId = 'node-a';
+  const remoteNodeId = 'node-b';
+  const partitionId = 'tbl-overlay-chain-p1';
+
+  const cachedServices = [];
+  let serveEligibilityRefreshed = false;
+  let readServeEligibilityCount = 0;
+  let getNodeReadinessCount = 0;
+
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: {
+      onCacheChange() {},
+      offCacheChange() {},
+      has: () => false,
+      get: (table, id) =>
+        table === TABLES.PARTITIONS && id === partitionId ?
+          {partition_id: partitionId, table_id: 'tbl-overlay-chain', table_name: 'user_orders'} :
+          null,
+      filter: (table, predicate) =>
+        table === TABLES.SERVICES ? cachedServices.filter(predicate) : [],
+      getAll: (table) => (table === TABLES.SERVICES ? [...cachedServices] : []),
+    },
+    messageRouter: createMockMessageRouter(),
+    controlPlaneReadinessService: {
+      // Projection readiness says eligible so if getPartitionRoutingSnapshot
+      // receives a non-SERVE_ELIGIBLE dimension (such as a wrapped object),
+      // it would falsely treat node-b as routable and skip serve refresh.
+      getControlPlaneParticipationSync(nodeId) {
+        return {
+          eligible: nodeId === remoteNodeId,
+          failedDimensions: [],
+          reasonCodes: [],
+        };
+      },
+      answerServeEligibility(nodeId) {
+        if (nodeId !== remoteNodeId) {
+          return null;
+        }
+        return serveEligibilityRefreshed ?
+          {
+            state: SERVE_ELIGIBILITY_STATE.READY,
+            decision: SERVE_ELIGIBILITY_DECISION.ELIGIBLE,
+            epoch: 2,
+            reasons: [],
+          } :
+          {
+            state: SERVE_ELIGIBILITY_STATE.READY,
+            decision: SERVE_ELIGIBILITY_DECISION.NOT_ELIGIBLE,
+            epoch: 1,
+            reasons: ['epoch_behind'],
+          };
+      },
+      async readServeEligibility() {
+        readServeEligibilityCount += 1;
+        serveEligibilityRefreshed = true;
+        return {epoch: 2};
+      },
+      async getNodeReadiness() {
+        getNodeReadinessCount += 1;
+        return null;
+      },
+    },
+  });
+  const executor = engine.queryExecutor;
+
+  // Before overlay refresh, no service rows exist in cache.
+  const initialSnapshot = executor.getPartitionRoutingSnapshot(
+    partitionId,
+    CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+  );
+  t.equal(initialSnapshot.serviceRowCount, 0, 'pre-overlay snapshot has no service rows');
+
+  // Negative control: passing wrapped {routingReadinessDimension} object to
+  // getPartitionRoutingSnapshot after service row arrives bypasses
+  // evaluateServeEligibilityRoutability and falsely reports 0 denied nodes.
+  cachedServices.push({
+    service_id: `${partitionId}-r1`,
+    replica_id: `${partitionId}-r1`,
+    partition_id: partitionId,
+    service_type: 'partition',
+    status: 'active',
+    node_id: remoteNodeId,
+    address: '127.0.0.1:9102',
+  });
+  const buggyObjectDimensionSnapshot = executor.getPartitionRoutingSnapshot(
+    partitionId,
+    {routingReadinessDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE},
+  );
+  t.same(
+    executor.collectAllFilteredRoutingRepairNodeIds(buggyObjectDimensionSnapshot),
+    [],
+    'negative control: object dimension argument bypasses SERVE_ELIGIBLE evaluation and misses denied node',
+  );
+  cachedServices.length = 0;
+
+  // Positive end-to-end chain: overlay refresh populates the active service row,
+  // awaitPostOverlayRoutingRepair calls getPartitionRoutingSnapshot with positional
+  // SERVE_ELIGIBLE dimension, discovers node-b is serve-denied, and awaits readServeEligibility().
+  executor.refreshRoutingMetadataOverlay = async () => {
+    cachedServices.push({
+      service_id: `${partitionId}-r1`,
+      replica_id: `${partitionId}-r1`,
+      partition_id: partitionId,
+      service_type: 'partition',
+      status: 'active',
+      node_id: remoteNodeId,
+      address: '127.0.0.1:9102',
+    });
+    return true;
+  };
+
+  const repaired = await executor.maybeAwaitDeniedPartitionRoutingRepair(
+    initialSnapshot,
+    {allowReadinessAuthoritativeRefresh: true},
+  );
+  t.equal(repaired, true, 'overlay + post-overlay repair chain reports repaired');
+  t.equal(
+    readServeEligibilityCount,
+    1,
+    'post-overlay SERVE_ELIGIBLE denial drives awaitServeEligibilityRefreshForDenial -> readServeEligibility()',
+  );
+  t.equal(getNodeReadinessCount, 0, 'projection repair not called for SERVE_ELIGIBLE');
+  const postRepairSnapshot = executor.getPartitionRoutingSnapshot(
+    partitionId,
+    CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+  );
+  t.equal(
+    postRepairSnapshot.routableServiceCount,
+    1,
+    'service is routable for SERVE_ELIGIBLE after post-overlay serve-eligibility refresh',
+  );
+});
+
+test('SQLQueryEngine & RuntimeServiceDefinitionResolution - authoritative SQL absence overrides stale cached presence and evicts populated SystemTableCache rows', async (t) => {
+  const {SystemTableCache} = await import('../../src/cache/system-table-cache.js');
+  const {METADATA_AUTHORITY_REFRESH_OUTCOME} = await import(
+    '../../src/query/sql-query-engine-metadata-authority-refresh.js'
+  );
+  const {
+    SERVICE_DEFINITION_RESOLUTION_OUTCOME,
+    resolveServiceDefinitionOutcomeForCreate,
+  } = await import('../../src/node/runtime-service-definition-resolution.js');
+
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
+    table_id: 'tbl-stale-dropped',
+    table_name: 'stale_dropped_orders',
+    schema_definition: JSON.stringify({
+      columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
+    }),
+    updated_at: 1000,
+  });
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+    partition_id: 'tbl-stale-dropped-p1',
+    table_id: 'tbl-stale-dropped',
+    table_name: 'stale_dropped_orders',
+    partition_version: 1,
+    replica_count: 1,
+    state: 'NORMAL',
+    updated_at: 1000,
+  });
+  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
+    service_id: 'svc-def-stale',
+    service_name: 'stale-wasm-service',
+    replica_count: 1,
+    updated_at: 1000,
+  });
+
+  t.equal(cache.getAll(TABLES.TABLES).length, 1, 'table row initially cached');
+  t.equal(cache.getAll(TABLES.PARTITIONS).length, 1, 'partition row initially cached');
+  t.ok(
+    cache.get(TABLES.SERVICE_DEFINITIONS, 'svc-def-stale'),
+    'service definition initially cached',
+  );
+
+  cache.delete = () => {
+    throw new Error('retired cache.delete must not run');
+  };
+  cache.remove = () => {
+    throw new Error('retired cache.remove must not run');
+  };
+
+  const gateway = {
+    async readAuthoritativeRows() {
+      return {success: true, rows: []};
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    nodeId: 'node-a',
+    systemCache: cache,
+    controlPlaneSystemTableGateway: gateway,
+    messageRouter: createMockMessageRouter(),
+  });
+
+  const refreshOutcome = await engine.refreshTableRoutingMetadataFromAuthority(
+    'stale_dropped_orders',
+  );
+  t.equal(
+    refreshOutcome.outcome,
+    METADATA_AUTHORITY_REFRESH_OUTCOME.ABSENT,
+    'authoritative empty table/partition SQL read must resolve to ABSENT despite stale cache',
+  );
+  t.equal(
+    cache.getAll(TABLES.TABLES).length,
+    0,
+    'stale table row must be evicted from SystemTableCache on authoritative absence',
+  );
+  t.equal(
+    cache.getAll(TABLES.PARTITIONS).length,
+    0,
+    'stale partition row must be evicted from SystemTableCache on authoritative absence',
+  );
+
+  const serviceResolution = await resolveServiceDefinitionOutcomeForCreate(
+    {
+      nodeId: 'node-a',
+      systemTableCache: cache,
+      controlPlaneSystemTableGateway: gateway,
+    },
+    'svc-def-stale',
+  );
+  t.equal(
+    serviceResolution.outcome,
+    SERVICE_DEFINITION_RESOLUTION_OUTCOME.ABSENT,
+    'authoritative empty service_definitions read must resolve to ABSENT',
+  );
+  t.equal(
+    cache.get(TABLES.SERVICE_DEFINITIONS, 'svc-def-stale'),
+    undefined,
+    'stale service_definitions row must be evicted from SystemTableCache on authoritative absence',
+  );
+});
+

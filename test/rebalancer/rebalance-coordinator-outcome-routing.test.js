@@ -235,14 +235,13 @@ function createTestCoordinator(options = {}) {
       return null;
     }},
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async refreshAuthoritativeCacheRow() {
         return true;
       },
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {

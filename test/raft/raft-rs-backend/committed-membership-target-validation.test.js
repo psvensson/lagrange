@@ -60,7 +60,6 @@ function resolveFor(harness, stamp, cache = metadataCache(PARTITION_ID,
   handler.systemTableCache = cache;
   return handler.resolveReplicaContext(PARTITION_ID, TARGET[0], {
     bootstrapReplicaIds: FOUNDERS.map(([replicaId]) => replicaId),
-    bootstrapPeerAddresses: FOUNDERS.map(addressOf),
     bootstrapMembership: stamp,
   });
 }
@@ -104,7 +103,8 @@ const DEFECT_CASES = Object.freeze({
   [COMMITTED_MEMBERSHIP_STAMP_DEFECT.IDENTITY_UNRESOLVED]: (stamp) =>
     ({...stamp, identities: {...stamp.identities, [stamp.voters[0]]: null}}),
   [COMMITTED_MEMBERSHIP_STAMP_DEFECT.NO_FOUNDERS]: () =>
-    ({kind: COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS, founders: []}),
+    ({kind: COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS, founders: [],
+      founderNodeIds: {}}),
 });
 
 test('T3: a missing or defective stamp is STAMP_INVALID with its defect, ' +
@@ -139,7 +139,8 @@ test('T3: GENESIS is refused where discovery shows a group outside the ' +
   try {
     const founders = [TARGET, ...FOUNDERS.slice(0, 2)];
     const genesis = {kind: COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS,
-      founders: founders.map(([replicaId]) => replicaId)};
+      founders: founders.map(([replicaId]) => replicaId),
+      founderNodeIds: Object.fromEntries(founders)};
     // Rows naming established voters and a leader node: a row-derived
     // classification would make this founder a learner.
     const establishedCache = metadataCache(PARTITION_ID, founders,
@@ -169,7 +170,8 @@ function genesisOperation(founders) {
     [ReplicaOperationField.PEER_ADDRESSES]: founders.map(addressOf),
     [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]: {
       kind: COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS,
-      founders: founders.map(([id]) => id)}};
+      founders: founders.map(([id]) => id),
+      founderNodeIds: Object.fromEntries(founders)}};
 }
 
 test('T3 (C1): a GENESIS founder re-created after its index-0 write ' +
@@ -232,7 +234,7 @@ test('T3: a COMMITTED stamp already naming the target a voter, with no ' +
     const leader = harness.leader();
     reservePartitionRaftPeerIdentity(leader, TARGET[0]);
     const proposed = await turnChainValue(leader.raft.proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: TARGET[0]}));
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: TARGET[0], nodeId: 'node-test'}));
     assert.equal(proposed.outcome, 'CORE_OK', 'setup: AddNode(target)');
     const zombieOf = () => statusOf(leader).peers.find((peer) =>
       peer.replicaIdentity === TARGET[0] && !peer.learner);
@@ -280,7 +282,7 @@ test('T3: learners in the committed configuration reach the target, and a ' +
     const leader = harness.leader();
     reservePartitionRaftPeerIdentity(leader, learner);
     await turnChainValue(leader.raft.proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: learner}));
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: learner, nodeId: 'node-test'}));
     assert.ok(await waitFor(() =>
       statusOf(leader).confState.learners.length === 1),
     'setup: the group committed a learner');

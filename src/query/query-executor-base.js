@@ -1,5 +1,8 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {
+  buildLocalAuthoritativeObservation,
+} from '../cdc/cdc-integration-service-local-system-table-routing.js';
+import {
   installQueryExecutorJoinExecutionHelpers,
 } from './query-executor-join-execution.js';
 import {
@@ -480,14 +483,40 @@ class QueryExecutorBase {
     } catch (_metricsErr) {
       // Metrics logging must not propagate to callers
     }
+    const readAuthorityWitnesses = results
+      .map((result) => result.readAuthorityWitness)
+      .filter(Boolean);
+    const rowSetComplete =
+      partitionIds.length > 0 &&
+      results.length === partitionIds.length &&
+      results.every(
+        (result) =>
+          result?.success === true &&
+          result?.rowSetComplete === true &&
+          result?.partial !== true,
+      );
+    const tableName = ast?.table || ast?.from || null;
+    const authoritativeObservation = rowSetComplete ?
+      (results.length === 1 && results[0]?.authoritativeObservation ?
+        results[0].authoritativeObservation :
+        buildLocalAuthoritativeObservation(
+          tableName,
+          rowSetComplete,
+          readAuthorityWitnesses,
+          sql,
+          params,
+        )) :
+      null;
     return {
       success: true,
       rows: aggregated.rows,
       count: aggregated.rows.length,
       partitions: partitionIds,
-      readAuthorityWitnesses: results.map(
-        (result) => result.readAuthorityWitness,
-      ).filter(Boolean),
+      tableName,
+      rowSetComplete,
+      readAuthorityWitness: readAuthorityWitnesses[0] || null,
+      readAuthorityWitnesses,
+      authoritativeObservation,
       timestamp: queryTimestamp.toString(),
       distributedMetrics: {
         fanout: fanoutMetrics,

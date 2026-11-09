@@ -1,0 +1,189 @@
+{
+  "reviewer": "subagent:/root/independent_review",
+  "base": "d511e4f0bb4aa534aab90c816edcb455913329d8",
+  "verdict": "approve",
+  "approvalScope": "Exact bounded WIP content plus inspected final all-33 static result, not Quest closure, full frozen caller cone, public Cell, E8/E9 or publication acceptance.",
+  "priorSnapshotsVerified": {
+    "v2Files": 27,
+    "v3Files": 31
+  },
+  "independentProbe": {
+    "exitCode": 0,
+    "validProducerEligible": true,
+    "malformedIncorrectlyEligible": 0
+  },
+  "files": [
+    {
+      "path": "scripts/check-duplication.js",
+      "sha256": "1824750240b02449938927a4a5a4aa7eac35829edf66dc39d0c05650e761859a"
+    },
+    {
+      "path": "scripts/check-unused-exports.js",
+      "sha256": "c53e42828d27be3a25161da5624272a40d99de2652cad9a2fd7a226798fd3c90"
+    },
+    {
+      "path": "src/admin/admin-runtime-service-views.js",
+      "sha256": "47e0ab8c0f4aa38cce2f218b44a04d8540411289c4f9795a8892931f765bc514"
+    },
+    {
+      "path": "src/bootstrap/shared/runtime-service-rebalancer-setup.js",
+      "sha256": "58cd24323c701e487aada4e49cc150d9641c4336942e6332bbab47a070ff19c3"
+    },
+    {
+      "path": "src/cli/core/remote-cache-service-rows.js",
+      "sha256": "2083697fbc69b7c6a1b6d0952d5141c02b003f322e616cb2860260db9b471d1f"
+    },
+    {
+      "path": "src/control-plane/owners/deployment-binding-contract.js",
+      "sha256": "65a63e817530f08443ee176e3ee97468ddf6bd93c3d6266564e05b59a923af40"
+    },
+    {
+      "path": "src/control-plane/owners/request-binding-service-definition-contract.js",
+      "sha256": "64b19c65f1446302a31def3d817a1fbd417087a73fa464b7f01f26c34a003ab2"
+    },
+    {
+      "path": "src/node/runtime-service-bound-creation-route.js",
+      "sha256": "67f601a6884a749e5662804b945995ab4990df81a045a6ca18b14e0193dca5ee"
+    },
+    {
+      "path": "src/node/runtime-service-definition-resolution.js",
+      "sha256": "543358d837a2c578b29554a67116849474f18e09b6b6fdda5ce5ea35a079500f"
+    },
+    {
+      "path": "src/node/runtime-service-generic-replica.js",
+      "sha256": "2d2d27b2c44ccf7896a386729cd7ccbed019f72f3bf7579fe45620399f83d9c0"
+    },
+    {
+      "path": "src/node/runtime-service-handler.js",
+      "sha256": "a0b3275760f4fc46ace623b85e9292aa202f808bf6bf51d25b2179d2f9840c80"
+    },
+    {
+      "path": "src/rebalancer/runtime-service-policy.js",
+      "sha256": "2080e1258509aeed56b2ff167fca12a099d1ba2d2d7fb74d66befb621c104824"
+    },
+    {
+      "path": "src/rebalancer/unified-rebalancer-policy-scheduler-methods.js",
+      "sha256": "e5d6dca6183460652089d4b9857181492b4a1b96c22c329109ac08fb3e7dbf48"
+    },
+    {
+      "path": "src/runtime/service-discovery-catalog.js",
+      "sha256": "38c85fb500f82fd8c2207b322c55bd20f372d043f8f08dec6b0af69ae7a7704a"
+    },
+    {
+      "path": "test/admin/admin-runtime-service-views.test.js",
+      "sha256": "a6a0d882dcf1f54ff932828d11ab01708e1b87c74bb1d7acb25830e8d2735a19"
+    },
+    {
+      "path": "test/bootstrap/runtime-service-rebalancer-owner.test.js",
+      "sha256": "63e531877721155614770de1905aee381d9901175378bc68fa25c423e5b04aed"
+    },
+    {
+      "path": "test/cli/core/remote-cache.test.js",
+      "sha256": "7b5f3931aee521938059e2f74db9c2998fce8cc7d151177cbbd64686c8a55864"
+    },
+    {
+      "path": "test/control-plane/deployment-binding-owner.test.js",
+      "sha256": "9ecca1d55654b32f089f1fa603fdf3b2ade9ed2ef5e7a55823ce9bcaee0f6d3a"
+    },
+    {
+      "path": "test/control-plane/request-binding-service-definition-fixture.js",
+      "sha256": "3ff8806b1723d2a9779f3dbe4c89395672b9513ebfc4cb87c79120b1f219e231"
+    },
+    {
+      "path": "test/control-plane/request-binding-service-definition-owner.test.js",
+      "sha256": "038e3ac14b9ecf5948a360ef8ea094e2e507c1d2b83851f22e4a925ee00282d4"
+    },
+    {
+      "path": "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+      "sha256": "2f286603847790fe28122f5119d522a74137cee6c9a8317c9abb291cd392d40f"
+    },
+    {
+      "path": "test/node/runtime-service-bound-route.test.js",
+      "sha256": "73f6520cc03730b3e65c5435e2a77101723440e81207454be1231e3de2e0391a"
+    },
+    {
+      "path": "test/node/runtime-service-definition-authority.test.js",
+      "sha256": "377cd8ebb46a017296b13a23b3906f32d483a63a6dbaa09b07a6423a4988790d"
+    },
+    {
+      "path": "test/node/runtime-service-handler.test.js",
+      "sha256": "fb8608e3e5a92423960447c4317a91efe39ad35ed638ade263549da5c905c38a"
+    },
+    {
+      "path": "test/rebalancer/call-activation-pin-planning.test.js",
+      "sha256": "e068294d5d09031f8fb3375e14c0bc0cd6bc6a39d2c8cbefff605ec105a7a6b5"
+    },
+    {
+      "path": "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js",
+      "sha256": "e24fd1d7ee01b42b2807e00d81331d7cd95f9251c5ee2e1c996be3487d2f63b8"
+    },
+    {
+      "path": "test/rebalancer/runtime-service-affinity-policy-lift.test.js",
+      "sha256": "28fa9c0ab8754ce58c4be345073be60b18f77fa02fc323dc9ef8e0c8c39cdbaa"
+    },
+    {
+      "path": "test/rebalancer/runtime-service-entity.test.js",
+      "sha256": "0e872496f95c4ff3c90c0915f939631d2e3f3ac69dd0d0da3935b833e49bcf2b"
+    },
+    {
+      "path": "test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js",
+      "sha256": "1ac19118f40d76e2385f5772c6b63ec15863f58c2c3c0ba4c7332058a2dbcade"
+    },
+    {
+      "path": "test/runtime/service-discovery-catalog.test.js",
+      "sha256": "73e8db050a10524476ab62d19f57e7b22edefbbebecf6387fb6698ad90289817"
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "sha256": "7dd1cf4cec381e586639b19192ee22807c687f4a84ada94b4a97aa5f6fcb4aba"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/implementation-content-v2.json",
+      "sha256": "596bfcd8d4035d848cc3b3a4ca21f741d84b673c2e8bec281302521adc9361c4"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/implementation-content-v3.json",
+      "sha256": "3d13600c49d6a12c9ff94e56ef706bd96f7c5b5652e6f97f423b23ec3e8dab48"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/implementation-content-v4.json",
+      "sha256": "337b3a6b796898bca94baaac348e945d25cb8108899130591b633b78688f0439"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/independent-implementation-review-hold.md",
+      "sha256": "348fe9930679821ae30fe184ce648c46acefcb127c0175918587ab1d94d22395"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/independent-implementation-review-inputs.json",
+      "sha256": "758c59c442606cbb205a291a179ff7e0a6fbbd8fa5dd9cc8be2ffb5d5d7b69fd"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/independent-lineage-boundary-probe.mjs",
+      "sha256": "e26f88d9eb082ec36af6aaf248ff7592841e812168f5b300705d5ecd0102ea82"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/independent-lineage-boundary-before.log",
+      "sha256": "5f2a5d1d392c304468724338b1b963aaeae300bd11439737c8097d1df3cf9ccf"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/independent-lineage-boundary-reviewer-after.log",
+      "sha256": "49dd721dafc9976ba35d44e4afa8fe7d31da946bbe2863ef70abe72b1d9269b6"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/final-25-callers.log",
+      "sha256": "82708a22cd236ec7065429ec58a373348494bb19c1b25820a94fec9f4e02347d"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/mechanical-correction-callers.log",
+      "sha256": "4c37163ff78e0c299b42f9a810250f1caf852de21c2a6243ed383c623be4cfbe"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/static-corrected-first.log",
+      "sha256": "09df4bb44fe8c4fc3844f6bf4da8b03446ae5828036f0f18d66c3b7343fc946e"
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/static-corrected-final.log",
+      "sha256": "6dce3c4e9c742e00a6927c4c9a3b98d18f17fd2617781bfb6404491d1959a837"
+    }
+  ]
+}

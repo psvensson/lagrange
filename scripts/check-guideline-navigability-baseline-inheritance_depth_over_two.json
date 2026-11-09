@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-08T12:15:36.616Z",
-  "rawViolationCount": 65,
+  "generatedAt": "2026-11-09T06:33:39.106Z",
+  "rawViolationCount": 58,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 404,
+      "line": 406,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -23,7 +23,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-leadership-summary.js",
-      "line": 281,
+      "line": 280,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -32,7 +32,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
-      "line": 578,
+      "line": 571,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -41,7 +41,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-node-view-projection.js",
-      "line": 470,
+      "line": 473,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -112,71 +112,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/control-plane/control-plane-readiness-evidence-reasons.js",
-      "line": 77,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "inheritance_depth_over_two",
-      "reason": "extends chain deeper than two; compose named collaborators instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
-      "line": 27,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "inheritance_depth_over_two",
-      "reason": "extends chain deeper than two; compose named collaborators instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
-      "line": 71,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "inheritance_depth_over_two",
-      "reason": "extends chain deeper than two; compose named collaborators instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-aware.js",
-      "line": 13,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "inheritance_depth_over_two",
-      "reason": "extends chain deeper than two; compose named collaborators instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 19,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "inheritance_depth_over_two",
-      "reason": "extends chain deeper than two; compose named collaborators instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 42,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "inheritance_depth_over_two",
-      "reason": "extends chain deeper than two; compose named collaborators instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
-      "line": 32,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "inheritance_depth_over_two",
-      "reason": "extends chain deeper than two; compose named collaborators instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/control-plane/membership-publication-coordinator-queue.js",
-      "line": 622,
+      "line": 609,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -185,7 +122,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 350,
+      "line": 80,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -194,7 +131,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-operation-execution.js",
-      "line": 32,
+      "line": 38,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -203,7 +140,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-readiness-capture.js",
-      "line": 45,
+      "line": 47,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -212,7 +149,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-health-readiness.js",
-      "line": 79,
+      "line": 77,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -239,7 +176,7 @@
     },
     {
       "filePath": "src/partition/partition-service-assembly.js",
-      "line": 30,
+      "line": 31,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -248,7 +185,7 @@
     },
     {
       "filePath": "src/partition/partition-service-cdc-stream-base.js",
-      "line": 82,
+      "line": 83,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -257,7 +194,7 @@
     },
     {
       "filePath": "src/partition/partition-service-entry-apply-base.js",
-      "line": 112,
+      "line": 113,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -275,7 +212,7 @@
     },
     {
       "filePath": "src/partition/partition-service-split-accessor-base.js",
-      "line": 109,
+      "line": 111,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -284,7 +221,7 @@
     },
     {
       "filePath": "src/partition/partition-service-write-metrics-base.js",
-      "line": 158,
+      "line": 159,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -302,7 +239,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-service-resolution.js",
-      "line": 38,
+      "line": 109,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -329,7 +266,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 48,
+      "line": 49,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -338,7 +275,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-partition-routing-readiness.js",
-      "line": 33,
+      "line": 31,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -347,7 +284,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-select-execution.js",
-      "line": 52,
+      "line": 59,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -374,7 +311,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-write-execution.js",
-      "line": 88,
+      "line": 90,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -401,7 +338,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-execution.js",
-      "line": 39,
+      "line": 34,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -419,7 +356,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-drain.js",
-      "line": 67,
+      "line": 66,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -428,7 +365,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-observation.js",
-      "line": 93,
+      "line": 96,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -437,7 +374,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile.js",
-      "line": 83,
+      "line": 87,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -482,7 +419,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 30,
+      "line": 72,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -491,7 +428,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 29,
+      "line": 28,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",

@@ -21,13 +21,17 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 
 import {OwnerKeyReconcileQueue} from '../../src/workflow/owner-key-reconcile-queue.js';
+import {committedServeEligibilityView} from './serve-eligibility-test-support.js';
 import {
   READINESS_CHURN_NODE_COUNT,
   READINESS_CHURN_NOW_MS,
   createReadinessChurnCache,
 } from './control-plane-readiness-service-test-support.js';
 
-import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {
+  createReadinessServiceForTest,
+  readinessCollaboratorFake,
+} from '../helpers/readiness-service-fixture.js';
 const OPTION_VARIANT_LIMIT = 16;
 const OPTION_VARIANT_PRESSURE_COUNT = 80;
 
@@ -121,9 +125,18 @@ test('ordinary CL-012 reuse may bridge a regressed row while planning reads ' +
       enteredAt: '2026-03-04T00:00:00.000Z',
       recentTransitions: [],
     }),
+    // Serving is the committed answer (quest
+    // serve-eligibility-committed-epoch-read): the committed record names the
+    // node eligible with its fresh lease.
+    authoritativeControlPlaneView: committedServeEligibilityView({
+      servingNodeIds: [nodeId],
+      nowMs: now,
+      nodeRowOverrides: {[nodeId]: {[COLUMN.READY_LEASE_EXPIRES_AT]: freshLease}},
+    }),
     now: () => now,
   });
 
+  await readinessService.readServeEligibility();
   const fresh = await readinessService.getNodeReadiness(nodeId);
   t.equal(fresh.dimensions.serveEligible, true,
     'async owner evaluation should capture a serve-eligible snapshot');
@@ -134,14 +147,13 @@ test('ordinary CL-012 reuse may bridge a regressed row while planning reads ' +
     [COLUMN.READY_LEASE_EXPIRES_AT]: now - 30000,
   });
 
+  // The lease regression is a revoking change for the committed serve
+  // record, which re-keys every derived readiness memo (quest
+  // serve-eligibility-committed-epoch-read): the stored snapshot that carried
+  // the old serve answer is no longer reused.
   const reused = readinessService.getReusableNodeReadinessSnapshotSync(nodeId);
-  t.equal(reused.dimensions.serveEligible, true,
-    'ordinary non-planning reuse should retain the fresher stored snapshot');
-  t.equal(
-    reused.nodeEvidence?.lastHeartbeat,
-    freshHeartbeat,
-    'reused sync snapshot should preserve the fresher heartbeat evidence',
-  );
+  t.equal(reused, null,
+    'a stale committed serve record retires the stored snapshot');
 
   const planningCurrent = readinessService.buildNodeReadinessSyncCurrent(
     nodeId,
@@ -199,7 +211,8 @@ test('sync readiness starts one deduped authoritative refresh for stale ' +
       async executeAuthoritativeSystemTableRead(
         tableName, _sql, _params, _options,
       ) {
-        authoritativeReads.push(tableName);
+        // Node-keyed repair reads only; the committed serve read is whole-table.
+        if (_params?.length > 0) authoritativeReads.push(tableName);
         if (tableName === TABLES.NODES) {
           return {
             success: true,
@@ -231,7 +244,9 @@ test('sync readiness starts one deduped authoritative refresh for stale ' +
   const options = {
     allowAuthoritativeRefresh: true,
     requireFreshOnIneligible: true,
-    decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+    // Serving is the committed answer; the projection's authoritative
+    // evidence repair remains for the repair dimension.
+    decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
   };
   const repairedSnapshotPublished = new Promise((resolve) => {
     const unsubscribe = readinessService.subscribeReadinessPlanningSnapshots(
@@ -247,9 +262,9 @@ test('sync readiness starts one deduped authoritative refresh for stale ' +
   const initial = readinessService.getNodeReadinessSync(nodeId, options);
   const repeated = readinessService.getNodeReadinessSync(nodeId, options);
 
-  t.equal(initial.dimensions.serveEligible, false,
+  t.equal(initial.dimensions.repairEligible, false,
     'stale local evidence should remain ineligible on the first sync read');
-  t.equal(repeated.dimensions.serveEligible, false,
+  t.equal(repeated.dimensions.repairEligible, false,
     'repeated sync reads should stay fail-closed until the owner refresh lands');
   await repairedSnapshotPublished;
 
@@ -257,7 +272,7 @@ test('sync readiness starts one deduped authoritative refresh for stale ' +
     'sync reads should trigger one deduped authoritative node/service refresh');
 
   const refreshed = readinessService.getNodeReadinessSync(nodeId, options);
-  t.equal(refreshed.dimensions.serveEligible, true,
+  t.equal(refreshed.dimensions.repairEligible, true,
     'later sync reads should observe the repaired owner evidence');
   t.end();
 });
@@ -348,7 +363,7 @@ async (t) => {
     {
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
 
@@ -356,8 +371,11 @@ async (t) => {
     'self-node should stay cluster-member-healthy while the local row catches up');
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'live local control-plane service ownership should keep self writes open');
-  t.equal(readiness.dimensions.serveEligible, true,
-    'load-lane admission should remain open for the live self node');
+  // Serving is the committed-epoch answer; there is no self serve grace
+  // (readiness-and-owner-contracts.md supersession, quest
+  // serve-eligibility-committed-epoch-read): no committed record, no serving.
+  t.equal(readiness.dimensions.serveEligible, false,
+    'serving follows the committed answer, not a self runtime grace');
   t.same(readiness.reasons, [],
     'self-node runtime grace should not emit a synthetic missing-row failure');
   t.same(authoritativeReads, [],
@@ -425,7 +443,7 @@ async (t) => {
     {
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
   const reasonCodes = readiness.reasons.map((reason) => reason.code);
@@ -444,79 +462,85 @@ async (t) => {
   t.end();
 });
 
-test('ControlPlaneReadinessService keeps self runtime grace when the ' +
-  'local node row and control-plane service rows are both missing',
+test('ControlPlaneReadinessService fails closed when the local node row and ' +
+  'control-plane service rows both remain missing after refresh, and ' +
+  'restores self runtime grace when authoritative SERVICES supplies them',
 async (t) => {
+  // R09 supersession (architecture/readiness-and-owner-contracts.md, quest
+  // readiness-self-grace-service-evidence-contract, commit e4d0f3294f).
+  const buildService = (nodeId, executeAuthoritativeSystemTableRead) => {
+    const cache = createCache({nodes: [], services: []});
+    return createReadinessServiceForTest({
+      nodeId,
+      systemTableCache: cache,
+      cacheMutationTarget: cache,
+      messageRouter: {
+        getConnectionState: () => STATE.READY,
+        getQueryDataPlaneTransportReadiness: () => ({
+          ready: true, reason: null, retryAfterMs: null,
+        }),
+      },
+      nodeLifecycleStateMachine: {getState: () => SERVICE_STATUS.ACTIVE},
+      storageAccountingService: createAccountingService({
+        [nodeId]: {nodeId, budgetBytes: 1000, pressureState: 'normal'},
+      }),
+      cdcIntegrationService: {executeAuthoritativeSystemTableRead},
+      cdcGroupPropagationService: createPublicationService({
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: '2026-03-04T00:00:00.000Z',
+        recentTransitions: [],
+      }),
+      now: () => 1500,
+    });
+  };
+  const readOpts = {
+    allowAuthoritativeRefresh: true,
+    requireFreshOnIneligible: true,
+    decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+  };
   const nodeId = 'node-self-missing-row-no-services';
   const authoritativeReads = [];
-  const readinessService = createReadinessServiceForTest({
-    nodeId,
-    systemTableCache: createCache({
-      nodes: [],
-      services: [],
-    }),
-    cacheMutationTarget: createCache({
-      nodes: [],
-      services: [],
-    }),
-    messageRouter: {
-      getConnectionState() {
-        return STATE.READY;
-      },
-    },
-    nodeLifecycleStateMachine: {
-      getState() {
-        return SERVICE_STATUS.ACTIVE;
-      },
-    },
-    storageAccountingService: createAccountingService({
-      [nodeId]: {
-        nodeId,
-        budgetBytes: 1000,
-        pressureState: 'normal',
-      },
-    }),
-    cdcIntegrationService: {
-      async executeAuthoritativeSystemTableRead(tableName) {
-        authoritativeReads.push(tableName);
-        return {
-          success: false,
-          rows: [],
-        };
-      },
-    },
-    cdcGroupPropagationService: createPublicationService({
-      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
-      reasonCode: null,
-      enteredAt: '2026-03-04T00:00:00.000Z',
-      recentTransitions: [],
-    }),
-    now: () => 1500,
+  const readinessService = buildService(nodeId, async (tableName) => {
+    authoritativeReads.push(tableName);
+    return {success: false, rows: []};
   });
+  const readiness = await readinessService.getNodeReadiness(nodeId, readOpts);
+  const reasonCodes = readiness.reasons.map((reason) => reason.code);
+  t.equal(readiness.dimensions.clusterMemberHealthy, false);
+  t.equal(readiness.dimensions.controlPlaneWritable, false);
+  t.equal(readiness.dimensions.repairEligible, false);
+  t.equal(readiness.dimensions.serveEligible, false);
+  t.ok(reasonCodes.includes(CONTROL_PLANE_READINESS_REASON.NODE_ROW_MISSING));
+  t.same(authoritativeReads, [TABLES.NODES, TABLES.SERVICES]);
 
-  const readiness = await readinessService.getNodeReadiness(
-    nodeId,
-    {
-      allowAuthoritativeRefresh: true,
-      requireFreshOnIneligible: true,
-      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+  const refreshedNodeId = 'node-self-missing-row-repaired-services';
+  const refreshedReads = [];
+  const refreshedReadinessService = buildService(
+    refreshedNodeId,
+    async (tableName) => {
+      refreshedReads.push(tableName);
+      return {
+        success: true,
+        rows: tableName === TABLES.SERVICES ?
+          [createMessageGroupService(refreshedNodeId)] : [],
+      };
     },
   );
-  const reasonCodes = readiness.reasons.map((reason) => reason.code);
-
-  t.equal(readiness.dimensions.clusterMemberHealthy, true,
-    'self runtime grace should keep cluster-member health open through ' +
-    'node-row and service-row cache lag');
-  t.equal(readiness.dimensions.controlPlaneWritable, true,
-    'self runtime grace should keep control-plane writes open when local ' +
-    'service rows have not propagated yet');
-  t.equal(readiness.dimensions.serveEligible, true,
-    'load-lane admission should stay open when only local cache evidence is missing');
-  t.notOk(reasonCodes.includes(CONTROL_PLANE_READINESS_REASON.NODE_ROW_MISSING),
-    'the missing-row grace path should not synthesize node_row_missing ' +
-    'when local cache service evidence is also absent');
-  t.same(authoritativeReads, [],
-    'local self-node grace should not force authoritative repair reads');
+  const refreshedReadiness = await refreshedReadinessService.getNodeReadiness(
+    refreshedNodeId, readOpts,
+  );
+  const refreshedReasonCodes = refreshedReadiness.reasons.map((r) => r.code);
+  t.same(refreshedReads, [TABLES.NODES, TABLES.SERVICES]);
+  t.equal(refreshedReadiness.dimensions.clusterMemberHealthy, true);
+  t.equal(refreshedReadiness.dimensions.controlPlaneWritable, true);
+  t.equal(refreshedReadiness.dimensions.repairEligible, true);
+  t.equal(refreshedReadiness.dimensions.serveEligible, false);
+  t.notOk(
+    refreshedReasonCodes.includes(
+      CONTROL_PLANE_READINESS_REASON.NODE_ROW_MISSING,
+    ),
+  );
   t.end();
 });
 
@@ -619,8 +643,13 @@ async (t) => {
       enteredAt: '2026-03-04T00:00:00.000Z',
       recentTransitions: [],
     }),
+    authoritativeControlPlaneView: committedServeEligibilityView({
+      servingNodeIds: ['node-connected-valid'],
+      nowMs: now,
+    }),
     now: () => now,
   });
+  await readinessService.readServeEligibility();
 
   const readiness = await readinessService
     .getNodeReadiness('node-connected-valid');
@@ -670,14 +699,19 @@ async (t) => {
       enteredAt: '2026-03-04T00:00:00.000Z',
       recentTransitions: [],
     }),
+    authoritativeControlPlaneView: committedServeEligibilityView({
+      servingNodeIds: ['node-no-router-evidence'],
+      nowMs: now,
+    }),
     now: () => now,
   });
+  await readinessService.readServeEligibility();
 
   const readiness = await readinessService
     .getNodeReadiness('node-no-router-evidence');
 
   t.equal(readiness.dimensions.serveEligible, true,
-    'no router evidence preserves row-evidence grace for serveEligible');
+    'serving follows the committed answer, not router evidence');
   t.equal(readiness.dimensions.repairEligible, true,
     'no router evidence preserves row-evidence grace for repairEligible');
   t.end();
@@ -903,10 +937,7 @@ test('priority recovery keeps a transport-connected active node recovery-eligibl
       recentTransitions: [],
     }),
     membershipPublicationService: {
-      getLatestPublicationForNode(targetNodeId) {
-        if (targetNodeId !== joiningNodeId) {
-          return null;
-        }
+      getLatestClusterPublication() {
         return {
           publicationEpoch: 41,
           status: 'ACK_PENDING',
@@ -935,6 +966,118 @@ test('priority recovery keeps a transport-connected active node recovery-eligibl
     'partition-only priority recovery must not reopen steady-state repair eligibility');
   t.equal(readiness.dimensions.controlPlaneRecoveryEligible, true,
     'priority recovery should not fail closed when transport and routed partition service evidence remain live');
+  t.end();
+});
+
+test('priority recovery current sync evaluation closes recovery eligibility ' +
+  'when a newer planning epoch clears priority blockers', (t) => {
+  const nowAtStart = 215000;
+  let now = nowAtStart;
+  const joiningNodeId = 'node-priority-recovery-sync-stale-grace';
+  const planningReadProfile = 'planning';
+  const diagnosticsPublicationRow = {
+    publicationEpoch: 41,
+    status: 'ACK_PENDING',
+    publishedActiveNodeIds: ['seed-node'],
+  };
+  let planningPublicationRow = {
+    publicationEpoch: 41,
+    status: 'PUBLISHED',
+    publishedActiveNodeIds: ['seed-node'],
+    priorityPartitionSummary: {
+      satisfied: false,
+    },
+  };
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(joiningNodeId),
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.LAST_HEARTBEAT]: nowAtStart - 1000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: nowAtStart - 5000,
+    }],
+    services: [
+      createPartitionService(
+        joiningNodeId,
+        'control_plane_publications-p1-r5',
+      ),
+    ],
+  });
+  const readinessService = createReadinessServiceForTest({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [joiningNodeId]: {
+        nodeId: joiningNodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    membershipPublicationService: {
+      getLatestClusterPublicationSync(options = {}) {
+        return options?.readProfile === planningReadProfile ?
+          planningPublicationRow :
+          diagnosticsPublicationRow;
+      },
+    },
+    now: () => now,
+  });
+
+  const activeReadiness = readinessService.buildNodeReadinessSyncCurrent(
+    joiningNodeId,
+    {readinessPlanningOwnerBuild: true},
+  );
+
+  t.equal(
+    activeReadiness?.dimensions?.controlPlaneRecoveryEligible,
+    true,
+    'sync readiness should start with active recovery eligibility',
+  );
+
+  planningPublicationRow = {
+    publicationEpoch: 42,
+    status: 'PUBLISHED',
+    publishedActiveNodeIds: ['seed-node'],
+  };
+  // A re-wiring is validated: the fixture completes the partial fake.
+  readinessService.syncOwnerDependencies({
+    membershipPublicationService: readinessCollaboratorFake(
+      'membershipPublicationService', {
+        getLatestClusterPublicationSync(options = {}) {
+          return options?.readProfile === planningReadProfile ?
+            planningPublicationRow :
+            diagnosticsPublicationRow;
+        },
+      }, 'seed-node'),
+  });
+  now = nowAtStart + 1000;
+
+  const retainedReadiness = readinessService.buildNodeReadinessSyncCurrent(
+    joiningNodeId,
+    {readinessPlanningOwnerBuild: true},
+  );
+
+  t.equal(
+    retainedReadiness?.dimensions?.clusterMemberHealthy,
+    false,
+    'sync readiness should continue respecting stale membership evidence',
+  );
+  t.equal(
+    retainedReadiness?.dimensions?.controlPlaneRecoveryEligible,
+    false,
+    'the signaled newer planning epoch should close obsolete recovery grace',
+  );
+
   t.end();
 });
 
@@ -979,10 +1122,7 @@ async (t) => {
       recentTransitions: [],
     }),
     membershipPublicationService: {
-      getLatestPublicationForNode(targetNodeId) {
-        if (targetNodeId !== joiningNodeId) {
-          return null;
-        }
+      getLatestClusterPublication() {
         return {
           publicationEpoch: 42,
           status: 'ACK_PENDING',

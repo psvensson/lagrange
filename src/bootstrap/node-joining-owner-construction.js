@@ -231,6 +231,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     this.leaseService = null;
     this.endpointService = null;
     this.dispatchService = null;
+    this.controlPlaneSystemTableGateway = null;
     this.rebalanceCoordinator = null; // Unified runtime ownership wiring.
     const runtimeWiring = createRuntimeStartupWiring({
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
@@ -327,6 +328,11 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
           }
           void this.createMessageGroupPhase
             .flushDeferredCreateSelfHostedMetadata()
+            .then((result) => {
+              if (result) {
+                this.runBackgroundCdcCatchupAfterSubscription();
+              }
+            })
             .catch((error) => {
               this.logger.warn(
                 NODE_JOINING_SERVICE_LITERAL.DEFERRED_CREATE_SELF_HOSTED_MESSAGE_GROUP_METADATA_PUBLICATION_FAILED,

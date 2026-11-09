@@ -56,6 +56,8 @@ import {
   LOG_SNAPSHOT_MISSING,
 } from './query-system-state-phase-constants.js';
 
+const JOIN_TIME_UPSERT_DELIVERY_PRIORITY = 'critical';
+
 /**
  * Handles the query-system-state phase of the join process.
  */
@@ -713,16 +715,12 @@ class QuerySystemStatePhase {
   }
 
   /**
-   * Determine whether join-time upserts can require local cache
-   * visibility.
-   * @return {Object|undefined}
+   * Join-time upsert options. A routed write answers at its commit; no
+   * cache-visibility opt-out exists.
+   * @return {Object}
    */
   getJoinTimeUpsertOptions() {
-    const options = {deliveryPriority: 'critical'};
-    if (this.delegates.getCdcSubscriptionsActive() !== true) {
-      options.skipCacheWait = true;
-    }
-    return options;
+    return {deliveryPriority: JOIN_TIME_UPSERT_DELIVERY_PRIORITY};
   }
 
   resolveJoinRegistrationMaxAttempts() {

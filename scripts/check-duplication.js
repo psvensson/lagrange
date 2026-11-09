@@ -96,8 +96,15 @@ const RATCHET_TARGETS = [
     // hint after deleting the legacy partition_callback axis.
     // Publisher and corpus-ratchet speedups: tightened 43/1358 -> 42/1331
     // on the checker's hint.
-    baselineCloneGroupCount: 42,
-    baselineDuplicatedLineCount: 1331,
+    // 2026-11-02 (quest serve-eligibility-committed-epoch-read attempt 1b): tightened 42/1331 -> 41/1302 on the
+    // checker's hint.
+    // 2026-11-03 (composed-05-comparison-readiness): tightened 41/1302 -> 39/1236 on the
+    // checker's hint.
+    // 2026-11-06: tightened 39/1236 -> 38/1207 on the checker's hint after
+    // control snapshots delegated their duplicate diagnostic helpers.
+    // The remaining pressure/timeout clone tightens the measured bound again.
+    baselineCloneGroupCount: 37,
+    baselineDuplicatedLineCount: 1187,
     strictEligible: true,
   },
   {
@@ -261,8 +268,27 @@ const RATCHET_TARGETS = [
     // checker's hint.
     // readiness-service-constructor-injection: 24346 -> 24336 -> 24292 (round 2, clones 649 -> 648) -> 24272 (B1 repair).
     // Merged stream: the lower of the two one-way baselines, then tightened 24272 -> 24259 on the hint.
-    baselineCloneGroupCount: 648,
-    baselineDuplicatedLineCount: 24259,
+    // learner-host-from-committed-admission (peer-address-resolver tests
+    // deleted): tightened 649/24346 -> 648/24311 on the checker's hint.
+    // 2026-11-02 (quest serve-eligibility-committed-epoch-read attempt 1b): tightened 648/24311 -> 647/24308 on the
+    // checker's hint (shared fixture helpers in the routing tests).
+    // 2026-11-03 (composed-05-comparison-readiness): tightened 647/24308 -> 646/24270 on
+    // the checker's hint after deduplicating query, rebalancer, and CDC test lifecycle fixtures.
+    // 2026-11-05 (explicit-single-replica-partition-configuration): tightened
+    // 646/24270 -> 641/24107 on the checker hint after RF3 fixture reconciliation.
+    // 2026-11-06 (partition-placement-declared-target): tightened 24107 -> 24100
+    // on the checker hint after consolidating shared table-policy fixtures.
+    // 2026-11-06 (committed-readiness-fixture-custody): tightened 641/24100
+    // to 637/23975 on the checker hint after unifying readiness fixtures.
+    // 2026-11-06 (required-entity-operation-observation): tightened 637/23975
+    // to 633/23857 after consolidating coordinator fixture construction.
+    // 2026-11-06: shared Binding producer fixture, 632 groups / 23837 lines.
+    // 2026-11-07: tightened 632/23837 -> 630/23777 -> 630/23772 -> 629/23740 -> 629/23695 on the checker hint.
+    // 2026-11-08: tightened 629/23695 -> 629/23689 on the checker hint.
+    // Alignment with PR #201 (code-navigability stream): the lower of the two
+    // one-way baselines, then tightened 23689 -> 23629 on the checker's hint.
+    baselineCloneGroupCount: 629,
+    baselineDuplicatedLineCount: 23629,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

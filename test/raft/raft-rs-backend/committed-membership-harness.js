@@ -46,6 +46,8 @@ import {OperationType} from
 import {ReplicaOperationField} from
   '../../../src/rebalancer/replica-operation-constants.js';
 import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
+import {answerCommittedOperations, committedAddOperation} from
+  '../../partition/committed-operation-gateway-fixture.js';
 import {handlerIdentityApi} from
   '../../test-helpers/replica-handler-identity-fixture.js';
 
@@ -217,6 +219,8 @@ function createCommittedMembershipHarness(partitionId) {
   const caches = new Map();
   const members = new Map();
   const handlers = new Map();
+  // The committed replica operations every replica's gateway answers.
+  const operations = [];
   const unreachable = () => {
     throw new Error('the harness handler reached a write collaborator');
   };
@@ -271,6 +275,7 @@ function createCommittedMembershipHarness(partitionId) {
       isJoiningExistingGroup,
       ...(bootstrapMembership === undefined ? {} : {bootstrapMembership}),
     }));
+    answerCommittedOperations(service, operations);
     services.set(member[0], service);
     caches.set(member[0], cache);
     members.set(member[0], member);
@@ -293,7 +298,7 @@ function createCommittedMembershipHarness(partitionId) {
   };
   return {partitionId, directory, network, services, caches, members,
     handlers, handlerOf, router, build, leader, leaderMember, dbPathOf,
-    dispose};
+    dispose, operations};
 }
 
 // Founders share one genesis list; every founder's cache names every
@@ -397,12 +402,10 @@ async function buildTargetFromOperation(harness, {target, operation, cache}) {
     targetReplicaId, {
       explicitOperationType: operation.type,
       bootstrapReplicaIds: operation[ReplicaOperationField.REPLICA_IDS],
-      bootstrapPeerAddresses: operation[ReplicaOperationField.PEER_ADDRESSES],
       bootstrapMembership: operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP],
     });
   const service = harness.build(target, {
     replicaIds: context.replicaIds,
-    peerAddresses: context.peerAddresses,
     cache,
     bootstrapMembership: context.bootstrapMembership,
     isJoiningExistingGroup: context.existingReplicaCount > 0,
@@ -411,13 +414,27 @@ async function buildTargetFromOperation(harness, {target, operation, cache}) {
   return {service, context};
 }
 
+// A target's admission request, as production makes it (quest
+// replica-admission-from-committed-operation): named by a committed ADD
+// operation, it asks the leader the committed-membership stamp it was created
+// from names (quest peer-and-leader-address-from-committed-configuration,
+// C4: no seeded leader id, no leader services row); the leader proposes the
+// ConfChange from the committed operation. Resolves with the request record.
+async function requestAdmission(harness, target) {
+  const operation = committedAddOperation(harness.partitionId, target);
+  harness.operations.push(operation);
+  const joined = harness.services.get(target[0]);
+  return joined.requestReplicaAdmission(operation.operation_id);
+}
+
 // The group's own admission: the target's row reaches every member's cache
-// and the leader proposes the ConfChange.
-async function admitThroughRows(harness, target, admitters) {
+// (discovery only, it admits nothing) and the target requests admission.
+async function admitThroughRequest(harness, target, admitters) {
   for (const [replicaId] of admitters) {
     harness.caches.get(replicaId).applySystemTableChange(TABLES.SERVICES,
       CDCOperation.INSERT, serviceRow(harness.partitionId, target));
   }
+  await requestAdmission(harness, target);
   const joined = harness.services.get(target[0]);
   joined.startElection();
   const joinedPeerId = statusOf(joined).peerId;
@@ -435,7 +452,8 @@ async function admitThroughRows(harness, target, admitters) {
 
 export {
   addressOf,
-  admitThroughRows,
+  admitThroughRequest,
+  requestAdmission,
   buildTargetFromOperation,
   configure,
   createCommittedMembershipHarness,

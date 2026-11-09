@@ -61,6 +61,7 @@ function hasAuthoritativeReadFailureEvidence(result = {}) {
 
 function isCompleteAuthoritativeReadResult(result = {}) {
   return result?.success === true &&
+    result?.rowSetComplete === true &&
     Array.isArray(result?.rows) &&
     !hasAuthoritativeReadFailureEvidence(result);
 }
@@ -90,6 +91,27 @@ function canMintAuthoritativeObservationReceipt(options) {
       options.result?.readAuthorityWitness,
       partitionId,
     );
+}
+
+function normalizeWitnessSafeInteger(value) {
+  return Number.isSafeInteger(value) ? value : null;
+}
+
+function normalizeWitnessString(value) {
+  return typeof value ===
+    CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.STRING_STRING ?
+    value :
+    null;
+}
+
+function extractReadAuthorityWitnessRevisionFields(witness) {
+  return {
+    term: normalizeWitnessSafeInteger(witness?.term),
+    appliedIndex: normalizeWitnessSafeInteger(witness?.appliedIndex),
+    commitIndex: normalizeWitnessSafeInteger(witness?.commitIndex),
+    servingNodeId: normalizeWitnessString(witness?.servingNodeId),
+    partitionId: normalizeWitnessString(witness?.partitionId),
+  };
 }
 
 const controlPlaneSystemTableGatewayReadStrategyMethods = {
@@ -235,6 +257,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
       readStartedAtMs: Math.floor(options.authoritativeReadStartedAtMs),
       causeId,
       rowSetComplete: true,
+      ...extractReadAuthorityWitnessRevisionFields(result.readAuthorityWitness),
     });
     resolveAuthoritativeObservationReceiptRegistry(this).set(
       authoritativeObservation,

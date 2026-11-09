@@ -263,7 +263,7 @@ export async function registerReplicaHandlerIdentityEntryTests({
     admissionState = null) {
     const updatedAt = 10;
     const bootstrapMembership = lifecycleRow ?
-      committedStampFor([replicaId]) : genesisStamp([replicaId]);
+      committedStampFor([replicaId]) : genesisStamp([replicaId], {});
     return {
       operation_id: operationId,
       type: OperationType.ADD,
@@ -321,7 +321,7 @@ export async function registerReplicaHandlerIdentityEntryTests({
     };
     const membership = {
       [REQUEST.BOOTSTRAP_PEER_IDS]: founders,
-      [REQUEST.BOOTSTRAP_MEMBERSHIP]: genesisStamp(founders),
+      [REQUEST.BOOTSTRAP_MEMBERSHIP]: genesisStamp(founders, {}),
       [REQUEST.SEND_TO_PEER]: send,
     };
     peer = createRaftRsOperationPort(portRequest({
@@ -552,7 +552,7 @@ export async function registerReplicaHandlerIdentityEntryTests({
         await node.handler.createReplicaAsync({operationId: 'f3c-resume-op',
           explicitOperationType: OperationType.ADD, partitionId: PARTITION_ID,
           replicaId: 'f3c-resume', bootstrapReplicaIds: [],
-          bootstrapPeerAddresses: [], bootstrapTableMetadata: null,
+          bootstrapTableMetadata: null,
           bootstrapPartitionMetadata: null}).catch(() => undefined);
         t.equal(node.opened.length, 1, 'no second open over the runtime');
       } finally {

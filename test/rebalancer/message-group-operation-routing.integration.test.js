@@ -26,6 +26,7 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   createMockControlPlaneReadinessService,
+  createMockControlPlaneSystemTableGateway,
   createMockTransactionCoordinator,
   withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
@@ -266,6 +267,9 @@ test('Message-group operation routing integration', async (t) => {
     'coordinator routes message-group operation to message-group handler',
     async (t) => {
       const deliveries = [];
+      const sqlQueryEngine = {
+        executeQuery: async () => ({success: true, rows: [], changes: 1}),
+      };
       const coordinator = new RebalanceCoordinator({
         nodeId: 'node-1',
         systemTableCache: {
@@ -285,11 +289,12 @@ test('Message-group operation routing integration', async (t) => {
         tablePolicyService: {
           getPolicyForPartition: () => ({}),
         },
-        sqlQueryEngine: {
-          executeQuery: async () => ({success: true, rows: [], changes: 1}),
-        },
+        sqlQueryEngine,
+        controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlQueryEngine),
         transactionCoordinator: createMockTransactionCoordinator(),
-        controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+        controlPlaneReadinessService: createMockControlPlaneReadinessService({
+          defaultRepairEligible: true,
+        }),
         storageAdmissionService: {
           checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
           checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
@@ -423,20 +428,15 @@ test('Message-group operation routing integration', async (t) => {
             status: 'initiated',
           })),
         },
-        controlPlaneSystemTableGateway: {
-          readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>
-            sqlQueryEngine.executeQuery(sql, params, queryOptions),
-          readRows: async (_tableName, sql, params = [], queryOptions = {}) =>
-            sqlQueryEngine.executeQuery(sql, params, queryOptions),
-          executeQuery: async (sql, params = [], queryOptions = {}) =>
-            sqlQueryEngine.executeQuery(sql, params, queryOptions),
-        },
+        controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlQueryEngine),
         tablePolicyService: {
           getPolicyForPartition: () => ({}),
         },
         sqlQueryEngine,
         transactionCoordinator: createMockTransactionCoordinator(),
-        controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+        controlPlaneReadinessService: createMockControlPlaneReadinessService({
+          defaultRepairEligible: true,
+        }),
         storageAdmissionService: {
           checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
           checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
@@ -511,6 +511,9 @@ test('Message-group operation routing integration', async (t) => {
   await t.test(
     'coordinator fails closed when message-group topology is unavailable',
     async (t) => {
+      const sqlQueryEngine = {
+        executeQuery: async () => ({success: true, rows: [], changes: 1}),
+      };
       const coordinator = new RebalanceCoordinator({
         nodeId: 'node-1',
         systemTableCache: {
@@ -529,11 +532,12 @@ test('Message-group operation routing integration', async (t) => {
         tablePolicyService: {
           getPolicyForPartition: () => ({}),
         },
-        sqlQueryEngine: {
-          executeQuery: async () => ({success: true, rows: [], changes: 1}),
-        },
+        sqlQueryEngine,
+        controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlQueryEngine),
         transactionCoordinator: createMockTransactionCoordinator(),
-        controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+        controlPlaneReadinessService: createMockControlPlaneReadinessService({
+          defaultRepairEligible: true,
+        }),
         storageAdmissionService: {
           checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
           checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),

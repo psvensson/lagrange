@@ -20,6 +20,7 @@ import * as snapshot from './control-plane-readiness-publication-planning-snapsh
 import * as resolution from './control-plane-readiness-publication-planning-resolution.js';
 import * as startup from './control-plane-readiness-startup-authority-health.js';
 import * as rows from './control-plane-readiness-node-service-rows.js';
+import * as serve from './control-plane-readiness-serve-eligibility-methods.js';
 import {installControlPlaneReadinessPlanningOwnerDelegateMethods} from
   './control-plane-readiness-planning-owner-delegate-methods.js';
 import {installControlPlaneReadinessNodeMethods} from
@@ -42,6 +43,8 @@ class ControlPlaneReadinessService {
     // no formation-release handoff authority logged yet.
     this.membershipPublicationDiagnosticsMemo = null;
     this.lastFormationReleaseHandoffAuthorityLogSignature = null;
+    // The committed serve-eligibility record's owner, created on first read.
+    this.serveEligibilityOwner = null;
     participation.initializeControlPlaneReadinessState(this, options);
   }
   clearMembershipPublicationDiagnosticsMemo() {
@@ -91,6 +94,9 @@ class ControlPlaneReadinessService {
   getParticipationDecisionLedgerEntries(options) {
     return eligibility.getParticipationDecisionLedgerEntries(this, options);
   }
+  getParticipationDecisionLedgerAggregatedSummaries(options) {
+    return eligibility.getParticipationDecisionLedgerAggregatedSummaries(this, options);
+  }
   recordAuthoritativeReadinessRepair(entry) {
     return eligibility.recordAuthoritativeReadinessRepair(this, entry);
   }
@@ -99,6 +105,10 @@ class ControlPlaneReadinessService {
   }
   getAuthoritativeReadinessRepairLedgerEntries(options) {
     return eligibility.getAuthoritativeReadinessRepairLedgerEntries(this, options);
+  }
+  getAuthoritativeReadinessRepairLedgerAggregatedSummaries(options) {
+    return eligibility.getAuthoritativeReadinessRepairLedgerAggregatedSummaries(
+      this, options);
   }
   getHeartbeatPublicationDiagnostics() {
     return eligibility.getHeartbeatPublicationDiagnostics(this);
@@ -114,9 +124,6 @@ class ControlPlaneReadinessService {
   }
   getPublicationDiagnostics(observedAt) {
     return eligibility.getPublicationDiagnostics(this, observedAt);
-  }
-  buildServeAdmissionSnapshot(context) {
-    return eligibility.buildServeAdmissionSnapshot(this, context);
   }
   resolveNormalizedProjectionReadinessContract(context, source, verdicts) {
     return eligibility.resolveNormalizedProjectionReadinessContract(
@@ -456,9 +463,6 @@ class ControlPlaneReadinessService {
   getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt) {
     return snapshot.getPriorityRecoveryPlanningAnswerSync(this, nodeId, observedAt);
   }
-  getMembershipPublicationPlanningSnapshotBestEffort(nodeId, observedAt) {
-    return snapshot.getMembershipPublicationPlanningSnapshotBestEffort(this, nodeId, observedAt);
-  }
   getPriorityRecoveryPlanningSnapshotBestEffort(nodeId, observedAt) {
     return snapshot.getPriorityRecoveryPlanningSnapshotBestEffort(this, nodeId, observedAt);
   }
@@ -473,6 +477,9 @@ class ControlPlaneReadinessService {
   }
   buildMembershipPublicationDiagnostics(row, observedAt) {
     return snapshot.buildMembershipPublicationDiagnostics(this, row, observedAt);
+  }
+  buildMembershipPublicationProtocolInput(context) {
+    return snapshot.buildMembershipPublicationProtocolInput(this, context);
   }
   buildMembershipPublicationPlanningSnapshot(context) {
     return snapshot.buildMembershipPublicationPlanningSnapshot(this, context);
@@ -729,6 +736,33 @@ class ControlPlaneReadinessService {
   }
   isClusterMemberHealthy(nodeId, nodeRow) {
     return rows.isClusterMemberHealthy(this, nodeId, nodeRow);
+  }
+  getServeEligibilityOwner() {
+    return serve.getServeEligibilityOwner(this);
+  }
+  readServeEligibilityCommittedRows(tableName, sql, params) {
+    return serve.readServeEligibilityCommittedRows(this, tableName, sql, params);
+  }
+  readServeEligibility(options) {
+    return serve.readServeEligibility(this, options);
+  }
+  answerServeEligibility(nodeId) {
+    return serve.answerServeEligibility(this, nodeId);
+  }
+  answerServeCohort(nodeIds) {
+    return serve.answerServeCohort(this, nodeIds);
+  }
+  answerCommittedNodes() {
+    return serve.answerCommittedNodes(this);
+  }
+  subscribeServeEligibility(listener) {
+    return serve.subscribeServeEligibility(this, listener);
+  }
+  noteServeEligibilitySourceChange(tableName, record) {
+    return serve.noteServeEligibilitySourceChange(this, tableName, record);
+  }
+  shutdownServeEligibilityOwner() {
+    return serve.shutdownServeEligibilityOwner(this);
   }
   static compactSnapshotSummary(snapshot, decisionDimension) {
     return rows.compactSnapshotSummary(snapshot, decisionDimension);

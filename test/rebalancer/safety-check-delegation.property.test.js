@@ -131,7 +131,7 @@ function createMockCdc() {
 function createMockPolicyService() {
   return {
     getPolicyForPartition: () => ({
-      replicaCount: 3,
+      targetReplicaCount: 3,
       minReplicaCount: 3,
       maxReplicaCount: 7,
     }),

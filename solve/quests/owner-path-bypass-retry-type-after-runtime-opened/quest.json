@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "owner-path-bypass-retry-type-after-runtime-opened",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Assertion 10 of test/node/replica-handler-owner-path-bypass.test.js ('retryable failure preserves its owner retry type', from terminal-create-runtime-lifecycle-fence-v2, bf82f7d58) is superseded under R09. After a CREATE's runtime has opened (phase RUNTIME_OPENED or ADMISSIBLE_ROW_RESUMED of src/node/replica-create-admission-input.js), a retryable owner failure is published as a terminal create failure with the failed-create cleanup claim and no deferRetry; recovery is the operation's re-drive with a fresh replica identity after the FAILED-target cleanup, never a re-drive of the same identity (K3 in the same test). The rewritten assertion states the new contract positively for both the terminal and the retryable case: the failure is published after the runtime is fenced, the cleanup claim is present on the FAILED row, and deferRetry is absent. Records and test only; no src change.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/owner-path-bypass-retry-type-after-runtime-opened/evidence/receipt.json",
+      "requiredReceipts": [
+        "owner-path-bypass-new-contract-asserted",
+        "terminal-fence-family-green",
+        "coupled-pair-declared"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "supersedes",
+      "statement": "supersedes: assertion 10 of test/node/replica-handler-owner-path-bypass.test.js (terminal-create-runtime-lifecycle-fence-v2, bf82f7d58, 2026-08-20). Reason (lead decision 2026-11-02): once the runtime has opened, assertion 10 and K3 in the same test contradict each other - K3 refuses re-driving a learner that reached SYNCING under the same id, so a preserved deferRetry after that boundary was a signal nobody could act on; the verified rule of fresh-create-failure-after-committed-admission-v2 (cleanup claim, no deferRetry after the runtime opened) resolves the contradiction in favour of the fail-closed path."
+    },
+    {
+      "id": "no-src",
+      "statement": "No src/ change. The rule under test is the landed one of fresh-create-failure-after-committed-admission-v2 (bba206ddd); this quest changes the guard's assertion, the impact-contract manifest and records only."
+    },
+    {
+      "id": "positive-assertion",
+      "statement": "The rewritten assertion asserts the new contract positively (failure published after the fence, cleanup claim present, deferRetry absent) for the terminal and the retryable case; it does not merely drop the old check. Red first: the current assertion 10 is red at bba206ddd (hosted gate run 41456061825, lab cone, local) and green at base 311695504."
+    },
+    {
+      "id": "lab-execution",
+      "statement": "Live runs only through node scripts/lab.js; local test lanes one at a time behind the thermal gate."
+    }
+  ],
+  "sealedAt": "bba206dddd577ba6f4d596be1525dd23f2367934"
+}

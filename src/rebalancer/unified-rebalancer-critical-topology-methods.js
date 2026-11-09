@@ -1,7 +1,9 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
-import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {selectCurrentEndpointRows} from
   '../control-plane/owners/endpoint-incarnation-currentness.js';
+import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
+import {projectNodeLivenessSemantics} from
+  '../control-plane/node-liveness-semantic-projection.js';
 
 const {
   COLUMN,
@@ -12,12 +14,10 @@ const {
   NodeStatus,
   REBALANCER_LOG_MSG,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  SYSTEM_TABLE_NAME,
   TABLES,
   TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE,
   TRANSPORT_TYPE,
   UNIFIED_REBALANCER_LITERAL,
-  isNodeReadyLeaseExplicitlyCleared,
   normalizeNodeEndpointRow,
   normalizeNodeRow,
   ownerNowMs,
@@ -33,28 +33,39 @@ const CRITICAL_NODE_KIND = Object.freeze({
 const REPLICA_OPERATION_ID_FIELDS =
   Object.freeze(['operationId', 'operation_id']);
 function normalizeNodeIds(nodeIds) {
+  const list = Array.isArray(nodeIds) ?
+    nodeIds :
+    nodeIds instanceof Set ?
+      Array.from(nodeIds) :
+      [];
   return [
     ...new Set(
-      (Array.isArray(nodeIds) ? nodeIds : []).filter(
+      list.filter(
         (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
       ),
     ),
   ];
 }
-function readCachedRows(rebalancer, tableName) {
-  return typeof rebalancer.systemTableCache?.getAll === 'function' ?
-    rebalancer.systemTableCache.getAll(tableName) :
-    [];
+// The rebalancer's readiness service is a required collaborator: the
+// committed node answer is called, never probed.
+function resolveCriticalNodeRows(rebalancer) {
+  return rebalancer.controlPlaneReadinessService.answerCommittedNodes();
+}
+function buildCriticalNodeUnavailableBlocker(resolvedNodes) {
+  return Object.freeze({
+    reason: CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.UNAVAILABLE,
+    epoch: resolvedNodes?.epoch ?? null,
+    retryAfterMs: resolvedNodes?.retryAfterMs ?? null,
+  });
 }
 function buildCriticalNodeContext(rebalancer) {
   const startupAuthorityNodeIds = rebalancer.getStartupAuthorityNodeIdSet();
   return {
+    nowMs: ownerNowMs(rebalancer),
     startupAuthorityNodeIds,
     constrainToStartupAuthority:
       startupAuthorityNodeIds instanceof Set &&
       startupAuthorityNodeIds.size > 0,
-    bypassPriorityStartupReadiness:
-      rebalancer.shouldBypassLocalPriorityControlPlaneStartupReadiness(),
     readinessDecisionDimension:
       rebalancer.resolveNodeReadinessDecisionDimension(),
   };
@@ -63,23 +74,8 @@ function isWithinStartupAuthority(context, nodeId) {
   return !context.constrainToStartupAuthority ||
     context.startupAuthorityNodeIds.has(nodeId);
 }
-function isCriticalNodeReady(rebalancer, nodeRow, nodeId, context) {
-  const readiness =
-    typeof rebalancer.controlPlaneReadinessService?.getNodeReadinessSync ===
-      'function' ?
-      rebalancer.controlPlaneReadinessService.getNodeReadinessSync(nodeId, {
-        allowStaleOnCacheChange: false,
-      }) :
-      null;
-  const membershipReady = rebalancer.isReadinessDimensionSatisfied(
-    readiness,
-    context.readinessDecisionDimension,
-  );
-  const startupLeaseClear =
-    context.bypassPriorityStartupReadiness &&
-    nodeId === rebalancer.nodeId &&
-    isNodeReadyLeaseExplicitlyCleared(nodeRow, {requireActiveStatus: true});
-  return startupLeaseClear || membershipReady;
+function isCriticalNodeReady(nodeRow, nowMs) {
+  return projectNodeLivenessSemantics({nodeRow, nowMs}).projection.readyNow === true;
 }
 function classifyCriticalNode(rebalancer, nodeRow, context) {
   const {status, nodeId} = normalizeNodeRow(nodeRow);
@@ -95,7 +91,7 @@ function classifyCriticalNode(rebalancer, nodeRow, context) {
       return {kind: CRITICAL_NODE_KIND.TRANSITIONAL, nodeId};
     }
     return {
-      kind: isCriticalNodeReady(rebalancer, nodeRow, nodeId, context) ?
+      kind: isCriticalNodeReady(nodeRow, context.nowMs) ?
         CRITICAL_NODE_KIND.READY :
         CRITICAL_NODE_KIND.UNREADY_ACTIVE,
       nodeId,
@@ -241,22 +237,6 @@ function buildEndpointVisibilityBlocker(rebalancer, activeNodeIds) {
       ...visibility,
     });
 }
-function buildInFlightTopologyBlocker(rebalancer, activeNodeIds) {
-  const operations =
-    rebalancer.collectCriticalSystemInFlightReplicaOperations(activeNodeIds, {
-      scopeToEntity: true,
-    });
-  return operations.count === 0 ?
-    null :
-    Object.freeze({
-      reason:
-        CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.TOPOLOGY_OPERATIONS_IN_FLIGHT,
-      activeNodeIds: Object.freeze([...activeNodeIds]),
-      inFlightReplicaOperations: operations.count,
-      inFlightReplicaOperationDetails: operations.details,
-      inFlightReplicaOperationsSource: operations.source || null,
-    });
-}
 function resolveRequiredReadyNodeCount(requiredNodeIds, configuredCount) {
   if (requiredNodeIds.length === 0) {
     return 0;
@@ -342,19 +322,23 @@ function successfulAuthoritativeRows(read) {
 }
 
 function mergeEndpointRows(rebalancer, tableName, authoritativeRead) {
+  const cachedRows =
+    typeof rebalancer.systemTableCache?.getAll === 'function' ?
+      rebalancer.systemTableCache.getAll(tableName) :
+      [];
   return [
-    ...readCachedRows(rebalancer, tableName),
+    ...cachedRows,
     ...successfulAuthoritativeRows(authoritativeRead),
   ];
 }
 
 function warnTopologyRevalidationFailure(rebalancer, blocker, error) {
-  rebalancer.logger.warn(
+  rebalancer.logger?.warn?.(
     REBALANCER_LOG_MSG.REVALIDATE_TOPOLOGY_BLOCKER_FAILED,
     {
       entityId: rebalancer.entityId,
       entityType: rebalancer.entityType,
-      reason: blocker.reason || null,
+      reason: blocker?.reason || null,
       error: error?.message || String(error),
     },
   );
@@ -387,12 +371,6 @@ async function revalidateEndpointVisibilityBlocker(rebalancer, blocker) {
 }
 
 async function revalidateInFlightTopologyBlocker(rebalancer, blocker) {
-  if (
-    typeof rebalancer.rebalanceCoordinator?.getOperationsByEntity !==
-      'function'
-  ) {
-    return blocker;
-  }
   let entityOperations;
   try {
     entityOperations =
@@ -404,12 +382,25 @@ async function revalidateInFlightTopologyBlocker(rebalancer, blocker) {
             REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
         },
       );
+    if (!Array.isArray(entityOperations)) {
+      throw new TypeError(CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.UNAVAILABLE);
+    }
   } catch (error) {
     warnTopologyRevalidationFailure(rebalancer, blocker, error);
-    return blocker;
+    return Object.freeze({
+      reason:
+        CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.UNAVAILABLE,
+      error: error?.message || String(error),
+    });
   }
 
-  const activeNodeIds = new Set(normalizeNodeIds(blocker.activeNodeIds));
+  const activeNodeIds = new Set(
+    normalizeNodeIds(
+      blocker?.activeNodeIds ||
+      rebalancer.getPublishedActiveNodeIdSet() ||
+      rebalancer.resolveConnectedClusterNodeIds(),
+    ),
+  );
   const nowMs = ownerNowMs(rebalancer);
   const nonBlockingOperationIds =
     await rebalancer.buildNonBlockingPriorityOperationIdSet(entityOperations);
@@ -427,7 +418,9 @@ async function revalidateInFlightTopologyBlocker(rebalancer, blocker) {
     return null;
   }
   return Object.freeze({
-    ...blocker,
+    reason:
+      CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.TOPOLOGY_OPERATIONS_IN_FLIGHT,
+    activeNodeIds: Object.freeze([...activeNodeIds]),
     inFlightReplicaOperations: details.length,
     inFlightReplicaOperationDetails: Object.freeze(details),
     inFlightReplicaOperationsSource:
@@ -441,19 +434,17 @@ class UnifiedRebalancerCriticalTopologyMethods {
     if (!this.isSystemPartitionEntity()) {
       return null;
     }
-    const nodeRows = readCachedRows(this, SYSTEM_TABLE_NAME.NODES);
-    if (
-      !Array.isArray(nodeRows) ||
-      nodeRows.length === UNIFIED_REBALANCER_LITERAL.ZERO
-    ) {
-      return null;
+    const resolvedNodes = resolveCriticalNodeRows(this);
+    const nodeRows = resolvedNodes?.nodeRows;
+    if (resolvedNodes?.state !== SERVE_ELIGIBILITY_STATE.READY ||
+        !Array.isArray(nodeRows) || nodeRows.length === 0) {
+      return buildCriticalNodeUnavailableBlocker(resolvedNodes);
     }
 
     const evidence = collectCriticalNodeEvidence(this, nodeRows);
     return buildTransitionalNodeBlocker(this, evidence) ||
       buildTransportMembershipBlocker(this, nodeRows, evidence) ||
-      buildEndpointVisibilityBlocker(this, evidence.activeNodeIds) ||
-      buildInFlightTopologyBlocker(this, evidence.activeNodeIds);
+      buildEndpointVisibilityBlocker(this, evidence.activeNodeIds);
   }
 
   // Report whether the critical topology still has a blocker.
@@ -603,68 +594,26 @@ class UnifiedRebalancerCriticalTopologyMethods {
     });
   }
 
-  // Return non-terminal operations that still indicate topology churn.
-  collectCriticalSystemInFlightReplicaOperations(
-    activeNodeIds = [],
-    options = {},
-  ) {
-    const requiredNodeIds = new Set(normalizeNodeIds(activeNodeIds));
-    if (
-      requiredNodeIds.size === 0 ||
-      typeof this.systemTableCache?.getAll !== 'function'
-    ) {
-      return Object.freeze({
-        count: 0,
-        details: Object.freeze([]),
-        source: null,
-      });
-    }
-
-    const rows = readAllSharedRows(
-      this.systemTableCache,
-      TABLES.REPLICA_OPERATIONS,
-    );
-    const nowMs = ownerNowMs(this);
-    const nonBlockingPriorityOperationIds =
-      this.buildNonBlockingPriorityOperationIdSetSync(rows, {
-        observedAt: nowMs,
-      });
-    const details = collectCriticalOperationDetails(
-      this,
-      rows,
-      requiredNodeIds,
-      {
-        nowMs,
-        scopeToEntity: options.scopeToEntity === true,
-        nonBlockingOperationIds: nonBlockingPriorityOperationIds,
-      },
-    );
-
-    return Object.freeze({
-      count: details.length,
-      details: Object.freeze(details),
-      source: TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE.CACHE,
-    });
-  }
-
-  // Revalidate cache blockers against authoritative endpoint/operation rows.
+  // Revalidate blockers against authoritative endpoint/operation rows.
   async revalidateCriticalSystemTopologySettlingBlocker(blocker) {
-    if (!blocker) {
-      return blocker;
-    }
+    let currentBlocker = blocker;
     if (
-      blocker.reason ===
+      currentBlocker?.reason ===
       CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.ENDPOINT_VISIBILITY_INCOMPLETE
     ) {
-      return revalidateEndpointVisibilityBlocker(this, blocker);
+      currentBlocker = await revalidateEndpointVisibilityBlocker(
+        this,
+        currentBlocker,
+      );
     }
     if (
-      blocker.reason ===
+      !currentBlocker ||
+      currentBlocker.reason ===
       CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.TOPOLOGY_OPERATIONS_IN_FLIGHT
     ) {
-      return revalidateInFlightTopologyBlocker(this, blocker);
+      return revalidateInFlightTopologyBlocker(this, currentBlocker);
     }
-    return blocker;
+    return currentBlocker;
   }
 }
 

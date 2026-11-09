@@ -1,3 +1,5 @@
+import {attachControlPlaneDiagnosticsLossAccounting} from
+  './admin-control-snapshot-diagnostic-loss-accounting.js';
 /**
  * Control snapshot building for the admin WebSocket API.
  *
@@ -516,10 +518,17 @@ class AdminControlSnapshotControlPlaneDiagnostics
           },
         );
     }
+    const hasSyncReadinessResolution =
+      typeof this.controlPlaneReadinessService?.getAllNodeReadinessSync ===
+        'function';
     const readinessEntries = await this.resolveControlPlaneReadinessEntries({
       allowAuthoritativeRefresh:
         !boundedObservationProbe &&
-        options.allowAuthoritativeReadinessRefresh !== false,
+        (options.allowAuthoritativeReadinessRefresh === true ||
+          ((options.preferAuthoritativePublicationRead === true ||
+            options.reconcileAuthoritativeMembershipPublication === true ||
+            !hasSyncReadinessResolution) &&
+            options.allowAuthoritativeReadinessRefresh !== false)),
       allowStaleOnCacheChange:
         options.allowStaleReadinessOnCacheChange !== false,
     });
@@ -562,11 +571,20 @@ class AdminControlSnapshotControlPlaneDiagnostics
       this.resolvePriorityControlPlaneRecoveryByNodeId(readinessEntries);
     const participationDecisions =
       this.resolveParticipationDecisionDiagnostics();
+    const participationDecisionSummaries =
+      this.resolveParticipationDecisionAggregatedDiagnostics?.() ||
+      ADMIN_CACHE_DUMP.EMPTY;
     const authoritativeReadinessRepairs =
       this.resolveAuthoritativeReadinessRepairDiagnostics();
+    const authoritativeReadinessRepairSummaries =
+      this.resolveAuthoritativeReadinessRepairAggregatedDiagnostics?.() ||
+      ADMIN_CACHE_DUMP.EMPTY;
     const recoveryEpochsByNodeId = this.resolveRecoveryEpochDiagnostics();
     const controlPlaneOperations =
       this.resolveControlPlaneOperationDiagnostics();
+    const controlPlaneOperationSummaries =
+      this.resolveControlPlaneOperationAggregatedDiagnostics?.() ||
+      ADMIN_CACHE_DUMP.EMPTY;
     const startupRecovery =
       this.startupRecoveryCoordinator &&
       typeof this.startupRecoveryCoordinator.evaluate === 'function' ?
@@ -613,9 +631,14 @@ class AdminControlSnapshotControlPlaneDiagnostics
         serviceRows,
         logsTable: priorityRecoveryPressureDiagnostics,
       });
-    this.schedulePriorityRecoveryDispatchPendingReentries(
-      priorityRecoveryDecisionSnapshots,
-    );
+    if (
+      options.preferAuthoritativePublicationRead === true ||
+      options.reconcileAuthoritativeMembershipPublication === true
+    ) {
+      this.schedulePriorityRecoveryDispatchPendingReentries(
+        priorityRecoveryDecisionSnapshots,
+      );
+    }
     const publicationEvidence =
       this.resolveCanonicalPublicationRecoveryEvidenceDiagnostics(
         readinessEntries,
@@ -646,7 +669,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
         this.resolveLocalPartitionServices() :
         null;
     const cdcReplay = buildCdcReplayRetentionDiagnostics(partitionServices);
-    return {
+    return attachControlPlaneDiagnosticsLossAccounting(this, {
       schemaVersion: CONTROL_PLANE_DIAGNOSTICS_SCHEMA_VERSION,
       nodeId: this.nodeId,
       capturedAt,
@@ -668,7 +691,9 @@ class AdminControlSnapshotControlPlaneDiagnostics
       priorityControlPlaneRecoveryByNodeId,
       readinessTransitionsByNodeId,
       participationDecisions,
+      participationDecisionSummaries,
       authoritativeReadinessRepairs,
+      authoritativeReadinessRepairSummaries,
       recoveryEpochsByNodeId,
       startupRecovery,
       placementEligibilityByNodeId,
@@ -676,6 +701,12 @@ class AdminControlSnapshotControlPlaneDiagnostics
         workflowDiagnostics.workflowAdmissionsByWorkflowId,
       timeoutClassifications: workflowDiagnostics.timeoutClassifications,
       controlPlaneOperations,
+      controlPlaneOperationSummaries,
+      aggregatedDiagnostics: {
+        participationDecisions: participationDecisionSummaries,
+        authoritativeReadinessRepairs: authoritativeReadinessRepairSummaries,
+        controlPlaneOperations: controlPlaneOperationSummaries,
+      },
       priorityRecoveryDecisionSnapshots,
       priorityRecoveryObservation,
       replicaOperations,
@@ -684,7 +715,11 @@ class AdminControlSnapshotControlPlaneDiagnostics
       controlPlaneOwnerQueueDepth,
       cdcReplay,
       cdcReplayByPartitionId: cdcReplay?.byPartitionId || null,
-    };
+      tableRevisionWatermarks:
+        typeof this.systemTableCache?.getTableRevisionWatermarks === 'function' ?
+          this.systemTableCache.getTableRevisionWatermarks() :
+          null,
+    });
   }
   /**
    * Build priority-recovery cross-service decision snapshots keyed by

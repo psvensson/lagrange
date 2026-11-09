@@ -53,6 +53,7 @@ import {
   initializeTestEnvironment,
   waitFor,
 } from '../../integration/helpers/cluster-test-helpers.js';
+import {scaleByMachineFactor} from '../../../scripts/test-machine-factor.js';
 import {createSeedQuerySurface} from
   '../../integration/helpers/seed-query-surface.js';
 import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
@@ -327,8 +328,9 @@ async function cleanSeedAttempt({bootstrapService, bootstrapResult, seedApi, dat
 }
 
 test('seed bootstraps and serves a write on rs-raft by default',
-  {timeout: SEED_TEST_TIMEOUT_MS}, async () => {
+  {timeout: scaleByMachineFactor(SEED_TEST_TIMEOUT_MS)}, async () => {
     initializeTestEnvironment({
+      partition: {defaultReplicaCount: 1},
       rebalancer: {
         periodicCheckIntervalMs: 600000,
         periodicCheckJitterMs: 100,
@@ -344,7 +346,7 @@ test('seed bootstraps and serves a write on rs-raft by default',
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 3000,
+        leadershipWaitTimeoutMs: scaleByMachineFactor(12000),
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,

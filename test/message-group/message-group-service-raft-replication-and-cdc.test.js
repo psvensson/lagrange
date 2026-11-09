@@ -213,6 +213,15 @@ test(
       transport,
     }));
 
+    service.raft = reportingConsensusPort({
+      role: RaftRole.FOLLOWER,
+      groupId: TEST_RETRYABLE_FORWARD_GROUP_ID,
+      replicaIdentity: TEST_RETRYABLE_FORWARD_REPLICA_ID,
+      peers: [{
+        replicaIdentity: TEST_RETRYABLE_FORWARD_TARGET_SERVICE_ID,
+        address: TEST_RETRYABLE_FORWARD_TARGET_ADDRESS,
+      }],
+    });
     service.resolveCDCForwardSelection = () => ({
       strictForwarding: true,
       strictForwardRetryAfterMs: TEST_RETRYABLE_FORWARD_RETRY_AFTER_MS,
@@ -539,7 +548,6 @@ test('MessageGroupService - consensus envelopes to message-group peers use the r
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       replicaIds: ['mg-1-r1', 'mg-1-r2'],
-      peerAddresses: ['seed/message-group/mg-1-r2'],
       nodeId: 'node-mg-1',
       transport,
     }, port);
@@ -920,7 +928,6 @@ test(
       service.isLeader = false;
       service.role = RaftRole.FOLLOWER;
       service.leaderId = TEST_STALE_FORWARD_REMOTE_REPLICA_ID;
-      service.peerAddresses = [TEST_STALE_FORWARD_REMOTE_ADDRESS];
       port.peers = [{
         address: TEST_STALE_FORWARD_REMOTE_ADDRESS,
         replicaIdentity: TEST_STALE_FORWARD_REMOTE_REPLICA_ID,

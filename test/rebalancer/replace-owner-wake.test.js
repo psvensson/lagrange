@@ -5,8 +5,8 @@
  *
  * A REPLACE at ACTIVE whose replacement replica's remove-safety readiness
  * reads refresh-pending DEFERS. The witnesses drive the REAL owner and the
- * REAL remove-safety evaluator; only the readiness service (its level, its
- * publications, its planning identity) and the owner's clocks are faked. The
+ * REAL remove-safety evaluator and committed serve owner. Authoritative
+ * rows, participation projections, planning publications and clocks are controlled. The
  * 1 s fallback timer is captured and never fired unless a witness says so,
  * so progress without it proves the wake.
  *
@@ -28,7 +28,7 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {NODE_STATE, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {NODE_STATE, TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
@@ -42,6 +42,7 @@ import {
 import {createTestCoordinator} from './test-helpers.js';
 import {createReplaceWitness} from './replace-witness-fixture.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
+import {ServeEligibilityOwner} from '../../src/control-plane/serve-eligibility-owner.js';
 
 const {
   OPERATION_OWNER_ACTION,
@@ -84,7 +85,8 @@ const PROFILES = Object.freeze([
     ownerNodeId: SOURCE_NODE_ID,
     wakingNodeId: TARGET_NODE_ID,
     deferPattern: /not voter-ready/,
-    // Still ineligible, but now an evidence-absent denial: the level moved.
+    // The committed lease becomes current, but strict replacement
+    // participation still denies: the level moves without granting removal.
     applyUnsafeLevelChange(readiness) {
       readiness.setLevel(TARGET_NODE_ID, LEVEL.EVIDENCE_ABSENT);
     },
@@ -130,12 +132,37 @@ function buildReadinessSnapshot(nodeId, level) {
 function createReadinessFake(initialLevels) {
   const levelByNodeId = new Map(Object.entries(initialLevels));
   const listeners = new Set();
+  const nodeRow = (nodeId) => ({
+    ...createReadyNode(nodeId),
+    ready_lease_expires_at: levelByNodeId.get(nodeId) === LEVEL.REFRESH_PENDING ?
+      0 : Date.now() + READY_LEASE_EXTENSION_MS,
+  });
+  const nodeIds = [...levelByNodeId.keys()];
+  const committed = new ServeEligibilityOwner({
+    now: () => Date.now(), readTimeoutMs: 2500, isNodeLoadReady: () => true,
+    setTimeout: () => ({unref() {}}), clearTimeout: () => {},
+    readCommittedRows: async (tableName) => ({success: true,
+      rows: tableName === TABLES.NODES ? nodeIds.map(nodeRow) : [{
+        publication_id: 'cluster_membership-7', publication_epoch: 7,
+        publication_kind: 'cluster_membership', status: 'PUBLISHED',
+        published_active_node_ids: JSON.stringify(nodeIds),
+        required_ack_node_ids: JSON.stringify(nodeIds),
+        acknowledged_node_ids: JSON.stringify(nodeIds),
+        priority_partition_summary: JSON.stringify({satisfied: true, blockedPartitions: []}),
+      }],
+    }),
+  });
   return readinessServiceFake({
     listeners,
+    readServeEligibility: () => committed.readServeEligibility(),
+    answerCommittedNodes: () => committed.answerCommittedNodes(),
+    subscribeServeEligibility: (listener) => committed.subscribe(listener),
+    shutdown: () => committed.shutdown(),
     setLevel(nodeId, level) {
       levelByNodeId.set(nodeId, level);
     },
     publish(nodeId) {
+      committed.noteSourceChange(TABLES.NODES, nodeRow(nodeId));
       const event = Object.freeze({
         ownerKey: nodeId,
         snapshot: buildReadinessSnapshot(nodeId, levelByNodeId.get(nodeId)),
@@ -221,6 +248,7 @@ async function createDeferredReplaceHarness(profile) {
     [TARGET_NODE_ID]: LEVEL.READY,
     [profile.wakingNodeId]: LEVEL.REFRESH_PENDING,
   });
+  await readiness.readServeEligibility();
   const coordinator = createTestCoordinator({
     nodeId: profile.ownerNodeId,
     enableTimeouts: false,
@@ -251,7 +279,7 @@ async function createDeferredReplaceHarness(profile) {
     },
     controlPlaneReadinessService: readiness,
     tablePolicyService: {
-      getPolicyForPartition: () => ({minReplicaCount: 3}),
+      getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
     },
     cacheData: {
       nodes: [
@@ -309,6 +337,7 @@ async function createDeferredReplaceHarness(profile) {
       ?.workflowStep;
   const shutdown = async () => {
     await coordinator.shutdown();
+    readiness.shutdown();
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
   };

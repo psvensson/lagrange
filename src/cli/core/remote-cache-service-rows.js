@@ -1,4 +1,4 @@
-import {resolveRuntimeServiceTargetReplicaCount} from
+import {resolveRuntimeServiceDefinitionPolicy} from
   '../../rebalancer/runtime-service-policy.js';
 
 const LOCAL_STR_RUNTIME_SERVICE = 'runtime_service';
@@ -291,10 +291,7 @@ export function getEndpointsByServiceId(tables) {
  * @return {number}
  */
 export function resolveReplicaCount(definition) {
-  if (!definition) {
-    return 0;
-  }
-  return resolveRuntimeServiceTargetReplicaCount(definition);
+  return resolveRuntimeServiceDefinitionPolicy(definition).targetReplicaCount;
 }
 
 /**
@@ -339,6 +336,7 @@ export function resolveLogicalServiceStatus(
   observedReplicaCount,
   healthyReplicaCount,
 ) {
+  if (desiredReplicaCount === null) return LOGICAL_SERVICE_STATUS.UNKNOWN;
   if (desiredReplicaCount <= 0) {
     return observedReplicaCount === 0 ?
       LOGICAL_SERVICE_STATUS.UNKNOWN :

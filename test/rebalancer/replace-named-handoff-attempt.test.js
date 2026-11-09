@@ -157,7 +157,9 @@ async function createHarness({stepDownResponse} = {}) {
       activeNodeIds: NODE_IDS,
       membershipTargetNodeId: TARGET_NODE_ID,
     }),
-    tablePolicyService: {getPolicyForPartition: () => ({minReplicaCount: 3})},
+    tablePolicyService: {getPolicyForPartition: () => ({
+      targetReplicaCount: 3, minReplicaCount: 3,
+    })},
     cacheData: {
       nodes: NODE_IDS.map(readyNode),
       services: [

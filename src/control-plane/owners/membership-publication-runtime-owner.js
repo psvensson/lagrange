@@ -120,7 +120,6 @@ class MembershipPublicationRuntimeOwner {
       ...options,
       deliveryPriority:
         options.deliveryPriority || JOIN_PUBLICATION_DELIVERY_PRIORITY,
-      skipCacheWait: options.skipCacheWait !== false,
     };
     if (queryTimeoutMs !== null) {
       mutationOptions.queryTimeoutMs = queryTimeoutMs;

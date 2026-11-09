@@ -364,13 +364,12 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
     const leaderStatus = cluster.node(leader).readStatus();
     assert.equal(leaderStatus.leaderAddress, cluster.addressOf(leader),
       'semantic status keeps leader identity and network address distinct');
-    const learnerAddress = cluster.addressOf(JOINER);
     assert.ok(
-      Number.isFinite(leaderStatus.followerProgress?.[learnerAddress]),
-      'semantic status projects raft-rs progress for the learner address',
+      Number.isFinite(leaderStatus.followerProgress?.[JOINER]),
+      'semantic status projects raft-rs progress for the learner identity',
     );
     const progressProbe = await turnChainValue(cluster.node(leader)
-      .probePeerProgress(learnerAddress));
+      .probePeerProgress(JOINER));
     assert.equal(progressProbe.outcome, 'CORE_OK',
       'the semantic progress probe stays behind the operation port');
     // Catching up did not make it a voter: that is ConfState's decision.

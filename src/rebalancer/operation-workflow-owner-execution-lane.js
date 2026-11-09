@@ -130,11 +130,27 @@ class OperationWorkflowOwnerExecutionLane
    * @param {string} targetNodeId
    * @return {Promise<string|null>}
    */
+  buildReconciledReplicaObservationOptions(baseOptions, options) {
+    if (options?.ignoreUnclaimedPreRuntimeFailedCreate !== true) {
+      return baseOptions;
+    }
+    return {
+      ...baseOptions,
+      ignoreUnclaimedPreRuntimeFailedCreate: true,
+    };
+  }
+
   async getReconciledReplicaStatus(
     replicaId,
     partitionId,
     targetNodeId,
+    options = {},
   ) {
+    const exactTargetObservationOptions =
+      this.buildReconciledReplicaObservationOptions(
+        EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+        options,
+      );
     const shouldPreferLocalPriorityReplicaObservation =
       targetNodeId === this.nodeId &&
       classifySystemPartition({partitionId}).priorityControlPlane;
@@ -148,7 +164,10 @@ class OperationWorkflowOwnerExecutionLane
           replicaId,
           partitionId,
           targetNodeId,
-          LOCAL_PRIORITY_EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+          this.buildReconciledReplicaObservationOptions(
+            LOCAL_PRIORITY_EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+            options,
+          ),
         );
       if (
         localObservation?.state === OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED
@@ -164,7 +183,7 @@ class OperationWorkflowOwnerExecutionLane
         replicaId,
         partitionId,
         targetNodeId,
-        EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+        exactTargetObservationOptions,
       );
       if (observation?.state === OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED) {
         return observation.lifecycleStatus;
@@ -174,7 +193,7 @@ class OperationWorkflowOwnerExecutionLane
       replicaId,
       partitionId,
       targetNodeId,
-      EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+      exactTargetObservationOptions,
     );
   }
 

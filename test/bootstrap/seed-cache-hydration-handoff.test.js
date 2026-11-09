@@ -57,9 +57,15 @@ function recordingSeed({imageState = PARTITION_HYDRATION_IMAGE_STATE.READ} = {})
         readHydrationImage(sql) {
           log.push(['read', tableName, sql]);
           return imageState === PARTITION_HYDRATION_IMAGE_STATE.READ ?
-            {state: imageState, rows: [{id: `${tableName}-row`}],
+            {state: imageState, rows: [{id: `${tableName}-row`, updated_at_hlc: '1000:0:seed'}],
               appliedIndex: positionOf(tableName)} :
             {state: imageState, rows: [], reason: null};
+        },
+        cdcDelivery: {
+          async acknowledgeHydratedObligationsThrough(appliedIndex) {
+            log.push(['acknowledgeHydrated', tableName, appliedIndex]);
+            return {acknowledged: 1};
+          },
         },
       });
     });
@@ -67,8 +73,8 @@ function recordingSeed({imageState = PARTITION_HYDRATION_IMAGE_STATE.READ} = {})
   const messageGroup = {
     groupId: 'mg-1',
     async subscribeToCDC() {},
-    async applyCDCEvent(tableName) {
-      log.push(['apply', tableName]);
+    async applyCDCEvent(tableName, _op, _row, options) {
+      log.push(['apply', tableName, options?.timestamp ?? null]);
     },
   };
   const delegates = {
@@ -105,8 +111,10 @@ test('seed handoff: each table\'s subscribers register on every replica before i
     registeredBeforeRead: lastIndex(log, 'register', tableName) <
       firstIndex(log, 'read', tableName),
     readBeforeApply: firstIndex(log, 'read', tableName) < firstIndex(log, 'apply', tableName),
+    applyBeforeAcknowledge: lastIndex(log, 'apply', tableName) <
+      firstIndex(log, 'acknowledgeHydrated', tableName),
     readBeforeNextTable: index === handedOffTables.length - 1 ||
-      lastIndex(log, 'apply', tableName) <
+      lastIndex(log, 'acknowledgeHydrated', tableName) <
         firstIndex(log, 'register', handedOffTables[index + 1]),
     recordedPosition: result.tables[tableName]?.appliedIndex ?? null,
   }));
@@ -117,6 +125,7 @@ test('seed handoff: each table\'s subscribers register on every replica before i
       registeredReplicas: getInitialReplicaIds(tableName).length,
       registeredBeforeRead: true,
       readBeforeApply: true,
+      applyBeforeAcknowledge: true,
       readBeforeNextTable: true,
       recordedPosition: positionOf(tableName),
     })),

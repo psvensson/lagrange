@@ -1,4 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {committedServeEligibilityView} from './serve-eligibility-test-support.js';
 import {
   createAccountingService,
   createActiveNode,
@@ -34,6 +35,31 @@ import {
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+
+test('both bulk readers require evidence or an explicit request to enumerate the observer',
+  async (t) => {
+    for (const method of ['getAllNodeReadiness', 'getAllNodeReadinessSync']) {
+      const readiness = createReadinessServiceForTest({
+        nodeId: 'unobserved-self',
+        systemTableCache: createCache({nodes: [], services: []}),
+        now: () => 350000,
+      });
+      try {
+        t.same(await readiness[method](), [], `${method}: observer ID alone is not a member`);
+        const required = await readiness[method]({requiredNodeIds: ['unobserved-self']});
+        t.same(required.map((entry) => entry.nodeId), ['unobserved-self'],
+          `${method}: explicit required domain still includes missing self`);
+        t.equal(required[0].dimensions.clusterMemberHealthy, false,
+          `${method}: missing self is an explicit negative observation`);
+        t.same((await readiness[method]()).map((entry) => entry.nodeId), ['unobserved-self'],
+          `${method}: the retained observation remains in the enumerated domain`);
+      } finally {
+        readiness.shutdownReadinessPlanningOwner();
+      }
+    }
+    t.end();
+  });
+
 test('ControlPlaneReadinessService getAllNodeReadiness propagates ' +
   'authoritative refresh for stale connected rows',
 async (t) => {
@@ -306,9 +332,18 @@ test('ControlPlaneReadinessService getAllNodeReadiness includes authoritative-on
         enteredAt: '2026-03-04T00:00:00.000Z',
         recentTransitions: [],
       }),
+      // Both nodes hold a committed lease at the published epoch.
+      authoritativeControlPlaneView: committedServeEligibilityView({
+        servingNodeIds: ['node-cache-visible', 'node-authoritative-only'],
+        nowMs: now,
+      }),
       now: () => now,
     });
 
+    // This composition's cache has no mutation versions, so the planning
+    // owner's identity stays saturated and its rebuilds never publish; the
+    // service is stopped with the test like every production composition.
+    t.teardown(() => readinessService.shutdown());
     const readinessEntries = await readinessService.getAllNodeReadiness({
       allowAuthoritativeRefresh: true,
     });
@@ -520,7 +555,7 @@ async (t) => {
     {
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
 
@@ -528,7 +563,7 @@ async (t) => {
     'fresh local reporter success should keep self cluster membership healthy');
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'fresh local reporter success should keep self control-plane writes admitted');
-  t.equal(readiness.dimensions.serveEligible, true,
+  t.equal(readiness.dimensions.repairEligible, true,
     'fresh local reporter success should keep self load serving admitted');
   t.same(authoritativeReads, [],
     'fresh local reporter success should avoid blocking authoritative self repairs');
@@ -605,7 +640,7 @@ async (t) => {
     {
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
 
@@ -613,7 +648,7 @@ async (t) => {
     'recent confirmed reporter success should keep self membership healthy');
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'self control-plane writes should remain admitted through one timed-out attempt');
-  t.equal(readiness.dimensions.serveEligible, true,
+  t.equal(readiness.dimensions.repairEligible, true,
     'load-lane self admission should not flap during the timeout grace window');
   t.same(authoritativeReads, [],
     'timeout grace should avoid blocking on bounded authoritative self repair');
@@ -774,7 +809,7 @@ async (t) => {
     {
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
 
@@ -782,7 +817,7 @@ async (t) => {
     'self-node local execution must keep membership healthy even with stale cached lease');
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'locally hosted active control-plane services should keep self writes admitted');
-  t.equal(readiness.dimensions.serveEligible, true,
+  t.equal(readiness.dimensions.repairEligible, true,
     'self-node should remain serve-eligible while authoritative state catches up');
   t.same(authoritativeReads, [],
     'self-node hot-path readiness should not force synchronous authoritative self repair');
@@ -1120,7 +1155,7 @@ async (t) => {
 });
 
 test('ControlPlaneReadinessService refreshes invalidated ineligible snapshots ' +
-  'synchronously for serve decisions', async (t) => {
+  'synchronously for repair-gating decisions (serving is the committed answer)', async (t) => {
   const now = 530000;
   const cache = createCache({
     nodes: [{
@@ -1208,16 +1243,131 @@ test('ControlPlaneReadinessService refreshes invalidated ineligible snapshots ' 
       allowStaleOnCacheChange: true,
       allowAuthoritativeRefresh: true,
       requireFreshOnIneligible: true,
-      decisionDimension: 'serveEligible',
+      decisionDimension: 'repairEligible',
     },
   );
 
-  t.equal(initial.dimensions.serveEligible, false);
-  t.equal(refreshed.dimensions.serveEligible, true);
+  t.equal(initial.dimensions.repairEligible, false);
+  t.equal(refreshed.dimensions.repairEligible, true);
+  // The committed serve read (whole-table, no params) is the serve owner's,
+  // triggered by the node change; the repair reads are keyed by node.
   t.equal(
-    authoritativeReads.length,
+    authoritativeReads.filter((read) => read.params?.length > 0).length,
     2,
-    'serve-gating callers should bypass stale ineligible snapshots and refresh immediately',
+    'repair-gating callers should bypass stale ineligible snapshots and refresh immediately',
+  );
+  t.end();
+});
+
+test('ControlPlaneReadinessService getAllNodeReadinessSync retains all known nodes ' +
+  'when a peer snapshot ages past maxCachedAgeMs and its node row advances', (t) => {
+  let now = 600000;
+  const cache = createCache({
+    nodes: [
+      {
+        ...createActiveNode('seed-node'),
+        [COLUMN.CONNECTION_STATE]: STATE.READY,
+        [COLUMN.LAST_HEARTBEAT]: now - 100,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+      },
+      {
+        ...createActiveNode('peer-healthy'),
+        [COLUMN.CONNECTION_STATE]: STATE.READY,
+        [COLUMN.LAST_HEARTBEAT]: now - 100,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+      },
+      {
+        ...createActiveNode('peer-stopped'),
+        [COLUMN.CONNECTION_STATE]: STATE.READY,
+        [COLUMN.LAST_HEARTBEAT]: now - 100,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+      },
+    ],
+    services: [
+      createMessageGroupService('seed-node'),
+      createMessageGroupService('peer-healthy'),
+      createMessageGroupService('peer-stopped'),
+    ],
+  });
+  const readinessService = createReadinessServiceForTest({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    cacheMutationTarget: cache,
+    messageRouter: {
+      getConnectionState(nodeId) {
+        return nodeId === 'peer-stopped' ? STATE.DISCONNECTED : STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      'seed-node': {
+        nodeId: 'seed-node',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+      'peer-healthy': {
+        nodeId: 'peer-healthy',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+      'peer-stopped': {
+        nodeId: 'peer-stopped',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  // Prime stored snapshots for all 3 nodes at t = 600000.
+  readinessService.buildNodeReadinessSyncCurrent('seed-node');
+  readinessService.buildNodeReadinessSyncCurrent('peer-healthy');
+  readinessService.buildNodeReadinessSyncCurrent('peer-stopped');
+
+  // Advance clock past maxCachedAgeMs (1500ms) and apply newer node rows so
+  // both getCachedReadinessSnapshot and getFresherStoredReadinessSnapshot miss.
+  now += 2500;
+  cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+    ...createActiveNode('peer-healthy'),
+    [COLUMN.CONNECTION_STATE]: STATE.READY,
+    [COLUMN.LAST_HEARTBEAT]: now - 50,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+  });
+  cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+    ...createActiveNode('peer-stopped'),
+    [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
+    [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,
+    [COLUMN.LAST_HEARTBEAT]: now - 50,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: now - 1000,
+  });
+
+  const entries = readinessService.getAllNodeReadinessSync({
+    allowStaleOnCacheChange: true,
+    maxCachedAgeMs: 1500,
+  });
+  const byNodeId = Object.fromEntries(
+    entries.map((entry) => [entry.nodeId, entry]),
+  );
+
+  t.same(
+    Object.keys(byNodeId).sort(),
+    ['peer-healthy', 'peer-stopped', 'seed-node'],
+    'getAllNodeReadinessSync must never drop known nodes when cached/stored snapshots miss',
+  );
+  t.equal(
+    byNodeId['peer-healthy']?.dimensions?.clusterMemberHealthy,
+    true,
+    'positive witness: healthy peer with newer heartbeat remains healthy and present',
+  );
+  t.equal(
+    byNodeId['peer-stopped']?.dimensions?.clusterMemberHealthy,
+    false,
+    'inverse counterexample: stopped peer is evaluated and reported unhealthy, neither dropped nor stale-healthy',
   );
   t.end();
 });

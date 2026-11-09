@@ -11,12 +11,9 @@ const BUFFER_ENCODING_UTF8 = 'utf8';
 const DIGEST_ALGORITHM_SHA256 = 'sha256';
 const URI_PATH_SEPARATOR = '/';
 const NON_ENUMERABLE_PARAMETERS_KEY = 'parameters';
-const DEFAULT_BACKUP_CLUSTER_ID = 'lagrange-cluster-default';
-const DEFAULT_PARTITION_PAYLOAD_SUFFIX = '-data';
 const SEGMENT_PATH_PREFIX = `${BMC.SEGMENTS_DIR}/${BMC.SEGMENT_PREFIX}`;
-const DEFAULT_RAFT_LOG_INDEX = 1000;
-const CORRUPTION_XOR_BYTE_MASK = 255;
-const STORAGE_NOT_FOUND_CODE = 'ENOENT';
+const FUNCTION_TYPE = 'function';
+const STRING_TYPE = 'string';
 const OPERATION_CONFLICT_MESSAGE = 'Operation conflict';
 
 const RX_UNREACHABLE = /unreachable|ENOTFOUND|ECONNREFUSED/i;
@@ -30,56 +27,7 @@ const ERROR_CLASSIFIERS = Object.freeze([
   [RX_VERIFICATION, L3_CODE.BACKUP_VERIFICATION_FAILED],
 ]);
 
-const makePart = (id) => Object.freeze({
-  partitionId: id, raftLogIndex: DEFAULT_RAFT_LOG_INDEX, raftTerm: 1,
-  payload: `partition-${id}${DEFAULT_PARTITION_PAYLOAD_SUFFIX}`,
-});
-const DEFAULT_PARTITIONS = Object.freeze([1, 2, 3].map(makePart));
-
 const toBuffer = (d) => (Buffer.isBuffer(d) ? d : Buffer.from(String(d), BUFFER_ENCODING_UTF8));
-
-const testUriMatch = (list, uri) =>
-  Boolean(list && Array.from(Array.isArray(list) || list instanceof Set ? list : [list])
-    .some((it) => typeof it === 'string' && it && uri.includes(it)));
-
-const verifyFail = (list, uri, code) => {
-  if (testUriMatch(list, uri)) throw Object.assign(new Error(code), {code});
-};
-
-const checkAdapterFailures = (f, uri) => {
-  verifyFail(f.unreachableUris, uri, L3_CODE.DESTINATION_UNREACHABLE);
-  verifyFail(f.writeDeniedUris, uri, L3_CODE.DESTINATION_WRITE_DENIED);
-  verifyFail(f.streamInterruptUris, uri, L3_CODE.BACKUP_STREAM_INTERRUPTED);
-};
-
-function applyByteCorruption(f, uri, buf) {
-  if (testUriMatch(f.corruptManifestUris, uri) || testUriMatch(f.corruptSegmentUris, uri)) {
-    const cp = Buffer.from(buf);
-    if (cp.length > 0) cp[0] ^= CORRUPTION_XOR_BYTE_MASK;
-    return cp;
-  }
-  return buf;
-}
-
-class DefaultStorageAdapter {
-  constructor(opts = {}) {
-    this.storage = new Map();
-    this.failures = opts;
-  }
-  async write(uri, data) {
-    checkAdapterFailures(this.failures, uri);
-    this.storage.set(uri, toBuffer(data));
-  }
-  async read(uri) {
-    verifyFail(this.failures.unreachableUris, uri, L3_CODE.DESTINATION_UNREACHABLE);
-    const buf = this.storage.get(uri);
-    if (!buf) {
-      throw Object.assign(new Error(STORAGE_NOT_FOUND_CODE), {code: STORAGE_NOT_FOUND_CODE});
-    }
-    return applyByteCorruption(this.failures, uri, buf);
-  }
-  has = (uri) => this.storage.has(uri);
-}
 
 const normalizeBaseUri = (uri) =>
   (typeof uri === 'string' && uri.endsWith(URI_PATH_SEPARATOR) ? uri.slice(0, -1) : (uri || ''));
@@ -111,10 +59,21 @@ const updateOperationState = (op, state, code, t) =>
 const isSameOpParams = (p1, p2) =>
   p1?.backupId === p2?.backupId && p1?.destinationUri === p2?.destinationUri;
 
+const failVerification = () => {
+  throw Object.assign(new Error(L3_CODE.BACKUP_VERIFICATION_FAILED),
+    {code: L3_CODE.BACKUP_VERIFICATION_FAILED});
+};
+
+const isCount = (v) => Number.isInteger(v) && v >= 0;
+
+/** An exported partition must carry its own payload and Raft position. */
 function toPayloadBuffer(p) {
-  if (Buffer.isBuffer(p?.payload)) return p.payload;
-  const raw = p?.payload ?? `${BMC.SEGMENT_PREFIX}${p?.partitionId}${DEFAULT_PARTITION_PAYLOAD_SUFFIX}`;
-  return Buffer.from(typeof raw === 'string' ? raw : JSON.stringify(raw), BUFFER_ENCODING_UTF8);
+  if (p?.payload == null || !isCount(p.raftLogIndex) || !isCount(p.raftTerm)) {
+    failVerification();
+  }
+  if (Buffer.isBuffer(p.payload)) return p.payload;
+  const raw = p.payload;
+  return Buffer.from(typeof raw === STRING_TYPE ? raw : JSON.stringify(raw), BUFFER_ENCODING_UTF8);
 }
 
 function computeDigest(data) {
@@ -151,10 +110,11 @@ function isInvalidDestinationUri(uri) {
 }
 const PREFLIGHT_RULES = Object.freeze([
   [(o) => !o.capabilitySupported, L3_CODE.BACKUP_CAPABILITY_UNSUPPORTED],
+  [(o) => o.getClusterId() === UNSET, L3_CODE.CLUSTER_IDENTITY_UNESTABLISHED],
   [(o, s) => s?.hasActiveOperation || o.hasActiveOperation(), L3_CODE.CONCURRENT_OPERATION_ACTIVE],
   [(_o, _s, p) => isInvalidDestinationUri(p?.destinationUri), L3_CODE.DESTINATION_URI_INVALID],
-  [(_o, s) => s?.ready === false, L3_CODE.CLUSTER_NOT_READY],
-  [(_o, s) => s?.hasPartitionQuorum === false, L3_CODE.PARTITION_QUORUM_UNAVAILABLE],
+  [(_o, s) => s?.ready !== true, L3_CODE.CLUSTER_NOT_READY],
+  [(_o, s) => s.hasPartitionQuorum !== true, L3_CODE.PARTITION_QUORUM_UNAVAILABLE],
   [(o, _s, p) => o.isBackupIdConflicting(p?.backupId, p?.destinationUri),
     L3_CODE.BACKUP_ID_CONFLICT],
 ]);
@@ -170,10 +130,6 @@ const classifyBackupError = (err) => {
   return hit ? hit[1] : L3_CODE.BACKUP_STREAM_INTERRUPTED;
 };
 
-const failVerification = () => {
-  throw Object.assign(new Error(L3_CODE.BACKUP_VERIFICATION_FAILED),
-    {code: L3_CODE.BACKUP_VERIFICATION_FAILED});
-};
 
 function verifySegmentPayload(part, buf) {
   const exp = part.sizeBytes !== undefined ? part.sizeBytes : part.byteLength;
@@ -207,28 +163,48 @@ async function loadAndVerifyBackup(adapter, destinationUri) {
   return {manifest, partitions: loaded};
 }
 
-const OWNER_DEFAULTS = Object.freeze({
-  capabilitySupported: true, clusterId: DEFAULT_BACKUP_CLUSTER_ID,
-  releaseVersion: CONTRACT.DEFAULT_RELEASE_VERSION,
-  restoreInProgress: false, restoreAborted: false,
-  restoredFrom: UNSET, hydratedPartitions: UNSET, activeOperation: UNSET,
-});
+const failCapabilityUnsupported = () => {
+  throw Object.assign(new Error(L3_CODE.BACKUP_CAPABILITY_UNSUPPORTED),
+    {code: L3_CODE.BACKUP_CAPABILITY_UNSUPPORTED});
+};
+
+const isFunction = (fn) => typeof fn === FUNCTION_TYPE;
 
 const genOpId = (id) => (id || `${CONTRACT.OPERATION_ID_PREFIX}${randomUUID()}`);
 
 class BackupRestoreOwner {
+  /**
+   * @param {Object} [opts] - Declared ports: storageAdapter,
+   *   exportPartitionSnapshots, hydratePartitionSnapshots, getClusterId /
+   *   onSetClusterId (the cluster record), getReleaseVersion. Backup/restore
+   *   is supported only when the storage, export and hydrate adapters are all
+   *   installed; there is no in-memory or synthetic substitute.
+   */
   constructor(opts = {}) {
-    Object.assign(this, OWNER_DEFAULTS, opts);
+    this.clusterId = opts.clusterId ?? UNSET;
+    this.releaseVersion = opts.releaseVersion ?? CONTRACT.DEFAULT_RELEASE_VERSION;
     this.getClusterIdOption = opts.getClusterId;
     this.getReleaseVersionOption = opts.getReleaseVersion;
-    this.getPartitions = opts.getPartitions || opts.exportPartitionSnapshots || UNSET;
-    this.onHydratePartitions = opts.onHydratePartitions || opts.hydratePartitionSnapshots || UNSET;
+    this.onSetClusterId = opts.onSetClusterId;
+    this.storageAdapter = opts.storageAdapter ?? UNSET;
+    this.exportPartitionSnapshots =
+      isFunction(opts.exportPartitionSnapshots) ? opts.exportPartitionSnapshots : UNSET;
+    this.hydratePartitionSnapshots =
+      isFunction(opts.hydratePartitionSnapshots) ? opts.hydratePartitionSnapshots : UNSET;
+    this.capabilitySupported = this.storageAdapter !== UNSET &&
+      this.exportPartitionSnapshots !== UNSET && this.hydratePartitionSnapshots !== UNSET;
+    this.restoreInProgress = false;
+    this.restoreAborted = false;
+    this.restoredFrom = UNSET;
+    this.hydratedPartitions = UNSET;
+    this.activeOperation = UNSET;
     this.operations = new Map();
     this.completedBackups = new Map();
-    this.storageAdapter = opts.storageAdapter || new DefaultStorageAdapter(opts);
-    if (opts.storageAdapter) Object.assign(this.storageAdapter.failures, opts);
   }
-  getClusterId = () => this.getClusterIdOption?.() || this.clusterId;
+  getClusterId = () => {
+    const id = isFunction(this.getClusterIdOption) ? this.getClusterIdOption() : this.clusterId;
+    return typeof id === STRING_TYPE && id.length > 0 ? id : UNSET;
+  };
   setClusterId = (id) => ((this.clusterId = id), this.onSetClusterId?.(id));
   getReleaseVersion = () => this.getReleaseVersionOption?.() || this.releaseVersion;
   isRestoreInProgress = () => this.restoreInProgress === true;
@@ -241,24 +217,13 @@ class BackupRestoreOwner {
   getBackupStatus = (id) => this.getOperation(id);
   getOperationStatus = (id) => this.getOperation(id);
 
-  resolveSnapshotPartitions(snap) {
-    if (Array.isArray(snap?.partitions)) return snap.partitions;
-    if (typeof this.getPartitions === 'function') return this.getPartitions();
-    return DEFAULT_PARTITIONS;
-  }
-
-  mergeSnapshot = (snap) => ({
-    ready: true, hasPartitionQuorum: true, hasActiveOperation: false,
-    epoch: 1, logicalTimestamp: Date.now(), partitions: this.resolveSnapshotPartitions(snap),
-    ...(this.getClusterSnapshot?.() || {}), ...snap,
-  });
   isBackupIdConflicting(id, dest) {
     if (typeof id === 'string' && this.completedBackups.has(id)) return true;
     const m = `${normalizeBaseUri(dest)}/${BMC.MANIFEST_FILENAME}`;
     return Boolean(typeof dest === 'string' && dest && this.storageAdapter?.has?.(m));
   }
-  evaluatePreflight(parameters, clusterSnapshot = {}) {
-    const code = findPreflightViolationCode(this, parameters, this.mergeSnapshot(clusterSnapshot));
+  evaluatePreflight(parameters, clusterSnapshot) {
+    const code = findPreflightViolationCode(this, parameters, clusterSnapshot ?? UNSET);
     return {valid: code === UNSET, ok: code === UNSET, reasonCode: code};
   }
   finishOp(op, state, code) {
@@ -280,7 +245,7 @@ class BackupRestoreOwner {
       });
     }
 
-    const clusterSnapshot = this.mergeSnapshot(options.clusterSnapshot);
+    const clusterSnapshot = options.clusterSnapshot ?? UNSET;
     const preflightCode = findPreflightViolationCode(this, parameters, clusterSnapshot);
     if (preflightCode !== UNSET) {
       return shapeOperationStatus(makeOp(
@@ -310,13 +275,13 @@ class BackupRestoreOwner {
     }
     const base = normalizeBaseUri(params.destinationUri);
     const manifestParts = [];
-    for (const p of (snap.partitions || DEFAULT_PARTITIONS)) {
+    for (const p of this.exportPartitionSnapshots()) {
       const segPath = `${SEGMENT_PATH_PREFIX}${p.partitionId}${BMC.SEGMENT_EXTENSION}`;
       const payloadBuf = toPayloadBuffer(p);
       await this.storageAdapter.write(`${base}/${segPath}`, payloadBuf);
       manifestParts.push({
-        partitionId: p.partitionId, raftLogIndex: p.raftLogIndex ?? DEFAULT_RAFT_LOG_INDEX,
-        raftTerm: p.raftTerm ?? 1, segmentPath: segPath, sizeBytes: payloadBuf.length,
+        partitionId: p.partitionId, raftLogIndex: p.raftLogIndex,
+        raftTerm: p.raftTerm, segmentPath: segPath, sizeBytes: payloadBuf.length,
         sha256: computeDigest(payloadBuf),
       });
     }
@@ -334,6 +299,7 @@ class BackupRestoreOwner {
   }
 
   async restoreFromBackup(options = {}) {
+    if (!this.capabilitySupported) failCapabilityUnsupported();
     const dest = options.destinationUri;
     const preserve = isPreserveIdentity(options);
     this.restoreInProgress = true;
@@ -342,7 +308,7 @@ class BackupRestoreOwner {
     try {
       const {manifest, partitions} = await loadAndVerifyBackup(this.storageAdapter, dest);
       this.hydratedPartitions = partitions;
-      this.onHydratePartitions?.(partitions);
+      this.hydratePartitionSnapshots(partitions);
       const srcId = manifest.clusterIdentity;
       const targetId = preserve ? srcId :
         selectDistinctClusterId(options.newClusterIdentity, srcId);

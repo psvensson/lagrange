@@ -35,6 +35,28 @@ import {
 const NODE = 'membership-claim-cache-seed';
 const TABLE = 'replica_operations';
 
+// The test's own observation of the projection: the routed writes answer at
+// their commit (quest replica-admission-from-committed-operation, attempt 2)
+// and the write path no longer waits for the cache, so the test waits for the
+// fields it inspects on the SystemTableCache's change events. Bounded by the
+// test runner's timeout; it is not production code.
+function untilProjected(cache, table, key, fields) {
+  const matches = () => {
+    const row = cache.get(table, key);
+    return Boolean(row) && Object.entries(fields).every(([field, value]) =>
+      row[field] === value);
+  };
+  if (matches()) return Promise.resolve();
+  return new Promise((resolve) => {
+    const listener = (changedTable) => {
+      if (changedTable !== table || !matches()) return;
+      cache.offCacheChange?.(listener);
+      resolve();
+    };
+    cache.onCacheChange(listener);
+  });
+}
+
 // Each case owns a distinct row and repository facade. Only the expensive
 // seed/SQL/Raft/CDC lifetime is shared; reconciliation remains quiesced.
 async function exerciseSettlement(t, settlement,
@@ -79,10 +101,9 @@ async function exerciseSettlement(t, settlement,
   const nulled = await cdc.updateSystemTableRow(TABLE, {operation_id: id},
     {lease_expires_at: null});
   assert.equal(nulled.success, true, JSON.stringify(nulled));
-  await cdc.waitForCacheUpdate(TABLE, id, true,
-    {expectedFields: {operation_id: id, lease_expires_at: null,
-      message_group_membership_identity: identity,
-      message_group_membership_owner_claim: null}});
+  await untilProjected(cache, TABLE, id, {operation_id: id, lease_expires_at: null,
+    message_group_membership_identity: identity,
+    message_group_membership_owner_claim: null});
   mark('null-lease-visible');
   const before = cache.get(TABLE, id);
   assert.ok(before, 'the inserted operation must actually become visible');
@@ -104,8 +125,7 @@ async function exerciseSettlement(t, settlement,
   assert.equal(typeof claimed.claim, 'string');
   assert.ok(writes.some(({sql}) => sql.includes('lease_expires_at IS NULL')),
     'the actual NULL-lease mutation must engage');
-  await cdc.waitForCacheUpdate(TABLE, id, true,
-    {expectedFields: {message_group_membership_owner_claim: claimed.claim}});
+  await untilProjected(cache, TABLE, id, {message_group_membership_owner_claim: claimed.claim});
   mark('claim-cache-visible');
   const visible = cache.get(TABLE, id);
   assert.equal(visible.message_group_membership_owner_claim, claimed.claim);
@@ -129,7 +149,8 @@ async function exerciseSettlement(t, settlement,
     learnersNext: [], appliedIndex: 6, commitIndex: 6,
     membershipGenerationIndex: 5, term: 3,
     configurationKey: raftRsConfStateKey(withLearner), leaderId: source,
-    gateOpen: true, identities: {[peerOf(source)]: source, [peerOf(target)]: target}};
+    gateOpen: true, identities: {[peerOf(source)]: source, [peerOf(target)]: target},
+    nodeIds: {[peerOf(source)]: null, [peerOf(target)]: null}};
   assert.ok(committedStampOfAnswer(learnerStamp), 'typed supplied learner basis must validate');
   const prior = {version: 2, transitionIdentity: `${id}-transition`,
     permitSequence: 1, permitStage: RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,
@@ -153,10 +174,10 @@ async function exerciseSettlement(t, settlement,
   assert.equal((await repository.authorizeMessageGroupLearner(initialInput)).outcome,
     'recorded', 'initial learner intent must cross the real SQL/Raft boundary');
   assert.equal(writes.length, intentWritesBefore + 1, 'one actual initial intent CAS');
-  await cdc.waitForCacheUpdate(TABLE, id, true, {expectedFields: {
+  await untilProjected(cache, TABLE, id, {
     message_group_membership_phase: 'learner_proposal_in_flight',
     message_group_membership_permit: initialPermit,
-    message_group_membership_obligation_state: 'unknown'}});
+    message_group_membership_obligation_state: 'unknown'});
   const issued = cache.get(TABLE, id);
   assert.equal(issued.message_group_membership_lane_key, `message-group:${group}`);
   assert.equal(issued.message_group_membership_owner_claim, claimed.claim);
@@ -179,7 +200,7 @@ async function exerciseSettlement(t, settlement,
   const nativeOrigin = JSON.parse(encodeCommittedLearnerAdmission({groupId: group,
     index: '5', term: '3', context: {operationId: id, transitionIdentity: `${id}-transition`,
       permitSequence: 1, stage: RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,
-      replicaIdentity: target, peerId: peerOf(target)}}));
+      replicaIdentity: target, peerId: peerOf(target), nodeId: NODE}}));
   const result = await repository.recordMessageGroupLearnerOutcome(
     {...initialInput, executionClaim: claimed.claim}, async (query) => {
       assert.equal(query.groupId, group);
@@ -188,7 +209,7 @@ async function exerciseSettlement(t, settlement,
         receipt: nativeOrigin, observedAppliedIndex: 6, membership: learnerStamp};
     });
   assert.equal(result.outcome, 'recorded', 'recovered outcome must cross actual SQL/Raft/CDC');
-  await cdc.waitForCacheUpdate(TABLE, id, true, {expectedFields: learnerFields});
+  await untilProjected(cache, TABLE, id, learnerFields);
   const admitted = await repository.queryAuthoritativeOperationById(id);
   const completedAt = Date.now();
   const settled = await repository.persistOperationUpdate({...admitted,
@@ -197,9 +218,9 @@ async function exerciseSettlement(t, settlement,
     disableSystemWriteSession: true, returnDisposition: true,
     expectedWorkflowStep: WORKFLOW_STEP.PENDING, terminalTransition: true});
   assert.notEqual(settled?.persisted, false, JSON.stringify(settled));
-  await cdc.waitForCacheUpdate(TABLE, id, true, {expectedFields: {
+  await untilProjected(cache, TABLE, id, {
     status: settlement.status, workflow_step: settlement.step,
-    completed_at: completedAt, ...learnerFields}});
+    completed_at: completedAt, ...learnerFields});
   const terminalBefore = {...cache.get(TABLE, id)};
   const nextPermit = JSON.stringify({...prior, permitSequence: 2,
     permitStage: RAFT_MEMBERSHIP_TRANSITION_STAGE.REMOVE, permitState: 'in_flight',
@@ -230,11 +251,11 @@ async function exerciseSettlement(t, settlement,
   assert.ok(mutation.sql.includes('completed_at = ?'), 'exact terminal SQL arm must engage');
   assert.ok(mutation.sql.includes('message_group_membership_owner_claim = ?'));
   assert.ok(mutation.params.includes(completedAt));
-  await cdc.waitForCacheUpdate(TABLE, id, true, {expectedFields: {
+  await untilProjected(cache, TABLE, id, {
     message_group_membership_phase: 'target_removal_proposal_in_flight',
     message_group_membership_permit: nextPermit,
     message_group_membership_lane_key: `message-group:${group}`,
-    status: ReplicaStatus.FAILED, completed_at: completedAt}});
+    status: ReplicaStatus.FAILED, completed_at: completedAt});
   const terminalAfter = {...cache.get(TABLE, id)};
   assert.equal(terminalAfter.message_group_membership_permit, nextPermit);
   assert.equal(terminalAfter.message_group_membership_phase, 'target_removal_proposal_in_flight');

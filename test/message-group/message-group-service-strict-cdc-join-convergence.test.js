@@ -118,7 +118,7 @@ test(
         [{
           type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
           replicaIdentity: 'mg-move-peer-reconcile-r2',
-          peerAddress: 'seed-node/message-group/mg-move-peer-reconcile-r2',
+          nodeId: 'seed-node',
         }],
         'the leader admits the second replica once, by identity, and never proposes its own identity as a peer',
       );
@@ -151,7 +151,15 @@ test(
       service.forwardCDCEventToLeader = async () => {
         throw new Error('should not forward while strict readiness is deferred');
       };
-      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID,
+        replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_LOCAL_REPLICA_ID,
+        peers: [{
+          replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_REPLICA_ID,
+          address: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_ADDRESS,
+        }],
+      });
 
       const result = await service.handleLatencyCdcPropagationMessage(
         'msg-strict-join-defer',
@@ -193,7 +201,15 @@ test(
       }));
 
       service.isJoiningExistingGroup = true;
-      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID,
+        replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_LOCAL_REPLICA_ID,
+        peers: [{
+          replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_REPLICA_ID,
+          address: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_ADDRESS,
+        }],
+      });
       service.forwardCDCEventToLeader = async () => {
         throw new Error(
           'canonical local join ingress should not forward strict CDC again',
@@ -306,7 +322,15 @@ test(
       }));
 
       service.isJoiningExistingGroup = true;
-      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID,
+        replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_LOCAL_REPLICA_ID,
+        peers: [{
+          replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_REPLICA_ID,
+          address: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_ADDRESS,
+        }],
+      });
       service.leaderId = 'mg-strict-local-live-hint-r1';
       service.forwardCDCEventToLeader = async () => {
         throw new Error(
@@ -400,7 +424,15 @@ test(
       }));
 
       service.isJoiningExistingGroup = true;
-      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID,
+        replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_LOCAL_REPLICA_ID,
+        peers: [{
+          replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_REPLICA_ID,
+          address: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_ADDRESS,
+        }],
+      });
       service.leaderId = 'mg-strict-local-addressed-fallback-r3';
       service.forwardCDCEventToLeader = async () => {
         throw new Error(
@@ -499,7 +531,15 @@ test(
         ready: false,
         reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
       });
-      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID,
+        replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_LOCAL_REPLICA_ID,
+        peers: [{
+          replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_REPLICA_ID,
+          address: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_ADDRESS,
+        }],
+      });
       service.leaderId = 'mg-strict-local-bootstrap-fallback-r3';
       service.forwardCDCEventToLeader = async () => {
         throw new Error(
@@ -593,7 +633,15 @@ test(
         transport: router,
       }));
 
-      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID,
+        replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_LOCAL_REPLICA_ID,
+        peers: [{
+          replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_REPLICA_ID,
+          address: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_ADDRESS,
+        }],
+      });
       service.leaderId = 'mg-strict-relayed-local-fallback-r3';
       service.forwardCDCEventToLeader = async () => {
         throw new Error(
@@ -698,7 +746,15 @@ test(
         transport: router,
       }));
 
-      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID,
+        replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_LOCAL_REPLICA_ID,
+        peers: [{
+          replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_REPLICA_ID,
+          address: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_ADDRESS,
+        }],
+      });
       service.leaderId = 'mg-strict-relayed-local-batch-fallback-r3';
       service.forwardCDCBatchToLeader = async () => {
         throw new Error(
@@ -800,7 +856,15 @@ test(
         transport: router,
       }));
 
-      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID,
+        replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_LOCAL_REPLICA_ID,
+        peers: [{
+          replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_REPLICA_ID,
+          address: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_ADDRESS,
+        }],
+      });
       service.leaderId =
         TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_REPLICA_ID;
       service.transport.getConnectionState = (candidateNodeId) => {
@@ -924,7 +988,15 @@ test(
         ready: false,
         reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
       });
-      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
+      service.raft = reportingConsensusPort({
+        role: RaftRole.FOLLOWER,
+        groupId: TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID,
+        replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_LOCAL_REPLICA_ID,
+        peers: [{
+          replicaIdentity: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_REPLICA_ID,
+          address: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_ADDRESS,
+        }],
+      });
       service.initialized = true;
       service.leaderId = 'mg-strict-decision-local-r3';
       service.forwardCDCEventToLeader = async () => {

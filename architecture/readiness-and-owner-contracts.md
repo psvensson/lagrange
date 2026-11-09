@@ -22,6 +22,36 @@ Self-readiness may preserve `serveEligible` through one timed-out
 is still fresh; this prevents transient self-denial while the bounded
 authoritative repair path is timing out under load.
 
+Superseded 2026-11-02 (R09, quest `serve-eligibility-committed-epoch-read`,
+epic `raft-rs-full-cutover`): `serveEligible` is the readiness owner's
+committed-epoch answer, derived from the committed `nodes` lease, status and
+boot incarnation and the latest published membership (published active nodes,
+acknowledgements, priority-partition spread) at its publication epoch; the
+readiness snapshot carries that answer and a new epoch re-keys every readiness
+memo. Self-readiness does not preserve `serveEligible` across a timed-out
+reporter attempt or any other local grace. raft-rs exports no ReadIndex, so the
+committed read is a leader-local read with a role witness; a positive answer
+never outlives the node's committed ready lease (`CONTROL_PLANE_READY_LEASE`,
+15 s), which is the stated bound on how long a deposed leader's answer can
+grant. System-table routing does not consume `serveEligible`.
+
+Superseded 2026-11-06 (R09, quest `readiness-self-grace-service-evidence-contract`,
+epic `operation-integrity-and-reliable-formation`): missing-node self runtime
+grace (`MISSING_NODE_READINESS_STATE.SELF_RUNTIME_GRACE` in
+`resolveMissingNodeReadinessState`) requires live local control-plane service
+evidence (at least one active addressed `message_group` row in `serviceRows`,
+either already present in cache or reconciled by authoritative `TABLES.SERVICES`
+refresh) and never grants `serveEligible`. The earlier fixture expectation in
+`test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js`
+(introduced in `e2797b6c8756cc0d596e24b16465b41c820cbd56`, re-enabled and
+renamed in `40ab2eccd7e9d3c98cedbecff6dc21a897cfe44a`, decomposed in
+`0177e9d1df290492bc3f03be4835eb22b747b414`, and partially updated in
+`835ea25c46d1bb60f9010e195f759212a6883301` before `e4d0f3294f4d51c6be637543dc2051a0a579f37b`
+deleted the empty-`services` default under `serve-eligibility-committed-epoch-read`)
+assumed `serviceRows.length === 0` defaulted to satisfied service ownership.
+When both the local `NODES` row and `SERVICES` rows remain absent after bounded
+authoritative refresh, self-node readiness fails closed with `node_row_missing`.
+
 ## Cluster Membership Health
 
 `NodeLivenessSemanticProjectionOwner` is the single semantic owner for the

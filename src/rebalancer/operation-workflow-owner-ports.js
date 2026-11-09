@@ -642,6 +642,7 @@ function mergeCoordinatorCreatedBootstrapMetadata(
     ReplicaOperationField.BOOTSTRAP_TABLE_METADATA,
     ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA,
     ReplicaOperationField.BOOTSTRAP_MEMBERSHIP,
+    ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
   ]) {
     if (
       (!mergedOperation[fieldName] ||

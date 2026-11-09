@@ -111,9 +111,10 @@ test('C-1. 45 partitions, three replicas each, all hosted on node-0',
       assert.equal(service.constructor.name, 'PartitionService',
         'each is a real runtime');
       assert.equal(service.nodeId, NODE_ID, 'hosted by node-0');
-      for (const address of service.peerAddresses) {
-        assert.ok(address.startsWith(`${NODE_ID}/`),
-          `${address} places a peer on node-0`);
+      // Every peer is addressed on the node its founding stamp committed.
+      for (const peer of service.raft.readStatus().peers) {
+        assert.ok(String(peer.address).startsWith(`${NODE_ID}/`),
+          `${peer.address} places a peer on node-0`);
       }
       // Node-local collaborators are node-0's, not a process singleton's.
       assert.equal(service.timeSource, world.environment.timeSource,

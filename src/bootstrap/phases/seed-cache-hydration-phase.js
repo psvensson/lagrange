@@ -161,6 +161,14 @@ class SeedCacheHydrationPhase {
       nodeId: d.getNodeId(),
     });
 
+    const latencyOwnersStartedAt = resolveHostedNodeClock(this.delegates)();
+    this.ensureLatencyTopologyOwners();
+    logger.info(LOG_HYDRATION_STEP_COMPLETE, {
+      nodeId: d.getNodeId(),
+      step: HYDRATION_STEP.LATENCY_OWNERS,
+      durationMs: resolveHostedNodeClock(this.delegates)() - latencyOwnersStartedAt,
+    });
+
     const phaseStepStartedAt = resolveHostedNodeClock(this.delegates)();
     const result = await this.hydrateFromLocalPartitions(
       systemTableCache,
@@ -188,14 +196,6 @@ class SeedCacheHydrationPhase {
       nodeId: d.getNodeId(),
       step: HYDRATION_STEP.WAIT_LEADERS,
       durationMs: resolveHostedNodeClock(this.delegates)() - leaderWaitStartedAt,
-    });
-
-    const latencyOwnersStartedAt = resolveHostedNodeClock(this.delegates)();
-    this.ensureLatencyTopologyOwners();
-    logger.info(LOG_HYDRATION_STEP_COMPLETE, {
-      nodeId: d.getNodeId(),
-      step: HYDRATION_STEP.LATENCY_OWNERS,
-      durationMs: resolveHostedNodeClock(this.delegates)() - latencyOwnersStartedAt,
     });
 
     const cdcReadinessGate =
@@ -435,9 +435,18 @@ class SeedCacheHydrationPhase {
     }
 
     for (const row of image.rows) {
+      const rowTimestamp =
+        typeof row?.updated_at_hlc === 'string' && row.updated_at_hlc.length > 0 ?
+          row.updated_at_hlc :
+          undefined;
       await leaderMessageGroup.applyCDCEvent(
         tableName, CDC_OPERATION.INSERT, row,
-        CDC_APPLY_OPTIONS);
+        rowTimestamp ? {...CDC_APPLY_OPTIONS, timestamp: rowTimestamp} : CDC_APPLY_OPTIONS);
+    }
+    if (typeof options.registerSubscribers === LOCAL_STR_FUNCTION) {
+      await leaderPartition.cdcDelivery?.acknowledgeHydratedObligationsThrough?.(
+        image.appliedIndex,
+      );
     }
 
     d.getLogger().debug(BOOTSTRAP_LOG_MSG.TABLE_HYDRATED, {
@@ -703,7 +712,9 @@ class SeedCacheHydrationPhase {
    * @return {Object}
    */
   ensureBootstrapCdcIntegrationService() {
-    return this.runtimeBridgeOwner.ensureBootstrapCdcIntegrationService();
+    return this.runtimeBridgeOwner?.ensureBootstrapCdcIntegrationService?.() ??
+      this.delegates?.ensureBootstrapCdcIntegrationService?.() ??
+      null;
   }
 
   /**
@@ -711,7 +722,10 @@ class SeedCacheHydrationPhase {
    * @return {Object}
    */
   ensureLatencyTopologyOwners() {
-    return this.runtimeBridgeOwner.ensureLatencyTopologyOwners();
+    this.ensureBootstrapCdcIntegrationService?.();
+    return this.runtimeBridgeOwner?.ensureLatencyTopologyOwners?.() ??
+      this.delegates?.ensureLatencyTopologyOwners?.() ??
+      null;
   }
 
   /**

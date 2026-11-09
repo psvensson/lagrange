@@ -315,7 +315,7 @@ handlers and Hono authoring belong to the 0.5 standard HTTP contract.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|---------------|-------------|
-| RM-0.2.9-published-operating-contract | Usable artifacts and exact-candidate operating contract | 🔲 | Bounded installed-startup/artifact/publication and current-result correctness repairs, genuine supported-use consumer checks, stale-assertion repair and accurate read/transaction/retry/recovery/comparison declarations. Existing stabilization and feature owners retain their work; stabilization owner: `solve/epics/release-0-2-7-stabilization.md`. Full composed stable-core and service acceptance remains 0.5; no new HTTP/service-envelope features are included. |
+| RM-0.2.9-published-operating-contract | Usable artifacts, operation integrity, reliable three-node formation and exact-candidate operating contract | 🔧 | Bounded installed-startup/artifact/publication and current-result correctness repairs, operation integrity across read authority/role publication/read-only observation/CREATE-retry-cleanup custody/deferred join-config-runtime handoffs/CDC fairness-cost/first-cause diagnostics, three-node fresh-formation user-table routability, genuine supported-use consumer checks, stale-assertion repair and accurate read/transaction/retry/recovery/comparison declarations. Existing stabilization and feature owners retain their work; owners: `solve/epics/operation-integrity-and-reliable-formation.md` and `solve/epics/release-0-2-7-stabilization.md`. Full composed five-node comparison, standard HTTP and service acceptance remains 0.5; no new HTTP/service-envelope features are included. |
 
 ### Phase 0.4.1 Exit Criteria
 

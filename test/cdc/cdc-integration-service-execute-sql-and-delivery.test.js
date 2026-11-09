@@ -333,7 +333,6 @@ test('CDCIntegrationService retries retryable control-plane write admission ' +
     sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
-  service.waitForCacheUpdate = async () => {};
   service.computeRetryDelayMs = () => 0;
 
   const result = await service.insertSystemTableRow(
@@ -349,7 +348,6 @@ test('CDCIntegrationService retries retryable control-plane write admission ' +
       created_at: Date.now(),
     },
     {
-      skipCacheWait: true,
     },
   );
 
@@ -379,7 +377,6 @@ test('CDCIntegrationService preserves explicit delivery source through one ' +
     sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
-  service.waitForCacheUpdate = async () => {};
 
   const result = await service.insertSystemTableRow(
     SYSTEM_TABLE_NAME.NODES,
@@ -394,7 +391,6 @@ test('CDCIntegrationService preserves explicit delivery source through one ' +
       created_at: Date.now(),
     },
     {
-      skipCacheWait: true,
       deliverySource: WRITE_DELIVERY_SOURCE,
     },
   );
@@ -423,7 +419,6 @@ test('CDCIntegrationService derives a coalesced delivery source for routed ' +
     sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
-  service.waitForCacheUpdate = async () => {};
 
   const result = await service.insertSystemTableRow(
     SYSTEM_TABLE_NAME.NODES,
@@ -438,7 +433,6 @@ test('CDCIntegrationService derives a coalesced delivery source for routed ' +
       created_at: Date.now(),
     },
     {
-      skipCacheWait: true,
       coalescingKey: COALESCING_KEY,
     },
   );
@@ -464,7 +458,6 @@ test('CDCIntegrationService derives replica-operation delivery source from ' +
     sqlQueryEngine: mockSqlEngine,
   });
   service.initialize();
-  service.waitForCacheUpdate = async () => {};
 
   const result = await service.updateSystemTableRow(
     SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
@@ -475,7 +468,6 @@ test('CDCIntegrationService derives replica-operation delivery source from ' +
       status: 'pending',
     },
     {
-      skipCacheWait: true,
     },
   );
 
@@ -519,7 +511,6 @@ test('CDCIntegrationService preserves canonical transaction-control routing ' +
     },
   });
   service.initialize();
-  service.waitForCacheUpdate = async () => {};
   service.computeRetryDelayMs = () => 0;
 
   const error = await t.rejects(
@@ -536,7 +527,6 @@ test('CDCIntegrationService preserves canonical transaction-control routing ' +
         created_at: Date.now(),
       },
       {
-        skipCacheWait: true,
       },
     ),
     'canonical routing-gap defers should fail closed without an internal retry loop',
@@ -582,7 +572,6 @@ test('CDCIntegrationService surfaces system-table owner handoff participant ' +
     },
   });
   service.initialize();
-  service.waitForCacheUpdate = async () => {};
   service.computeRetryDelayMs = () => 0;
 
   const error = await t.rejects(
@@ -596,7 +585,6 @@ test('CDCIntegrationService surfaces system-table owner handoff participant ' +
         updated_at: 1,
       },
       {
-        skipCacheWait: true,
       },
     ),
     'owner handoff participant failures should surface immediately to the owner loop',

@@ -21,7 +21,7 @@ function nativePromotionAttempt({progress, commit = 12, term = 7}) {
   const command = {operationId: 'native-progress',
     transitionIdentity: 'native-progress-transition', permitSequence: 2,
     stage: RAFT_MEMBERSHIP_TRANSITION_STAGE.PROMOTE, stageOrdinal: 2,
-    replicaIdentity: TARGET, peerId: 4, peerAddress: 'target-address',
+    replicaIdentity: TARGET, peerId: 4, nodeId: 'target-node',
     replicaLifecycleIncarnation: 'lifecycle', expectedRuntimeGeneration: 3,
     expectedLeaderTerm: 7,
     expectedConfigurationKey: '[["1"],[],["4"],[],false]',
@@ -37,7 +37,7 @@ function nativePromotionAttempt({progress, commit = 12, term = 7}) {
   const group = {lifecycleIncarnation: 'lifecycle',
     membershipGenerationKnown: true, membershipGenerationIndex: 9,
     membershipTransitionFence: null,
-    resolvePeerAddress: () => 'target-address'};
+    resolvePeerNodeId: () => 'target-node'};
   let statusReads = 0;
   let proposals = 0;
   const turn = proposeMembershipTransition({group, expectedGeneration: 3,
@@ -71,7 +71,7 @@ function request(cluster, leader, stage, permitSequence, overrides = {}) {
     permitSequence,
     stage,
     replicaIdentity: TARGET,
-    peerAddress: cluster.addressOf(TARGET),
+    nodeId: 'target-node',
     replicaLifecycleIncarnation: leaderStatus.lifecycleIncarnation,
     runtimeGeneration: leaderStatus.runtimeGeneration,
     leaderTerm: leaderStatus.term,
@@ -119,7 +119,7 @@ function formLearner(t) {
     return target.confState.learners.includes(targetPeer) &&
       target.membershipGenerationIndex ===
         currentLeader.membershipGenerationIndex &&
-      currentLeader.followerProgress[cluster.addressOf(TARGET)] >=
+      currentLeader.followerProgress[TARGET] >=
         currentLeader.commitIndex;
   }, {rounds: 400}), true);
 

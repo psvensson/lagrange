@@ -1,0 +1,130 @@
+{
+  "schema": "independent-measurement-disposition-inputs/1",
+  "baseCommit": "3bd7e2e8875c5ff32fd94162a3775aea991a35df",
+  "scope": "Dirty two-file planning implementation plus unchanged test/rig; design and measurement disposition only, no final source approval.",
+  "inputs": [
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-publication-advance-trace.mjs",
+      "sha256": "579bf7c3d4fabb06ea9716835795aaf00044625e43d16fa784df8c0aa5a3f67e",
+      "bytes": 3051
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-publication-advance-trace.json",
+      "sha256": "44a83c9a800d5d96b512f2908f371d2b4ba30fa6ea9fb9c3e8d3df53e602b51a",
+      "bytes": 804058
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-direct-after-unmodified-counts.log",
+      "sha256": "7c791228788dcfcef605f7c435a1618247806057d6fdcfd5d6d03448f6a3b8ca",
+      "bytes": 75033
+    },
+    {
+      "path": "test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "sha256": "22217433d58bc3d5fa4365294f5e0ee9745c4e8b655ca05fefe183d4456b6ed8",
+      "bytes": 43736
+    },
+    {
+      "path": "test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "sha256": "1c2d4d97b4ebdd2dbdd7b5f8a5be415b2dccc0843211558cd7489eef1b20fd05",
+      "bytes": 23611
+    },
+    {
+      "path": "test/control-plane/readiness-planning-formation-rig.js",
+      "sha256": "c5f7b9c3509de1d74ccdae4ee9aaef9e0e2935f9857c5821a870748b63697e2a",
+      "bytes": 8856
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "sha256": "00dd263106903cf567a97d831a9c6aa65036bdbf7dfe152bb1f090e9d955ce27",
+      "bytes": 32767
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+      "sha256": "72adeea1ff4c1d56454d501f84c66e2b83b147afae03417bab246ee191d3e3fd",
+      "bytes": 31800
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-service-node-methods.js",
+      "sha256": "d558b1ce3fa215b25586767d8f88663709f00d0f333cc0193a63820f4c26a922",
+      "bytes": 24309
+    },
+    {
+      "path": "src/control-plane/membership-publication-coordinator-planning.js",
+      "sha256": "ea6dd676b94dca92002d0ee07c48b0b26f2fe078a33579d18b77880c2ef9d1a4",
+      "bytes": 10557
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-publication-diagnostics.js",
+      "sha256": "c683539a737184df64d68498315fdbf3e09f9c6cb59e64bb6d6a337703d96055",
+      "bytes": 14686
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-identity/quest.json",
+      "sha256": "2cc2ad00402ae635c7533bc8ec056ac4ee4b2cfe3a32b613583c66758681abfc",
+      "bytes": 2465
+    }
+  ],
+  "historicalObjects": [
+    {
+      "commit": "f95fccaf05af37beab410005926d216c626c269a",
+      "path": "test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "sha256": "5f7b5f6dc75b22384a484b4f13ecce51b2c0e4b801ac5015c9861ca54d53d85c"
+    },
+    {
+      "commit": "f95fccaf05af37beab410005926d216c626c269a",
+      "path": "src/control-plane/control-plane-readiness-service-node-methods.js",
+      "sha256": "7b19f9749ecb4a03b06550e686dd4b6ea1dabd78d9b56faf3d9c80a9b14ed76e"
+    },
+    {
+      "commit": "2cd37024e6a097b44b246fa2bdb911f670234928",
+      "path": "src/control-plane/control-plane-readiness-service-node-methods.js",
+      "sha256": "279ceb0dee6b5474cfa2db3cbfe7dbe69687ed1a4eaf304d768916e0b321d946"
+    },
+    {
+      "commit": "63e4a854b783d4b3176b3ecd123677384c96fafa",
+      "path": "src/control-plane/control-plane-readiness-service-node-methods.js",
+      "sha256": "8f62b6bededcfdd66880229daf06c771b142b352e76e17592b51dedc8de78988"
+    }
+  ],
+  "independentlyCalculatedTrace": {
+    "cold": {
+      "builds": 13,
+      "outsideFreshFrames": 3,
+      "perFreshNode": {
+        "node-0": 2,
+        "node-1": 2,
+        "node-2": 2,
+        "node-3": 2,
+        "node-4": 2
+      },
+      "nodeObservations": [
+        "node-0",
+        "node-1",
+        "node-2",
+        "node-3",
+        "node-4"
+      ]
+    },
+    "advance": {
+      "builds": 13,
+      "outsideFreshFrames": 3,
+      "perFreshNode": {
+        "node-0": 2,
+        "node-1": 2,
+        "node-2": 2,
+        "node-3": 2,
+        "node-4": 2
+      },
+      "nodeObservations": [
+        "node-0",
+        "node-1",
+        "node-2",
+        "node-3",
+        "node-4"
+      ]
+    }
+  },
+  "stableRepeatBuilds": 0,
+  "stableIdentity": true,
+  "freshIdentity": true
+}

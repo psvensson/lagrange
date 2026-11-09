@@ -3,10 +3,27 @@ import {
 } from './runtime-service-replica-identity.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
-import {REPLICA_OPERATION_REPOSITORY_ERROR_MSG} from
+import {REPLICA_OPERATION_REPOSITORY_ERROR_CODE, REPLICA_OPERATION_REPOSITORY_ERROR_MSG} from
   './replica-operation-repository-constants.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+
+function malformedEntityOperationRead() {
+  return Object.assign(new TypeError(
+    REPLICA_OPERATION_REPOSITORY_ERROR_MSG.ENTITY_OPERATION_OBSERVATION_MALFORMED,
+  ), {reasonCode: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.ENTITY_OPERATION_OBSERVATION_MALFORMED});
+}
+
+function assertEntityOperationRows(rows, entityType, entityId) {
+  if (!Array.isArray(rows)) throw malformedEntityOperationRead();
+  for (const [index, row] of rows.entries()) {
+    if (!Object.hasOwn(rows, index) || !row || typeof row !== 'object' || Array.isArray(row) ||
+        typeof row.operation_id !== 'string' || row.operation_id.trim().length === 0 ||
+        row.entity_type !== entityType || row.entity_id !== entityId) {
+      throw malformedEntityOperationRead();
+    }
+  }
+}
 
 function assignReplicaOperationRepositoryEntityReadMethods(
   ReplicaOperationRepository,
@@ -137,7 +154,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
    * owner path without consulting the cache projection first.
    * @param {string} entityType
    * @param {string} entityId
-   * @return {Promise<Array>}
+   * @return {Promise<Object>}
    */
     async getOperationsByEntityAuthoritativeObservation(entityType, entityId) {
       const queryStartedAtMs = this.timeSource.now();
@@ -149,12 +166,16 @@ function assignReplicaOperationRepositoryEntityReadMethods(
           leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
         },
       );
+      if (!result || typeof result.success !== 'boolean') throw malformedEntityOperationRead();
+      if (result.success) assertEntityOperationRows(result.rows, entityType, entityId);
       const queryDurationMs = this.timeSource.now() - queryStartedAtMs;
       const planningSnapshot = this.resolvePriorityRecoveryPlanningSnapshotForOwnerRead();
-      const cachedOperations = this.getEntityInFlightOperationRows({
+      const cachedRows = this.getEntityInFlightOperationRows({
         entityType,
         entityId,
-      }).map((row) => this.rowToOperation(row));
+      });
+      assertEntityOperationRows(cachedRows, entityType, entityId);
+      const cachedOperations = cachedRows.map((row) => this.rowToOperation(row));
       const ownerPersistedFallbackOperations =
       this.getOwnerPersistedTransitionVisibilityFallbackOperationsForEntity(
         entityType,
@@ -168,7 +189,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
           ),
         );
 
-      if (!result.success || !result.rows) {
+      if (!result.success) {
         const deferredOutcome = this.buildDeferredEntityOperationVisibilityOutcome({
           // This boundary requires the operation-ledger owner. An unavailable
           // owner cannot prove that the entity has no operation, even when a
@@ -222,14 +243,6 @@ function assignReplicaOperationRepositoryEntityReadMethods(
       }
 
       return this.buildEntityOperationVisibilityObservation(operations, null);
-    }
-
-    async getOperationsByEntityAuthoritative(entityType, entityId) {
-      const observation = await this.getOperationsByEntityAuthoritativeObservation(
-        entityType,
-        entityId,
-      );
-      return Array.isArray(observation?.operations) ? observation.operations : [];
     }
 
     /**

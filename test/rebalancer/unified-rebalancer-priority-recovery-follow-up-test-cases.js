@@ -2,7 +2,7 @@ export async function registerPriorityRecoveryFollowUpTestCases(t, context) {
   const {
     createMockCache,
     createMockCoordinator,
-    createMockReadinessService,
+    createMockControlPlaneReadinessService,
     createTestRebalancer,
     EntityType,
     MoveType,
@@ -223,7 +223,7 @@ export async function registerPriorityRecoveryFollowUpTestCases(t, context) {
         replicaOperations,
       );
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
@@ -240,7 +240,7 @@ export async function registerPriorityRecoveryFollowUpTestCases(t, context) {
       };
       const createdOperations = [];
       const coordinator = {
-        ...createMockCoordinator(),
+        ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
         createOperation: async (move) => {
           createdOperations.push(move);
           return {
@@ -491,7 +491,7 @@ export async function registerPriorityRecoveryFollowUpTestCases(t, context) {
         partitionRows,
       );
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
@@ -508,7 +508,7 @@ export async function registerPriorityRecoveryFollowUpTestCases(t, context) {
       };
       const createdOperations = [];
       const coordinator = {
-        ...createMockCoordinator(),
+        ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
         createOperation: async (move) => {
           createdOperations.push(move);
           return {
@@ -699,7 +699,7 @@ export async function registerPriorityRecoveryFollowUpTestCases(t, context) {
         partitionRows,
       );
       const readinessService = {
-        ...createMockReadinessService(cache),
+        ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
@@ -716,7 +716,7 @@ export async function registerPriorityRecoveryFollowUpTestCases(t, context) {
       };
       const createdOperations = [];
       const coordinator = {
-        ...createMockCoordinator(),
+        ...createMockCoordinator({controlPlaneReadinessService: readinessService}),
         createOperation: async (move) => {
           createdOperations.push(move);
           return {

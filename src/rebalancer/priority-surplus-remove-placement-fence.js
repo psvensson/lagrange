@@ -1,3 +1,9 @@
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from '../bootstrap/system-table-schemas-constants.js';
+import {isValidLeaderReadAuthorityWitness} from
+  '../control-plane/control-plane-authoritative-read-witness.js';
 import {buildReplicaInventorySnapshot} from './replica-inventory.js';
 
 const PRIORITY_SURPLUS_REMOVE_FENCE_SOURCE = 'owner_rpc_lane';
@@ -100,8 +106,14 @@ function evaluatePrioritySurplusRemovePlacementFence(options = {}) {
   }
   if (
     observation.available !== true ||
+    observation.partial === true ||
+    observation.rowSetComplete !== true ||
     observation.source !== PRIORITY_SURPLUS_REMOVE_FENCE_SOURCE ||
-    !Array.isArray(observation.rows)
+    !Array.isArray(observation.rows) ||
+    !isValidLeaderReadAuthorityWitness(
+      observation.readAuthorityWitness,
+      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES],
+    )
   ) {
     return decision(
       PRIORITY_SURPLUS_REMOVE_FENCE_STATE.AUTHORITY_UNAVAILABLE,

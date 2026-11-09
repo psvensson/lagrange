@@ -138,6 +138,9 @@ const COMMITTED_MEMBERSHIP_ANSWER_FIELD = Object.freeze({
   LEADER_ID: 'leaderId',
   GATE_OPEN: 'gateOpen',
   IDENTITIES: 'identities',
+  // Every id's committed node (its admission context, founding or joining
+  // stamp, snapshot image), or null where the answering replica holds none.
+  NODE_IDS: 'nodeIds',
 });
 
 // The participation gate: until a replica's applied index reaches

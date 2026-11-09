@@ -104,6 +104,7 @@ import {
   RequestCellHttpAdapter,
 } from '../../src/service/request-cell-http-adapter.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TENANT_ID = 'default';
 const USER = 'developer';
 const NODE_ONE = 'node-worker-1';
@@ -204,6 +205,11 @@ class SharedLifecycleCatalogGateway {
       affectedRows += 1;
     }
     return {affectedRows, success: true};
+  }
+
+  // This fixture's projection applies synchronously with the write.
+  async awaitProjectionAt(position) {
+    return {outcome: 'reached', position};
   }
 
   async upsertSystemTableRow(table, row) {
@@ -369,6 +375,7 @@ describe('developer-journey-j1-j2-j3.integration', () => {
 
     // PG Wire SQL client
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       autoStartDistributedTransactionRecovery: false,
       messageRouter: {deliver: async () => ({success: true})},
       systemCache: systemTableCache,
@@ -1023,6 +1030,7 @@ describe('developer-journey-j1-j2-j3.integration', () => {
       });
 
       const storelessEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         autoStartDistributedTransactionRecovery: false,
         messageRouter: {deliver: async () => ({success: true})},
         systemCache: systemTableCache,

@@ -197,13 +197,16 @@ function normalizeControlSnapshotActiveGateBudget(activeGate = null) {
 function resolveControlSnapshotActiveGateBudgetSource(
   controlPlaneDiagnostics = null,
 ) {
+  if (controlPlaneDiagnostics === null || controlPlaneDiagnostics === undefined) {
+    return null;
+  }
   const sources = [
-    controlPlaneDiagnostics?.publicationConvergence?.activeGate,
-    controlPlaneDiagnostics?.publicationConvergenceGate?.activeGate,
-    controlPlaneDiagnostics?.priorityRecoveryObservation?.activeGate,
-    controlPlaneDiagnostics?.priorityRecoveryObservation?.activeGateNoProgress,
-    controlPlaneDiagnostics?.priorityRecoveryObservation?.activeGateProgress,
-    controlPlaneDiagnostics?.priorityRecoveryObservation?.activeGateBestProgress,
+    controlPlaneDiagnostics.publicationConvergence?.activeGate,
+    controlPlaneDiagnostics.publicationConvergenceGate?.activeGate,
+    controlPlaneDiagnostics.priorityRecoveryObservation?.activeGate,
+    controlPlaneDiagnostics.priorityRecoveryObservation?.activeGateNoProgress,
+    controlPlaneDiagnostics.priorityRecoveryObservation?.activeGateProgress,
+    controlPlaneDiagnostics.priorityRecoveryObservation?.activeGateBestProgress,
   ];
   return sources.find(isControlSnapshotRecord) || null;
 }
@@ -234,21 +237,21 @@ function hasDurablePublishedMembershipObservation(
     return false;
   }
   if (
-    publicationDiagnostics?.publicationObservation?.state ===
+    publicationDiagnostics.publicationObservation?.state ===
     CONTROL_SNAPSHOT_PUBLICATION_OBSERVATION_STATE.AVAILABLE
   ) {
     return true;
   }
   if (
-    publicationDiagnostics?.publishedActiveNodeIdsPresent === true ||
-    Array.isArray(publicationDiagnostics?.publishedActiveNodeIds)
+    publicationDiagnostics.publishedActiveNodeIdsPresent === true ||
+    Array.isArray(publicationDiagnostics.publishedActiveNodeIds)
   ) {
     return true;
   }
   const publicationStatus = String(
-    publicationDiagnostics?.status ||
-      publicationDiagnostics?.publicationStatus ||
-      publicationDiagnostics?.publicationObservation?.status ||
+    publicationDiagnostics.status ||
+      publicationDiagnostics.publicationStatus ||
+      publicationDiagnostics.publicationObservation?.status ||
       ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
   ).toUpperCase();
   return publicationStatus === ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED;
@@ -723,4 +726,8 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
     });
   }
 }
-export {AdminControlSnapshotNodeViewProjection};
+export {
+  AdminControlSnapshotNodeViewProjection,
+  hasDurablePublishedMembershipObservation,
+  selectDurablePublishedMembershipObservation,
+};

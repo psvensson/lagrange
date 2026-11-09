@@ -32,7 +32,7 @@ function clusterAfterSelfChange(partitionId, type) {
   assert.equal(cluster.settle(() => cluster.leaderReplicaId() === A), true,
     'setup: A leads');
   const proposed = turnChainValue(cluster.node(A).proposeConfChange({type,
-    replicaIdentity: A}));
+    replicaIdentity: A, nodeId: 'node-test'}));
   assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     `setup: the change about A is proposed (${JSON.stringify(proposed)})`);
   const aId = cluster.raftPeerIdOf(A);

@@ -1,7 +1,4 @@
 import {
-  PUBLICATION_OWNER_STREAM_OUTCOME,
-} from './publication-owner-constants.js';
-import {
   PROJECTION_READINESS_ACTIVE_GATE_STATE,
   PROJECTION_READINESS_CONTRACT_STATE,
   PROJECTION_READINESS_LANE,
@@ -60,32 +57,15 @@ const PROJECTION_READINESS_REPAIR_BLOCKERS = objectFreeze([
   }),
 ]);
 
+// The serve lane is the readiness owner's committed-epoch answer (quest
+// serve-eligibility-committed-epoch-read). The published-membership,
+// acknowledgement and priority-spread facts are inside that answer, read from
+// the committed publication row; the lane does not re-derive them from the
+// projected publication stream.
 const PROJECTION_READINESS_SERVE_BLOCKERS = objectFreeze([
   objectFreeze({
     reason: PROJECTION_READINESS_REASON.SERVE_NOT_ELIGIBLE,
     matches: (evidence) => evidence.runtimeServeEligible !== true,
-  }),
-  objectFreeze({
-    reason: PROJECTION_READINESS_REASON.PUBLICATION_STREAM_UNAVAILABLE,
-    matches: (evidence) =>
-      evidence.publicationOwnerStream === null &&
-      evidence.publicationBoundaryOutcome === null &&
-      evidence.publicationReady !== true,
-  }),
-  objectFreeze({
-    reason: PROJECTION_READINESS_REASON.PUBLICATION_STREAM_FAILED,
-    matches: (evidence) => evidence.publicationFailed === true,
-  }),
-  objectFreeze({
-    reason: PROJECTION_READINESS_REASON.PUBLICATION_STREAM_NOT_READY,
-    matches: (evidence) =>
-      evidence.publicationReady !== true &&
-      evidence.publicationStreamOutcome !==
-        PUBLICATION_OWNER_STREAM_OUTCOME.FAILED,
-  }),
-  objectFreeze({
-    reason: PROJECTION_READINESS_REASON.PRIORITY_RECOVERY_ACTIVE,
-    matches: (evidence) => evidence.priorityRecoveryActive === true,
   }),
 ]);
 

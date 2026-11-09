@@ -162,7 +162,9 @@ function wasmServiceConsensusRequest(replica) {
     [RAFT_OPERATION_PORT_REQUEST.PEER_ADDRESS]: replica.unifiedAddress,
     [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS]: replica.replicaIds,
     [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
-      genesisStamp(replica.replicaIds),
+      // No founding placement is committed for a WASM service group: its
+      // peers are addressed by its own resolver (follow-up of C3).
+      genesisStamp(replica.replicaIds, {}),
     [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: replica.db,
     [RAFT_OPERATION_PORT_REQUEST.TIMING]: resolveReplicaRaftTiming(replica),
     [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: hostedConsensusSubstrate(replica),

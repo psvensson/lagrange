@@ -83,7 +83,7 @@ const NO_HOST_PRIMITIVE = Object.freeze([]);
 // waits for that hop to run so it measures the one it arms itself.
 const CONSTRUCTOR_HOP_SETTLE_MS = 5;
 const PLANNED_ACTION_COUNT = 2;
-const HOP_COUNT_PER_REPLICA = 2;
+const HOP_COUNT_PER_REPLICA = 1;
 const EMPTY_STATE = Object.freeze([]);
 
 const timerName = (primitive, delayMs) =>
@@ -255,8 +255,8 @@ async function startPartitionReplica(open, label, authorities) {
   open.push(partition);
   await partition.initialize();
   await settle(CONSTRUCTOR_HOP_SETTLE_MS);
-  assert.equal(partition.peerReconciliationScheduled, false,
-    'the constructor\'s own hop has run, so the witness arms the next one');
+  // A partition replica takes no peer-reconciliation hop: services rows
+  // never admit a peer (quest replica-admission-from-committed-operation).
   // The size-update debounce is not what this witness measures: the replica
   // goes back to the state its constructor starts in, where the next
   // write's size update is due.
@@ -290,7 +290,6 @@ async function messageGroupReplica(open, label, authorities) {
     replicaId: `${GROUP_ID}-${label}-r1`,
     replicaIds: [`${GROUP_ID}-${label}-r1`],
     nodeId: NODE_ID,
-    peerAddresses: [],
     transport: messageGroupTransport(),
     deferElection: true,
     ...authorities,
@@ -427,9 +426,6 @@ test('a seed-hosted replica schedules like a production replica', (t) =>
 
     const partition = await startPartitionReplica(open, 'seed', authorities);
     assert.deepEqual(
-      primitivesArmedBy(() => partition.scheduleRaftPeerReconciliation()),
-      [SET_IMMEDIATE], 'the peer-reconciliation hop is a setImmediate');
-    assert.deepEqual(
       primitivesArmedBy(() => partition.scheduleSizeUpdate()),
       [SET_IMMEDIATE], 'the size-update hop is a setImmediate');
     await closeReplica(open, partition);
@@ -455,10 +451,6 @@ test('a seed-hosted and a joiner-hosted replica schedule alike', (t) =>
 
     const seeded = await startPartitionReplica(open, 'alike-seed', hosted);
     const joined = await startPartitionReplica(open, 'alike-join', {});
-    assert.deepEqual(
-      primitivesArmedBy(() => seeded.scheduleRaftPeerReconciliation()),
-      primitivesArmedBy(() => joined.scheduleRaftPeerReconciliation()),
-      'both take the peer-reconciliation hop the same way');
     assert.deepEqual(
       primitivesArmedBy(() => seeded.scheduleSizeUpdate()),
       primitivesArmedBy(() => joined.scheduleSizeUpdate()),
@@ -493,14 +485,11 @@ test('a supplied clock still owns hosted replica and reconciler scheduling',
     const partition = await startPartitionReplica(open, 'supplied', authorities);
     const beforeHops = zeroDelayArmCount(clock);
     assert.deepEqual(
-      primitivesArmedBy(() => partition.scheduleRaftPeerReconciliation()),
-      NO_HOST_PRIMITIVE,
-      'the peer-reconciliation hop never reaches for a host primitive');
-    assert.deepEqual(
       primitivesArmedBy(() => partition.scheduleSizeUpdate()),
-      NO_HOST_PRIMITIVE, 'and neither does the size-update hop');
+      NO_HOST_PRIMITIVE,
+      'the size-update hop never reaches for a host primitive');
     assert.equal(zeroDelayArmCount(clock) - beforeHops, HOP_COUNT_PER_REPLICA,
-      'both hops were taken on the supplied clock');
+      'the hop was taken on the supplied clock');
     await closeReplica(open, partition);
 
     const group = await messageGroupReplica(open, 'supplied', authorities);

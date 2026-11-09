@@ -112,26 +112,6 @@ function buildGatewayWriteOptions(gateway, options = {}, context = {}) {
   writeOptions = copyOption(
     writeOptions,
     options,
-    CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.SKIPCACHEWAIT,
-  );
-  writeOptions = copyOption(
-    writeOptions,
-    options,
-    CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWPENDINGVISIBILITY,
-  );
-  writeOptions = copyOption(
-    writeOptions,
-    options,
-    CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.EXPECTEDCACHEFIELDS,
-  );
-  writeOptions = copyOption(
-    writeOptions,
-    options,
-    CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MINIMUMCACHEFIELDS,
-  );
-  writeOptions = copyOption(
-    writeOptions,
-    options,
     CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.FALLBACKPHASE,
   );
   writeOptions = copyOption(

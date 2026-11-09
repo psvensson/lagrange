@@ -436,6 +436,9 @@ function assignNodeJoiningDelegateBundleMethods(ServiceClass) {
         setEndpointService: (v) => {
           self.endpointService = v;
         },
+        setControlPlaneSystemTableGateway: (gateway) => {
+          self.controlPlaneSystemTableGateway = gateway;
+        },
         getDispatchService: () => self.dispatchService,
         setDispatchService: (v) => {
           self.dispatchService = v;

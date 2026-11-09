@@ -56,6 +56,55 @@ import {
   isVisibleMembershipPublicationHandoffOutcome,
   selectMembershipPublicationHandoffOutcome,
 } from './admin-control-snapshot-publication-handoff.js';
+
+function captureControlSnapshotCacheVersion(systemTableCache) {
+  if (
+    !systemTableCache ||
+    typeof systemTableCache.getTableNames !== 'function' ||
+    typeof systemTableCache.getTableMutationVersion !== 'function'
+  ) {
+    return null;
+  }
+  const versions = {};
+  for (const tableName of systemTableCache.getTableNames()) {
+    versions[tableName] = systemTableCache.getTableMutationVersion(tableName);
+  }
+  return versions;
+}
+
+function hasControlSnapshotCacheChangedSince(
+  systemTableCache,
+  previousVersions,
+) {
+  if (!previousVersions) {
+    return false;
+  }
+  const currentVersions = captureControlSnapshotCacheVersion(systemTableCache);
+  if (!currentVersions) {
+    return false;
+  }
+  return Object.keys(currentVersions).some(
+    (tableName) => currentVersions[tableName] !== previousVersions[tableName],
+  );
+}
+
+function canTriggerMembershipPublicationHandoffOwnerCommand(options = {}) {
+  return !(
+    options.allowAuthoritativeRepair === false &&
+    options.forceAuthoritativeRepair !== true &&
+    options.reconcileAuthoritativeMembershipPublication !== true
+  );
+}
+
+function shouldAllowAuthoritativeHandoffReconcile(options = {}) {
+  return (
+    options.forceAuthoritativeRepair === true ||
+    options.allowAuthoritativeRepair === true ||
+    options.reconcileAuthoritativeMembershipPublication === true ||
+    options.allowAuthoritativeRepair === undefined
+  );
+}
+
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
  * Control snapshot builder.
@@ -71,6 +120,27 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
       );
     } catch (_error) {
       return CONTROL_SNAPSHOT_ABSENT_DEFERRED_SNAPSHOT;
+    }
+  }
+
+  async refreshDegradedControlSnapshotAfterRepairAttempt(
+    localSnapshot = null,
+    preRepairCacheVersion = null,
+    options = {},
+  ) {
+    if (
+      !hasControlSnapshotCacheChangedSince(
+        this.systemTableCache,
+        preRepairCacheVersion,
+      )
+    ) {
+      return localSnapshot;
+    }
+    try {
+      const refreshedSnapshot = await this.buildLocalControlSnapshot(options);
+      return refreshedSnapshot || localSnapshot;
+    } catch (_error) {
+      return localSnapshot;
     }
   }
 
@@ -199,6 +269,9 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
     snapshot = null,
     options = {},
   ) {
+    if (!canTriggerMembershipPublicationHandoffOwnerCommand(options)) {
+      return snapshot;
+    }
     const controlPlaneDiagnostics =
       snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
     if (
@@ -219,7 +292,8 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
           publicationActiveGateHandoff,
           {
             ...options,
-            reconcileAuthoritativeMembershipPublication: true,
+            reconcileAuthoritativeMembershipPublication:
+              shouldAllowAuthoritativeHandoffReconcile(options),
           },
         );
       return attachMembershipPublicationHandoffOutcome(snapshot, outcome);
@@ -329,23 +403,13 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
     const repairEvaluation =
       this.evaluateAuthoritativeControlSnapshotRepair(snapshot, options);
     if (!this.canRunAuthoritativeControlSnapshotRepair()) {
-      const triggeredSnapshot =
-        await this.triggerMembershipPublicationHandoffOwnerCommand(
+      const deferredHandoffOptions =
+        buildControlSnapshotHandoffDeferredOptions(
           snapshot,
           options,
         );
-      const handoffRefresh =
-        await this.prepareVisibleMembershipPublicationHandoffRefresh(
-          triggeredSnapshot,
-          options,
-        );
-      const deferredHandoffOptions =
-        buildControlSnapshotHandoffDeferredOptions(
-          handoffRefresh.snapshot,
-          options,
-        );
       return this.resolveSharedControlSnapshot(
-        handoffRefresh.snapshot,
+        snapshot,
         deferredHandoffOptions,
       );
     }
@@ -357,42 +421,28 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
         allowAuthoritativeRepair,
       })
     ) {
-      const triggeredSnapshot =
-        await this.triggerMembershipPublicationHandoffOwnerCommand(
-          snapshot,
-          options,
-        );
-      const handoffRefresh =
-        await this.prepareVisibleMembershipPublicationHandoffRefresh(
-          triggeredSnapshot,
-          options,
-        );
       const deferredHandoffOptions =
         buildControlSnapshotHandoffDeferredOptions(
-          handoffRefresh.snapshot,
+          snapshot,
           options,
         );
       const shouldEmitDeferredObservation =
         deferredHandoffOptions !== options ||
         repairEvaluation?.shouldRepair === true;
-      const sharedSnapshotOptions = handoffRefresh.refreshed === true ?
-        options :
-        (shouldEmitDeferredObservation ?
-          {
-            ...deferredHandoffOptions,
-            repairEvaluation,
-            repairDeferred: true,
-            observationMode:
-              ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
-          } :
-          options);
+      const sharedSnapshotOptions = shouldEmitDeferredObservation ?
+        {
+          ...deferredHandoffOptions,
+          repairEvaluation,
+          repairDeferred: true,
+          observationMode:
+            ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+        } :
+        options;
       return this.resolveSharedControlSnapshot(
-        handoffRefresh.refreshed === true ?
-          handoffRefresh.snapshot :
-          attachOrdinaryRepairDeferralDiagnostics(
-            handoffRefresh.snapshot,
-            repairEvaluation?.shouldRepair === true,
-          ),
+        attachOrdinaryRepairDeferralDiagnostics(
+          snapshot,
+          repairEvaluation?.shouldRepair === true,
+        ),
         sharedSnapshotOptions,
       );
     }
@@ -401,6 +451,9 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
         forceAuthoritativeRepair,
         repairEvaluation,
       });
+    const preRepairCacheVersion = captureControlSnapshotCacheVersion(
+      this.systemTableCache,
+    );
     let repair = null;
     try {
       repair = await this[CONTROL_SNAPSHOT_AUTHORITATIVE_REPAIR_METHOD]({
@@ -433,6 +486,11 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
         return forcedRepairDeferredSnapshot;
       }
       if (canDegradeThrownRepairFailure) {
+        snapshot = await this.refreshDegradedControlSnapshotAfterRepairAttempt(
+          snapshot,
+          preRepairCacheVersion,
+          options,
+        );
         const triggeredSnapshot =
           await this.triggerMembershipPublicationHandoffOwnerCommand(
             snapshot,
@@ -491,6 +549,11 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
           repair,
         });
       if (canDegradeUnappliedRepair) {
+        snapshot = await this.refreshDegradedControlSnapshotAfterRepairAttempt(
+          snapshot,
+          preRepairCacheVersion,
+          options,
+        );
         const triggeredSnapshot =
           await this.triggerMembershipPublicationHandoffOwnerCommand(
             snapshot,

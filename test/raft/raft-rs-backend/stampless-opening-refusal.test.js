@@ -81,7 +81,7 @@ test('V1a: a founder rebuilt with no stamp and no record is refused typed, ' +
     };
     for (let attempt = 0; attempt < 10 && !joinerHoldsBoth(); attempt += 1) {
       cluster.node(FOUNDER).proposeConfChange({
-        type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: JOINER});
+        type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: JOINER, nodeId: 'node-test'});
       cluster.settle(joinerHoldsBoth, {rounds: 40});
     }
     assert.ok(joinerHoldsBoth(),

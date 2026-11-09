@@ -192,7 +192,6 @@ test('message-group replica: the persist path syncs, the application does ' +
     replicaId,
     nodeId: NODE_ID,
     replicaIds: [replicaId],
-    peerAddresses: [`${NODE_ID}/message-group/${replicaId}`],
     transport: router,
     nodeService: {
       getSystemTableCache: () => cache,

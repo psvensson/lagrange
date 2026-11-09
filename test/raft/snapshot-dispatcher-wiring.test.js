@@ -222,7 +222,7 @@ test('PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam',
           tableName: STATE_TABLE,
           replicaId: REPLICA_ID,
           replicaIds: [REPLICA_ID],
-          bootstrapMembership: genesisStamp([REPLICA_ID]),
+          bootstrapMembership: genesisStamp([REPLICA_ID], {}),
           nodeId: NODE_ID,
           dbPath,
           schema: {

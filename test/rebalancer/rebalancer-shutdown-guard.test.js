@@ -55,7 +55,7 @@ test('UnifiedRebalancer shutdown guard skips rebalance checks after shutdown', a
       updateSystemTableRow: async () => ({success: true}),
     },
     tablePolicyService: {
-      getPolicyForPartition: async () => ({replicaCount: 3}),
+      getPolicyForPartition: async () => ({minReplicaCount: 3, targetReplicaCount: 3}),
     },
     messageRouter: {
       deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {

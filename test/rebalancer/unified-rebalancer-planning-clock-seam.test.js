@@ -1,3 +1,4 @@
+import {createMockCoordinator} from './test-helpers.js';
 // Seam proof (formation-sim, bounded-seams constraint): the unified
 // rebalancer's planning-gate pass reads no ambient clock - every read goes
 // through the owner's nowFn - so a virtual clock decides start-delay,
@@ -14,10 +15,9 @@ import {
 import {
   createMockCache,
   createMockCdcService,
-  createMockCoordinator,
   createMockMessageRouter,
   createMockPolicyService,
-  createMockReadinessService,
+  createMockControlPlaneReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 
@@ -29,25 +29,6 @@ const NODES = Object.freeze([
   {node_id: 'node-2', status: 'active'},
 ]);
 
-// The test-support readiness mock reads the ambient clock for lease expiry;
-// it is a stand-in, not the owner under proof, so it answers on the injected
-// clock here; its `now` is the owner's clock, so a planning read of the
-// readiness clock is a read of the injected clock.
-function clockNeutralReadiness(cache, clock, ownerClock) {
-  const mock = createMockReadinessService(cache, ownerClock);
-  const original = mock.getNodeReadinessSync.bind(mock);
-  mock.getNodeReadinessSync = (nodeId, options) => {
-    const saved = Date.now;
-    Date.now = () => clock.nowMs;
-    try {
-      return original(nodeId, options);
-    } finally {
-      Date.now = saved;
-    }
-  };
-  return mock;
-}
-
 function buildRebalancer(clock) {
   const ownerClock = () => clock.nowMs;
   const cache = createMockCache([...NODES], [], [], [], [], [], []);
@@ -57,15 +38,16 @@ function buildRebalancer(clock) {
     nodeId: 'node-1',
     systemTableCache: cache,
     cdcIntegrationService: createMockCdcService(),
-    tablePolicyService: createMockPolicyService([], []),
+    tablePolicyService: createMockPolicyService({partitions: [], tables: []}),
     messageRouter: createMockMessageRouter(CONNECTED),
     rebalanceCoordinator: createMockCoordinator(),
     sqlQueryEngine: {async executeQuery() {
       return {success: true, rows: []};
     }},
     controlPlaneSystemTableGateway: null,
-    controlPlaneReadinessService: clockNeutralReadiness(cache, clock,
-      ownerClock),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      systemTableCache: cache, now: ownerClock,
+    }),
     nowFn: ownerClock,
     randomSource: {random: () => 0},
   });

@@ -43,6 +43,7 @@ import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TEMP_PREFIX = 'unknown-outcome-surface-';
 const NODE_ID = 'uo-node';
 const EXECUTOR_RETRY_DELAY_MS = 5;
@@ -67,7 +68,6 @@ const GROUP_BUDGET_MS = 10000;
 const JOIN_WRITE_OPTIONS = Object.freeze({
   deliveryPriority: 'critical',
   phaseScope: CONTROL_PLANE_PHASE_SCOPE.JOIN,
-  skipCacheWait: true,
 });
 
 function quietEnvironment(raft = {}) {
@@ -188,6 +188,10 @@ function buildSurfaceEngine({tableRows, partitionRows, serviceRows,
   const byType = {tables: tableRows, partitions: partitionRows,
     services: serviceRows};
   const engine = new SQLQueryEngine({
+    // Gateway writes route user tables on the recovery dimension and pass
+    // mutation admission, which still read the projection until attempt 3
+    // of quest serve-eligibility-committed-epoch-read: a healthy projection.
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     nodeId: NODE_ID,
     systemCache: {
       get(type, key) {

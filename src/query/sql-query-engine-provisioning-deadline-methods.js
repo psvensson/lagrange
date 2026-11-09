@@ -12,20 +12,8 @@ const {
  * admission encounters a whole-cluster transient hold.
  */
 class SQLQueryEngineProvisioningDeadlineMethods {
-  isWholeClusterTransientProvisioningHold(options = {}) {
-    const admissionConvergence = options.admissionConvergence || null;
-    const maximumProvisionableReplicaCount = Number.isInteger(
-      admissionConvergence?.maximumProvisionableReplicaCount,
-    ) ?
-      admissionConvergence.maximumProvisionableReplicaCount :
-      null;
-    return (
-      maximumProvisionableReplicaCount === 0 &&
-      options.hasExplicitMinimumRoutableReplicaCount !== true &&
-      this.hasOnlyTransientProvisioningShortfall(
-        admissionConvergence?.rejectedTargetNodePlans,
-      )
-    );
+  isWholeClusterTransientProvisioningHold(_options = {}) {
+    return false;
   }
 
   async waitOutWholeClusterTransientProvisioningHold(options = {}) {

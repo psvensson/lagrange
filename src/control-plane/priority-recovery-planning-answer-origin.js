@@ -51,6 +51,34 @@ const PRIORITY_RECOVERY_PLANNING_ANSWER_ORIGIN_UNSTATED = Object.freeze({
 });
 
 const PLANNING_OWNER_TYPE = 'object';
+const PRIORITY_RECOVERY_PLANNING_SYNC_METHOD =
+  'getPriorityRecoveryPlanningAnswerSync';
+
+/**
+ * Read the synchronous priority-recovery planning answer from the readiness
+ * owner's canonical surface. The readiness service is a validated
+ * collaborator of every consumer (requireControlPlaneReadinessService); the
+ * answer method is a member of the one ControlPlaneReadinessService class,
+ * so it is called, never probed. An absent service (a late-bound owner not
+ * wired yet) answers null.
+ *
+ * @param {Object|null} readinessService - Readiness owner.
+ * @param {string|null} nodeId - Node the consumer is asking about.
+ * @param {number|string|null} observedAt - Observation timestamp.
+ * @return {Object|null}
+ */
+function readPriorityRecoveryPlanningAnswerSync(
+  readinessService,
+  nodeId,
+  observedAt,
+) {
+  if (!isPlanningOwner(readinessService)) {
+    return null;
+  }
+  const answer =
+    readinessService[PRIORITY_RECOVERY_PLANNING_SYNC_METHOD](nodeId, observedAt);
+  return answer && typeof answer === PLANNING_OWNER_TYPE ? answer : null;
+}
 
 // The facts of the answer in flight, per owner: reset per call, never keyed by
 // anything the answer itself carries.
@@ -204,6 +232,7 @@ export {
   notePriorityRecoveryPlanningAnswerRetention,
   readPriorityRecoveryPlanningAnswerCallRetention,
   readPriorityRecoveryPlanningAnswerOrigin,
+  readPriorityRecoveryPlanningAnswerSync,
   recordPriorityRecoveryPlanningProjectionReuse,
   statePriorityRecoveryPlanningAnswerOrigin,
 };

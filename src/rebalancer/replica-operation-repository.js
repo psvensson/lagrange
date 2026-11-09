@@ -217,12 +217,13 @@ const SQL = Object.freeze({
     lease_expires_at = ?
     WHERE operation_id = ? AND completed_at IS NULL`,
   SELECT_REPLICA_STATUS: `SELECT service_id, replica_id, group_id, partition_id,
-      node_id, service_type, status, raft_role, address, cleanup_token,
-      create_attempt_token, created_at, state_entered_at
+      node_id, service_type, status, previous_state, raft_role, address,
+      cleanup_token, create_attempt_token, created_at, state_entered_at
     FROM services WHERE service_id = ?`,
   SELECT_REPLICA_BY_PARTITION_NODE: `SELECT service_id, replica_id,
-      group_id, partition_id, node_id, service_type, status, raft_role, address,
-      cleanup_token, create_attempt_token, created_at, state_entered_at
+      group_id, partition_id, node_id, service_type, status, previous_state,
+      raft_role, address, cleanup_token, create_attempt_token, created_at,
+      state_entered_at
     FROM services 
     WHERE partition_id = ? AND node_id = ?`,
 });

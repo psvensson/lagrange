@@ -26,6 +26,7 @@ class AuthoritativeRowMutationHelper {
       buildUpdateData,
       buildUpdateOptions,
       readValueFromCache,
+      readLiveValue,
       readRowFromCache,
       buildExpectedCacheFields,
       isWriteReady,
@@ -63,37 +64,28 @@ class AuthoritativeRowMutationHelper {
     this.buildUpdateData = buildUpdateData;
     this.buildUpdateOptions = withDefault(buildUpdateOptions, () => ({}));
     this.readValueFromCache = readValueFromCache;
+    this.readLiveValue = optionalFunction(readLiveValue);
     this.readRowFromCache = withDefault(readRowFromCache, null);
-    this.buildExpectedCacheFields = withDefault(
-      buildExpectedCacheFields,
-      null,
-    );
+    this.buildExpectedCacheFields = withDefault(buildExpectedCacheFields, null);
     this.isWriteReady = withDefault(isWriteReady, () => true);
     this.prepareFlush = withDefault(prepareFlush, () => ({skip: false}));
     this.retryDelayMs = withDefault(retryDelayMs, TIME_MS.SECOND);
-    this.retryBackoffMultiplier =
-      normalizeRetryBackoffMultiplier(withDefault(
-        retryBackoffMultiplier,
-        AUTHORITATIVE_ROW_MUTATION_RETRY.BACKOFF_MULTIPLIER,
-      ));
+    this.retryBackoffMultiplier = normalizeRetryBackoffMultiplier(withDefault(
+      retryBackoffMultiplier, AUTHORITATIVE_ROW_MUTATION_RETRY.BACKOFF_MULTIPLIER,
+    ));
     this.maxRetryDelayMs = normalizeMaxRetryDelayMs(withDefault(
-      maxRetryDelayMs,
-      AUTHORITATIVE_ROW_MUTATION_RETRY.MAX_DELAY_MS,
+      maxRetryDelayMs, AUTHORITATIVE_ROW_MUTATION_RETRY.MAX_DELAY_MS,
     ));
     this.cdcIntegrationService = withDefault(cdcIntegrationService, null);
     this.controlPlaneSystemTableGateway = withDefault(
-      controlPlaneSystemTableGateway,
-      null,
+      controlPlaneSystemTableGateway, null,
     );
     this.nodeId = withDefault(nodeId, null);
     this.messageRouter = withDefault(messageRouter, null);
     this.systemTableCache = withDefault(systemTableCache, null);
     this.refreshObservedRow = optionalFunction(refreshObservedRow);
     this.readAuthoritativeRow = optionalFunction(readAuthoritativeRow);
-    this.onObservedStateChanged = withDefault(
-      onObservedStateChanged,
-      () => {},
-    );
+    this.onObservedStateChanged = withDefault(onObservedStateChanged, () => {});
     this.onAsyncError = withDefault(onAsyncError, () => {});
     // Loudness/budget hooks (quest
     // partition-leader-row-publication-integrity). All optional; absent
@@ -111,11 +103,13 @@ class AuthoritativeRowMutationHelper {
     this.clearTimeoutFn = withDefault(clearTimeoutFn, clearTimeout);
 
     this.pendingValue = null;
+    this.pendingRevision = 0;
     this.persistedValue = null;
     this.inFlight = false;
     this.retryTimer = null;
     this.retryAttemptCount = 0;
     this.followUpFlushScheduled = false;
+    this.followUpFlushOwed = false;
     this.shuttingDown = false;
   }
 
@@ -147,11 +141,13 @@ class AuthoritativeRowMutationHelper {
       return;
     }
 
+    this.pendingRevision += 1;
     this.pendingValue = value;
     if (!this.cdcIntegrationService) {
       return;
     }
     if (this.inFlight) {
+      this.followUpFlushOwed = true;
       this.scheduleFollowUpFlush();
       return;
     }
@@ -161,9 +157,22 @@ class AuthoritativeRowMutationHelper {
     });
   }
 
+  isFlushSuperseded(value, flushRevision) {
+    if (this.pendingRevision !== flushRevision) {
+      return true;
+    }
+    return this.pendingValue !== null && this.pendingValue !== value;
+  }
+
   syncFromCache() {
     const cachedValue = this.readValueFromCache(this.systemTableCache);
     if (!cachedValue) {
+      return false;
+    }
+    const liveValue = this.readLiveValue ?
+      this.readLiveValue(cachedValue) :
+      null;
+    if (liveValue && liveValue !== cachedValue) {
       return false;
     }
 
@@ -218,6 +227,9 @@ class AuthoritativeRowMutationHelper {
     const prepareResult = this.prepareFlush({
       pendingValue: this.pendingValue,
       persistedValue: this.persistedValue,
+      flushingValue: this.pendingValue,
+      flushRevision: this.pendingRevision,
+      pendingRevision: this.pendingRevision,
     }) || {skip: false};
 
     if (prepareResult.clearPending) {
@@ -271,15 +283,29 @@ class AuthoritativeRowMutationHelper {
   async executeFlush() {
     this.inFlight = true;
     let writeSucceeded = false;
+    let supersededByNewerPending = false;
     const value = this.pendingValue;
+    const flushRevision = this.pendingRevision;
     try {
       const authoritativeProbe =
-        await this.resolveAuthoritativeProbe(value);
+        await this.resolveAuthoritativeProbe(value, flushRevision);
+      if (this.isFlushSuperseded(value, flushRevision)) {
+        supersededByNewerPending = true;
+        return this.buildResult({
+          reason: AUTHORITATIVE_ROW_MUTATION_REASON.SKIPPED,
+        });
+      }
       if (authoritativeProbe.settled) {
         return authoritativeProbe.result;
       }
-      const ownershipResult = this.resolvePreMutationOwnership(value);
+      const ownershipResult = this.resolvePreMutationOwnership(
+        value,
+        flushRevision,
+      );
       if (ownershipResult) {
+        if (this.isFlushSuperseded(value, flushRevision)) {
+          supersededByNewerPending = true;
+        }
         return ownershipResult;
       }
       const submission = this.buildMutationSubmission(
@@ -295,23 +321,28 @@ class AuthoritativeRowMutationHelper {
       }
 
       writeSucceeded = true;
-      return this.recordAppliedMutation(value, partitionResult);
+      return this.recordAppliedMutation(value, flushRevision, partitionResult);
     } catch (error) {
       this.decorateFlushError(error);
       throw error;
     } finally {
-      this.completeFlush(writeSucceeded);
+      this.completeFlush(writeSucceeded, supersededByNewerPending);
     }
   }
 
-  async resolveAuthoritativeProbe(value) {
+  async resolveAuthoritativeProbe(value, flushRevision) {
     if (!this.readAuthoritativeRow) {
       return {settled: false, row: null};
     }
-    return this.probeAuthoritativeRow(value);
+    return this.probeAuthoritativeRow(value, flushRevision);
   }
 
-  resolvePreMutationOwnership(value) {
+  resolvePreMutationOwnership(value, flushRevision) {
+    if (this.isFlushSuperseded(value, flushRevision)) {
+      return this.buildResult({
+        reason: AUTHORITATIVE_ROW_MUTATION_REASON.SKIPPED,
+      });
+    }
     // Ownership/readiness can change while the authoritative point read is
     // in flight. Re-run the same owner predicate immediately before submit
     // so a demoted leader cannot publish a stale owner row after losing Raft
@@ -319,9 +350,15 @@ class AuthoritativeRowMutationHelper {
     const preMutationResult = this.prepareFlush({
       pendingValue: this.pendingValue,
       persistedValue: this.persistedValue,
+      flushingValue: value,
+      flushRevision,
+      pendingRevision: this.pendingRevision,
       phase: 'pre-mutation',
     }) || {skip: false};
-    if (preMutationResult.clearPending && this.pendingValue === value) {
+    if (
+      preMutationResult.clearPending &&
+      !this.isFlushSuperseded(value, flushRevision)
+    ) {
       this.reportPendingDropped(preMutationResult.reason);
       this.pendingValue = null;
     }
@@ -361,9 +398,6 @@ class AuthoritativeRowMutationHelper {
       typeof updateOptionsCandidate === 'object' ?
       updateOptionsCandidate :
       {};
-    const expectedCacheFields = optionalFunction(
-      this.buildExpectedCacheFields,
-    )?.(value, updateData) || null;
     return {
       mutation: {
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
@@ -371,10 +405,7 @@ class AuthoritativeRowMutationHelper {
         whereClause: this.buildWhereClause(value, mutationContext),
         data: updateData,
       },
-      options: {
-        ...updateOptions,
-        ...(expectedCacheFields ? {expectedCacheFields} : {}),
-      },
+      options: {...updateOptions},
     };
   }
 
@@ -397,9 +428,9 @@ class AuthoritativeRowMutationHelper {
     });
   }
 
-  recordAppliedMutation(value, partitionResult) {
+  recordAppliedMutation(value, flushRevision, partitionResult) {
     this.persistedValue = value;
-    if (this.pendingValue === value) {
+    if (!this.isFlushSuperseded(value, flushRevision)) {
       this.pendingValue = null;
     }
     this.retryAttemptCount = 0;
@@ -423,12 +454,21 @@ class AuthoritativeRowMutationHelper {
     }
   }
 
-  completeFlush(writeSucceeded) {
+  completeFlush(writeSucceeded, supersededByNewerPending = false) {
     this.inFlight = false;
-    if (this.shuttingDown || !writeSucceeded) {
+    const followUpOwed = this.followUpFlushOwed || supersededByNewerPending;
+    this.followUpFlushOwed = false;
+    if (this.shuttingDown) {
       return;
     }
     if (!this.pendingValue || this.pendingValue === this.persistedValue) {
+      return;
+    }
+    if (followUpOwed && this.retryTimer) {
+      this.clearTimeoutFn(this.retryTimer);
+      this.retryTimer = null;
+    }
+    if (!writeSucceeded && !followUpOwed && this.retryTimer) {
       return;
     }
     this.scheduleFollowUpFlush();
@@ -455,10 +495,11 @@ class AuthoritativeRowMutationHelper {
    * - durable row already carries the pending value: dedup honestly;
    * - otherwise: proceed to the CAS write guarded by the authoritative row.
    * @param {*} value - The pending value being flushed.
+   * @param {number} flushRevision - The pendingRevision captured at flush start.
    * @return {Promise<{settled: boolean, result?: Object, row?: Object|null}>}
    * @private
    */
-  async probeAuthoritativeRow(value) {
+  async probeAuthoritativeRow(value, flushRevision) {
     let probe = null;
     try {
       probe = await this.readAuthoritativeRow(value);
@@ -509,14 +550,14 @@ class AuthoritativeRowMutationHelper {
       )
     ) {
       this.persistedValue = value;
-      if (this.pendingValue === value) {
+      if (!this.isFlushSuperseded(value, flushRevision)) {
         this.pendingValue = null;
       }
       this.retryAttemptCount = 0;
       return {
         settled: true,
         result: this.buildResult({
-          cacheVisible: true,
+          cacheVisible: this.pendingValue === null,
           recoveredFromCacheGap: true,
           reason:
             AUTHORITATIVE_ROW_MUTATION_REASON.CACHE_VISIBILITY_GAP_RECOVERED,
@@ -702,6 +743,7 @@ class AuthoritativeRowMutationHelper {
 
   shutdown() {
     this.shuttingDown = true;
+    this.followUpFlushOwed = false;
     if (!this.retryTimer) {
       this.followUpFlushScheduled = false;
       this.pendingValue = null;

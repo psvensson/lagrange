@@ -1,3 +1,4 @@
+import {EventEmitter} from 'node:events';
 import {test} from '../../src/test-helpers/tap.js';
 import {TableCreationService} from
   '../../src/query/table-creation-service.js';
@@ -13,6 +14,16 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schema-shared-constants.js';
+import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
+import {PgWireProtocolHandler} from
+  '../../src/runtime/pgwire-protocol-handler.js';
+import {PG_BACKEND_MSG, PG_ERROR_CODE, PG_TRANSACTION_STATE} from
+  '../../src/runtime/pgwire-protocol-constants.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {TABLES} from '../../src/constants/index.js';
+import {SCHEMA_PROVISIONING_DEFAULT} from
+  '../../src/query/schema-provisioning-job-constants.js';
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 
 function createAst(extraColumn = null) {
   return {
@@ -70,13 +81,34 @@ function applyGatewayUpsert(rows, mutation) {
   return {success: true, affectedRows: 1, visibilityState: 'visible'};
 }
 
+// A committed metadata write answers its position (routed writes answer at
+// commit); this fixture's projection applies at once unless paused.
+function metadataPosition(mutation) {
+  return {tableName: mutation.tableName,
+    key: mutation.row?.table_id ?? mutation.row?.partition_id,
+    originHlc: '1793615397288-1-seam-node'};
+}
+
 function createGateway() {
   const rows = new Map();
   const writes = [];
   return {
     rows,
     writes,
+    paused: false,
+    projectionWaits: [],
+    awaitProjectionAt(position, options = {}) {
+      if (!this.paused) return Promise.resolve({outcome: 'reached', position});
+      return new Promise((resolve, reject) => {
+        this.projectionWaits.push({position, options, resolve, reject});
+      });
+    },
     async submitMutation(mutation) {
+      const answer = await this.applyMutation(mutation);
+      return mutation.tableName === 'schema_operations' ? answer :
+        {...answer, position: metadataPosition(mutation)};
+    },
+    async applyMutation(mutation) {
       writes.push(mutation);
       const {operation, tableName} = mutation;
       const normalizedOperation = String(operation).toUpperCase();
@@ -140,6 +172,337 @@ function createService(gateway, provisionCalls, overrides = {}) {
         nextAction: 'proceed',
       };
     }),
+  });
+}
+
+// Real SQL dispatch, table service, durable schema owner and wire mapping.
+// Only durable storage, provisioning availability and timer delivery are seams.
+function createSchemaWireClient(t, service, gateway, existingEngine = null) {
+  const engine = existingEngine || new SQLQueryEngine({
+    systemCache: {find: () => null, getAll: () => []},
+    controlPlaneSystemTableGateway: gateway,
+    autoStartDistributedTransactionRecovery: false,
+    migrationAutoWire: false,
+  });
+  engine.tableCreationService.shutdown();
+  engine.tableCreationService = service;
+  t.teardown(() => service.shutdown());
+  return async () => {
+    const socket = new EventEmitter();
+    const messages = [];
+    socket.write = (message) => messages.push(Buffer.from(message));
+    let outcome;
+    const handler = new PgWireProtocolHandler({
+      adapter: {
+        async execute(sessionId, sql, params) {
+          outcome = await engine.executeQuery(sql, params, {sessionId});
+          return outcome;
+        },
+      },
+      socket,
+      logger: {debug() {}, info() {}, warn() {}, error() {}},
+    });
+    handler._session = {
+      sessionId: 'quorum-refusal-client',
+      getTransactionState: () => PG_TRANSACTION_STATE.IDLE,
+      setTransactionState() {},
+    };
+    await handler._executeAndSend(
+      'CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY)', []);
+    return {outcome, messages};
+  };
+}
+
+function createServeRefreshClock() {
+  const clock = {now: 1000, timers: []};
+  clock.setTimeout = (callback, delayMs) => {
+    const timer = {at: clock.now + delayMs, callback,
+      cleared: false, unref() {}};
+    clock.timers.push(timer);
+    return timer;
+  };
+  clock.clearTimeout = (timer) => {
+    timer.cleared = true;
+  };
+  clock.advance = async (elapsedMs) => {
+    clock.now += elapsedMs;
+    for (const timer of clock.timers.filter((entry) =>
+      !entry.cleared && entry.at <= clock.now)) {
+      timer.cleared = true;
+      timer.callback();
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  };
+  return clock;
+}
+
+function serveRefreshPublication(epoch) {
+  const members = JSON.stringify(['serve-a', 'serve-b', 'serve-c']);
+  return {publication_id: `cluster_membership-${epoch}`,
+    publication_kind: 'cluster_membership', publication_epoch: epoch,
+    publisher_node_id: 'serve-a', status: 'PUBLISHED',
+    published_active_node_ids: members, required_ack_node_ids: members,
+    acknowledged_node_ids: members,
+    priority_partition_summary: JSON.stringify({
+      satisfied: true, blockedPartitions: []}),
+  };
+}
+
+function createServeRefreshFixture(t, gateway) {
+  const clock = createServeRefreshClock();
+  const cache = new SystemTableCache();
+  const state = {reads: 0, activeReads: 0, maxActiveReads: 0, hold: null,
+    nodes: ['serve-a', 'serve-b', 'serve-c'].map((nodeId) => ({
+      node_id: nodeId, status: 'active', boot_incarnation: 1,
+      ready_lease_expires_at: 16000,
+    })), publications: [serveRefreshPublication(3)], fail: false};
+  const view = {
+    canRead: () => true,
+    async readReadinessOwnerRows(tableName) {
+      state.reads += 1;
+      state.activeReads += 1;
+      state.maxActiveReads = Math.max(state.maxActiveReads, state.activeReads);
+      const rows = tableName === TABLES.NODES ? state.nodes : state.publications;
+      const answer = {success: !state.fail, rows: structuredClone(rows)};
+      try {
+        if (state.hold) await state.hold;
+        return answer;
+      } finally {
+        state.activeReads -= 1;
+      }
+    },
+  };
+  const readiness = createReadinessServiceForTest({
+    nodeId: 'serve-a', systemTableCache: cache,
+    authoritativeControlPlaneView: view,
+    now: () => clock.now,
+    setTimeoutFn: clock.setTimeout, clearTimeoutFn: clock.clearTimeout,
+  });
+  const engine = new SQLQueryEngine({
+    nodeId: 'serve-a', systemCache: cache,
+    controlPlaneReadinessService: readiness,
+    controlPlaneSystemTableGateway: gateway,
+    autoStartDistributedTransactionRecovery: false, migrationAutoWire: false,
+  });
+  t.teardown(() => readiness.shutdown());
+  return {clock, cache, state, readiness, engine};
+}
+
+// Real public SQL -> schema custody -> provisioning cohort -> readiness owner
+// -> SystemTableCache source events. Storage and native replica dispatch are
+// the explicit seams; no test supplies a serve decision or a retry outcome.
+for (const heldReadFails of [false, true]) {
+  test('CREATE retains one job across regressed serve reads and an in-flight ' +
+    `source wake (held read fails: ${heldReadFails})`, async (t) => {
+    const gateway = createGateway();
+    const {clock, cache, state, readiness, engine} =
+      createServeRefreshFixture(t, gateway);
+    const nativeDispatches = [];
+    const service = createService(gateway, [], {
+      systemCache: cache, now: () => clock.now,
+      schemaProvisioningRetrySetTimeoutFn: clock.setTimeout,
+      schemaProvisioningRetryClearTimeoutFn: clock.clearTimeout,
+      async partitionProvisioner(context) {
+        const cohort = await engine.waitForProvisionTargetNodeIds({
+          ...context, requiredReplicaCount: context.replicaCount,
+          maxWaitMs: SCHEMA_PROVISIONING_DEFAULT.RETRY_AFTER_MS});
+        nativeDispatches.push({partitionId: context.partitionId,
+          nodeIds: cohort.nodeIds, epoch: cohort.epoch});
+        return {resolvedReplicaCount: cohort.nodeIds.length,
+          routableReplicaCount: cohort.nodeIds.length,
+          fullReplicaCountConverged: true,
+          contractState: OWNER_CONTRACT_STATE.READY,
+          nextAction: 'proceed', epoch: cohort.epoch};
+      },
+    });
+    const query = createSchemaWireClient(t, service, gateway, engine);
+    await readiness.readServeEligibility();
+    t.equal(readiness.answerServeCohort().epoch.publicationEpoch, 3);
+    state.publications = [serveRefreshPublication(4)];
+    cache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS,
+      'INSERT', serveRefreshPublication(5));
+    await new Promise((resolve) => setImmediate(resolve));
+    const first = await query();
+    assertQuorumRefusal(t, first, first.outcome.detail);
+    const jobKey = `schema_operations:${first.outcome.jobId}`;
+    t.equal(gateway.rows.get(jobKey)?.status, 'PENDING');
+    t.equal(nativeDispatches.length, 0, 'regressed committed epoch cannot dispatch');
+    t.equal(readiness.answerServeCohort().reason, 'unavailable_stale');
+
+    const beforeIdle = state.reads;
+    await clock.advance(100);
+    t.equal(state.reads, beforeIdle,
+      'a regressed read creates no 100ms polling obligation');
+    t.equal(nativeDispatches.length, 0);
+    t.equal(gateway.rows.get(jobKey)?.attempt_count, 1,
+      'the existing schema retry has not elapsed');
+
+    let release;
+    state.hold = new Promise((resolve) => {
+      release = resolve;
+    });
+    state.fail = heldReadFails;
+    const heldRead = readiness.readServeEligibility();
+    const beforeWake = state.reads;
+    state.nodes = state.nodes.map((row) => ({...row,
+      ready_lease_expires_at: 21000}));
+    state.publications = [serveRefreshPublication(5)];
+    state.fail = false;
+    // A real accepted cache apply arrives while the prior committed read is
+    // held. Lease extension does not revoke, but must retain its wake.
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', state.nodes[0]);
+    await new Promise((resolve) => setImmediate(resolve));
+    state.hold = null;
+    release();
+    await heldRead;
+    await new Promise((resolve) => setImmediate(resolve));
+    t.equal(state.reads, beforeWake + 2,
+      'exactly one successor read consumes the source event before any timer');
+    t.equal(state.maxActiveReads, 2,
+      'only the two tables of one committed refresh overlap');
+    t.equal(readiness.answerServeCohort().state, 'ready');
+    t.equal(readiness.answerServeCohort().epoch?.publicationEpoch, 5);
+    t.equal(nativeDispatches.length, 0, 'refresh cannot act as a schema worker');
+
+    await clock.advance(SCHEMA_PROVISIONING_DEFAULT.RETRY_AFTER_MS - 100);
+    for (let turn = 0; turn < 100; turn += 1) {
+      if (gateway.rows.get(jobKey)?.status === 'SUCCEEDED') break;
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    t.equal(gateway.rows.get(jobKey)?.status, 'SUCCEEDED',
+      'the existing schema retry completes the retained intent');
+    t.equal(nativeDispatches.length, 1);
+    t.same(nativeDispatches[0]?.nodeIds, ['serve-a', 'serve-b', 'serve-c']);
+    t.equal(nativeDispatches[0]?.epoch?.publicationEpoch, 5);
+    t.equal(service.schemaProvisioningJobOwner.retryTimersByWorkflowId.size, 0);
+    t.equal(gateway.writes.filter((write) => write.tableName === 'tables' &&
+      String(write.operation).toUpperCase() === 'INSERT').length, 1);
+    const replay = await query();
+    t.equal(replay.outcome.jobId, first.outcome.jobId);
+    t.equal(replay.outcome.contractState, OWNER_CONTRACT_STATE.READY);
+    t.ok(replay.messages.some((message) =>
+      message[0] === PG_BACKEND_MSG.COMMAND_COMPLETE));
+    t.equal(nativeDispatches.length, 1, 'terminal replay does not dispatch again');
+  });
+}
+
+function assertQuorumRefusal(t, answer, refusal) {
+  const {outcome, messages} = answer;
+  t.equal(outcome.success, false, 'below quorum cannot complete CREATE');
+  t.equal(outcome.contractState, OWNER_CONTRACT_STATE.DEFERRED);
+  t.equal(outcome.nextAction, 'retry');
+  t.equal(outcome.errorCode, QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE);
+  t.same(outcome.epoch, refusal.epoch, 'current observation epoch survives');
+  t.same(outcome.reasons, refusal.reasons, 'current refusal reasons survive');
+  t.equal(outcome.retryAfterMs, refusal.retryAfterMs);
+  t.same(outcome.detail, refusal, 'structured detail matches the observation');
+  t.equal(messages.length, 1);
+  t.equal(messages[0]?.[0], PG_BACKEND_MSG.ERROR_RESPONSE);
+  t.ok(messages[0]?.includes(Buffer.from(PG_ERROR_CODE.CANNOT_CONNECT_NOW)),
+    'public SQL maps the typed refusal to 57P03');
+  t.ok(messages[0]?.includes(Buffer.from(JSON.stringify(refusal))),
+    'the wire carries the current epoch, reasons and retry delay');
+  t.notOk(messages.some((message) =>
+    message[0] === PG_BACKEND_MSG.COMMAND_COMPLETE));
+}
+
+for (const recreateOwner of [false, true]) {
+  test('below-quorum schema work retains retry custody and wire refusal ' +
+    `through recovery (recreate owner: ${recreateOwner})`, async (t) => {
+    const gateway = createGateway();
+    const timers = [];
+    const provisionCalls = [];
+    const now = {value: 100};
+    let quorumAvailable = false;
+    let refusal = {epoch: {publicationEpoch: 7},
+      reasons: ['serve_cohort_below_quorum'], retryAfterMs: 125};
+    const overrides = {
+      now: () => now.value,
+      schemaProvisioningLeaseMs: 1000,
+      schemaProvisioningRetrySetTimeoutFn(callback, delayMs) {
+        const timer = {callback, delayMs, cleared: false, unref() {}};
+        timers.push(timer);
+        return timer;
+      },
+      schemaProvisioningRetryClearTimeoutFn(timer) {
+        timer.cleared = true;
+      },
+      async partitionProvisioner(context) {
+        provisionCalls.push(context);
+        if (!quorumAvailable) {
+          throw Object.assign(new Error('Provisioning unavailable: no quorum'), {
+            code: QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
+            ...refusal,
+            detail: {...refusal},
+          });
+        }
+        return {
+          resolvedReplicaCount: recreateOwner ? 2 : 3,
+          routableReplicaCount: recreateOwner ? 2 : 3,
+          fullReplicaCountConverged: !recreateOwner,
+          contractState: recreateOwner ? OWNER_CONTRACT_STATE.UNDER_REPLICATED :
+            OWNER_CONTRACT_STATE.READY,
+          nextAction: 'proceed',
+          epoch: {publicationEpoch: 9},
+          missingReplicaCount: recreateOwner ? 1 : 0,
+        };
+      },
+    };
+    let service = createService(gateway, provisionCalls, overrides);
+    let query = createSchemaWireClient(t, service, gateway);
+    const first = await query();
+    assertQuorumRefusal(t, first, refusal);
+    const jobId = first.outcome.jobId;
+    const jobKey = `schema_operations:${jobId}`;
+    t.equal(gateway.rows.get(jobKey)?.status, 'PENDING',
+      'temporary quorum loss must not poison the durable intent as FAILED');
+    t.equal(timers.length, 1, 'one canonical retry is retained');
+    if (gateway.rows.get(jobKey)?.status !== 'PENDING') return;
+
+    if (recreateOwner) {
+      service.shutdown();
+      t.ok(timers[0].cleared, 'old owner disarms its retry');
+      service = createService(gateway, provisionCalls, {...overrides,
+        schemaProvisioningOwnerId: 'schema-worker-b'});
+      query = createSchemaWireClient(t, service, gateway);
+      const [retained] = await service.resumeDurableProvisioningJobs();
+      t.equal(retained.contractState, OWNER_CONTRACT_STATE.PENDING);
+      t.equal(provisionCalls.length, 1,
+        'new owner cannot provision under the previous live lease');
+      now.value = gateway.rows.get(jobKey).workflow_lease_expires_at + 1;
+    }
+    refusal = {epoch: {publicationEpoch: 8},
+      reasons: ['committed_lease_unavailable'], retryAfterMs: 275};
+    const second = await query();
+    assertQuorumRefusal(t, second, refusal);
+    t.equal(second.outcome.jobId, jobId, 'repeated CREATE attaches to one job');
+    t.equal(gateway.rows.get(jobKey).status, 'PENDING');
+    t.equal(gateway.rows.get(jobKey).workflow_owner_id,
+      recreateOwner ? 'schema-worker-b' : 'schema-worker-a');
+    t.equal(service.schemaProvisioningJobOwner.retryTimersByWorkflowId.size, 1);
+    t.equal(provisionCalls.length, 2, 'latest refusal comes from a new attempt');
+
+    quorumAvailable = true;
+    timers.at(-1).callback();
+    for (let turn = 0; turn < 100; turn += 1) {
+      if (gateway.rows.get(jobKey).status === 'SUCCEEDED') break;
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    t.equal(gateway.rows.get(jobKey).status, 'SUCCEEDED',
+      'canonical owner timer completes the intent without another CREATE');
+    t.equal(gateway.rows.get(jobKey).attempt_count, 3);
+    t.equal(provisionCalls.length, 3);
+    t.equal(service.schemaProvisioningJobOwner.retryTimersByWorkflowId.size, 0);
+    t.equal(gateway.writes.filter((write) => write.tableName === 'tables' &&
+      String(write.operation).toUpperCase() === 'INSERT').length, 1,
+    'metadata is created once');
+    const replay = await query();
+    t.equal(replay.outcome.jobId, jobId);
+    t.equal(replay.outcome.contractState, recreateOwner ?
+      OWNER_CONTRACT_STATE.UNDER_REPLICATED : OWNER_CONTRACT_STATE.READY);
+    t.ok(replay.messages.some((message) =>
+      message[0] === PG_BACKEND_MSG.COMMAND_COMPLETE));
+    t.equal(provisionCalls.length, 3, 'terminal success is replayed');
   });
 }
 
@@ -565,6 +928,73 @@ test('CREATE fails closed when durable intent persistence is unavailable',
       service.createTable(createAst()),
       {code: SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE},
     );
+  });
+
+// Corrective 2c: client-visible DDL keeps same-node read-your-writes. The
+// statement's answer waits at its own metadata positions; its content still
+// comes from the commit and provisioning.
+test('CREATE TABLE answers only once this node projects its own metadata',
+  async (t) => {
+    const gateway = createGateway();
+    gateway.paused = true;
+    const service = createService(gateway, []);
+    let answered = false;
+    const creating = service.createTable(createAst(), {namespace: 'tenant-a'})
+      .then((result) => {
+        answered = true;
+        return result;
+      });
+    for (let turn = 0; turn < 50 && gateway.projectionWaits.length < 2;
+      turn += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    t.same(gateway.projectionWaits.map((wait) => wait.position.tableName),
+      ['tables', 'partitions'], 'it waits at both metadata positions');
+    t.equal(gateway.projectionWaits[0].options.statement, 'CREATE TABLE');
+    t.equal(answered, false, 'no answer before the projection holds them');
+    for (const wait of gateway.projectionWaits) wait.resolve({});
+    const result = await creating;
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.READY,
+      'the answer is the commit and provisioning answer');
+  });
+
+test('a projection wait ended by disconnect answers CREATE TABLE typed ' +
+  'unavailable; the metadata stays committed', async (t) => {
+  const gateway = createGateway();
+  gateway.paused = true;
+  const service = createService(gateway, []);
+  const controller = new AbortController();
+  const creating = service.createTable(createAst(),
+    {namespace: 'tenant-a', abortSignal: controller.signal})
+    .then(() => null, (error) => error);
+  for (let turn = 0; turn < 50 && gateway.projectionWaits.length < 2;
+    turn += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  t.equal(gateway.projectionWaits[0].options.abortSignal, controller.signal,
+    'the session signal reaches the wait');
+  for (const wait of gateway.projectionWaits) {
+    wait.reject(Object.assign(new Error('ended'),
+      {code: 'client_disconnected'}));
+  }
+  const refusal = await creating;
+  t.equal(refusal?.code, SCHEMA_PROVISIONING_ERROR_CODE.PROJECTION_UNAVAILABLE);
+  t.equal(refusal?.projectionOutcome, 'client_disconnected');
+  t.equal([...gateway.rows.keys()].filter((key) =>
+    key.startsWith('tables:')).length, 1, 'the metadata stays committed');
+});
+
+test('a resumed job has no client and never waits for projection',
+  async (t) => {
+    const gateway = createGateway();
+    gateway.paused = true;
+    const service = createService(gateway, []);
+    await service.executeDurableSchemaProvisioningJob(createAst(), {
+      tableId: 'tbl-resumed', partitionId: 'tbl-resumed-p1',
+      jobId: 'schema-job-resumed', ownerFenceToken: 1,
+      assertOwnership: async () => {},
+    });
+    t.equal(gateway.projectionWaits.length, 0);
   });
 
 test('durable job cannot succeed through detached metadata wiring',

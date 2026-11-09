@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-08T12:15:36.615Z",
+  "generatedAt": "2026-11-09T06:33:39.105Z",
   "rawViolationCount": 87,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-stale-watermark-record.js",
-      "line": 114,
+      "line": 116,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -113,7 +113,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-planning-answer-origin.js",
-      "line": 57,
+      "line": 85,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -122,7 +122,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-planning-answer-origin.js",
-      "line": 59,
+      "line": 87,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -185,7 +185,7 @@
     },
     {
       "filePath": "src/control-plane/startup-authority-snapshot-owner.js",
-      "line": 236,
+      "line": 233,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -230,7 +230,7 @@
     },
     {
       "filePath": "src/node/participant-release-authorization-owner.js",
-      "line": 4,
+      "line": 25,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -248,16 +248,7 @@
     },
     {
       "filePath": "src/node/replica-create-admission-owner.js",
-      "line": 73,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "identity_keyed_module_state",
-      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/node/replica-create-process-owner.js",
-      "line": 69,
+      "line": 74,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -267,6 +258,15 @@
     {
       "filePath": "src/node/replica-create-process-owner.js",
       "line": 70,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/node/replica-create-process-owner.js",
+      "line": 71,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -455,16 +455,7 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-membership-administration.js",
-      "line": 88,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "identity_keyed_module_state",
-      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-raft-write-commit.js",
-      "line": 145,
+      "line": 107,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -481,8 +472,17 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
+      "filePath": "src/partition/partition-service-raft-write-commit.js",
+      "line": 147,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
       "filePath": "src/partition/partition-service-row-owner.js",
-      "line": 61,
+      "line": 59,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -536,7 +536,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-group-membership-admission.js",
-      "line": 162,
+      "line": 165,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -545,7 +545,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-group-membership-admission.js",
-      "line": 163,
+      "line": 166,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -581,7 +581,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-replica-lifecycle-owner.js",
-      "line": 54,
+      "line": 55,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -590,7 +590,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 153,
+      "line": 159,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -599,7 +599,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 155,
+      "line": 161,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -662,7 +662,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-owner-wake.js",
-      "line": 88,
+      "line": 90,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -689,7 +689,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
-      "line": 137,
+      "line": 139,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",

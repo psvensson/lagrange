@@ -28,6 +28,9 @@ import {
 } from '../../src/wasm-service/wasm-service-constants.js';
 import {EP_COL} from '../../src/wasm-service/service-endpoint-builder.js';
 
+import {createRequestBindingFixture} from
+  '../control-plane/request-binding-service-definition-fixture.js';
+
 // --- Mock data helpers ---
 
 function createEndpoint(overrides = {}) {
@@ -49,7 +52,7 @@ function createDefinition(overrides = {}) {
     service_id: META_SERVICE_ID.POSTGRES_WIRE,
     service_name: 'PostgreSQL Wire',
     runtime_kind: 'native_js',
-    replica_count: 3,
+    status: 'active', replica_count: 3,
     ...overrides,
   };
 }
@@ -199,22 +202,23 @@ describe('admin-runtime-service-views', () => {
       assert.equal(groups[0].health, LOGICAL_SERVICE_HEALTH.PARTIAL);
     });
 
-    it('reports the system-policy target for Binding-derived Cells', () => {
-      const serviceId = `binding-service-${'a'.repeat(64)}`;
-      const endpoints = [createEndpoint({
-        [EP_COL.SERVICE_ID]: serviceId,
-      })];
-      const definitions = [createDefinition({
-        service_id: serviceId,
-        replica_count: 0,
-        binding_version_id: `binding-version-${'b'.repeat(64)}`,
-      })];
-
-      const groups = groupReplicasByLogicalService(endpoints, definitions);
-
+    it('reports the system-policy target for a producer-derived Binding Cell', async () => {
+      const producer = await createRequestBindingFixture();
+      const {serviceDefinition} = await producer.owners.serviceDefinitionsOwner
+        .reconcileRequestBinding(producer.bindingRow);
+      const endpoints = [createEndpoint({[EP_COL.SERVICE_ID]: serviceDefinition.service_id})];
+      const groups = groupReplicasByLogicalService(endpoints, [serviceDefinition]);
+      assert.equal(serviceDefinition.replica_count, 0);
       assert.equal(groups[0].desired_replica_count, 3);
       assert.equal(groups[0].observed_replica_count, 1);
       assert.equal(groups[0].health, LOGICAL_SERVICE_HEALTH.PARTIAL);
+    });
+
+    it('does not turn partial Binding lineage into desired placement', () => {
+      const row = createDefinition({binding_version_id: 'partial', replica_count: 1});
+      const groups = groupReplicasByLogicalService([createEndpoint()], [row]);
+      assert.equal(groups[0].desired_replica_count, null);
+      assert.equal(groups[0].health, LOGICAL_SERVICE_HEALTH.UNKNOWN);
     });
 
     it('collects unique nodes per group', () => {

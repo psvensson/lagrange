@@ -5,6 +5,7 @@ import {
   buildProjectionReadinessGeneration,
 } from './projection-readiness-evidence-generation.js';
 import {ProjectionReadinessEvidenceOwner} from './projection-readiness-evidence-owner.js';
+import {isServeEligibilityAnswerEligible} from './serve-eligibility-owner.js';
 import {
   CONTROL_PLANE_READINESS_COLLABORATOR as COLLABORATOR,
   CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED as UNWIRED,
@@ -25,16 +26,10 @@ const {
   PUBLICATION_REASON_CONFIG_SAFE_MODE,
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
   READINESS_ERROR_MSG,
-  STATE,
   buildProjectionReadinessContract,
   buildPublicationRecoveryGateSnapshot,
   pickProjectionReadinessEvidenceSource,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
-
-const SERVE_ADMISSION_STATE = Object.freeze({
-  ADMITTED: 'admitted',
-  BLOCKED_RUNTIME: 'blocked_runtime',
-});
 
 /**
  * A priority-recovery state reads active only while the memoized planning
@@ -115,6 +110,16 @@ function getParticipationDecisionLedgerEntries(service, options = {}) {
 }
 
 /**
+ * @param {Object} [options={}]
+ * @return {Object[]}
+ */
+function getParticipationDecisionLedgerAggregatedSummaries(service, options = {}) {
+  return service.participationDecisionLedger ?
+    service.participationDecisionLedger.getAggregatedSummaries(options) :
+    Object.freeze([]);
+}
+
+/**
  * @param {Object} entry
  * @return {void}
  * @private
@@ -138,6 +143,15 @@ function getLatestAuthoritativeReadinessRepair(service, nodeId) {
  */
 function getAuthoritativeReadinessRepairLedgerEntries(service, options = {}) {
   return service.authoritativeNodeEvidenceReconciler.getLedgerEntries(options);
+}
+
+/**
+ * @param {Object} [options={}]
+ * @return {Object[]}
+ */
+function getAuthoritativeReadinessRepairLedgerAggregatedSummaries(service, options = {}) {
+  return service.authoritativeNodeEvidenceReconciler
+    .getLedgerAggregatedSummaries(options);
 }
 
 /**
@@ -238,45 +252,6 @@ function getPublicationDiagnostics(service, observedAt) {
 }
 
 /**
- * Build the runtime serve-admission input from normalized transport, load,
- * and service evidence. Projection readiness owns publication and recovery
- * lane closure after this local runtime input is normalized.
- * @param {Object} context
- * @return {Object}
- * @private
- */
-function buildServeAdmissionSnapshot(service, context = {}) {
-  const runtimeAuthority =
-    context?.runtimeAuthority &&
-    typeof context.runtimeAuthority === 'object' ?
-      context.runtimeAuthority :
-      service.buildRuntimeAuthoritySnapshot(context);
-  const evidence = Object.freeze({
-    repairEligible: runtimeAuthority.repairEligible === true,
-    loadReady: context.loadReady === true,
-    transportNotExplicitlyNegative:
-      context.transportNotExplicitlyNegative === true,
-    serveEligibleControlPlaneService:
-      context.serveEligibleControlPlaneService === true,
-  });
-  const runtimeServeEligible =
-    evidence.repairEligible &&
-    evidence.loadReady &&
-    evidence.transportNotExplicitlyNegative &&
-    evidence.serveEligibleControlPlaneService;
-  const state = runtimeServeEligible ?
-    SERVE_ADMISSION_STATE.ADMITTED :
-    SERVE_ADMISSION_STATE.BLOCKED_RUNTIME;
-
-  return Object.freeze({
-    state,
-    eligible: state === SERVE_ADMISSION_STATE.ADMITTED,
-    evidence,
-    reasonCodes: Object.freeze([]),
-  });
-}
-
-/**
  * Build the readiness dimensions together with the single per-build
  * projection-contract evaluation they derive from. One readiness build
  * performs exactly one runtime serve admission, one priority-recovery
@@ -362,22 +337,17 @@ function buildDimensionsEvaluation(service, context) {
     typeof context.runtimeAuthority === 'object' ?
       context.runtimeAuthority :
       service.buildRuntimeAuthoritySnapshot(context);
-  const serveEligibleControlPlaneService =
-    service.hasServeEligibleControlPlaneService(context.serviceRows);
+  // Serving is the readiness owner's committed-epoch answer (quest
+  // serve-eligibility-committed-epoch-read); the projection carries it, it
+  // does not re-derive it.
+  const serveEligibility = service.answerServeEligibility(context.nodeId);
+  const committedServeEligible =
+    isServeEligibilityAnswerEligible(serveEligibility);
   const loadReady = service.isLoadReady(context.nodeRow);
   const placementEligible =
     runtimeAuthority.provisioning?.eligible === true &&
     loadReady &&
     service.isCapacityPlacementEligible(context.capacity);
-  const serveAdmission = service.buildServeAdmissionSnapshot({
-    ...context,
-    runtimeAuthority,
-    loadReady,
-    transportNotExplicitlyNegative:
-      service.getNodeTransportState(context.nodeId, context.nodeRow)
-        .routerState !== STATE.DISCONNECTED,
-    serveEligibleControlPlaneService,
-  });
   const baseDimensions = Object.freeze({
     [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]:
       runtimeAuthority.processAlive === true,
@@ -400,7 +370,7 @@ function buildDimensionsEvaluation(service, context) {
     [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
       runtimeAuthority.repairEligible === true,
     [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
-      serveAdmission.eligible,
+      committedServeEligible,
   });
   const priorityControlPlaneRecovery =
     service.getPriorityControlPlaneRecoveryState({
@@ -420,12 +390,12 @@ function buildDimensionsEvaluation(service, context) {
       dimensions: baseDimensions,
       priorityControlPlaneRecovery,
       runtimeAuthority,
-      runtimeServeEligible: serveAdmission.eligible,
+      runtimeServeEligible: committedServeEligible,
     }, {
       baseDimensions,
       priorityControlPlaneRecovery,
       runtimeAuthority,
-      runtimeServeEligible: serveAdmission.eligible,
+      runtimeServeEligible: committedServeEligible,
     });
 
   return Object.freeze({
@@ -437,7 +407,7 @@ function buildDimensionsEvaluation(service, context) {
     priorityControlPlaneRecovery,
     projectionReadinessContract,
     runtimeAuthority,
-    serveAdmission,
+    serveEligibility,
   });
 }
 
@@ -674,15 +644,16 @@ export {
   gatePriorityControlPlaneRecoveryStateActivity,
   recordParticipationDecision,
   getParticipationDecisionLedgerEntries,
+  getParticipationDecisionLedgerAggregatedSummaries,
   recordAuthoritativeReadinessRepair,
   getLatestAuthoritativeReadinessRepair,
   getAuthoritativeReadinessRepairLedgerEntries,
+  getAuthoritativeReadinessRepairLedgerAggregatedSummaries,
   getHeartbeatPublicationDiagnostics,
   getHeartbeatPublicationMode,
   hasFreshLocalReporterSuccess,
   shouldGraceTimedOutLocalReporterFailure,
   getPublicationDiagnostics,
-  buildServeAdmissionSnapshot,
   resolveNormalizedProjectionReadinessContract,
   computeProjectionReadinessGeneration,
   buildDimensionsEvaluation,

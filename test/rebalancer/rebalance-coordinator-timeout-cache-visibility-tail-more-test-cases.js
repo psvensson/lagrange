@@ -33,10 +33,12 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
+          },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -59,7 +61,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -129,7 +131,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -138,7 +139,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -189,7 +190,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -198,7 +198,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -262,7 +262,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -271,7 +270,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -326,7 +325,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -335,7 +333,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -404,7 +402,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -413,7 +410,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {
@@ -572,7 +569,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneSystemTableGateway: {
           async readRows(tableName, sql, params, options) {
@@ -599,7 +595,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine,
@@ -845,7 +841,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
           getNodeReadinessSync(nodeId) {
@@ -858,7 +853,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
               },
             };
           },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
+          },
+          getPriorityRecoveryPlanningAnswerSync() {
             return publishedPriorityRecoverySnapshot;
           },
         },
@@ -887,7 +885,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+            return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
         sqlQueryEngine,
@@ -1021,7 +1019,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         controlPlaneSystemTableGateway: {
           async readRows(tableName, sql, params, options) {
@@ -1048,7 +1045,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine,
@@ -1097,7 +1094,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
       },
       cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-        async waitForCacheUpdate() {},
       },
       messageRouter: {
         async deliver() {
@@ -1106,7 +1102,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       sqlQueryEngine: {
@@ -1165,7 +1161,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-          async waitForCacheUpdate() {},
         },
         messageRouter: {
           async deliver() {
@@ -1174,7 +1169,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         },
         tablePolicyService: {
           async getPolicyForPartition() {
-            return {minReplicaCount: 1};
+            return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
         sqlQueryEngine: {

@@ -231,12 +231,14 @@ function createCoordinator(deliveries, deferredTimers, operationRow) {
     },
     systemTableCache: createMockCache(),
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead() {
         return {success: true, rows: TEST_EMPTY_ROWS, affectedRows: 0};
       },
     },
     controlPlaneReadinessService: {
+      getPriorityRecoveryPlanningAnswerSync() {
+        return buildPlanningSnapshot();
+      },
       getPriorityRecoveryPlanningSnapshotBestEffort() {
         return buildPlanningSnapshot();
       },
@@ -261,7 +263,7 @@ function createCoordinator(deliveries, deferredTimers, operationRow) {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+        return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
       },
     },
     setTimeoutFn(fn, delayMs) {

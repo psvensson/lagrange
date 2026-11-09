@@ -39,6 +39,7 @@ import {
   gracefulShutdown,
 } from './helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TEST_TIMEOUT_MS = 480000;
 // A joining node's router self-connection can time out transiently when the
 // single-process multi-node cluster saturates the event loop; the production
@@ -347,6 +348,7 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
     });
     await seedApi.initialize(0, {listen: false});
     seedQueryEngine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
       nodeId: SEED_NODE_ID,

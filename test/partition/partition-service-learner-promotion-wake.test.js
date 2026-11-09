@@ -26,12 +26,13 @@ import {
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
 } from '../../src/partition/partition-service-constants.js';
 import {TRANSPORT_DEFAULT} from '../../src/constants/transport.js';
+import {buildDeliveryEnvelope} from
+  '../../src/transport/transport-semantic-outcome.js';
 import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {
   LEARNER_PROMOTION_PROOF_REASON,
   LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
-  evaluateLearnerPromotionProof,
   refuseLearnerPromotionProof,
 } from '../../src/raft/learner-promotion-progress.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
@@ -284,8 +285,9 @@ test('the learner start seeds the observed epoch from its cache, so the ' +
   t.same(wakes, [], 'publication churn at the seeded epoch never wakes');
 });
 
-test('learner_address_unresolvable re-asserts the durable services row ' +
-  'through the replica state machine; no other cause does', async (t) => {
+test('no leader refusal re-asserts the learner\'s durable services row: ' +
+  'the proof never depends on a row (learner-host-from-committed-admission)',
+async (t) => {
   const kicks = [];
   const partition = createLearner({
     replicaStateMachine: {
@@ -294,41 +296,32 @@ test('learner_address_unresolvable re-asserts the durable services row ' +
         return Promise.resolve(0);
       },
     },
+    transport: {
+      async deliver() {
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          partitionId: PARTITION_ID,
+          learnerReplicaId: LEARNER_REPLICA_ID,
+          proof: refuseLearnerPromotionProof(
+            LEARNER_PROMOTION_PROOF_REASON.NOT_IN_CONFIGURATION, null),
+        });
+      },
+    },
   });
-  partition.reactToLearnerPromotionRefusalCause(refuseLearnerPromotionProof(
-    LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
-    LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE,
-  ));
-  t.equal(kicks.length, 1, 'the unresolvable cause kicks the CL-021 retry');
-  partition.reactToLearnerPromotionRefusalCause(refuseLearnerPromotionProof(
-    LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
-    LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.REQUEST_SHAPE,
-  ));
-  partition.reactToLearnerPromotionRefusalCause(refuseLearnerPromotionProof(
-    LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
-    LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.DELIVERY_FAILED,
-  ));
-  partition.reactToLearnerPromotionRefusalCause(evaluateLearnerPromotionProof({
-    raftIsLeader: true,
-    currentTerm: 1,
-    committedIndex: 1,
-    learnerMatchIndex: 0,
-    leaderMembershipEpoch: BOOTSTRAP_EPOCH,
-    learnerMembershipEpoch: BOOTSTRAP_EPOCH,
-  }));
-  t.equal(kicks.length, 1,
-    'request_shape, transport failures and evaluated refusals never kick');
-
-  const bootstrapLearner = createLearner();
-  t.doesNotThrow(
-    () => bootstrapLearner.reactToLearnerPromotionRefusalCause(
-      refuseLearnerPromotionProof(
-        LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
-        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE,
-      ),
-    ),
-    'without a replica state machine there is no deferred row to re-assert',
-  );
+  partition.leaderId = OTHER_REPLICA_ID;
+  partition.resolveLeaderAddressForPromotionProof = () =>
+    'node-leader/partition/' + OTHER_REPLICA_ID;
+  const proof = await partition.requestLearnerPromotionProofFromLeader({
+    leaderReplicaId: OTHER_REPLICA_ID,
+    membershipEpoch: BOOTSTRAP_EPOCH,
+  });
+  t.equal(proof.reason, LEARNER_PROMOTION_PROOF_REASON.NOT_IN_CONFIGURATION,
+    'the leader\'s refusal reaches the learner as it was minted');
+  t.same(kicks, [], 'no refusal re-asserts a services row');
+  t.equal(typeof partition.reactToLearnerPromotionRefusalCause, 'undefined',
+    'the row re-assert reaction no longer exists');
+  t.equal(Object.hasOwn(LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
+    'LEARNER_ADDRESS_UNRESOLVABLE'), false,
+  'the learner_address_unresolvable cause no longer exists');
 });
 
 test('the proof delivery timeout is the router-configured message timeout, ' +

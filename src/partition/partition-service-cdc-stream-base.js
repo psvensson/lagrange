@@ -31,6 +31,7 @@ const {
   PARTITION_SERVICE_VALUE,
   PARTITION_SPLIT_MIRROR_ORIGIN,
   SYSTEM_TABLE_NAME,
+  TABLES,
   fs,
 } = PARTITION_SERVICE_SHARED;
 
@@ -704,6 +705,9 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    * @private
    */
   scheduleSizeUpdate() {
+    if (this.isSystemTable === true || this.tableName === TABLES.PARTITIONS) {
+      return;
+    }
     if (this.sizeUpdatePending) {
       return;
     }

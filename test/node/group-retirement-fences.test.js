@@ -233,7 +233,7 @@ test('G2b-A the partition\'s conf-change admission refuses every membership ' +
   'change of a retiring group, typed, before the port', async (t) => {
   const retiring = serviceOf('fence-adm', retiringSplitRecord('fence-adm'));
   const admitted = admitPartitionRaftPeer(retiring.service,
-    {replicaIdentity: 'joiner', peerAddress: 'n9/partition/joiner'});
+    {replicaIdentity: 'joiner', nodeId: 'n9'});
   t.equal(admitted.outcome, RAFT_MEMBERSHIP_ADMISSION_OUTCOME.REFUSED,
     'an ADD is refused');
   t.equal(admitted.reason, RAFT_MEMBERSHIP_CHANGE_REFUSAL.GROUP_RETIRING,
@@ -253,7 +253,7 @@ test('G2b-A the partition\'s conf-change admission refuses every membership ' +
     active_partition_version: 1, partition_transition_state: null,
     partition_transition_metadata: null});
   admitPartitionRaftPeer(live.service,
-    {replicaIdentity: 'joiner', peerAddress: 'n9/partition/joiner'});
+    {replicaIdentity: 'joiner', nodeId: 'n9'});
   proposePeerRetirement(live.service, {
     type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: 'm2'});
   t.same(live.portCalls, ['readStatus', RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER],

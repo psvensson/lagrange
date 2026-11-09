@@ -93,6 +93,9 @@ export function createReadinessSnapshotStoreTestStub({
     recordRecoveryEpochObservation: () => {},
     // No local query transport evidence: a stored snapshot never drifts.
     getLocalQueryTransportEvidence: () => null,
+    // No committed serve record owner: a source change notes nothing (the
+    // service's own method with no owner created).
+    noteServeEligibilitySourceChange: () => {},
   };
   installControlPlaneReadinessSnapshotStoreMethods(stub);
   return {stub, state};

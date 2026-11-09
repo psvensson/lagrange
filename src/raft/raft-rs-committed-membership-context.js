@@ -16,8 +16,28 @@ const CONTEXT_FIELD = Object.freeze({
   STAGE: 'stage',
   REPLICA_IDENTITY: 'replicaIdentity',
   PEER_ID: 'peerId',
+  // The node the transition's replica lives on (D-C3: one committed peer
+  // context shape). Every replica applying the entry records it with the
+  // identity; a context without it does not decode.
+  NODE_ID: 'nodeId',
 });
 const MANAGED_CONTEXT_KEYS = Object.freeze(Object.values(CONTEXT_FIELD));
+// The admission context of a host-proposed ADD (the partition and message
+// group admission path, raft-rs-group-membership-admission.js): the admitted
+// replica, its derived raft peer id and the node it is admitted on. Every
+// replica that applies the entry records the node with the identity, so the
+// group's peers are addressed from the committed log, never from a row.
+const ADMISSION_CONTEXT_FIELD = Object.freeze({
+  REPLICA_IDENTITY: 'replicaIdentity',
+  PEER_ID: 'peerId',
+  NODE_ID: 'nodeId',
+});
+const ADMISSION_CONTEXT_KEYS = Object.freeze(
+  Object.values(ADMISSION_CONTEXT_FIELD));
+const ADMISSION_CHANGE_TYPES = Object.freeze(new Set([
+  RAFT_RS_CONF_CHANGE_TYPE.ADD_NODE,
+  RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
+]));
 const STAGE_CHANGE_TYPE = Object.freeze({
   [RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER]:
     RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
@@ -38,13 +58,17 @@ function ownString(record, key) {
     record[key].length > 0;
 }
 
-function exactlyManagedContext(record) {
+function exactlyKeys(record, expected) {
   if (record === null || typeof record !== 'object' || Array.isArray(record)) {
     return false;
   }
   const keys = Object.keys(record);
-  return keys.length === MANAGED_CONTEXT_KEYS.length &&
-    MANAGED_CONTEXT_KEYS.every((key) => keys.includes(key));
+  return keys.length === expected.length &&
+    expected.every((key) => keys.includes(key));
+}
+
+function exactlyManagedContext(record) {
+  return exactlyKeys(record, MANAGED_CONTEXT_KEYS);
 }
 
 function parseContext(decoded) {
@@ -73,7 +97,8 @@ function validateContextShape(context) {
       context[CONTEXT_FIELD.PERMIT_SEQUENCE] < 1 ||
       !ownString(context, CONTEXT_FIELD.STAGE) ||
       !ownString(context, CONTEXT_FIELD.REPLICA_IDENTITY) ||
-      !ownString(context, CONTEXT_FIELD.PEER_ID)) {
+      !ownString(context, CONTEXT_FIELD.PEER_ID) ||
+      !ownString(context, CONTEXT_FIELD.NODE_ID)) {
     throw new Error(COMMITTED_MEMBERSHIP_CONTEXT_ERROR.MALFORMED);
   }
   if (!Object.hasOwn(STAGE_CHANGE_TYPE, context[CONTEXT_FIELD.STAGE])) {
@@ -118,13 +143,60 @@ function encodeCommittedMembershipContext(context) {
     [CONTEXT_FIELD.REPLICA_IDENTITY]:
       context[CONTEXT_FIELD.REPLICA_IDENTITY],
     [CONTEXT_FIELD.PEER_ID]: context[CONTEXT_FIELD.PEER_ID],
+    [CONTEXT_FIELD.NODE_ID]: context[CONTEXT_FIELD.NODE_ID],
   })).toString(CONTEXT_ENCODING);
+}
+
+function validateAdmissionContext(context) {
+  if (!ADMISSION_CONTEXT_KEYS.every((key) => ownString(context, key))) {
+    throw new Error(COMMITTED_MEMBERSHIP_CONTEXT_ERROR.MALFORMED);
+  }
+  if (context[ADMISSION_CONTEXT_FIELD.PEER_ID] !==
+      deriveRaftRsPeerId(context[ADMISSION_CONTEXT_FIELD.REPLICA_IDENTITY])) {
+    throw new Error(COMMITTED_MEMBERSHIP_CONTEXT_ERROR.BINDING);
+  }
+}
+
+/**
+ * The encoded admission context of a host-proposed ADD.
+ * @param {Object} context - {replicaIdentity, peerId, nodeId}.
+ * @return {string} The base64 context the conf change carries.
+ */
+function encodeCommittedAdmissionContext(context) {
+  if (!exactlyKeys(context, ADMISSION_CONTEXT_KEYS)) {
+    throw new Error(COMMITTED_MEMBERSHIP_CONTEXT_ERROR.MALFORMED);
+  }
+  validateAdmissionContext(context);
+  return Buffer.from(JSON.stringify({
+    [ADMISSION_CONTEXT_FIELD.REPLICA_IDENTITY]:
+      context[ADMISSION_CONTEXT_FIELD.REPLICA_IDENTITY],
+    [ADMISSION_CONTEXT_FIELD.PEER_ID]: context[ADMISSION_CONTEXT_FIELD.PEER_ID],
+    [ADMISSION_CONTEXT_FIELD.NODE_ID]: context[ADMISSION_CONTEXT_FIELD.NODE_ID],
+  })).toString(CONTEXT_ENCODING);
+}
+
+function committedAdmissionContext(decoded, context) {
+  validateAdmissionContext(context);
+  const changes = decoded?.changes;
+  if (!Array.isArray(changes) || changes.length !== 1 ||
+      String(changes[0]?.nodeId) !== context[ADMISSION_CONTEXT_FIELD.PEER_ID] ||
+      !ADMISSION_CHANGE_TYPES.has(changes[0]?.changeType)) {
+    throw new Error(COMMITTED_MEMBERSHIP_CONTEXT_ERROR.CHANGE);
+  }
+  return Object.freeze({
+    replicaIdentity: context[ADMISSION_CONTEXT_FIELD.REPLICA_IDENTITY],
+    peerId: context[ADMISSION_CONTEXT_FIELD.PEER_ID],
+    nodeId: context[ADMISSION_CONTEXT_FIELD.NODE_ID],
+  });
 }
 
 function committedMembershipContext(decoded) {
   const context = parseContext(decoded);
   if (context === ABSENT_CONTEXT) {
     return null;
+  }
+  if (exactlyKeys(context, ADMISSION_CONTEXT_KEYS)) {
+    return committedAdmissionContext(decoded, context);
   }
   validateContextShape(context);
   validateNativeChange(decoded, context);
@@ -140,6 +212,7 @@ function committedMembershipContext(decoded) {
     stage: context[CONTEXT_FIELD.STAGE],
     replicaIdentity: context[CONTEXT_FIELD.REPLICA_IDENTITY],
     peerId: context[CONTEXT_FIELD.PEER_ID],
+    nodeId: context[CONTEXT_FIELD.NODE_ID],
   });
 }
 
@@ -248,5 +321,6 @@ export {
   learnerAdmissionMatchesReservation,
   committedMembershipChangeType,
   committedMembershipContext,
+  encodeCommittedAdmissionContext,
   encodeCommittedMembershipContext,
 };

@@ -1,7 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {COLUMN, NODE_STATE, TABLES} from '../../src/constants/index.js';
 import {
   LATENCY_ASSIGNMENT_STATE,
@@ -13,33 +11,10 @@ import {
 import {
   LATENCY_GROUP_MANAGER_REASON,
 } from '../../src/topology/latency-group-manager-constants.js';
-
-function setupConfig(overrides = {}) {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize({
-    node: {id: 'node-a'},
-    logging: {level: 'error'},
-    latency: {
-      groupThresholdMs: 100,
-      recalcIntervalMs: 1000,
-      recalcJitterRatio: 0.1,
-      pingTimeoutMs: 50,
-      pingRetryCount: 2,
-      smoothingAlpha: 0.5,
-      propagationMode: 'safe',
-      ...overrides,
-    },
-  });
-  const logging = LoggingService.getInstance();
-  logging.initialize({level: 'error'});
-}
-
-function teardownConfig() {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-}
+import {
+  setupLatencyTestConfig as setupConfig,
+  teardownLatencyTestConfig as teardownConfig,
+} from './latency-test-config.js';
 
 function createNodeRow(nodeId, groupId = null) {
   return {
@@ -61,13 +36,20 @@ function createGroupRow(groupId, representativeNodeId) {
   };
 }
 
-function createMockCache({nodes = [], groups = []} = {}) {
+function createMockCache({
+  nodes = [],
+  groups = [],
+  services = [],
+  messageGroups = [],
+} = {}) {
   const nodeRows = new Map(
     nodes.map((row) => [row[COLUMN.NODE_ID], {...row}]),
   );
   const groupRows = new Map(
     groups.map((row) => [row[COLUMN.GROUP_ID], {...row}]),
   );
+  const serviceRows = services.map((row) => ({...row}));
+  const messageGroupRows = messageGroups.map((row) => ({...row}));
 
   const getTable = (tableName) => {
     if (tableName === TABLES.NODES) {
@@ -86,8 +68,17 @@ function createMockCache({nodes = [], groups = []} = {}) {
       return row ? {...row} : null;
     },
     getAll: (tableName) => {
+      if (tableName === TABLES.MESSAGE_GROUPS) {
+        return messageGroupRows.map((row) => ({...row}));
+      }
       const table = getTable(tableName);
       return Array.from(table.values()).map((row) => ({...row}));
+    },
+    filter: (tableName, predicate) => {
+      if (tableName === TABLES.SERVICES) {
+        return serviceRows.filter((row) => predicate(row)).map((row) => ({...row}));
+      }
+      return [];
     },
     has: (tableName, key) => {
       const table = getTable(tableName);
@@ -259,6 +250,46 @@ test('runAssignmentCycle creates a group when no eligible group exists', async (
   assert.equal(cdc.updates.length, 1);
   assert.equal(cdc.updates[0].data[COLUMN.LATENCY_GROUP_ID], 'lg-node-a-5000');
   assert.equal(selection.calls.length, 1);
+
+  teardownConfig();
+  t.end();
+});
+
+test('runAssignmentCycle reuses locally hosted self-hosted message group id when creating a latency group', async (t) => {
+  setupConfig();
+  const cache = createMockCache({
+    nodes: [createNodeRow('node-joiner-1')],
+    groups: [],
+    services: [{
+      [COLUMN.SERVICE_ID]: 'mg-node-joiner-1-r1',
+      [COLUMN.NODE_ID]: 'node-joiner-1',
+      [COLUMN.SERVICE_TYPE]: 'message_group',
+      [COLUMN.GROUP_ID]: 'mg-node-joiner-1',
+    }],
+  });
+  const cdc = createMockCdc();
+  const measurement = createMockMeasurementService();
+  const selection = createMockGroupSelectionService();
+  const manager = new LatencyGroupManager({
+    nodeId: 'node-joiner-1',
+    systemTableCache: cache,
+    cdcIntegrationService: cdc,
+    latencyMeasurementService: measurement,
+    groupSelectionService: selection,
+    nowFn: () => 5000,
+  });
+  manager.initialize();
+
+  const result = await manager.runAssignmentCycle();
+
+  assert.equal(result.success, true);
+  assert.equal(result.changed, true);
+  assert.equal(result.createdGroup, true);
+  assert.equal(result.reason, LATENCY_GROUP_MANAGER_REASON.CREATE_NEW_GROUP);
+  assert.equal(result.targetGroupId, 'mg-node-joiner-1');
+  assert.equal(cdc.upserts.length, 1);
+  assert.equal(cdc.upserts[0].row[COLUMN.GROUP_ID], 'mg-node-joiner-1');
+  assert.equal(cdc.updates[0].data[COLUMN.LATENCY_GROUP_ID], 'mg-node-joiner-1');
 
   teardownConfig();
   t.end();

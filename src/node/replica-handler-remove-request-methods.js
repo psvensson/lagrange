@@ -34,7 +34,9 @@ function matchesFailedCreateCleanupPrecondition(precondition, expected) {
 
 function hasValidFailedCreateCleanupPrecondition(precondition) {
   if (!precondition) return false;
-  if (!isFailedCreateCleanupToken(precondition.cleanup_token)) return false;
+  if (!isFailedCreateCleanupToken(precondition.cleanup_token)) {
+    return false;
+  }
   return typeof precondition.create_attempt_token === 'string' &&
     precondition.create_attempt_token.length > 0;
 }
@@ -88,9 +90,7 @@ function validFailedCreateCleanupRequest(
     partition_id: partitionId,
     node_id: handler.nodeId,
     status: ReplicaStatus.FAILED,
-  }) && isFailedCreateCleanupToken(precondition?.cleanup_token) &&
-    typeof precondition?.create_attempt_token === 'string' &&
-    precondition.create_attempt_token.length > 0 &&
+  }) && hasValidFailedCreateCleanupPrecondition(precondition) &&
     typeof handler.replicaStateMachine
       ?.transitionAuthoritativeReplicaGeneration === 'function';
 }

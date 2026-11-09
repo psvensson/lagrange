@@ -4,28 +4,22 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 import {
   captureReplaceOwnerLevel,
   registerReplaceOwnerWaiter,
+  resolveReplaceOwnerEntryLevel,
 } from './operation-workflow-replace-owner-wake.js';
 import {
   REPLACE_EFFECT_ADMISSION,
+  REPLACE_WAIT_REASON,
   admitReplaceSourceRemovalEffect,
   isPartitionReplace,
   isReplaceRemovalIntentDurable,
   recordReplaceOwnerWait,
   recordReplaceSourceRemovalEffect,
 } from './operation-workflow-replace-owner.js';
-import {
-  assertCanonicalRebalancerEntityIdentity,
-} from './rebalancer-entity-identity.js';
-import {
-  isBoundMembershipPublicationEpoch,
-} from './replica-operation-membership-epoch-binding.js';
+import {assertCanonicalRebalancerEntityIdentity} from './rebalancer-entity-identity.js';
+import {isBoundMembershipPublicationEpoch} from './replica-operation-membership-epoch-binding.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
-import {
-  buildReplicaCreateAdmissionToken,
-  buildReplicaCreateAttemptToken,
-} from './replica-create-admission-token.js';
-import {bindReplaceCreateTargetReplicaId} from
-  './operation-workflow-replace-target-binding.js';
+import {buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken} from './replica-create-admission-token.js';
+import {bindReplaceCreateTargetReplicaId} from './operation-workflow-replace-target-binding.js';
 import {
   isRetainedCreateDeliveryResolution,
   resolveAmbiguousCreateDeliveryFailure,
@@ -55,6 +49,7 @@ const {
   WORKFLOW_STEP,
   buildHandoffDeferralTransportDiagnostics,
   classifySystemPartition,
+  isBootstrapTopologyDispatchDeferred,
   isDeliveredTransportDeliveryOutcome,
   resolveOperationHandlerType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -205,6 +200,33 @@ function allowCreateDispatchAuthority(operation) {
  * @param {boolean} replaceRemoveDispatchPhase
  * @return {Promise<Object|null>}
  */
+function resolveObservedCreateDispatchAuthority(
+  owner,
+  operation,
+  observation,
+) {
+  const current = observation?.operation || null;
+  if (!current) {
+    if (!observation?.deferredOutcome &&
+        hasDurableCreateDispatchTuple(operation)) {
+      return allowCreateDispatchAuthority(operation);
+    }
+    throw buildCreateDispatchRefreshDeferred(operation, observation);
+  }
+  if (!sameCreateDispatchIdentity(operation, current)) {
+    return REFUSED_CREATE_DISPATCH_AUTHORITY;
+  }
+  const hasCurrentTuple = hasDurableCreateDispatchTuple(current);
+  if (owner.repository.isOperationTerminal(current) && !hasCurrentTuple) {
+    return REFUSED_CREATE_DISPATCH_AUTHORITY;
+  }
+  return allowCreateDispatchAuthority(
+    !hasCurrentTuple && hasDurableCreateDispatchTuple(operation) ?
+      operation :
+      current,
+  );
+}
+
 async function refreshCreateDispatchAuthority(
   owner,
   operation,
@@ -213,8 +235,7 @@ async function refreshCreateDispatchAuthority(
   if (!isCreateDispatchPhase(operation, replaceRemoveDispatchPhase)) {
     return allowCreateDispatchAuthority(operation);
   }
-  if (hasDurableCreateDispatchTuple(operation) ||
-      operation.workflowStep === WORKFLOW_STEP.PENDING ||
+  if (operation.workflowStep === WORKFLOW_STEP.PENDING ||
       operation.workflowStep === WORKFLOW_STEP.SENDING) {
     return allowCreateDispatchAuthority(operation);
   }
@@ -227,18 +248,7 @@ async function refreshCreateDispatchAuthority(
         allowOwnerPersistedTransitionDeferredVisibility: false,
       },
     );
-  const current = observation?.operation || null;
-  if (!current) {
-    throw buildCreateDispatchRefreshDeferred(operation, observation);
-  }
-  if (!sameCreateDispatchIdentity(operation, current)) {
-    return REFUSED_CREATE_DISPATCH_AUTHORITY;
-  }
-  if (owner.repository.isOperationTerminal(current) &&
-      !hasDurableCreateDispatchTuple(current)) {
-    return REFUSED_CREATE_DISPATCH_AUTHORITY;
-  }
-  return allowCreateDispatchAuthority(current);
+  return resolveObservedCreateDispatchAuthority(owner, operation, observation);
 }
 const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
   new Set([
@@ -288,11 +298,29 @@ function isReplaceStoppingOwnerEntry(operation, options) {
     options?.replaceStoppingEffect !== true;
 }
 
-// The removal-effect boundary after SAFE for a partition REPLACE: null when
-// the effect is sent now; otherwise the owner's result (T5'' or a wait).
+// The removal-effect boundary after SAFE for a partition REPLACE or initial
+// REMOVE: null when the effect is sent now; otherwise the owner's result.
 async function holdReplaceSourceRemovalEffect(
   owner, operation, replaceRemoveDispatchPhase, entryLevel) {
   if (!replaceRemoveDispatchPhase || !isPartitionReplace(operation)) {
+    const resolvedEntry = resolveReplaceOwnerEntryLevel(owner, entryLevel);
+    if (
+      owner.isRemoveInitialDispatchPhase(operation) &&
+      resolvedEntry &&
+      captureReplaceOwnerLevel(owner, operation)?.levelKey !==
+        resolvedEntry.levelKey
+    ) {
+      owner.armReplaceOwnerWait(
+        operation,
+        REPLACE_WAIT_REASON.EFFECT_REVALIDATION_MOVED,
+        resolvedEntry,
+      );
+      return owner.buildSkippedOperationResult(
+        REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+        operation.operationId,
+        {deferReason: REPLACE_WAIT_REASON.EFFECT_REVALIDATION_MOVED},
+      );
+    }
     return null;
   }
   const effect = await admitReplaceSourceRemovalEffect(
@@ -426,6 +454,12 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         operation?.operationId,
       );
     }
+    if (isBootstrapTopologyDispatchDeferred(operation)) {
+      return this.buildSkippedOperationResult(
+        OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
+        operation?.operationId,
+      );
+    }
     if (isReplaceStoppingOwnerEntry(operation, options)) {
       return this.runReplaceStoppingOwner(operation);
     }
@@ -502,7 +536,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       }
     }
     // Captured before the evaluation reads readiness (R-2 lost-wakeup rule).
-    const readinessEntryLevel = captureReplaceOwnerLevel(this, operation);
+    let readinessEntryLevel = captureReplaceOwnerLevel(this, operation);
     let removeSafetyEvaluation = await this.evaluateRemoveSafety(operation);
     if (removeSafetyEvaluation?.error) {
       if (
@@ -525,10 +559,12 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
             handoffResponse,
           )
         ) {
+          const refreshedEntryLevel = captureReplaceOwnerLevel(this, operation);
           const refreshedRemoveSafetyEvaluation =
             await this.evaluateRemoveSafety(operation);
           if (!refreshedRemoveSafetyEvaluation?.error) {
             removeSafetyEvaluation = refreshedRemoveSafetyEvaluation;
+            readinessEntryLevel = refreshedEntryLevel;
           }
         }
         if (
@@ -703,13 +739,6 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     ) {
       request[ReplicaOperationField.REPLICA_IDS] =
         operation[ReplicaOperationField.REPLICA_IDS];
-    }
-    if (
-      Array.isArray(operation[ReplicaOperationField.PEER_ADDRESSES]) &&
-      operation[ReplicaOperationField.PEER_ADDRESSES].length > 0
-    ) {
-      request[ReplicaOperationField.PEER_ADDRESSES] =
-        operation[ReplicaOperationField.PEER_ADDRESSES];
     }
     if (
       operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] &&

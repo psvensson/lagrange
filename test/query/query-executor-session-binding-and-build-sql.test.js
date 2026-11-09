@@ -35,6 +35,7 @@ import {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -98,6 +99,7 @@ test('QueryExecutor - executeOnPartition pins session-bound writes to the ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
     nodeId: 'local-node',
@@ -193,6 +195,7 @@ test('QueryExecutor - executeOnPartition clears session-bound replica ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
     nodeId: 'local-node',
@@ -327,6 +330,7 @@ test('QueryExecutor - executeOnPartition quarantines thrown stale no-handler ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter,
     systemCache,
     routingMetadataOverlay,
@@ -397,6 +401,7 @@ test('QueryExecutor - control-plane no-handler quarantine stays active until ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
     nodeId: 'local-node',
@@ -478,6 +483,7 @@ test('QueryExecutor - non-control-plane no-handler quarantine keeps default ' +
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
     nodeId: 'local-node',
@@ -549,6 +555,7 @@ test('QueryExecutor - findPartitionLeaderAddress prefers canonical partition lea
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
   });
@@ -600,6 +607,7 @@ test('QueryExecutor - excludes creating and syncing services from routable candi
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache,
     });
@@ -646,6 +654,7 @@ test('QueryExecutor - read candidates ignore NodeService leader hints', (t) => {
     };
 
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache,
     });
@@ -716,6 +725,7 @@ test('QueryExecutor - follows leader redirect response', async (t) => {
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: redirectRouter,
     systemCache,
   });
@@ -775,6 +785,7 @@ test('QueryExecutor - handles redirect when leader also fails', async (t) => {
   };
 
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: failingRouter,
     systemCache,
   });
@@ -792,6 +803,7 @@ test('QueryExecutor - handles redirect when leader also fails', async (t) => {
 test('QueryExecutor - preserves qualified logical table names as SQLite identifiers',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache(['p1']),
     });
@@ -825,6 +837,7 @@ test('QueryExecutor - preserves qualified logical table names as SQLite identifi
 
 test('QueryExecutor - buildInsertSQL appends RETURNING *', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
   });
@@ -838,6 +851,7 @@ test('QueryExecutor - buildInsertSQL appends RETURNING *', async (t) => {
 
 test('QueryExecutor - buildInsertSQL appends RETURNING columns', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
   });
@@ -851,6 +865,7 @@ test('QueryExecutor - buildInsertSQL appends RETURNING columns', async (t) => {
 
 test('QueryExecutor - buildInsertSQL omits RETURNING when absent', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
   });
@@ -864,6 +879,7 @@ test('QueryExecutor - buildInsertSQL omits RETURNING when absent', async (t) => 
 
 test('QueryExecutor - buildUpdateSQL appends RETURNING *', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
   });
@@ -877,6 +893,7 @@ test('QueryExecutor - buildUpdateSQL appends RETURNING *', async (t) => {
 
 test('QueryExecutor - buildUpdateSQL appends RETURNING columns', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
   });
@@ -890,6 +907,7 @@ test('QueryExecutor - buildUpdateSQL appends RETURNING columns', async (t) => {
 
 test('QueryExecutor - buildUpdateSQL omits RETURNING when absent', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
   });
@@ -903,6 +921,7 @@ test('QueryExecutor - buildUpdateSQL omits RETURNING when absent', async (t) => 
 
 test('QueryExecutor - buildDeleteSQL appends RETURNING *', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
   });
@@ -916,6 +935,7 @@ test('QueryExecutor - buildDeleteSQL appends RETURNING *', async (t) => {
 
 test('QueryExecutor - buildDeleteSQL appends RETURNING columns', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
   });
@@ -929,6 +949,7 @@ test('QueryExecutor - buildDeleteSQL appends RETURNING columns', async (t) => {
 
 test('QueryExecutor - buildDeleteSQL omits RETURNING when absent', async (t) => {
   const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache: createMockSystemCache(['p1']),
   });
@@ -943,6 +964,7 @@ test('QueryExecutor - buildDeleteSQL omits RETURNING when absent', async (t) => 
 test('QueryExecutor - buildSelectSQL emits derived table in FROM',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache(['p1']),
     });
@@ -980,6 +1002,7 @@ test('QueryExecutor - buildSelectSQL emits derived table in FROM',
 test('QueryExecutor - buildSelectSQL emits derived table in JOIN',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache(['p1']),
     });
@@ -1027,6 +1050,7 @@ test('QueryExecutor - buildSelectSQL emits derived table in JOIN',
 test('QueryExecutor - buildSelectSQL uses table name when no subquery',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache(['p1']),
     });
@@ -1042,6 +1066,7 @@ test('QueryExecutor - buildSelectSQL uses table name when no subquery',
 test('QueryExecutor - buildExpressionSQL emits CAST with affinity',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });
@@ -1058,6 +1083,7 @@ test('QueryExecutor - buildExpressionSQL emits CAST with affinity',
 test('QueryExecutor - buildExpressionSQL emits CAST with nested expression',
   async (t) => {
     const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       messageRouter: createMockMessageRouter(),
       systemCache: createMockSystemCache([]),
     });

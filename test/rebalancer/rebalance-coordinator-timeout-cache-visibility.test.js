@@ -37,7 +37,6 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
   async (t) => {
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - 70000;
-    const waitForCacheUpdateCalls = [];
     const timedOutOperationRow = {
       operation_id: 'op-stopping-timeout',
       type: 'REMOVE',
@@ -99,14 +98,6 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
       },
       cdcIntegrationService: {
         refreshAuthoritativeCacheRow: async () => true,
-        async waitForCacheUpdate(tableName, key, expectPresent, options = {}) {
-          waitForCacheUpdateCalls.push({
-            tableName,
-            key,
-            expectPresent,
-            options,
-          });
-        },
       },
       messageRouter: {
         async deliver() {
@@ -115,7 +106,7 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       sqlQueryEngine,
@@ -129,8 +120,6 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
       await coordinator.shutdown();
     }
 
-    t.equal(waitForCacheUpdateCalls.length, 0,
-      'timeout handling should not depend on projection visibility waits');
     t.equal(timedOutOperationRow.status, 'removed');
     t.equal(timedOutOperationRow.workflow_step, 'REMOVED');
   });
@@ -164,7 +153,6 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
 
     const cdcIntegrationService = {
       refreshAuthoritativeCacheRow: async () => true,
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
         sql,
@@ -267,7 +255,7 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       enableTimeouts: false,
@@ -440,7 +428,6 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
     },
     cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
-      async waitForCacheUpdate() {},
     },
     messageRouter: {
       async deliver() {
@@ -449,7 +436,7 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     sqlQueryEngine,
@@ -543,7 +530,6 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
       },
       cdcIntegrationService: {
         refreshAuthoritativeCacheRow: async () => true,
-        async waitForCacheUpdate() {},
       },
       messageRouter: {
         async deliver() {
@@ -552,7 +538,7 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 1};
+          return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
       sqlQueryEngine,
@@ -616,7 +602,6 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
       },
       cdcIntegrationService: {
         refreshAuthoritativeCacheRow: async () => true,
-        async waitForCacheUpdate() {},
       },
       messageRouter: {
         async deliver() {
@@ -625,7 +610,7 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 3};
+          return {targetReplicaCount: 3, minReplicaCount: 3};
         },
       },
       sqlQueryEngine: {
@@ -787,14 +772,16 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
             }),
           };
         },
+        async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
+          return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
+        },
       },
       cdcIntegrationService: {
         refreshAuthoritativeCacheRow: async () => true,
-        async waitForCacheUpdate() {},
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: 3};
+          return {targetReplicaCount: 3, minReplicaCount: 3};
         },
       },
       systemTableCache: {
@@ -929,7 +916,6 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
 
     const cdcIntegrationService = {
       refreshAuthoritativeCacheRow: async () => true,
-      async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
         sql,
@@ -1052,7 +1038,7 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       enableTimeouts: false,

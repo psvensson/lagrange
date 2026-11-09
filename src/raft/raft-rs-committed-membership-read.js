@@ -73,6 +73,23 @@ function identitiesOf(group, ids) {
   return identities;
 }
 
+/**
+ * Every id's committed node: the node its admission (or its founding or
+ * joining stamp, or a snapshot image) committed, or null where this replica
+ * holds none, including an id whose identity it never reserved.
+ * @param {Object} group - The runtime group (resolvePeerNodeId).
+ * @param {Object} identities - {peerId: replicaIdentity|null}.
+ * @return {Object} {peerId: nodeId|null}.
+ */
+function nodeIdsOf(group, identities) {
+  const nodeIds = {};
+  for (const [peerId, identity] of Object.entries(identities)) {
+    nodeIds[peerId] = identity === null ? null :
+      group.resolvePeerNodeId(identity);
+  }
+  return nodeIds;
+}
+
 // What a bootstrap or retirement read refuses of a configuration still in
 // transition: a joint configuration; for a retirement read also a proposed
 // change not yet applied (a member it adds would never be retired).
@@ -138,6 +155,12 @@ function answerCommittedMembership(group, status, purpose) {
     return committedMembershipRefusal(
       COMMITTED_MEMBERSHIP_REFUSAL.IDENTITY_UNRESOLVED);
   }
+  let nodeIds;
+  try {
+    nodeIds = nodeIdsOf(group, identities);
+  } catch {
+    return committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD);
+  }
   return deepFreeze({
     kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED,
     voters,
@@ -152,6 +175,7 @@ function answerCommittedMembership(group, status, purpose) {
     leaderId: status.leaderId ?? null,
     gateOpen: status.gateOpen,
     identities,
+    nodeIds,
   });
 }
 

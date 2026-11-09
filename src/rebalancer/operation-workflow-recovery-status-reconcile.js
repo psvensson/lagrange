@@ -514,6 +514,8 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       operation.targetNodeId,
       {
         entityType,
+        ignoreUnclaimedPreRuntimeFailedCreate:
+          this.isPreSyncCreateOperation(operation),
       },
     );
     if (cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY) {

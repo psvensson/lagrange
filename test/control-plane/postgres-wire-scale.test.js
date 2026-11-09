@@ -57,8 +57,7 @@ test('PG-wire scale never reports zero, unknown, ambiguous or deferred effects p
     {...APPLIED, partitionResult: {affectedRows: 0,
       settledReplay: PARTITION_SETTLED_REPLAY.OUTCOME_NOT_RETAINED}},
     ...[2, -1, '1'].map((affectedRows) => ({...APPLIED, partitionResult: {affectedRows}})),
-    {success: true, outcome: CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED, affectedRows: 0},
-    {success: true, outcome: CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY, affectedRows: 1}];
+    {success: true, outcome: CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED, affectedRows: 0}];
   for (const result of unknown) {
     const {admin} = fixture(result);
     const response = await admin.scalePostgresWireListener(REQUEST);

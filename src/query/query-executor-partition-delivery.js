@@ -12,7 +12,13 @@ import {
   createPartitionCandidateDeliveryState,
 } from './query-executor-partition-candidate-state.js';
 import {
+  applySuccessfulCandidateAffinity,
   buildQueryPartitionCandidateFailureDetails,
+  buildQueryPartitionRoutingDenialFailureDetails,
+  clearPinnedCandidateAddress,
+  hasPlanningRefreshPendingDenial,
+  resolveNoCandidateErrorMessage,
+  resolveRedirectParticipantNodeId,
 } from './query-executor-partition-failure.js';
 import {
   resolvePartitionExecutionBuilders,
@@ -22,7 +28,6 @@ import {
   createUnknownOutcomeRedelivery,
   withWriteEntryIdentity,
 } from './query-executor-unknown-outcome.js';
-import {pickTypedWriteAnswer} from '../partition/partition-write-kernel.js';
 import {deliveryAnswerOf, deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyThrownDeliveryError,
   deliveryReadingOf} from
   '../transport/transport-semantic-outcome.js';
@@ -38,12 +43,9 @@ const {
   QUERY_LOG_MSG,
   QUERY_RESPONSE_TYPE,
   normalizeParticipantFailureString,
-  resolveParticipantBackpressureState,
 } = QUERY_EXECUTOR_SHARED;
 
 const LOCAL_NUM_PLANNING_REFRESH_MAX_ATTEMPTS = 30;
-const LOCAL_STR_PLANNING_SNAPSHOT_REFRESH_PENDING =
-  'planning_snapshot_refresh_pending';
 
 class QueryExecutorPartitionDelivery extends QueryExecutorBase {
   async executeOnPartition(
@@ -178,58 +180,46 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
       attemptBudget.reportReadAttemptsSpent(currentMaxAttempts);
       return buildLastFailureResult();
     };
+    const resolveAttemptCandidates = () =>
+      this.resolvePartitionServiceCandidates(
+        partitionId,
+        forRead,
+        preferLeader,
+        preferSameLatencyGroup,
+        routingReadinessDimension,
+        {
+          allowReadinessAuthoritativeRefresh,
+          [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]:
+            executionOptions?.readAuthority || null,
+          recoveryCandidateSelectionKey:
+            executionOptions.recoveryCandidateSelectionKey,
+        },
+      );
     for (let attempt = 1; attempt <= currentMaxAttempts; attempt++) {
       lastAttempt = attempt;
       this.throwIfCancelled(cancellationToken);
       const attemptBudgetMs = getRemainingExecutionBudgetMs();
       if (attemptBudgetMs !== null && attemptBudgetMs <= 0) {
         attemptBudget.reportDeadlineSpentBeforeAttempt();
-        return {
-          ...buildFailureResult(
-            lastError || ERRORS.QUERY_FAILED,
-            lastFailureDetails,
-          ),
-        };
+        return buildLastFailureResult();
       }
       let {candidates: serviceCandidates, routingSnapshot} =
-        this.resolvePartitionServiceCandidates(
-          partitionId,
-          forRead,
-          preferLeader,
-          preferSameLatencyGroup,
-          routingReadinessDimension,
-          {
-            allowReadinessAuthoritativeRefresh,
-            [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]:
-              executionOptions?.readAuthority || null,
-            recoveryCandidateSelectionKey:
-                executionOptions.recoveryCandidateSelectionKey,
-          },
-        );
+        resolveAttemptCandidates();
       if (
-        !awaitedRoutingRepair &&
         serviceCandidates.length === 0 &&
+        (!awaitedRoutingRepair || hasPlanningRefreshPendingDenial(routingSnapshot)) &&
         (await this.maybeAwaitDeniedPartitionRoutingRepair(routingSnapshot, {
           allowReadinessAuthoritativeRefresh,
+          timeoutMs: getRemainingExecutionBudgetMs(),
+          timeoutBudget: executionOptions?.timeoutBudget || null,
+          cancellationToken,
+          signal: executionOptions?.signal || null,
         }))
       ) {
         awaitedRoutingRepair = true;
         this.throwIfCancelled(cancellationToken);
         ({candidates: serviceCandidates, routingSnapshot} =
-          this.resolvePartitionServiceCandidates(
-            partitionId,
-            forRead,
-            preferLeader,
-            preferSameLatencyGroup,
-            routingReadinessDimension,
-            {
-              allowReadinessAuthoritativeRefresh,
-              [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]:
-                executionOptions?.readAuthority || null,
-              recoveryCandidateSelectionKey:
-                  executionOptions.recoveryCandidateSelectionKey,
-            },
-          ));
+          resolveAttemptCandidates());
       }
       if (!requireCanonicalLeader) {
         serviceCandidates = this.prioritizeSessionPartitionAddress(
@@ -240,26 +230,20 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         );
       }
       if (serviceCandidates.length === 0) {
-        const hasRoutableService =
-          routingSnapshot.routableServiceCount > 0;
+        lastFailureDetails =
+          buildQueryPartitionRoutingDenialFailureDetails(routingSnapshot);
+        const hasRoutableService = routingSnapshot.routableServiceCount > 0;
         const hasPartitionRecord = this.hasPartitionRecord(partitionId);
         if (!forRead) {
-          if (hasRoutableService && attempt < maxAttempts) {
-            lastError = ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE;
-            if (!(await waitForRetryBudget(this.leaderRetryDelayMs))) {
-              return buildPreSubmissionRouteFailureResult(
-                lastError,
-                lastFailureDetails,
-              );
-            }
-            continue;
-          }
-          if (
-            !hasRoutableService &&
-            hasPartitionRecord &&
-            attempt < maxAttempts
-          ) {
-            lastError = ERRORS.PARTITION_SERVICE_NOT_FOUND;
+          const canRetryWrite =
+            attempt < maxAttempts && (hasRoutableService || hasPartitionRecord);
+          lastError = resolveNoCandidateErrorMessage({
+            forRead: false,
+            hasRoutableService,
+            hasPartitionRecord,
+            isFinalWriteAttempt: !canRetryWrite,
+          });
+          if (canRetryWrite) {
             if (!(await waitForRetryBudget(this.leaderRetryDelayMs))) {
               return buildPreSubmissionRouteFailureResult(
                 lastError,
@@ -273,48 +257,29 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               partitionId,
               attempts: attempt,
             });
-            return buildPreSubmissionRouteFailureResult(
-              ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
-            );
-          }
-          if (!hasRoutableService) {
+          } else {
             this.logNoServiceForPartition(partitionId, routingSnapshot);
-            return buildPreSubmissionRouteFailureResult(
-              QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND,
-            );
           }
-        } else {
-          // §1.10/§1.12: Reads get bounded retries so routing
-          // repair and cache convergence can discover candidates.
-          const isPlanningRefreshPending =
-            Object.values(routingSnapshot?.deniedByNodeId || {}).some((entry) =>
-              Array.isArray(entry?.reasonCodes) &&
-              entry.reasonCodes.some(
-                (code) =>
-                  String(code?.code ?? code) ===
-                  LOCAL_STR_PLANNING_SNAPSHOT_REFRESH_PENDING,
-              ),
-            );
-          if (
-            isPlanningRefreshPending &&
-            currentMaxAttempts < LOCAL_NUM_PLANNING_REFRESH_MAX_ATTEMPTS
-          ) {
-            currentMaxAttempts = LOCAL_NUM_PLANNING_REFRESH_MAX_ATTEMPTS;
-          }
-          if (hasPartitionRecord && attempt < currentMaxAttempts) {
-            lastError = QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND;
-            if (!(await waitForRetryBudget(this.leaderRetryDelayMs))) {
-              return {
-                ...buildFailureResult(lastError, lastFailureDetails),
-              };
-            }
-            continue;
-          }
-          this.logNoServiceForPartition(partitionId, routingSnapshot);
-          return {
-            ...buildFailureResult(QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND),
-          };
+          return buildPreSubmissionRouteFailureResult(
+            lastError,
+            lastFailureDetails,
+          );
         }
+        lastError = QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND;
+        if (
+          hasPlanningRefreshPendingDenial(routingSnapshot) &&
+          currentMaxAttempts < LOCAL_NUM_PLANNING_REFRESH_MAX_ATTEMPTS
+        ) {
+          currentMaxAttempts = LOCAL_NUM_PLANNING_REFRESH_MAX_ATTEMPTS;
+        }
+        if (hasPartitionRecord && attempt < currentMaxAttempts) {
+          if (!(await waitForRetryBudget(this.leaderRetryDelayMs))) {
+            return {...buildFailureResult(lastError, lastFailureDetails)};
+          }
+          continue;
+        }
+        this.logNoServiceForPartition(partitionId, routingSnapshot);
+        return {...buildFailureResult(lastError, lastFailureDetails)};
       }
       const candidateState = createPartitionCandidateDeliveryState({
         allowReadinessAuthoritativeRefresh,
@@ -420,21 +385,13 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           // answer when delivered, else the transport outcome.
           const response = deliveryReadingOf(delivery);
           if (isSuccessfulResponse(delivery)) {
-            this.clearTemporarilyUnroutableAddress(partitionId, address);
-            if (
-              executionOptions.clearSessionPartitionAffinityOnSuccess === true
-            ) {
-              this.clearSessionPartitionAddress(
-                executionOptions.sessionId,
-                partitionId,
-              );
-            } else if (!forRead) {
-              this.setSessionPartitionAddress(
-                executionOptions.sessionId,
-                partitionId,
-                address,
-              );
-            }
+            applySuccessfulCandidateAffinity(
+              this,
+              executionOptions,
+              partitionId,
+              address,
+              forRead,
+            );
             return buildSuccessResult(deliveryAnswerOf(delivery), {
               partitionId,
               address,
@@ -459,18 +416,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               attemptedAddresses,
             );
             if (redirectRouterDeliveryOptions === null) {
-              // lastError || ERRORS.QUERY_FAILED, matching every other
-              // exhausted-candidates return in this method: the only
-              // errorMessage in this scope is declared later in the block, so
-              // referencing it here threw a temporal-dead-zone ReferenceError
-              // whenever a redirect exhausted delivery options before any
-              // failure had been recorded (full-gate run 32623687633).
-              return {
-                ...buildFailureResult(
-                  lastError || ERRORS.QUERY_FAILED,
-                  lastFailureDetails,
-                ),
-              };
+              return buildLastFailureResult();
             }
             deliverySubmitted = true;
             unknownOutcome.recordDelivery();
@@ -491,24 +437,13 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             deliverySubmitted = false;
             const redirectResponse = deliveryReadingOf(redirectDelivery);
             if (isSuccessfulResponse(redirectDelivery)) {
-              this.clearTemporarilyUnroutableAddress(
+              applySuccessfulCandidateAffinity(
+                this,
+                executionOptions,
                 partitionId,
                 response.leaderAddress,
+                forRead,
               );
-              if (
-                executionOptions.clearSessionPartitionAffinityOnSuccess === true
-              ) {
-                this.clearSessionPartitionAddress(
-                  executionOptions.sessionId,
-                  partitionId,
-                );
-              } else if (!forRead) {
-                this.setSessionPartitionAddress(
-                  executionOptions.sessionId,
-                  partitionId,
-                  response.leaderAddress,
-                );
-              }
               return buildSuccessResult(deliveryAnswerOf(redirectDelivery), {
                 partitionId,
                 address: response.leaderAddress,
@@ -520,13 +455,17 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             // Redirect target also failed - continue to next candidate
             const redirectFailureMessage =
               redirectResponse.error || ERRORS.QUERY_FAILED;
+            const redirectParticipantNodeId = resolveRedirectParticipantNodeId(
+              response.leaderAddress,
+              serviceInfo?.nodeId,
+            );
             const redirectUnknownDecision =
               unknownOutcome.observeAnswer(redirectResponse);
             if (redirectUnknownDecision !== UNKNOWN_OUTCOME_DECISION.NONE) {
               recordCandidateFailure(
                 redirectFailureMessage,
                 redirectResponse,
-                serviceInfo?.nodeId,
+                redirectParticipantNodeId,
                 response.leaderAddress,
               );
               if (
@@ -547,7 +486,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             recordCandidateFailure(
               redirectFailureMessage,
               redirectResponse,
-              serviceInfo?.nodeId,
+              redirectParticipantNodeId,
               response.leaderAddress,
             );
             if (
@@ -603,12 +542,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               candidateIndex,
               serviceInfo?.nodeId || null,
             );
-            if (
-              !forRead &&
-              this.isLeaderUnavailable(errorMessage, response?.errorCode)
-            ) {
-              continue;
-            }
             continue;
           }
           const errorMessage = response.error || ERRORS.QUERY_FAILED;
@@ -649,17 +582,12 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               serviceInfo?.nodeId,
               address,
             );
-            if (
-              this.getSessionPartitionAddress(
-                executionOptions.sessionId,
-                partitionId,
-              ) === address
-            ) {
-              this.clearSessionPartitionAddress(
-                executionOptions.sessionId,
-                partitionId,
-              );
-            }
+            clearPinnedCandidateAddress(
+              this,
+              executionOptions,
+              partitionId,
+              address,
+            );
             candidateState.queueLeaderRecoveryCandidates(
               candidateIndex,
               serviceInfo?.nodeId || null,
@@ -683,15 +611,16 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             continue;
           }
           return {
-            ...buildFailureResult(errorMessage, {
-              ...pickTypedWriteAnswer(response),
-              errorCode: response?.errorCode,
-              retryAfterMs: response?.retryAfterMs,
-              deferRetry: response?.deferRetry,
-              participantNodeId: serviceInfo?.nodeId,
-              participantAddress: address,
-              backpressured: resolveParticipantBackpressureState(response),
-            }),
+            ...buildFailureResult(
+              errorMessage,
+              buildQueryPartitionCandidateFailureDetails({
+                executor: this,
+                failure: response,
+                forRead,
+                participantNodeId: serviceInfo?.nodeId,
+                participantAddress: address,
+              }),
+            ),
           };
         } catch (error) {
           const errorMessage =
@@ -719,73 +648,17 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               serviceInfo?.nodeId || null,
             );
             if (!forRead) {
-              if (
-                this.getSessionPartitionAddress(
-                  executionOptions.sessionId,
-                  partitionId,
-                ) === address
-              ) {
-                this.clearSessionPartitionAddress(
-                  executionOptions.sessionId,
-                  partitionId,
-                );
-              }
+              clearPinnedCandidateAddress(
+                this,
+                executionOptions,
+                partitionId,
+                address,
+              );
               candidateState.queueLeaderRecoveryCandidates(
                 candidateIndex,
                 serviceInfo?.nodeId || null,
               );
             }
-            continue;
-          }
-          if (
-            !forRead &&
-            this.isLeaderUnavailable(
-              errorMessage,
-              classifyThrownDeliveryError(error).errorCode,
-            )
-          ) {
-            const controlPlaneWriteRetryDecision =
-              this.resolveControlPlaneWriteRetryDecision(
-                partitionId,
-                error,
-                forRead,
-              );
-            if (
-              controlPlaneWriteRetryDecision.state !==
-              CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.NONE
-            ) {
-              recordCandidateFailure(
-                errorMessage,
-                error,
-                serviceInfo?.nodeId,
-                address,
-              );
-              if (followRetryDecision(controlPlaneWriteRetryDecision)) {
-                break;
-              }
-              continue;
-            }
-            recordCandidateFailure(
-              errorMessage,
-              error,
-              serviceInfo?.nodeId,
-              address,
-            );
-            if (
-              this.getSessionPartitionAddress(
-                executionOptions.sessionId,
-                partitionId,
-              ) === address
-            ) {
-              this.clearSessionPartitionAddress(
-                executionOptions.sessionId,
-                partitionId,
-              );
-            }
-            candidateState.queueLeaderRecoveryCandidates(
-              candidateIndex,
-              serviceInfo?.nodeId || null,
-            );
             continue;
           }
           const controlPlaneWriteRetryDecision =
@@ -807,6 +680,31 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             if (followRetryDecision(controlPlaneWriteRetryDecision)) {
               break;
             }
+            continue;
+          }
+          if (
+            !forRead &&
+            this.isLeaderUnavailable(
+              errorMessage,
+              classifyThrownDeliveryError(error).errorCode,
+            )
+          ) {
+            recordCandidateFailure(
+              errorMessage,
+              error,
+              serviceInfo?.nodeId,
+              address,
+            );
+            clearPinnedCandidateAddress(
+              this,
+              executionOptions,
+              partitionId,
+              address,
+            );
+            candidateState.queueLeaderRecoveryCandidates(
+              candidateIndex,
+              serviceInfo?.nodeId || null,
+            );
             continue;
           }
 
@@ -833,36 +731,22 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           });
           if (unknownOutcome.isUnresolved()) {
             // A write whose outcome is unknown ends typed, never thrown.
-            return buildFailureResult(errorMessage, {
-              participantNodeId: serviceInfo?.nodeId,
-              participantAddress: address,
-            });
+            return buildFailureResult(
+              errorMessage,
+              buildQueryPartitionCandidateFailureDetails({
+                executor: this,
+                failure: error,
+                forRead,
+                participantNodeId: serviceInfo?.nodeId,
+                participantAddress: address,
+              }),
+            );
           }
           throw error;
         }
       }
-      if (candidateState.shouldRetryCurrentAddress()) {
-        if (attempt < currentMaxAttempts) {
-          if (!(await waitForLeaderRetryBudget())) {
-            return buildLastFailureResult();
-          }
-          continue;
-        }
-        return returnReadAttemptsSpent();
-      }
-      if (candidateState.shouldDeferPartitionRetry()) {
-        if (attempt < currentMaxAttempts) {
-          if (!(await waitForLeaderRetryBudget())) {
-            return buildLastFailureResult();
-          }
-          continue;
-        }
-        return returnReadAttemptsSpent();
-      }
-      if (attempt < currentMaxAttempts) {
-        if (!(await waitForLeaderRetryBudget())) {
-          return buildLastFailureResult();
-        }
+      if (attempt < currentMaxAttempts && !(await waitForLeaderRetryBudget())) {
+        return buildLastFailureResult();
       }
     }
     return returnReadAttemptsSpent();

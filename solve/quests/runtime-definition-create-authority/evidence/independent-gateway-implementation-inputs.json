@@ -1,0 +1,144 @@
+{
+  "reviewer": "subagent:/root/independent_review",
+  "ruleSetRevision": 5,
+  "base": "6cd5753fb23e32d0f9d73676ab7651ba650cb6b5",
+  "manifest": {
+    "path": "test-output/runtime-definition-create-authority-20261106/gateway-implementation-content.json",
+    "sha256": "f30c583d3707add071bca4885784da21a3f0dabcdd22c5fddec203b1a945fc5c",
+    "bytes": 3114
+  },
+  "files": [
+    {
+      "path": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
+      "sha256": "c1ead2322413dfc52e23604861b71234a2e687a65e60bc806c3e485cdc715b00"
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service-seed-delegates.js",
+      "sha256": "2eb1c92293a22328f896040b6d11135c4fbec241f639479967087aeae1ff7f9a"
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service.js",
+      "sha256": "1ba5adea2ec49f84e140f97863cee2eaa63bf3b78d1bc1d07674475452182554"
+    },
+    {
+      "path": "src/bootstrap/join-cleanup-handler.js",
+      "sha256": "e78b2cf351b3e740c283ec6012062efe279ca14ca1f0bb45ec4d5512119ce68e"
+    },
+    {
+      "path": "src/bootstrap/node-joining-delegate-bundles.js",
+      "sha256": "db1fc12d2d212e18c1f1640f677803b05af0d542fb98a9a09c259b637432ad76"
+    },
+    {
+      "path": "src/bootstrap/node-joining-owner-construction.js",
+      "sha256": "aafd059912763824669b34c594a7bbc5181e0b6e5901a579840a6cffa9ff7e28"
+    },
+    {
+      "path": "src/bootstrap/node-joining-publication-activation.js",
+      "sha256": "5850a8018428a589afd4be68643d17c0709a7e7bd889e77998ec755f82a33f30"
+    },
+    {
+      "path": "src/bootstrap/pgwire-startup-safety-gate-constants.js",
+      "sha256": "86542d1160bb150060c24cb7ee3cd71311656d05be74a2c0606f2abf8b2351d6"
+    },
+    {
+      "path": "src/bootstrap/pgwire-startup-safety-gate.js",
+      "sha256": "7575c461573ee7b84beeedb5ad779ec5d390976bd0e5a663bda353ab32b34ae7"
+    },
+    {
+      "path": "src/bootstrap/shared/control-plane-setup.js",
+      "sha256": "8701a0e2b2595b02b369c6ee3530da2d47a2bf0b1f887c9858831cc044edf796"
+    },
+    {
+      "path": "src/bootstrap/shared/guarded-runtime-service-handler.js",
+      "sha256": "1571b96c520a785c137eb66aa1e31c25d33fcfe42d24a23d5340c8447b607f41"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-sequence.test.js",
+      "sha256": "80fdb5397d004b9aff725c2c4d49a7800c5e434108255f2a0453d2405c95f5a6"
+    },
+    {
+      "path": "test/bootstrap/cleanup-ownership-order-characterization.test.js",
+      "sha256": "6c3e56f25285871d2a57dff76d8a38ebde945c88bb6ac85903660a4e192ad1c6"
+    },
+    {
+      "path": "test/bootstrap/guarded-runtime-service-handler.test.js",
+      "sha256": "deeaae4710618601454e94cc290aa5bf55094dda196bc1a609148654be465aba"
+    },
+    {
+      "path": "test/bootstrap/node-joining-service-join-lifecycle-resume.test.js",
+      "sha256": "b194b1aa42df51b13109fc85e7e49467911aba062c0c80938cbdd823ef208afc"
+    },
+    {
+      "path": "test/bootstrap/pgwire-startup-safety-gate.test.js",
+      "sha256": "b6548f5c79801bf444011d3d36a2b2b55b927a2fda5c119b61027ff28f89a6a7"
+    },
+    {
+      "path": "test/bootstrap/shared/control-plane-setup.test.js",
+      "sha256": "206f933088e211a6c6f6918a6eb6951c22f9a811360f4c0aede50af531b0217d"
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "sha256": "a2eca0edd45e532ec73bb361bfe0dc3515d7797f37579ff9b2ae14be36c6811a"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/gateway-composition-before.log",
+      "sha256": "5f343f97501c0cb0891ed7c952a745214bced15062006dda54bd496d5a7c4ba2",
+      "bytes": 149338
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/gateway-composition-after.log",
+      "sha256": "b7d5fa1096b05cb0051a5c43ec50e2dfe96e5306175e6c020d887286e9ebfcae",
+      "bytes": 915
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/gateway-guard-before.log",
+      "sha256": "9a2f7fd6d9884156412a91145187e4693e95afca96003d5b238608963fa47eb2",
+      "bytes": 54344
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/gateway-static-full.log",
+      "sha256": "623ba65fb06ac8090d307af3b1fe6865477f9d5d2b50becf7280ec58d357732c",
+      "bytes": 12252
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/gateway-composition-final.log",
+      "sha256": "983b781834ef5ec62d63a5a859a1cd1e88703c2d4a04a0d7ed4fbcba0358b177",
+      "bytes": 915
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/gateway-static-corrected.log",
+      "sha256": "cef22ccc9fff37570f4f0081fe360e95256c35fd079e3c4e7a37a06bd6964455",
+      "bytes": 9408
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/gateway-named-guard.log",
+      "sha256": "269034213e51edf4d0097fbac1380bccb7ff71faa4ed67886ebeb16412d9dd04",
+      "bytes": 342
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/gateway-implementation-content-before-static-corrections.json",
+      "sha256": "4f73f08ae9c15a7d538fa93221ca8c180e4cf355258136ba9c5611249d78a9aa",
+      "bytes": 3114
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/gateway-implementation-content.json",
+      "sha256": "f30c583d3707add071bca4885784da21a3f0dabcdd22c5fddec203b1a945fc5c",
+      "bytes": 3114
+    },
+    {
+      "path": "test-output/runtime-definition-create-authority-20261106/independent-gateway-composition-design.md",
+      "sha256": "dbcc0eeae875a83c3adf7c9eb4f577331b5b94d562e9dd28f89a6d487f5a49be",
+      "bytes": 7494
+    }
+  ],
+  "results": {
+    "finalFiles": 7,
+    "reportedAssertions": 334,
+    "ordinaryReported": 9,
+    "bootstrapReported": 325,
+    "staticAuditsPassed": 33
+  },
+  "scope": "Bounded WIP implementation approval only; exact committed/frozen/public journey/full source proof remain open"
+}

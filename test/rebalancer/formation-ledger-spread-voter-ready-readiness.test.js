@@ -1,57 +1,9 @@
 /**
- * Quest formation-ledger-spread-voter-ready-readiness (DT-first rung):
- * deterministic reproduction of the cold-formation operation-ledger spread
- * wedge, pinned from the live run archived at
- * run4-archive/service-data-affinity-demo (2026-08-15T11:15Z):
- *
- * The seed's spread REPLACE for replica_operations-p1 settled with
- * `sourceState: removal_required` (drain released, source retained), leaving
- * the DURABLE wedge the joiners' formation barrier observes forever:
- * 4 ACTIVE voters on 3 distinct nodes with 2 voters on the seed —
- * `settledSpreadComplete false`, `totalVoters 4, maxVotersOnOneNode 2` —
- * while every joiner burns the full 120s formation-barrier timeout and
- * restarts its join.
- *
- * The cure the barrier is waiting for is ONE surplus drain: remove one of
- * the seed's two co-located voters. That drain is refused by the
- * execution-time remove-safety voter-ready floor, because the floor counts
- * only voter-ready ROUTABLE rows —
- *   operation-workflow-remove-safety-evaluator.js:503
- *     currentVoterReadyRows = rows.filter(isVoterReadyRoutableReplica)
- *   priority-publication-safety-topology.js:133 isVoterReadyRoutableReplica
- *     -> priority-publication-safety-rows.js:215 isNodeReadyForRouting
- *     -> controlPlaneReadinessService node readiness dimensions
- * — and a formation-barrier-held joiner HAS no READY lease by construction
- * (the barrier itself withholds it), so its readiness denies with the
- * EVIDENCE-ABSENT reason class (planning_snapshot_refresh_pending /
- * owner_evidence_missing). The joiners' healthy, promoted raft voters are
- * therefore invisible to the floor, the projection drops to 1/3, and the
- * drain defers forever: the barrier waits for the spread, the spread's
- * drain waits for readiness, readiness waits for the barrier.
- *
- * These tests encode the SEALED direction (mirroring the approved
- * system-table leader fail-open in
- * src/query/query-executor-partition-routing-snapshot.js): a replica that is
- * voter-ready by TOPOLOGY (active + addressed + voter raft role) on a node
- * whose readiness denial consists EXCLUSIVELY of evidence-absent reason
- * codes must count toward the remove-safety voter-ready floor. Substantive
- * denials (liveness, membership, transport) keep the floor closed — the
- * guard case below pins that no-guard-weakening constraint and must stay
- * green before AND after the fix.
- *
- * RED at HEAD: the surplus-drain REMOVE (the wedge's only remaining cure)
- * defers with "would drop voter-ready replicas below minimum (1/3)".
- *
- * Why the REMOVE and not the REPLACE leg: an in-flight spread REPLACE whose
- * target sits in the recovery projection cohort rides the shared completion
- * contract (state `spread_satisfied_in_flight`, reasonCode
- * `replace_remove_dispatch_phase_on_eligible_target`, blocked:false), which
- * short-circuits the floor — characterized green below. The live run's
- * REPLACE settled WITHOUT draining its source
- * (`sourceState: removal_required`, `drainState: owner_unavailable_released`
- * at 11:15:37), consuming that lane; the standalone surplus REMOVE left
- * behind has no completion lane and dies at the floor. That asymmetry is
- * why the wedge is durable.
+ * R09 supersession: committed-node-remove-safety-wake replaces the exhausted
+ * predecessor Quest's evidence-absent/lease-zero floor carve-out. Its original
+ * seal, red evidence and separate five-node gate remain in the append-only
+ * history. This controlled placement fixture now requires committed current
+ * node leases; projection reason codes never grant floor credit.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -69,7 +21,7 @@ import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {
   getAuthoritativeOperationLedgerPlacementObservation,
 } from '../../src/rebalancer/operation-ledger-quorum-concentration.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {createMockControlPlaneReadinessService, createTestCoordinator} from './test-helpers.js';
 
 const TEST_LEDGER_PARTITION_ID = 'replica_operations-p1';
 const TEST_SEED_NODE_ID = 'seed-node';
@@ -180,7 +132,7 @@ function createSettledWedgeServiceRows() {
  * whole formation cohort so the voter-ready floor is the only
  * readiness-discriminating gate on the drain path under test.
  */
-function createColdFormationReadinessService({denialReasonCodesByNodeId}) {
+function createColdFormationReadinessService({denialReasonCodesByNodeId, nodeRows}) {
   const cohortNodeIds = Object.freeze([
     TEST_SEED_NODE_ID,
     TEST_JOINER_NODE_ID_B,
@@ -203,47 +155,47 @@ function createColdFormationReadinessService({denialReasonCodesByNodeId}) {
       missingPartitionIds: [],
     }),
   });
-  return {
-    getNodeReadinessSync(nodeId) {
-      const denialReasonCodes = denialReasonCodesByNodeId[nodeId] || null;
-      const eligible = !denialReasonCodes;
-      const dimensions = {};
-      for (const dimensionName of Object.values(
-        CONTROL_PLANE_READINESS_DIMENSION,
-      )) {
-        if (typeof dimensionName === 'string') {
-          dimensions[dimensionName] = eligible;
+  return createMockControlPlaneReadinessService({
+    readNodeRows: () => nodeRows,
+    callbacks: {
+      getNodeReadinessSync(nodeId) {
+        const denialReasonCodes = denialReasonCodesByNodeId[nodeId] || null;
+        const eligible = !denialReasonCodes;
+        const dimensions = {};
+        for (const dimensionName of Object.values(
+          CONTROL_PLANE_READINESS_DIMENSION,
+        )) {
+          if (typeof dimensionName === 'string') {
+            dimensions[dimensionName] = eligible;
+          }
         }
-      }
-      // Both denial-reason surfaces of the production snapshot: `reasons`
-      // ([{code}] — the shape the query-executor fail-open consumes) and
-      // the flat `reasonCodes` list.
-      return {
-        nodeId,
-        dimensions,
-        reasons: denialReasonCodes ?
-          denialReasonCodes.map((code) => ({code})) :
-          [],
-        reasonCodes: denialReasonCodes ? [...denialReasonCodes] : [],
-        observedAt: Date.now(),
-      };
+        // Both denial-reason surfaces of the production snapshot: `reasons`
+        // ([{code}] — the shape the query-executor fail-open consumes) and
+        // the flat `reasonCodes` list.
+        return {
+          nodeId,
+          dimensions,
+          reasons: denialReasonCodes ?
+            denialReasonCodes.map((code) => ({code})) :
+            [],
+          reasonCodes: denialReasonCodes ? [...denialReasonCodes] : [],
+          observedAt: Date.now(),
+        };
+      },
+      // REMOVE safety reads the owner surface; the same modelled formation
+      // planning state is presented there, unchanged. The best-effort surfaces
+      // stay for the AVAILABLE consumers in this scenario.
+      async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
+        return buildPlanningSnapshot(nodeId);
+      },
+      async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
+        return buildPlanningSnapshot(nodeId);
+      },
+      getPriorityRecoveryPlanningAnswerSync(nodeId) {
+        return buildPlanningSnapshot(nodeId);
+      },
     },
-    // REMOVE safety reads the owner surface; the same modelled formation
-    // planning state is presented there, unchanged. The best-effort surfaces
-    // stay for the AVAILABLE consumers in this scenario.
-    async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
-      return buildPlanningSnapshot(nodeId);
-    },
-    async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
-      return buildPlanningSnapshot(nodeId);
-    },
-    async getMembershipPublicationPlanningSnapshot(nodeId) {
-      return buildPlanningSnapshot(nodeId);
-    },
-    getPriorityRecoveryPlanningAnswerSync(nodeId) {
-      return buildPlanningSnapshot(nodeId);
-    },
-  };
+  });
 }
 
 // Answer the coordinator's authoritative (owner_rpc_lane) services reads
@@ -280,17 +232,23 @@ function installAuthoritativeServicesRead(coordinator, rowsProvider) {
   };
 }
 
-function createWedgeCoordinator({denialReasonCodesByNodeId}) {
+function createWedgeCoordinator({denialReasonCodesByNodeId, committedJoinersReady = false}) {
+  const nodeRows = [createSeedReadyNodeRow(),
+    createBarrierHeldJoinerNodeRow(TEST_JOINER_NODE_ID_B),
+    createBarrierHeldJoinerNodeRow(TEST_JOINER_NODE_ID_C)];
+  if (committedJoinersReady) {
+    for (const row of nodeRows) row.ready_lease_expires_at = Date.now() + 60000;
+  }
   const coordinator = createTestCoordinator({
     nodeId: TEST_SEED_NODE_ID,
     enableTimeouts: false,
     controlPlaneReadinessService: createColdFormationReadinessService({
-      denialReasonCodesByNodeId,
+      denialReasonCodesByNodeId, nodeRows,
     }),
     tablePolicyService: {
       getPolicyForPartition: () => ({
         minReplicaCount: TEST_MIN_REPLICA_COUNT,
-        replicaCount: TEST_TARGET_REPLICA_COUNT,
+        targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
       }),
     },
     cacheData: {
@@ -324,75 +282,39 @@ function describeEvaluation(evaluation) {
   });
 }
 
-test('RED (binding check): draining one of the seed\'s two co-located ' +
-'ledger voters must be SAFE when the remaining topology-voter-ready ' +
-'replicas sit on formation-barrier-held joiners whose readiness denials ' +
-'are exclusively evidence-absent — at HEAD the remove-safety voter-ready ' +
-'floor (operation-workflow-remove-safety-evaluator.js SIMPLE_FLOOR via ' +
-'isVoterReadyRoutableReplica -> isNodeReadyForRouting) refuses 1/3',
-async (t) => {
-  initializeTestEnvironment();
-  const coordinator = createWedgeCoordinator({
-    denialReasonCodesByNodeId: {
-      [TEST_JOINER_NODE_ID_B]: TEST_EVIDENCE_ABSENT_DENIAL_REASON_CODES,
-      [TEST_JOINER_NODE_ID_C]: TEST_EVIDENCE_ABSENT_DENIAL_REASON_CODES,
-    },
-  });
-  coordinator.initialize();
-  try {
-    // Harness sanity: the joiner replicas ARE voter-ready by topology (the
-    // replacement promoted; only node readiness is withheld). If this fails
-    // the fixture no longer models the live wedge.
-    const joinerReplicaRow = coordinator.systemTableCache.get(
-      'services',
-      TEST_JOINER_REPLACEMENT_REPLICA_ID,
-    );
-    t.equal(
-      coordinator.workflowOwner.isVoterReadyReplicaTopology(joinerReplicaRow),
-      true,
-      'joiner replacement replica must be voter-ready by TOPOLOGY ' +
-        '(active + addressed + voter raft role) — the wedge is not a ' +
-        'promotion/topology problem',
-    );
-
-    const operation = await coordinator.createOperation({
-      type: OperationType.REMOVE,
-      partitionId: TEST_LEDGER_PARTITION_ID,
-      nodeId: TEST_SEED_NODE_ID,
-      replicaId: TEST_SEED_SURPLUS_REPLICA_ID,
+for (const committedJoinersReady of [false, true]) {
+  test(`R09 surplus drain consumes committed joiner leases (current=${committedJoinersReady})`,
+    async (t) => {
+      initializeTestEnvironment();
+      const coordinator = createWedgeCoordinator({committedJoinersReady,
+        denialReasonCodesByNodeId: {
+          [TEST_JOINER_NODE_ID_B]: TEST_EVIDENCE_ABSENT_DENIAL_REASON_CODES,
+          [TEST_JOINER_NODE_ID_C]: TEST_EVIDENCE_ABSENT_DENIAL_REASON_CODES,
+        },
+      });
+      try {
+        const row = coordinator.systemTableCache.get('services', TEST_JOINER_REPLACEMENT_REPLICA_ID);
+        t.equal(coordinator.workflowOwner.isVoterReadyReplicaTopology(row), true);
+        const operation = await coordinator.createOperation({
+          type: OperationType.REMOVE, partitionId: TEST_LEDGER_PARTITION_ID,
+          nodeId: TEST_SEED_NODE_ID, replicaId: TEST_SEED_SURPLUS_REPLICA_ID,
+        });
+        const evaluation = await coordinator.workflowOwner.evaluateRemoveSafety(operation);
+        t.equal(evaluation.classification === TEST_SAFE_CLASSIFICATION, committedJoinersReady,
+          'a known expired lease never becomes credit through evidence-absent reasons: ' +
+          describeEvaluation(evaluation));
+        if (!committedJoinersReady) t.match(evaluation.error, TEST_VOTER_READY_FLOOR_PATTERN);
+      } finally {
+        await coordinator.shutdown();
+        resetTestEnvironment();
+      }
     });
+}
 
-    const evaluation =
-      await coordinator.workflowOwner.evaluateRemoveSafety(operation);
-
-    t.equal(
-      evaluation.classification,
-      TEST_SAFE_CLASSIFICATION,
-      'the surplus drain that releases the formation barrier must be SAFE: ' +
-        'post-removal there are 3 topology-voter-ready replicas on 3 ' +
-        'distinct nodes, and every non-seed readiness denial is ' +
-        'evidence-absent (planning_snapshot_refresh_pending / ' +
-        'owner_evidence_missing). Blocking check at HEAD: the voter-ready ' +
-        'floor counts only isVoterReadyRoutableReplica rows, so ' +
-        'barrier-held joiners project 1/3 and the drain defers forever ' +
-        '(readiness <- barrier <- spread <- drain <- readiness ' +
-        'circularity). Got: ' + describeEvaluation(evaluation),
-    );
-  } finally {
-    await coordinator.shutdown();
-    resetTestEnvironment();
-  }
-});
-
-test('CHARACTERIZATION (binding-check exoneration, must stay green): the ' +
-'in-flight spread REPLACE\'s own source removal at the ACTIVE ' +
-'(remove-dispatch) step is NOT refused by the voter-ready floor — the ' +
-'completion contract (spread_satisfied_in_flight / ' +
-'replace_remove_dispatch_phase_on_eligible_target) covers it. Only the ' +
-'standalone surplus REMOVE (previous test) lacks a lane and binds at the ' +
-'floor', async (t) => {
+test('replacement completion guards remain distinct from the committed node floor', async (t) => {
   initializeTestEnvironment();
   const coordinator = createWedgeCoordinator({
+    committedJoinersReady: true,
     denialReasonCodesByNodeId: {
       [TEST_JOINER_NODE_ID_B]: TEST_EVIDENCE_ABSENT_DENIAL_REASON_CODES,
       [TEST_JOINER_NODE_ID_C]: TEST_EVIDENCE_ABSENT_DENIAL_REASON_CODES,
@@ -434,9 +356,7 @@ test('CHARACTERIZATION (binding-check exoneration, must stay green): the ' +
   }
 });
 
-test('GUARD (no guard weakening — must stay green before and after the ' +
-'fix): the same surplus drain stays refused when a joiner\'s readiness ' +
-'denial carries a SUBSTANTIVE reason', async (t) => {
+test('expired committed joiners remain below the floor with substantive projection denial', async (t) => {
   initializeTestEnvironment();
   const coordinator = createWedgeCoordinator({
     denialReasonCodesByNodeId: {
@@ -462,9 +382,7 @@ test('GUARD (no guard weakening — must stay green before and after the ' +
     t.not(
       evaluation.classification,
       TEST_SAFE_CLASSIFICATION,
-      'a substantive readiness denial (cluster_member_unhealthy) must keep ' +
-        'the voter-ready floor closed — only the evidence-absent class may ' +
-        'be carved out. Got: ' + describeEvaluation(evaluation),
+      'expired committed leases keep the floor closed regardless of reason class. Got: ' + describeEvaluation(evaluation),
     );
   } finally {
     await coordinator.shutdown();

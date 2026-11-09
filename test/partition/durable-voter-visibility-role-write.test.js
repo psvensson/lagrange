@@ -4,6 +4,7 @@ import {PartitionServiceCoreBase} from
 import {createPartitionServiceMetadataDeliveryMethods} from
   '../../src/partition/partition-service-metadata-delivery-methods.js';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {evaluateOperationLedgerQuorumConcentration} from
   '../../src/rebalancer/operation-ledger-quorum-concentration.js';
@@ -156,9 +157,16 @@ function createDurableStoreFake({caches}) {
  * it (prototype call on a contract-faithful self), so the CAS guard shape,
  * dedup callbacks, and recovery paths under test are production code.
  */
-function createRoleHelperForReplica({replicaId, cache, store, warns}) {
+function createRoleHelperForReplica({
+  replicaId,
+  cache,
+  store,
+  warns,
+  initialRole = null,
+}) {
   const svc = {
     replicaId,
+    role: initialRole,
     partitionId: LEDGER_PARTITION_ID,
     systemTableCache: cache,
     cdcIntegrationService: store.cdcIntegrationService,
@@ -189,7 +197,9 @@ function createRoleHelperForReplica({replicaId, cache, store, warns}) {
   svc.refreshMetadataPublicationGuardRow =
     PartitionServiceCoreBase.prototype.refreshMetadataPublicationGuardRow
       .bind(svc);
-  return PartitionServiceCoreBase.prototype.createRoleMutationHelper.call(svc);
+  const helper = PartitionServiceCoreBase.prototype.createRoleMutationHelper.call(svc);
+  helper._owner = svc;
+  return helper;
 }
 
 /**
@@ -436,4 +446,247 @@ test('durable voter visibility - quorum-spread hold releases once cure moves com
     'the quorum-spread hold releases once the cure moves complete and the ' +
       'promoted roles are durably visible',
   );
+});
+
+test('durable voter visibility - in-flight learner flush superseded during readAuthoritativeRoleRow is fenced and followed by voter flush', async (t) => {
+  const replicaId = `${LEDGER_PARTITION_ID}-r6`;
+  const cache = createCacheFake();
+  const store = createDurableStoreFake({caches: [cache]});
+  const warns = [];
+
+  store.seedDurableRow(
+    ledgerServiceRow({
+      replicaId,
+      nodeId: 'node-3',
+      raftRole: null,
+      updatedAt: 1000,
+    }),
+  );
+
+  let releaseFirstProbe;
+  const firstProbeGate = new Promise((resolve) => {
+    releaseFirstProbe = resolve;
+  });
+  let readCallCount = 0;
+  const originalRead =
+    store.cdcIntegrationService.executeAuthoritativeSystemTableRead;
+  store.cdcIntegrationService.executeAuthoritativeSystemTableRead = async (
+    tableName,
+    sql,
+    params,
+    options,
+  ) => {
+    readCallCount += 1;
+    if (readCallCount === 1) {
+      await firstProbeGate;
+    }
+    return originalRead(tableName, sql, params, options);
+  };
+
+  const writtenRoles = [];
+  const originalUpdate = store.cdcIntegrationService.updateSystemTableRow;
+  store.cdcIntegrationService.updateSystemTableRow = async (
+    tableName,
+    whereClause,
+    data,
+  ) => {
+    writtenRoles.push(data.raft_role);
+    return originalUpdate(tableName, whereClause, data);
+  };
+
+  const helper = createRoleHelperForReplica({replicaId, cache, store, warns});
+  // Start an in-flight learner flush that pauses inside readAuthoritativeRoleRow.
+  helper.queue(RAFT_ROLE.LEARNER);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  t.equal(helper.inFlight, true, 'initial learner flush is in flight');
+
+  // While the authoritative probe for learner is in flight, the replica
+  // promotes to follower and queues the voter role.
+  helper.queue(RAFT_ROLE.FOLLOWER);
+  releaseFirstProbe();
+
+  await settleHelper(helper);
+  helper.shutdown();
+
+  t.same(
+    writtenRoles,
+    [RAFT_ROLE.FOLLOWER],
+    'superseded learner flush is fenced before submitMutation and only follower is written',
+  );
+  t.equal(
+    store.rows.get(replicaId).raft_role,
+    RAFT_ROLE.FOLLOWER,
+    'durable row converges to follower without regressing to learner',
+  );
+});
+
+test('durable voter visibility - ReplicaStateMachine preserves voter raft_role across buildUpdateCdcData and buildCreateCdcData for the same replica identity', async (t) => {
+  const replicaId = `${LEDGER_PARTITION_ID}-r7`;
+  const cache = createCacheFake();
+  cache.applySystemTableChange(
+    SERVICES,
+    'upsert',
+    ledgerServiceRow({
+      replicaId,
+      nodeId: 'node-3',
+      raftRole: RAFT_ROLE.FOLLOWER,
+      updatedAt: 1000,
+    }),
+  );
+
+  const stateMachine = new ReplicaStateMachine({
+    nodeId: 'node-3',
+    systemTableCache: cache,
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true, affectedRows: 1}),
+    },
+  });
+
+  const replicaState = {
+    replicaId,
+    serviceId: replicaId,
+    replicaIdentity: replicaId,
+    partitionId: LEDGER_PARTITION_ID,
+    nodeId: 'node-3',
+    state: 'active',
+    stateEnteredAt: 2000,
+    triggerReason: 'voter_ready',
+    createdAt: 1000,
+  };
+
+  const updatePayload = stateMachine._buildUpdateCdcData(
+    replicaState,
+    'syncing',
+  );
+  t.equal(
+    updatePayload.raft_role,
+    RAFT_ROLE.FOLLOWER,
+    'buildUpdateCdcData preserves voter raft_role for the same replica identity',
+  );
+
+  const createPayload = stateMachine._buildCreateCdcData(
+    replicaState,
+    replicaId,
+    'partition',
+    'node-3/partition/r7',
+  );
+  t.equal(
+    createPayload.raft_role,
+    RAFT_ROLE.FOLLOWER,
+    'buildCreateCdcData preserves voter raft_role for the same replica identity',
+  );
+
+  const mismatchedIdentityPayload = stateMachine._buildUpdateCdcData(
+    {
+      ...replicaState,
+      replicaIdentity: `${replicaId}#gen-2`,
+    },
+    'syncing',
+  );
+  t.equal(
+    mismatchedIdentityPayload.raft_role,
+    undefined,
+    'buildUpdateCdcData does not copy raft_role across different replica identities',
+  );
+
+  // Stale cached leader role after stepdown to follower must never be
+  // republished by lifecycle writes or by an in-flight stale role flush.
+  cache.applySystemTableChange(
+    SERVICES,
+    'upsert',
+    ledgerServiceRow({
+      replicaId,
+      nodeId: 'node-3',
+      raftRole: RAFT_ROLE.LEADER,
+      updatedAt: 3000,
+    }),
+  );
+  const unconfirmedCachedLeaderUpdate = stateMachine._buildUpdateCdcData(
+    replicaState,
+    'syncing',
+  );
+  t.equal(
+    unconfirmedCachedLeaderUpdate.raft_role,
+    undefined,
+    'unconfirmed cached leader role is not copied into lifecycle UPDATE payload',
+  );
+  const liveFollowerPayload = stateMachine._buildUpdateCdcData(
+    {
+      ...replicaState,
+      raftRole: RAFT_ROLE.FOLLOWER,
+    },
+    'syncing',
+  );
+  t.equal(
+    liveFollowerPayload.raft_role,
+    RAFT_ROLE.FOLLOWER,
+    'live follower role overrides stale cached leader role in lifecycle payload',
+  );
+  await stateMachine.clear();
+});
+
+test('durable voter visibility - leader replica flushes collapsed follower voter role while fencing stale leader flush after stepdown', async (t) => {
+  const replicaId = `${LEDGER_PARTITION_ID}-r8`;
+  const cache = createCacheFake();
+  const store = createDurableStoreFake({caches: [cache]});
+  const warns = [];
+
+  store.seedDurableRow(
+    ledgerServiceRow({
+      replicaId,
+      nodeId: 'node-3',
+      raftRole: RAFT_ROLE.LEARNER,
+      updatedAt: 1000,
+    }),
+  );
+
+  // A learner promoted and elected to leader queues collapsed 'follower'
+  // voter role while owner.role === 'leader'.
+  const helper = createRoleHelperForReplica({
+    replicaId,
+    cache,
+    store,
+    warns,
+    initialRole: RAFT_ROLE.LEADER,
+  });
+  helper.queue(RAFT_ROLE.FOLLOWER);
+  await settleHelper(helper);
+
+  t.equal(
+    store.rows.get(replicaId).raft_role,
+    RAFT_ROLE.FOLLOWER,
+    'leader replica flushes its collapsed follower voter role to durable services row',
+  );
+
+  // If the replica steps down to follower, a stale 'leader' role flush or
+  // cached 'leader' value is fenced by the live role check.
+  helper._owner.role = RAFT_ROLE.FOLLOWER;
+  cache.applySystemTableChange(
+    SERVICES,
+    'upsert',
+    ledgerServiceRow({
+      replicaId,
+      nodeId: 'node-3',
+      raftRole: RAFT_ROLE.LEADER,
+      updatedAt: Date.now() + 1000,
+    }),
+  );
+  t.equal(
+    helper.syncFromCache(),
+    false,
+    'syncFromCache rejects stale cached leader role after stepdown to follower',
+  );
+  helper.queue(RAFT_ROLE.LEADER);
+  const staleResult = await helper.flush();
+  t.equal(
+    staleResult.applied,
+    false,
+    'stale leader role flush is skipped after stepdown to follower',
+  );
+  t.equal(
+    helper.pendingValue,
+    null,
+    'stale pending leader role update is cleared',
+  );
+  helper.shutdown();
 });

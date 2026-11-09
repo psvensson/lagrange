@@ -38,6 +38,7 @@ const {
   OWNER_CONTRACT_STATE,
   OperationType,
   QUERY_DEFAULTS,
+  QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   ReplicaOperationField,
@@ -125,6 +126,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     let provisioningNextAction = OWNER_CONTRACT_NEXT_ACTION.PROCEED;
     let provisioningReasonCodes = [];
     let provisioningRetryAfterMs = 0;
+    let provisioningEpoch = provisionTargetDiagnostics?.epoch || null;
     let admissionConvergence =
       context?.admissionConvergence &&
       typeof context.admissionConvergence === LOCAL_STR_OBJECT ?
@@ -146,22 +148,17 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
 
     if (
       explicitTargetNodeIds.length === 0 &&
-      // Quorum-minimum creates also converge admission before planning; run-24
-      // otherwise fail-fasted into a transient whole-cluster ledger hold.
-      (enforceEveryProvisioningOperation ||
-        this.supportsProvisioningAdmissionPrecheck()) &&
       (provisionTargetNodeIds.length < targetReplicaCount ||
         this.supportsProvisioningAdmissionPrecheck())
     ) {
-      // A quorum-minimum create proceeds when the minimum admits; requiring the
-      // full target would wait for replicas the rebalancer can fill afterwards.
-      const convergenceRequiredReplicaCount = enforceEveryProvisioningOperation ?
-        targetReplicaCount :
-        Math.max(1, minimumRoutableReplicaCount);
       let convergenceResult = await this.waitForProvisionTargetNodeIds({
         partitionId,
         schemaJobId: context?.schemaJobId,
-        requiredReplicaCount: convergenceRequiredReplicaCount,
+        requiredReplicaCount: targetReplicaCount,
+        minimumRoutableReplicaCount,
+        hasExplicitMinimumRoutableReplicaCount,
+        minimumRoutableReplicaCountWasDefaulted:
+          context?.minimumRoutableReplicaCountWasDefaulted === true,
         timeoutBudget,
         failOnTimeout: false,
         maxWaitMs: this.tablePartitionTargetNodeConvergenceTimeoutMs,
@@ -176,7 +173,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         await this.waitOutWholeClusterTransientProvisioningHold({
           partitionId,
           schemaJobId: context?.schemaJobId,
-          requiredReplicaCount: convergenceRequiredReplicaCount,
+          requiredReplicaCount: targetReplicaCount,
+          minimumRoutableReplicaCount,
           timeoutBudget,
           explicitTargetNodeIds,
           hasExplicitMinimumRoutableReplicaCount,
@@ -194,64 +192,53 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         targetReplicaCount,
         provisionTargetDiagnostics,
       );
-      const maximumProvisionableReplicaCount = Number.isInteger(
-        admissionConvergence?.maximumProvisionableReplicaCount,
-      ) ?
-        admissionConvergence.maximumProvisionableReplicaCount :
-        provisionTargetNodeIds.length;
-      const implicitFallbackMinimumReplicaCount =
-        this.resolveImplicitProvisioningFallbackReplicaCount(
-          targetReplicaCount,
-          provisionTargetDiagnostics?.activeNodeRowCount,
+      provisioningEpoch = convergenceResult?.epoch || provisioningEpoch;
+      if (convergenceResult.contractState === OWNER_CONTRACT_STATE.DEFERRED) {
+        const error = new Error(
+          `Provisioning unavailable: quorum not reachable for partition ${partitionId}`,
         );
-      const fallbackMinimumReplicaCount =
-        this.resolveProvisioningShortfallFallbackMinimum({
-          hasExplicitMinimumRoutableReplicaCount,
-          implicitFallbackMinimumReplicaCount,
-          maximumProvisionableReplicaCount,
-          rejectedTargetNodePlans:
-            admissionConvergence?.rejectedTargetNodePlans,
-        });
-
-      if (
-        convergenceResult.nextAction === OWNER_CONTRACT_NEXT_ACTION.WAIT &&
-        maximumProvisionableReplicaCount > 0 &&
-        maximumProvisionableReplicaCount < targetReplicaCount &&
-        maximumProvisionableReplicaCount >= fallbackMinimumReplicaCount
-      ) {
-        targetReplicaCount = Math.max(1, maximumProvisionableReplicaCount);
-        if (!hasExplicitMinimumRoutableReplicaCount) {
-          minimumRoutableReplicaCount = Math.min(
-            minimumRoutableReplicaCount,
-            targetReplicaCount,
-          );
-        }
-        enforceEveryProvisioningOperation =
-          minimumRoutableReplicaCount >= targetReplicaCount;
-        provisioningContractState = convergenceResult.contractState;
-        provisioningNextAction = convergenceResult.nextAction;
-        provisioningReasonCodes = Array.isArray(convergenceResult.reasonCodes) ?
-          [...convergenceResult.reasonCodes] :
-          [];
-        provisioningRetryAfterMs =
-          Number.isFinite(convergenceResult.retryAfterMs) &&
-          convergenceResult.retryAfterMs > 0 ?
-            Math.floor(convergenceResult.retryAfterMs) :
-            0;
-        this.logger.warn(
-          QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_FALLBACK_USED,
-          {
-            partitionId,
-            requiredReplicaCount: convergenceResult.requiredReplicaCount,
-            resolvedReplicaCount: targetReplicaCount,
-            minimumRoutableReplicaCount,
-            convergenceTimedOut: true,
-            waitedMs: convergenceResult.waitedMs,
-            diagnostics: convergenceResult.diagnostics,
-            admissionConvergence,
-          },
+        error.code = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
+        error.errorCode = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
+        error.epoch = convergenceResult.epoch || null;
+        error.reasons = convergenceResult.reasons || [];
+        error.retryAfterMs = convergenceResult.retryAfterMs || 0;
+        error.detail = {
+          epoch: error.epoch,
+          reasons: error.reasons,
+          retryAfterMs: error.retryAfterMs,
+        };
+        throw error;
+      }
+      targetReplicaCount = provisionTargetNodeIds.length;
+      if (!hasExplicitMinimumRoutableReplicaCount) {
+        minimumRoutableReplicaCount = Math.max(
+          this.calculateQuorumReplicaCount(requestedReplicaCount),
+          Math.min(minimumRoutableReplicaCount, targetReplicaCount),
         );
       }
+      if (targetReplicaCount < minimumRoutableReplicaCount) {
+        const error = new Error(
+          `Provisioning unavailable: quorum not reachable for partition ${partitionId}`,
+        );
+        error.code = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
+        error.errorCode = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
+        error.epoch = provisioningEpoch;
+        error.reasons = convergenceResult.reasons || [];
+        error.retryAfterMs = convergenceResult.retryAfterMs || 0;
+        error.detail = {
+          epoch: error.epoch,
+          reasons: error.reasons,
+          retryAfterMs: error.retryAfterMs,
+        };
+        throw error;
+      }
+      enforceEveryProvisioningOperation = true;
+      provisioningContractState = convergenceResult.contractState;
+      provisioningNextAction = convergenceResult.nextAction;
+      provisioningReasonCodes = Array.isArray(convergenceResult.reasonCodes) ?
+        [...convergenceResult.reasonCodes] :
+        [];
+      provisioningRetryAfterMs = convergenceResult.retryAfterMs || 0;
     }
 
     const routableNodeIdSet = new Set(routableNodeIds);
@@ -392,61 +379,18 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       supportsAdmissionPrecheck &&
       maximumPrecheckedProvisionableReplicaCount < minimumRoutableReplicaCount
     ) {
-      const implicitFallbackMinimumReplicaCount =
-        this.resolveImplicitProvisioningFallbackReplicaCount(
-          targetReplicaCount,
-          provisionTargetDiagnostics?.activeNodeRowCount,
-        );
-      const fallbackMinimumReplicaCount =
-        this.resolveProvisioningShortfallFallbackMinimum({
-          hasExplicitMinimumRoutableReplicaCount,
-          implicitFallbackMinimumReplicaCount,
-          maximumProvisionableReplicaCount:
-            maximumPrecheckedProvisionableReplicaCount,
-          rejectedTargetNodePlans,
-        });
-      if (
-        !hasExplicitMinimumRoutableReplicaCount &&
-        maximumPrecheckedProvisionableReplicaCount > 0 &&
-        maximumPrecheckedProvisionableReplicaCount >= fallbackMinimumReplicaCount
-      ) {
-        const previousTargetReplicaCount = targetReplicaCount;
-        const previousMinimumRoutableReplicaCount = minimumRoutableReplicaCount;
-        targetReplicaCount = Math.max(
-          1,
+      this.throwProvisioningInsufficientTargets({
+        partitionId,
+        targetReplicaCount,
+        minimumRoutableReplicaCount,
+        candidateTargetNodeIds: provisionTargetNodeIds,
+        existingRoutableNodeIds: [...routableNodeIdSet],
+        plannedTargetNodeIds: admittedTargetNodeIds,
+        rejectedTargetNodePlans,
+        maximumProvisionableReplicaCount:
           maximumPrecheckedProvisionableReplicaCount,
-        );
-        minimumRoutableReplicaCount = targetReplicaCount;
-        enforceEveryProvisioningOperation =
-          minimumRoutableReplicaCount >= targetReplicaCount;
-        this.logger.warn(
-          QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_FALLBACK_USED,
-          {
-            partitionId,
-            requiredReplicaCount: previousTargetReplicaCount,
-            resolvedReplicaCount: targetReplicaCount,
-            minimumRoutableReplicaCount,
-            previousMinimumRoutableReplicaCount,
-            admissionShortfall: true,
-            existingRoutableNodeIds: [...routableNodeIdSet],
-            plannedTargetNodeIds: admittedTargetNodeIds,
-            rejectedTargetNodePlans,
-          },
-        );
-      } else {
-        this.throwProvisioningInsufficientTargets({
-          partitionId,
-          targetReplicaCount,
-          minimumRoutableReplicaCount,
-          candidateTargetNodeIds: provisionTargetNodeIds,
-          existingRoutableNodeIds: [...routableNodeIdSet],
-          plannedTargetNodeIds: admittedTargetNodeIds,
-          rejectedTargetNodePlans,
-          maximumProvisionableReplicaCount:
-            maximumPrecheckedProvisionableReplicaCount,
-          retryable: !hasExplicitMinimumRoutableReplicaCount,
-        });
-      }
+        retryable: !hasExplicitMinimumRoutableReplicaCount,
+      });
     }
 
     for (const targetNodeId of admittedTargetNodeIds) {
@@ -500,85 +444,39 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
 
     const maximumProvisionableReplicaCount =
       routableNodeIdSet.size + plannedOperations.length;
-    const implicitFallbackMinimumReplicaCount =
-      this.resolveImplicitProvisioningFallbackReplicaCount(
-        targetReplicaCount,
-        provisionTargetDiagnostics?.activeNodeRowCount,
-      );
-    const fallbackMinimumReplicaCount =
-      this.resolveProvisioningShortfallFallbackMinimum({
-        hasExplicitMinimumRoutableReplicaCount,
-        implicitFallbackMinimumReplicaCount,
-        maximumProvisionableReplicaCount,
-        rejectedTargetNodePlans,
-      });
     if (maximumProvisionableReplicaCount < minimumRoutableReplicaCount) {
-      if (
-        !hasExplicitMinimumRoutableReplicaCount &&
-        maximumProvisionableReplicaCount > 0 &&
-        maximumProvisionableReplicaCount >= fallbackMinimumReplicaCount
-      ) {
-        const previousTargetReplicaCount = targetReplicaCount;
-        const previousMinimumRoutableReplicaCount = minimumRoutableReplicaCount;
-        targetReplicaCount = Math.max(1, maximumProvisionableReplicaCount);
-        minimumRoutableReplicaCount = targetReplicaCount;
-        enforceEveryProvisioningOperation =
-          minimumRoutableReplicaCount >= targetReplicaCount;
-        this.logger.warn(
-          QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_FALLBACK_USED,
-          {
-            partitionId,
-            requiredReplicaCount: previousTargetReplicaCount,
-            resolvedReplicaCount: targetReplicaCount,
-            minimumRoutableReplicaCount,
-            previousMinimumRoutableReplicaCount,
-            planningShortfall: true,
-            existingRoutableNodeIds: [...routableNodeIdSet],
-            plannedTargetNodeIds: plannedOperations
-              .map(
-                (operation) =>
-                  operation?.targetNodeId || operation?.nodeId || null,
-              )
-              .filter(
-                (nodeId) => typeof nodeId === LOCAL_STR_STRING && nodeId.length > 0,
-              ),
-            rejectedTargetNodePlans,
-          },
+      const retryable = !hasExplicitMinimumRoutableReplicaCount;
+      const retainDurableSchemaPlanningOperations =
+        retryable &&
+        shouldRetainDurableSchemaPlanningOperations(
+          context,
+          createdPlanningOperations,
         );
-      } else {
-        const retryable = !hasExplicitMinimumRoutableReplicaCount;
-        const retainDurableSchemaPlanningOperations =
-          retryable &&
-          shouldRetainDurableSchemaPlanningOperations(
-            context,
-            createdPlanningOperations,
-          );
-        if (!retainDurableSchemaPlanningOperations) {
-          await this.abortProvisioningPlanningOperations(
-            partitionId,
-            createdPlanningOperations,
-            QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_ABORTED_PRE_DISPATCH,
-          );
-        }
-        this.throwProvisioningInsufficientTargets({
+      if (!retainDurableSchemaPlanningOperations) {
+        await this.abortProvisioningPlanningOperations(
           partitionId,
-          targetReplicaCount,
-          minimumRoutableReplicaCount,
-          candidateTargetNodeIds: provisionTargetNodeIds,
-          existingRoutableNodeIds: [...routableNodeIdSet],
-          plannedTargetNodeIds: plannedOperations
-            .map(
-              (operation) =>
-                operation?.targetNodeId || operation?.nodeId || null,
-            )
-            .filter(
-              (nodeId) => typeof nodeId === LOCAL_STR_STRING && nodeId.length > 0,
-            ),
-          rejectedTargetNodePlans,
-          maximumProvisionableReplicaCount,
-          retryable,
-        });
+          createdPlanningOperations,
+          QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_ABORTED_PRE_DISPATCH,
+        );
       }
+      this.throwProvisioningInsufficientTargets({
+        partitionId,
+        targetReplicaCount,
+        minimumRoutableReplicaCount,
+        candidateTargetNodeIds: provisionTargetNodeIds,
+        existingRoutableNodeIds: [...routableNodeIdSet],
+        plannedTargetNodeIds: plannedOperations
+          .map(
+            (operation) =>
+              operation?.targetNodeId || operation?.nodeId || null,
+          )
+          .filter(
+            (nodeId) => typeof nodeId === LOCAL_STR_STRING && nodeId.length > 0,
+          ),
+        rejectedTargetNodePlans,
+        maximumProvisionableReplicaCount,
+        retryable,
+      });
     }
 
     const bootstrapTopology = this.buildInitialPartitionBootstrapTopology(
@@ -587,7 +485,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     );
     // The founding cohort's GENESIS stamp (owner decision O1): the second
     // and last stamp origin beside the creation owner's committed read.
-    const bootstrapMembership = genesisStamp(bootstrapTopology.replicaIds);
+    const bootstrapMembership = genesisStamp(bootstrapTopology.replicaIds,
+      bootstrapTopology.founderNodeIds);
     const bootstrapLeaderNodeId =
       this.resolveInitialPartitionBootstrapLeaderNodeId(
         partitionId,
@@ -607,23 +506,9 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       }),
     });
 
-    const metadataWaitReplicaIds = [];
     for (const operation of plannedOperations) {
       throwIfCancellationRequested(cancellationToken);
-      // A deterministic-intent retry can hand back the prior attempt's
-      // durably terminal-successful operation (collision terminal arm).
-      // The replica already exists: re-stamping and re-executing it is the
-      // round-10 livelock. Keep it in the plan for counting, wait on its
-      // routability like any other create, but never re-dispatch it.
       if (isTerminalSuccessfulCreateOperation(operation)) {
-        const terminalReplicaId =
-          operation?.replicaId || operation?.replica_id || null;
-        if (
-          typeof terminalReplicaId === LOCAL_STR_STRING &&
-          terminalReplicaId.length > 0
-        ) {
-          metadataWaitReplicaIds.push(terminalReplicaId);
-        }
         continue;
       }
       operation[ReplicaOperationField.REPLICA_IDS] =
@@ -667,11 +552,33 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
           bootstrapPartitionMetadata;
       }
+      operation.updatedAt = this.nowFn();
       if (
         typeof this.rebalanceCoordinator.dispatchOperation === LOCAL_STR_FUNCTION &&
         typeof this.rebalanceCoordinator.persistOperationUpdate === LOCAL_STR_FUNCTION
       ) {
         await this.rebalanceCoordinator.persistOperationUpdate(operation);
+      }
+    }
+
+    const metadataWaitReplicaIds = [];
+    for (const operation of plannedOperations) {
+      throwIfCancellationRequested(cancellationToken);
+      // A deterministic-intent retry can hand back the prior attempt's
+      // durably terminal-successful operation (collision terminal arm).
+      // The replica already exists: re-stamping and re-executing it is the
+      // round-10 livelock. Keep it in the plan for counting, wait on its
+      // routability like any other create, but never re-dispatch it.
+      if (isTerminalSuccessfulCreateOperation(operation)) {
+        const terminalReplicaId =
+          operation?.replicaId || operation?.replica_id || null;
+        if (
+          typeof terminalReplicaId === LOCAL_STR_STRING &&
+          terminalReplicaId.length > 0
+        ) {
+          metadataWaitReplicaIds.push(terminalReplicaId);
+        }
+        continue;
       }
       const executionResult =
         typeof this.rebalanceCoordinator.executeOperation === 'function' ?
@@ -769,6 +676,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       nextAction: provisioningNextAction,
       reasonCodes: provisioningReasonCodes,
       retryAfterMs: provisioningRetryAfterMs,
+      epoch: provisioningEpoch,
     });
   }
 

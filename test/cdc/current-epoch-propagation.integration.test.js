@@ -16,6 +16,7 @@ import {
   waitFor,
 } from '../integration/helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const WAIT_MS = Object.freeze({
   EPOCH_ROW: 3000,
   POLL_INTERVAL: 50,
@@ -79,6 +80,7 @@ test('Current epoch durability and propagation integration', {timeout: 120000}, 
       t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
 
       seedSqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -117,6 +119,7 @@ test('Current epoch durability and propagation integration', {timeout: 120000}, 
 
       const systemCache = NodeService.getInstance().getSystemTableCache();
       seedSqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,

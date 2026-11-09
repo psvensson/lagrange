@@ -1,3 +1,11 @@
+import {PRIORITY_RECOVERY_COMPLETION_STATE} from
+  '../control-plane/priority-recovery-completion.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from '../bootstrap/system-table-schemas-constants.js';
+import {isValidLeaderReadAuthorityWitness} from
+  '../control-plane/control-plane-authoritative-read-witness.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   REPLICA_INVENTORY_OBSERVATION_STATE,
@@ -11,12 +19,58 @@ const LOCAL_STR_OBJECT = 'object';
 
 const {
   CONTROL_PLANE_QUERY_OPTIONS,
+  CONTROL_PLANE_READ_LEADER_MODE,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  ReplicaOperationRepository,
   SERVICE_TYPE,
   getControlPlaneRetryAfterMs,
 } = REBALANCE_COORDINATOR_SHARED;
+
+// The repository owns this envelope. Validation precedes the recovery-pressure
+// decision: an incomplete contract cannot become a synthetic deferred-empty read.
+function isEntityDeferredOutcomeValid(outcome) {
+  return outcome === null || Boolean(outcome &&
+    outcome.completionState ===
+      PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED &&
+    typeof outcome.reasonCode === 'string' && outcome.reasonCode.length > 0 &&
+    (outcome.retryAfterMs === null ||
+      (Number.isFinite(outcome.retryAfterMs) && outcome.retryAfterMs >= 0)));
+}
+
+function isEntityOperationIdentityValid(operation, entityType, entityId) {
+  return Boolean(operation && typeof operation === LOCAL_STR_OBJECT && !Array.isArray(operation) &&
+    typeof operation.operationId === 'string' && operation.operationId.trim().length > 0 &&
+    operation.entityType === entityType && operation.entityId === entityId);
+}
+
+function hasEntityOperationObservationShape(observation, entityType, entityId) {
+  if (!observation || !Array.isArray(observation.operations) ||
+      !Number.isSafeInteger(observation.operationCount) ||
+      observation.operationCount !== observation.operations.length ||
+      !isEntityDeferredOutcomeValid(observation.deferredOutcome)) return false;
+  const expectedRetryAfterMs = observation.deferredOutcome?.retryAfterMs ?? null;
+  if (observation.retryAfterMs !== expectedRetryAfterMs) return false;
+  for (const [index, operation] of observation.operations.entries()) {
+    if (!Object.hasOwn(observation.operations, index) ||
+        !isEntityOperationIdentityValid(operation, entityType, entityId)) return false;
+  }
+  return true;
+}
+
+function isEntityOperationObservationValid(observation, entityType, entityId) {
+  if (!hasEntityOperationObservationShape(observation, entityType, entityId)) return false;
+  const deferred = observation.deferredOutcome;
+  switch (observation.state) {
+  case INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT:
+    return observation.operationCount > 0;
+  case INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY:
+    return observation.operationCount === 0 && deferred === null;
+  case INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED:
+    return observation.operationCount === 0 && deferred !== null;
+  default:
+    return false;
+  }
+}
 
 class RebalanceCoordinatorOperationReadMethods {
   /**
@@ -178,56 +232,41 @@ class RebalanceCoordinatorOperationReadMethods {
    * @private
    */
   async getEntityAuthoritativeOperationObservation(entityType, entityId) {
-    const hasCustomObservationMethod =
-      typeof this.repository?.getOperationsByEntityAuthoritativeObservation ===
-        LOCAL_STR_FUNCTION &&
-      this.repository.getOperationsByEntityAuthoritativeObservation !==
-        ReplicaOperationRepository.prototype
-          .getOperationsByEntityAuthoritativeObservation;
-    if (hasCustomObservationMethod) {
-      return this.repository.getOperationsByEntityAuthoritativeObservation(
+    let observation;
+    try {
+      observation = await this.repository.getOperationsByEntityAuthoritativeObservation(
         entityType,
         entityId,
       );
+    } catch (cause) {
+      const error = this.createDeferredOperationVisibilityError(
+        null, {deferredOutcome: cause}, {entityType, entityId},
+      );
+      error.cause = cause;
+      throw error;
     }
-    const hasCustomReadMethod =
-      typeof this.repository?.getOperationsByEntityAuthoritative ===
-        LOCAL_STR_FUNCTION &&
-      this.repository.getOperationsByEntityAuthoritative !==
-        ReplicaOperationRepository.prototype.getOperationsByEntityAuthoritative;
-    const operations = hasCustomReadMethod ?
-      await this.repository.getOperationsByEntityAuthoritative(
-        entityType,
-        entityId,
-      ) :
-      typeof this.repository
-        ?.getOperationsByEntityAuthoritativeObservation ===
-        LOCAL_STR_FUNCTION ?
-        (
-          await this.repository.getOperationsByEntityAuthoritativeObservation(
-            entityType,
-            entityId,
-          )
-        )?.operations :
-        await this.repository.getOperationsByEntityAuthoritative(
-          entityType,
-          entityId,
-        );
-    const operationCount = Array.isArray(operations) ? operations.length : 0;
-    return Object.freeze({
-      state:
-        operationCount > 0 ?
-          INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
-          INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
-      operationCount,
-      operations: Array.isArray(operations) ? operations : [],
-      deferredOutcome: null,
-      retryAfterMs: null,
-    });
+    if (!isEntityOperationObservationValid(observation, entityType, entityId)) {
+      throw this.createDeferredOperationVisibilityError(
+        null, observation, {entityType, entityId},
+      );
+    }
+    return observation;
+  }
+
+  // The strict facade consumes the authoritative observation; recovery identity
+  // consumers may supply only the existing owner's explicit bounded-use answer.
+  requireEntityOperationRows(observation, entityType, entityId) {
+    if (observation.deferredOutcome &&
+        observation.state !== REPLICA_INVENTORY_OBSERVATION_STATE.BOUNDED_USABLE) {
+      throw this.createDeferredOperationVisibilityError(
+        null, observation, {entityType, entityId},
+      );
+    }
+    return observation.operations;
   }
 
   /**
-   * Resolve the operation observation consumed by topology inventory. Generic
+   * Resolve the operation observation consumed by recovery topology and identity. Generic
    * deferral remains unusable. The existing recovery-pressure owner may emit
    * an explicit bounded-usable state only after proving its contained-pressure
    * exception and zero visible operations.
@@ -235,7 +274,7 @@ class RebalanceCoordinatorOperationReadMethods {
    * @param {string} entityId
    * @return {Promise<Object>}
    */
-  async getEntityTopologyInventoryOperationObservation(entityType, entityId) {
+  async getEntityRecoveryOperationObservation(entityType, entityId) {
     const observation = await this.getEntityAuthoritativeOperationObservation(
       entityType,
       entityId,
@@ -471,12 +510,30 @@ class RebalanceCoordinatorOperationReadMethods {
           {}),
       },
     );
+    const requireLeaderWitness =
+      readOptions?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE?.REQUIRED;
+    const hasUsableRows =
+      result?.success === true &&
+      result?.partial !== true &&
+      result?.rowSetComplete !== false &&
+      Array.isArray(result?.rows);
+    const hasCompleteLeaderProvenance =
+      hasUsableRows &&
+      result?.rowSetComplete === true &&
+      isValidLeaderReadAuthorityWitness(
+        result?.readAuthorityWitness,
+        INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES],
+      );
+    const available = requireLeaderWitness ?
+      hasCompleteLeaderProvenance :
+      hasUsableRows;
     return Object.freeze({
-      available: result.success === true && Array.isArray(result.rows),
-      rows:
-        result.success === true && Array.isArray(result.rows) ?
-          result.rows :
-          [],
+      available,
+      rows: available ? result.rows : [],
+      rowSetComplete:
+        result?.rowSetComplete === true && result?.partial !== true,
+      partial: result?.partial === true,
+      readAuthorityWitness: result?.readAuthorityWitness || null,
       error: result?.error || null,
       reasonCode: result?.reasonCode || null,
       source: result?.source || null,

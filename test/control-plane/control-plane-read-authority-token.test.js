@@ -20,7 +20,6 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READ_PURPOSE,
-  CONTROL_PLANE_READ_RECOVERY_ROUTING,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {
@@ -197,8 +196,10 @@ test('membership publication threads purpose through view, CDC, owner RPC, ' +
     observedAuthorities[0].top,
     'query execution receives the identical frozen authority token',
   );
-  t.equal(ordinaryReadinessCount, 1,
-    'only the concurrent ordinary read enters full readiness policy');
+  // Lead decision D2 (quest serve-eligibility-committed-epoch-read):
+  // system-table routing reads no readiness for any purpose.
+  t.equal(ordinaryReadinessCount, 0,
+    'no system-table read enters readiness policy');
   coordinator.shutdown?.();
 });
 
@@ -216,10 +217,6 @@ async (t) => {
     {leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED},
     {leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED},
     {purpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL},
-    {
-      recoveryRouting:
-        CONTROL_PLANE_READ_RECOVERY_ROUTING.PRIORITY_RECOVERY_BOOTSTRAP,
-    },
     {
       authoritativeReadMode:
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
@@ -484,8 +481,8 @@ test('readiness-internal owner RPC routes without re-entering readiness',
     );
     t.equal(
       maxReadinessDepth,
-      1,
-      'ordinary routing retains the existing readiness participation policy',
+      0,
+      'ordinary system-table routing reads no readiness either (D2)',
     );
 
     const readinessReadAuthority = buildControlPlaneReadAuthority({
@@ -504,8 +501,8 @@ test('readiness-internal owner RPC routes without re-entering readiness',
     );
     t.equal(missingHandler.success, false,
       'a structural route still preserves the runtime no-handler failure');
-    t.equal(maxReadinessDepth, 1,
-      'no-handler recovery does not re-enter readiness adjudication');
+    t.equal(maxReadinessDepth, 0,
+      'no-handler recovery does not enter readiness adjudication');
     t.equal(asyncReadinessRepairCount, 0,
       'no-handler recovery does not invoke async readiness repair');
 

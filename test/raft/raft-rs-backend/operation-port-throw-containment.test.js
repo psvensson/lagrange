@@ -86,7 +86,7 @@ function lonePort(groupId, {deferElection, db = new Database(IN_MEMORY), timeSou
     [RAFT_OPERATION_PORT_REQUEST.PEER_ADDRESS]: `containment://${replicaId}`,
     [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS]: [replicaId],
     [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
-      genesisStamp([replicaId]),
+      genesisStamp([replicaId], {}),
     [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: db,
     [RAFT_OPERATION_PORT_REQUEST.TIMING]: TIMING,
     [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: timeSource === null ? {} : {timeSource},

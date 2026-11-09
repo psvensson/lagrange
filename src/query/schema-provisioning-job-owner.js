@@ -43,6 +43,28 @@ const TRANSIENT_ERROR_FRAGMENT = Object.freeze({
   TIMEOUT_MESSAGE: 'timeout',
   TIMED_OUT_MESSAGE: 'timed out',
 });
+const TRANSIENT_PROVISIONING_CODES = new Set([
+  QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
+  QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE,
+  SCHEMA_PROVISIONING_ERROR_CODE.STALE_OWNER,
+]);
+const TRANSIENT_CODE_FRAGMENTS = Object.freeze([
+  TRANSIENT_ERROR_FRAGMENT.TIMEOUT_CODE,
+  TRANSIENT_ERROR_FRAGMENT.CANCEL_CODE,
+]);
+const TRANSIENT_MESSAGE_FRAGMENTS = Object.freeze([
+  TRANSIENT_ERROR_FRAGMENT.TIMEOUT_MESSAGE,
+  TRANSIENT_ERROR_FRAGMENT.TIMED_OUT_MESSAGE,
+  TRANSIENT_ERROR_FRAGMENT.CANCEL_MESSAGE,
+  TRANSIENT_ERROR_FRAGMENT.STALE_FENCE_MESSAGE,
+  TRANSIENT_ERROR_FRAGMENT.NOT_CONFIRMED_MESSAGE,
+]);
+
+function isTerminalProvisioningSuccess(result) {
+  const state = result?.contractState;
+  return state === OWNER_CONTRACT_STATE.READY ||
+    state === OWNER_CONTRACT_STATE.UNDER_REPLICATED;
+}
 const SCHEMA_PROVISIONING_FAILED_MESSAGE = 'Schema provisioning failed';
 const SCHEMA_PROVISIONING_FAILED_CODE = 'SCHEMA_PROVISIONING_FAILED';
 
@@ -116,15 +138,27 @@ function buildInitialRow(intent, workflow) {
 export function isTransientProvisioningError(error) {
   const code = String(error?.code || error?.errorCode || '').toUpperCase();
   const message = String(error?.message || '').toLowerCase();
-  return code.includes(TRANSIENT_ERROR_FRAGMENT.TIMEOUT_CODE) ||
-    code.includes(TRANSIENT_ERROR_FRAGMENT.CANCEL_CODE) ||
-    code === QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE ||
-    message.includes(TRANSIENT_ERROR_FRAGMENT.TIMEOUT_MESSAGE) ||
-    message.includes(TRANSIENT_ERROR_FRAGMENT.TIMED_OUT_MESSAGE) ||
-    message.includes(TRANSIENT_ERROR_FRAGMENT.CANCEL_MESSAGE) ||
-    message.includes(TRANSIENT_ERROR_FRAGMENT.STALE_FENCE_MESSAGE) ||
-    message.includes(TRANSIENT_ERROR_FRAGMENT.NOT_CONFIRMED_MESSAGE) ||
-    code === SCHEMA_PROVISIONING_ERROR_CODE.STALE_OWNER;
+  return TRANSIENT_PROVISIONING_CODES.has(code) ||
+    TRANSIENT_CODE_FRAGMENTS.some((fragment) => code.includes(fragment)) ||
+    TRANSIENT_MESSAGE_FRAGMENTS.some((fragment) => message.includes(fragment));
+}
+
+function buildProvisioningRefusal(workflow, error) {
+  const {epoch, reasons, retryAfterMs} = error;
+  return {
+    success: false,
+    error: error.message,
+    errorCode: QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
+    ...buildOwnerContractOutcome({
+      contractState: OWNER_CONTRACT_STATE.DEFERRED,
+      nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+    }),
+    jobId: workflow.workflowId,
+    epoch,
+    reasons,
+    retryAfterMs,
+    detail: {epoch, reasons, retryAfterMs},
+  };
 }
 
 function recoverIntentFromRow(row) {
@@ -324,7 +358,10 @@ class SchemaProvisioningJobOwner {
       return {
         ...(workflow.result || {}),
         ...buildOwnerContractOutcome({
-          contractState: OWNER_CONTRACT_STATE.READY,
+          contractState:
+            workflow.result?.contractState === OWNER_CONTRACT_STATE.UNDER_REPLICATED ?
+              OWNER_CONTRACT_STATE.UNDER_REPLICATED :
+              OWNER_CONTRACT_STATE.READY,
           nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
         }),
         jobId: workflow.workflowId,
@@ -377,7 +414,7 @@ class SchemaProvisioningJobOwner {
     return claim.workflow;
   }
 
-  async transitionPendingForRetry(intent, executor, workflow) {
+  async transitionPendingForRetry(intent, executor, workflow, error = null) {
     const renewedWorkflow = await this.assertOwnership(workflow);
     await this.workflowCoordinator.transitionStep(workflow.workflowId, {
       nextStep: SCHEMA_PROVISIONING_JOB_STEP.RECONCILING_REPLICAS,
@@ -392,6 +429,13 @@ class SchemaProvisioningJobOwner {
       retryAfterMs: this.retryAfterMs,
     });
     this.scheduleRetry(intent, executor);
+    if ((error?.code || error?.errorCode) ===
+        QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE) {
+      // Refusal is the current committed-quorum observation, not durable job
+      // completion. Repeated/recovered step history must not replay an older
+      // observation or turn the generic PENDING result into wire success.
+      return buildProvisioningRefusal(renewedWorkflow, error);
+    }
     return this.buildOutcome(renewedWorkflow);
   }
 
@@ -446,7 +490,7 @@ class SchemaProvisioningJobOwner {
         ownerFenceToken: ownedWorkflow.fenceToken,
         assertOwnership: () => this.assertOwnership(ownedWorkflow),
       });
-      if (result?.contractState !== OWNER_CONTRACT_STATE.READY) {
+      if (!isTerminalProvisioningSuccess(result)) {
         return this.transitionPendingForRetry(
           intent,
           executor,
@@ -475,6 +519,7 @@ class SchemaProvisioningJobOwner {
           intent,
           executor,
           ownedWorkflow,
+          error,
         );
       }
       return this.transitionTerminal(intent, ownedWorkflow, {

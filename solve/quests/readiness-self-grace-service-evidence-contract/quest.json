@@ -1,0 +1,30 @@
+{
+  "schema": "solve-quest/2",
+  "id": "readiness-self-grace-service-evidence-contract",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Self-node missing-row runtime grace requires live active addressed message_group service evidence from cache or authoritative SERVICES refresh and fails closed when both NODES and SERVICES rows remain missing, with explicit R09 supersession of the pre-serve-eligibility empty-services fixture expectation.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/readiness-self-grace-service-evidence-contract/evidence/receipt.json",
+      "requiredReceipts": [
+        "missing-both-rows-fails-closed-after-authoritative-refresh",
+        "authoritative-service-refresh-restores-self-runtime-grace",
+        "r09-supersession-and-comment-aligned",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-empty-service-evidence-fallback",
+      "statement": "Preserve hasServeEligibleControlPlaneService(serviceRows) returning false on empty serviceRows as sealed by serve-eligibility-committed-epoch-read (e4d0f3294f4d51c6be637543dc2051a0a579f37b). Do not restore an empty-services default or invent a rowless local runtime service ownership fallback."
+    },
+    {
+      "id": "explicit-r09-supersession-and-dual-witness",
+      "statement": "Record the R09 supersession from e2797b6c8756cc0d596e24b16465b41c820cbd56, 40ab2eccd7e9d3c98cedbecff6dc21a897cfe44a, 0177e9d1df290492bc3f03be4835eb22b747b414, 835ea25c46d1bb60f9010e195f759212a6883301 and e4d0f3294f4d51c6be637543dc2051a0a579f37b in architecture/readiness-and-owner-contracts.md, align the comment in src/control-plane/control-plane-readiness-evidence-reasons.js, and verify both the fail-closed missing-both-rows negative and the authoritative SERVICES refresh positive in test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js."
+    }
+  ],
+  "sealedAt": "ad0d64de8cfc06b574b0589f33985d4be1f3a4d0"
+}

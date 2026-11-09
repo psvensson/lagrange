@@ -278,7 +278,7 @@ test('F-ak: the routers that hold a write answer route it again by its code',
         nodeId: 'typed-release-node',
         systemTableCache: {get: () => null, getAll: () => [],
           filter: () => []},
-        cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+        cdcIntegrationService: {},
         controlPlaneSystemTableGateway: {},
         logger: {info() {}, warn() {}, error() {}, debug() {}},
       });

@@ -137,16 +137,10 @@ test('ManagedSplitWorkflow persists admission_pending before planning and ' +
     preparingMetadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID],
     'workflow id should be persisted in transition metadata',
   );
-  t.same(
+  t.equal(
     preparingUpdate.options?.expectedCacheFields,
-    {
-      pending_partition_version: 2,
-      partition_transition_state:
-        PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
-      partition_transition_metadata:
-        preparingUpdate.data.partition_transition_metadata,
-    },
-    'workflow should wait for the transition fields to become visible in cache',
+    undefined,
+    'the preparing write answers at its commit: no projection-field wait',
   );
 });
 
@@ -534,9 +528,9 @@ test('ManagedSplitWorkflow executes write-driven split work under local ' +
     'child metadata writes should inherit the critical execution class',
   );
   t.equal(
-    insertCalls[0]?.options?.skipCacheWait,
-    true,
-    'child metadata writes should preserve skip-cache-wait semantics',
+    'skipCacheWait' in (insertCalls[0]?.options ?? {}),
+    false,
+    'child metadata writes carry no cache-wait opt-out (they answer at commit)',
   );
 });
 

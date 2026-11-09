@@ -636,16 +636,27 @@ export function quarantineConnectionAfterAckTimeout(
   // teardown is skipped. Truly dead sockets still close via ws close/error
   // events, and silent-hung peers exceed the liveness window and quarantine.
   const livenessWindowMs = router.ackTimeoutQuarantineLivenessWindowMs;
-  const lastInboundAt = Math.max(
-    activeConnection.lastAckAt || TRANSPORT_NUM.ZERO,
-    (typeof router.getNodeInboundActivityAt === TRANSPORT_TYPEOF.FUNCTION &&
-      router.getNodeInboundActivityAt(targetNodeId)) || TRANSPORT_NUM.ZERO,
-  );
+  const nowMs = router.timeSource.now();
+  const lastSocketAckAt = activeConnection.lastAckAt || TRANSPORT_NUM.ZERO;
+  const outboundSocketWedged =
+    activeConnection.ackTimeoutStreak >=
+      Math.max(router.ackTimeoutQuarantineThreshold * 3, 6) &&
+    Number.isFinite(livenessWindowMs) &&
+    livenessWindowMs > TRANSPORT_NUM.ZERO &&
+    (lastSocketAckAt <= TRANSPORT_NUM.ZERO ||
+      nowMs - lastSocketAckAt >= livenessWindowMs);
+  const lastInboundAt = outboundSocketWedged ?
+    lastSocketAckAt :
+    Math.max(
+      lastSocketAckAt,
+      (typeof router.getNodeInboundActivityAt === TRANSPORT_TYPEOF.FUNCTION &&
+        router.getNodeInboundActivityAt(targetNodeId)) || TRANSPORT_NUM.ZERO,
+    );
   if (
     Number.isFinite(livenessWindowMs) &&
     livenessWindowMs > TRANSPORT_NUM.ZERO &&
     lastInboundAt > TRANSPORT_NUM.ZERO &&
-    router.timeSource.now() - lastInboundAt < livenessWindowMs
+    nowMs - lastInboundAt < livenessWindowMs
   ) {
     router.logger.warn(
       MESSAGE_ROUTER_LITERAL.STRING_QUARANTINE_SKIPPED_PEER_RECENTLY_ALIVE,

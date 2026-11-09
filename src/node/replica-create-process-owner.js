@@ -9,6 +9,7 @@ const SNAPSHOT_INSTALL_MUTATION_SYNC_ERROR =
 const ASYNC_FUNCTION_NAME = 'AsyncFunction';
 const CLOSED_ADMISSION_STATE = 'CLOSED';
 const CREATE_ADMISSION_DEFERRED = 'REPLICA_CREATE_ADMISSION_DEFERRED';
+const CREATE_ADMISSION_STALE = 'REPLICA_CREATE_ADMISSION_STALE';
 // A caller's admission basis: exact columns it read that must still hold at
 // this owner's row check (the admission CAS, its advances and the install
 // commit). None by default, so the partition path is unchanged.
@@ -243,16 +244,63 @@ function hasReplicaCreatePhysicalWorkerForGeneration(owner, generation) {
   });
 }
 
+function isReplicaCreateProgressRowSuperseded(owner, row, evidence) {
+  if (!row || !evidence || row.operation_id !== evidence.operationId) {
+    return false;
+  }
+  const rowCreatedAt = nullableSafeInteger(
+    row.create_admission_replica_created_at,
+  );
+  const rowAttemptSeq = nullableSafeInteger(row.create_admission_attempt_seq);
+  const rowOwnerIncarnation = nullableSafeInteger(
+    row.create_admission_owner_incarnation,
+  );
+  return row.create_admission_state === CLOSED_ADMISSION_STATE ||
+    Boolean(row.create_admission_token) &&
+      row.create_admission_token !== evidence.admissionToken ||
+    rowCreatedAt !== null && rowCreatedAt !== evidence.replicaCreatedAt ||
+    rowAttemptSeq !== null && rowAttemptSeq > evidence.attemptSeq ||
+    Boolean(row.create_admission_attempt_token) &&
+      row.create_admission_attempt_token !== evidence.attemptToken &&
+      row.create_admission_previous_attempt_token !== evidence.attemptToken ||
+    rowOwnerIncarnation !== null &&
+      owner?.ownerIncarnation !== null &&
+      rowOwnerIncarnation > owner.ownerIncarnation;
+}
+
+function throwIfReplicaCreateProgressSuperseded(owner, row, evidence) {
+  if (!isReplicaCreateProgressRowSuperseded(owner, row, evidence)) {
+    return;
+  }
+  const rowOwnerIncarnation = nullableSafeInteger(
+    row?.create_admission_owner_incarnation,
+  );
+  const error = new Error(
+    `CREATE admission progress superseded for ${evidence?.operationId}`,
+  );
+  error.code = CREATE_ADMISSION_STALE;
+  error.errorCode = CREATE_ADMISSION_STALE;
+  error.operationId = evidence?.operationId ?? null;
+  error.bootIncarnationSuperseded =
+    rowOwnerIncarnation !== null &&
+    owner?.ownerIncarnation !== null &&
+    rowOwnerIncarnation > owner.ownerIncarnation;
+  error.admissionSuperseded = true;
+  throw error;
+}
+
 export {
   NO_ADMISSION_BASIS,
   advanceReplicaCreatePhysicalWorker,
   claimReplicaCreateDurablePhysicalWorker,
   commitReplicaCreateSnapshotInstall,
   hasReplicaCreatePhysicalWorkerForGeneration,
+  isReplicaCreateProgressRowSuperseded,
   releaseReplicaCreatePhysicalWorker,
   requireReplicaCreateRotationWorkerClaim,
   revalidateReplicaCreatePhysicalWorker,
   rowMatchesAdmissionBasis,
   runReplicaCreateExclusive,
   snapshotReplicaCreateInstallAuthority,
+  throwIfReplicaCreateProgressSuperseded,
 };

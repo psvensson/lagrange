@@ -32,7 +32,6 @@ test('DynamicConfigService config seed apply uses canonical mutation outcomes',
     const service = new DynamicConfigService();
     const cases = [
       [CONTROL_PLANE_MUTATION_OUTCOME.APPLIED, true],
-      [CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY, true],
       [CONTROL_PLANE_MUTATION_OUTCOME.NO_OP, false],
       [CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED, false],
       [CONTROL_PLANE_MUTATION_OUTCOME.REJECTED, false],
@@ -1109,4 +1108,28 @@ test('DynamicConfigService clearCache', async (t) => {
   const stats = service.getStats();
   t.equal(stats.cachedKeys, 0,
     'cache should be empty after clear');
+});
+
+test('DynamicConfigService handleCDCEvent applies UPSERT events and notifies watchers', async (t) => {
+  const mockEngine = createMockSqlEngine();
+  const service = new DynamicConfigService({
+    sqlQueryEngine: mockEngine,
+    nodeId: 'test-node',
+  });
+  await service.initialize();
+  const observed = [];
+  service.watch('logging.level', (newValue, oldValue, key) => {
+    observed.push({newValue, oldValue, key});
+  });
+  await service.handleCDCEvent({
+    operation: 'UPSERT',
+    data: {
+      config_key: 'logging.level',
+      config_value: 'debug',
+      value_type: ConfigValueType.STRING,
+    },
+  });
+  t.equal(await service.get('logging.level'), 'debug');
+  t.equal(observed.length, 1);
+  t.equal(observed[0].newValue, 'debug');
 });

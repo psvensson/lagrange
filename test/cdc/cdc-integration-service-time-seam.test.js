@@ -61,61 +61,30 @@ async function pumpOnVirtualClock(timeSource, pending, stepMs) {
   return {outcome: null, pumps};
 }
 
-test('the cache-visibility wait arms its timeout on the injected clock', async () => {
+// Re-derived from the deleted post-write cache wait (quest
+// replica-admission-from-committed-operation, attempt 2): the one projection
+// wait arms no timer on any clock - a position that never arrives keeps it
+// pending however far the injected clock runs, and only the owner's
+// shutdown ends it. (The wait's in-budget repair retry is deleted with it.)
+test('the projection wait arms no timer and ends only at shutdown', async () => {
   const {service, timeSource} = serviceOnVirtualClock();
-  assert.equal(timeSource.pendingTimerCount(), 0);
-  let settled = false;
-  const wait = service.waitForCacheUpdate(
-    SYSTEM_TABLE_NAME.NODES, ABSENT_KEY, true, {timeoutMs: WAIT_BUDGET_MS})
-    .catch((error) => error)
-    .then((outcome) => {
-      settled = true;
-      return outcome;
+  let outcome = null;
+  const wait = service.awaitProjectionAt({tableName: SYSTEM_TABLE_NAME.NODES,
+    key: ABSENT_KEY, originHlc: '1793615397288-1-seam-node'})
+    .then((value) => ({value}), (error) => ({error}))
+    .then((settled) => {
+      outcome = settled;
+      return settled;
     });
   await Promise.resolve();
-  assert.equal(timeSource.pendingTimerCount(), 1,
-    'the wait must be armed on the injected clock, not the ambient one');
-  assert.equal(settled, false, 'nothing has happened on the virtual clock yet');
-  // The owner splits the budget: the cache-wait timer fires at the
-  // cache-wait share (750 of 1000) and the repair leg uses the rest.
-  // Advancing the whole budget fires it; the row never arrives, so the
-  // owner's own timeout contract is the outcome - reached because the
-  // virtual clock ran, not because a wall-clock second passed.
-  timeSource.advance(WAIT_BUDGET_MS);
-  const outcome = await wait;
-  assert.equal(settled, true, 'advancing the virtual clock is what settles the wait');
-  assert.match(String(outcome && outcome.message), /within 1000ms/u);
-});
-
-test('the authoritative-fallback retry delay and the timeout classification are on the injected clock', async () => {
-  // A repair leg that neither confirms nor defers drives the wait's own
-  // retry: a delay armed on the owner's clock, then a second attempt, then
-  // the timeout error - whose remaining-budget classification must be read
-  // on the same clock the deadline was stamped on. (The pump advances in
-  // 50ms steps, so the 25ms delay lands one step later; the assertion
-  // compares against the clock, not a hand-counted instant.)
-  const {service, timeSource} = serviceOnVirtualClock();
-  service.repairCacheVisibilityHole = async () => ({
-    authoritativeVisibilityConfirmed: false, visibilityState: null,
-  });
-  const armedMs = [];
-  const original = timeSource.setTimeout.bind(timeSource);
-  timeSource.setTimeout = (fn, ms, ...args) => {
-    armedMs.push(ms);
-    return original(fn, ms, ...args);
-  };
-  const wait = service.waitForCacheUpdate(
-    SYSTEM_TABLE_NAME.NODES, ABSENT_KEY, true, {timeoutMs: WAIT_BUDGET_MS})
-    .then((result) => ({result}), (error) => ({error}));
-  const {outcome} = await pumpOnVirtualClock(timeSource, wait, RETRY_AFTER_MS);
-  assert.ok(outcome && outcome.error, 'the wait must settle by virtual time alone');
-  assert.ok(armedMs.includes(service.authoritativeFallbackRetryDelayMs),
-    `the fallback retry delay (${service.authoritativeFallbackRetryDelayMs}ms) is armed on the injected clock`);
-  const remaining = outcome.error.timeoutClassification.remainingBudgetMs;
-  assert.equal(remaining, WAIT_BUDGET_MS - timeSource.now(),
-    'the error classifies the remaining budget on the virtual clock, not the wall');
-  assert.ok(remaining > 0 && remaining < WAIT_BUDGET_MS,
-    'the timer fired inside the budget: neither exhausted nor untouched');
+  assert.equal(timeSource.pendingTimerCount(), 0,
+    'the projection wait arms no timer on the injected clock');
+  timeSource.advance(WAIT_BUDGET_MS * 10);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(outcome, null, 'no amount of virtual time settles it');
+  service.markShuttingDown();
+  await wait;
+  assert.equal(outcome?.error?.code, 'shutdown', 'shutdown ends it, typed');
 });
 
 test('the routed-mutation retry loop delays and budgets on the injected clock', async () => {
@@ -135,7 +104,7 @@ test('the routed-mutation retry loop delays and budgets on the injected clock', 
   service.initialize();
   const mutation = service.updateSystemTableRow(
     SYSTEM_TABLE_NAME.NODES, {node_id: 'n1'}, {status: 'active'},
-    {queryTimeoutMs: QUERY_BUDGET_MS, skipCacheWait: true})
+    {queryTimeoutMs: QUERY_BUDGET_MS})
     .then((result) => ({result}), (error) => ({error}));
   const {outcome} = await pumpOnVirtualClock(timeSource, mutation, RETRY_AFTER_MS);
   assert.ok(outcome, 'the loop must settle by virtual time alone');
@@ -305,15 +274,14 @@ test('a write duration is measured end to end on the owner clock', async () => {
     timeSource.advance(ELAPSED_MS);
     return {success: true, changes: 1};
   };
-  service.waitForCacheUpdate = async () => undefined;
   await service.insertSystemTableRow(TABLES.SERVICES,
     {service_id: 'duration-witness', status: 'active'});
   const [written] = metrics;
   assert.ok(written, 'the write metric was emitted');
   assert.equal(written.sqlDurationMs, ELAPSED_MS,
     'the reported duration is the virtual time that passed during the write');
-  assert.equal(written.cacheWaitDurationMs, 0,
-    'and the cache wait, which consumed no virtual time, reports none');
+  assert.equal(written.totalDurationMs, ELAPSED_MS,
+    'and the write answers at its commit: the total is the commit duration');
 });
 
 test('MUTATION: mixing ambient time into a duration breaks its end-to-end claim',
@@ -343,7 +311,6 @@ test('MUTATION: mixing ambient time into a duration breaks its end-to-end claim'
       poisonNextRead = true;
       return {success: true, changes: 1};
     };
-    service.waitForCacheUpdate = async () => undefined;
     service.timeSource = {
       ...timeSource,
       now: () => {

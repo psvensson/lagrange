@@ -1,0 +1,27 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "runtime-definition-create-authority",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "canonical-definition-meaning",
+      "passed": false,
+      "detail": "Actual Binding producer, native counts and malformed lineage controls pass locally at reviewed manifest337b3a6b; frozen exact-candidate and full affected proof remain pending."
+    },
+    {
+      "id": "authoritative-create-route",
+      "passed": false,
+      "detail": "Explicit keyed authority and one-read routing controls pass locally; old-source negatives retained. Frozen exact-candidate proof remains pending."
+    },
+    {
+      "id": "retained-retry-custody",
+      "passed": false,
+      "detail": "Actual coordinator callback resumes the same operation/replica after finite refusal with a held-callback negative and controlled scheduler/persistence boundaries. Frozen exact-candidate proof remains pending."
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "detail": "Independent v4 bounded WIP content approved in71b2104e; committed applicability and final evidence admission remain pending."
+    }
+  ]
+}

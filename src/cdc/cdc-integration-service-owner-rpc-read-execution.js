@@ -39,6 +39,28 @@ const AUTHORITATIVE_OWNER_RPC_READ_PREFER_LEADER = false;
 const AUTHORITATIVE_LEADER_WITNESS_FAILURE =
   'authoritative_owner_leader_witness_required';
 
+function extractReadAuthorityWitness(result) {
+  const candidate = result?.readAuthorityWitness;
+  return candidate && typeof candidate === 'object' && !Array.isArray(candidate) ?
+    candidate :
+    null;
+}
+
+function extractReadAuthorityWitnesses(result, readAuthorityWitness) {
+  if (Array.isArray(result?.readAuthorityWitnesses)) {
+    return result.readAuthorityWitnesses;
+  }
+  return readAuthorityWitness ? [readAuthorityWitness] : [];
+}
+
+function isNormalizedRowSetComplete(result, success) {
+  return Boolean(
+    success &&
+      result?.partial !== true &&
+      result?.rowSetComplete === true,
+  );
+}
+
 function normalizeAuthoritativeQueryRowSet(queryResult) {
   const result = queryResult || {
     success: false,
@@ -46,14 +68,24 @@ function normalizeAuthoritativeQueryRowSet(queryResult) {
     rows: [],
   };
   const rowsValid = Array.isArray(result.rows);
+  const rows = rowsValid ? result.rows : [];
+  const success = result.success === true && rowsValid;
+  const readAuthorityWitness = extractReadAuthorityWitness(result);
   return {
     ...result,
-    success: result.success === true && !rowsValid ? false : result.success,
+    success,
     error: result.success === true && !rowsValid ?
       CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_QUERY_FAILED :
       result.error,
-    rows: rowsValid ? result.rows : [],
-    rowCount: rowsValid ? result.rows.length : 0,
+    rows,
+    count: rows.length,
+    rowCount: rows.length,
+    rowSetComplete: isNormalizedRowSetComplete(result, success, rows.length),
+    readAuthorityWitness,
+    readAuthorityWitnesses: extractReadAuthorityWitnesses(
+      result,
+      readAuthorityWitness,
+    ),
   };
 }
 

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "reviewType": "independent-design-and-r09-supersession-review",
+  "questId": "readiness-self-grace-service-evidence-contract",
+  "epic": "operation-integrity-and-reliable-formation",
+  "questClass": "fix",
+  "verifier": "subagent:b53f502d-cb6d-4d3b-b17c-9e51dbbbcf82",
+  "verdict": "approve",
+  "ruleSetRevision": 5,
+  "headCommit": "ad0d64de8cfc06b574b0589f33985d4be1f3a4d0",
+  "causalHistoryCommits": {
+    "introducedSubtest7": "e2797b6c8756cc0d596e24b16465b41c820cbd56",
+    "reenabledAndRenamedTestFile": "40ab2eccd7e9d3c98cedbecff6dc21a897cfe44a",
+    "waveCDecomposition": "0177e9d1df290492bc3f03be4835eb22b747b414",
+    "serveEligibilityAttempt1TestUpdate": "835ea25c46d1bb60f9010e195f759212a6883301",
+    "serveEligibilityAttempt4EmptyDefaultDeletion": "e4d0f3294f4d51c6be637543dc2051a0a579f37b"
+  },
+  "verifiedFiles": [
+    {
+      "path": "src/control-plane/control-plane-readiness-node-service-rows.js",
+      "sha256": "9013b217e01eaf6281612fab52d5c7ef87cbe0633ad925ab29c7ebc10f45d5ad"
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-evidence-reasons.js",
+      "sha256": "5fb117306b9d8a7549b4bdab27dc96974c5110d6d42e4adebca729159f9e8135"
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-service-node-methods.js",
+      "sha256": "d558b1ce3fa215b25586767d8f88663709f00d0f333cc0193a63820f4c26a922"
+    },
+    {
+      "path": "src/control-plane/authoritative-node-evidence-reconciler.js",
+      "sha256": "2ef5d87fb46b475b1c933b18a939b2deb8c583accde6eb9099e1cf6f9367b196"
+    },
+    {
+      "path": "test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js",
+      "sha256": "0f82414c8b7980dbd1dfd8242fe6f77f998a63f83a1edbd89f9935cfb4241483"
+    },
+    {
+      "path": "architecture/readiness-and-owner-contracts.md",
+      "sha256": "43933414f88c1469a89152a0f416bb4962d0adde83e84caa4a05e849a3cac802"
+    },
+    {
+      "path": "solve/quests/serve-eligibility-committed-epoch-read/quest.json",
+      "sha256": "1687937c5a2248ab7de1424712114f58dd3287faab5646d7ee4225e22a159204"
+    },
+    {
+      "path": "solve/quests/serve-eligibility-committed-epoch-read/evidence/design-note.md",
+      "sha256": "47ca435c6fa286212be05ab05818b75bbef71e0886caeef26a2c24e584831243"
+    },
+    {
+      "path": "test-output/verification-20261106-partition-target/independent-readiness-cleanup-design-review.md",
+      "sha256": "0206272720dacb4325d11efd85bc529d18c380c2607f34290ee8fe0a7116b6ac"
+    }
+  ]
+}

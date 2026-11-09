@@ -19,9 +19,13 @@ import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {buildFailedCreateCleanupToken} from
   '../rebalancer/failed-create-cleanup-token.js';
 import {CREATE_ADMISSION_STATE} from './replica-create-admission-owner.js';
-import {persistFailedCreateLifecycle} from
+import {expiredCreateInitialStatusError, persistFailedCreateLifecycle} from
   './replica-handler-failed-create-publication.js';
 import {durableRowVersion} from './replica-state-machine-recovery.js';
+import {
+  isConflictingCachedReplicaIdentity,
+  resolvePreservedReplicaRaftRole,
+} from './replica-state-machine-lifecycle-observation.js';
 import {REPLICA_CLEANUP_ERROR_CODE} from
   './replica-cleanup-constants.js';
 import {
@@ -134,12 +138,7 @@ async function rotateFailedCreateEvidence(handler, evidence, physicalClaim) {
 
 function buildRotatingReplayContext(handler, replicaId, partitionId,
   service, rotatingEvidence) {
-  const context = buildFailedCreateReplayContext(
-    handler,
-    replicaId,
-    partitionId,
-    service,
-  );
+  const context = buildFailedCreateReplayContext(partitionId, service);
   if (!rotatingEvidence) return context;
   return {
     ...context,
@@ -148,22 +147,23 @@ function buildRotatingReplayContext(handler, replicaId, partitionId,
   };
 }
 
-// The exact authoritative row of this create on this node in `status`,
-// installed as the tracked state; null when the row is anything else.
-async function resolveCreateReplay(
-  handler,
-  replicaId,
-  partitionId,
-  status,
-  createAdmissionEvidence = null,
-) {
+async function observeCreateReplay(handler, replicaId, partitionId, status,
+  createAdmissionEvidence = null) {
   const observation = await handler.replicaStateMachine
     .observeAuthoritativeReplicaLifecycle(replicaId);
-  if (observation?.available !== true ||
-      !isExactCreateRow(handler, observation.row,
-        {replicaId, partitionId, status, createAdmissionEvidence})) {
-    return null;
-  }
+  if (observation?.available !== true) return {available: false, row: null};
+  const row = isExactCreateRow(handler, observation.row,
+    {replicaId, partitionId, status, createAdmissionEvidence}) ? observation.row : null;
+  return {available: true, row};
+}
+
+// The exact authoritative row of this create on this node in `status`,
+// installed as the tracked state; null when no matching row is observed.
+async function resolveCreateReplay(handler, replicaId, partitionId, status,
+  createAdmissionEvidence = null) {
+  const observation = await observeCreateReplay(
+    handler, replicaId, partitionId, status, createAdmissionEvidence);
+  if (!observation.row) return null;
   registerAuthoritativeCreateSnapshot(handler, replicaId, observation.row);
   const trackedState = observeTrackedReplicaState(
     handler,
@@ -172,20 +172,13 @@ async function resolveCreateReplay(
   return trackedState?.state === status ? {service: observation.row} : null;
 }
 
-function buildFailedCreateReplayContext(
-  handler,
-  replicaId,
-  partitionId,
-  service,
-) {
+function buildFailedCreateReplayContext(partitionId, service) {
   return {
     partitionId,
     nodeId: service.node_id,
     serviceId: service.service_id,
-    serviceType:
-      service.service_type,
-    serviceAddress:
-      service.address,
+    serviceType: service.service_type,
+    serviceAddress: service.address,
   };
 }
 
@@ -301,7 +294,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         }
         this.throwIfShuttingDown();
         if (this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
-          return this.persistPriorityReplicaCreateCreatingStatus(options);
+          return await this.persistPriorityReplicaCreateCreatingStatus(options);
         }
         await this.persistReplicaStatusWithRetry(replicaId, ReplicaStatus.CREATING, {
           partitionId,
@@ -310,6 +303,9 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         });
         return true;
       } catch (error) {
+        const currentError = await expiredCreateInitialStatusError(
+          this, options, error, observeCreateReplay);
+        if (currentError !== error) throw currentError;
         if (shouldRethrowCreateStatusError(error)) throw error;
         this.deferRetryableReplicaCreateStatusWrite({
           operationId,
@@ -456,6 +452,9 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         status: ReplicaStatus.SYNCING,
         service: null,
       });
+      // Reported to the create's admission-input owner: the resumed row is
+      // the leader's admission input (replica-create-admission-input.js).
+      options.resumedLifecycleStatus = ReplicaStatus.SYNCING;
       return true;
     }
 
@@ -501,6 +500,8 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
           partitionId,
           replicaId,
           error,
+          createAdmissionEvidence: options.createAdmissionEvidence,
+          createAttemptToken: options.createAttemptToken,
         });
         return true;
       }
@@ -522,10 +523,12 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
      * @param {string} replicaId
      * @param {string} partitionId
      * @param {string} status - ReplicaStatus value reflecting local truth.
+     * @param {Object} [options]
+     * @param {boolean} [options.markLocalOnly=true]
      * @return {boolean} Whether the row was applied.
      * @private
      */
-    seedLocalPriorityServiceRow(replicaId, partitionId, status) {
+    seedLocalPriorityServiceRow(replicaId, partitionId, status, options = {}) {
       if (
         !this.systemTableCache ||
         typeof this.systemTableCache.applySystemTableChange !==
@@ -534,28 +537,86 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         return false;
       }
       const nowMs = Date.now();
+      const {trackedState} = observeTrackedReplicaState(this, replicaId);
+      const trackedMatchesStatus = trackedState?.state === status;
+      const createdAt = Number.isFinite(trackedState?.createdAt) ?
+        trackedState.createdAt : nowMs;
+      const stateEnteredAt = trackedMatchesStatus &&
+        Number.isFinite(trackedState?.stateEnteredAt) ?
+        trackedState.stateEnteredAt : nowMs;
+      const updatedAt = trackedMatchesStatus &&
+        Number.isFinite(trackedState?.durableVersion) ?
+        trackedState.durableVersion : stateEnteredAt;
+      const seededRow = {
+        service_id: replicaId,
+        service_type: REPLICA_HANDLER_SERVICE.TYPE,
+        partition_id: partitionId,
+        node_id: this.nodeId,
+        status,
+        address: this.buildTrackedServiceAddress(replicaId),
+        created_at: createdAt,
+        updated_at: updatedAt,
+      };
+      if (trackedState) {
+        seededRow.replica_id = trackedState.replicaIdentity || replicaId;
+        seededRow.state_entered_at = stateEnteredAt;
+        seededRow.previous_state = trackedMatchesStatus ?
+          trackedState.previousState ?? null :
+          trackedState.state ?? null;
+        seededRow.cleanup_token = trackedState.cleanupToken ?? null;
+        seededRow.create_attempt_token =
+          trackedState.createAttemptToken ?? null;
+      }
+      const existingRow = typeof this.systemTableCache.get ===
+          REPLICA_HANDLER_TYPEOF.FUNCTION ?
+        this.systemTableCache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId) :
+        null;
+      const preservedRole = trackedState ?
+        resolvePreservedReplicaRaftRole(
+          {
+            systemTableCache: this.systemTableCache,
+            resolveLiveReplicaRole: (serviceId) => {
+              const role = this.getTrackedReplicaRole(serviceId);
+              return isVoterRaftRole(role) ? normalizePublishedRaftRole(
+                role, {collapseLeaderToFollower: true}) : null;
+            },
+          },
+          {
+            ...trackedState,
+            replicaId,
+            replicaIdentity: seededRow.replica_id || replicaId,
+            partitionId,
+            nodeId: this.nodeId,
+            state: status,
+            createdAt,
+            cleanupToken: seededRow.cleanup_token ?? null,
+            createAttemptToken: seededRow.create_attempt_token ?? null,
+          },
+          replicaId,
+          {voterOnly: false},
+        ) :
+        null;
+      if (preservedRole) {
+        seededRow.raft_role = preservedRole;
+      } else if (existingRow?.raft_role !== undefined) {
+        seededRow.raft_role = null;
+      }
       this.systemTableCache.applySystemTableChange(
         SYSTEM_TABLE_NAME.SERVICES,
         LOCAL_STR_UPSERT,
-        {
-          service_id: replicaId,
-          service_type: REPLICA_HANDLER_SERVICE.TYPE,
-          partition_id: partitionId,
-          node_id: this.nodeId,
-          status,
-          address: this.buildTrackedServiceAddress(replicaId),
-          created_at: nowMs,
-          updated_at: nowMs,
-        },
+        seededRow,
         {causeId: `priority-local-create:${replicaId}`},
       );
       // Lifecycle persistence must UPSERT for this row until a durable
       // write confirms remote existence (the local row no longer proxies
-      // it).
-      this.replicaStateMachine?.markServiceRowLocalOnly?.(
-        replicaId,
-        deferredDurableWriteActivation(this, replicaId),
-      );
+      // it). Terminal FAILED rows and post-durable ACTIVE seeds must not arm
+      // local-only full-row insert reconciliation.
+      if (status !== ReplicaStatus.FAILED && options?.markLocalOnly !== false) {
+        this.replicaStateMachine?.markServiceRowLocalOnly?.(
+          replicaId,
+          deferredDurableWriteActivation(this, replicaId),
+        );
+      }
       return true;
     }
 
@@ -604,10 +665,14 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       // Do not synthesize an incomplete row: only seed the field onto an
       // existing SERVICES row (the create-path seed already established it).
       const existingRow = this.systemTableCache.get(
-        SYSTEM_TABLE_NAME.SERVICES,
-        replicaId,
-      );
+        SYSTEM_TABLE_NAME.SERVICES, replicaId);
       if (!existingRow) {
+        return false;
+      }
+      const {trackedState} = observeTrackedReplicaState(this, replicaId);
+      if (trackedState &&
+        isConflictingCachedReplicaIdentity(existingRow, trackedState, replicaId)
+      ) {
         return false;
       }
       const trackedRole = this.getTrackedReplicaRole(replicaId);
@@ -620,16 +685,11 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       this.systemTableCache.applySystemTableChange(
         SYSTEM_TABLE_NAME.SERVICES,
         LOCAL_STR_UPSERT,
-        {
-          service_id: replicaId,
-          raft_role: normalizedRole,
-        },
+        {service_id: replicaId, raft_role: normalizedRole},
         {causeId: `local-voter-ready:${replicaId}`},
       );
       this.replicaStateMachine?.markServiceRowLocalOnly?.(
-        replicaId,
-        deferredDurableWriteActivation(this, replicaId),
-      );
+        replicaId, deferredDurableWriteActivation(this, replicaId));
       return true;
     }
 
@@ -649,15 +709,12 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         partitionId,
         status: ReplicaStatus.CREATING,
       });
-      this.seedLocalPriorityServiceRow(
-        replicaId,
-        partitionId,
-        ReplicaStatus.CREATING,
-      );
       const transitionContext = {
         partitionId,
         nodeId: this.nodeId,
         errorMessage: error?.message || null,
+        createAdmissionEvidence: options.createAdmissionEvidence,
+        createAttemptToken: options.createAttemptToken,
         serviceId: replicaId,
         serviceType: REPLICA_HANDLER_SERVICE.TYPE,
         serviceAddress: this.buildTrackedServiceAddress(replicaId),
@@ -697,6 +754,11 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
           });
         }
       }
+      this.seedLocalPriorityServiceRow(
+        replicaId,
+        partitionId,
+        ReplicaStatus.CREATING,
+      );
       this.logger.warn(REPLICA_HANDLER_LOG_MSG.CREATE_STATUS_WRITE_DEFERRED, {
         operationId,
         partitionId,

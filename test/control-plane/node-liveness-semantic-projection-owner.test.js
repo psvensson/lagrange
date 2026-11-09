@@ -30,7 +30,7 @@ function buildOwnerFixture(options = {}) {
   };
   const changes = [];
   const owner = new NodeLivenessSemanticProjectionOwner({
-    localNodeId: 'node-local',
+    localNodeId: options.localNodeId || 'node-local',
     timeSource,
     setTimeoutFn: options.setTimeoutFn,
     clearTimeoutFn: options.clearTimeoutFn,
@@ -773,3 +773,248 @@ test('readiness and planning callers contain no former local liveness clocks',
     }
     t.end();
   });
+
+test('lease input classification distinguishes invalid, cleared, absent and valid values', (t) => {
+  const cases = [[null, 'cleared', true], [undefined, 'invalid', false],
+    [0, 'expired', false], ['0', 'expired', false], [NOW_MS + 1, 'valid', false],
+    [String(NOW_MS + 1), 'valid', false],
+    ...[NaN, Infinity, -0, -1, NOW_MS + 0.5, Number.MAX_SAFE_INTEGER + 1,
+      false, true, {}, [], '', 'bad'].map((value) => [value, 'invalid', false])];
+  for (const [value, state, cleared] of cases) {
+    const fixture = buildOwnerFixture();
+    fixture.row.ready_lease_expires_at = value;
+    const projection = fixture.owner.projectNodeLiveness('node-a', NOW_MS);
+    t.equal(projection.leaseSemantics.state, state);
+    t.equal(projection.leaseSemantics.explicitlyCleared, cleared);
+    if (state === 'invalid') {
+      t.equal(projection.readyNow, false);
+      t.equal(projection.clusterMembershipSemantics.healthy, false,
+        'malformed lease cannot inherit transport/heartbeat health');
+      const local = buildOwnerFixture({localNodeId: 'node-a'});
+      local.row.ready_lease_expires_at = value;
+      t.equal(local.owner.projectNodeLiveness('node-a', NOW_MS)
+        .clusterMembershipSemantics.healthy, false,
+      'malformed lease cannot inherit local reporter health');
+      local.owner.shutdown();
+    }
+    fixture.owner.shutdown();
+  }
+  const fixture = buildOwnerFixture();
+  fixture.row.ready_lease_expires_at = undefined;
+  fixture.row.readyLeaseExpiresAt = NOW_MS + 100;
+  t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS).leaseSemantics.state,
+    'invalid', 'a present invalid canonical field cannot borrow another spelling');
+  delete fixture.row.readyLeaseExpiresAt;
+  delete fixture.row.ready_lease_expires_at;
+  fixture.owner.recordNodeSourceChange('node-a', NOW_MS);
+  t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS).leaseSemantics.state,
+    'unknown', 'absence remains distinct');
+  fixture.owner.shutdown();
+  t.end();
+});
+
+test('same-heartbeat lease-invalid and explicit-null views cannot rotate shared evidence', (t) => {
+  const fixture = buildOwnerFixture();
+  t.teardown(() => fixture.owner.shutdown());
+  fixture.row.ready_lease_expires_at = undefined;
+  const invalid = fixture.owner.projectNodeLiveness('node-a', NOW_MS);
+  const generation = fixture.owner.getNodeLivenessGeneration('node-a');
+  const candidate = fixture.owner.projectNodeLivenessFromEvidence('node-a', {
+    nodeRow: {...fixture.row, ready_lease_expires_at: null},
+  }, NOW_MS);
+  t.equal(candidate.leaseSemantics.state, 'cleared', 'the conflicting caller gets its own answer');
+  t.equal(invalid.leaseSemantics.state, 'invalid');
+  t.equal(fixture.owner.getNodeLivenessGeneration('node-a'), generation,
+    'conflicting equal-watermark evidence cannot replace the shared state');
+  t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS).leaseSemantics.state, 'invalid');
+  fixture.row.ready_lease_expires_at = null;
+  fixture.owner.recordNodeSourceChange('node-a', NOW_MS);
+  t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS).leaseSemantics.state, 'cleared');
+  t.equal(fixture.owner.getNodeLivenessGeneration('node-a'), generation + 1,
+    'the actual source change advances the existing owner generation');
+  t.end();
+});
+
+
+test('nested hostile caller rows cannot execute or rotate shared liveness evidence', (t) => {
+  const fixture = buildOwnerFixture();
+  t.teardown(() => fixture.owner.shutdown());
+  const before = fixture.owner.projectNodeLiveness('node-a', NOW_MS);
+  const generation = fixture.owner.getNodeLivenessGeneration('node-a');
+  let accessorCalls = 0;
+  const getterRow = Object.defineProperty({...fixture.row}, 'ready_lease_expires_at', {
+    enumerable: true, get() {
+      accessorCalls++; return NOW_MS + 13;
+    },
+  });
+  const heartbeatGetter = Object.defineProperty({...fixture.row}, 'last_heartbeat', {
+    enumerable: true, get() {
+      accessorCalls++; return NOW_MS + 1;
+    },
+  });
+  const proxyRow = new Proxy({...fixture.row}, {
+    get(target, key) {
+      accessorCalls++; return Reflect.get(target, key);
+    },
+  });
+  for (const nodeRow of [getterRow, heartbeatGetter, proxyRow]) {
+    const caller = fixture.owner.projectNodeLivenessFromEvidence('node-a', {nodeRow}, NOW_MS);
+    t.equal(caller.readyNow, false, 'malformed caller evidence receives its own denial');
+    t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS), before,
+      'the source-owned projection object remains current');
+    t.equal(fixture.owner.getNodeLivenessGeneration('node-a'), generation);
+  }
+  t.equal(accessorCalls, 0, 'no nested accessor or proxy trap runs before comparison');
+  fixture.row.ready_lease_expires_at = null;
+  fixture.owner.recordNodeSourceChange('node-a', NOW_MS);
+  t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS).leaseSemantics.state, 'cleared');
+  t.equal(fixture.owner.getNodeLivenessGeneration('node-a'), generation + 1,
+    'a real source change still publishes the new semantic identity');
+  t.end();
+});
+
+test('nested source rows are admitted before becoming the shared comparison snapshot', (t) => {
+  const fixture = buildOwnerFixture();
+  t.teardown(() => fixture.owner.shutdown());
+  let accessorCalls = 0;
+  const hostileRow = Object.defineProperty({...fixture.row}, 'last_heartbeat', {
+    enumerable: true, get() {
+      accessorCalls++; return NOW_MS;
+    },
+  });
+  fixture.owner.readNodeEvidence = () => ({nodeRow: hostileRow});
+  t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS).readyNow, false);
+  const valid = {...fixture.row};
+  t.equal(fixture.owner.projectNodeLivenessFromEvidence('node-a', {nodeRow: valid}, NOW_MS).readyNow,
+    true, 'subsequent valid evidence can establish the first usable observation');
+  t.equal(accessorCalls, 0, 'neither initial projection nor later comparison reads an accessor');
+  const generation = fixture.owner.getNodeLivenessGeneration('node-a');
+  valid.ready_lease_expires_at = null;
+  t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS).readyNow, true,
+    'the retained row is an admitted snapshot, not a mutable caller alias');
+  t.equal(fixture.owner.getNodeLivenessGeneration('node-a'), generation);
+  t.end();
+});
+
+test('rejected outer evidence cannot borrow an inherited node row', (t) => {
+  const fixture = buildOwnerFixture();
+  t.teardown(() => fixture.owner.shutdown());
+  const before = fixture.owner.projectNodeLiveness('node-a', NOW_MS);
+  const generation = fixture.owner.getNodeLivenessGeneration('node-a');
+  const original = Object.getOwnPropertyDescriptor(Object.prototype, 'nodeRow');
+  let inheritedReads = 0;
+  let caller;
+  try {
+    // eslint-disable-next-line no-extend-native -- restored adversarial evidence fixture
+    Object.defineProperty(Object.prototype, 'nodeRow', {
+      configurable: true, get() {
+        inheritedReads++;
+        return {...fixture.row, status: 'stopped', last_heartbeat: NOW_MS};
+      },
+    });
+    caller = fixture.owner.projectNodeLivenessFromEvidence('node-a', [], NOW_MS);
+  } finally {
+    // eslint-disable-next-line no-extend-native -- restore the prior descriptor
+    if (original) Object.defineProperty(Object.prototype, 'nodeRow', original);
+    else delete Object.prototype.nodeRow;
+  }
+  t.equal(inheritedReads, 0, 'outer refusal has no inherited evidence path');
+  t.equal(caller.readyNow, false, 'rejected evidence answers only this caller');
+  t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS), before);
+  t.equal(fixture.owner.getNodeLivenessGeneration('node-a'), generation);
+  t.end();
+});
+
+test('scalar comparison never coerces caller objects and real source changes still recover', (t) => {
+  const fixture = buildOwnerFixture();
+  t.teardown(() => fixture.owner.shutdown());
+  const before = fixture.owner.projectNodeLiveness('node-a', NOW_MS);
+  const generation = fixture.owner.getNodeLivenessGeneration('node-a');
+  let coercions = 0;
+  const coerciveValues = [
+    {valueOf() {
+      coercions++; return NOW_MS + 100;
+    }},
+    {[Symbol.toPrimitive]() {
+      coercions++; return NOW_MS + 100;
+    }},
+  ];
+  for (const value of coerciveValues) {
+    for (const field of ['ready_lease_expires_at', 'last_heartbeat']) {
+      const caller = fixture.owner.projectNodeLivenessFromEvidence('node-a', {
+        nodeRow: {...fixture.row, [field]: value},
+      }, NOW_MS);
+      if (field === 'ready_lease_expires_at') {
+        t.equal(caller.leaseSemantics.state, 'invalid');
+        t.equal(caller.readyNow, false);
+      }
+      t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS), before,
+        'malformed caller scalar cannot replace the shared observation');
+      t.equal(fixture.owner.getNodeLivenessGeneration('node-a'), generation);
+    }
+  }
+  t.equal(coercions, 0, 'semantic facts reach comparison without raw coercion hooks');
+
+  fixture.row.ready_lease_expires_at = coerciveValues[0];
+  fixture.owner.recordNodeSourceChange('node-a', NOW_MS);
+  t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS).leaseSemantics.state, 'invalid');
+  t.equal(fixture.owner.getNodeLivenessGeneration('node-a'), generation + 1,
+    'actual source invalidation is visible despite the caller veto');
+  fixture.row.ready_lease_expires_at = null;
+  fixture.owner.recordNodeSourceChange('node-a', NOW_MS);
+  t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS).leaseSemantics.state, 'cleared');
+  t.equal(fixture.owner.getNodeLivenessGeneration('node-a'), generation + 2);
+  fixture.row.ready_lease_expires_at = NOW_MS + 100;
+  fixture.owner.recordNodeSourceChange('node-a', NOW_MS);
+  t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS).readyNow, true);
+  t.equal(fixture.owner.getNodeLivenessGeneration('node-a'), generation + 3,
+    'a genuine valid source observation recovers through the same owner');
+  const newer = fixture.owner.projectNodeLivenessFromEvidence('node-a', {
+    ...fixture.evidence,
+    nodeRow: {...fixture.row, status: 'stopped', last_heartbeat: NOW_MS},
+  }, NOW_MS);
+  t.equal(newer.readyNow, false);
+  t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS), newer,
+    'the existing watermark owner still accepts a legitimate newer heartbeat');
+  t.equal(fixture.owner.getNodeLivenessGeneration('node-a'), generation + 4);
+  t.equal(coercions, 0, 'neither source admission nor later comparison executes a hook');
+  t.end();
+});
+
+test('canonical watermark comparison uses captured primitive operations', (t) => {
+  const fixture = buildOwnerFixture();
+  t.teardown(() => fixture.owner.shutdown());
+  const before = fixture.owner.projectNodeLiveness('node-a', NOW_MS);
+  const generation = fixture.owner.getNodeLivenessGeneration('node-a');
+  const originals = {Number: globalThis.Number, lower: String.prototype.toLowerCase,
+    freeze: Object.freeze};
+  const olderRow = {...fixture.row, status: 'stopped', last_heartbeat: NOW_MS - 23};
+  let calls = 0;
+  let caller;
+  try {
+    const poisonedNumber = () => {
+      calls++; return 1;
+    };
+    poisonedNumber.isFinite = originals.Number.isFinite;
+    globalThis.Number = poisonedNumber;
+    // eslint-disable-next-line no-extend-native -- restored adversarial comparison fixture
+    String.prototype.toLowerCase = () => {
+      calls++; return 'ready';
+    };
+    Object.freeze = (value) => {
+      calls++; return value;
+    };
+    caller = fixture.owner.projectNodeLivenessFromEvidence('node-a', {nodeRow: olderRow}, NOW_MS);
+  } finally {
+    globalThis.Number = originals.Number;
+    // eslint-disable-next-line no-extend-native -- restore the prior intrinsic
+    String.prototype.toLowerCase = originals.lower;
+    Object.freeze = originals.freeze;
+  }
+  t.equal(calls, 0, 'the comparison does not invoke ambient replacements');
+  t.equal(caller.readyNow, false);
+  t.equal(fixture.owner.projectNodeLiveness('node-a', NOW_MS), before,
+    'an older caller cannot replace the shared observation');
+  t.equal(fixture.owner.getNodeLivenessGeneration('node-a'), generation);
+  t.end();
+});

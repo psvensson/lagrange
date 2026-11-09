@@ -239,7 +239,7 @@ test('AdminControlSnapshot labels local-cache observation mode',
     );
   });
 
-test('AdminControlSnapshot query result defers owner handoff commands by default',
+test('AdminControlSnapshot query result omits owner handoff commands by default',
   async (t) => {
     const snapshot = createSnapshot();
     let receivedOptions = null;
@@ -255,12 +255,12 @@ test('AdminControlSnapshot query result defers owner handoff commands by default
 
     t.equal(
       receivedOptions?.[TEST_DEFER_INLINE_OWNER_COMMAND_FIELD],
-      true,
-      'local snapshot queries should enqueue owner work instead of blocking the observation path',
+      undefined,
+      'ordinary local snapshot queries must not enqueue or run owner handoff commands',
     );
   });
 
-test('AdminControlSnapshot query result preserves explicit owner handoff deferral',
+test('AdminControlSnapshot query result defers owner handoff when repair is allowed',
   async (t) => {
     const snapshot = createSnapshot();
     let receivedOptions = null;
@@ -273,13 +273,14 @@ test('AdminControlSnapshot query result preserves explicit owner handoff deferra
     };
 
     await snapshot.buildControlSnapshotQueryResult({
+      allowAuthoritativeRepair: true,
       [TEST_DEFER_INLINE_OWNER_COMMAND_FIELD]: true,
     });
 
     t.equal(
       receivedOptions?.[TEST_DEFER_INLINE_OWNER_COMMAND_FIELD],
       true,
-      'explicit snapshot-query owner handoff deferral should still reach the resolver',
+      'allowed repair snapshot queries should defer inline owner handoff commands to the resolver',
     );
   });
 

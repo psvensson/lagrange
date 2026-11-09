@@ -1,0 +1,27 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "system-cache-reconciliation-ingress",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "one-sanctioned-cache-ingress",
+      "passed": false,
+      "detail": "Direct-writer guard is red; reviewed implementation and exact-candidate evidence pending."
+    },
+    {
+      "id": "provenance-and-error-custody",
+      "passed": false,
+      "detail": "Direct-writer guard is red; reviewed implementation and exact-candidate evidence pending."
+    },
+    {
+      "id": "no-alternate-mutation-route",
+      "passed": false,
+      "detail": "Direct-writer guard is red; reviewed implementation and exact-candidate evidence pending."
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "detail": "Direct-writer guard is red; reviewed implementation and exact-candidate evidence pending."
+    }
+  ]
+}

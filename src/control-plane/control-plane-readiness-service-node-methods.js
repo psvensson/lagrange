@@ -235,6 +235,56 @@ function pruneProvisioningTrustGrace(service, nodeIds) {
   }
 }
 
+function collectPublishedRequiredNodeIds(service, options = {}) {
+  const publicationRows = readTrustCacheRows(
+    service,
+    TABLES.CONTROL_PLANE_PUBLICATIONS,
+  );
+  const publishedActiveNodeIds =
+    resolvePublishedActiveNodeIds({publicationRows}) || [];
+  const explicitRequiredNodeIds = Array.isArray(options.requiredNodeIds) ?
+    options.requiredNodeIds :
+    [];
+  return [
+    ...publishedActiveNodeIds,
+    ...explicitRequiredNodeIds,
+  ].filter((nodeId) => typeof nodeId === 'string' && nodeId.length > 0);
+}
+
+function addRowNodeIdsToSet(nodeIds, rows = []) {
+  for (const row of rows) {
+    const nodeId = row?.[COLUMN.NODE_ID] || null;
+    if (nodeId) {
+      nodeIds.add(nodeId);
+    }
+  }
+}
+
+function collectCandidateReadinessNodeIds(
+  service,
+  nodeRows,
+  serviceRows,
+  options = {},
+) {
+  const nodeIds = new Set(collectPublishedRequiredNodeIds(service, options));
+  addRowNodeIdsToSet(nodeIds, nodeRows);
+  addRowNodeIdsToSet(nodeIds, serviceRows);
+  const nodeEndpointRows =
+    readCurrentEndpointRows(service.systemTableCache, TABLES.NODE_ENDPOINTS);
+  addRowNodeIdsToSet(nodeIds, nodeEndpointRows);
+  for (const nodeId of service.lastReadinessSnapshotByNodeId.keys()) {
+    if (nodeId) {
+      nodeIds.add(nodeId);
+    }
+  }
+  return [...nodeIds].sort();
+}
+
+function hasAuthoritativeBulkRows(service, options, collaborator) {
+  return options.allowAuthoritativeRefresh === true &&
+    readWiredCollaborator(service, collaborator) !== UNWIRED;
+}
+
 const controlPlaneReadinessNodeMethods = {
   /**
    * Build readiness for every known node.
@@ -243,100 +293,58 @@ const controlPlaneReadinessNodeMethods = {
   async getAllNodeReadiness(options = {}) {
     const nodeRows = await this.readNodeRows(options);
     const serviceRows = await this.readAllNodeServiceRows(options);
-    const bulkNodeRowsAreAuthoritative =
-      options.allowAuthoritativeRefresh === true &&
-      readWiredCollaborator(this, COLLABORATOR.NODES_OWNER) !== UNWIRED;
-    const bulkServiceRowsAreAuthoritative =
-      options.allowAuthoritativeRefresh === true &&
-      readWiredCollaborator(this, COLLABORATOR.SERVICES_OWNER) !== UNWIRED;
-    const nodeIds = new Set();
-    for (const nodeRow of nodeRows) {
-      const nodeId = nodeRow?.[COLUMN.NODE_ID] || null;
-      if (nodeId) {
-        nodeIds.add(nodeId);
-      }
-    }
-    if (
-      serviceRows.length > 0 ||
-      readWiredCollaborator(this, COLLABORATOR.SYSTEM_TABLE_CACHE) !== UNWIRED
-    ) {
-      const nodeEndpointRows =
-        readCurrentEndpointRows(this.systemTableCache, TABLES.NODE_ENDPOINTS);
-      for (const serviceRow of serviceRows) {
-        const nodeId = serviceRow?.[COLUMN.NODE_ID] || null;
-        if (nodeId) {
-          nodeIds.add(nodeId);
-        }
-      }
-      for (const endpointRow of nodeEndpointRows) {
-        const nodeId = endpointRow?.[COLUMN.NODE_ID] || null;
-        if (nodeId) {
-          nodeIds.add(nodeId);
-        }
-      }
-    }
-    for (const nodeId of this.lastReadinessSnapshotByNodeId.keys()) {
-      if (nodeId) {
-        nodeIds.add(nodeId);
-      }
-    }
+    const allNodeRows = hasAuthoritativeBulkRows(
+      this,
+      options,
+      COLLABORATOR.NODES_OWNER,
+    ) ?
+      nodeRows :
+      null;
+    const allServiceRows = hasAuthoritativeBulkRows(
+      this,
+      options,
+      COLLABORATOR.SERVICES_OWNER,
+    ) ?
+      serviceRows :
+      null;
+    const sortedNodeIds = collectCandidateReadinessNodeIds(
+      this,
+      nodeRows,
+      serviceRows,
+      options,
+    );
     const readiness = [];
-
-    for (const nodeId of [...nodeIds].sort()) {
+    for (const nodeId of sortedNodeIds) {
       readiness.push(
         await this.getNodeReadiness(nodeId, {
           ...options,
-          allNodeRows: bulkNodeRowsAreAuthoritative ? nodeRows : null,
-          allServiceRows: bulkServiceRowsAreAuthoritative ? serviceRows : null,
+          allNodeRows,
+          allServiceRows,
         }),
       );
     }
-
     return readiness;
   },
 
   getAllNodeReadinessSync(options = {}) {
     const nodeRows = readTrustCacheRows(this, TABLES.NODES);
     const serviceRows = readTrustCacheRows(this, TABLES.SERVICES);
-    const nodeEndpointRows =
-      readCurrentEndpointRows(this.systemTableCache, TABLES.NODE_ENDPOINTS);
-    const nodeIds = new Set();
-    for (const nodeRow of nodeRows) {
-      const nodeId = nodeRow?.[COLUMN.NODE_ID] || null;
-      if (nodeId) {
-        nodeIds.add(nodeId);
-      }
-    }
-    for (const serviceRow of serviceRows) {
-      const nodeId = serviceRow?.[COLUMN.NODE_ID] || null;
-      if (nodeId) {
-        nodeIds.add(nodeId);
-      }
-    }
-    for (const endpointRow of nodeEndpointRows) {
-      const nodeId = endpointRow?.[COLUMN.NODE_ID] || null;
-      if (nodeId) {
-        nodeIds.add(nodeId);
-      }
-    }
-    for (const nodeId of this.lastReadinessSnapshotByNodeId.keys()) {
-      if (nodeId) {
-        nodeIds.add(nodeId);
-      }
-    }
+    const sortedNodeIds = collectCandidateReadinessNodeIds(
+      this,
+      nodeRows,
+      serviceRows,
+      options,
+    );
     const maxCachedAgeMs = normalizePositiveInteger(
       options.maxCachedAgeMs,
       this.clusterMemberStaleHeartbeatMaxAgeMs,
     );
     const readiness = [];
-    for (const nodeId of [...nodeIds].sort()) {
+    for (const nodeId of sortedNodeIds) {
       const cachedSnapshot = this.getCachedReadinessSnapshot(
         nodeId,
         maxCachedAgeMs,
-        {
-          ...options,
-          allowStaleOnCacheChange: true,
-        },
+        options,
       );
       if (cachedSnapshot) {
         readiness.push(cachedSnapshot);
@@ -350,6 +358,14 @@ const controlPlaneReadinessNodeMethods = {
       );
       if (storedSnapshot) {
         readiness.push(storedSnapshot);
+        continue;
+      }
+      const currentSnapshot = this.buildNodeReadinessSyncCurrent(
+        nodeId,
+        options,
+      );
+      if (currentSnapshot) {
+        readiness.push(currentSnapshot);
       }
     }
     return readiness;

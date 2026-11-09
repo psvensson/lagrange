@@ -725,7 +725,6 @@ class NodeRegistrationOwnerPublicationMethods {
     return {
       deliveryPriority: JOIN_ADMISSION_DELIVERY_PRIORITY,
       phaseScope: JOIN_ADMISSION_PHASE_SCOPE,
-      skipCacheWait: true,
       queryTimeoutMs: this.getJoinAdmissionWriteRetryTimeoutMs(),
     };
   }

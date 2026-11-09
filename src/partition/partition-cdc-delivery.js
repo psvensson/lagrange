@@ -28,6 +28,7 @@ import {
 import {PARTITION_CDC_OBLIGATION_REASON} from
   './partition-cdc-obligation-constants.js';
 import {
+  acknowledgeHydratedObligationsThrough,
   cdcObligationDiagnosticsOf,
   createCdcObligationLane,
   driveCdcObligations,
@@ -173,6 +174,13 @@ function markReplayOnlyCdcEvent(cdcEvent) {
    * @return {Promise<Object>} The flush's outcome.
    */ flushCdcAcknowledgements(reason) {
     return flushCdcAcknowledgements(this, reason);
+  }
+  /**
+   * Acknowledge owed obligations at or below a hydration image's applied index.
+   * @param {number|string} appliedIndex - Hydrated applied log index.
+   * @return {Promise<Object>} Acknowledgement summary.
+   */ acknowledgeHydratedObligationsThrough(appliedIndex) {
+    return acknowledgeHydratedObligationsThrough(this, appliedIndex);
   }
   /**
    * The ledger committed these events delivered (a CDC_DELIVERED applied).

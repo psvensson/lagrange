@@ -40,11 +40,12 @@ function namesExactLearner(stamp, identity) {
 }
 
 // The leader's own observed progress for the learner (its follower progress
-// at the address it resolves the learner's peer to), or undefined.
+// under the learner's replica identity, the configured peer it names), or
+// undefined.
 function leaderMatchIndex(status, identity) {
   const peer = status.peers?.find((entry) => entry.peerId === identity.targetPeerId &&
     entry.replicaIdentity === identity.targetReplicaId);
-  return peer?.address ? status.followerProgress?.[peer.address] : undefined;
+  return peer ? status.followerProgress?.[peer.replicaIdentity] : undefined;
 }
 
 // The leader's committed answer and its own status are one leader in one term.

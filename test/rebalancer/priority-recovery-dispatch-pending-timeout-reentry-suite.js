@@ -591,7 +591,6 @@ function createTopologyOperatorWitnessCoordinator() {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     messageRouter: {
       async deliver() {
@@ -602,7 +601,7 @@ function createTopologyOperatorWitnessCoordinator() {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+        return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
       },
     },
     enableTimeouts: false,
@@ -895,7 +894,6 @@ registerCase(TEST_BOUNDED_OWNER_REENTRY_CONTRACT_TEST_NAME, async (t) => {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
     },
     messageRouter: {
       async deliver() {
@@ -906,7 +904,7 @@ registerCase(TEST_BOUNDED_OWNER_REENTRY_CONTRACT_TEST_NAME, async (t) => {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+        return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
       },
     },
     setTimeoutFn(fn, delayMs) {
@@ -1005,7 +1003,6 @@ registerCase(
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       messageRouter: {
         async deliver(target, payload, options) {
@@ -1017,7 +1014,7 @@ registerCase(
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       setTimeoutFn(fn, delayMs) {
@@ -1094,7 +1091,6 @@ registerCase(
         },
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
       },
       messageRouter: {
         async deliver() {
@@ -1105,7 +1101,7 @@ registerCase(
       },
       tablePolicyService: {
         async getPolicyForPartition() {
-          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
         },
       },
       setTimeoutFn(fn, delayMs) {

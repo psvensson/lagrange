@@ -903,13 +903,13 @@ test(
     );
     t.equal(
       result?.rows?.[0]?.replicaOperations?.staleInFlightCount,
-      0,
-      'failed advisory repair should not publish an unverified stale operation as live',
+      1,
+      'local snapshot should fall back to the local stale replica-operation view when advisory repair fails',
     );
     t.same(
       getAuthoritativeRepairReadTables(failingReplicaOpEngine.executeRequestCalls),
-      [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES].sort(),
-      'degraded forced repair should retain the canonical authoritative table scope',
+      [TABLES.REPLICA_OPERATIONS].sort(),
+      'degraded local snapshot should attempt only the scoped replica_operations repair',
     );
   },
 );
@@ -1192,10 +1192,15 @@ test(
     t.match(
       result.rows[0].snapshotObservation,
       {
-        state: CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH,
-        refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED,
+        state: CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.STALE_BUT_USABLE,
+        refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.IDLE,
       },
-      'default control snapshot should expose deferred repair explicitly',
+      'default control snapshot should expose the stale-but-usable observation without scheduling repair',
+    );
+    t.equal(
+      result.rows[0].adminObservation?.repair?.deferred,
+      true,
+      'default control snapshot should still mark admin repair observation as deferred',
     );
     t.equal(
       writableCache.get(TABLES.NODES, 'node-peer'),

@@ -5,6 +5,9 @@ import {
   REPLICATION_TARGET_SOURCE,
   resolveDesiredReplicationFactor,
 } from '../bootstrap/replication-target-authority.js';
+import {
+  shouldAllowPriorityRecoveryDispatchBootstrap,
+} from '../control-plane/replica-dispatch-priority-recovery-bootstrap.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -55,6 +58,53 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
   }
 
   /**
+   * Whether a node admitted by startup-authority priority placement is also
+   * ready for dispatch execution.
+   *
+   * @param {string} nodeId
+   * @param {Object|null} readiness
+   * @param {string|null} [readinessDecisionDimension=null]
+   * @return {boolean}
+   * @private
+   */
+  isStartupAuthorityPlacementDispatchReady(
+    nodeId,
+    readiness,
+    readinessDecisionDimension = null,
+  ) {
+    const dimension =
+      readinessDecisionDimension ||
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    return (
+      this.isReadinessDimensionSatisfied(readiness, dimension) ||
+      shouldAllowPriorityRecoveryDispatchBootstrap({
+        operation: {
+          partitionId: this.entityId,
+          targetNodeId: nodeId,
+        },
+        readiness,
+        decisionDimension: dimension,
+        selfNodeId: this.nodeId,
+      })
+    );
+  }
+
+  /**
+   * Resolve node readiness sync snapshot for the requested readiness options.
+   *
+   * @param {string} nodeId
+   * @param {Object} [readinessOptions={}]
+   * @return {Object|null}
+   * @private
+   */
+  resolveNodeReadinessSyncSnapshot(nodeId, readinessOptions = {}) {
+    return this.controlPlaneReadinessService?.getNodeReadinessSync(
+      nodeId,
+      readinessOptions,
+    );
+  }
+
+  /**
    * Evaluate readiness eligibility from explicit canonical evidence.
    *
    * @param {Object|null} readiness
@@ -63,54 +113,7 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
    * @private
    */
   isReadinessDimensionSatisfied(readiness, decisionDimension) {
-    const dimensions =
-      readiness?.dimensions && typeof readiness.dimensions === 'object' ?
-        readiness.dimensions :
-        null;
-    if (!dimensions) {
-      return false;
-    }
-    const readinessEvidence = Object.freeze({
-      explicitDecisionDimensionPresent:
-        Object.hasOwn(dimensions, decisionDimension),
-      explicitDecisionDimensionSatisfied:
-        dimensions[decisionDimension] === true,
-      recoveryEligibilityRequested:
-        decisionDimension ===
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      recoveryEligibilitySatisfied:
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] !== false &&
-        dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
-        ] === true &&
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY] !== false &&
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY] !== false &&
-        dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE
-        ] !== false &&
-        dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE
-        ] !== false &&
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] !==
-          false &&
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] !== false,
-    });
-    if (readinessEvidence.explicitDecisionDimensionSatisfied) {
-      return true;
-    }
-    if (
-      this.isFormationLivenessDependencyPartition() &&
-      readinessEvidence.recoveryEligibilityRequested
-    ) {
-      return false;
-    }
-    if (
-      !readinessEvidence.recoveryEligibilityRequested ||
-      readinessEvidence.explicitDecisionDimensionPresent
-    ) {
-      return false;
-    }
-    return readinessEvidence.recoveryEligibilitySatisfied;
+    return readiness?.dimensions?.[decisionDimension] === true;
   }
 
   /**

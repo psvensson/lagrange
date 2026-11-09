@@ -1,6 +1,12 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {MembershipPublicationCoordinatorReconcile} from
-  '../../src/control-plane/membership-publication-coordinator-reconcile.js';
+import {
+  MembershipPublicationCoordinatorReconcile,
+} from '../../src/control-plane/membership-publication-coordinator-reconcile.js';
+import {
+  resolveDeferredPropagatedCatchupCooldownMs,
+} from '../../src/control-plane/membership-publication-coordinator-reconcile-helpers.js';
+import {PRIORITY_CONTROL_PLANE_TABLE_IDS} from
+  '../../src/bootstrap/system-partition-classification.js';
 import {buildMembershipPublicationRow} from
   '../../src/control-plane/membership-publication-planning-evidence.js';
 import {MEMBERSHIP_PUBLICATION_STATUS} from
@@ -265,8 +271,10 @@ test('steady-state-hydration-covers-routing-tables: the sibling sweep asks for '
   t.equal(swept.maxAttemptsPerTable, 1,
     'a single attempt per table: a slow owner cannot stall the deferral tick ' +
     'behind retry sleeps');
-  t.equal(swept.tables.includes('replica_operations'), false,
-    'unbounded-growth tables are never swept (no routing benefit, full scans)');
+  t.equal(swept.tables.includes(TABLES.REPLICA_OPERATIONS), true,
+    'replica_operations is swept so non-leader observers converge ledger in-flight projections');
+  t.equal(swept.tables.includes(TABLES.LOGS), false,
+    'unbounded-growth non-propagated tables are never swept');
 
   clock += 20000; // still within the 30000ms sibling cooldown
   await coordinator.reconcileClusterMembership();
@@ -602,3 +610,210 @@ test('CL-001 variant D: deferral stays safe when no CDC catch-up is available',
     t.equal(result.deferred, true,
       'defers cleanly with no catch-up available (no throw)');
   });
+
+test('concurrent deferred catch-up calls single-flight without overlapping hydrations',
+  async (t) => {
+    let clock = 1000;
+    let releaseHydration = null;
+    const calls = [];
+    const spyService = {
+      hydrateCdcPropagatedTablesFromAuthority: (opts) => {
+        calls.push({at: clock, tables: opts.tables});
+        return new Promise((resolve) => {
+          releaseHydration = () => resolve({swept: true});
+        });
+      },
+    };
+    const coordinator = makeDeferringCoordinator({
+      cache: new SystemTableCache(),
+      cdcIntegrationService: spyService,
+      now: () => clock,
+    });
+
+    const firstPropagated =
+      coordinator.refreshDeferredPropagatedCachesFromAuthority();
+    t.ok(coordinator.deferredPropagatedCatchupInFlight,
+      'deferredPropagatedCatchupInFlight is latched while hydration is in flight');
+    clock = 35000;
+    const overlappingPropagated =
+      coordinator.refreshDeferredPropagatedCachesFromAuthority();
+    t.equal(calls.length, 1,
+      'only one propagated hydration is launched while in flight');
+    releaseHydration();
+    const [firstResult, secondResult] = await Promise.all([
+      firstPropagated,
+      overlappingPropagated,
+    ]);
+    t.equal(secondResult, firstResult,
+      'overlapping propagated catch-up reuses the in-flight result even past 30s');
+    t.equal(coordinator.deferredPropagatedCatchupInFlight, null,
+      'deferredPropagatedCatchupInFlight clears after completion');
+  });
+
+test('non-services-leader with a syncing service row refreshes propagated caches on the 5s cooldown until active',
+  async (t) => {
+    let clock = 1000;
+    const calls = [];
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', {
+      service_id: 'replica_operations-p1-r5',
+      service_type: 'partition',
+      partition_id: 'replica_operations-p1',
+      node_id: 'N2',
+      status: 'syncing',
+    }, {causeId: 'syncing-row'});
+    const spyService = {
+      canWriteSystemTableLocally: () => false,
+      hydrateCdcPropagatedTablesFromAuthority: async (opts) => {
+        calls.push({at: clock, tables: opts.tables});
+        return {swept: true};
+      },
+    };
+    const coordinator = makeDeferringCoordinator({
+      cache,
+      cdcIntegrationService: spyService,
+      now: () => clock,
+    });
+
+    await coordinator.refreshDeferredPropagatedCachesFromAuthority();
+    t.equal(calls.length, 1, 'initial sweep runs at t=1000');
+
+    clock = 6500;
+    await coordinator.refreshDeferredPropagatedCachesFromAuthority();
+    t.equal(calls.length, 2,
+      'syncing service row allows a second sweep after 5.5s (< 30s)');
+
+    cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', {
+      service_id: 'replica_operations-p1-r5',
+      service_type: 'partition',
+      partition_id: 'replica_operations-p1',
+      node_id: 'N2',
+      status: 'active',
+    }, {causeId: 'active-row'});
+    clock = 15000;
+    await coordinator.refreshDeferredPropagatedCachesFromAuthority();
+    t.equal(calls.length, 2,
+      'once service row is active, the 30s cooldown applies again');
+  });
+
+test('fast priority-spread propagated catch-up uses 5000ms cooldown when ' +
+  '3 eligible nodes have active priority replicas on only 2 holders, ' +
+  'and 30000ms once spread across all 3',
+async (t) => {
+  const cache = new SystemTableCache();
+  for (const nodeId of MEMBERS) {
+    cache.applySystemTableChange(TABLES.NODES, 'UPSERT', {
+      node_id: nodeId,
+      status: 'active',
+    }, {causeId: `seed-node-${nodeId}`});
+  }
+  const priorityPartitionIds = [...PRIORITY_CONTROL_PLANE_TABLE_IDS].map(
+    (tableId) => `${tableId}-p1`,
+  );
+  for (const partitionId of priorityPartitionIds) {
+    const tableId = partitionId.slice(0, -3);
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'UPSERT', {
+      partition_id: partitionId,
+      table_id: tableId,
+      table_name: tableId,
+      replica_count: 3,
+      leader_node_id: 'N1',
+    }, {causeId: `seed-partition-${partitionId}`});
+    for (const nodeId of ['N1', 'N2']) {
+      cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', {
+        service_id: `${partitionId}-${nodeId}`,
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: nodeId,
+        raft_role: nodeId === 'N1' ? 'leader' : 'follower',
+        status: 'active',
+        address: `${nodeId}/partition/${partitionId}-${nodeId}`,
+      }, {causeId: `seed-service-${partitionId}-${nodeId}`});
+    }
+  }
+  cache.applySystemTableChange(PUBLICATIONS, 'UPSERT', {
+    ...publicationRow(20, 1000),
+  }, {causeId: 'seed-pub-gap'});
+
+  let clock = 1000;
+  const propagatedSweeps = [];
+  const spyService = {
+    canWriteSystemTableLocally: () => false,
+    hydrateCdcPropagatedTablesFromAuthority: async (opts) => {
+      if (Array.isArray(opts?.tables) && !opts.tables.includes(PUBLICATIONS)) {
+        propagatedSweeps.push({at: clock, opts});
+      }
+      return {swept: true};
+    },
+  };
+  const coordinator = makeDeferringCoordinator({
+    cache,
+    cdcIntegrationService: spyService,
+    now: () => clock,
+  });
+
+  t.equal(
+    resolveDeferredPropagatedCatchupCooldownMs(cache, spyService),
+    5000,
+    'effective propagated catch-up cooldown is 5000ms when 3 eligible nodes have active priority replicas on only 2 holders',
+  );
+
+  await coordinator.refreshDeferredPropagatedCachesFromAuthority();
+  t.equal(propagatedSweeps.length, 1, 'initial sweep runs at t=1000');
+
+  clock = 4000;
+  const withinFast =
+    await coordinator.refreshDeferredPropagatedCachesFromAuthority();
+  t.equal(withinFast.reason, 'cooldown_active',
+    'call within 5000ms fast cooldown is rate-limited');
+  t.equal(propagatedSweeps.length, 1);
+
+  clock = 6500;
+  await coordinator.refreshDeferredPropagatedCachesFromAuthority();
+  t.equal(propagatedSweeps.length, 2,
+    'call after 5000ms fast cooldown runs immediately without waiting 30000ms');
+
+  for (const partitionId of priorityPartitionIds) {
+    cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', {
+      service_id: `${partitionId}-N3`,
+      service_type: 'partition',
+      partition_id: partitionId,
+      node_id: 'N3',
+      raft_role: 'follower',
+      status: 'active',
+      address: `N3/partition/${partitionId}-N3`,
+    }, {causeId: `seed-service-${partitionId}-N3`});
+  }
+
+  t.equal(
+    resolveDeferredPropagatedCatchupCooldownMs(cache, spyService),
+    30000,
+    'effective propagated catch-up cooldown returns to 30000ms once all 6 priority partitions are spread across 3 nodes',
+  );
+
+  clock = 15000;
+  const withinSteady =
+    await coordinator.refreshDeferredPropagatedCachesFromAuthority();
+  t.equal(withinSteady.reason, 'cooldown_active',
+    'at t=15000 (+8500ms after t=6500) the 30000ms steady-state cooldown is active');
+  t.equal(propagatedSweeps.length, 2);
+
+  clock = 37000;
+  await coordinator.refreshDeferredPropagatedCachesFromAuthority();
+  t.equal(propagatedSweeps.length, 3,
+    'at t=37000 (+30500ms after t=6500) the steady-state sweep runs again');
+
+  cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'UPSERT', {
+    operation_id: 'op-in-flight-1',
+    partition_id: 'tables-p1',
+    replica_id: 'tables-p1-r3',
+    type: 'ADD',
+    status: 'syncing',
+    workflow_step: 'SYNCING',
+  }, {causeId: 'seed-op-in-flight'});
+  t.equal(
+    resolveDeferredPropagatedCatchupCooldownMs(cache, spyService),
+    5000,
+    'non-terminal replica_operations row keeps the fast 5000ms catch-up cooldown active',
+  );
+});

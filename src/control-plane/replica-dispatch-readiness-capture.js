@@ -14,6 +14,9 @@ import {
   MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
   assertMembershipPublicationEpochBinding,
 } from '../rebalancer/replica-operation-membership-epoch-binding.js';
+import {
+  isBootstrapTopologyDispatchDeferred as isBootstrapTopologyDispatchDeferredFn,
+} from '../rebalancer/replica-status.js';
 
 const {
   COLUMN,
@@ -28,7 +31,6 @@ const {
   ReplicaOperationField,
   STRING,
   classifySystemPartition,
-  getOperationMetadataValue,
   getOperationMetadataObject,
   getOperationMetadataString,
   getOperationMetadataStringArray,
@@ -53,26 +55,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
    * @private
    */
   isBootstrapTopologyDispatchDeferred(operationOrRow) {
-    if (!operationOrRow || typeof operationOrRow !== 'object') {
-      return false;
-    }
-
-    let stepsHistory = operationOrRow.stepsHistory;
-    if (!Array.isArray(stepsHistory)) {
-      stepsHistory = operationOrRow.steps_history;
-    }
-    if (typeof stepsHistory === 'string') {
-      try {
-        stepsHistory = JSON.parse(stepsHistory);
-      } catch {
-        return false;
-      }
-    }
-
-    return getOperationMetadataValue(
-      stepsHistory,
-      OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED,
-    ) === true;
+    return isBootstrapTopologyDispatchDeferredFn(operationOrRow);
   }
 
   /**
@@ -210,6 +193,8 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
         ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA],
       [OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP,
         ReplicaOperationField.BOOTSTRAP_MEMBERSHIP],
+      [OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION],
     ]) {
       const metadata = getOperationMetadataObject(stepsHistory, metadataKey);
       if (metadata) {
@@ -653,7 +638,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       return;
     }
 
-    const leaderAddress = mgService.buildPeerAddress(leaderId);
+    const leaderAddress = mgService.resolveCommittedPeerAddress(leaderId);
     const forwardedPayload = {
       ...payload,
       [ControlPlaneField.FORWARDED_BY]: [...forwardedBy, this.nodeId],

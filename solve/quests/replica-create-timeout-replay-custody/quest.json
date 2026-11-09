@@ -1,0 +1,50 @@
+{
+  "schema": "solve-quest/2",
+  "id": "replica-create-timeout-replay-custody",
+  "class": "product",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "An admitted, nonterminal partition CREATE whose exact PENDING lifecycle times out while a post-materialization authority operation is held retains its existing replay custody. After that authority operation resolves, the late continuation performs no runtime effect under expired attempt authority: it either proceeds through the existing legal rotation or yields a typed deferral with existing recovery custody. Once authority is available, the first explicit same-identity re-dispatch reconciles the exact durable lifecycle and admission, rotates through the existing seam, and completes useful creation without harness repair or an unrelated rescue request. Completed operations, cleanup claims, CLOSED admissions, changed incarnations and mismatched identities cannot be resurrected. Ordinary FAILED transitions remain terminal; only the existing narrow unclaimed-CREATE replay seam may rotate the attempt.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/replica-create-timeout-replay-custody/evidence/receipt.json",
+      "requiredReceipts": [
+        "historical-cause-reproduced-with-real-owners",
+        "same-operation-replay-completes-after-finite-failure",
+        "terminal-identity-and-cleanup-fences-preserved",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-bound-first-divergence",
+      "statement": "Before production edits, reproduce the preserved d717874c operation 91ab63d0-edcc-40e1-a6c6-952d5b70aa4b failure class with the real ReplicaHandler, ReplicaCreateAdmissionOwner and ReplicaStateMachine: an actual durable PENDING write, admission materialization, held authority operation, the unchanged state timeout committing FAILED, and release/replay of the same identity. Distinguish the late-continuation arm from an unavailable read followed by explicit re-dispatch. Record any difference from the physical trace rather than treating similarity as attribution."
+    },
+    {
+      "id": "existing-authority-and-replay-only",
+      "statement": "The lifecycle owner decides the exact durable SERVICES generation; the admission owner decides operation identity and attempt rotation; the existing coordinator distinguishes live unclaimed pre-sync failure from terminal cleanup. Reuse those decisions and CAS fences. A physical-worker claim may legitimately serialize failed-attempt rotation; do not forbid every claim over FAILED or introduce a competing lifecycle/admission owner."
+    },
+    {
+      "id": "bounded-owned-scope",
+      "statement": "Repair the demonstrated partition CREATE admission/lifecycle/replay interaction in src/node and its named tests/impact contracts. Shared process-owner or message-group semantics, founding-release admission-input sequencing, and cleanup deletion policy are unchanged unless a concrete counterexample first requires an explicit recorded scope decision."
+    },
+    {
+      "id": "unchanged-bounds-and-failure-meaning",
+      "statement": "Keep the existing PENDING deadline, all other budgets, retry counts and clocks unchanged. No new timer, polling loop, readiness bypass, fabricated success, cache-derived grant or harness repair. Finite unavailability retains typed deferral or existing retry custody; permanent unavailability is not successful service."
+    },
+    {
+      "id": "proof-and-claim-ceiling",
+      "statement": "Pair positive same-operation recovery with stale-attempt, completed-operation, cleanup-claim, CLOSED and wrong-identity controls, plus a controlled negative that restores the demonstrated defect. Run the affected interaction tests on locked lab hosts and obtain exact-source independent subagent verification before landing. Storage, native factory and clock substitutions are explicit evidence ceilings. This bounded repair does not settle the old formation H1 hypothesis or claim the epic's physical acceptance; those gates remain separate."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "admission-gating",
+    "recovery-replay",
+    "retry-loops",
+    "concurrency-serialization",
+    "harness-fidelity"
+  ],
+  "sealedAt": "340e34e484c04bb2badacfc97b5aa34aedf5c74a"
+}

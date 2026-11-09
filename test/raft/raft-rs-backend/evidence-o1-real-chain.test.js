@@ -29,7 +29,8 @@ import {test} from 'node:test';
 
 import {
   addressOf,
-  admitThroughRows,
+  admitThroughRequest,
+  requestAdmission,
   buildTargetFromOperation,
   configure,
   createCommittedMembershipHarness,
@@ -121,7 +122,7 @@ async function commitOnLeader(harness, type, replicaId) {
   const peerId = deriveRaftRsPeerId(replicaId);
   const shows = () => leaderDurable(harness).applied.voters.includes(peerId) ===
     (type === RAFT_MEMBERSHIP_OPERATION.ADD_PEER);
-  await turnChainValue(leader.raft.proposeConfChange({type, replicaIdentity: replicaId}));
+  await turnChainValue(leader.raft.proposeConfChange({type, replicaIdentity: replicaId, nodeId: 'node-test'}));
   assert.equal(await waitFor(shows), true, `setup: ${type} ${replicaId}`);
 }
 
@@ -135,7 +136,7 @@ async function skewedGroup(harness, founders, joiner) {
   assert.equal(created.error, undefined, created.error?.message);
   await buildTargetFromOperation(harness, {target: joiner,
     operation: created.operation, cache: metadataCache(PARTITION_ID, [])});
-  assert.equal(await admitThroughRows(harness, joiner, founders), true,
+  assert.equal(await admitThroughRequest(harness, joiner, founders), true,
     'setup: the group admits the joiner');
   const [, removed] = founders;
   await commitOnLeader(harness, RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
@@ -213,7 +214,7 @@ test('M2 (differential): the persisted stamp is the fold of the leader ' +
     const samples = [];
     const sampling = setInterval(() => samples.push(durableAppliedState(
       harness.dbPathOf(target), PARTITION_ID)), 10);
-    assert.equal(await admitThroughRows(harness, target, members), true,
+    assert.equal(await admitThroughRequest(harness, target, members), true,
       'the group admits the target');
     assert.equal(await waitFor(() => statusOf(service).gateOpen === true),
       true, 'the target gate opens');
@@ -318,7 +319,7 @@ test('M5 (row never reaches the members): the unadmitted target with its ' +
   }
 });
 
-// A target admitted from its row while its commit knowledge is capped one
+// A target admitted from its request while its commit knowledge is capped one
 // below its own AddNode: it will hold the entry, applied one below it.
 async function admittedUnderCommitLag(harness, founders, target) {
   await formGroup(harness, founders);
@@ -340,12 +341,13 @@ async function admittedUnderCommitLag(harness, founders, target) {
     harness.caches.get(replicaId).applySystemTableChange(TABLES.SERVICES,
       CDCOperation.INSERT, serviceRow(PARTITION_ID, target));
   }
+  await requestAdmission(harness, target);
   const targetPeerId = deriveRaftRsPeerId(target[0]);
   const admitted = () => logFold(leaderDurable(harness).dbFile,
     PARTITION_ID, []).find((snapshot) =>
     snapshot.voters.includes(targetPeerId))?.index ?? null;
   assert.equal(await waitFor(() => admitted() !== null), true,
-    'setup: the leader committed the target AddNode from its row');
+    'setup: the leader committed the target AddNode from its request');
   const aSelf = admitted();
   cap.value = aSelf - 1;
   return {service, aSelf};
@@ -421,7 +423,7 @@ test('M5 (row visible to every member, catch-up stalled): the admitted-but-' +
 // first settles (CONF_CHANGE_APPLIED); the property (both admitted, one
 // AddNode entry each) is unchanged, the setup premise (an empty entry in
 // its place) is inverted.
-test('M3 (dropped AddNode): two rows in one turn, the second AddNode ' +
+test('M3 (dropped AddNode): two requests in one turn, the second AddNode ' +
   'deferred behind the first, both admitted by the settlement re-drive - ' +
   'one AddNode entry each, both gates open, no further row',
 async () => {
@@ -450,6 +452,8 @@ async () => {
           CDCOperation.INSERT, serviceRow(PARTITION_ID, join));
       }
     }
+    // Both requests in one turn: the second AddNode meets the first pending.
+    await Promise.all(joins.map((join) => requestAdmission(harness, join)));
     const peerIds = joins.map(([replicaId]) => deriveRaftRsPeerId(replicaId));
     assert.equal(await waitFor(() => services.every((service) =>
       statusOf(service).gateOpen === true), ADMISSION_BOUND_MS), true,
@@ -547,13 +551,13 @@ test('anchor: GENESIS is refused where discovery shows a replica outside ' +
   const harness = createCommittedMembershipHarness(PARTITION_ID);
   const founders = [['gx-t', 'node-t'], ['gx-a', 'node-a'], ['gx-b', 'node-b']];
   const stamp = {kind: COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS,
-    founders: founders.map(([replicaId]) => replicaId)};
+    founders: founders.map(([replicaId]) => replicaId),
+    founderNodeIds: Object.fromEntries(founders)};
   const resolve = (cache) => {
     const handler = harness.handlerOf('node-t');
     handler.systemTableCache = cache;
     return handler.resolveReplicaContext(PARTITION_ID, 'gx-t', {
       bootstrapReplicaIds: stamp.founders,
-      bootstrapPeerAddresses: founders.map(addressOf),
       bootstrapMembership: stamp,
     });
   };
@@ -570,7 +574,8 @@ test('anchor: GENESIS is refused where discovery shows a replica outside ' +
       'rows naming a leader and the founders do not make a founder a joiner');
     assert.equal(Object.getPrototypeOf(founding.bootstrapMembership), null,
       'the accepted stamp is the canonical own-data snapshot');
-    assert.deepEqual({...founding.bootstrapMembership}, stamp);
+    assert.deepEqual({...founding.bootstrapMembership, founderNodeIds:
+      {...founding.bootstrapMembership.founderNodeIds}}, stamp);
   } finally {
     await harness.dispose();
   }

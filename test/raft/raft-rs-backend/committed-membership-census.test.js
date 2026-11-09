@@ -204,6 +204,11 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     'src/rebalancer/operation-workflow-dispatch-response-reconcile.js',
     'src/rebalancer/operation-workflow-owner-ports.js',
     'src/rebalancer/replica-operation-repository-row-methods.js',
+    // Reader (quest fresh-create-release-authority-from-committed-operation):
+    // the answering leader reads the GENESIS founding stamp the provisioning
+    // owner wrote into the committed create operation's first step, as the
+    // fresh-create release authority; it never produces or re-derives one.
+    'src/node/participant-release-authorization-owner.js',
     // The target: request intake, validation, the partition, the port.
     'src/node/replica-handler-create-admission-methods.js',
     'src/node/replica-handler-create-methods.js',
@@ -211,6 +216,10 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     'src/node/replica-handler-runtime-metadata-methods.js',
     'src/partition/partition-service-core-base.js',
     'src/partition/partition-service-raft-init-base.js',
+    // A target not yet admitted asks the leader its stamp names (quest
+    // peer-and-leader-address-from-committed-configuration, C4): it reads
+    // the stamp it carries, never re-derives it.
+    'src/partition/partition-replica-admission.js',
     'src/raft/raft-rs-operation-port.js',
     'src/raft/raft-rs-original-allocation-preparation.js',
     // The field names' owners.

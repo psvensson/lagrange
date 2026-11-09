@@ -10,6 +10,7 @@ import {
   copyStrictOwnDataRecord,
 } from '../utils/strict-own-data.js';
 import {compareNodeHeartbeatWatermarks} from '../node/node-readiness-policy.js';
+import {COLUMN} from '../constants/index.js';
 
 const MapConstructor = Map;
 const SetConstructor = Set;
@@ -44,16 +45,26 @@ function nextGeneration(previousGeneration) {
     previousGeneration + 1 : numberMaxSafeInteger;
 }
 
+// Snapshot the nested row at both evidence ingresses before any watermark
+// comparison or row-fact read. A rejected caller row answers that caller only;
+// it cannot execute an accessor or become the shared evidence identity.
+function copyNodeEvidence(evidence) {
+  const source = copyStrictOwnDataRecord(evidence) || objectCreate(null);
+  const nodeRow = copyStrictOwnDataRecord(source.nodeRow);
+  return objectFreeze({...source, nodeRow: nodeRow && objectFreeze(nodeRow)});
+}
+
 function readProjectionEvidence(owner, nodeId) {
   const recorded = mapPrototypeGet(owner.sourceEvidenceByNodeId, nodeId);
   const rawEvidence = recorded || owner.readNodeEvidence(nodeId) ||
     EMPTY_EVIDENCE;
-  return copyStrictOwnDataRecord(rawEvidence) || EMPTY_EVIDENCE;
+  return copyNodeEvidence(rawEvidence);
 }
 
 function nodeLivenessRowFactsEqual(left, right) {
   return left.lastHeartbeatMs === right.lastHeartbeatMs &&
     left.readyLeaseExpiresAtMs === right.readyLeaseExpiresAtMs &&
+    left.readyLeaseValueState === right.readyLeaseValueState &&
     left.hasReadyLeaseField === right.hasReadyLeaseField &&
     left.status === right.status &&
     left.connectionState === right.connectionState;
@@ -69,17 +80,29 @@ function nodeLivenessRowFactsEqual(left, right) {
 // has one, and an absent row never replaces a present one: a row's absence
 // or a same-watermark content change reaches the projection from its
 // source, whose change clears the recorded evidence (fix-f4, F-1).
+function toHeartbeatWatermarkRow(facts) {
+  const row = objectCreate(null);
+  row[COLUMN.LAST_HEARTBEAT] = facts.lastHeartbeatMs;
+  row[COLUMN.READY_LEASE_EXPIRES_AT] = facts.readyLeaseExpiresAtMs;
+  row[COLUMN.CONNECTION_STATE] = facts.connectionState;
+  return objectFreeze(row);
+}
+
 function isEvidenceRowCurrent(projectedRow, candidateRow) {
   if (projectedRow === null || projectedRow === undefined) return true;
   if (candidateRow === null || candidateRow === undefined) return false;
   const projected = readNodeLivenessRowFacts(projectedRow);
   const candidate = readNodeLivenessRowFacts(candidateRow);
+  if (candidate.readyLeaseValueState === NODE_LIVENESS_SEMANTIC_STATE.INVALID) return false;
   if (projected.lastHeartbeatMs !== null) {
     if (candidate.lastHeartbeatMs === null) return false;
   } else if (candidate.lastHeartbeatMs !== null) {
     return true;
   }
-  const order = compareNodeHeartbeatWatermarks(projectedRow, candidateRow);
+  // The watermark owner compares its canonical row representation; it must
+  // never receive a caller-owned object as a numeric fact to coerce.
+  const order = compareNodeHeartbeatWatermarks(
+    toHeartbeatWatermarkRow(projected), toHeartbeatWatermarkRow(candidate));
   if (order !== 0) return order > 0;
   return nodeLivenessRowFactsEqual(projected, candidate);
 }
@@ -182,7 +205,7 @@ class NodeLivenessSemanticProjectionOwner {
   ) {
     if (this.stopped) return null;
     const key = normalizeNodeId(nodeId);
-    const source = copyStrictOwnDataRecord(evidence) || objectFreeze({});
+    const source = copyNodeEvidence(evidence);
     const normalizedNowMs = normalizeSemanticNowMs(nowMs);
     // The shared projection (the planning identity's liveness input) moves
     // forward only: evidence older than, or absent against, the row it last

@@ -9,7 +9,7 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {CDC_PIPELINE_METRIC} from '../../src/constants/cdc-lifecycle-constants.js';
 import {buildPartitionCdcPropagationSubscriber} from
   '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
-import {buildCommittedCdcOutcome, buildProvisionalCdcOutcome, unknownCdcAcceptance} from
+import {CDC_COMPLETION, buildCommittedCdcOutcome, buildProvisionalCdcOutcome, unknownCdcAcceptance} from
   '../../src/cdc/cdc-delivery-outcome.js';
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND,
   PARTITION_CDC_OBLIGATION_DRIVE_STATE, PARTITION_CDC_OBLIGATION_REASON,
@@ -17,6 +17,7 @@ import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND,
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {
   OBLIGATION_RETRY_DISPOSITION,
+  handleDeliveryFailure,
   scheduleDeliveryRetry,
 } from '../../src/partition/partition-cdc-obligation-delivery.js';
 import {PARTITION_SERVICE_DEFAULT} from '../../src/partition/partition-service-constants.js';
@@ -46,6 +47,10 @@ function delayedClock() {
     setInterval: (callback, delay, ...args) => scheduled.setInterval(callback, delay, ...args),
     clearInterval: (handle) => scheduled.clearInterval(handle),
     elapseWithoutCallbacks: (milliseconds) => observed.advance(milliseconds),
+    advance: (milliseconds) => {
+      observed.advance(milliseconds);
+      scheduled.advance(milliseconds);
+    },
   };
 }
 
@@ -274,7 +279,7 @@ test('435 owed obligations make bounded progress across explicit retry dispositi
   assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
   assert.equal(lane.retryTimer.state, 'idle');
   assert.equal(lane.retryDelayMs, initialDelay);
-  // 3. Subscriber/acknowledgement backpressure -> respect retry hint without doubling
+  // 3. Subscriber/acknowledgement backpressure -> respect retry hint on initial attempt, then back off capped at 250ms
   const backpressureDelay = scheduleDeliveryRetry(
     delivery,
     {reason: 'backpressure', retryAfterMs: 12},
@@ -282,8 +287,45 @@ test('435 owed obligations make bounded progress across explicit retry dispositi
   );
   assert.equal(backpressureDelay, 12);
   assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
-  assert.equal(lane.retryDelayMs, initialDelay,
-    'backpressure respects hint without doubling retryDelayMs');
+  assert.equal(lane.retryDelayMs, initialDelay * 2,
+    'backpressure respects hint on initial attempt and advances backoff for repeated backpressure');
+  // Simulate timer firing before next retry attempt
+  clearTimeout(lane.retryTimer.handle);
+  lane.retryTimer = {state: 'idle', handle: null};
+  // Repeated backpressure WITH hint backs off capped at 250ms
+  const repeatedHintedBackpressureDelay = scheduleDeliveryRetry(
+    delivery,
+    {reason: 'backpressure', retryAfterMs: 12},
+    OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE,
+  );
+  assert.equal(repeatedHintedBackpressureDelay, 100, 'repeated hinted backpressure backs off');
+  assert.equal(lane.retryDelayMs, 200);
+
+  // Advance to verify capping at 250ms
+  clearTimeout(lane.retryTimer.handle);
+  lane.retryTimer = {state: 'idle', handle: null};
+  const delay3 = scheduleDeliveryRetry(delivery, {reason: 'backpressure', retryAfterMs: 12}, OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
+  assert.equal(delay3, 200);
+  clearTimeout(lane.retryTimer.handle);
+  lane.retryTimer = {state: 'idle', handle: null};
+  const cappedDelay = scheduleDeliveryRetry(delivery, {reason: 'backpressure', retryAfterMs: 12}, OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
+  assert.equal(cappedDelay, 250, 'hinted backpressure caps at 250ms to prevent exceeding projection bound');
+
+  // Reset lane backpressure delay for unhinted test
+  lane.consecutiveBackpressure = 0;
+  lane.retryDelayMs = initialDelay;
+  clearTimeout(lane.retryTimer.handle);
+  lane.retryTimer = {state: 'idle', handle: null};
+
+  // Repeated backpressure WITHOUT hint advances exponential backoff to avoid unbacked-off storm
+  const unhintedBackpressureDelay = scheduleDeliveryRetry(
+    delivery,
+    {reason: 'backpressure'},
+    OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE,
+  );
+  assert.equal(unhintedBackpressureDelay, initialDelay);
+  assert.equal(lane.retryDelayMs, initialDelay * 2,
+    'unhinted backpressure doubles retryDelayMs to avoid storm');
   scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
   // 4. Stale propagation lifetime -> refuse and disarm; never resume retired work
   assert.equal(
@@ -309,13 +351,16 @@ test('435 owed obligations make bounded progress across explicit retry dispositi
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
       executeRead: async ({readFromCache}) => ({rows: readFromCache()}),
-      submitMutation: async (mutation, options) => {
-        assert.deepEqual(options.expectedCacheFields, {
-          table_policies: mutation.data.table_policies,
-        });
-        assert.deepEqual(options.minimumCacheFields, {
-          updated_at: mutation.data.updated_at,
-        });
+      // The policy write's base is the committed row (census site 6).
+      readAuthoritativeRows: async (_tableName, _sql, params) => ({
+        success: true,
+        rows: cachedTables.has(params[0]) ?
+          [{...cachedTables.get(params[0])}] : [],
+      }),
+      submitMutation: async (_mutation, options) => {
+        // The policy write answers at its commit: no projection-field wait.
+        assert.equal(options.expectedCacheFields, undefined);
+        assert.equal(options.minimumCacheFields, undefined);
         return {
           success: true,
           outcome: 'applied',
@@ -361,4 +406,108 @@ test('435 owed obligations make bounded progress across explicit retry dispositi
   assert.equal(thirdDrive.delivered, 435 - 10 - 256);
   assert.equal(lane.lastRetryDisposition, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
   assert.equal(f.calls.length, 435);
+});
+
+test('handleDeliveryFailure logs at debug level on backpressure and warn on other errors', () => {
+  const debugCalls = [];
+  const warnCalls = [];
+  const tenure = {term: 1, generation: 1};
+  const mockLane = {
+    tenure,
+    retryTimer: {state: 'idle', handle: null},
+    retryDelayMs: 50,
+    consecutiveBackpressure: 0,
+  };
+  const mockDelivery = {
+    term: 1,
+    generation: 1,
+    obligationLane: mockLane,
+    owner: {
+      partitionId: 'p1',
+      isLeader: true,
+      isShutdown: false,
+      leadershipTenure: tenure,
+      timeSource: {
+        now: () => 0,
+        setTimeout: () => 1,
+        clearTimeout: () => {},
+      },
+      logger: {
+        debug: (...args) => debugCalls.push(args),
+        warn: (...args) => warnCalls.push(args),
+      },
+      cdcPipelineMetrics: {
+        increment: () => {},
+      },
+    },
+  };
+  const obligation = {
+    eventKey: 'event-1',
+    logIndex: 10,
+    ordinal: 1,
+  };
+
+  const backpressureError = {message: 'busy', reason: CDC_COMPLETION.BACKPRESSURE};
+  handleDeliveryFailure(mockDelivery, mockLane, obligation, 'error', false, backpressureError);
+  assert.equal(debugCalls.length, 1, 'logged at debug level for backpressure');
+  assert.equal(warnCalls.length, 0, 'did not log at warn level for backpressure');
+
+  const transientError = {message: 'connection reset', reason: 'connection_reset'};
+  handleDeliveryFailure(mockDelivery, mockLane, obligation, 'error', false, transientError);
+  assert.equal(warnCalls.length, 1, 'logged at warn level for transient error');
+
+  const causedBackpressureError = {message: 'busy', cause: {reason: CDC_COMPLETION.BACKPRESSURE}, retryAfterMs: 50};
+  handleDeliveryFailure(mockDelivery, mockLane, obligation, 'error', false, causedBackpressureError);
+  assert.equal(debugCalls.length, 2, 'logged at debug level for caused backpressure');
+  assert.equal(warnCalls.length, 1, 'did not log at warn level for caused backpressure');
+});
+
+test('contended page yield preserves open ACK batch until flush deadline while ' +
+  'unproposed batches without a timer are retried on retryTimer', async (t) => {
+  const rows = Array.from({length: 12}, (_unused, index) => `ack-batch-${index}`);
+  const f = await fixture(t, {rows, subscribers: 1});
+  const delivery = f.leader.cdcDelivery;
+  const initialDelay = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+
+  f.behavior = (_index, event, context, groupId) => {
+    if (event.data.id === 'ack-batch-4') {
+      context.markContended();
+    }
+    return recipientAnswer(event, groupId, true);
+  };
+
+  const firstDrive = await f.drive();
+  const lane = delivery.obligationLane;
+  assert.equal(firstDrive.state, DRIVE.PAGE_YIELDED);
+  assert.equal(firstDrive.delivered, 5);
+  assert.equal(lane.batch.events, 5, '5 acknowledged events accumulate in the open batch');
+  assert.notEqual(lane.flushTimer, null, 'flush deadline timer is armed for the open batch');
+  assert.equal(
+    f.proposed.some((command) => command.type === PARTITION_CDC_COMMAND.DELIVERED),
+    false,
+    'no premature 5-event CDC_DELIVERED is proposed before bound or deadline',
+  );
+
+  // Advancing retryTimer (50ms) drives the remaining 7 rows into the same batch
+  // without flushing the first 5 events as a separate 5-event Raft commit.
+  f.clock.advance(initialDelay);
+  await settleTicks();
+  assert.equal(lane.batch.events, 12, 'remaining 7 events join the open batch on retryTimer');
+  assert.equal(
+    f.proposed.filter((command) => command.type === PARTITION_CDC_COMMAND.DELIVERED).length,
+    0,
+    'retryTimer does not flush an open batch whose flushTimer is still active',
+  );
+
+  // Advancing to ACK_FLUSH_DEADLINE_MS proposes all 12 events in one batch.
+  f.clock.advance(PARTITION_CDC_OBLIGATION_BOUND.ACK_FLUSH_DEADLINE_MS);
+  await settleTicks();
+  const ackCommands = f.proposed.filter(
+    (command) => command.type === PARTITION_CDC_COMMAND.DELIVERED,
+  );
+  assert.equal(ackCommands.length, 1, 'all 12 events flush together as a single CDC_DELIVERED');
+  assert.equal(
+    ackCommands[0].acknowledged.reduce((sum, group) => sum + group.events.length, 0),
+    12,
+  );
 });

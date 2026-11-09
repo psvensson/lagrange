@@ -12,6 +12,7 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const PARTICIPANT_FAILURE_ERROR =
   'Distributed operation failed due to participant failures';
 const DISTRIBUTED_PARTICIPANT_FAILURE_CODE =
@@ -143,6 +144,7 @@ test('Convergence uses local control snapshot when distributed admin SQL reads f
 
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,

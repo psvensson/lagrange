@@ -1,0 +1,249 @@
+{
+  "reviewer": "subagent:b53f502d-cb6d-4d3b-b17c-9e51dbbbcf82",
+  "ruleSetRevision": 5,
+  "candidate": "ad0d64de8cfc06b574b0589f33985d4be1f3a4d0",
+  "parent": "3bd7e2e8875c5ff32fd94162a3775aea991a35df",
+  "reviewedManifestSha256": "652fdae4b12e8a91f0587acbf2bcd2b45232abad341141ada056d8c3dddf3532",
+  "reviewedCommittedInputs": [
+    {
+      "path": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "sha256": "00dd263106903cf567a97d831a9c6aa65036bdbf7dfe152bb1f090e9d955ce27",
+      "committedMatch": true
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+      "sha256": "72adeea1ff4c1d56454d501f84c66e2b83b147afae03417bab246ee191d3e3fd",
+      "committedMatch": true
+    },
+    {
+      "path": "test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "sha256": "54dc5f98cd4045497e488c6223b64b246dab2ecd0e74576ec26ff0420298b7dc",
+      "committedMatch": true
+    },
+    {
+      "path": "test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "sha256": "3e3f72b9126633ab7a4475f7053d7163f50e01c05ea9bfa739b8abefb2c9eb6e",
+      "committedMatch": true
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "sha256": "d2f9e556629722dd458fdef7f35aa829998f422a4516379f931d2bbb09a7607d",
+      "committedMatch": true
+    }
+  ],
+  "commitPaths": [
+    {
+      "path": "solve/changes/global-owner-debt-inventory/inventory.json",
+      "sha256": "7b19fa756114fc196bcab84be56644e9150a1d41d5df5c97c6df2464df34554b"
+    },
+    {
+      "path": "solve/epics/operation-integrity-and-reliable-formation.md",
+      "sha256": "d01f57aa2d49f227ff56b3740797c4cf68dcf8c8509acd3baa9117c4cbe24653"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/independent-direct-planning-design-inputs.json",
+      "sha256": "3b95cc45ba1c0c55b06581debdf8ffea5f888174803245393e396360aa692989"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/independent-direct-planning-design-review.md",
+      "sha256": "1180b892240f114e4473f829b40fff47c6abe74a92971ec4cf96174c583438bd"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/independent-planning-implementation-hold-inputs.json",
+      "sha256": "a3b0a4f3de72c9582d42ac4d9e457b270421ea91436bc25f54320ec7ea78ed7d"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/independent-planning-implementation-hold.md",
+      "sha256": "66b16f9a7faece36c103ff79e224fa4459d874250939a55fa527a53803741fc9"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/independent-planning-implementation-inputs.json",
+      "sha256": "5a8de3e267c80725107f04b80fb87b117932453ffabdc6dedfd8d69cef6bb1f5"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/independent-planning-implementation-review.md",
+      "sha256": "2b5874f1507b2a8acd606259f2e5f4d20cf185d7438314b63747335e4be35cc7"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/independent-publication-advance-accounting-inputs.json",
+      "sha256": "f69c52b1b1fa12a46babccfedf0640d6080acd4d40dc3d97e3da2b339fa06a13"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/independent-publication-advance-accounting-review.md",
+      "sha256": "6342519b2be123879f109a2bd64ae40630fc4d9170c5486148a56e6bae3f2582"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/planning-implementation-content-v2.json",
+      "sha256": "652fdae4b12e8a91f0587acbf2bcd2b45232abad341141ada056d8c3dddf3532"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/evidence/receipt.json",
+      "sha256": "8cd6a8ef2532de327e43312d6d16d664df9599e6da223afceb227b575e2730e1"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/log.ndjson",
+      "sha256": "fc683963ac9c591b0a444c94d16364c096ddd27ff80f58c61856a5da0b429668"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-custody/quest.json",
+      "sha256": "e5df44c4c0565d0b393848e23a9541d67ea456e59b5c87915ce6360d1dd321f7"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-identity/evidence/receipt.json",
+      "sha256": "dfba26a6587e7a8ca7c83f9f4080559b328bc9f3117b18e77fd7f0ac1058fc5f"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-identity/log.ndjson",
+      "sha256": "98d541be3a37ec55493e33b8d7f08d57a4d2c93ddc2763b58eaaf9e8ca0e28cf"
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-identity/quest.json",
+      "sha256": "2cc2ad00402ae635c7533bc8ec056ac4ee4b2cfe3a32b613583c66758681abfc"
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "sha256": "00dd263106903cf567a97d831a9c6aa65036bdbf7dfe152bb1f090e9d955ce27"
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+      "sha256": "72adeea1ff4c1d56454d501f84c66e2b83b147afae03417bab246ee191d3e3fd"
+    },
+    {
+      "path": "test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "sha256": "54dc5f98cd4045497e488c6223b64b246dab2ecd0e74576ec26ff0420298b7dc"
+    },
+    {
+      "path": "test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "sha256": "3e3f72b9126633ab7a4475f7053d7163f50e01c05ea9bfa739b8abefb2c9eb6e"
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "sha256": "d2f9e556629722dd458fdef7f35aa829998f422a4516379f931d2bbb09a7607d"
+    },
+    {
+      "path": "test/shards/impact-graph-seal.json",
+      "sha256": "2b07dded7aa7147df65e1a52d95f93692f6519f337d08d7e4083cea53310ab7c"
+    },
+    {
+      "path": "test/shards/subsystem-classes.json",
+      "sha256": "f9ea816b04cdbc61abf61b420e0df572d34cd7592a96da441bc376096649c0db"
+    }
+  ],
+  "predecessorSuperseded": true,
+  "receiptStatus": "fail",
+  "receiptPassed": [
+    false,
+    false,
+    false,
+    false,
+    false
+  ],
+  "proof": {
+    "fileCount": 2,
+    "assertions": 31,
+    "scheduleAttempt": 1,
+    "automaticRetries": 0,
+    "worker": "lenovo-laptop",
+    "machineFactor": 2.4,
+    "packageLockSha256": "8ac4b4fb882a5a93a67f192b37167fe8d5884c9a6778ca5b4b2dff7b28b76b04",
+    "workerNodeVersionClaim": null,
+    "note": "environment.json runtime version is controller-only; no new worker runtime/boot fingerprint claimed"
+  },
+  "artifacts": [
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-implementation-content.json",
+      "bytes": 1080,
+      "sha256": "15d577a50c41b27ca4647c927bdb75d5a629f0ea556eca476e6b8d00749feb22"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-implementation-content-v2.json",
+      "bytes": 1097,
+      "sha256": "652fdae4b12e8a91f0587acbf2bcd2b45232abad341141ada056d8c3dddf3532"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-files.json",
+      "bytes": 146,
+      "sha256": "3e694fd0e10b4a80d990839d51ab6c8f52b68a9184c85d276952b1d8d407a6f4"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-direct-before-3bd7e2e8.log",
+      "bytes": 74796,
+      "sha256": "7944f8b174982df75200383075665e607c9c14d2a2d3ade4314fb4110c3fc777"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-predecessor-3bd7e2e8-collection.json",
+      "bytes": 1394,
+      "sha256": "74fb92b80518c13a3c5d7191e82ce525581602ba9373453d816f9abef4f4567c"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-predecessor-3bd7e2e8.log",
+      "bytes": 100929,
+      "sha256": "69861f251d1cbce978b85464fca6c4ca1fdbe3ad3abb9535c443f79566cbc23c"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-complete-callers-corrected.log",
+      "bytes": 103872,
+      "sha256": "2390a5dfaf0e1a86a5c185ac066c5c664ecb15d7cf704537a2ae8e14c7e48bec"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-proof-correction-second.log",
+      "bytes": 371,
+      "sha256": "7cf6017f5da6fba48e2394dbe7291604f85fe27dd00c267adba95bb4f42f027e"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-corrected-metadata.log",
+      "bytes": 788,
+      "sha256": "2ebcdc4f3d1d4abe8cfb969ffcd1252f13ff450e622a046759eb83e85614ef97"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-static-first.log",
+      "bytes": 10318,
+      "sha256": "8507c12cec325bfa28aa4d46aba16dbf20deb42e4b62c9e7e853f172377fbe4b"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-lint-corrected.log",
+      "bytes": 84,
+      "sha256": "592732f4ae2bf4ab61d3f2f08c0d265e5265c825ab339e75949ab76cade9975c"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-closed-shape-corrected.log",
+      "bytes": 127,
+      "sha256": "23349cc64cc9bbdacc6155665ade4c715247786b031bfa669a7f564260a37f66"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-planning-ad0d64de-collection.json",
+      "bytes": 1313,
+      "sha256": "a9804c1f4e43811f191c6547f7fe56dc8e9b2803ad131594dd1f76c43ce5e191"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/run-frozen-planning-ad0d64de.mjs",
+      "bytes": 2673,
+      "sha256": "a2964996f4dabba9ca1793370bc8103c517b41148599c50dc8e20e3b0def7b71"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-planning-ad0d64de.log",
+      "bytes": 2140,
+      "sha256": "e5689f74006cb56c0a541d49d53aebbaa4b7c1a67e3351c1db1e5bde70d2194d"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-planning-ad0d64de/environment.json",
+      "bytes": 825,
+      "sha256": "1f9f71e167b0ce707497a098f4a2ea13975f7a2cc1bbaf8825079ca1e1fed252"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-planning-ad0d64de/completion.json",
+      "bytes": 118,
+      "sha256": "244e62599fb70e98736d308d4009cf3e7b22abb42559f6660e3ddc5a826b9947"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/frozen-planning-ad0d64de/test-results-lenovo-laptop.ndjson",
+      "bytes": 355,
+      "sha256": "05b1bc11b12e03aacd61c19c521308f290398929dc0a7992fc8880f20d619b60"
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-commit.log",
+      "bytes": 5460,
+      "sha256": "3e873d3f8b6a6ba66aa25b5ed46c91ecf5fc585c035145be7e414927c624033a"
+    }
+  ]
+}

@@ -148,7 +148,6 @@ function createTestRepository(overrides = {}) {
     filter: (_table, predicate) => [].filter(predicate),
   };
   const mockCdc = overrides.cdcIntegrationService || {
-    waitForCacheUpdate: async () => {},
   };
 
   return new ReplicaOperationRepository({

@@ -4,6 +4,9 @@ import {
   CONTROL_PLANE_READ_LEADER_MODE,
   readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {RAFT_ROLE} from '../raft/constants.js';
+import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {ReplicaStatus} from '../rebalancer/replica-status.js';
 
 const READ_REPLICA_LIFECYCLE_SQL = `SELECT
   service_id,
@@ -269,17 +272,157 @@ function resolveReplicaCreateGroupId(stateMachine, replicaState, serviceId) {
     cachedRow.group_id.length > 0 ? cachedRow.group_id : null;
 }
 
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function hasConflictingNonEmptyField(cachedValue, expectedValue) {
+  return isNonEmptyString(cachedValue) &&
+    isNonEmptyString(expectedValue) &&
+    cachedValue !== expectedValue;
+}
+
+function hasMismatchedOptionalToken(cachedValue, expectedValue) {
+  const cachedToken = isNonEmptyString(cachedValue) ? cachedValue : null;
+  const expectedToken = isNonEmptyString(expectedValue) ? expectedValue : null;
+  return cachedToken !== expectedToken;
+}
+
+function isConflictingCachedIncarnationTokens(cachedRow, replicaState) {
+  if (
+    hasMismatchedOptionalToken(
+      cachedRow?.create_attempt_token,
+      replicaState?.createAttemptToken,
+    ) ||
+    hasMismatchedOptionalToken(
+      cachedRow?.cleanup_token,
+      replicaState?.cleanupToken,
+    )
+  ) {
+    return true;
+  }
+  return Number.isFinite(cachedRow?.created_at) &&
+    Number.isFinite(replicaState?.createdAt) &&
+    cachedRow.created_at !== replicaState.createdAt;
+}
+
+const ROLE_PRESERVING_LIFECYCLE_STATES = new Set([
+  ReplicaStatus.PENDING,
+  ReplicaStatus.CREATING,
+  ReplicaStatus.SYNCING,
+  ReplicaStatus.ACTIVE,
+]);
+
+function isConflictingCachedReplicaIdentity(cachedRow, replicaState, serviceId) {
+  if (
+    !cachedRow ||
+    typeof cachedRow !== 'object' ||
+    !replicaState ||
+    typeof replicaState !== 'object'
+  ) {
+    return true;
+  }
+  if (
+    isNonEmptyString(cachedRow.status) &&
+    !ROLE_PRESERVING_LIFECYCLE_STATES.has(cachedRow.status.toLowerCase())
+  ) {
+    return true;
+  }
+  const replicaIdentity =
+    replicaState?.replicaIdentity || replicaState?.replicaId || serviceId;
+  if (
+    hasConflictingNonEmptyField(cachedRow.replica_id, replicaIdentity) ||
+    hasConflictingNonEmptyField(cachedRow.node_id, replicaState?.nodeId) ||
+    hasConflictingNonEmptyField(
+      cachedRow.partition_id,
+      replicaState?.partitionId,
+    )
+  ) {
+    return true;
+  }
+  return isConflictingCachedIncarnationTokens(cachedRow, replicaState);
+}
+
+function resolveLiveReplicaRaftRole(stateMachine, replicaState, serviceId) {
+  // The replica's own role: its raft role when it states one, else its
+  // role field (the same precedence the replica state carries).
+  const raftRole = replicaState?.raftRole;
+  const directRole = raftRole === undefined || raftRole === null ?
+    replicaState?.role : raftRole;
+  if (isNonEmptyString(directRole)) {
+    return directRole;
+  }
+  if (typeof stateMachine?.resolveLiveReplicaRole === 'function') {
+    const resolved = stateMachine.resolveLiveReplicaRole(serviceId, replicaState);
+    if (isNonEmptyString(resolved)) {
+      return resolved;
+    }
+  }
+  return null;
+}
+
+function isNonActiveReplicaLifecycleState(replicaState) {
+  return !replicaState ||
+    typeof replicaState !== 'object' ||
+    (isNonEmptyString(replicaState.state) &&
+      !ROLE_PRESERVING_LIFECYCLE_STATES.has(replicaState.state.toLowerCase()));
+}
+
+function filterPreservedRaftRole(role, voterOnly) {
+  if (!isNonEmptyString(role)) {
+    return null;
+  }
+  return voterOnly && !isVoterRaftRole(role) ? null : role;
+}
+
+function readCachedReplicaServiceRow(stateMachine, serviceId) {
+  if (!serviceId || typeof stateMachine?.systemTableCache?.get !== 'function') {
+    return null;
+  }
+  return stateMachine.systemTableCache.get(TABLES.SERVICES, serviceId);
+}
+
+function resolvePreservedReplicaRaftRole(
+  stateMachine,
+  replicaState,
+  serviceId,
+  {voterOnly = false} = {},
+) {
+  if (isNonActiveReplicaLifecycleState(replicaState)) {
+    return null;
+  }
+  const liveRole = resolveLiveReplicaRaftRole(
+    stateMachine,
+    replicaState,
+    serviceId,
+  );
+  if (isNonEmptyString(liveRole)) {
+    return filterPreservedRaftRole(liveRole, voterOnly);
+  }
+  const cachedRow = readCachedReplicaServiceRow(stateMachine, serviceId);
+  const cachedRole = cachedRow?.raft_role;
+  if (
+    cachedRole === RAFT_ROLE.LEADER ||
+    isConflictingCachedReplicaIdentity(cachedRow, replicaState, serviceId)
+  ) {
+    return null;
+  }
+  return filterPreservedRaftRole(cachedRole, voterOnly);
+}
+
 export {
   DURABLE_VERSION_COLUMN,
   buildReplicaLifecycleMutationPredicateFromRow,
   buildReplicaLifecycleMutationPredicateFromState,
   durableRowVersion,
+  isConflictingCachedReplicaIdentity,
   isReplicaLifecycleMutationPredicate,
   nextLifecycleStateEntry,
   installAuthoritativeReplicaLifecycleSnapshot,
   observeAuthoritativeReplicaLifecycle,
   readAuthoritativePartitionLeader,
   readAuthoritativeReplicaLifecycle,
+  resolvePreservedReplicaRaftRole,
   resolveReplicaCreateGroupId,
   rowHoldsReplicaIncarnation,
   rowMatchesReplicaLifecycle,

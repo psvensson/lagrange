@@ -1,8 +1,9 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
-import {buildSystemTableMutationSqlParts, buildSystemTableUpsert} from './cdc-system-table-mutation-sql-helpers.js';
-import {TABLES} from '../constants/index.js';
+import {committedWritePosition} from './cdc-committed-write-answer.js';
 import {classifyControlPlaneMutationResult} from
   '../control-plane/control-plane-mutation-outcome-classifier.js';
+import {buildSystemTableMutationSqlParts, buildSystemTableUpsert} from './cdc-system-table-mutation-sql-helpers.js';
+import {TABLES} from '../constants/index.js';
 import {
   CONTROL_PLANE_GATEWAY_ERROR_CODE,
   GATEWAY_ERROR_MSG,
@@ -19,29 +20,33 @@ const {
   CDC_PRIMARY_KEY,
   SQL,
   buildSystemTableMutationError,
-  buildSystemTableVisibilityResult,
-  normalizeSystemTableVisibilityResult,
   shouldLogTableWriteFailure,
   logSystemTableWriteFailure,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
-async function observeDeletedRowVisibility(context, tableName, id, whereClause, options, result) {
+// A committed DELETE that removed nothing emits no CDC event, so a cache row
+// at that key that the committed deletion says is absent would stay stale
+// forever. The commit triggers one reconciliation of that projection row
+// (an authoritative read through the repair owner); the write's answer never
+// waits for it and never reads it (quest
+// replica-admission-from-committed-operation, attempt 2: a projection may
+// trigger reconciliation, it never answers a write). A conditional delete
+// that removed nothing is a failed comparison: the row stands, nothing
+// should disappear, and nothing is repaired.
+function reconcileZeroRowDeletion(context, tableName, id, whereClause, result) {
   const effect = classifyControlPlaneMutationResult(result);
   const idField = context.getPrimaryKeyField(tableName);
-  const conditional = Object.keys(whereClause).some((field) => field !== idField);
-  // A failed comparison says nothing should disappear. Primary-key-only
-  // deletion still requests absence even on replay with zero affected rows.
-  // An applied comparison waits for this matched row to disappear, allowing
-  // a successor at the same key to remain visible.
-  const canObserveDeletion = !conditional ||
-    (effect.applied && effect.affectedRowsPresent && effect.affectedRows > 0);
-  if (!canObserveDeletion) return buildSystemTableVisibilityResult({visibilityState: null});
-  return normalizeSystemTableVisibilityResult(
-    await context.waitForCacheUpdate(tableName, id, false, {
-      expectedFields: whereClause,
-      allowPendingVisibility: options?.allowPendingVisibility === true,
-    }),
-  );
+  if (!effect.affectedRowsPresent || effect.affectedRows !== 0 ||
+      Object.keys(whereClause).some((field) => field !== idField) ||
+      typeof context.repairCacheVisibilityHole !== 'function') {
+    return;
+  }
+  context.repairCacheVisibilityHole(tableName, id, false, whereClause)
+    .catch((error) => {
+      context.logger.warn(CDC_LOG_MSG.ZERO_ROW_DELETE_RECONCILE_FAILED, {
+        tableName, id, error: error?.message ?? String(error),
+        nodeId: context.nodeId});
+    });
 }
 
 /**
@@ -104,8 +109,7 @@ export async function deleteSystemTableRow(context, tableName, whereClause, opti
           CDC_ERROR_MSG.DELETE_FAILED,
         );
       }
-      const visibilityResult = await observeDeletedRowVisibility(
-        context, tableName, id, whereClause, options, result);
+      reconcileZeroRowDeletion(context, tableName, id, whereClause, result);
       context.stats.deletes++;
       context.logger.debug(CDC_LOG_MSG.DELETED_ROW, {
         tableName,
@@ -121,17 +125,13 @@ export async function deleteSystemTableRow(context, tableName, whereClause, opti
       });
       return {
         success: true,
+        committed: true,
+        position: committedWritePosition(tableName, id, result, true),
         operation: CDCOperationType.DELETE,
         tableName,
         whereClause,
         id,
         partitionResult: result,
-        visibilityState: visibilityResult.visibilityState,
-        contractState: visibilityResult.contractState,
-        nextAction: visibilityResult.nextAction,
-        authoritativeVisibilityConfirmed:
-          visibilityResult.authoritativeVisibilityConfirmed,
-        retryAfterMs: visibilityResult.retryAfterMs,
       };
     } catch (error) {
       context.stats.failures++;
@@ -231,16 +231,6 @@ export async function upsertSystemTableRow(context, tableName, data, options = {
           CDC_ERROR_MSG.UPSERT_FAILED,
         );
       }
-      let visibilityResult = buildSystemTableVisibilityResult();
-      if (options?.skipCacheWait !== true) {
-        visibilityResult = normalizeSystemTableVisibilityResult(
-          await context.waitForCacheUpdate(tableName, id, true, {
-            allowPendingVisibility: options?.allowPendingVisibility === true,
-            expectedFields: options?.expectedCacheFields,
-            originHlc: result.originHlc,
-          }),
-        );
-      }
       context.stats.updates++;
       context.logger.debug(CDC_LOG_MSG.UPSERTED_ROW, {
         tableName,
@@ -254,16 +244,12 @@ export async function upsertSystemTableRow(context, tableName, data, options = {
       });
       return {
         success: true,
+        committed: true,
+        position: committedWritePosition(tableName, id, result),
         operation: CDCOperationType.UPSERT,
         tableName,
         data: upsertData,
         partitionResult: result,
-        visibilityState: visibilityResult.visibilityState,
-        contractState: visibilityResult.contractState,
-        nextAction: visibilityResult.nextAction,
-        authoritativeVisibilityConfirmed:
-          visibilityResult.authoritativeVisibilityConfirmed,
-        retryAfterMs: visibilityResult.retryAfterMs,
       };
     } catch (error) {
       context.stats.failures++;

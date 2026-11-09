@@ -114,7 +114,7 @@ function buildService(fixture, kind) {
   let service;
   if (kind === 'partition') {
     service = new PartitionService({...options, partitionId: id, tableId: `${id}-table`,
-      tableName: 'opening_refusal_rows', bootstrapMembership: genesisStamp([replicaId])});
+      tableName: 'opening_refusal_rows', bootstrapMembership: genesisStamp([replicaId], {})});
   } else if (kind === 'message-group') {
     service = new MessageGroupService({...options, groupId: id});
   } else {

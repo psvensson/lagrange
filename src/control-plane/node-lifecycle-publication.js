@@ -131,7 +131,6 @@ const NODE_LIFECYCLE_PUBLICATION_LITERAL = Object.freeze({
 // local projection is installed from the outcome row, never awaited here.
 const NODE_LIFECYCLE_WRITE_ROUTING = Object.freeze({
   allowCoalescing: true,
-  skipCacheWait: true,
 });
 
 // The lifecycle source and readback are read from the NODES partition owner

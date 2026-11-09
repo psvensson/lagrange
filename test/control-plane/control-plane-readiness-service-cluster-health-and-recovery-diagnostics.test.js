@@ -32,6 +32,8 @@ import {
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+
+import {committedMembershipPublicationRow} from './serve-eligibility-test-support.js';
 test('isClusterMemberHealthy returns true for transport-connected ready ' +
   'node with expired lease but recent heartbeat ' +
   '(uses ControlPlaneReadinessService.isClusterMemberHealthy, ' +
@@ -77,8 +79,8 @@ test('isClusterMemberHealthy returns true for transport-connected ready ' +
     'transport-connected node should stay cluster-member-healthy while heartbeat evidence is still fresh');
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'transport-connected node with fresh heartbeat grace should keep control-plane writes admitted');
-  t.equal(readiness.dimensions.serveEligible, true,
-    'transport-connected node with fresh heartbeat grace should stay serve-eligible');
+  t.equal(readiness.dimensions.repairEligible, true,
+    'transport-connected node with fresh heartbeat grace should stay repair-eligible');
   t.end();
 });
 
@@ -281,8 +283,8 @@ async (t) => {
     'node-cache-lag',
     {maxCachedAgeMs: 5000},
   );
-  t.equal(first.dimensions.serveEligible, true,
-    'initial snapshot must be serve-eligible');
+  t.equal(first.dimensions.repairEligible, true,
+    'initial snapshot must be repair-eligible');
 
   readinessService.handleCacheChange(TABLES.SERVICES, {
     [COLUMN.NODE_ID]: 'node-cache-lag',
@@ -296,7 +298,7 @@ async (t) => {
       allowStaleOnCacheChange: false,
       requireFreshOnIneligible: true,
       decisionDimension:
-        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     },
   );
 
@@ -364,8 +366,8 @@ async (t) => {
     'self-node must remain cluster-member-healthy despite expired ' +
     'lease and no transport evidence — the node is alive and ' +
     'running the check (§1.4.12)');
-  t.equal(readiness.dimensions.serveEligible, true,
-    'self-node must remain serve-eligible when only the cache ' +
+  t.equal(readiness.dimensions.repairEligible, true,
+    'self-node must remain repair-eligible when only the cache ' +
     'lease is stale');
   t.equal(readiness.dimensions.controlPlaneWritable, true,
     'self-node must remain control-plane-writable when only the ' +
@@ -655,6 +657,14 @@ test('ControlPlaneReadinessService records authoritative repair attempts ' +
             source: 'sql_query_engine',
           };
         }
+        if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+          // The committed published membership the serve answer reads.
+          return {
+            success: true,
+            rows: [committedMembershipPublicationRow([nodeId], now)],
+            source: 'sql_query_engine',
+          };
+        }
         return {success: false, rows: []};
       },
     },
@@ -671,6 +681,9 @@ test('ControlPlaneReadinessService records authoritative repair attempts ' +
     allowAuthoritativeRefresh: false,
   });
   now += 1000;
+  // Serving (and so the recovery epoch's close) is the committed-epoch answer
+  // (quest serve-eligibility-committed-epoch-read): one committed read.
+  await readinessService.readServeEligibility();
   const repairedReadiness = await readinessService.getNodeReadiness(
     nodeId,
     {allowAuthoritativeRefresh: true},
@@ -882,10 +895,7 @@ test('ControlPlaneReadinessService exposes controlPlanePublished while keeping r
       recentTransitions: [],
     }),
     membershipPublicationService: {
-      getLatestPublicationForNode(targetNodeId) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      getLatestClusterPublication() {
         return {
           publicationEpoch: 14,
           status: 'ACK_PENDING',
@@ -994,10 +1004,7 @@ test('ControlPlaneReadinessService awaits async membership publication reads bef
       recentTransitions: [],
     }),
     membershipPublicationService: {
-      async getLatestPublicationForNode(targetNodeId) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      async getLatestClusterPublication() {
         return {
           publicationEpoch: 22,
           status: 'ACK_PENDING',
@@ -1127,13 +1134,10 @@ test('ControlPlaneReadinessService splits publication diagnostics from recovery 
   t.end();
 });
 
-// The sync CLUSTER publication read is memoized per publication change
-// (CL-019) whenever a publication owner is wired, as it always was with the
-// production coordinator: the diagnostics lane and the recovery-planning lane
-// of one sync readiness build observe the same row. (A per-read-profile split
-// was observable only through a fake without the cluster read, which skipped
-// the memo; that fake shape is now refused.)
-test('ControlPlaneReadinessService sync readiness derives publication diagnostics and recovery planning from one memoized cluster publication read', (t) => {
+// The memoized CLUSTER publication read serves the diagnostics lane only
+// (PR #201: the planning lane reads its own profile), so one sync readiness
+// build reads diagnostics and planning separately.
+test('ControlPlaneReadinessService sync readiness splits publication diagnostics from recovery planning', (t) => {
   const nodeId = 'node-publication-lane-split-sync';
   const capturedReadProfiles = [];
   const readinessService = createReadinessServiceForTest({
@@ -1155,11 +1159,12 @@ test('ControlPlaneReadinessService sync readiness derives publication diagnostic
       enteredAt: '2026-03-04T00:00:00.000Z',
       recentTransitions: [],
     }),
-    // Readiness reads the cluster's latest publication row (the production
-    // coordinator's cluster read); the fixture derives the per-node read.
     membershipPublicationService: {
       getLatestClusterPublicationSync(options = {}) {
         capturedReadProfiles.push(options);
+        if (options.readProfile === 'diagnostics') {
+          return null;
+        }
         return {
           publicationEpoch: 24,
           status: 'ACK_PENDING',
@@ -1177,23 +1182,122 @@ test('ControlPlaneReadinessService sync readiness derives publication diagnostic
   });
 
   t.same(
-    capturedReadProfiles.map((options) => options.readProfile),
-    ['diagnostics'],
-    'sync readiness reads the cluster publication once; the planning lane is served from the memoized row',
+    capturedReadProfiles.map((options) => options.readProfile).sort(),
+    ['diagnostics', 'planning'],
+    'sync readiness should read diagnostics and planning publication lanes separately',
   );
   t.equal(
-    readiness.membershipPublication?.status,
-    'ACK_PENDING',
-    'sync publication truth is the memoized cluster row',
+    readiness.membershipPublication,
+    null,
+    'sync diagnostics publication truth should remain null when no durable publication row is visible',
   );
-  t.equal(readiness.dimensions.controlPlanePublished, false,
-    'a pending publication is not published');
-  t.equal(readiness.dimensions.controlPlaneRecoveryEligible, true,
-    'a pending publication keeps recovery open');
+  t.equal(readiness.dimensions.controlPlanePublished, true);
+  t.equal(readiness.dimensions.controlPlaneRecoveryEligible, true);
   t.same(
     readiness.priorityControlPlaneRecovery.reasonCodes,
     [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING],
-    'priority recovery reasons derive from the same row',
   );
+  t.end();
+});
+
+test('ControlPlaneDiagnosticsLedger preserves first-cause root event and causal fields under repeated secondary churn', async (t) => {
+  const {ControlPlaneDiagnosticsLedger} = await import(
+    '../../src/control-plane/control-plane-diagnostics-ledger.js'
+  );
+  let nowMs = 1000;
+  const ledger = new ControlPlaneDiagnosticsLedger({
+    maxEntries: 4,
+    now: () => nowMs,
+  });
+
+  // Record root cause at t=1000
+  ledger.append({
+    decidingBoundary: 'serve_eligibility',
+    originalCause: 'PUBLICATION_EPOCH_PENDING',
+    identity: 'node-1',
+    acceptedRevision: 7,
+    remainingObligation: 'ack_publication_epoch_7',
+    responsibleOwner: 'MembershipPublicationCoordinator',
+    nextTrigger: 'publication_ack_retry_timer',
+    lastMeaningfulProgress: 'epoch_7_staged',
+  });
+
+  // Repeated secondary churn on the same causal key updates latestOccurrenceAtMs and count
+  // without losing firstOccurrenceAtMs or root causal fields, and without consuming distinct key slots.
+  for (let i = 1; i <= 10; i += 1) {
+    nowMs = 1000 + i * 100;
+    ledger.append({
+      decidingBoundary: 'serve_eligibility',
+      originalCause: 'PUBLICATION_EPOCH_PENDING',
+      identity: 'node-1',
+      lastMeaningfulProgress: `epoch_7_poll_${i}`,
+    });
+  }
+
+  const summaries = ledger.getAggregatedSummaries();
+  t.equal(summaries.length, 1, 'repeated churn on the same causal key aggregates into one summary');
+  t.equal(summaries[0].count, 11, 'occurrence count tracks all 11 events');
+  t.equal(summaries[0].firstOccurrenceAtMs, 1000, 'firstOccurrenceAtMs is preserved');
+  t.equal(summaries[0].latestOccurrenceAtMs, 2000, 'latestOccurrenceAtMs reflects latest event');
+  t.equal(summaries[0].originalCause, 'PUBLICATION_EPOCH_PENDING');
+  t.equal(summaries[0].decidingBoundary, 'serve_eligibility');
+  t.equal(summaries[0].identity, 'node-1');
+  t.equal(summaries[0].acceptedRevision, 7);
+  t.equal(summaries[0].remainingObligation, 'ack_publication_epoch_7');
+  t.equal(summaries[0].responsibleOwner, 'MembershipPublicationCoordinator');
+  t.equal(summaries[0].nextTrigger, 'publication_ack_retry_timer');
+  t.equal(summaries[0].lastMeaningfulProgress, 'epoch_7_poll_10');
+  t.end();
+});
+
+test('ControlPlaneReadinessService getAllNodeReadiness and getAllNodeReadinessSync include published and explicit required nodes when cache rows are missing', async (t) => {
+  const cache = createCache({
+    nodes: [createActiveNode('node-1')],
+    services: [createMessageGroupService('node-1')],
+  });
+  const pubRow = committedMembershipPublicationRow(['node-1', 'node-2'], 1500);
+  const origGetAll = cache.getAll.bind(cache);
+  cache.getAll = (tableName) => {
+    if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+      return [pubRow];
+    }
+    return origGetAll(tableName);
+  };
+  const readinessService = createReadinessServiceForTest({
+    nodeId: 'node-1',
+    systemTableCache: cache,
+    storageAccountingService: createAccountingService({
+      'node-1': {nodeId: 'node-1', budgetBytes: 1000, pressureState: 'normal'},
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => 1500,
+  });
+
+  const asyncAll = await readinessService.getAllNodeReadiness({
+    requiredNodeIds: ['node-3'],
+  });
+  const syncAll = readinessService.getAllNodeReadinessSync({
+    requiredNodeIds: ['node-3'],
+  });
+
+  t.same(
+    asyncAll.map((entry) => entry.nodeId),
+    ['node-1', 'node-2', 'node-3'],
+    'async getAllNodeReadiness must evaluate published (node-2) and explicit required (node-3) nodes even when their cache rows are missing',
+  );
+  t.same(
+    syncAll.map((entry) => entry.nodeId),
+    ['node-1', 'node-2', 'node-3'],
+    'sync getAllNodeReadinessSync must evaluate published (node-2) and explicit required (node-3) nodes even when their cache rows are missing',
+  );
+  const node2Async = asyncAll.find((entry) => entry.nodeId === 'node-2');
+  const node3Async = asyncAll.find((entry) => entry.nodeId === 'node-3');
+  t.equal(node2Async?.dimensions?.clusterMemberHealthy, false);
+  t.equal(node3Async?.dimensions?.clusterMemberHealthy, false);
   t.end();
 });

@@ -1,7 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   CONTROL_PLANE_MUTATION_OUTCOME,
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
   buildControlPlaneMutationOwnerOutcomeEnvelope,
 } from '../../src/control-plane/control-plane-system-table-gateway-shared.js';
 import {
@@ -88,8 +87,6 @@ test('gateway mutation outcome preserves owner detail through envelope round tri
     const envelope = buildControlPlaneMutationOwnerOutcomeEnvelope(
       {
         success: false,
-        visibilityState:
-          CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
         reasonCodes: ['owner_not_ready'],
         retryAfterMs: TEST_GATEWAY_RETRY_AFTER_MS,
         revision: TEST_GATEWAY_REVISION,
@@ -109,11 +106,7 @@ test('gateway mutation outcome preserves owner detail through envelope round tri
       retryAfterMs: TEST_GATEWAY_RETRY_AFTER_MS,
       terminal: false,
     });
-    t.match(normalized.evidence, {
-      visibilityState:
-        CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
-      success: false,
-    });
+    t.match(normalized.evidence, {success: false});
   });
 
 test('publication active-gate outcome preserves owner detail through envelope round trip',

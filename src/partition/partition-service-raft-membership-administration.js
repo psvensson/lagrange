@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {AddressManager} from '../address/address-manager.js';
 import {
   REDRIVEN_ADMISSION_OUTCOMES,
   admissionOfPortAnswer,
@@ -26,7 +27,7 @@ import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
 import {computeReplicaElectionTimeouts} from
   '../raft/replica-election-timeouts.js';
 
-const {PARTITION_SERVICE_VALUE} = PARTITION_SERVICE_SHARED;
+const {ENTITY_TYPE, PARTITION_SERVICE_VALUE} = PARTITION_SERVICE_SHARED;
 const GROUP_RETIRING_LOG_MSG = 'Partition membership change refused: the ' +
   'group is being retired as a unit by its durable workflow record';
 
@@ -52,7 +53,11 @@ function reservePartitionRaftPeerIdentity(
 
 // The port-shaped refusal of any membership change of a group its durable
 // record retires as a unit (group-retirement-members.js froze its members),
-// or null. The one fence every partition conf change passes.
+// or null. The one fence every partition conf change passes. It reads the
+// cache and is the one cache read on the admission path: an explicit,
+// refuse-only exemption owned by the group-retirement owner (it can refuse an
+// admission, never grant one; lead decision 2026-11-02, recorded as an R17
+// finding for the projection-authority census).
 function groupRetiringRefusal(service) {
   return isGroupRetiringInView(service.systemTableCache, service.partitionId) ?
     Object.freeze({outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
@@ -64,9 +69,12 @@ function groupRetiringRefusal(service) {
  * The partition's one path to admitting a peer into its raft configuration,
  * through the group-neutral admission owner: only the leader proposes, a
  * member or a replica that is not the leader is a typed no-op, and every
- * decision is recorded as what the port answered.
+ * decision is recorded as what the port answered. Its one caller is the
+ * admission request owner (partition-replica-admission.js), which supplies
+ * the node from the committed replica operation: the admission commits that
+ * node (the admission context), and the peer is addressed from it.
  * @param {Object} service - The partition service.
- * @param {Object} peer - {replicaIdentity, peerAddress}.
+ * @param {Object} peer - {replicaIdentity, nodeId}.
  * @return {Object} The frozen admission record.
  */
 function admitPartitionRaftPeer(service, peer) {
@@ -79,7 +87,17 @@ function admitPartitionRaftPeer(service, peer) {
       change: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, ...refused});
     return refused;
   }
-  return admitGroupPeer(service.raft, admissionGroupOf(service), peer);
+  const nodeId = peer.nodeId ?? (peer.peerAddress ?
+    AddressManager.getInstance().nodeIdOfProjectedAddress(peer.peerAddress) :
+    null);
+  const peerAddress = peer.peerAddress ?? (nodeId ?
+    AddressManager.getInstance().format(nodeId,
+      ENTITY_TYPE.PARTITION, peer.replicaIdentity) : null);
+  return admitGroupPeer(service.raft, admissionGroupOf(service), {
+    replicaIdentity: peer.replicaIdentity,
+    nodeId,
+    peerAddress,
+  });
 }
 
 // The row-driven retirements (REMOVE_PEER) the port deferred, by the change
@@ -216,9 +234,7 @@ function voterMembershipStateOf(answer, sourceReplicaIdentity) {
  * @return {Promise<Object>} Frozen observation.
  */
 async function readPartitionReplicaMembership(service, sourceReplicaIdentity) {
-  const read = service?.raft?.[RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP];
-  const answer = typeof read === 'function' ? await read({
-    purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS}) : null;
+  const answer = await readPartitionCommittedMembership(service);
   if (answer?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED) {
     return Object.freeze({
       state: PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE,
@@ -242,6 +258,19 @@ async function readPartitionReplicaMembership(service, sourceReplicaIdentity) {
     votersOutgoingReplicaIds: replicaIdentitiesOf(answer, answer.votersOutgoing),
     transferWindowMaxMs: leadershipTransferWindowMaxMsOf(service),
   });
+}
+
+/**
+ * The partition's one committed-membership read: a witness read of this
+ * replica's own applied configuration through its port, as the port
+ * answered it (COMMITTED or a typed refusal), or null without a port.
+ * @param {Object} service - The partition service.
+ * @return {Promise<Object|null>} The frozen answer.
+ */
+async function readPartitionCommittedMembership(service) {
+  const read = service?.raft?.[RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP];
+  return typeof read === 'function' ? read({
+    purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS}) : null;
 }
 
 function replicaIdentitiesOf(answer, peerIds) {
@@ -292,6 +321,7 @@ async function retirePartitionRaftPeer(service, replicaIdentity) {
 
 export {
   admitPartitionRaftPeer,
+  readPartitionCommittedMembership,
   readPartitionReplicaMembership,
   proposePeerRetirement,
   reservePartitionRaftPeerIdentity,

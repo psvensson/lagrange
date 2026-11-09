@@ -929,9 +929,9 @@ async (t) => {
     'bootstrap writes should opt into the explicit startup fallback scope',
   );
   t.equal(
-    sqlCalls[0].options.skipCacheWait,
-    true,
-    'bootstrap SQL fallback should rely on the later visibility gate instead of inline cache waits',
+    'skipCacheWait' in sqlCalls[0].options,
+    false,
+    'the bootstrap SQL path is gated by its phase scope alone (no cache-wait opt-out exists: writes answer at their commit)',
   );
 
   await api.shutdown();

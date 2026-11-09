@@ -15,13 +15,6 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createTestRebalancer} from './test-helpers.js';
 
-function projectNodesAsReady(nodes) {
-  return Object.fromEntries(nodes.map(({node_id: nodeId}) => [
-    nodeId,
-    Object.freeze({readyNow: true}),
-  ]));
-}
-
 // Initialize test environment
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -42,6 +35,8 @@ function initializeTestEnvironment() {
 // Arbitrary for generating node configurations
 const nodeArb = fc.record({
   node_id: fc.uuid(),
+  connection_state: fc.constant('ready'),
+  ready_lease_expires_at: fc.constant(Date.now() + 60000),
   status: fc.constantFrom(NodeStatus.ACTIVE, NodeStatus.FAILED),
   cpu_usage_percent: fc.integer({min: 0, max: 100}),
   memory_usage_percent: fc.integer({min: 0, max: 100}),
@@ -54,7 +49,7 @@ const policyArb = fc.integer({min: 3, max: 7}).chain((maxReplica) => {
   // Ensure maxReplica is odd
   const adjustedMax = maxReplica % 2 === 0 ? maxReplica + 1 : maxReplica;
   return fc.record({
-    replicaCount: fc.constantFrom(3, 5, 7).filter((r) => r <= adjustedMax),
+    targetReplicaCount: fc.constantFrom(3, 5, 7).filter((r) => r <= adjustedMax),
     minReplicaCount: fc.constant(3),
     maxReplicaCount: fc.constant(adjustedMax),
     placementConstraints: fc.record({
@@ -87,7 +82,7 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
             cacheData: {nodes: activeNodes},
-            livenessProjectionByNodeId: projectNodesAsReady(activeNodes),
+
           });
 
           // Calculate target state with no existing replicas
@@ -126,11 +121,11 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
             cacheData: {nodes: activeNodes},
-            livenessProjectionByNodeId: projectNodesAsReady(activeNodes),
+
           });
 
           const policy = {
-            replicaCount: 3,
+            targetReplicaCount: 3,
             minReplicaCount: 3,
             maxReplicaCount: 7,
             placementConstraints: {spreadAcrossNodes: true},
@@ -188,7 +183,7 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
             cacheData: {nodes},
-            livenessProjectionByNodeId: projectNodesAsReady(nodes),
+
           });
 
           // Get available nodes - should filter based on status
@@ -222,7 +217,7 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
             cacheData: {nodes},
-            livenessProjectionByNodeId: projectNodesAsReady(nodes),
+
           });
 
           // Calculate target state and check result

@@ -39,7 +39,8 @@ const TEST_REPLACE_OPERATION_TYPE = 'REPLACE';
 const TEST_ADD_OPERATION_TYPE = 'ADD';
 const TEST_FAILED_STATUS = 'failed';
 const TEST_TABLE_POLICY = Object.freeze({
-  replicaCount: 3,
+  targetReplicaCount: 3,
+  minReplicaCount: 3,
 });
 
 function initializeTestEnvironment() {
@@ -302,22 +303,20 @@ test('RebalanceCoordinator topology guard invokes the injected inventory owner',
   },
 );
 
-test('RebalanceCoordinator fails topology increase closed when owner rows are unavailable',
+test('RebalanceCoordinator fails topology increase closed when service owner rows are unavailable',
   async (t) => {
     initializeTestEnvironment();
-    const unavailable = async () => ({
-      success: false,
-      rows: [],
-      error: 'owner unavailable',
-    });
+    const readRows = async (table) => table === SYSTEM_TABLE_NAME.SERVICES ? {
+      success: false, rows: [], error: 'service owner unavailable',
+    } : {success: true, rows: []};
     const {coordinator} = createCoordinator({
       cacheServices: [
         createServiceRow(TEST_SOURCE_REPLICA_ID, TEST_NODE_ID),
       ],
       controlPlaneSystemTableGateway: {
-        readAuthoritativeRows: unavailable,
-        readRows: unavailable,
-        executeQuery: unavailable,
+        readAuthoritativeRows: readRows,
+        readRows,
+        executeQuery: async () => ({success: true, rows: []}),
       },
     });
 
@@ -467,6 +466,30 @@ test(
       },
     };
 
+    const policyOwner = coordinator.tablePolicyService;
+    const unavailableOwners = [null,
+      ...[null, {}, {replicaCount: 3}, {targetReplicaCount: '3'},
+        {targetReplicaCount: 1.5}, {targetReplicaCount: 3}].map((policy) => ({
+        getPolicyForPartition: async () => policy,
+      })),
+      {getPolicyForPartition: async () => {
+        throw new Error('finite policy read fault');
+      }},
+    ];
+    for (const owner of unavailableOwners) {
+      coordinator.tablePolicyService = owner;
+      for (const normalizedMoveType of [TEST_REPLACE_OPERATION_TYPE, TEST_ADD_OPERATION_TYPE]) {
+        const denied = await coordinator.buildTopologyGuardSnapshot({
+          ...context, normalizedMoveType,
+        });
+        t.equal(denied.state, 'target_unavailable',
+          'unavailable target precedes the recovery-cure exception');
+        t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      }
+      t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+        'the surplus REMOVE fence also has no target permission');
+    }
+    coordinator.tablePolicyService = policyOwner;
     const recovery = await coordinator.buildTopologyGuardSnapshot(context);
     t.equal(recovery.state, 'allowed',
       'the count-neutral ledger spread cure breaks the owner-read circularity');
@@ -696,6 +719,8 @@ test('RebalanceCoordinator applies topology occupancy guard to message-group cre
 // surplus drains. The net-new catch vs the existing rows-only distinct-node ADD
 // guard is REPLACE (which that guard exempts), so the red-on-revert is a REPLACE.
 const CRIT_PARTITION_ID = 'control_plane_publications-p1';
+const CRIT_NODE_ROWS = ['node-1', 'node-2', 'node-3', 'node-4', 'node-5']
+  .map((nodeId) => ({node_id: nodeId, status: 'active'}));
 function critRow(replicaId, nodeId, status) {
   return createServiceRow(replicaId, nodeId, {
     partitionId: CRIT_PARTITION_ID,
@@ -715,6 +740,7 @@ test('count-keyed lane HOLDS a REPLACE churn create while the critical partition
     critRow(CRIT_PARTITION_ID + '-r4', 'node-4'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -746,6 +772,7 @@ test('count-keyed lane consumes canonical identity deduplication', async (t) => 
     critRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -779,6 +806,7 @@ async (t) => {
     critRow(CRIT_PARTITION_ID + '-r4', 'node-4', TEST_FAILED_STATUS),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -812,6 +840,7 @@ test('count-keyed lane HOLDS a REPLACE churn create when the surplus is a draini
     critRow(CRIT_PARTITION_ID + '-r4', 'node-4', ReplicaStatusForTest.REMOVING),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -849,6 +878,7 @@ test('count-keyed lane EXEMPTS the priority-spread cure ADD: over target on aliv
     critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -878,6 +908,7 @@ test('count-keyed lane STILL HOLDS an over-target ADD without the spread-cure ' 
     critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -905,6 +936,7 @@ async (t) => {
     critRow(CRIT_PARTITION_ID + '-r4', 'node-4'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -931,6 +963,7 @@ test('count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target n
     critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -968,6 +1001,7 @@ test('s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op
     orphanRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -997,6 +1031,7 @@ test('s14 orphan census: a CATCHING-UP learner (status=creating) still counts, '
     {...critRow(CRIT_PARTITION_ID + '-r3', 'node-3'), raft_role: 'learner', status: 'creating'},
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -1022,6 +1057,7 @@ test('s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED â
     orphanRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
   ];
   const {coordinator, sqlEngine} = createCoordinator({
+    cacheNodes: CRIT_NODE_ROWS,
     cacheServices: rows,
     authoritativeServices: rows,
   });
@@ -1036,4 +1072,38 @@ test('s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED â
   t.ok(error, 'target node already occupied (full-occupancy check intact) -> blocked');
   t.equal(sqlEngine.getOperations().length, 0, 'no double-placement on the orphan node');
   coordinator.shutdown();
+});
+
+
+test('ADD and REPLACE refuse unavailable policy before persistence ' +
+  'and recover through the same topology guard', async (t) => {
+  initializeTestEnvironment();
+  for (const type of [TEST_ADD_OPERATION_TYPE, TEST_REPLACE_OPERATION_TYPE]) {
+    const rows = [createServiceRow(TEST_SOURCE_REPLICA_ID, TEST_NODE_ID)];
+    const {coordinator, sqlEngine} = createCoordinator({
+      cacheServices: rows, authoritativeServices: rows,
+    });
+    try {
+      const owner = coordinator.tablePolicyService;
+      coordinator.tablePolicyService = {
+        getPolicyForPartition: async () => ({targetReplicaCount: null}),
+      };
+      const move = {type, partitionId: TEST_PARTITION_ID, nodeId: TEST_TARGET_NODE_ID,
+        replicaId: type === TEST_REPLACE_OPERATION_TYPE ? TEST_SOURCE_REPLICA_ID : null,
+        sourceNodeId: type === TEST_REPLACE_OPERATION_TYPE ? TEST_NODE_ID : null,
+        emitOperationCreated: false, enforceConcurrentOperationBudget: true};
+      const error = await captureOperationCreateError(() => coordinator.createOperation(move));
+      t.same(error.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      t.equal(sqlEngine.getOperations().length, 0, 'no operation is recorded without its target');
+      coordinator.tablePolicyService = owner;
+      await coordinator.ensureCreateTopologyGuardAllowed({
+        normalizedMoveType: type, entityType: SERVICE_TYPE.PARTITION,
+        entityId: TEST_PARTITION_ID, partitionId: TEST_PARTITION_ID, move,
+      });
+      t.pass('valid policy restoration admits this move at the same topology guard');
+      t.equal(sqlEngine.getOperations().length, 0, 'a topology decision alone does not persist an operation');
+    } finally {
+      await coordinator.shutdown();
+    }
+  }
 });

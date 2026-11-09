@@ -36,7 +36,7 @@ import {test} from 'node:test';
 
 import {
   addressOf,
-  admitThroughRows,
+  admitThroughRequest,
   buildTargetFromOperation,
   configure,
   createCommittedMembershipHarness,
@@ -103,7 +103,7 @@ async function buildReplaceTarget(harness, {source, target, founders}) {
 }
 
 function admit(harness, target, members) {
-  return admitThroughRows(harness, target, members);
+  return admitThroughRequest(harness, target, members);
 }
 
 async function restart(harness, member, cache) {

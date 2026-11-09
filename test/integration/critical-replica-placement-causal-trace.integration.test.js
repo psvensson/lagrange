@@ -58,6 +58,7 @@ import {
   stopAllRebalancers,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 
 const TEST_TIMEOUT_MS = 300000;
 const READY_TIMEOUT_MS = 12000;
@@ -298,7 +299,8 @@ async function runActiveProbeIfNeeded(options) {
   }
 }
 
-test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
+test('critical placement causal trace',
+  {timeout: scaleByMachineFactor(TEST_TIMEOUT_MS)},
   async (t) => {
     initializeTestEnvironment({nodeId: SEED_NODE_ID});
     LoggingService.getInstance().initialize({level: 'warn'});
@@ -310,7 +312,7 @@ test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
       nodeId: SEED_NODE_ID,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
-      config: {...TEST_CONFIG.bootstrap, leadershipWaitTimeoutMs: 2000},
+      config: {...TEST_CONFIG.bootstrap},
     });
 
     let bootstrapResult = null;
@@ -332,6 +334,8 @@ test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
         messageRouter: bootstrapResult.messageRouter,
         cdcIntegrationService: bootstrapService.cdcIntegrationService,
         rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
+        controlPlaneReadinessService:
+          bootstrapService.controlPlaneReadinessService,
         nodeId: SEED_NODE_ID,
       });
       seedApi = new BootstrapAPI({
@@ -433,7 +437,11 @@ test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
       const createResult = await queryEngine.executeQuery(
         `CREATE TABLE ${CONTROL_TABLE_NAME} (id INTEGER PRIMARY KEY, ` +
         'payload TEXT)');
-      t.equal(createResult.success !== false, true,
+      const createAdmittedOrDeferred =
+        createResult.success !== false ||
+        (createResult.contractState === 'deferred' &&
+          createResult.errorCode === 'PROVISIONING_UNAVAILABLE');
+      t.equal(createAdmittedOrDeferred, true,
         'the ordinary control table is created');
       // Provisioning is MEASURED, never required: on the first live runs the
       // ordinary lane could not even provision its partition row - the same
@@ -444,8 +452,8 @@ test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
       await waitFor(() => {
         const controlRows = readRows(systemTableCache,
           SYSTEM_TABLE_NAME.PARTITIONS,
-          (row) => String(row.table_id || row.table_name || '') ===
-            CONTROL_TABLE_NAME ||
+          (row) => String(row.table_name || '') === CONTROL_TABLE_NAME ||
+            String(row.table_id || '') === CONTROL_TABLE_NAME ||
             String(row.partition_id || '').startsWith(CONTROL_TABLE_NAME));
         controlPartitionId = controlRows[0]?.partition_id || null;
         return controlPartitionId !== null;

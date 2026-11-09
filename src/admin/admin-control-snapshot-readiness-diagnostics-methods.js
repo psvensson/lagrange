@@ -1,8 +1,9 @@
+import {resolveControlPlaneDiagnosticsLossAccounting} from
+  './admin-control-snapshot-diagnostic-loss-accounting.js';
 import {createAdminControlSnapshotPublicationConvergenceDiagnosticsMethods} from
   './admin-control-snapshot-publication-convergence-diagnostics.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
-
 function assignAdminControlSnapshotReadinessDiagnosticsMethods(
   AdminControlSnapshot,
   options = {},
@@ -352,6 +353,24 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
         return ADMIN_CACHE_DUMP.EMPTY;
       }
     }
+    resolveParticipationDecisionAggregatedDiagnostics() {
+      const fn =
+        this.controlPlaneReadinessService
+          ?.getParticipationDecisionLedgerAggregatedSummaries ||
+        this.controlPlaneReadinessService
+          ?.getParticipationDecisionAggregatedSummaries;
+      if (typeof fn !== 'function') {
+        return ADMIN_CACHE_DUMP.EMPTY;
+      }
+      try {
+        const summaries = fn.call(this.controlPlaneReadinessService, {
+          limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT,
+        });
+        return Array.isArray(summaries) ? summaries : ADMIN_CACHE_DUMP.EMPTY;
+      } catch (_error) {
+        return ADMIN_CACHE_DUMP.EMPTY;
+      }
+    }
     /**
      * Resolve recent authoritative readiness repair attempts.
      * @return {Object[]}
@@ -371,6 +390,24 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
             {limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT},
           );
         return Array.isArray(entries) ? entries : ADMIN_CACHE_DUMP.EMPTY;
+      } catch (_error) {
+        return ADMIN_CACHE_DUMP.EMPTY;
+      }
+    }
+    resolveAuthoritativeReadinessRepairAggregatedDiagnostics() {
+      const fn =
+        this.controlPlaneReadinessService
+          ?.getAuthoritativeReadinessRepairLedgerAggregatedSummaries ||
+        this.controlPlaneReadinessService
+          ?.getAuthoritativeReadinessRepairAggregatedSummaries;
+      if (typeof fn !== 'function') {
+        return ADMIN_CACHE_DUMP.EMPTY;
+      }
+      try {
+        const summaries = fn.call(this.controlPlaneReadinessService, {
+          limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT,
+        });
+        return Array.isArray(summaries) ? summaries : ADMIN_CACHE_DUMP.EMPTY;
       } catch (_error) {
         return ADMIN_CACHE_DUMP.EMPTY;
       }
@@ -418,6 +455,75 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       } catch (_error) {
         return ADMIN_CACHE_DUMP.EMPTY;
       }
+    }
+    resolveControlPlaneOperationAggregatedDiagnostics() {
+      const fn =
+        this.controlPlaneSystemTableGateway
+          ?.getControlPlaneOperationLedgerAggregatedSummaries ||
+        this.controlPlaneSystemTableGateway
+          ?.getControlPlaneOperationAggregatedSummaries;
+      if (typeof fn !== 'function') {
+        return ADMIN_CACHE_DUMP.EMPTY;
+      }
+      try {
+        const summaries = fn.call(this.controlPlaneSystemTableGateway, {
+          limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT,
+        });
+        return Array.isArray(summaries) ? summaries : ADMIN_CACHE_DUMP.EMPTY;
+      } catch (_error) {
+        return ADMIN_CACHE_DUMP.EMPTY;
+      }
+    }
+    resolveControlPlaneReadinessDiagnostics() {
+      const participationDecisions =
+        this.resolveParticipationDecisionDiagnostics();
+      const participationDecisionSummaries =
+        this.resolveParticipationDecisionAggregatedDiagnostics();
+      const authoritativeReadinessRepairs =
+        this.resolveAuthoritativeReadinessRepairDiagnostics();
+      const authoritativeReadinessRepairSummaries =
+        this.resolveAuthoritativeReadinessRepairAggregatedDiagnostics();
+      const controlPlaneOperations =
+        this.resolveControlPlaneOperationDiagnostics();
+      const controlPlaneOperationSummaries =
+        this.resolveControlPlaneOperationAggregatedDiagnostics();
+      const lossAccounting = resolveControlPlaneDiagnosticsLossAccounting(this, {
+        participationDecisions,
+        participationDecisionSummaries,
+        authoritativeReadinessRepairs,
+        authoritativeReadinessRepairSummaries,
+        controlPlaneOperations,
+        controlPlaneOperationSummaries,
+      });
+      const aggregatedSummaries = Object.freeze({
+        participationDecisions: participationDecisionSummaries,
+        authoritativeReadinessRepairs: authoritativeReadinessRepairSummaries,
+        controlPlaneOperations: controlPlaneOperationSummaries,
+      });
+      return Object.freeze({
+        participationDecisions,
+        participationDecisionSummaries,
+        authoritativeReadinessRepairs,
+        authoritativeReadinessRepairSummaries,
+        controlPlaneOperations,
+        controlPlaneOperationSummaries,
+        aggregatedSummaries,
+        lossAccounting,
+      });
+    }
+    async getControlSnapshot(options = {}) {
+      const ordinaryObservation =
+        options.forceAuthoritativeRepair !== true &&
+        options.allowAuthoritativeRepair !== true &&
+        options.allowAuthoritativeReadinessRefresh === undefined;
+      return this.buildLocalControlSnapshot(
+        ordinaryObservation ?
+          {
+            ...options,
+            allowAuthoritativeReadinessRefresh: false,
+          } :
+          options,
+      );
     }
     /**
      * Resolve heartbeat publication diagnostics from the local owner.

@@ -77,8 +77,8 @@ function bindDataDirectoryProcessOwner(runtime, owner) {
   const shutdownRuntime = runtime.shutdownRuntime;
   return Object.freeze({
     ...runtime,
-    async shutdownRuntime() {
-      const result = await shutdownRuntime.call(runtime);
+    async shutdownRuntime(...args) {
+      const result = await shutdownRuntime.apply(runtime, args);
       owner.release();
       return result;
     },

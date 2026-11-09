@@ -30,6 +30,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {TABLES} from '../../src/constants/index.js';
 import {createMockSystemCache} from './sql-query-engine-test-support.js';
 
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
@@ -344,7 +345,9 @@ function setupJ2Cluster() {
   const downPartitions = new Set();
   const messageRouter = createPartitionMessageRouter(partitionDbs, downPartitions);
   const cache = createMockSystemCache(tables, partitions);
-  const engine = new SQLQueryEngine({systemCache: cache, messageRouter});
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    systemCache: cache, messageRouter});
 
   return {
     engine,
@@ -710,6 +713,7 @@ test('J2 Journey: partition split, merge, and engine restart transitions', async
   const updatedCache = createMockSystemCache(tables, partitions);
   const updatedRouter = createPartitionMessageRouter(partitionDbs);
   const restartedEngine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: updatedCache,
     messageRouter: updatedRouter,
   });
@@ -767,6 +771,7 @@ test('J2 Journey: partition split, merge, and engine restart transitions', async
   const postMergeCache = createMockSystemCache(tables, partitions);
   const postMergeRouter = createPartitionMessageRouter(partitionDbs);
   const postMergeEngine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: postMergeCache,
     messageRouter: postMergeRouter,
   });

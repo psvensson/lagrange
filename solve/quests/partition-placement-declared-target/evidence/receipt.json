@@ -1,0 +1,37 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "partition-placement-declared-target",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "declared-target-through-real-planning",
+      "passed": false,
+      "detail": "Pending repaired exact-source proof; real-owner old-source planning disagreement is retained on 4024a23e7."
+    },
+    {
+      "id": "single-policy-request-and-read-contract",
+      "passed": false,
+      "detail": "Pending repaired exact-source proof; real-owner old-source planning disagreement is retained on 4024a23e7."
+    },
+    {
+      "id": "finite-unavailability-owner-redrive",
+      "passed": false,
+      "detail": "Pending repaired exact-source proof; real-owner old-source planning disagreement is retained on 4024a23e7."
+    },
+    {
+      "id": "coordinator-target-refusal-and-recovery",
+      "passed": false,
+      "detail": "Pending repaired exact-source proof; real-owner old-source planning disagreement is retained on 4024a23e7."
+    },
+    {
+      "id": "remove-minimum-safety-and-retry",
+      "passed": false,
+      "detail": "Pending repaired exact-source proof; real-owner old-source planning disagreement is retained on 4024a23e7."
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "detail": "Pending repaired exact-source proof; real-owner old-source planning disagreement is retained on 4024a23e7."
+    }
+  ]
+}

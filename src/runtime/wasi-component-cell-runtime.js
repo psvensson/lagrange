@@ -1,37 +1,37 @@
+import {Worker} from 'node:worker_threads';
 import {
-  Worker,
-} from 'node:worker_threads';
-import {
-  resolveModuleDirectory,
-  resolvePackagedRuntimeFile,
+  resolveModuleDirectory, resolvePackagedRuntimeFile,
 } from '../sea/runtime-file-resolution.js';
 import {
-  RequestCellTableReadBoundError,
-  indexRequestCellTableReads,
-  requestCellTableIndexEstimatedBytes,
-  requestCellTableIndexRowBound,
+  RequestCellTableReadBoundError, indexRequestCellTableReads,
+  requestCellTableIndexEstimatedBytes, requestCellTableIndexRowBound,
 } from './request-cell-table-read-index.js';
 import {
-  DEFAULT_REQUEST_HOST_CALL_BUDGET,
-  HOST_CALL_MESSAGE,
-  HOST_CALL_RESPONDER_STATUS,
-  createHostCallDescriptor,
+  DEFAULT_REQUEST_HOST_CALL_BUDGET, HOST_CALL_MESSAGE,
+  HOST_CALL_RESPONDER_STATUS, createHostCallDescriptor,
   createParentHostCallResponder,
 } from './cell-host-call-protocol.js';
 import {
   CELL_EMIT_BUFFER_META_SLOTS,
   DEFAULT_CELL_EMIT_BUFFER_BYTES as CELL_EMIT_BUFFER_BYTES,
-  WasiComponentCellPressureTracker,
-  clearCellBusy,
-  isCellBusyWithinDeadline,
-  markCellBusy,
-  normalizeCallInvokeOptions,
-  prepareCallEmitPayload,
+  WasiComponentCellPressureTracker, clearCellBusy, isCellBusyWithinDeadline,
+  markCellBusy, normalizeCallInvokeOptions, prepareCallEmitPayload,
 } from './wasi-component-cell-pressure-tracker.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  WASI_COMPONENT_CELL_ERROR_CODE, WASI_COMPONENT_CELL_ERROR_MESSAGE,
+  WasiComponentCellError,
+} from './wasi-component-cell-errors.js';
+import {
+  DERIVATION_OUTCOME, WasiComponentDerivationOwner,
+} from './wasi-component-derivation.js';
 
 const BYTE_ENCODING = 'utf8';
+// Liveness bound over spawn, memory cap, glue import, core compile and
+// instantiate: the transpile is derived beforehand by the derivation owner
+// (measured 0.1 s alone, 1.9 s at 8-way contention on one core).
 const STARTUP_TIMEOUT_MS = 10_000; // ends-on: the cell worker posts its ready message
+const CELL_START_PHASE_SPAWN = 'spawn';
 const HEALTH_TIMEOUT_MS = 1_000; // ends-on: the cell worker answers the health probe
 const CPU_SAMPLE_INTERVAL_MS = 2;
 const CELL_STARTUP_WAIT = Object.freeze({
@@ -51,7 +51,6 @@ const CELL_WORLD = Object.freeze({
 const CELL_EMIT_LENGTH_INDEX = 0;
 const CELL_EMIT_ERROR_INDEX = 1;
 const CELL_EMIT_OVERFLOW_MARKER = '__call_cell_emit_overflow__';
-const WASI_COMPONENT_CELL_ERROR_NAME = 'WasiComponentCellError';
 const WALL_BUDGET_EXHAUSTED_ACTUAL_OFFSET_MS = 1;
 const CELL_BUDGET_FIELD = Object.freeze({
   CONTEXT_BYTES: 'context_bytes',
@@ -70,46 +69,17 @@ const CELL_OPERATION_TYPE = Object.freeze({
   START: 'start',
   STOP: 'stop',
 });
-const WASI_COMPONENT_CELL_ERROR_MESSAGE = Object.freeze({
-  ALREADY_INVOKING: 'Component instance already has an active invocation',
-  INVOCATION_FAILED: 'Component invocation failed',
-  NOT_READY: 'Component instance is not ready',
-  START_FAILED: 'Component startup failed',
-  STOPPED: 'Component instance stopped',
-});
 const CELL_RUNTIME_MODULE_DIR = resolveModuleDirectory(resolveModuleDirectory);
-
-const WASI_COMPONENT_CELL_ERROR_CODE = Object.freeze({
-  BUDGET_EXHAUSTED: 'request_cell_budget_exhausted',
-  COMPONENT_FAILED: 'request_cell_component_failed',
-  COMPONENT_UNAVAILABLE: 'request_cell_component_unavailable',
-  CONCURRENT_INVOCATION: 'request_cell_concurrent_invocation',
-  CONTEXT_BUDGET_EXCEEDED: 'request_cell_context_budget_exceeded',
-  EMIT_BUFFER_OVERFLOW: 'request_cell_emit_buffer_overflow',
-  RUNTIME_MEMORY_PRESSURE_EXCEEDED:
-    'request_cell_runtime_memory_pressure_exceeded',
-  START_FAILED: 'request_cell_start_failed',
-});
 
 const CELL_MESSAGE = Object.freeze({
   INVOKE: 'invoke',
   INVOKE_RESULT: 'invoke_result',
   PING: 'ping',
+  PHASE: 'phase',
   PONG: 'pong',
   READY: 'ready',
   START_FAILED: 'start_failed',
 });
-
-class WasiComponentCellError extends Error {
-  constructor(code, message, options = {}) {
-    super(message, {cause: options.cause});
-    this.name = WASI_COMPONENT_CELL_ERROR_NAME;
-    this.code = code;
-    if (options.preserveReplicaState === true) {
-      this.preserveReplicaState = true;
-    }
-  }
-}
 
 function encodedBytes(value) {
   return Buffer.byteLength(
@@ -178,6 +148,17 @@ function releaseInvocationHostCall(state) {
   state.hostCallResponder = HOST_CALL_RESPONDER_RETIRED;
 }
 
+function cellWorld(cell) {
+  return cell.world === CELL_WORLD.CALL ? CELL_WORLD.CALL : CELL_WORLD.REQUEST;
+}
+
+function stoppedCellError() {
+  return new WasiComponentCellError(
+    WASI_COMPONENT_CELL_ERROR_CODE.COMPONENT_UNAVAILABLE,
+    WASI_COMPONENT_CELL_ERROR_MESSAGE.STOPPED,
+  );
+}
+
 function resolveCellWorkerPath() {
   return resolvePackagedRuntimeFile({
     bundledFileName: CELL_WORKER_BUNDLE_FILE,
@@ -190,10 +171,12 @@ class WasiComponentCellRuntime {
   constructor(options = {}) {
     this.cells = new Map();
     this.operations = new Map();
+    this.serviceGenerations = new Map();
     this.nextGeneration = 1;
     this.nextMessageId = 1;
     this.workerPath = options.workerPath || resolveCellWorkerPath();
     this.pressureTracker = new WasiComponentCellPressureTracker(options);
+    this.derivations = new WasiComponentDerivationOwner();
     this.maxAggregateEmitBufferBytes =
       this.pressureTracker.maxAggregateEmitBufferBytes;
   }
@@ -206,19 +189,55 @@ class WasiComponentCellRuntime {
     return this.pressureTracker.getTelemetry(this.cells);
   }
 
+  getDerivationTelemetry() {
+    return this.derivations.telemetry();
+  }
+
+  // Driver prepare triggers the single-flight derivation; start awaits the
+  // same outcome. Resolves to a named outcome and never rejects.
+  prepareComponent(cell) {
+    return this.derivations.acquire(cell.serviceId, {
+      bytes: cell.bytes,
+      world: cellWorld(cell),
+    });
+  }
+
+  releaseComponent(serviceId) {
+    this.derivations.release(serviceId);
+  }
+
+  advanceServiceGeneration(serviceId) {
+    const generation = (this.serviceGenerations.get(serviceId) ?? 0) + 1;
+    this.serviceGenerations.set(serviceId, generation);
+    return generation;
+  }
+
+  isCurrentServiceGeneration(serviceId, generation) {
+    return this.serviceGenerations.get(serviceId) === generation;
+  }
+
+  assertCurrentServiceGeneration(serviceId, generation) {
+    if (!this.isCurrentServiceGeneration(serviceId, generation)) {
+      throw stoppedCellError();
+    }
+  }
+
   start(cell) {
+    const current = this.operations.get(cell.serviceId);
+    if (current?.type === CELL_OPERATION_TYPE.START) return current.promise;
+    const startGeneration = this.advanceServiceGeneration(cell.serviceId);
     return this.scheduleOperation(
       cell.serviceId,
       CELL_OPERATION_TYPE.START,
-      () => this._start(cell),
+      () => this._start(cell, startGeneration),
     );
   }
 
   scheduleOperation(serviceId, type, execute) {
     const current = this.operations.get(serviceId);
     if (current?.type === type) return current.promise;
-    const promise = Promise.resolve(current?.promise)
-      .catch(() => {})
+    const prior = current ? current.promise.catch(() => {}) : Promise.resolve();
+    const promise = prior
       .then(execute)
       .finally(() => {
         if (this.operations.get(serviceId)?.promise === promise) {
@@ -229,30 +248,25 @@ class WasiComponentCellRuntime {
     return promise;
   }
 
-  workerDataForCell(cell) {
+  workerDataForCell(cell, derivedFiles) {
     return {
-      bytes: new Uint8Array(cell.bytes),
       capabilities: cell.capabilities,
       contextBytes: cell.budgets.context_bytes,
+      derivedFiles,
       exportName: cell.exportName,
       memoryBytes: cell.budgets.memory_bytes,
       requestCellWorker: true,
-      world: cell.world === CELL_WORLD.CALL ?
-        CELL_WORLD.CALL :
-        CELL_WORLD.REQUEST,
+      world: cellWorld(cell),
     };
   }
 
-  async _start(cell) {
-    const existing = this.cells.get(cell.serviceId);
-    if (existing && await this.health(cell.serviceId)) return;
-    if (existing) await this._stop(cell.serviceId);
-
+  spawnCellWorker(cell, derivedFiles) {
     const worker = new Worker(this.workerPath, {
-      workerData: this.workerDataForCell(cell),
+      workerData: this.workerDataForCell(cell, derivedFiles),
     });
     const state = {
       activeDeadlineMs: null,
+      startPhase: CELL_START_PHASE_SPAWN,
       busy: false,
       busySinceMs: null,
       cell,
@@ -261,17 +275,15 @@ class WasiComponentCellRuntime {
       hostCallResponder: HOST_CALL_RESPONDER_RETIRED,
       pending: new Map(),
       ready: false,
+      readySettled: false,
       worker,
     };
     this.nextGeneration += 1;
     this.cells.set(cell.serviceId, state);
-    worker.on(
-      CELL_WORKER_EVENT.MESSAGE,
-      (message) => this.onMessage(state, message),
-    );
+    worker.on(CELL_WORKER_EVENT.MESSAGE, (msg) => this.onMessage(state, msg));
     worker.on(
       CELL_WORKER_EVENT.ERROR,
-      (error) => this.onWorkerFailure(state, error),
+      (err) => this.onWorkerFailure(state, err),
     );
     worker.on(CELL_WORKER_EVENT.EXIT, (code) => {
       if (this.cells.get(cell.serviceId) !== state) return;
@@ -280,11 +292,39 @@ class WasiComponentCellRuntime {
         new Error(`Component worker exited with code ${code}`),
       );
     });
+    return state;
+  }
+
+  async _start(cell, startGeneration) {
+    if (!this.isCurrentServiceGeneration(cell.serviceId, startGeneration)) {
+      return;
+    }
+    const existing = this.cells.get(cell.serviceId);
+    if (existing && await this.health(cell.serviceId)) return;
+    if (existing) await this._stop(cell.serviceId);
+    if (!this.isCurrentServiceGeneration(cell.serviceId, startGeneration)) {
+      return;
+    }
+    const derivation = await this.prepareComponent(cell);
+    if (derivation.outcome !== DERIVATION_OUTCOME.DERIVED) {
+      throw derivation.error;
+    }
+    this.assertCurrentServiceGeneration(cell.serviceId, startGeneration);
+    const state = this.spawnCellWorker(cell, derivation.files);
     await this.waitForReady(state);
+    if (!this.isCurrentServiceGeneration(cell.serviceId, startGeneration)) {
+      await this.terminateCellState(state);
+      throw stoppedCellError();
+    }
   }
 
   onMessage(state, message) {
+    if (message.type === CELL_MESSAGE.PHASE) {
+      state.startPhase = message.phase;
+      return;
+    }
     if (message.type === CELL_MESSAGE.READY) {
+      if (state.readySettled) return;
       state.ready = true;
       state.readyResolve?.();
       return;
@@ -350,6 +390,7 @@ class WasiComponentCellRuntime {
     return new Promise((resolve, reject) => {
       const startedAtMs = Date.now();
       const timer = setTimeout(() => {
+        state.readySettled = true;
         reportWaitBoundSpent(null, {
           ...CELL_STARTUP_WAIT,
           boundMs: STARTUP_TIMEOUT_MS,
@@ -360,29 +401,32 @@ class WasiComponentCellRuntime {
         reject(new WasiComponentCellError(
           WASI_COMPONENT_CELL_ERROR_CODE.START_FAILED,
           'Component startup timed out',
+          {detail: {
+            budgetMs: STARTUP_TIMEOUT_MS,
+            elapsedMs: Date.now() - startedAtMs,
+            phase: state.startPhase,
+          }},
         ));
       }, STARTUP_TIMEOUT_MS);
       state.readyResolve = () => {
+        if (state.readySettled) return;
+        state.readySettled = true;
         clearTimeout(timer);
         resolve();
       };
       state.readyReject = (error) => {
+        if (state.readySettled) return;
+        state.readySettled = true;
         clearTimeout(timer);
         reject(error);
       };
     }).catch(async (error) => {
-      await this._stop(state.cell.serviceId);
+      await this.terminateCellState(state);
       throw error;
     });
   }
 
-  send(
-    state,
-    type,
-    payload,
-    timeoutMs,
-    budgetLimitMs = timeoutMs,
-  ) {
+  send(state, type, payload, timeoutMs, budgetLimitMs = timeoutMs) {
     const id = this.nextMessageId++;
     const startedAtMs = Date.now();
     return new Promise((resolve, reject) => {
@@ -414,18 +458,13 @@ class WasiComponentCellRuntime {
     const state = this.cells.get(serviceId);
     if (!state?.ready) return false;
     if (state.busy === true) {
-      if (isCellBusyWithinDeadline(state)) {
-        return true;
-      }
+      if (isCellBusyWithinDeadline(state)) return true;
       await this._stop(serviceId);
       return false;
     }
     try {
       const result = await this.send(
-        state,
-        CELL_MESSAGE.PING,
-        {},
-        HEALTH_TIMEOUT_MS,
+        state, CELL_MESSAGE.PING, {}, HEALTH_TIMEOUT_MS,
       );
       return result.type === CELL_MESSAGE.PONG;
     } catch {
@@ -466,38 +505,28 @@ class WasiComponentCellRuntime {
     if (inputBytes <= state.cell.budgets.input_bytes) return;
     await this.stop(serviceId);
     throw budgetFailure(
-      CELL_BUDGET_FIELD.INPUT_BYTES,
-      inputBytes,
-      state.cell.budgets.input_bytes,
+      CELL_BUDGET_FIELD.INPUT_BYTES, inputBytes, state.cell.budgets.input_bytes,
     );
   }
 
   async readInvocationContexts(
-    state,
-    readContexts,
-    wallBudget,
-    cancelOperation,
+    state, readContexts, wallBudget, cancelOperation,
   ) {
     const tableReads = await this.runWithinWallBudget(
       () => readContexts(wallBudget),
-      wallBudget.deadlineMs,
-      wallBudget.configuredBudgetMs,
-      cancelOperation,
+      wallBudget.deadlineMs, wallBudget.configuredBudgetMs, cancelOperation,
     );
     const contextBytes = encodedBytes(tableReads);
     if (contextBytes > state.cell.budgets.context_bytes) {
       throw budgetFailure(
         CELL_BUDGET_FIELD.CONTEXT_BYTES,
-        contextBytes,
-        state.cell.budgets.context_bytes,
+        contextBytes, state.cell.budgets.context_bytes,
       );
     }
     try {
       indexRequestCellTableReads(
         tableReads,
-        requestCellTableIndexRowBound(
-          state.cell.budgets.context_bytes,
-        ),
+        requestCellTableIndexRowBound(state.cell.budgets.context_bytes),
       );
     } catch (error) {
       if (!(error instanceof RequestCellTableReadBoundError)) throw error;
@@ -535,9 +564,7 @@ class WasiComponentCellRuntime {
       options.beforeComponentInvoke();
     }
     const cpuMonitor = this.monitorCpuBudget(
-      state,
-      initialCpu,
-      state.cell.budgets.cpu_time_ms,
+      state, initialCpu, state.cell.budgets.cpu_time_ms,
     );
     state.hostCallResponder =
       attachInvocationHostCall(state, payload, options);
@@ -546,12 +573,9 @@ class WasiComponentCellRuntime {
       try {
         result = await Promise.race([
           this.send(
-            state,
-            CELL_MESSAGE.INVOKE,
-            payload,
+            state, CELL_MESSAGE.INVOKE, payload,
             this.remainingWallBudgetMs(
-              wallBudget.deadlineMs,
-              wallBudget.configuredBudgetMs,
+              wallBudget.deadlineMs, wallBudget.configuredBudgetMs,
             ),
             wallBudget.configuredBudgetMs,
           ),
@@ -565,9 +589,7 @@ class WasiComponentCellRuntime {
       }
       state.componentInvocationCount += 1;
       await this.assertCpuBudget(
-        state,
-        initialCpu,
-        state.cell.budgets.cpu_time_ms,
+        state, initialCpu, state.cell.budgets.cpu_time_ms,
       );
       if (emitBuffer !== undefined) {
         result = this.attachCallEmitPartials(result, emitBuffer);
@@ -619,12 +641,8 @@ class WasiComponentCellRuntime {
   }
 
   async invoke(
-    serviceId,
-    args,
-    readContexts,
-    writeEffects,
-    cancelOperation = () => {},
-    options = {},
+    serviceId, args, readContexts, writeEffects,
+    cancelOperation = () => {}, options = {},
   ) {
     const state = this.requireInvocationState(serviceId);
     const wallBudget = invocationWallBudget(state, options);
@@ -676,12 +694,7 @@ class WasiComponentCellRuntime {
     return remainingMs;
   }
 
-  async runWithinWallBudget(
-    operation,
-    deadlineMs,
-    limitMs,
-    cancelOperation,
-  ) {
+  async runWithinWallBudget(operation, deadlineMs, limitMs, cancelOperation) {
     const remainingMs = this.remainingWallBudgetMs(deadlineMs, limitMs);
     let timer = null;
     try {
@@ -740,33 +753,47 @@ class WasiComponentCellRuntime {
   }
 
   stop(serviceId) {
+    this.advanceServiceGeneration(serviceId);
+    this.derivations.release(serviceId);
+    const state = this.cells.get(serviceId);
+    if (state && state.readySettled === false) {
+      this.cells.delete(serviceId);
+      state.ready = false;
+      state.readyReject?.(stoppedCellError());
+      void state.worker.terminate();
+    }
     return this.scheduleOperation(
       serviceId, CELL_OPERATION_TYPE.STOP, () => this._stop(serviceId),
     );
   }
 
   async shutdown() {
-    const serviceIds = [...this.cells.keys()];
-    await Promise.all(serviceIds.map((serviceId) => this.stop(serviceId)));
+    const serviceIds = new Set([
+      ...this.cells.keys(),
+      ...this.operations.keys(),
+    ]);
+    await Promise.all([...serviceIds].map((serviceId) => this.stop(serviceId)));
+    await this.derivations.shutdown();
+  }
+
+  async terminateCellState(state) {
+    if (this.cells.get(state.cell.serviceId) === state) {
+      this.cells.delete(state.cell.serviceId);
+    }
+    state.ready = false;
+    for (const pending of state.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(stoppedCellError());
+    }
+    state.pending.clear();
+    await state.worker.terminate();
   }
 
   async _stop(serviceId) {
     const state = this.cells.get(serviceId);
     if (!state) return;
-    this.cells.delete(serviceId);
-    state.ready = false;
-    for (const pending of state.pending.values()) {
-      clearTimeout(pending.timer);
-      pending.reject(new WasiComponentCellError(
-        WASI_COMPONENT_CELL_ERROR_CODE.COMPONENT_UNAVAILABLE,
-        WASI_COMPONENT_CELL_ERROR_MESSAGE.STOPPED,
-      ));
-    }
-    state.pending.clear();
-    await state.worker.terminate();
+    await this.terminateCellState(state);
   }
 }
 
-export {
-  WasiComponentCellRuntime,
-};
+export {WasiComponentCellRuntime};

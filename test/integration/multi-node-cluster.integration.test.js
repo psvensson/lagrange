@@ -1,3 +1,4 @@
+import {createMockControlPlaneReadinessService} from '../rebalancer/test-helpers.js';
 /**
  * Multi-node cluster integration tests.
  * Tests node joining, leaving, replica rebalancing, and message routing.
@@ -18,8 +19,6 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
-import {CONTROL_PLANE_READINESS_DIMENSION} from
-  '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   createVirginSeedBootstrapService,
   initializeTestEnvironment,
@@ -32,30 +31,8 @@ import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
-function createAlwaysReadyControlPlaneReadinessService() {
-  const dimensions = {
-    [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
-    [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
-  };
-  return {
-    getNodeReadinessSync: (_nodeId, options = {}) => ({
-      dimensions: {
-        ...dimensions,
-        ...(options.decisionDimension ?
-          {[options.decisionDimension]: true} :
-          {}),
-      },
-    }),
-  };
-}
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+
 
 function createMockStorageAdmissionService() {
   return {
@@ -218,6 +195,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
       // (patching only the rebalancer option would be bypassed by the
       // production coordinator's real readiness service).
       const sqlQueryEngine = new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
         systemCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -236,7 +214,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
           messageRouter: bootstrapResult.messageRouter,
         }),
         controlPlaneReadinessService:
-          createAlwaysReadyControlPlaneReadinessService(),
+          createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
         storageAdmissionService: createMockStorageAdmissionService(),
         storageAccountingService: createMockStorageAccountingService(),
         enableTimeouts: false,
@@ -254,7 +232,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
         rebalanceCoordinator,
         nodeId: seedNodeId,
         controlPlaneReadinessService:
-          createAlwaysReadyControlPlaneReadinessService(),
+          createMockControlPlaneReadinessService({systemTableCache: systemTableCache}),
         storageAdmissionService: createMockStorageAdmissionService(),
         storageAccountingService: createMockStorageAccountingService(),
         storagePressureBehavior: createMockStoragePressureBehavior(),
@@ -297,8 +275,9 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
 
       // Create 3-replica message group (all on same node for this test)
       const replicaIds = ['mg-1-r1', 'mg-1-r2', 'mg-1-r3'];
-      const peerAddresses =
-        replicaIds.map((replicaId) => `${nodeId}/message-group/${replicaId}`);
+      // The founding placement: every founder on this node.
+      const founderNodeIds = Object.fromEntries(
+        replicaIds.map((replicaId) => [replicaId, nodeId]));
 
       for (const replicaId of replicaIds) {
         const messageGroup = new MessageGroupService(withTestDbPath({
@@ -306,7 +285,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
           replicaId,
           nodeId,
           replicaIds,
-          peerAddresses,
+          founderNodeIds,
           transport: router,
         }));
 
@@ -368,8 +347,9 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
 
       // Create 3-replica message group for proper Raft consensus
       const replicaIds = ['mg-cross-r1', 'mg-cross-r2', 'mg-cross-r3'];
-      const peerAddresses =
-        replicaIds.map((replicaId) => `${nodeId}/message-group/${replicaId}`);
+      // The founding placement: every founder on this node.
+      const founderNodeIds = Object.fromEntries(
+        replicaIds.map((replicaId) => [replicaId, nodeId]));
 
       for (const replicaId of replicaIds) {
         const replica = new MessageGroupService(withTestDbPath({
@@ -377,7 +357,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
           replicaId,
           nodeId,
           replicaIds,
-          peerAddresses,
+          founderNodeIds,
           transport: router,
         }));
 
@@ -406,7 +386,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
     }
   });
 
-  await t.test('rebalancer - maintains odd replica count', async (t) => {
+  await t.test('rebalancer - preserves the declared partition target', async (t) => {
     // Use real BootstrapService to create seed node
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440030';
     const seedWsPort = getUniquePort();
@@ -442,8 +422,12 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
         });
       }
 
+      const declaredPartition = systemTableCache.get(
+        SYSTEM_TABLE_NAME.PARTITIONS, 'replica_operations-p1',
+      );
+      t.ok(declaredPartition, 'bootstrap declares the operation-ledger partition');
       const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
-        entityId: 'partition-odd',
+        entityId: declaredPartition.partition_id,
         entityType: EntityType.PARTITION,
         systemTableCache,
         cdcIntegrationService: cdcService,
@@ -455,18 +439,13 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
 
       rebalancer.initialize();
 
-      // Test odd count validation
       const policy = await rebalancer.getPolicy();
-      t.equal(policy.replicaCount % 2, 1, 'default replica count should be odd');
-
-      const validated3 = rebalancer.validateReplicaCount(3, policy);
-      t.equal(validated3, 3, 'should keep 3 as is');
-
-      const validated4 = rebalancer.validateReplicaCount(4, policy);
-      t.equal(validated4 % 2, 1, 'should adjust 4 to odd');
-
-      const validated5 = rebalancer.validateReplicaCount(5, policy);
-      t.equal(validated5, 5, 'should keep 5 as is');
+      t.equal(policy.targetReplicaCount, declaredPartition.replica_count,
+        'the policy consumes the declared target');
+      for (const observedCount of [3, 4, 5]) {
+        t.equal(rebalancer.validateReplicaCount(observedCount, policy),
+          declaredPartition.replica_count, 'observed availability does not redefine the target');
+      }
 
       rebalancer.shutdown();
     } finally {

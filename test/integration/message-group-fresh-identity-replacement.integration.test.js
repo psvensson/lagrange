@@ -354,15 +354,15 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
         controlPlaneSystemTableGateway: cpStore.gateway,
         logger: noLog,
         systemTableCache: cache,
-        cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+        cdcIntegrationService: {},
         authoritativeVisibilityTimeoutMs: 0,
         authoritativeVisibilityRetryDelayMs: 0,
       });
     const repository = repositoryFor(SEED_NODE);
 
-    const peerAddresses = FOUNDERS.map(
-      (replicaId) => `${SEED_NODE}/message-group/${replicaId}`,
-    );
+    // The founding placement: every founder on the seed node.
+    const founderNodeIds = Object.fromEntries(
+      FOUNDERS.map((replicaId) => [replicaId, SEED_NODE]));
     const replicas = new Map();
     const liveReplicas = () => [...replicas.values()];
 
@@ -373,7 +373,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
           replicaId,
           nodeId: SEED_NODE,
           replicaIds: [...FOUNDERS],
-          peerAddresses: [...peerAddresses],
+          founderNodeIds,
           transport: router,
           nodeService,
           dbPath: path.join(seedStorage, `${replicaId}.db`),
@@ -545,7 +545,6 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
             localReplicaIdentity: leaderForAdd.replicaId,
             senderNodeId: SEED_NODE,
             senderBootIncarnation: 1,
-            peerAddress: targetAddress,
           },
           {
             operationId,
@@ -845,7 +844,6 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
             localReplicaIdentity: removalLeader.replicaId,
             senderNodeId: SEED_NODE,
             senderBootIncarnation: 1,
-            peerAddress: `${SEED_NODE}/message-group/${sourceReplicaId}`,
           },
           {
             operationId,

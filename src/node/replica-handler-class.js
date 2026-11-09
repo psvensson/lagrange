@@ -23,9 +23,6 @@ import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {NUM} from '../constants/index.js';
-import {
-  classifySystemPartition,
-} from '../bootstrap/system-partition-classification.js';
 import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {PartitionServiceRowOwner} from '../partition/partition-service-row-owner.js';
@@ -41,6 +38,8 @@ import {assignReplicaHandlerMembershipMethods} from
 import {assignReplicaHandlerCommittedMembershipMethods} from
   './replica-handler-committed-membership-methods.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {
   REPLICA_HANDLER_ADDRESS,
   REPLICA_HANDLER_DEFAULT,
@@ -93,6 +92,27 @@ import {
   partitionMetadataMissingError,
 } from './replica-handler-transition-policy.js';
 
+function createLiveReplicaRoleResolver(handler) {
+  return (serviceId) => {
+    const trackedRole = handler.getTrackedReplicaRole(serviceId);
+    return isVoterRaftRole(trackedRole) ?
+      normalizePublishedRaftRole(trackedRole, {
+        collapseLeaderToFollower: true,
+      }) :
+      null;
+  };
+}
+
+function attachStateMachineLiveReplicaRoleResolver(stateMachine, resolver) {
+  if (
+    stateMachine &&
+    typeof stateMachine.resolveLiveReplicaRole !==
+      REPLICA_HANDLER_TYPEOF.FUNCTION
+  ) {
+    stateMachine.resolveLiveReplicaRole = resolver;
+  }
+}
+
 /**
  * ReplicaHandler handles replica creation and removal requests on target nodes.
  * Returns immediately with status, then performs async work.
@@ -141,6 +161,7 @@ class ReplicaHandler extends EventEmitter {
       this.createPartitionService,
       REPLICA_HANDLER_ERROR_MSG.CREATE_PARTITION_SERVICE_REQUIRED,
     );
+    const resolveLiveReplicaRole = createLiveReplicaRoleResolver(this);
     this.replicaStateMachine =
       options.replicaStateMachine ||
       new ReplicaStateMachine({
@@ -148,7 +169,12 @@ class ReplicaHandler extends EventEmitter {
         cdcIntegrationService: this.cdcIntegrationService,
         controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
         systemTableCache: this.systemTableCache,
+        resolveLiveReplicaRole,
       });
+    attachStateMachineLiveReplicaRoleResolver(
+      this.replicaStateMachine,
+      resolveLiveReplicaRole,
+    );
     this.timeSource = options.timeSource || this.replicaStateMachine?.timeSource ||
       Object.freeze({now: Date.now,
         setTimeout: (callback, delay) => setTimeout(callback, delay),
@@ -241,7 +267,6 @@ assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   SYSTEM_TABLE_HYDRATION_SQL,
   SYSTEM_TABLE_NAME,
   TABLE_METADATA_MISSING_PREFIX,
-  classifySystemPartition,
   createControlPlaneRuntimeBundle,
   createSystemMetadataGatewayRequiredError,
   fs,

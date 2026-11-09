@@ -1,3 +1,4 @@
+import {createMockPolicyService} from './test-helpers.js';
 /**
  * Shared fixture builders for the quorum-conditioned remove-safety tail
  * test-case modules. These collapse the verbose per-test coordinator wiring
@@ -50,63 +51,13 @@ export function createPublishedPlanningReadinessService({
     async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
-    async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
-      return buildPlanningSnapshot(nodeId);
-    },
-    async getMembershipPublicationPlanningSnapshot(nodeId) {
+    async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
     getPriorityRecoveryPlanningAnswerSync(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
   };
-}
-
-/**
- * Presents a readiness fixture's existing planning state on the OWNER-READ
- * surface as well.
- *
- * REMOVE safety reads getPriorityRecoveryPlanningAnswerForOwnerRead and
- * nothing else; a fixture that models a converged planning state for a
- * removal but exposes it only through the best-effort surfaces is modelling a
- * node with NO owner evidence, which the fail-closed contract correctly
- * refuses to remove on. This wrapper adds the owner surface, returning the
- * fixture's own snapshot unchanged, and leaves every AVAILABLE surface in
- * place for the narration, progress and budget-admission consumers that
- * legitimately read them.
- *
- * A fixture that already models the owner surface - including one that
- * deliberately makes the two contracts disagree - is returned untouched.
- */
-export function withOwnerReadPlanningEvidence(readinessService) {
-  if (
-    !readinessService ||
-    typeof readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead ===
-      'function'
-  ) {
-    return readinessServiceFake(readinessService);
-  }
-  return readinessServiceFake({
-    ...readinessService,
-    async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId, observedAt) {
-      if (
-        typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
-        'function'
-      ) {
-        return readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
-          nodeId, observedAt);
-      }
-      if (
-        typeof readinessService
-          .getMembershipPublicationPlanningSnapshotBestEffort === 'function'
-      ) {
-        return readinessService
-          .getMembershipPublicationPlanningSnapshotBestEffort(
-            nodeId, observedAt);
-      }
-      return null;
-    },
-  });
 }
 
 /**
@@ -198,14 +149,14 @@ export async function runReplacementElectionNudgeScenario(context, t, {
       deliveries,
       respond: () => buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'}),
     }),
-    controlPlaneReadinessService: createPublishedPlanningReadinessService({
+    readinessFixture: {callbacks: createPublishedPlanningReadinessService({
       publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
       activeNodeIds: Object.freeze(['node-a', 'node-b', 'node-c', 'node-d']),
       membershipTargetNodeId: testReplacementNodeId,
+    })},
+    tablePolicyService: createMockPolicyService({
+      getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
     }),
-    tablePolicyService: {
-      getPolicyForPartition: () => ({minReplicaCount: 3}),
-    },
     cacheData: {
       nodes: ['node-a', 'node-b', 'node-c', 'node-d'].map(createReadyNode),
       services: buildScenarioServiceRows('follower'),

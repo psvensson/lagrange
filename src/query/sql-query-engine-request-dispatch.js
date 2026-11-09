@@ -126,6 +126,7 @@ function buildClientRequestQueryOptions(sqlRequest, executionOptions = {}) {
     timeoutBudget: sqlRequest.timeoutBudget,
     cancellationToken: sqlRequest.cancellationToken || null,
     budgets: sqlRequest.budgets,
+    ...(sqlRequest.abortSignal ? {abortSignal: sqlRequest.abortSignal} : {}),
     ...expectedTransactionOption(sqlRequest),
     ...(issuingServiceId ? {issuingServiceId} : {}),
     ...(securityContext ? {securityContext} : {}),
@@ -381,6 +382,8 @@ class SQLQueryEngineRequestDispatch extends
           sessionId: sqlRequest.sessionId,
           ...(sqlRequest.securityContext ?
             {securityContext: sqlRequest.securityContext} : {}),
+          ...(sqlRequest.abortSignal ?
+            {abortSignal: sqlRequest.abortSignal} : {}),
         },
       );
       if (lifecycleExecution.disposition ===

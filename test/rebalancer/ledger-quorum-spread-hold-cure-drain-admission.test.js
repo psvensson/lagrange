@@ -84,7 +84,6 @@ import {
   createTestCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
-import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 
 const TEST_LEDGER_PARTITION_ID = 'replica_operations-p1';
 const TEST_SEED_NODE_ID = 'node-1';
@@ -188,7 +187,7 @@ function createFixedTargetPolicyService() {
   return {
     getPolicyForPartition: () => ({
       minReplicaCount: TEST_TARGET_REPLICA_COUNT,
-      replicaCount: TEST_TARGET_REPLICA_COUNT,
+      targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
     }),
   };
 }
@@ -202,10 +201,6 @@ function createFormationReadinessService(
   cache,
   {cohortNodeIds = TEST_COHORT_NODE_IDS, prioritySpreadSatisfied},
 ) {
-  const base = createMockControlPlaneReadinessService({
-    systemTableCache: cache,
-    defaultRepairEligible: true,
-  });
   const buildPlanningSnapshot = (nodeId) => ({
     publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
     publishedActiveNodeIdsPresent: true,
@@ -220,20 +215,19 @@ function createFormationReadinessService(
       missingPartitionIds: [],
     },
   });
-  return readinessServiceFake({
-    getNodeReadinessSync: (nodeId, readOptions) =>
-      base.getNodeReadinessSync(nodeId, readOptions),
+  return createMockControlPlaneReadinessService({
+    systemTableCache: cache,
+    callbacks: {
     // REMOVE safety reads the owner surface; this fixture models the same
     // planning state there, unchanged. The best-effort surfaces stay for the
     // narration and admission consumers that read AVAILABLE evidence.
-    getPriorityRecoveryPlanningAnswerForOwnerRead: async (nodeId) =>
-      buildPlanningSnapshot(nodeId),
-    getMembershipPublicationPlanningSnapshotBestEffort: async (nodeId) =>
-      buildPlanningSnapshot(nodeId),
-    getMembershipPublicationPlanningSnapshot: async (nodeId) =>
-      buildPlanningSnapshot(nodeId),
-    getPriorityRecoveryPlanningAnswerSync: (nodeId) =>
-      buildPlanningSnapshot(nodeId),
+      getPriorityRecoveryPlanningAnswerForOwnerRead: async (nodeId) =>
+        buildPlanningSnapshot(nodeId),
+      getPriorityRecoveryPlanningSnapshotBestEffort: async (nodeId) =>
+        buildPlanningSnapshot(nodeId),
+      getPriorityRecoveryPlanningAnswerSync: (nodeId) =>
+        buildPlanningSnapshot(nodeId),
+    },
   });
 }
 

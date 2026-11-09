@@ -137,7 +137,17 @@ const TARGET_THRESHOLD = 12;
 // 2026-11-01 (comparative-benchmark-evidence-repair): tightened 1735 -> 1731 on
 // the checker's hint after restoring ownership in the benchmark chain (campaign
 // runner, workload call site, identity inspection, readiness, durability proof).
-const BASELINE_COUNT = 1731;
+// 2026-11-02 (quest serve-eligibility-committed-epoch-read attempt 1b): tightened 1731 -> 1728 on the checker's hint.
+// 2026-11-03 (quest serve-eligibility-committed-epoch-read attempt 2): tightened 1728 -> 1727 on the checker's hint.
+// 2026-11-03 (composed-05-comparison-readiness): tightened 1727 -> 1721 on the checker's hint.
+// 2026-11-04 (composed-05-comparison-readiness): tightened 1721 -> 1720 on the checker's hint.
+// 2026-11-06 (required-entity-operation-observation): tightened 1720 -> 1719
+// on the checker hint after deleting alternate required-read adaptation.
+// 2026-11-07: tightened 1719 -> 1718 -> 1715 -> 1714 on the checker hint after unifying the
+// priority-recovery planning-answer reader and decomposing reconcile/routing helpers.
+// 2026-11-08: tightened 1714 -> 1712 -> 1711 on the checker hint after removing safety-row and
+// publication-scope fallbacks and decomposing formation priority-spread completeness checks.
+const BASELINE_COUNT = 1711;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

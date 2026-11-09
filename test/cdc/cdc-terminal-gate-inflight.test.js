@@ -203,17 +203,16 @@ test('K5: the catch-up\'s read in flight at the mark answers rows: they are ' +
   assertCatchupTerminal(box);
 });
 
-async function visibilityRepairInFlight(heldAttempt) {
+// The visibility repair's one entry after attempt 2 of
+// replica-admission-from-committed-operation is the projection owner's
+// repairCacheVisibilityHole (no write waits on it; its in-budget retry, S3,
+// is deleted with the wait). Its read in flight at the mark is not applied.
+test('S4: the visibility repair\'s read in flight at the mark: no ' +
+  'repair applied after terminal', async () => {
   const owner = composeOwner();
-  const wait = track(owner.service.waitForCacheUpdate(
-    TABLES.NODES, NODE_ROW.node_id, true, {timeoutMs: 1000}));
-  // Earlier attempts confirm nothing (the row is not there yet), so the
-  // repair retries; the held attempt is in flight at the mark.
-  for (let attempt = 1; attempt < heldAttempt; attempt += 1) {
-    await untilHeld(owner, 'owner-rpc-read', attempt);
-    owner.answer({success: true, rows: []});
-  }
-  await untilHeld(owner, 'owner-rpc-read', heldAttempt);
+  const repair = track(owner.service.repairCacheVisibilityHole(
+    TABLES.NODES, NODE_ROW.node_id, true));
+  await untilHeld(owner, 'owner-rpc-read', 1);
   owner.service.markShuttingDown();
   await turns();
   owner.answer({success: true, rows: [{...NODE_ROW}]});
@@ -222,16 +221,10 @@ async function visibilityRepairInFlight(heldAttempt) {
     'no cache repair and no further read after terminal');
   assert.equal(owner.cache.has(TABLES.NODES, NODE_ROW.node_id), false,
     'the cache is not repaired after terminal');
-  assert.notEqual(wait.outcome, null, 'the waiter settles at terminal');
-  assert.equal(wait.outcome.error?.code, SHUT_DOWN,
-    'with the owner\'s typed SHUT_DOWN');
-}
-
-test('S4: the visibility repair\'s first read in flight at the mark: no ' +
-  'repair applied after terminal', () => visibilityRepairInFlight(1));
-
-test('S3: the visibility repair\'s retry read in flight at the mark: no ' +
-  'repair applied after terminal', () => visibilityRepairInFlight(2));
+  assert.notEqual(repair.outcome, null, 'the repair settles at terminal');
+  assert.notEqual(repair.outcome.value?.visible, true,
+    'and is never answered visible');
+});
 
 test('S5: refreshAuthoritativeCacheRow called after the mark reads and ' +
   'applies nothing', async () => {

@@ -47,13 +47,20 @@ function cdcProgressCurrent(delivery, lane, cell) {
       topologyBindingCurrent(branch, cell.binding));
 }
 
+function resolveObligationNumber(primary, fallback, defaultValue) {
+  if (Number.isSafeInteger(primary)) return primary;
+  return Number.isSafeInteger(fallback) ? fallback : defaultValue;
+}
+
 function prepareCdcObligationProgress(delivery, lane, event, subscribers) {
   const binding = cdcCommitWaitIdentity([event]);
   const previous = lane.currentObligation;
   if (previous?.binding === binding && cdcProgressCurrent(delivery, lane, previous)) {
     return previous;
   }
-  const cell = {binding, branches: subscribers.map((subscriber) =>
+  const logIndex = resolveObligationNumber(event?.logIndex, event?.sourceLogIndex, null);
+  const ordinal = resolveObligationNumber(event?.ordinal, event?.sourceOrdinal, 0);
+  const cell = {binding, logIndex, ordinal, branches: subscribers.map((subscriber) =>
     subscriberBinding(delivery, subscriber)), nextSubscriber: 0};
   lane.currentObligation = cell;
   return cell;
@@ -76,7 +83,37 @@ function topologyProgressOf(lane, branch, owner, source, targets) {
   return branch.topology;
 }
 
-function cdcSubscriberInvocation(delivery, lane, cell, branch, context, event) {
+function registerLaneContentionOwner(
+  delivery, lane, tableName, propagationOwner, onSliceTurnReady = null,
+) {
+  if (!propagationOwner || typeof tableName !== 'string' || tableName.length === 0) {
+    return null;
+  }
+  if (!(lane.contendedPropagationOwners instanceof Map)) {
+    lane.contendedPropagationOwners = new Map();
+  }
+  let owners = lane.contendedPropagationOwners.get(tableName);
+  if (!(owners instanceof Set)) {
+    owners = new Set();
+    lane.contendedPropagationOwners.set(tableName, owners);
+  }
+  owners.add(propagationOwner);
+  const isLive = () =>
+    delivery.obligationLane === lane &&
+    delivery.owner.isLeader &&
+    !delivery.owner.isShutdown &&
+    delivery.owner.leadershipTenure === lane.tenure &&
+    lane.contendedPropagationOwners instanceof Map &&
+    lane.contendedPropagationOwners.has(tableName);
+  if (typeof onSliceTurnReady === 'function') {
+    isLive.onSliceTurnReady = onSliceTurnReady;
+  }
+  return isLive;
+}
+
+function cdcSubscriberInvocation(
+  delivery, lane, cell, branch, context, event, onSliceTurnReady = null,
+) {
   const operations = (scoped) => ({
     bindTopology: (owner, source, targets) => {
       scoped.assertCurrent();
@@ -84,6 +121,10 @@ function cdcSubscriberInvocation(delivery, lane, cell, branch, context, event) {
       scoped.assertCurrent();
       return bindCdcPropagationProgress(scoped, progress, [event]);
     },
+    registerContentionOwner: (propagationOwner, tableName = event?.tableName) =>
+      registerLaneContentionOwner(
+        delivery, lane, tableName, propagationOwner, onSliceTurnReady,
+      ),
   });
   return scopeCdcDeliveryInvocation(context,
     () => cdcProgressCurrent(delivery, lane, cell), operations);
@@ -97,5 +138,45 @@ function cdcObligationCoverage(cell) {
   return cdcCoverageState(cell.branches.map((branch) => branch.coverage), cell.binding);
 }
 
+function recordUncoveredSubscriberHint(state, answer) {
+  const hint = answer?.retryAfterMs;
+  if (Number.isFinite(hint) && hint > 0) {
+    state.retryAfterMs = state.retryAfterMs === null ? hint : Math.min(state.retryAfterMs, hint);
+  }
+  if (answer?.error === CDC_COMPLETION.BACKPRESSURE ||
+      answer?.reason === CDC_COMPLETION.BACKPRESSURE) state.backpressured = true;
+}
+
+function throwUncoveredObligationError(lane, current, state) {
+  if (!current) lane.currentObligation = null;
+  const error = new Error(CDC_COMPLETION.UNKNOWN);
+  error.deferRetry = true;
+  if (state.retryAfterMs !== null) error.retryAfterMs = state.retryAfterMs;
+  if (state.backpressured) error.reason = CDC_COMPLETION.BACKPRESSURE;
+  throw error;
+}
+
+function releaseOwnersForTable(contendedTable, owners) {
+  if (!(owners instanceof Set)) return;
+  for (const propagationOwner of owners) {
+    propagationOwner?.releaseDurableSliceContender?.(contendedTable);
+  }
+}
+
+function releaseContendedPropagationOwners(lane, tableName = null) {
+  const map = lane?.contendedPropagationOwners;
+  if (!(map instanceof Map) || map.size === 0) return;
+  if (typeof tableName === 'string' && tableName.length > 0) {
+    releaseOwnersForTable(tableName, map.get(tableName));
+    map.delete(tableName);
+    return;
+  }
+  for (const [contendedTable, owners] of map.entries()) {
+    releaseOwnersForTable(contendedTable, owners);
+  }
+  map.clear();
+}
+
 export {cdcObligationCoverage, cdcProgressCurrent, cdcSubscriberInvocation, nextCdcSubscriber,
-  observeCdcSubscriber, prepareCdcObligationProgress};
+  observeCdcSubscriber, prepareCdcObligationProgress, recordUncoveredSubscriberHint,
+  releaseContendedPropagationOwners, throwUncoveredObligationError};

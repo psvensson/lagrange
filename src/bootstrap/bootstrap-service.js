@@ -283,6 +283,7 @@ class BootstrapService extends EventEmitter {
     this.leaseService = null;
     this.endpointService = null;
     this.dispatchService = null;
+    this.controlPlaneSystemTableGateway = null;
     this.rebalanceCoordinator = null;
     this.serviceLifecycleCommandOwner = null;
     this.serviceInstallationReconcilerOwnerHandle = null;

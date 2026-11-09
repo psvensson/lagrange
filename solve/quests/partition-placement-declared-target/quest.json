@@ -1,0 +1,44 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-placement-declared-target",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Partition placement consumes only the persisted partition declaration through the existing replication-target authority, projected as the single targetReplicaCount planner field. Configuration and table policy cannot retarget existing partitions. Unsupported table-policy target requests are refused before writes, and unavailable policy cannot become planning or REMOVE permission. Existing owners retain retry custody and recover after finite unavailability without new timers or weaker safety floors.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/partition-placement-declared-target/evidence/receipt.json",
+      "requiredReceipts": [
+        "declared-target-through-real-planning",
+        "single-policy-request-and-read-contract",
+        "finite-unavailability-owner-redrive",
+        "coordinator-target-refusal-and-recovery",
+        "remove-minimum-safety-and-retry",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "historical-s6b-successor",
+      "statement": "Complete the planner/coordinator target divergence expressly deferred by behaviour-changing-consumer-convergence to S6b. Preserve its historical proof ceiling and the current 4024a23e7 real-owner red plus declared-target control; do not claim this explains the separate default-RF3 three-process formation failure."
+    },
+    {
+      "id": "one-canonical-path-no-legacy",
+      "statement": "Apply the explicit user instruction: remove competing replicaCount aliases, default target authority, inert table target update APIs and unavailable-policy fallbacks in this interaction. One targetReplicaCount wire field; the persisted partition row decoder is sole partition target authority. No compatibility interpretation or automatic stored-policy migration."
+    },
+    {
+      "id": "request-read-and-retry-ownership",
+      "statement": "Follow the independently approved evidence/design-review.md. Unsupported mutation requests are terminal typed refusals before effects. Read unavailability retains cause and deferRetry:true through existing planning, safety and split/merge owners; absent owners/rows and malformed policy do not synthesize defaults. Valid sparse policy retains its authored non-target defaults."
+    },
+    {
+      "id": "preserve-safety-and-producers",
+      "statement": "Preserve seed/application/split/merge declaration producers, explicit RF1 creation configuration, minimum-five REMOVE safety, runtime-service zero-target semantics and other entity-specific strategies. The partition target must not be clamped by default min/max/odd adjustment. No new replication setter, supervisor, timer, deadline or retry loop."
+    },
+    {
+      "id": "bounded-claim-and-independent-proof",
+      "statement": "Prove real seeded rows through policy, readiness and actual move planning; target/missing-policy controls; outward admin and CREATE refusal without writes; real scheduled finite-failure recovery and disabled-trigger negative; actual coordinator and REMOVE safety/retry owner behavior. Source requires independent verification and frozen lab checks. E8/E9, broader publication, merge and comparative measurements remain separate."
+    }
+  ],
+  "sealedAt": "4024a23e7e7a253fe27cbc0e28404eb86cb0450c"
+}

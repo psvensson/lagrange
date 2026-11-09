@@ -66,13 +66,15 @@ function createFacadeCoordinator(overrides = {}) {
       calls.repository.push(['getOperationsByEntity', entityType, entityId]);
       return [{entityType, entityId}];
     },
-    async getOperationsByEntityAuthoritative(entityType, entityId) {
+    async getOperationsByEntityAuthoritativeObservation(entityType, entityId) {
       calls.repository.push([
-        'getOperationsByEntityAuthoritative',
+        'getOperationsByEntityAuthoritativeObservation',
         entityType,
         entityId,
       ]);
-      return [{entityType, entityId, authoritative: true}];
+      return {state: 'present', operationCount: 1,
+        operations: [{operationId: 'op-authoritative', entityType, entityId, authoritative: true}],
+        deferredOutcome: null, retryAfterMs: null};
     },
   };
 
@@ -149,7 +151,6 @@ function createFacadeCoordinator(overrides = {}) {
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {},
       async upsertSystemTableRow() {
         return {success: true};
       },
@@ -159,7 +160,7 @@ function createFacadeCoordinator(overrides = {}) {
     },
     tablePolicyService: {
       async getPolicyForPartition() {
-        return {minReplicaCount: 1};
+        return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
     messageRouter: {
@@ -287,7 +288,7 @@ test(
     t.same(
       calls.repository[calls.repository.length - 1],
       [
-        'getOperationsByEntityAuthoritative',
+        'getOperationsByEntityAuthoritativeObservation',
         'partition',
         'partition-1',
       ],

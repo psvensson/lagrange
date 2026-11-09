@@ -1,320 +1,13 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import {afterEach, describe, it} from 'node:test';
-
-import {SYSTEM_TABLE_NAME} from
-  '../../src/bootstrap/system-table-schemas-constants.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {ReplicaHandler} from '../../src/node/replica-handler.js';
-import {
-  CREATE_ADMISSION_STATE,
-} from '../../src/node/replica-create-admission-owner.js';
-import {OperationType, ReplicaStatus} from
-  '../../src/rebalancer/replica-status.js';
-import {ReplicaOperationField} from
-  '../../src/rebalancer/replica-operation-constants.js';
-import {
-  buildReplicaCreateAdmissionToken,
-  buildReplicaCreateAttemptToken,
-} from '../../src/rebalancer/replica-create-admission-token.js';
-import {
-  createLifecycleControlPlaneGatewayForCache,
-} from '../test-helpers/lifecycle-state-store.js';
-import {bindRegisteredReplicaHandler} from
-  '../test-helpers/replica-handler-identity-fixture.js';
+import {describe, it} from 'node:test';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
+import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {ReplicaOperationField} from '../../src/rebalancer/replica-operation-constants.js';
 import {committedStampFor} from './replica-handler-bootstrap-stamps.js';
-import Database from 'better-sqlite3';
-import {REPLICA_OPERATIONS_SCHEMA} from
-  '../../src/bootstrap/system-table-schemas-constants.js';
-import {generateCreateTableSQL} from
-  '../../src/bootstrap/system-table-schema-sql.js';
-
-const tempDirs = [];
-
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((directory) =>
-    fs.rm(directory, {recursive: true, force: true})));
-});
-
-function matches(row, where) {
-  return Object.entries(where).every(([field, value]) => row?.[field] === value);
-}
-
-function operationRow(overrides = {}) {
-  const admissionToken = 'replica-create-admission:v1:op-1:replica-1:node-1:11';
-  return {
-    operation_id: 'op-1',
-    type: OperationType.ADD,
-    entity_type: 'partition',
-    entity_id: 'partition-1',
-    partition_id: 'partition-1',
-    replica_id: 'replica-1',
-    source_node_id: 'seed-node',
-    target_node_id: 'node-1',
-    status: ReplicaStatus.CREATING,
-    workflow_step: 'SENDING',
-    created_at: 10,
-    updated_at: 11,
-    completed_at: null,
-    error_message: null,
-    steps_history: JSON.stringify([{
-      bootstrapMembership: committedStampFor(['leader-replica']),
-    }]),
-    create_admission_state: CREATE_ADMISSION_STATE.MATERIALIZED,
-    create_admission_token: admissionToken,
-    create_admission_replica_created_at: 20,
-    create_admission_attempt_token: `${admissionToken}:attempt:1`,
-    create_admission_previous_attempt_token: null,
-    create_admission_attempt_seq: 1,
-    create_admission_workflow_updated_at: 11,
-    create_admission_owner_incarnation: 101,
-    ...overrides,
-  };
-}
-
-function createCache(targetRows = []) {
-  const cache = new SystemTableCache();
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
-    table_id: 'table-1',
-    table_name: 'test_table',
-    schema_definition: JSON.stringify({
-      columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
-    }),
-  });
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
-    partition_id: 'partition-1',
-    table_id: 'table-1',
-    partition_key_start: null,
-    partition_key_end: null,
-    leader_node_id: 'leader-node',
-  });
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
-    service_id: 'leader-replica',
-    service_type: 'partition',
-    partition_id: 'partition-1',
-    node_id: 'leader-node',
-    replica_id: 'leader-replica',
-    group_id: null,
-    raft_role: 'leader',
-    status: ReplicaStatus.ACTIVE,
-    address: 'leader-node/partition/leader-replica',
-    cleanup_token: null,
-    create_attempt_token: null,
-    created_at: 1,
-    state_entered_at: 1,
-    updated_at: 1,
-  });
-  const rows = Array.isArray(targetRows) ? targetRows : [targetRows];
-  for (const targetRow of rows.filter(Boolean)) {
-    cache.applySystemTableChange(
-      SYSTEM_TABLE_NAME.SERVICES,
-      'INSERT',
-      targetRow,
-    );
-  }
-  return cache;
-}
-
-function targetLifecycle(row, overrides = {}) {
-  return {
-    service_id: row.replica_id,
-    service_type: 'partition',
-    partition_id: row.partition_id,
-    node_id: row.target_node_id,
-    replica_id: row.replica_id,
-    group_id: null,
-    raft_role: null,
-    status: ReplicaStatus.CREATING,
-    address: `${row.target_node_id}/partition/${row.replica_id}`,
-    cleanup_token: null,
-    create_attempt_token: row.create_admission_attempt_token,
-    created_at: row.create_admission_replica_created_at,
-    state_entered_at: 20,
-    updated_at: 20,
-    ...overrides,
-  };
-}
-
-function gatewayFixture(cache, row, options = {}) {
-  const lifecycle = createLifecycleControlPlaneGatewayForCache(cache);
-  const operationRows = [row, ...(options.additionalRows || [])];
-  let bootIncarnation = options.bootIncarnation ?? 102;
-  let snapshotFailures = options.snapshotFailures ?? 0;
-  const gateway = {
-    async readAuthoritativeRows(tableName, sql, params) {
-      if (tableName === SYSTEM_TABLE_NAME.NODES) {
-        return {success: true, rows: [{
-          node_id: row.target_node_id,
-          boot_incarnation: bootIncarnation,
-        }]};
-      }
-      if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-        if (sql.includes('WHERE operation_id = ?')) {
-          const operation = operationRows.find(
-            (candidate) => candidate.operation_id === params[0],
-          );
-          return {success: true, rows: operation ? [operation] : []};
-        }
-        if (sql.includes('entity_type = ?')) {
-          await options.snapshotBarrier;
-          if (snapshotFailures > 0) {
-            snapshotFailures -= 1;
-            throw new Error('operation ledger unavailable');
-          }
-          return {success: true, rows: operationRows.filter((candidate) =>
-            candidate.target_node_id === params[0] &&
-              candidate.entity_type === params[1] &&
-              candidate.create_admission_state !== null)};
-        }
-        return {success: true, rows: operationRows.filter((candidate) =>
-          candidate.replica_id === params[0] &&
-            candidate.target_node_id === params[1])};
-      }
-      if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
-          params[0] === options.deferredLifecycleReplicaId) {
-        return {success: false, error: 'lifecycle authority deferred'};
-      }
-      return lifecycle.readAuthoritativeRows(tableName, sql, params);
-    },
-    async updateSystemTableRow(tableName, where, data) {
-      const operation = operationRows.find((candidate) =>
-        matches(candidate, where));
-      if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS || !operation) {
-        return {success: true, outcome: 'no_op'};
-      }
-      Object.assign(operation, data);
-      return {success: true, outcome: 'applied'};
-    },
-    submitMutation: lifecycle.submitMutation,
-  };
-  return {
-    gateway,
-    setBootIncarnation(value) {
-      bootIncarnation = value;
-    },
-  };
-}
-
-function routedCreateRequest(row) {
-  const admissionToken = buildReplicaCreateAdmissionToken({
-    operationId: row.operation_id,
-    replicaId: row.replica_id,
-    targetNodeId: row.target_node_id,
-    workflowUpdatedAt: row.updated_at,
-  });
-  return {
-    [ReplicaOperationField.OPERATION_ID]: row.operation_id,
-    [ReplicaOperationField.OPERATION_TYPE]: OperationType.ADD,
-    [ReplicaOperationField.ENTITY_TYPE]: row.entity_type,
-    [ReplicaOperationField.ENTITY_ID]: row.entity_id,
-    [ReplicaOperationField.PARTITION_ID]: row.partition_id,
-    [ReplicaOperationField.REPLICA_ID]: row.replica_id,
-    [ReplicaOperationField.CREATE_ADMISSION_TOKEN]: admissionToken,
-    [ReplicaOperationField.CREATE_ADMISSION_WORKFLOW_UPDATED_AT]: row.updated_at,
-    [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_TOKEN]:
-      buildReplicaCreateAttemptToken(admissionToken, 1),
-    [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_SEQ]: 1,
-    [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]:
-      committedStampFor(['leader-replica']),
-  };
-}
-
-async function createHandlerFixture({row, targetRow, additionalTargetRows = [],
-  gatewayOptions, authorityFor} = {}) {
-  const cache = createCache([targetRow, ...additionalTargetRows]);
-  const authority = authorityFor ? authorityFor(cache) :
-    gatewayFixture(cache, row, gatewayOptions);
-  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'create-recovery-'));
-  tempDirs.push(dataDir);
-  let physicalStarts = 0;
-  let releaseFactory;
-  const factoryGate = new Promise((resolve) => {
-    releaseFactory = resolve;
-  });
-  const handler = new ReplicaHandler({
-    nodeId: row.target_node_id,
-    ownerIncarnation: gatewayOptions?.bootIncarnation ?? 102,
-    cdcIntegrationService: {},
-    controlPlaneSystemTableGateway: authority.gateway,
-    systemTableCache: cache,
-    dataDir,
-    createPartitionService: async (factoryOptions) => {
-      physicalStarts += 1;
-      await factoryGate;
-      return bindRegisteredReplicaHandler({
-        partitionId: factoryOptions.partitionId,
-        replicaId: factoryOptions.replicaId,
-        initialized: true,
-        role: 'follower',
-        async shutdown() {},
-        async syncFromLeader() {},
-      }, factoryOptions);
-    },
-  });
-  return {
-    authority,
-    cache,
-    handler,
-    releaseFactory,
-    physicalStarts: () => physicalStarts,
-  };
-}
-
-async function waitForPhysicalStart(fixture) {
-  for (let turn = 0; fixture.physicalStarts() === 0 && turn < 40; turn += 1) {
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-}
-
-function waitForCreateCompletion(handler) {
-  return new Promise((resolve, reject) => {
-    handler.once('replicaCreated', resolve);
-    handler.once('replicaCreationFailed', (event) => {
-      reject(new Error(event?.error || 'replica creation failed'));
-    });
-  });
-}
-
-// replica_operations on real SQL, so the startup scan's own predicate runs
-// (not a mock's reading of it); services rows stay on the lifecycle store.
-function sqlOperationsAuthority(cache, rows, bootIncarnation = 102) {
-  const lifecycle = createLifecycleControlPlaneGatewayForCache(cache);
-  const db = new Database(':memory:');
-  db.exec(generateCreateTableSQL(REPLICA_OPERATIONS_SCHEMA));
-  for (const row of rows) {
-    const columns = Object.keys(row);
-    db.prepare(`INSERT INTO replica_operations (${columns.join(', ')}) ` +
-      `VALUES (${columns.map(() => '?').join(', ')})`).run(...Object.values(row));
-  }
-  const gateway = {
-    async readAuthoritativeRows(tableName, sql, params = []) {
-      if (tableName === SYSTEM_TABLE_NAME.NODES) {
-        return {success: true, rows: [{node_id: rows[0].target_node_id,
-          boot_incarnation: bootIncarnation}]};
-      }
-      if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-        return {success: true, rows: db.prepare(sql).all(...params)};
-      }
-      return lifecycle.readAuthoritativeRows(tableName, sql, params);
-    },
-    async updateSystemTableRow(tableName, where, data) {
-      if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-        return {success: true, outcome: 'no_op'};
-      }
-      const set = Object.keys(data).map((column) => `${column} = ?`).join(', ');
-      const match = Object.keys(where).map((column) => `${column} IS ?`).join(' AND ');
-      const changes = db.prepare(`UPDATE replica_operations SET ${set} WHERE ${match}`)
-        .run(...Object.values(data), ...Object.values(where)).changes;
-      return {success: true, outcome: changes === 1 ? 'applied' : 'no_op'};
-    },
-    submitMutation: lifecycle.submitMutation,
-  };
-  const read = (operationId) => db.prepare(
-    'SELECT * FROM replica_operations WHERE operation_id = ?').get(operationId);
-  return {gateway, read, close: () => db.close()};
-}
+import {createHandlerFixture, operationRow, routedCreateRequest,
+  sqlOperationsAuthority, targetLifecycle, waitForCreateCompletion, waitForPhysicalStart,
+} from '../test-helpers/replica-create-admission-recovery-fixture.js';
 
 // A message-group REPLACE admission retained by an older boot (FreshMG B1).
 function messageGroupAdmissionRow(operationId, replicaId, state) {
@@ -613,4 +306,200 @@ describe('ReplicaHandler retained CREATE admission recovery', () => {
       await completed;
       await fixture.handler.shutdown();
     });
+
+  it('preserves the live ACTIVE runtime and arms recovery when post-ACTIVE ' +
+    'markProgress hits a transient boot-authority read failure', async () => {
+    const row = operationRow();
+    const fixture = await createHandlerFixture({
+      row,
+      targetRow: targetLifecycle(row),
+    });
+    const completed = waitForCreateCompletion(fixture.handler);
+    fixture.handler.initialize();
+    await fixture.handler.awaitReplicaCreateAdmissionRecoveryBarrier();
+    await waitForPhysicalStart(fixture);
+    const originalPersist =
+      fixture.handler.persistReplicaStatusWithRetry.bind(fixture.handler);
+    fixture.handler.persistReplicaStatusWithRetry = async (
+      replicaId,
+      newStatus,
+      additionalData,
+    ) => {
+      const result = await originalPersist(replicaId, newStatus, additionalData);
+      if (newStatus === ReplicaStatus.ACTIVE) {
+        fixture.authority.failNextBootReads(1);
+      }
+      return result;
+    };
+    fixture.releaseFactory();
+    await completed;
+    assert.equal(fixture.physicalShutdowns(), 0,
+      'transient post-ACTIVE markProgress failure must not tear down the live service');
+    assert.ok(fixture.handler.localServices.get(row.replica_id),
+      'the activated partition service remains hosted in localServices');
+    assert.equal(
+      fixture.cache.get(SYSTEM_TABLE_NAME.SERVICES, row.replica_id)?.status,
+      ReplicaStatus.ACTIVE,
+    );
+    assert.equal(row.create_admission_state, CREATE_ADMISSION_STATE.MATERIALIZED);
+    assert.ok(fixture.handler.replicaCreateAdmissionRecoveryRearmOwner.current(),
+      'recovery is re-armed to settle create_admission_state = ACTIVE');
+    fixture.handler.startReplicaCreateAdmissionRecovery();
+    await fixture.handler.replicaCreateAdmissionRecoveryTask;
+    assert.equal(row.create_admission_state, CREATE_ADMISSION_STATE.ACTIVE);
+    assert.equal(fixture.physicalStarts(), 1);
+    await fixture.handler.shutdown();
+  });
+
+  it('fences a superseded boot incarnation without arming recovery on the ' +
+    'stale boot when boot authority changes before physical creation', async () => {
+    const row = operationRow();
+    const fixture = await createHandlerFixture({
+      row,
+      targetRow: targetLifecycle(row),
+    });
+    const owner = fixture.handler.getReplicaCreateAdmissionOwner();
+    fixture.authority.failNextBootReads(1);
+    await assert.rejects(
+      owner.requireCurrentBootIncarnation(),
+      {
+        bootAuthorityUnavailable: true,
+        bootIncarnationSuperseded: false,
+      },
+    );
+    fixture.authority.setBootIncarnation(103);
+    await assert.rejects(
+      owner.requireCurrentBootIncarnation(),
+      {
+        bootAuthorityUnavailable: true,
+        bootIncarnationSuperseded: true,
+      },
+    );
+    await fixture.handler.shutdown();
+  });
+
+  it('fences the runtime and removes localServices/localReplicas when ' +
+    'post-ACTIVE markProgress observes a superseded admission or boot', async () => {
+    const row = operationRow();
+    const fixture = await createHandlerFixture({
+      row,
+      targetRow: targetLifecycle(row),
+    });
+    fixture.handler.initialize();
+    await fixture.handler.awaitReplicaCreateAdmissionRecoveryBarrier();
+    await waitForPhysicalStart(fixture);
+    const originalPersist =
+      fixture.handler.persistReplicaStatusWithRetry.bind(fixture.handler);
+    fixture.handler.persistReplicaStatusWithRetry = async (
+      replicaId,
+      newStatus,
+      additionalData,
+    ) => {
+      const result = await originalPersist(replicaId, newStatus, additionalData);
+      if (newStatus === ReplicaStatus.ACTIVE) {
+        row.create_admission_state = CREATE_ADMISSION_STATE.CLOSED;
+      }
+      return result;
+    };
+    fixture.releaseFactory();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(fixture.physicalShutdowns(), 1,
+      'confirmed post-ACTIVE supersession must fence and shut down the runtime');
+    assert.equal(fixture.handler.localServices.get(row.replica_id), undefined);
+    assert.equal(
+      fixture.handler.localReplicas.get(row.replica_id)?.service ?? null,
+      null,
+    );
+    assert.equal(
+      fixture.handler.replicaCreateAdmissionRecoveryRearmOwner.current(),
+      null,
+      'superseded attempt must not re-arm recovery',
+    );
+    await fixture.handler.shutdown();
+  });
+
+  it('retires a superseded retained admission runtime via single cleanup owner while preserving untagged and newer successor runtimes', async () => {
+    const row = operationRow();
+    const fixture = await createHandlerFixture({
+      row,
+      targetRow: targetLifecycle(row),
+    });
+    const staleService = {
+      createAdmissionOperationId: row.operation_id,
+      createAdmissionToken: row.create_admission_token,
+      createAttemptToken: row.create_admission_attempt_token,
+      shutdownCalls: 0,
+      async shutdown() {
+        this.shutdownCalls += 1;
+      },
+    };
+    fixture.handler.localServices.set(row.replica_id, staleService);
+    fixture.handler.setLocalReplica(row.replica_id, {
+      replicaId: row.replica_id,
+      partitionId: row.partition_id,
+      service: staleService,
+      createAdmissionOperationId: row.operation_id,
+      createAdmissionToken: row.create_admission_token,
+      createAttemptToken: row.create_admission_attempt_token,
+    });
+    row.create_admission_state = CREATE_ADMISSION_STATE.CLOSED;
+    await fixture.handler.recoverRetainedReplicaCreateAdmissions();
+    assert.equal(staleService.shutdownCalls, 1,
+      'retained recovery retires the superseded admission runtime');
+    assert.equal(fixture.handler.localServices.get(row.replica_id), undefined);
+    assert.equal(
+      fixture.handler.localReplicas.get(row.replica_id)?.service ?? null,
+      null,
+      'fenceFailedReplicaCreateRuntime clears the service reference on localReplicas',
+    );
+
+    // Negative control 1: an untagged runtime must NOT be matched or retired by fallback.
+    const untaggedService = {
+      shutdownCalls: 0,
+      async shutdown() {
+        this.shutdownCalls += 1;
+      },
+    };
+    fixture.handler.localServices.set(row.replica_id, untaggedService);
+    fixture.handler.setLocalReplica(row.replica_id, {
+      replicaId: row.replica_id,
+      partitionId: row.partition_id,
+      service: untaggedService,
+    });
+    await fixture.handler.recoverRetainedReplicaCreateAdmissions();
+    assert.equal(untaggedService.shutdownCalls, 0,
+      'retained recovery must not match or retire an untagged runtime');
+    assert.equal(
+      fixture.handler.localServices.get(row.replica_id),
+      untaggedService,
+    );
+
+    // Negative control 2: a newer successor runtime with different tags must be preserved.
+    const successorService = {
+      createAdmissionOperationId: 'op-successor',
+      createAdmissionToken: 'admission-successor',
+      createAttemptToken: 'attempt-successor',
+      shutdownCalls: 0,
+      async shutdown() {
+        this.shutdownCalls += 1;
+      },
+    };
+    fixture.handler.localServices.set(row.replica_id, successorService);
+    fixture.handler.setLocalReplica(row.replica_id, {
+      replicaId: row.replica_id,
+      partitionId: row.partition_id,
+      service: successorService,
+      createAdmissionOperationId: 'op-successor',
+      createAdmissionToken: 'admission-successor',
+      createAttemptToken: 'attempt-successor',
+    });
+    await fixture.handler.recoverRetainedReplicaCreateAdmissions();
+    assert.equal(successorService.shutdownCalls, 0,
+      'retained recovery must not tear down a newer successor runtime');
+    assert.equal(
+      fixture.handler.localServices.get(row.replica_id),
+      successorService,
+    );
+    await fixture.handler.shutdown();
+  });
 });

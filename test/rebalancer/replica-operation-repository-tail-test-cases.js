@@ -267,9 +267,9 @@ export function registerReplicaOperationRepositoryTailTests({
         'should submit the canonical row shape through the mutation ingress',
       );
       t.equal(
-        insertedRows[0]?.options?.skipCacheWait,
-        true,
-        'canonical mutation ingress should skip cache wait and rely on authoritative confirmation',
+        'skipCacheWait' in (insertedRows[0]?.options ?? {}),
+        false,
+        'canonical mutation ingress carries no cache-wait opt-out (writes answer at their commit)',
       );
       t.equal(
         authoritativeReads.length,
@@ -433,7 +433,10 @@ export function registerReplicaOperationRepositoryTailTests({
           executeQuery: async () => ({success: true, changes: 1}),
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
+          },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -515,7 +518,10 @@ export function registerReplicaOperationRepositoryTailTests({
           executeQuery: async () => ({success: true, changes: 1}),
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
+          },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -597,7 +603,10 @@ export function registerReplicaOperationRepositoryTailTests({
           executeQuery: async () => ({success: true, changes: 1}),
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          async getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return this.getPriorityRecoveryPlanningAnswerSync();
+          },
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -755,9 +764,9 @@ export function registerReplicaOperationRepositoryTailTests({
         'should replace older pending writes for the same operation row',
       );
       t.equal(
-        gatewayMutations[0]?.options?.skipCacheWait,
-        true,
-        'canonical mutation ingress should skip cache wait and rely on authoritative confirmation',
+        'skipCacheWait' in (gatewayMutations[0]?.options ?? {}),
+        false,
+        'canonical mutation ingress carries no cache-wait opt-out (writes answer at their commit)',
       );
       t.equal(
         gatewayMutations[0]?.options?.workloadClass,

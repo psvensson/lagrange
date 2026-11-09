@@ -515,7 +515,7 @@ test('AdminWebSocketAPI - local control snapshot derives canonical leaders ' +
 });
 
 test(
-  'AdminWebSocketAPI - local control snapshot ignores stale ADD rows once exact target replica services are active',
+  'AdminWebSocketAPI - local control snapshot retains a CREATING ADD with an active target service',
   async (t) => {
     const cache = createPopulatedCache();
     cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
@@ -546,7 +546,7 @@ test(
       address: 'node-2/partition/partition-1-r2',
     });
     cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
-      operation_id: 'op-add-stale-active-replica',
+      operation_id: 'op-add-creating-active-target',
       type: 'ADD',
       partition_id: 'partition-1',
       entity_type: 'partition',
@@ -569,18 +569,18 @@ test(
     const payload = result?.rows?.[0] || null;
     const timeline =
       payload?.replicaOperations?.operationTimelineById
-        ?.['op-add-stale-active-replica'] || [];
+        ?.['op-add-creating-active-target'] || [];
     const currentStateEntry = timeline[timeline.length - 1] || null;
 
     t.equal(
       payload?.replicaOperations?.inFlightCount,
-      0,
-      'control snapshot should not count stale ADD rows once the exact target replica is active',
+      1,
+      'the CREATING operation remains in flight despite its active target service',
     );
     t.equal(
       currentStateEntry?.inFlight,
-      false,
-      'replica-operation timeline should mark the current state as non-blocking after observed service convergence',
+      true,
+      'the operation timeline preserves the unresolved operation state',
     );
   },
 );

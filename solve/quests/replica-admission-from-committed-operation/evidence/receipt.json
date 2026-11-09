@@ -1,0 +1,41 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "first-divergence-witness-on-candidate",
+      "passed": true,
+      "evidence": "evidence/phase0-reproducer-run-2026-11-02.md: fresh-formation-user-table-routability on b26d2c090 (tv-dator, lenovo-laptop, adams-gamla, 2026-11-02T10:26:07Z) RED; node logs retained outside the repo (sha256 in the record)"
+    },
+    {
+      "id": "admission-from-committed-operation",
+      "passed": true,
+      "evidence": "green at 413287f7617e93095a96dd1b3afc22721ebeda49: test/partition/replica-admission-from-committed-operation.test.js (a)-(h) 114/114 passing; test/partition/replica-admission-committed-operation-production.integration.test.js 65/65 passing; red-on-revert verified"
+    },
+    {
+      "id": "write-answers-at-commit-position",
+      "passed": true,
+      "evidence": "green at 413287f7617e93095a96dd1b3afc22721ebeda49: test/cdc/routed-system-table-write-answers-at-commit.test.js (a)-(d) 27/27 passing; test/cdc/write-then-read-projection-census.test.js 3/3 (0 owed across 12 sites); test/integration/services-p1-self-referential-write.integration.test.js (Lab #2661/#2662 C1 scenario) 34/34 passing; test/integration/seed-node-bootstrap.integration.test.js 111/111; test/integration/membership-consistency.integration.test.js 93/93; test/integration/sql-workflow.integration.test.js 48/48; test/integration/control-plane-rebalance.integration.test.js 16/16; skipCacheWait removed from src/ (0 occurrences)"
+    },
+    {
+      "id": "reproducer-admission-without-cache-visibility",
+      "passed": true,
+      "evidence": "measured at 5946c4d2f (lab run 2026-11-02T11:53:43Z, evidence/attempt1-reproducer-run-2026-11-02.md) and verified on corrected tree 413287f7617e93095a96dd1b3afc22721ebeda49: every joiner replica that reached SYNCING was admitted from its committed operation within one cadence re-send (0 not_in_configuration refusals vs Phase 0's 205), and Lab #2661/#2662 C1 self-referential write reproducer passes 34/34 without services-row producer/cache waits; remaining fresh-formation serve-lane blocker is C5 (Group A serve-eligibility-committed-epoch-read)"
+    },
+    {
+      "id": "cdc-hold-handoff-recorded",
+      "passed": true,
+      "evidence": "log.ndjson entry 29 (2026-11-02T11:46:49.064Z) and entry 43 (2026-11-03T05:56:16.597Z): C2b leader-side CDC hold/non-durable delivery address resolution routed to peer-and-leader-address-from-committed-configuration (Group B), and Lab #2661/#2662 C1 self-referential write timeout resolved in Stream B"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "evidence": "subagent:1591de84-cf6a-4569-bb9e-f31c8e384a0e approved 413287f7617e93095a96dd1b3afc22721ebeda49 (sealedAt edaff0e867172f8032e27db9257ae01e0606e66c, diff sha256 ebcfb163c99474149c15939c0b451bcbc4939885dcf7dfc91e19d7312ad4f170; 20c4d48c5..413287f76 sha256 7b48517b8821cb02d3a0bee6ecd576f71712db840296718f54e8626555c0bf20; src byte-identical to 08b5ae2ae)"
+    }
+  ],
+  "evidence": [
+    "evidence/phase0-reproducer-run-2026-11-02.md",
+    "evidence/attempt1-reproducer-run-2026-11-02.md"
+  ],
+  "applicability": "All 6 receipts satisfied and independently verified on candidate 413287f7617e93095a96dd1b3afc22721ebeda49."
+}

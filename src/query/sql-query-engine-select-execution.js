@@ -20,6 +20,13 @@ import {
   reportConditionWaitSpent,
   selectRequestOptions,
 } from './sql-select-execution-helpers.js';
+import {
+  METADATA_AUTHORITY_ERROR_CODE,
+  METADATA_AUTHORITY_REFRESH_OUTCOME,
+  METADATA_AUTHORITY_UNAVAILABLE_REASON,
+  refreshTableRoutingMetadataFromAuthority,
+  resolveSelectExecutionPlanWithAuthorityRefresh,
+} from './sql-query-engine-metadata-authority-refresh.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_WAIT_FOR_CONDITION = 'wait_for_condition';
@@ -50,6 +57,13 @@ const {
 } = SQL_QUERY_ENGINE_SHARED;
 
 class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverlay {
+  async refreshTableRoutingMetadataFromAuthority(tableName, queryOptions = {}) {
+    return refreshTableRoutingMetadataFromAuthority(
+      this,
+      tableName,
+      queryOptions,
+    );
+  }
   /**
    * Create one control-plane timeout budget.
    * @param {number} configuredBudgetMs
@@ -206,7 +220,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       this.isSystemTable(tableName) &&
       routingReadinessDimension ===
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
-    return this.isSystemTable(tableName) && !recoveryLaneSystemTableSelect;
+    return !recoveryLaneSystemTableSelect;
   }
 
   validateSelectJoinPlans(ast, distributedPlan) {
@@ -219,6 +233,17 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         distributedPlan.tablePlans.get(joinTableName) ||
         null;
       if (!joinPlan || joinPlan.partitions.length === 0) {
+        if (this.getTableInfo?.(joinTableName)) {
+          return {
+            success: false,
+            tableName: joinTableName,
+            outcome: METADATA_AUTHORITY_REFRESH_OUTCOME.UNAVAILABLE,
+            reason: METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED,
+            error: `Authoritative routing metadata unavailable for table: ${joinTableName}`,
+            errorCode:
+              METADATA_AUTHORITY_ERROR_CODE.ROUTING_METADATA_UNAVAILABLE,
+          };
+        }
         return {
           success: false,
           error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${joinTableName}`,
@@ -261,8 +286,6 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     }
 
     const tableName = ast.from.name;
-    const tableInfo = this.getTableInfo(tableName);
-    const dualWriteMode = this.isDualWriteModeActiveForTable(tableInfo);
     const authoritativeLocalResult = transactionRead ? null :
       await this.tryExecuteAuthoritativeSystemTableSelect(
         tableName,
@@ -275,26 +298,22 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       return authoritativeLocalResult;
     }
 
-    const planningStartTimeMs = Date.now();
-    const distributedPlan = this.distributedQueryPlanner.planSelect(
-      ast,
-      params,
-      {sessionId},
-    );
-    const planningDurationMs = Date.now() - planningStartTimeMs;
-    const rootAlias = ast.from.alias || tableName;
-    const rootPlan =
-      distributedPlan.tablePlans.get(rootAlias) ||
-      distributedPlan.tablePlans.get(tableName) ||
-      null;
-
-    if (!rootPlan || rootPlan.partitions.length === 0) {
-      return {
-        success: false,
-        error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
-        errorCode: QUERY_ERROR_CODE.TABLE_NOT_FOUND,
-      };
+    const planResolution =
+      await resolveSelectExecutionPlanWithAuthorityRefresh(
+        this,
+        ast,
+        params,
+        {sessionId, queryOptions},
+      );
+    if (planResolution.settled) {
+      return planResolution.response;
     }
+    const {
+      distributedPlan,
+      rootPlan,
+      dualWriteMode,
+      planningDurationMs,
+    } = planResolution;
 
     const partitionIds = rootPlan.partitions;
 
@@ -315,8 +334,6 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       queryOptions,
       transactionRead,
     );
-    const joinPlanFailure = this.validateSelectJoinPlans(ast, distributedPlan);
-    if (joinPlanFailure) return joinPlanFailure;
 
     if (transactionRead) {
       const allParticipants = Array.from(distributedPlan.tablePlans.values())
@@ -418,20 +435,37 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
 
     const confirmEmptyLocalReadWithOwnerRpc =
       this.shouldConfirmEmptyAuthoritativeSystemTableRead(tableName, ast);
+    const suppliedReadAuthority =
+      queryOptions?.readAuthority &&
+      Object.isFrozen(queryOptions.readAuthority) === true &&
+      (queryOptions.readAuthority.authoritativeReadMode ===
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY ||
+        queryOptions.readAuthority.authoritativeReadMode ===
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+            .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC ||
+        queryOptions.readAuthority.authoritativeReadMode ===
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_ONLY) ?
+        queryOptions.readAuthority :
+        null;
+    const readAuthority = suppliedReadAuthority ||
+      buildControlPlaneReadAuthority({
+        authoritativeReadMode: confirmEmptyLocalReadWithOwnerRpc ?
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+            .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC :
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+        localReadConsistency:
+          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
+        replicaFallbackConsistency: confirmEmptyLocalReadWithOwnerRpc ?
+          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA :
+          null,
+      });
     const executableSql = this.queryExecutor.buildSelectSQL(ast);
     const localResult = await authoritativeControlPlaneView.readRows(
       tableName,
       executableSql,
       params,
       {
-        readAuthority: buildControlPlaneReadAuthority({
-          authoritativeReadMode: confirmEmptyLocalReadWithOwnerRpc ?
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-              .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC :
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-          replicaFallbackConsistency:
-            LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
-        }),
+        readAuthority,
         queryTimeoutMs: queryOptions?.timeoutMs,
       },
     );

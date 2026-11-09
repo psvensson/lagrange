@@ -98,7 +98,7 @@ function admissionOfPortAnswer(answered) {
 
 // One admission decision in the group's log, with the port's own outcome
 // and reason when the admission reached the port.
-function recordAdmission(group, peerAddress, admission) {
+function recordAdmission(group, {peerAddress, nodeId}, admission) {
   const level = admission.outcome === RAFT_MEMBERSHIP_ADMISSION_OUTCOME.REFUSED ?
     ADMISSION_REFUSED_LOG_LEVEL : ADMISSION_LOG_LEVEL;
   group.logger[level](RAFT_GROUP_MEMBERSHIP_ADMISSION_LOG_MSG.PEER_ADMISSION, {
@@ -106,6 +106,7 @@ function recordAdmission(group, peerAddress, admission) {
     ...group.logContext,
     replicaId: group.localReplicaIdentity,
     peerAddress,
+    nodeId,
     admission: {
       replicaIdentity: admission.replicaIdentity,
       outcome: admission.outcome,
@@ -119,11 +120,12 @@ function recordAdmission(group, peerAddress, admission) {
 // answered. An answer the port queued behind the group's in-flight work is
 // QUEUED now and recorded again, as its settled outcome, when the port
 // answers; `settled` carries that settled admission.
-function proposeAdmission(port, group, {replicaIdentity, peerAddress}) {
+function proposeAdmission(port, group, peer) {
+  const {replicaIdentity, nodeId} = peer;
   const proposal = port.proposeConfChange({
     type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
     replicaIdentity,
-    peerAddress,
+    nodeId,
   });
   if (proposal.settled) {
     return {replicaIdentity, proposal: proposal.result,
@@ -132,7 +134,7 @@ function proposeAdmission(port, group, {replicaIdentity, peerAddress}) {
   const settle = (answered) => {
     const admission = Object.freeze({replicaIdentity, proposal: answered,
       ...admissionOfPortAnswer(answered)});
-    recordAdmission(group, peerAddress, admission);
+    recordAdmission(group, peer, admission);
     return admission;
   };
   // A queued operation that rejects instead of answering is refused, with
@@ -197,12 +199,14 @@ function proposeInFlightAdmission(port, group, peer) {
  * @param {Object} port - The replica's raft-rs operation port.
  * @param {Object} group - {groupId, localReplicaIdentity, logger,
  *   logContext?}.
- * @param {Object} peer - {replicaIdentity, peerAddress}.
+ * @param {Object} peer - {replicaIdentity, peerAddress, nodeId}: the node
+ *   is committed with the admission (its context), the address is logged.
  * @return {Object} Frozen {replicaIdentity, outcome}, with the port's answer
  *   (`proposal`, `portOutcome`, `reason`) when the admission reached the
  *   port, and `settled` when the port queued it.
  */
-function admitGroupPeer(port, group, {replicaIdentity, peerAddress}) {
+function admitGroupPeer(port, group, peer) {
+  const {replicaIdentity} = peer;
   const status = port.readStatus();
   let admission;
   if (status?.role !== RAFT_ROLE.LEADER) {
@@ -218,10 +222,9 @@ function admitGroupPeer(port, group, {replicaIdentity, peerAddress}) {
     admission = {replicaIdentity,
       outcome: RAFT_MEMBERSHIP_ADMISSION_OUTCOME.IN_FLIGHT};
   } else {
-    admission = proposeInFlightAdmission(port, group,
-      {replicaIdentity, peerAddress});
+    admission = proposeInFlightAdmission(port, group, peer);
   }
-  recordAdmission(group, peerAddress, admission);
+  recordAdmission(group, peer, admission);
   return Object.freeze(admission);
 }
 
@@ -231,7 +234,7 @@ function admitGroupPeer(port, group, {replicaIdentity, peerAddress}) {
  * @param {Object} port - The replica's raft-rs operation port.
  * @param {Object} group - {groupId, localReplicaIdentity, logger,
  *   logContext?}.
- * @param {Object} peer - {replicaIdentity, peerAddress}.
+ * @param {Object} peer - {replicaIdentity, peerAddress, nodeId}.
  * @return {Object} The frozen admission record.
  */
 function reserveAndAdmitGroupPeer(port, group, peer) {
@@ -243,7 +246,7 @@ function reserveAndAdmitGroupPeer(port, group, peer) {
       portOutcome: null,
       reason: reservation.reason || reservation.outcome,
     });
-    recordAdmission(group, peer.peerAddress, refused);
+    recordAdmission(group, peer, refused);
     return refused;
   }
   return admitGroupPeer(port, group, peer);
@@ -444,13 +447,6 @@ async function proposeAuthorizedGroupPromotion(port, group, request, observeAuth
     observed.admitExecution));
 }
 
-function removalPeerAddress(port, group, transition) {
-  const peers = port.readStatus()?.peers || [];
-  const configured = peers.find((peer) =>
-    peer.replicaIdentity === transition.replicaIdentity)?.address;
-  return configured || group?.peerAddress || transition.peerAddress;
-}
-
 async function proposeAuthorizedGroupRemoval(port, group, request, observeAuthorization,
   delivery) {
   if (typeof observeAuthorization !== 'function') {
@@ -460,9 +456,8 @@ async function proposeAuthorizedGroupRemoval(port, group, request, observeAuthor
     delivery, RAFT_MEMBERSHIP_TRANSITION_STAGE.REMOVE);
   if (observed.refusal) return observed.refusal;
   if (!liveDelivery(observed.admitExecution)) return deliveryRefusal();
-  const peerAddress = removalPeerAddress(port, group, observed.transition);
   return turnChainValue(port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
-    {...observed.transition, peerAddress}, observed.admitExecution));
+    observed.transition, observed.admitExecution));
 }
 
 export {

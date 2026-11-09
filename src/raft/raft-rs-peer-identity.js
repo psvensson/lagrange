@@ -9,8 +9,10 @@
 //                                  name, so even a lost file re-derives it;
 //   independent of where a replica runs
 //                                  the derivation reads the logical identity
-//                                  and nothing else. Nothing about placement
-//                                  reaches this module;
+//                                  and nothing else. The node a replica was
+//                                  admitted on is recorded beside it (from a
+//                                  committed fact only) and never derives,
+//                                  changes or reassigns an identity;
 //   never list position            the identity is a digest of the replica's
 //                                  own name. Registering the same replicas in
 //                                  a different order, in a different file,
@@ -37,6 +39,7 @@ import {createHash} from 'node:crypto';
 
 import {
   RAFT_RS_LEARNER_ADMISSION_COLUMN,
+  RAFT_RS_NODE_ID_COLUMN,
   RAFT_RS_LEARNER_ORIGIN_COVERAGE,
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
@@ -74,6 +77,14 @@ function validatedLearnerAdmission(reservation) {
   return learnerAdmission;
 }
 
+function validatedNodeId(reservation) {
+  const nodeId = reservation.nodeId ?? null;
+  if (nodeId !== null && (typeof nodeId !== TYPE_STRING || nodeId.length === EMPTY)) {
+    throw new TypeError(RAFT_RS_PEER_IDENTITY_ERROR_MSG.NODE_ID_CONFLICT);
+  }
+  return nodeId;
+}
+
 function validatedReservation(reservation, identities, peerIds) {
   const replicaIdentity = reservation?.replicaIdentity;
   const peerId = reservation?.peerId;
@@ -88,8 +99,10 @@ function validatedReservation(reservation, identities, peerIds) {
   }
   identities.add(replicaIdentity);
   peerIds.add(peerId);
+  const nodeId = validatedNodeId(reservation);
   const learnerAdmission = validatedLearnerAdmission(reservation);
   return Object.freeze({replicaIdentity, peerId,
+    ...(nodeId === null ? {} : {nodeId}),
     ...(learnerAdmission === null ? {} : {learnerAdmission})});
 }
 
@@ -98,6 +111,7 @@ function readRaftRsPeerIdentityReservations(db) {
     db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_ALL).all().map((row) => ({
       replicaIdentity: row.replica_identity,
       peerId: row.raft_peer_id,
+      nodeId: row.node_id,
       learnerAdmission: row.learner_admission,
     })));
 }
@@ -134,6 +148,11 @@ class RaftRsPeerIdentityRegistry {
     if (!columns.some(({name}) => name === RAFT_RS_LEARNER_ADMISSION_COLUMN)) {
       // No evidence is fabricated for an older reservation. Null stays unknown.
       this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.ADD_LEARNER_ADMISSION);
+    }
+    if (!columns.some(({name}) => name === RAFT_RS_NODE_ID_COLUMN)) {
+      // A reservation recorded before node identities were committed has
+      // none: it stays null (unknown), never filled from a row.
+      this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.ADD_NODE_ID);
     }
   }
 
@@ -239,6 +258,52 @@ class RaftRsPeerIdentityRegistry {
       this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.RECORD_LEARNER_ADMISSION)
         .run(encoded, replicaIdentity);
     }
+  }
+
+  /**
+   * Record the node a reserved replica was admitted on, from a committed
+   * fact (a stamp, the committed admission context, a snapshot image). Once
+   * recorded it is permanent: the same value again is a no-op, another value
+   * is a conflict, never a replacement.
+   * @param {string} replicaIdentity - The reserved replica.
+   * @param {string} nodeId - Its node.
+   */
+  recordCommittedNodeId(replicaIdentity, nodeId) {
+    const row = this.reservationFor(replicaIdentity);
+    if (!row || typeof nodeId !== TYPE_STRING || nodeId.length === EMPTY ||
+        (row.node_id !== null && row.node_id !== nodeId)) {
+      throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.NODE_ID_CONFLICT);
+    }
+    if (row.node_id === null) {
+      this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.RECORD_NODE_ID)
+        .run(nodeId, replicaIdentity);
+    }
+  }
+
+  /**
+   * Record several committed nodes (a stamp's) as one durable write.
+   * @param {Array<Array<string>>} entries - [[replicaIdentity, nodeId]].
+   */
+  recordCommittedNodeIds(entries) {
+    const record = () => {
+      for (const [replicaIdentity, nodeId] of entries) {
+        this.recordCommittedNodeId(replicaIdentity, nodeId);
+      }
+    };
+    if (this.db.inTransaction) {
+      record();
+    } else {
+      this.db.transaction(record)();
+    }
+  }
+
+  /**
+   * @param {string} replicaIdentity - The replica.
+   * @return {string|null} The committed node it was admitted on, or null
+   *   when this registry holds no committed node for it.
+   */
+  committedNodeIdOf(replicaIdentity) {
+    return this.reservationFor(replicaIdentity)?.node_id ?? null;
   }
 
   /** Raw stored evidence, decoded only by the native committed-context owner. */

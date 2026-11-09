@@ -3,6 +3,8 @@ import {buildCurrentPriorityPlacementFromRebalancerCache} from
   './priority-placement-observation-memo.js';
 import {readExpectedReplicaCount} from
   '../control-plane/membership-publication-priority-partition-canonical-data.js';
+import {readPriorityRecoveryPlanningAnswerSync} from
+  '../control-plane/priority-recovery-planning-answer-origin.js';
 
 const {
   LIFECYCLE_PHASE,
@@ -203,8 +205,11 @@ function buildPlanningPublicationRecoveryGateUncached(planningSnapshot) {
   });
 }
 function readMembershipPlanningSnapshot(readinessService, nodeId, observedAt) {
-  return readinessService.getPriorityRecoveryPlanningAnswerSync(
-    nodeId, observedAt);
+  return readPriorityRecoveryPlanningAnswerSync(
+    readinessService,
+    nodeId,
+    observedAt,
+  );
 }
 function normalizeNodeIdSet(nodeIds) {
   return new Set(

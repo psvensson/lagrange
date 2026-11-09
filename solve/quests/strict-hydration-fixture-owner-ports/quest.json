@@ -1,0 +1,29 @@
+{
+  "schema": "solve-quest/2",
+  "id": "strict-hydration-fixture-owner-ports",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "The strict-hydration fixture supplies the canonical router and cache dependencies so the real cache-hydration phase reaches its required-table verifier and refuses the mode swap for missing SERVICES.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/strict-hydration-fixture-owner-ports/evidence/receipt.json",
+      "requiredReceipts": [
+        "strict-hydration-reached",
+        "no-mode-swap",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "fixture-only",
+      "statement": "Only test/bootstrap/cache-hydration-strictness.test.js changes behavior. Supply one explicit router object shared with CDC and actual SystemTableCache with the same four existing rows; keep SERVICES absent. Do not add a production fallback, override latency setup, alter hydration/no-swap assertions or change a timeout."
+    },
+    {
+      "id": "owned-lifetime",
+      "statement": "Real latency owners started by the phase are stopped through LatencyTopologySetup.stop in teardown. Retain the missing-router red and router-only/get-missing red as fixture evidence. Existing latency topology delegation control and independent review precede closure."
+    }
+  ],
+  "sealedAt": "502c603f2460bb2ff5f2c46e62517c00086f5428"
+}

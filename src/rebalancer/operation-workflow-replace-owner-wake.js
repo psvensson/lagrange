@@ -1,10 +1,11 @@
+import {committedNodeFloorLevel} from './operation-workflow-committed-node-floor.js';
 /**
  * Owner contract:
  * Owner: the single level-triggered wake of the REPLACE owner (quest
  * replace-source-removal-owner: R-2 as amended by challengers BR1, BR2 and
  * A9, generalised by amendment-1 step 0 to every level the owner waits on).
  * Inputs (wakes only, never authority):
- *  - the readiness owner's snapshot publications;
+ *  - the readiness owner's snapshot and committed-eligibility publications;
  *  - the node's replicated services rows (a REPLACE source's row change);
  *  - the node's partition consensus relay (the replica handler's tracked
  *    services): the applied ConfState announcement and the leader/term
@@ -22,10 +23,11 @@
  * one level key:
  *  - readiness: per node, the owner's own participation read
  *    (isNodeReadyForRouting with the remove-safety dimension and owner-read
- *    participation kind, which is getControlPlaneParticipationSync) and its
- *    evidence-absent denial read (isEvidenceAbsentReadinessDenial). A
- *    refresh-pending placeholder flips to the current answer under an
- *    UNCHANGED planning identity (BR1/A9), so the answer itself is compared;
+ *    participation kind, which is getControlPlaneParticipationSync) and
+ *    the full committed-node semantic level at one owner-clock instant.
+ *    This includes authoritative-only peers and availability, never raw
+ *    lease renewals or epoch tokens. A refresh-pending placeholder can flip
+ *    under an UNCHANGED planning identity (BR1/A9); compare the answer;
  *  - consensus: the last applied ConfState, leader and term the local relay
  *    announced for the operation's partition;
  *  - concurrency: the other non-terminal operations cached for the
@@ -94,10 +96,15 @@ function readWakeState(owner) {
       waiterByOperationId: new Map(),
       redriveInFlightOperationIds: new Set(),
       consensusLevelByPartitionId: new Map(),
-      // At most two entries: the readiness subscription's and the consensus
-      // relay subscription's release.
+      observedNodeIdsByPartitionId: new Map(),
+      lastCapturedByOperationId: new Map(),
+      // Entry levels augmented by later-observed replica nodes, keyed by the
+      // captured entry-level record (released with it).
+      augmentedEntryLevelByEntry: new WeakMap(),
+      // Planning, committed-node and consensus subscriptions share this lifetime.
       unsubscribes: [],
       readinessSubscribed: false,
+      committedSubscribed: false,
       consensusSubscribed: false,
     };
     WAKE_STATE_BY_OWNER.set(owner, state);
@@ -121,36 +128,50 @@ function collectReplaceOwnerNodeIds(owner, operation) {
   for (const row of Array.isArray(rows) ? rows : []) {
     addNodeId(nodeIds, row?.node_id);
   }
+  for (const nodeId of operation?.waitedPeerNodeIds || []) {
+    addNodeId(nodeIds, nodeId);
+  }
+  const observed = WAKE_STATE_BY_OWNER.get(owner)
+    ?.observedNodeIdsByPartitionId.get(operation?.partitionId);
+  for (const nodeId of observed || []) {
+    addNodeId(nodeIds, nodeId);
+  }
   return [...nodeIds].sort();
 }
 
-function readNodeLevel(owner, nodeId, readinessOptions) {
-  const ready = owner.isNodeReadyForRouting(nodeId, readinessOptions) === true;
-  const evidenceAbsent =
-    typeof owner.isEvidenceAbsentReadinessDenial === 'function' &&
-    owner.isEvidenceAbsentReadinessDenial(nodeId, readinessOptions) === true;
-  return nodeId + LEVEL_FIELD_SEPARATOR +
-    (ready ? LEVEL_TRUE : LEVEL_FALSE) +
-    (evidenceAbsent ? LEVEL_TRUE : LEVEL_FALSE);
-}
-
-function readReplaceOwnerLevel(owner, operation, nodeIds) {
-  const readinessOptions = {
+function buildReadinessOptions(operation) {
+  return {
     partitionId: operation?.partitionId || null,
     decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
     participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   };
-  const readinessLevel = nodeIds
-    .map((nodeId) => readNodeLevel(owner, nodeId, readinessOptions))
-    .join(LEVEL_NODE_SEPARATOR);
+}
+
+function readNodeLevel(owner, nodeId, readinessOptions) {
+  const ready = owner.isNodeReadyForRouting(nodeId, readinessOptions) === true;
+  return nodeId + LEVEL_FIELD_SEPARATOR + (ready ? LEVEL_TRUE : LEVEL_FALSE);
+}
+
+function readReplaceOwnerTailParts(owner, operation) {
   const consensusLevel = WAKE_STATE_BY_OWNER.get(owner)
     ?.consensusLevelByPartitionId.get(operation?.partitionId) ??
     NO_CONSENSUS_OBSERVATION;
   return [
-    readinessLevel,
+    committedNodeFloorLevel(owner),
     consensusLevel,
     concurrentOperationLevel(owner, operation),
     sourceRowLevel(owner, operation),
+  ];
+}
+
+function readReplaceOwnerLevel(owner, operation, nodeIds) {
+  const readinessOptions = buildReadinessOptions(operation);
+  const readinessLevel = nodeIds
+    .map((nodeId) => readNodeLevel(owner, nodeId, readinessOptions))
+    .join(LEVEL_NODE_SEPARATOR);
+  return [
+    readinessLevel,
+    ...readReplaceOwnerTailParts(owner, operation),
   ].join(LEVEL_PART_SEPARATOR);
 }
 
@@ -217,10 +238,93 @@ function captureReplaceOwnerLevel(owner, operation) {
     return null;
   }
   const nodeIds = collectReplaceOwnerNodeIds(owner, operation);
-  return Object.freeze({
+  const readinessOptions = buildReadinessOptions(operation);
+  const nodeLevelById = new Map(
+    nodeIds.map((nodeId) => [
+      nodeId,
+      readNodeLevel(owner, nodeId, readinessOptions),
+    ]),
+  );
+  const tailParts = readReplaceOwnerTailParts(owner, operation);
+  const readinessLevel = nodeIds
+    .map((nodeId) => nodeLevelById.get(nodeId))
+    .join(LEVEL_NODE_SEPARATOR);
+  const entryLevel = Object.freeze({
     nodeIds: Object.freeze(nodeIds),
-    levelKey: readReplaceOwnerLevel(owner, operation, nodeIds),
+    levelKey: [readinessLevel, ...tailParts].join(LEVEL_PART_SEPARATOR),
   });
+  readWakeState(owner).lastCapturedByOperationId.set(operation.operationId, {
+    entryLevel,
+    nodeLevelById,
+    tailParts,
+  });
+  return entryLevel;
+}
+
+function recordObservedReplicaNodes(owner, operation, replicaRows) {
+  const observed = new Set(operation?.waitedPeerNodeIds || []);
+  for (const row of replicaRows) {
+    addNodeId(observed, row?.node_id);
+  }
+  if (observed.size === 0) {
+    return null;
+  }
+  const sortedObserved = Object.freeze([...observed].sort());
+  operation.waitedPeerNodeIds = sortedObserved;
+  const partitionId = operation.partitionId;
+  if (typeof partitionId === 'string' && partitionId.length > 0) {
+    readWakeState(owner).observedNodeIdsByPartitionId.set(
+      partitionId,
+      sortedObserved,
+    );
+  }
+  return sortedObserved;
+}
+
+function noteReplaceOwnerObservedReplicaRows(owner, operation, replicaRows) {
+  if (!owner || !operation || !Array.isArray(replicaRows)) {
+    return;
+  }
+  const sortedObserved = recordObservedReplicaNodes(
+    owner,
+    operation,
+    replicaRows,
+  );
+  const captured = WAKE_STATE_BY_OWNER.get(owner)
+    ?.lastCapturedByOperationId.get(operation.operationId);
+  if (!sortedObserved || !captured) {
+    return;
+  }
+  const readinessOptions = buildReadinessOptions(operation);
+  let added = false;
+  for (const nodeId of sortedObserved) {
+    if (!captured.nodeLevelById.has(nodeId)) {
+      captured.nodeLevelById.set(
+        nodeId,
+        readNodeLevel(owner, nodeId, readinessOptions),
+      );
+      added = true;
+    }
+  }
+  if (!added) {
+    return;
+  }
+  const nodeIds = Object.freeze([...captured.nodeLevelById.keys()].sort());
+  const readinessLevel = nodeIds
+    .map((nodeId) => captured.nodeLevelById.get(nodeId))
+    .join(LEVEL_NODE_SEPARATOR);
+  const levelKey = [readinessLevel, ...captured.tailParts]
+    .join(LEVEL_PART_SEPARATOR);
+  readWakeState(owner).augmentedEntryLevelByEntry.set(
+    captured.entryLevel,
+    Object.freeze({nodeIds, levelKey}),
+  );
+}
+
+function resolveReplaceOwnerEntryLevel(owner, entryLevel) {
+  return (entryLevel &&
+    WAKE_STATE_BY_OWNER.get(owner)?.augmentedEntryLevelByEntry.get(entryLevel)) ||
+    entryLevel;
 }
 
 function wakeWaiters(owner, state, matches) {
@@ -315,6 +419,12 @@ function ensureWakeSubscriptions(owner, state) {
       (event) => handleReadinessPublication(owner, event),
     ));
   }
+  if (!state.committedSubscribed) {
+    state.committedSubscribed = true;
+    state.unsubscribes.push(service.subscribeServeEligibility(() => {
+      if (!owner.isShuttingDown) wakeWaiters(owner, state, () => true);
+    }));
+  }
   attachReplicaConsensusEvents(owner, owner.replicaConsensusEvents);
 }
 
@@ -353,19 +463,20 @@ function attachReplicaConsensusEvents(owner, source) {
  */
 function registerReplaceOwnerWaiter(owner, operation, entryLevel) {
   const operationId = operation?.operationId;
-  if (!entryLevel || !operationId || owner.isShuttingDown) {
+  const resolvedEntry = resolveReplaceOwnerEntryLevel(owner, entryLevel);
+  if (!resolvedEntry || !operationId || owner.isShuttingDown) {
     return false;
   }
   const state = readWakeState(owner);
   ensureWakeSubscriptions(owner, state);
   state.waiterByOperationId.set(operationId, Object.freeze({
     operation,
-    nodeIds: entryLevel.nodeIds,
-    levelKey: entryLevel.levelKey,
+    nodeIds: resolvedEntry.nodeIds,
+    levelKey: resolvedEntry.levelKey,
   }));
   if (
-    readReplaceOwnerLevel(owner, operation, entryLevel.nodeIds) !==
-    entryLevel.levelKey
+    readReplaceOwnerLevel(owner, operation, resolvedEntry.nodeIds) !==
+    resolvedEntry.levelKey
   ) {
     redriveReplaceOwnerWake(owner, operationId);
   }
@@ -467,7 +578,9 @@ async function redriveReplaceOwnerWake(owner, operationId) {
  * @param {string} operationId
  */
 function clearReplaceOwnerWaiter(owner, operationId) {
-  WAKE_STATE_BY_OWNER.get(owner)?.waiterByOperationId.delete(operationId);
+  const state = WAKE_STATE_BY_OWNER.get(owner);
+  state?.waiterByOperationId.delete(operationId);
+  state?.lastCapturedByOperationId.delete(operationId);
 }
 
 /**
@@ -485,9 +598,12 @@ function shutdownReplaceOwnerWake(owner) {
     }
   }
   state.readinessSubscribed = false;
+  state.committedSubscribed = false;
   state.consensusSubscribed = false;
   state.waiterByOperationId.clear();
   state.consensusLevelByPartitionId.clear();
+  state.observedNodeIdsByPartitionId.clear();
+  state.lastCapturedByOperationId.clear();
 }
 
 export {
@@ -495,6 +611,8 @@ export {
   wakeReplaceOwnersForReplicaRow,
   captureReplaceOwnerLevel,
   clearReplaceOwnerWaiter,
+  noteReplaceOwnerObservedReplicaRows,
   registerReplaceOwnerWaiter,
+  resolveReplaceOwnerEntryLevel,
   shutdownReplaceOwnerWake,
 };

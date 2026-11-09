@@ -22,12 +22,11 @@ import {
   REBALANCER_MOVE_TYPE,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import {CONTROL_PLANE_READINESS_DIMENSION}
-  from '../../src/control-plane/control-plane-readiness-constants.js';
 import {PLACEMENT_OWNER_DATA_AFFINITY_SCORE}
   from '../../src/rebalancer/placement-owner-constants.js';
 import {
   createAllowAllStorageAdmissionService,
+  createMockCache,
   createMockControlPlaneReadinessService,
   createTestRebalancer,
   initializeSpreadTestEnvironment,
@@ -95,31 +94,15 @@ function buildStallScenario({policyByFetch}) {
       status: ReplicaStatus.ACTIVE,
     });
   }
-  const controlPlaneReadinessService =
-    createMockControlPlaneReadinessService({
-      defaultRepairEligible: true,
-      livenessProjectionByNodeId: Object.fromEntries(
-        NODE_IDS.map((nodeId) => [
-          nodeId,
-          Object.freeze({readyNow: true}),
-        ]),
-      ),
-      readinessByNodeId: {
-        'node-0': {
-          nodeId: 'node-0',
-          dimensions: Object.fromEntries(
-            Object.values(CONTROL_PLANE_READINESS_DIMENSION)
-              .filter((name) => typeof name === 'string')
-              .map((name) => [name, true]),
-          ),
-        },
-      },
-    });
+  const cache = createMockCache({nodes, services});
+  const controlPlaneReadinessService = createMockControlPlaneReadinessService({
+    systemTableCache: cache,
+  });
   const rebalancer = createTestRebalancer({
     entityId: SERVICE_ID,
     entityType: REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE,
     nodeId: 'node-0',
-    cacheData: {nodes, services},
+    systemTableCache: cache,
     controlPlaneReadinessService,
   });
   rebalancer.isLeader = true;

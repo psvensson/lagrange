@@ -328,6 +328,7 @@ test('a valid committed stamp for a different voter set cannot certify the bound
     const removed = answer.voters.find((peer) => answer.identities[peer] !== answer.leaderId);
     answer.voters = answer.voters.filter((peer) => peer !== removed);
     delete answer.identities[removed];
+    delete answer.nodeIds[removed];
     answer.configurationKey = raftRsConfStateKey(answer);
     assert.ok(committedStampOfAnswer(answer), 'FAULT_MUST_STILL_BE_A_VALID_COMMITTED_STAMP');
     await withMembershipRead(f, () => answer, async () => {

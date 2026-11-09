@@ -46,6 +46,7 @@ import {
   foldAt,
   logFold,
   reservedIdentities,
+  reservedNodeIds,
 } from '../raft/raft-rs-backend/committed-membership-oracles.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -142,12 +143,12 @@ function resetRuntime() {
   LoggingService.resetInstance();
 }
 
-function readyNode(nodeId) {
+function readyNode(nodeId, nowMs = Date.now()) {
   return {
     node_id: nodeId,
     status: NODE_STATE.ACTIVE,
     connection_state: NODE_STATE.READY,
-    ready_lease_expires_at: Date.now() + READY_LEASE_EXTENSION_MS,
+    ready_lease_expires_at: nowMs + READY_LEASE_EXTENSION_MS,
   };
 }
 
@@ -392,6 +393,8 @@ class RealGroup {
       gateOpen: true,
       identities: Object.fromEntries(voters.map((peerId) =>
         [peerId, reserved.get(peerId)])),
+      nodeIds: Object.fromEntries(voters.map((peerId) =>
+        [peerId, reservedNodeIds(dbFile).get(peerId) ?? null])),
     };
   }
 
@@ -408,7 +411,7 @@ class RealGroup {
     };
     for (let attempt = 0; attempt < 20 && !shows(); attempt += 1) {
       this.cluster.node(this.leader()).proposeConfChange({
-        type, replicaIdentity: replicaId});
+        type, replicaIdentity: replicaId, nodeId: 'node-test'});
       this.settle(shows, 20);
     }
     if (!this.settle(shows, ELECTION_ROUNDS)) {
@@ -634,7 +637,7 @@ function createReplaceWorld(options = {}) {
   };
   world.readiness = createReadiness(world, nodeIds);
   world.cache = createObservedCache({
-    nodes: nodeIds.map(readyNode),
+    nodes: nodeIds.map((nodeId) => readyNode(nodeId)),
     services: members.map(([replicaId, nodeId]) => serviceRow(partitionId,
       replicaId, nodeId, replicaId === initialLeader ? 'leader' : 'follower')),
   });
@@ -926,9 +929,14 @@ function startCoordinator(world) {
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
     },
-    controlPlaneReadinessService: world.readiness,
+    readinessFixture: {
+      callbacks: world.readiness,
+      now: () => Date.now() + world.clockOffsetMs,
+      readNodeRows: () => world.members.map(([, nodeId]) =>
+        readyNode(nodeId, Date.now() + world.clockOffsetMs)),
+    },
     tablePolicyService: {getPolicyForPartition: () =>
-      ({minReplicaCount: world.members.length - 1})},
+      ({targetReplicaCount: 3, minReplicaCount: world.members.length - 1})},
     setTimeoutFn(fn, delayMs) {
       const handle = {fn, delayMs, cleared: false, fired: false, unref() {}};
       world.fallbackTimers.push(handle);

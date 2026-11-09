@@ -84,6 +84,13 @@ const INT32_BYTES = 4;
 const LOCK_OPEN_MODE = 'wx';
 const LOCK_ERROR_EXIST = 'EEXIST';
 const LOCK_ERROR_PERM = 'EPERM';
+const PROC_DIR = '/proc';
+const PROC_STAT_FILENAME = 'stat';
+const PROC_CMDLINE_FILENAME = 'cmdline';
+const PROC_NS_PID_PATH = 'ns/pid';
+const STAT_COMM_CLOSE = ')';
+const STAT_STARTTIME_OFFSET = 19;
+const STAT_FIELD_DELIMITER = /\s+/u;
 const RUNNER_INPUT_TYPE_FLAG = '--input-type=module';
 const RUNNER_EVAL_FLAG = '-e';
 const UNKNOWN_ERROR = 'unknown error';
@@ -553,6 +560,52 @@ function isPidAlive(pid) {
   }
 }
 
+function readPidStartTime(pid) {
+  if (!pid || typeof pid !== 'number' || pid <= 0) return null;
+  try {
+    const statPath = path.join(PROC_DIR, String(pid), PROC_STAT_FILENAME);
+    const content = fs.readFileSync(statPath, TEXT_ENCODING);
+    const lastParen = content.lastIndexOf(STAT_COMM_CLOSE);
+    if (lastParen < 0) return null;
+    const remainder = content.slice(lastParen + 1).trim();
+    const fields = remainder.split(STAT_FIELD_DELIMITER);
+    const value = fields[STAT_STARTTIME_OFFSET];
+    return (typeof value === 'string' && value.length > 0) ? value : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function readPidNamespace(pid) {
+  if (!pid || typeof pid !== 'number' || pid <= 0) return null;
+  try {
+    const nsPath = path.join(PROC_DIR, String(pid), PROC_NS_PID_PATH);
+    return fs.readlinkSync(nsPath);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function isKernelThreadPid(pid) {
+  if (!pid || typeof pid !== 'number' || pid <= 0) return false;
+  try {
+    const cmdlinePath = path.join(PROC_DIR, String(pid), PROC_CMDLINE_FILENAME);
+    const content = fs.readFileSync(cmdlinePath);
+    return content.length === 0;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function inspectPidIdentity(pid) {
+  return {
+    alive: isPidAlive(pid),
+    pidStartTime: readPidStartTime(pid),
+    pidNamespace: readPidNamespace(pid),
+    isKernelThread: isKernelThreadPid(pid),
+  };
+}
+
 function readLockRecord(lockPath) {
   try {
     const content = fs.readFileSync(lockPath, TEXT_ENCODING);
@@ -562,9 +615,39 @@ function readLockRecord(lockPath) {
   }
 }
 
-function isLockStale(record, now = Date.now()) {
+function isPidIdentityStale(record, live) {
+  if (!live || !live.alive) return true;
+  if (live.isKernelThread === true) return true;
+  if (record.pidStartTime && live.pidStartTime && record.pidStartTime !== live.pidStartTime) {
+    return true;
+  }
+  if (record.pidNamespace && live.pidNamespace && record.pidNamespace !== live.pidNamespace) {
+    return true;
+  }
+  return false;
+}
+
+function hasOptionalIdentityField(value) {
+  return value !== undefined && value !== null;
+}
+
+function isPidIdentityVerified(record, live) {
+  if (!record || !live) return false;
+  if (typeof record.pidStartTime !== 'string' || record.pidStartTime.length === 0) return false;
+  if (record.pidStartTime !== live.pidStartTime) return false;
+  if (hasOptionalIdentityField(record.pidNamespace) ||
+      hasOptionalIdentityField(live.pidNamespace)) {
+    if (typeof record.pidNamespace !== 'string' || record.pidNamespace.length === 0) return false;
+    if (record.pidNamespace !== live.pidNamespace) return false;
+  }
+  return true;
+}
+
+function isLockStale(record, now = Date.now(), inspectFn = inspectPidIdentity) {
   if (!record || typeof record.pid !== 'number') return true;
-  if (!isPidAlive(record.pid)) return true;
+  const live = inspectFn(record.pid);
+  if (isPidIdentityStale(record, live)) return true;
+  if (isPidIdentityVerified(record, live)) return false;
   if (record.createdAt && (now - record.createdAt > LAND_LOCK_STALE_MS)) return true;
   return false;
 }
@@ -573,11 +656,14 @@ function sleepSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(INT32_BYTES)), 0, 0, ms);
 }
 
-function tryCreateLandingLock(lockPath, questId, nowFn) {
+function tryCreateLandingLock(lockPath, questId, nowFn, inspectFn = inspectPidIdentity) {
   try {
     const fd = fs.openSync(lockPath, LOCK_OPEN_MODE);
+    const identity = inspectFn(process.pid) || {};
     const payload = JSON.stringify({
       pid: process.pid,
+      pidStartTime: identity.pidStartTime ?? null,
+      pidNamespace: identity.pidNamespace ?? null,
       createdAt: nowFn(),
       questId: questId || null,
     }) + LINE_SEPARATOR;
@@ -592,11 +678,23 @@ function tryCreateLandingLock(lockPath, questId, nowFn) {
   }
 }
 
-function removeOwnedLock(lockPath) {
+function isOwnedLockRecord(current, selfPid, inspectFn) {
+  if (current.pid !== selfPid) return false;
+  const selfIdentity = inspectFn(selfPid) || {};
+  if (!hasOptionalIdentityField(current.pidStartTime) &&
+      !hasOptionalIdentityField(selfIdentity.pidStartTime) &&
+      !hasOptionalIdentityField(current.pidNamespace) &&
+      !hasOptionalIdentityField(selfIdentity.pidNamespace)) {
+    return true;
+  }
+  return isPidIdentityVerified(current, selfIdentity);
+}
+
+function removeOwnedLock(lockPath, inspectFn = inspectPidIdentity) {
   try {
     if (fs.existsSync(lockPath)) {
       const current = readLockRecord(lockPath);
-      if (!current || current.pid === process.pid) {
+      if (!current || isOwnedLockRecord(current, process.pid, inspectFn)) {
         fs.unlinkSync(lockPath);
       }
     }
@@ -606,9 +704,9 @@ function removeOwnedLock(lockPath) {
   return true;
 }
 
-function clearStaleLock(lockPath, now) {
+function clearStaleLock(lockPath, now, inspectFn = inspectPidIdentity) {
   const record = readLockRecord(lockPath);
-  if (isLockStale(record, now)) {
+  if (isLockStale(record, now, inspectFn)) {
     try {
       fs.unlinkSync(lockPath);
       return true;
@@ -629,16 +727,17 @@ function acquireLandingLock(root, options = {}) {
   const pollMs = options.lockPollMs ?? LAND_LOCK_POLL_MS;
   const nowFn = options.now ?? Date.now;
   const sleepFn = options.sleep ?? sleepSync;
+  const inspectFn = options.inspectPid ?? inspectPidIdentity;
   const start = nowFn();
 
   while (true) {
-    if (tryCreateLandingLock(lockPath, options.id, nowFn)) {
+    if (tryCreateLandingLock(lockPath, options.id, nowFn, inspectFn)) {
       return {
         lockPath,
-        release: () => removeOwnedLock(lockPath),
+        release: () => removeOwnedLock(lockPath, inspectFn),
       };
     }
-    if (clearStaleLock(lockPath, nowFn())) {
+    if (clearStaleLock(lockPath, nowFn(), inspectFn)) {
       continue;
     }
     if (nowFn() - start >= timeoutMs) {
@@ -950,9 +1049,10 @@ function board(root) {
 }
 
 export {
-  ALTITUDE_BUDGET, LAND_LOCK_FILENAME, LAND_LOCK_TIMEOUT_REFUSAL,
+  ALTITUDE_BUDGET, LAND_LOCK_FILENAME, LAND_LOCK_STALE_MS, LAND_LOCK_TIMEOUT_REFUSAL,
   LANDING_MARKER_ENV, LANDING_MARKER_VALUE, NEXT_OWNER,
   SolveError, acquireLandingLock, board, evidenceAdd, evidenceDelete, evidenceRelocate,
-  isLockStale, isPidAlive, land, landChangeProofEnvironment,
-  note, probe, requiresInventoryRefresh, runChangeProof, stageGeneratedArtifacts, start,
+  inspectPidIdentity, isKernelThreadPid, isLockStale, isPidAlive, land, landChangeProofEnvironment,
+  note, probe, readPidNamespace, readPidStartTime, requiresInventoryRefresh, runChangeProof,
+  stageGeneratedArtifacts, start, tryCreateLandingLock,
 };

@@ -160,7 +160,7 @@ function createTerminalCasHarness({
       getAll: () => [],
       filter: () => [],
     },
-    cdcIntegrationService: {waitForCacheUpdate: async () => {}},
+    cdcIntegrationService: {},
     controlPlaneSystemTableGateway: gateway,
     authoritativeVisibilityTimeoutMs: TEST_VISIBILITY_TIMEOUT_MS,
     authoritativeVisibilityRetryDelayMs: TEST_RETRY_DELAY_MS,

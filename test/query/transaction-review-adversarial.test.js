@@ -14,6 +14,7 @@ import {
   preparedEvidenceOf,
 } from '../../src/query/sql-query-engine-participant-wire.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const logger = {debug() {}, warn() {}, error() {}};
 const evidence = {preparedDigest: 'b'.repeat(64), prepareIndex: 3, prepareTerm: 1};
 const deferred = () => {
@@ -44,7 +45,9 @@ test('review R2-A: exact old COMMIT cannot commit newer session transaction', as
 test('review R2-B: exact old ROLLBACK cannot roll back newer engine transaction', async (t)=>{
   const gateway=createTransactionPersistenceGateway();
   t.after(()=>gateway.db.close());
-  const e=new SQLQueryEngine({controlPlaneSystemTableGateway: gateway});
+  const e=new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneSystemTableGateway: gateway});
   const old=await e.executeQuery('BEGIN', [], {sessionId: 'reused'});
   await e.executeQuery('ROLLBACK', [], {sessionId: 'reused', expectedTransactionId: old.transactionId});
   const current=await e.executeQuery('BEGIN', [], {sessionId: 'reused'});
@@ -56,7 +59,9 @@ test('review R2-B: exact old ROLLBACK cannot roll back newer engine transaction'
 test('review R2-C: BEGIN expectation is checked again after its FIFO wait', async (t)=>{
   const gateway=createTransactionPersistenceGateway();
   t.after(()=>gateway.db.close());
-  const e=new SQLQueryEngine({controlPlaneSystemTableGateway: gateway});
+  const e=new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneSystemTableGateway: gateway});
   const old=await e.executeQuery('BEGIN', [], {sessionId: 'reused'});
   const entered=deferred();
   const release=deferred();
@@ -143,7 +148,9 @@ test('review R2-E: stale restart persists false terminal over canonical COMMIT r
     reads++;
     return ownerRead(...args);
   };
-  const e=new SQLQueryEngine({controlPlaneSystemTableGateway: gateway});
+  const e=new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneSystemTableGateway: gateway});
   await e.waitForDistributedTransactionRecoveryReplay();
   e.transactionCoordinator.recoverFromSystemTables({transactions: [stale], participants: []});
   const result=await e.resumeRecoveredDistributedTransactions();
@@ -213,6 +220,7 @@ test('C56-4: participant answers reject noHandler, inherited fields, and ' +
 test('C56-4: live delivery binds the processed response to the exact request',
   async (t) => {
     const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
       autoStartDistributedTransactionRecovery: false,
     });
@@ -265,7 +273,9 @@ test('C56-6: uncertain BEGIN accepts an exact lost INSERT answer',
         return {success: true, rows: [{...submitted}]};
       },
     };
-    const engine = new SQLQueryEngine({controlPlaneSystemTableGateway: gateway,
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneSystemTableGateway: gateway,
       autoStartDistributedTransactionRecovery: false});
     t.after(() => engine.shutdown());
     const begun = await engine.executeQuery('BEGIN', [], {sessionId: 'exact'});
@@ -291,7 +301,9 @@ test('C56-6: uncertain BEGIN refuses conflicting immutable creation content',
           transaction_mode: 'AUTOCOMMIT_STATEMENT'}]};
       },
     };
-    const engine = new SQLQueryEngine({controlPlaneSystemTableGateway: gateway,
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneSystemTableGateway: gateway,
       autoStartDistributedTransactionRecovery: false});
     t.after(() => engine.shutdown());
     const begun = await engine.executeQuery('BEGIN', [], {sessionId: 'readback'});
@@ -354,7 +366,9 @@ test('C56-6: matching advanced readback is left to durable recovery without ' +
       ...answerParticipantTransactionRequest(message, partitionId),
       decisionIndex: 12, decisionTerm: 9});
   }};
-  const engine = new SQLQueryEngine({controlPlaneSystemTableGateway: gateway,
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneSystemTableGateway: gateway,
     systemCache: cache, messageRouter: router});
   t.after(() => engine.shutdown());
   await engine.waitForDistributedTransactionRecoveryReplay();
@@ -401,7 +415,9 @@ test('C56-6: BEGIN admits only the canonical recovery epoch domain before ' +
     Number.NEGATIVE_INFINITY, -1, -0, 1.5, Number.MAX_SAFE_INTEGER + 1];
   for (const epoch of invalid) {
     const gateway = createTransactionPersistenceGateway();
-    const engine = new SQLQueryEngine({controlPlaneSystemTableGateway: gateway,
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneSystemTableGateway: gateway,
       autoStartDistributedTransactionRecovery: false,
       transactionEpochSource: () => epoch});
     const begun = await engine.executeQuery('BEGIN', [],
@@ -423,7 +439,9 @@ test('C56-6: BEGIN admits only the canonical recovery epoch domain before ' +
   }
   const gateway = createTransactionPersistenceGateway();
   t.after(() => gateway.db.close());
-  const engine = new SQLQueryEngine({controlPlaneSystemTableGateway: gateway,
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneSystemTableGateway: gateway,
     autoStartDistributedTransactionRecovery: false,
     transactionEpochSource: () => Number.MAX_SAFE_INTEGER});
   t.after(() => engine.shutdown());

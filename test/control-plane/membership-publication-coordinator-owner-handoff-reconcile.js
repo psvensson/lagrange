@@ -61,8 +61,6 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_AUTHORITATIVE_READ_ERROR =
   'explicit handoff target should not require authoritative node repair';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_BROAD_READ_ERROR =
   'active-gate owner reconcile should not read broad membership tables';
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY = true;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SKIP_CACHE_WAIT = true;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READ_PROFILE =
   'diagnostics';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_REASON_CODE =
@@ -209,6 +207,7 @@ test('readPublicationPlanningSnapshot uses authoritative membership evidence for
     ];
     const readinessRefreshModes = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_AUTH_REFRESH_NODE_ID,
       controlPlanePublicationsOwner: {
         async listPublications() {
@@ -242,7 +241,7 @@ test('readPublicationPlanningSnapshot uses authoritative membership evidence for
         getRecoveryEpochHistoryByNodeId() {
           return {};
         },
-        async getMembershipPublicationPlanningSnapshotBestEffort() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return null;
         },
       },
@@ -303,6 +302,7 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
     const persistOptions = [];
     const publicationReadOptions = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
@@ -362,7 +362,7 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
         getRecoveryEpochHistoryByNodeId() {
           return {};
         },
-        async getMembershipPublicationPlanningSnapshotBestEffort() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return null;
         },
       },
@@ -391,8 +391,6 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
       ],
       readProfile:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READ_PROFILE,
-      allowPendingVisibility:
-        PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
     });
 
     t.same(
@@ -441,11 +439,6 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
       },
       'explicit handoff target should be persisted as the durable publication target',
     );
-    t.equal(
-      persistOptions[0]?.allowPendingVisibility,
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
-      'explicit handoff target should preserve pending visibility on the publication write',
-    );
     t.match(
       publicationReadOptions[publicationReadOptions.length - 1],
       {
@@ -481,6 +474,7 @@ test('reconcileActiveGateMembershipPublication owns handoff write visibility',
     const persistOptions = [];
     const publicationReadOptions = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: {
         async listPublications() {
@@ -562,11 +556,8 @@ test('reconcileActiveGateMembershipPublication owns handoff write visibility',
       false,
       'active-gate owner reconcile should keep write readback enabled',
     );
-    t.equal(
-      persistOptions[0]?.skipCacheWait,
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SKIP_CACHE_WAIT,
-      'active-gate owner reconcile should not wait on cache visibility before authoritative readback',
-    );
+    t.equal('skipCacheWait' in (persistOptions[0] ?? {}), false,
+      'active-gate owner reconcile carries no cache-wait opt-out');
     t.match(
       publicationReadOptions[publicationReadOptions.length - 1],
       {
@@ -584,6 +575,7 @@ test('reconcileActiveGateMembershipPublication uses handoff baseline under publi
     const persistedRows = [];
     const listPublicationCalls = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: {
         async listPublications() {
@@ -681,6 +673,7 @@ test('reconcileActiveGateMembershipPublication widens seed-only active-gate hand
       }));
     const persistedRows = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: {
         async listPublications() {
@@ -771,6 +764,7 @@ test('reconcileClusterMembership consumes active-gate owner reconcile handoff',
     };
     const persistedRows = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
       controlPlanePublicationsOwner: {
         async listPublications() {
@@ -851,6 +845,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_TEST_NAME, async (t) => {
   });
   const enqueued = [];
   const coordinator = new MembershipPublicationCoordinator({
+    resolveIsControlPlanePublicationsWriteLeader: () => true,
     nodeId: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[0],
     reconcileQueue: {
       enqueue(ownerKey, reason, context, options) {
@@ -927,6 +922,7 @@ test('reconcileActiveGateMembershipPublication defers stale durable readback',
     const pending = new Map();
     const enqueued = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
@@ -1030,6 +1026,7 @@ test('MembershipPublicationCoordinator bounds active-gate owner retry policy del
     let capturedRetryPolicy = null;
     const pending = new Map();
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
@@ -1125,6 +1122,7 @@ test('reconcileActiveGateMembershipPublication bounds retryable write failure de
     retryableError.retryAfterMs = PUBLICATION_CONVERGENCE_LONG_RETRY_AFTER_MS;
     retryableError.deferRetry = true;
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
@@ -1220,6 +1218,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
     const pending = new Map();
     const enqueued = [];
     const coordinator = new MembershipPublicationCoordinator({
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
       nodeId:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX

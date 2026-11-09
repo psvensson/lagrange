@@ -1,0 +1,98 @@
+{
+  "schema": "independent-design-inputs/1",
+  "reviewer": "subagent:/root/independent_review",
+  "sourceCommit": "3bd7e2e8875c5ff32fd94162a3775aea991a35df",
+  "scope": "Planning representation reuse design only; no implementation or acceptance approval.",
+  "inputs": [
+    {
+      "path": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "sha256": "ac3e3c967a7b2ad25c8a12375ab355dad5dd85661e049d20ade904740dbc09ce",
+      "bytes": 32625
+    },
+    {
+      "path": "src/control-plane/readiness-resolved-planning-answer-context.js",
+      "sha256": "605923411476341f53a379bd0151450390b56386c1c53eaba7172381aeb46d4b",
+      "bytes": 1466
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+      "sha256": "187d456c37d561e13b51e260948321db87d088346509e13d27f1e401a523fbab",
+      "bytes": 30752
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-publication-diagnostics.js",
+      "sha256": "c683539a737184df64d68498315fdbf3e09f9c6cb59e64bb6d6a337703d96055",
+      "bytes": 14686
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+      "sha256": "a7bd2c9a811caa2390cf399fc008acdedf8f0e6c8667a34dc1cc552ab80f0466",
+      "bytes": 42077
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-participation-base.js",
+      "sha256": "4a2c4570229c7bc6c7c40c169dead79822a89e4b2fba3da48caec6cf7aa4cc37",
+      "bytes": 35279
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-stored-snapshot-reuse.js",
+      "sha256": "45c918bebd5cc85625eddfdbbc162f47503feb96af6be888d91cf86d6b8941d8",
+      "bytes": 8812
+    },
+    {
+      "path": "src/control-plane/control-plane-readiness-lifecycle.js",
+      "sha256": "ea7935bb102f5d1b4c7864739fd0ab7dbf1293d2c5ae87a07213a4e343074286",
+      "bytes": 2181
+    },
+    {
+      "path": "src/control-plane/recovery-protocol-snapshot.js",
+      "sha256": "32b7fcb5b6466112085944828fe182ab643b47d820fcdbe6e90318dfdae7507f",
+      "bytes": 27376
+    },
+    {
+      "path": "test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "sha256": "5f7b5f6dc75b22384a484b4f13ecce51b2c0e4b801ac5015c9861ca54d53d85c",
+      "bytes": 35815
+    },
+    {
+      "path": "test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "sha256": "1c2d4d97b4ebdd2dbdd7b5f8a5be415b2dccc0843211558cd7489eef1b20fd05",
+      "bytes": 23611
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-direct-answer-mechanism.mjs",
+      "sha256": "218b650f47ca010e56e19d677edacf48e7740f48be8de2e4e37b8999a44699ab",
+      "bytes": 4130
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/planning-direct-answer-mechanism-v2.log",
+      "sha256": "29c34d79a43965e07e897f45153f51ab55f9f6008cb1e584eeea253dfd6c4f5e",
+      "bytes": 879
+    },
+    {
+      "path": "test-output/readiness-and-cleanup-20261106/independent-planning-trace-supplement.md",
+      "sha256": "9f0cb27710eba3312a35a1a0d1cc6848a01b114442216658ca4633c2ede96057",
+      "bytes": 4390
+    },
+    {
+      "path": "solve/quests/readiness-planning-verified-snapshot-identity-owner/quest.json",
+      "sha256": "508a9b4cb2684346763c4ddfd4a4ea0e25bd69afd3ef27a59425b44f26d5f4ef",
+      "bytes": 8024
+    },
+    {
+      "path": "solve/quests/readiness-planning-deferral-bounded/quest.json",
+      "sha256": "ffe47481c49a6b4a30d3c61edb272f6fbbd4fba0a5e7864af6ce5d865554014b",
+      "bytes": 6333
+    },
+    {
+      "path": "solve/quests/readiness-direct-publication-planning-identity/quest.json",
+      "sha256": "2cc2ad00402ae635c7533bc8ec056ac4ee4b2cfe3a32b613583c66758681abfc",
+      "bytes": 2465
+    },
+    {
+      "path": "docs/steering/rules.md",
+      "sha256": "ff82e2e1318f964871a3655e39755f0410f11c8bdd5edc89e7ed1f0a16fdd08b",
+      "bytes": 8992
+    }
+  ]
+}

@@ -296,10 +296,7 @@ test('ControlPlaneReadinessService keeps same-epoch planning closure witnesses d
         recentTransitions: [],
       }),
       membershipPublicationService: {
-        async getLatestPublicationForNode(targetNodeId) {
-          if (targetNodeId !== TEST_NODE_ID) {
-            return null;
-          }
+        async getLatestClusterPublication() {
           return {
             publicationEpoch: TEST_PUBLICATION_EPOCH,
             status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
@@ -357,11 +354,9 @@ test('ControlPlaneReadinessService keeps same-epoch planning closure witnesses d
       [],
       'runtime authority reason codes should come from the resolved planning answer',
     );
-    t.equal(
-      readiness.dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE],
-      true,
-      'serve admission should stay open once the direct ready row closes the gate',
-    );
+    // Serving is the committed-epoch answer (quest
+    // serve-eligibility-committed-epoch-read); this test's subject is the
+    // projected priority gate, asserted below.
     t.equal(
       readiness.reasons.some((reason) =>
         reason.code ===
@@ -516,10 +511,7 @@ test('ControlPlaneReadinessService preserves source snapshot version in membersh
         recentTransitions: [],
       }),
       membershipPublicationService: {
-        getLatestPublicationForNode(targetNodeId) {
-          if (targetNodeId !== nodeId) {
-            return null;
-          }
+        getLatestClusterPublication() {
           return {
             publicationEpoch: 12,
             status: 'PUBLISHED',
@@ -575,7 +567,7 @@ test('ControlPlaneReadinessService reports stale published priority summaries wi
         recentTransitions: [],
       }),
       membershipPublicationService: {
-        async getLatestPublicationForNode() {
+        async getLatestClusterPublication() {
           return stalePublication;
         },
         enqueueClusterMembershipReconcile(reason, context) {
@@ -642,7 +634,7 @@ test('ControlPlaneReadinessService keeps priority control-plane recovery mode ac
         recentTransitions: [],
       }),
       membershipPublicationService: {
-        getLatestPublicationForNode() {
+        getLatestClusterPublication() {
           return {
             publicationEpoch: 16,
             status: 'PUBLISHED',

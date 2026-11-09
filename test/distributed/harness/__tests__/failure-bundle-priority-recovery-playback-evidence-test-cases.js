@@ -859,4 +859,236 @@ export function registerFailureBundlePriorityRecoveryPlaybackEvidenceTests(conte
       );
     },
   );
+
+  it(
+    'labels historical startup active-gate snapshots and replaces completed startup REPLACE with active ADD from playback snapshots',
+    async () => {
+      refreshState();
+      const scenarioName = 'fresh-formation-user-table-routability';
+      const scenarioDir = join(tempDir, scenarioName);
+      await mkdir(scenarioDir, {recursive: true});
+      const startupEvent = {
+        type: 'cluster.stage',
+        timestamp: 1000,
+        details: {
+          stage: 'setup.cluster.active',
+          mode: 'startup',
+          state: 'ready',
+          ready: true,
+          attempts: 3,
+          elapsedMs: 5000,
+          snapshotCoverage: {
+            selectedNodeId: 'node-1',
+            selectedCapturedAtMs: 1000,
+            selectedObservedNodeIds: ['node-1', 'node-2', 'node-3'],
+            selectedPublicationConvergence: {
+              publicationEpoch: 4,
+              publicationStatus: 'PUBLISHED',
+              publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+              pendingAckNodeIds: [],
+              pendingAckCount: 0,
+              recoveryProtocolState: 'priority_spread_pending',
+              prioritySpreadPending: true,
+              priorityRecoveryReasonCodes: ['priority_partitions_not_spread'],
+              priorityPartitionSummary: {
+                satisfied: false,
+                requiredDistinctNodeCount: 3,
+                readyEligibleNodeCount: 3,
+                totalPriorityPartitionCount: 1,
+                missingPartitionIds: ['replica_operations-p1'],
+                blockedPartitions: [{
+                  partitionId: 'replica_operations-p1',
+                  spreadGap: 1,
+                  requiredDistinctNodeCount: 3,
+                  readyDistinctNodeCount: 2,
+                  readyReplicaCount: 3,
+                  expectedReplicaCount: 3,
+                }],
+                blockedPartitionCount: 1,
+                largestSpreadGap: 1,
+                totalSpreadGap: 1,
+              },
+            },
+            selectedPriorityRecoveryDecisionSnapshots: {
+              schemaVersion: 1,
+              capturedAt: 1000,
+              publicationEpoch: 4,
+              snapshotCount: 1,
+              partitionCount: 1,
+              partitionIdsBySemanticState: {
+                recovering_in_flight: ['replica_operations-p1'],
+              },
+              snapshots: [{
+                partitionId: 'replica_operations-p1',
+                epoch: 4,
+                operationId: 'replace-op-1',
+                correlationKey: 'replica_operations-p1|4|replace-op-1',
+                semanticState: 'recovering_in_flight',
+                admission: {
+                  workflowId: 'replace-workflow-1',
+                  decisionDimension: 'controlPlaneRecoveryEligible',
+                  eligibleNodeIds: ['node-1', 'node-2'],
+                  effectiveEligibleNodeIds: ['node-1', 'node-2'],
+                },
+                planner: {
+                  spreadGap: 1,
+                  readyDistinctNodeCount: 2,
+                  requiredDistinctNodeCount: 3,
+                },
+                coordinator: {
+                  operationIds: ['replace-op-1'],
+                  operation: {
+                    operationId: 'replace-op-1',
+                    type: 'REPLACE',
+                    status: 'removing',
+                    workflowStep: 'STOPPING',
+                    updatedAtMs: 1000,
+                  },
+                },
+                observation: {
+                  workflowState: 'remove_phase',
+                  visibilityState: 'cache_visible',
+                  convergenceState: 'spread_gap',
+                  provenance: {
+                    capturedAt: 1000,
+                    workflowSource: 'system_table_cache',
+                  },
+                },
+              }],
+            },
+          },
+        },
+      };
+      const laterStepEvent = {
+        type: 'scenario.step',
+        timestamp: 9000,
+        details: {
+          step: 'formation-serve-lane-spread-ledger',
+          phase: 'end',
+          status: 'ok',
+        },
+      };
+      await writeFile(
+        join(scenarioDir, 'events.ndjson'),
+        `${JSON.stringify(startupEvent)}\n${JSON.stringify(laterStepEvent)}\n`,
+        UTF8_ENCODING,
+      );
+      await writeFile(
+        join(scenarioDir, 'snapshots.ndjson'),
+        `${JSON.stringify({
+          timestamp: 9000,
+          services: [
+            {
+              service_id: 'replace-replica-1',
+              partition_id: 'replica_operations-p1',
+              node_id: 'node-2',
+              status: 'ready',
+              raft_role: 'leader',
+            },
+            {
+              service_id: 'replica_operations-p1-r2',
+              partition_id: 'replica_operations-p1',
+              node_id: 'node-1',
+              status: 'ready',
+              raft_role: 'follower',
+            },
+            {
+              service_id: 'replica_operations-p1-r4',
+              partition_id: 'replica_operations-p1',
+              node_id: 'node-3',
+              status: 'creating',
+              raft_role: 'learner',
+              voter_ready: false,
+            },
+          ],
+          replicaOperations: [
+            {
+              operation_id: 'replace-op-1',
+              partition_id: 'replica_operations-p1',
+              entity_type: 'partition',
+              type: 'REPLACE',
+              target_node_id: 'node-2',
+              replica_id: 'replace-replica-1',
+              status: 'removed',
+              workflow_step: 'REMOVED',
+              created_at: 500,
+              updated_at: 2000,
+              completed_at: 2000,
+            },
+            {
+              operation_id: 'add-op-2',
+              partition_id: 'replica_operations-p1',
+              entity_type: 'partition',
+              type: 'ADD',
+              target_node_id: 'node-3',
+              replica_id: 'replica_operations-p1-r4',
+              status: 'creating',
+              workflow_step: 'CREATING',
+              created_at: 2500,
+              updated_at: 8500,
+            },
+          ],
+        })}\n`,
+        UTF8_ENCODING,
+      );
+
+      const reportPath = join(tempDir, 'report-historical-startup.json');
+      const writer = new ReportWriter(reportPath);
+      writer.addResult(scenarioName, {
+        passed: false,
+        duration: 9000,
+        error: 'fresh-formation-user-table-routability failed',
+      });
+      await writer.write();
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios: JSON.parse(await readFile(reportPath, UTF8_ENCODING))
+          .scenarios,
+        reportOutputPath: reportPath,
+        outputDir: tempDir,
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const bundleMarkdown = await readFile(
+        resolve(tempDir, scenarioBundles[0].links.markdownPath),
+        UTF8_ENCODING,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.activeGateSnapshotHistorical,
+        true,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.activeGateSnapshotStage,
+        'setup.cluster.active',
+      );
+      assert.match(
+        bundleMarkdown,
+        /Active Gate Snapshot Provenance: historical_startup/,
+      );
+      const witness =
+        scenarioBundle.publicationConvergence.priorityRecoveryPartitionWitnesses[0];
+      assert.ok(witness);
+      assert.equal(witness.partitionId, 'replica_operations-p1');
+      assert.deepEqual(witness.operationIds, ['add-op-2']);
+      assert.equal(witness.latestOperationStatus, 'creating');
+      assert.equal(witness.latestOperationWorkflowStep, 'CREATING');
+      assert.deepEqual(witness.eligibleNodeIds, ['node-1', 'node-2', 'node-3']);
+      const decisionSnapshot =
+        scenarioBundle.controlPlane.priorityRecoveryDecisionSnapshots.snapshots[0];
+      assert.ok(decisionSnapshot);
+      assert.equal(decisionSnapshot.partitionId, 'replica_operations-p1');
+      assert.equal(decisionSnapshot.operationId, 'add-op-2');
+      assert.equal(decisionSnapshot.admission.workflowId, null);
+      assert.deepEqual(decisionSnapshot.admission.effectiveEligibleNodeIds, [
+        'node-1',
+        'node-2',
+        'node-3',
+      ]);
+    },
+  );
 }

@@ -13,6 +13,8 @@ import {
   resolveSplitDescriptorEpochEvidenceForService,
 } from './partition-service-split-replication-state.js';
 import {PARTICIPANT_ACK_RESULT} from '../workflow/workflow-constants.js';
+import {classifyControlPlaneMutationResult} from
+  '../control-plane/control-plane-mutation-outcome-classifier.js';
 
 const {
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -112,12 +114,22 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
   }
   /**
    * Persist leader-owned size_bytes updates into the partitions system table.
+   * size_bytes is an own column (only this partition's leader writes it):
+   * the leader dedupes against the size its last committed write answered,
+   * never against the projection (census site 7, three-class rule, own row;
+   * quest replica-admission-from-committed-operation attempt 2). Only an
+   * applied write is kept, for its leader term (another leader may have
+   * written since): a failed write, or one that found no row, keeps nothing,
+   * so the next measurement writes again. Absent-row repeats (mainly a
+   * retired partition still measuring) are an R17 to the partition owner.
    * @param {number} sizeBytes - Latest measured size.
    * @return {Promise<void>}
    * @private
    */
   async persistPartitionSize(sizeBytes) {
     if (
+      this.isSystemTable === true ||
+      this.tableName === TABLES.PARTITIONS ||
       !this.isLeader ||
       !this.systemTableCache ||
       !this.cdcIntegrationService ||
@@ -125,19 +137,16 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     ) {
       return;
     }
-    const cachedPartition =
-      this.systemTableCache.get?.(TABLES.PARTITIONS, this.partitionId) || null;
-    if (!cachedPartition) {
-      return;
-    }
-    const cachedSize = Number(
-      cachedPartition.size_bytes ?? cachedPartition.sizeBytes,
-    );
-    if (Number.isFinite(cachedSize) && cachedSize === sizeBytes) {
+    const {term} = this.raft.readStatus();
+    const kept = this.committedPartitionSize;
+    if (kept?.term === term && kept.sizeBytes === sizeBytes) {
       return;
     }
     try {
-      await this.submitPartitionSizeMutation(sizeBytes);
+      const answer = await this.submitPartitionSizeMutation(sizeBytes);
+      if (classifyControlPlaneMutationResult(answer).applied) {
+        this.committedPartitionSize = {term, sizeBytes};
+      }
     } catch (error) {
       this.logger.warn(
         PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_SIZE_PERSIST_FAILED,
@@ -182,6 +191,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       throw new Error(result.error || result.message ||
         PARTITION_SERVICE_LITERAL.SIZE_PERSISTENCE_FAILED);
     }
+    return result;
   }
   /**
    * Normalize split transition metadata from table/control-plane payloads.

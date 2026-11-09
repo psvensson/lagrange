@@ -121,7 +121,7 @@ async function activateMessageGroupServiceRows(options = {}) {
 
   for (const {groupId, replicaId, service} of activationEntries) {
     try {
-      await owner.activateReplica({
+      const activatedRow = await owner.activateReplica({
         groupId,
         replicaId,
         nodeId: options.nodeId,
@@ -134,6 +134,12 @@ async function activateMessageGroupServiceRows(options = {}) {
         isEffectHandlerCurrent: () =>
           isReplicaHandlerRegistered(replicaId, service) === true,
       });
+      if (
+        activatedRow &&
+        typeof options.registrationEvidenceByReplicaId?.set === 'function'
+      ) {
+        options.registrationEvidenceByReplicaId.set(replicaId, activatedRow);
+      }
       activatedCount += 1;
     } catch (error) {
       if (options.deferTransientFailures === true &&

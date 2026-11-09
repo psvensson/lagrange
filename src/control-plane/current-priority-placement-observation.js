@@ -8,6 +8,7 @@ import {
 } from './membership-publication-priority-partition-summary.js';
 import {
   appendOwnArrayValue,
+  arrayIsArray,
   copyCanonicalDenseOwnDataRecordArray,
   copyDenseOwnDataArray,
   copyStrictOwnDataRecord,
@@ -113,13 +114,27 @@ function copyActiveNodeViews(value) {
 }
 
 function resolveCurrentPlacementEligibleNodeIds(activeNodeViews = {}) {
-  return (
-    activeNodeViews.locallyEligibleNodeIds?.length > 0 ?
-      activeNodeViews.locallyEligibleNodeIds :
-      activeNodeViews.effectiveActiveNodeIds?.length > 0 ?
-        activeNodeViews.effectiveActiveNodeIds :
-        activeNodeViews.projectedServingNodeIds || []
-  );
+  const merged = [];
+  const seen = new SetConstructor();
+  const sources = [
+    activeNodeViews.locallyEligibleNodeIds,
+    activeNodeViews.effectiveActiveNodeIds,
+    activeNodeViews.projectedServingNodeIds,
+    activeNodeViews.publishedActiveNodeIds,
+  ];
+  for (let i = 0; i < sources.length; i += 1) {
+    const list = sources[i];
+    if (arrayIsArray(list)) {
+      for (let j = 0; j < list.length; j += 1) {
+        const id = list[j];
+        if (typeof id === 'string' && id.length > 0 && !setHas(seen, id)) {
+          setAdd(seen, id);
+          appendOwnArrayValue(merged, id);
+        }
+      }
+    }
+  }
+  return merged;
 }
 
 function buildStringSet(values) {
@@ -372,6 +387,54 @@ function buildUnavailablePriorityLeaderCoverage(priorityPartitionIds) {
   });
 }
 
+function buildCurrentPriorityRowsByPartitionId({
+  priorityPartitionIds,
+  partitionRows,
+  serviceRows,
+}) {
+  const priorityPartitionIdSet = buildStringSet(priorityPartitionIds);
+  const partitionRowById = new MapConstructor();
+  for (let index = 0; index < partitionRows.length; index += 1) {
+    const partitionRow = partitionRows[index];
+    const partitionId = readOwnPrimitiveString(
+      partitionRow,
+      ['partition_id', 'partitionId'],
+    );
+    if (setHas(priorityPartitionIdSet, partitionId)) {
+      mapSet(partitionRowById, partitionId, partitionRow);
+    }
+  }
+  const serviceRowsById = new MapConstructor();
+  for (let index = 0; index < priorityPartitionIds.length; index += 1) {
+    mapSet(serviceRowsById, priorityPartitionIds[index], []);
+  }
+  for (let index = 0; index < serviceRows.length; index += 1) {
+    const serviceRow = serviceRows[index];
+    const partitionId = readOwnPrimitiveString(
+      serviceRow,
+      ['partition_id', 'partitionId'],
+    );
+    if (setHas(priorityPartitionIdSet, partitionId)) {
+      appendOwnArrayValue(mapGet(serviceRowsById, partitionId), serviceRow);
+    }
+  }
+  const rowsByPartitionId = {};
+  for (let index = 0; index < priorityPartitionIds.length; index += 1) {
+    const partitionId = priorityPartitionIds[index];
+    const partitionServiceRows = mapGet(serviceRowsById, partitionId) || [];
+    objectDefineProperty(rowsByPartitionId, partitionId, {
+      value: objectFreeze({
+        partitionRow: mapGet(partitionRowById, partitionId) || null,
+        serviceRows: objectFreeze(partitionServiceRows),
+      }),
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+  return objectFreeze(rowsByPartitionId);
+}
+
 function canonicalizeCurrentPlacementInputs(options) {
   const optionsSnapshot = copyStrictOwnDataRecord(options);
   const safeOptions = optionsSnapshot || createNullRecord(null);
@@ -443,6 +506,11 @@ function buildCurrentPriorityPlacementObservation(options = {}) {
       eligibleNodeIds,
     }) :
     buildUnavailablePriorityLeaderCoverage(priorityPartitionIds);
+  const rowsByPartitionId = buildCurrentPriorityRowsByPartitionId({
+    priorityPartitionIds,
+    partitionRows: inputs.valid ? partitionRows : [],
+    serviceRows: inputs.valid ? serviceRows : [],
+  });
   const available = priorityPartitionSummary !== null;
   return objectFreeze({
     state: available ?
@@ -456,6 +524,7 @@ function buildCurrentPriorityPlacementObservation(options = {}) {
     priorityPartitionIds: objectFreeze(priorityPartitionIds),
     priorityPartitionSummary,
     leaderCoverage,
+    rowsByPartitionId,
     satisfied:
       available &&
       priorityPartitionSummary.satisfied === true &&

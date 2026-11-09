@@ -91,7 +91,8 @@ test('enumerations: the stamp kinds and bootstrap sources are the two ' +
   });
   assertClassifies('ANSWER_FIELD', COMMITTED_MEMBERSHIP_ANSWER_FIELD, {
     configuration: ['VOTERS', 'VOTERS_OUTGOING', 'LEARNERS', 'LEARNERS_NEXT',
-      'CONFIGURATION_KEY', 'MEMBERSHIP_GENERATION_INDEX', 'IDENTITIES'],
+      'CONFIGURATION_KEY', 'MEMBERSHIP_GENERATION_INDEX', 'IDENTITIES',
+      'NODE_IDS'],
     label: ['APPLIED_INDEX', 'COMMIT_INDEX', 'TERM', 'LEADER_ID'],
     gate: ['GATE_OPEN'],
     kind: ['KIND'],

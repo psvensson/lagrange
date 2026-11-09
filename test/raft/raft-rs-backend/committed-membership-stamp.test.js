@@ -15,7 +15,7 @@ import {test} from 'node:test';
 
 import {
   addressOf,
-  admitThroughRows,
+  admitThroughRequest,
   buildTargetFromOperation,
   configure,
   createCommittedMembershipHarness,
@@ -26,6 +26,8 @@ import {
   statusOf,
   waitFor,
 } from './committed-membership-harness.js';
+import {committedAddOperation} from
+  '../../partition/committed-operation-gateway-fixture.js';
 import {
   bootstrapFold,
   durableAppliedState,
@@ -60,13 +62,18 @@ test('T2: a join is stamped with the committed configuration its leader ' +
   const founders = [founderA, source, founderB];
   try {
     await formGroup(harness, founders);
-    // A committed voter added by the group's own row-driven admission (it
-    // never starts a process): the log now carries a conf-change entry, so
-    // the fold is not the genesis list.
+    // A committed voter added by the group's own admission, requested from
+    // its committed operation (it never starts a process): the log now
+    // carries a conf-change entry, so the fold is not the genesis list.
     for (const [replicaId] of founders) {
       harness.caches.get(replicaId).applySystemTableChange(TABLES.SERVICES,
         CDCOperation.INSERT, serviceRow(PARTITION_ID, joiner));
     }
+    const joinerOperation = committedAddOperation(PARTITION_ID, joiner);
+    harness.operations.push(joinerOperation);
+    await harness.leader().handleReplicaAdmissionRequest({
+      partitionId: PARTITION_ID, replicaIdentity: joiner[0],
+      operationId: joinerOperation.operation_id});
     const leaderAtSetup = harness.leaderMember();
     const leaderDb = () => harness.dbPathOf(harness.leaderMember());
     const genesisPeerIds = peerIdsOf(
@@ -133,7 +140,7 @@ test('T2: a join is stamped with the committed configuration its leader ' +
       left.length - right.length || left.localeCompare(right)),
     'the address hints are in ascending raft peer id order');
 
-    assert.equal(await admitThroughRows(harness, target,
+    assert.equal(await admitThroughRequest(harness, target,
       [founderA, source, founderB]), true, 'the group admits the target');
     const targetFold = bootstrapFold(targetDb, PARTITION_ID, {
       voters: stamp.voters, learners: stamp.learners,

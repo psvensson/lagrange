@@ -31,6 +31,7 @@ import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
 import {resumeFixtureParticipantAdmission} from
   '../../test-helpers/participant-transaction-fixture.js';
 
+import {createCommittedServeEligibilityOwner} from '../../control-plane/serve-eligibility-test-support.js';
 const FAILED_RUN_IDS = Object.freeze([
   'bench-9fc36d55-8126-4f3d-ad77-c3fd1c151d5d-412',
   'bench-9fc36d55-8126-4f3d-ad77-c3fd1c151d5d-414',
@@ -91,6 +92,7 @@ function createEndToEndPartition() {
 function createEndToEndCoordinator(partition) {
   const partitionId = partition.partitionId;
   const queryExecutor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache([partitionId]),
     messageRouter: {
       deliver: async (_address, request) =>

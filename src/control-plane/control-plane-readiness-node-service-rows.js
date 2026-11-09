@@ -204,13 +204,13 @@ function hasWritableControlPlaneService(service, serviceRows) {
 
 function hasServeEligibleControlPlaneService(service, serviceRows) {
   if (serviceRows.length === 0) {
-    return true;
+    return false;
   }
   const hasMessageGroupRows = serviceRows.some((serviceRow) => {
     return serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP;
   });
   if (!hasMessageGroupRows) {
-    return true;
+    return false;
   }
   return service.hasActiveAddressedMessageGroupService(serviceRows);
 }

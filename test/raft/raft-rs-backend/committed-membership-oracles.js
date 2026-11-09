@@ -151,6 +151,19 @@ function reservedIdentities(dbFile) {
     .map((row) => [String(row.raft_peer_id), row.replica_identity])));
 }
 
+/**
+ * The committed node each reserved raft peer id carries in the durable
+ * identity record, or null where none is recorded.
+ * @param {string} dbFile - The replica database.
+ * @return {Map<string, string|null>} peerId -> nodeId.
+ */
+function reservedNodeIds(dbFile) {
+  return readOnly(dbFile, (db) => new Map(db.prepare(
+    `SELECT raft_peer_id, node_id FROM ${IDENTITY_TABLE}`)
+    .safeIntegers(true).all()
+    .map((row) => [String(row.raft_peer_id), row.node_id ?? null])));
+}
+
 function decoder() {
   if (decoderCore === null) {
     decoderCore = instantiateRaftRsCore();
@@ -266,6 +279,8 @@ function oracleCommittedStamp(dbFile, groupId, genesisPeerIds, leaderId) {
     gateOpen: true,
     identities: Object.fromEntries(voters.map((peerId) =>
       [peerId, reserved.get(peerId)])),
+    nodeIds: Object.fromEntries(voters.map((peerId) =>
+      [peerId, reservedNodeIds(dbFile).get(peerId) ?? null])),
   };
 }
 
@@ -279,4 +294,5 @@ export {
   logFold,
   oracleCommittedStamp,
   reservedIdentities,
+  reservedNodeIds,
 };

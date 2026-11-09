@@ -6,6 +6,8 @@ import {applyCDCIntegrationServiceAuthoritativeReadDelegates} from
   './cdc-integration-service-authoritative-read-delegates.js';
 import {applyCDCRoutedMutationReadiness} from
   './cdc-routed-mutation-readiness.js';
+import {applyCDCIntegrationServiceProjectionWait} from
+  './cdc-integration-service-projection-wait.js';
 import {applyCDCIntegrationServiceCacheVisibilityWait} from
   './cdc-integration-service-cache-visibility-wait.js';
 import {applyCDCIntegrationServiceMutationOperations} from
@@ -93,9 +95,6 @@ class CDCIntegrationService extends EventEmitter {
       CDC_DEFAULTS.RETRY_MAX_ATTEMPTS;
     this.retryDelayMs =
       config.get(CDC_CONFIG_KEY.RETRY_DELAY_MS) || CDC_DEFAULTS.RETRY_DELAY_MS;
-    this.cacheWaitTimeoutMs =
-      config.get(CDC_CONFIG_KEY.CACHE_WAIT_TIMEOUT_MS) ||
-      CDC_DEFAULTS.CACHE_WAIT_TIMEOUT_MS;
 
     // Epoch manager reference for CDC epoch change handling
     this.epochManager = null;
@@ -142,6 +141,7 @@ applyCDCIntegrationServiceLifecycleMethods(CDCIntegrationService);
 applyCDCIntegrationServiceAuthoritativeReadDelegates(CDCIntegrationService);
 applyCDCRoutedMutationReadiness(CDCIntegrationService);
 applyCDCIntegrationServiceCacheVisibilityWait(CDCIntegrationService);
+applyCDCIntegrationServiceProjectionWait(CDCIntegrationService);
 applyCDCIntegrationServiceMutationOperations(CDCIntegrationService);
 applyCDCIntegrationServiceCdcEventDelegates(CDCIntegrationService);
 
