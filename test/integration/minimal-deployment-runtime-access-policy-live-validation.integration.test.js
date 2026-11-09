@@ -40,6 +40,7 @@ import {ServiceRuntimeLifecycle} from
 import {WasmComponentDriver} from
   '../../src/runtime/wasm-component-driver.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {readinessCollaboratorFake} from '../helpers/readiness-service-fixture.js';
 
 const NODE_ID = 'runtime-access-live-node';
 const TENANT_ID = 'tenant-a';
@@ -295,7 +296,7 @@ describe('minimal deployment runtime access production path', () => {
     async (testContext) => {
       const systemTableCache = new SystemTableCache();
       const handlers = new Map();
-      const messageRouter = {
+      const messageRouter = readinessCollaboratorFake('messageRouter', {
         deliver: async () => ({success: true}),
         getRegisteredHandler: (address) => handlers.get(address) ?? null,
         register(address, handler) {
@@ -307,7 +308,7 @@ describe('minimal deployment runtime access production path', () => {
           handlers.delete(address);
           return true;
         },
-      };
+      });
       const engine = new SQLQueryEngine({
         autoStartDistributedTransactionRecovery: false,
         messageRouter,
