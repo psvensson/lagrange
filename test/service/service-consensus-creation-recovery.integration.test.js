@@ -4,6 +4,7 @@ import {fork} from 'node:child_process';
 import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {flushCoverageBeforeKill} from '../test-helpers/census-pre-kill-flush.js';
 const CHILD = new URL('./service-consensus-creation-recovery-child.js', import.meta.url);
 
 function child(children, args) {
@@ -33,6 +34,7 @@ for (const mode of ['reservation', 'admission']) {
     t.after(async () => {
       for (const owned of children) {
         if (owned.running.exitCode === null && owned.running.signalCode === null) {
+          flushCoverageBeforeKill(owned.running.pid, 'SIGKILL');
           owned.running.kill('SIGKILL');
         }
         await owned.closed;
@@ -46,6 +48,7 @@ for (const mode of ['reservation', 'admission']) {
     assert.equal(saved.resource.phase, 'ADMITTED');
     assert.equal(saved.resource.ordinal, 1);
     assert.equal(saved.row.admission_json === null, mode === 'reservation');
+    flushCoverageBeforeKill(first.running.pid, 'SIGKILL');
     first.running.kill('SIGKILL');
     assert.deepEqual(await first.closed, {code: null, signal: 'SIGKILL'});
     const second = child(children, ['recover', databasePath, saved.row.operation_id]);

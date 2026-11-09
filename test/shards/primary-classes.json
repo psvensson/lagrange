@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2216,
+    "unit": 2217,
     "integration": 119,
     "bootstrap": 218,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2560,
-  "digest": "fnv1a32-7a682dcf",
+  "censusSize": 2561,
+  "digest": "fnv1a32-a0904345",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2226,6 +2226,7 @@
     "test/scripts/evidence-relocation-acceptance.test.js": "unit",
     "test/scripts/evidence-relocation.test.js": "unit",
     "test/scripts/exact-election-evidence-same-turn-model-contract.test.js": "unit",
+    "test/scripts/fallback-branch-census.test.js": "unit",
     "test/scripts/formation-health.test.js": "unit",
     "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": "unit",
     "test/scripts/gen-solve-commands-index.test.js": "unit",

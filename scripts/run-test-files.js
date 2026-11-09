@@ -168,6 +168,24 @@ const TEST_NODE_ARGS = Object.freeze([
   '--no-compilation-cache',
   '--max-old-space-size=512',
 ]);
+// The fallback-branch census (scripts/checks/fallback-branch-census.js
+// collect) raises the heap limit: V8 block coverage parses each coverage
+// write into the heap, which takes a 512 MB test process over its limit.
+const TEST_HEAP_ENV = 'LAGRANGE_TEST_MAX_OLD_SPACE_MB';
+const HEAP_FLAG_PREFIX = '--max-old-space-size=';
+
+/**
+ * The node arguments of a test process: TEST_NODE_ARGS, with the heap limit
+ * TEST_HEAP_ENV names when it is a positive integer.
+ * @param {Object} [env]
+ * @return {ReadonlyArray<string>}
+ */
+function testNodeArgs(env = process.env) {
+  const raised = Number(env[TEST_HEAP_ENV]);
+  if (!Number.isInteger(raised) || raised < 1) return TEST_NODE_ARGS;
+  return TEST_NODE_ARGS.map((argument) => (argument.startsWith(HEAP_FLAG_PREFIX) ?
+    `${HEAP_FLAG_PREFIX}${raised}` : argument));
+}
 
 function parsePositiveInteger(value, option) {
   const parsed = Number(value);
@@ -697,7 +715,7 @@ function runTestFileSync(file, options = {}) {
   const startedAt = Date.now();
   const processResult = spawnSync(
     process.execPath,
-    [...TEST_NODE_ARGS, run.absoluteFile],
+    [...testNodeArgs(), run.absoluteFile],
     {
       cwd: run.cwd,
       env: run.env,
@@ -724,7 +742,7 @@ function runTestFile(file, options = {}) {
   }
   const startedAt = Date.now();
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [...TEST_NODE_ARGS, run.absoluteFile], {
+    const child = spawn(process.execPath, [...testNodeArgs(), run.absoluteFile], {
       cwd: run.cwd,
       env: run.env,
       stdio: ['ignore', run.stdoutFd, run.stderrFd],
@@ -976,6 +994,7 @@ export {
   RETRY_FAILED_ONCE_ENABLED,
   RETRY_FAILED_ONCE_ENV,
   TEST_FILE_LINE,
+  TEST_HEAP_ENV,
   TEST_NODE_ARGS,
   TEST_RESULTS_LEDGER_ROTATE_BYTES,
   analyzeTapOutput,
@@ -990,4 +1009,5 @@ export {
   runTestFileSync,
   runTestFiles,
   testFileVerdictReader,
+  testNodeArgs,
 };

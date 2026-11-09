@@ -7,6 +7,7 @@ import {afterEach, describe, it} from 'node:test';
 import {
   RETRY_FAILED_ONCE_ENABLED,
   RETRY_FAILED_ONCE_ENV,
+  TEST_HEAP_ENV,
   TEST_NODE_ARGS,
   TEST_RESULTS_LEDGER_ROTATE_BYTES,
   analyzeTapOutput,
@@ -16,6 +17,7 @@ import {
   retryFailedOnce,
   runTestFileSync,
   runTestFiles,
+  testNodeArgs,
 } from '../../scripts/run-test-files.js';
 
 const FIXTURE_DIRECTORY = 'test/scripts/__fixtures__/run-test-files';
@@ -273,6 +275,17 @@ describe('test process loaders', () => {
   it('keeps the V8 compilation cache off (3bac105f1) and the heap bound', () => {
     assert.ok(TEST_NODE_ARGS.includes('--no-compilation-cache'));
     assert.ok(TEST_NODE_ARGS.some((argument) => argument.startsWith('--max-old-space-size=')));
+  });
+
+  it('raises only the heap bound, and only for a positive integer census value', () => {
+    assert.equal(testNodeArgs({}), TEST_NODE_ARGS);
+    assert.equal(testNodeArgs({[TEST_HEAP_ENV]: 'lots'}), TEST_NODE_ARGS);
+    assert.equal(testNodeArgs({[TEST_HEAP_ENV]: '0'}), TEST_NODE_ARGS);
+    const raised = testNodeArgs({[TEST_HEAP_ENV]: '2048'});
+    assert.deepEqual(raised.filter((argument) => !argument.startsWith('--max-old-space-size=')),
+      TEST_NODE_ARGS.filter((argument) => !argument.startsWith('--max-old-space-size=')));
+    assert.ok(raised.includes('--max-old-space-size=2048'));
+    assert.equal(raised.length, TEST_NODE_ARGS.length);
   });
 });
 

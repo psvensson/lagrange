@@ -26,6 +26,9 @@ data
 !/data/storage-load/
 /data/storage-load/*
 !/data/storage-load/*.json
+!/data/fallback-census/
+/data/fallback-census/*
+!/data/fallback-census/census.json
 !/data/tidb-comparison/
 /data/tidb-comparison/*
 !/data/tidb-comparison/*.ndjson

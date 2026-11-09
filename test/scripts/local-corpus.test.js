@@ -12,6 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {parse} from 'yaml';
+import {flushCoverageBeforeKill} from '../test-helpers/census-pre-kill-flush.js';
 
 import {
   LOCAL_CORPUS_OWED, localCorpusPlan, publishExactHead, reconcileLocalCorpus,
@@ -50,6 +51,9 @@ function fakeRunning(t) {
   const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)', '--',
     '--local-corpus'], {detached: true, stdio: 'ignore'});
   t.after(() => {
+    if (child.exitCode === null && child.signalCode === null) {
+      flushCoverageBeforeKill(child.pid, 'SIGKILL');
+    }
     try {
       process.kill(-child.pid, 'SIGKILL');
     } catch {
@@ -177,6 +181,8 @@ test('a newer publish supersedes a running local corpus', async (t) => {
 
   // After the new head's push is verified, the running one is stopped and said.
   const lines = [];
+  // The census flushes the child the supersede is about to SIGTERM.
+  flushCoverageBeforeKill(running.child.pid, 'SIGTERM');
   supersedeLocalCorpus(stateDir, HEAD, (line) => lines.push(line));
   assert.equal(stateOf(stateDir, HEAD).state, 'running');
   assert.doesNotThrow(() => process.kill(same.child.pid, 0));
@@ -467,6 +473,7 @@ test('a publish says what the local corpus found, and supersedes only once on ma
     files: 9, startedAt: 2, log: '/l'});
   writeState(passing.stateDir, {sha: 'e'.repeat(40), state: 'red', files: 3, startedAt: 1,
     log: '/l/e.log'});
+  flushCoverageBeforeKill(replaced.child.pid, 'SIGTERM');
   passing.publish();
   await replaced.exited;
   assert.match(passing.lines[0], /^publish: !!! the local corpus was RED for e{40}/u,
