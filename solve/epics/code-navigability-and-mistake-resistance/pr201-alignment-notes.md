@@ -392,3 +392,52 @@ also what brings two_source_fallback_reads under its cap; (c) the PR's
 witness "missing committed reader stays missing" now asserts a TypeError
 (the reader is a required member); (d) the query owners' new probes on an
 optional readiness service were left as found and are recorded here.
+
+## PR head c8215e322
+
+PR #201 moved one commit past the aligned 343c56965. Merged as db88766dc
+(parents 87c49877d, c8215e322). The commit ("preserve system-table SELECT
+provenance, admit boot load-lane via admin-meta, and start all nodes before
+joiner /readyz") changes:
+
+- `src/query/query-executor-base.js` `executeSelect`: computes the table name
+  once before fan-out, passes it to `executeOnPartitions` (was `ast.table`,
+  always undefined for a SELECT) and to the authoritative observation (was
+  `ast?.table || ast?.from`, i.e. the `from` object), and prefers the leader
+  for system tables (`INITIAL_PARTITION_IDS[tableName]`).
+- `src/admin/admin-websocket-load-lane-admission.js`,
+  `admin-websocket-local-observation-methods.js`,
+  `parallel-query-partition-outcomes.js`: boot load-lane admission via
+  admin-meta and failure snapshot carry-through.
+- harness `real-product-deployer-lagrange.js`: start every joining node
+  before polling a joiner's `/readyz`; witnesses in the topology test and the
+  product-answers fixture; admin and query-executor witnesses.
+
+The pre-commit hook refused the merge with three violations from that
+commit; each was re-expressed, no baseline moved:
+
+1. and 2. ambient intrinsics, `real-product-cluster-deployer-topology.test.js`:
+   two `calls.findIndex(...)` became `arrayFindIndex(calls, ...)` from
+   `real-product-captured-intrinsics.js` (the file already imports its
+   siblings from there). `arrayFindIndex` is
+   `Function.call.bind(Array.prototype.findIndex)` captured at module load,
+   so the result is identical on an unmodified prototype.
+3. `two_source_fallback_reads` at `executeSelect`:
+   `ast?.table || ast?.from?.name || (typeof ast?.from === 'string' ?
+   ast.from : null)` became one named owner, `resolveSelectTableName(ast)` =
+   `ast?.from?.name || null`. Equivalence: the parser's SELECT shape
+   (`convertSelect`/`convertFrom`) never sets a top-level `table` and never
+   produces a string `from`; `from` is an object (`name` null for a derived
+   table) or null without FROM. The only non-parser caller,
+   `buildMatchingPkSelectAst` (locking reads), builds `{from: {name}}`.
+   Top-level `table` is the INSERT/UPDATE/DELETE shape, which never reaches
+   `executeSelect`. So both expressions yield the same value for every AST
+   that reaches this point. Witness: `sql-parser.test.js` "SELECT names its
+   base table only as from.name" (plain, JOIN, UNION, CTE, derived table,
+   FROM-less; sqlite and postgresql dialects; DML carries `table` and no
+   `from`). `executeSelect` complexity went from 36 to 29.
+
+Checks on db88766dc: PR-changed tests plus their importers, the query
+executor, parser, system-table local-read, engine-execution and locking-read
+tests all green locally; `node scripts/check-fast-static.js` exit 0;
+`npx eslint src` exit 0.
