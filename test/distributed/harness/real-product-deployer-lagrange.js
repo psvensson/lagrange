@@ -460,7 +460,10 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
       dockerArgs: [...storageArgs(opts, campaignId, index),
         ...nodeEnv({nodeId, host, seedHost, connection})]});
     roles.push({role: NODE_ROLE, host, containerId: started.containerId, nodeId});
-    nodeReadiness.push(await nodeReady(ctx, host));
+    if (index === 0) nodeReadiness.push(await nodeReady(ctx, host));
+  }
+  for (let index = 1; index < hosts.length; index += 1) {
+    nodeReadiness.push(await nodeReady(ctx, hosts[index]));
   }
   const membership = await membershipReady(ctx, seedHost, hosts.length);
   const listener = await publicPgWireReady(ctx, seedHost, roles);

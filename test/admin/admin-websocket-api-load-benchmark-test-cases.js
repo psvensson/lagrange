@@ -645,4 +645,100 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
       ws.close();
       await api.shutdown();
     });
+
+  test('AdminWebSocketAPI - load lane admits benchmark queries using boot-time sys-admin-meta websocket endpoint when sys-postgres-wire has 0 replicas',
+    async (t) => {
+      let executedQueryCount = 0;
+      const cache = createPopulatedCache();
+      cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
+        service_id: 'sys-admin-meta',
+        name: 'Admin & Control Plane API',
+        type: 'meta',
+        protocol: 'websocket',
+        default_port: 8080,
+        status: 'active',
+        updated_at: 1000,
+      });
+      cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+        endpoint_id: 'ep-sys-admin-meta-node-1',
+        service_id: 'sys-admin-meta',
+        node_id: 'node-1',
+        address: 'localhost',
+        port: 8080,
+        protocol: 'websocket',
+        health_status: 'healthy',
+        endpoint_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+        updated_at: 1000,
+      });
+      cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
+        id: 'tbl-ratings',
+        table_name: 'ratings',
+        schema_json: JSON.stringify({
+          tableName: 'ratings',
+          columns: [{name: 'userId', type: ' INTEGER', primaryKey: true}],
+        }),
+        partition_count: 1,
+        status: 'active',
+        updated_at: 1000,
+      });
+      cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+        id: 'ratings-p1',
+        partition_id: 'ratings-p1',
+        table_name: 'ratings',
+        shard_id: 0,
+        leader_node_id: 'node-1',
+        raft_term: 1,
+        status: 'active',
+        updated_at: 1000,
+      });
+      cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+        service_id: 'ratings-p1-r1',
+        service_type: 'partition',
+        node_id: 'node-1',
+        partition_id: 'ratings-p1',
+        replica_id: 'ratings-p1-r1',
+        raft_role: 'leader',
+        status: 'active',
+        address: 'node-1/partition/ratings-p1-r1',
+        updated_at: 1000,
+      });
+
+      const api = new AdminWebSocketAPI({
+        nodeId: 'node-1',
+        systemTableCache: cache,
+        sqlQueryEngine: {
+          executeRequest: async () => {
+            executedQueryCount += 1;
+            return {
+              success: true,
+              rows: [{count: 42}],
+              count: 1,
+              tableName: 'ratings',
+            };
+          },
+        },
+      });
+
+      await api.initialize(0, {listen: false});
+      const {ws} = await connectAndReceive(api, 2000, {
+        query: {lane: 'load'},
+      });
+
+      ws.send(JSON.stringify({
+        type: MessageType.QUERY,
+        queryId: 'q-load-boot-admin-meta-only',
+        sql: 'SELECT COUNT(*) AS count FROM ratings WHERE userId = 1',
+      }));
+
+      const result = await waitForMessage(ws);
+      t.equal(result.type, MessageType.QUERY_RESULT,
+        'should return query_result envelope when only sys-admin-meta endpoint is registered');
+      t.equal(result.error, undefined,
+        'load lane admission must succeed via sys-admin-meta without requiring scaled sys-postgres-wire');
+      t.equal(executedQueryCount, 1,
+        'query should execute on the admitted load lane');
+
+      ws.close();
+      await api.shutdown();
+    });
 }

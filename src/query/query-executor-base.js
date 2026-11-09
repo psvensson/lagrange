@@ -1,5 +1,8 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {
+  INITIAL_PARTITION_IDS,
+} from '../bootstrap/system-table-schemas-constants.js';
+import {
   buildLocalAuthoritativeObservation,
 } from '../cdc/cdc-integration-service-local-system-table-routing.js';
 import {
@@ -417,6 +420,13 @@ class QueryExecutorBase {
     );
 
     // Execute on all partitions in parallel (read operations can go to any replica)
+    const tableName =
+      ast?.table ||
+      ast?.from?.name ||
+      (typeof ast?.from === 'string' ? ast.from : null);
+    const preferLeader =
+      options.preferLeader === true ||
+      Boolean(tableName && INITIAL_PARTITION_IDS[tableName]);
     const results = await this.executeOnPartitions(
       partitionIds,
       sql,
@@ -424,7 +434,7 @@ class QueryExecutorBase {
       queryTimestamp,
       true,
       // forRead = true for SELECT
-      options.preferLeader || false,
+      preferLeader,
       options.preferSameLatencyGroup === true,
       {
         sessionId: options.sessionId,
@@ -436,7 +446,7 @@ class QueryExecutorBase {
         cancellationToken: options.cancellationToken || null,
         resultMaxBytes,
         resultMaxRows,
-        tableName: ast.table,
+        tableName,
       },
     );
     const fanoutMetrics = this.getLastCoordinatorMetrics();
@@ -495,7 +505,6 @@ class QueryExecutorBase {
           result?.rowSetComplete === true &&
           result?.partial !== true,
       );
-    const tableName = ast?.table || ast?.from || null;
     const authoritativeObservation = rowSetComplete ?
       (results.length === 1 && results[0]?.authoritativeObservation ?
         results[0].authoritativeObservation :

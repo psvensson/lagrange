@@ -1143,3 +1143,102 @@ test('QueryExecutor - fresh bootstrap fallback still fails closed when leader ' 
 // R17 finding UA-1): the fresh-bootstrap routing grace that admitted a user
 // partition service whose serve eligibility failed. Witness:
 // query-executor-serve-eligibility-routing.test.js (bootstrap window).
+
+test('QueryExecutor - executeSelect preserves rowSetComplete, leader witness, and complete_table authoritativeObservation for SQLParser SELECT ASTs',
+  async (t) => {
+    const deliveredTo = [];
+    const leaderWitness = Object.freeze({
+      state: 'observed',
+      partitionId: 'partitions-p1',
+      servingNodeId: 'node-leader',
+      servingReplicaId: 'partitions-p1-r2',
+      role: 'leader',
+      term: 3,
+      commitIndex: 14,
+      appliedIndex: 14,
+      observedAtMs: 1700000001234,
+    });
+    const systemCache = {
+      partitions: [{
+        partition_id: 'partitions-p1',
+        table_name: 'partitions',
+        leader_node_id: 'node-leader',
+        raft_term: 3,
+        status: 'active',
+      }],
+      services: [
+        {
+          service_id: 'partitions-p1-r1',
+          replica_id: 'partitions-p1-r1',
+          service_type: 'partition',
+          partition_id: 'partitions-p1',
+          node_id: 'node-follower',
+          raft_role: 'follower',
+          address: 'node-follower/partition/partitions-p1-r1',
+          status: 'active',
+        },
+        {
+          service_id: 'partitions-p1-r2',
+          replica_id: 'partitions-p1-r2',
+          service_type: 'partition',
+          partition_id: 'partitions-p1',
+          node_id: 'node-leader',
+          raft_role: 'leader',
+          address: 'node-leader/partition/partitions-p1-r2',
+          status: 'active',
+        },
+      ],
+      get(type, key) {
+        if (type === 'partitions') {
+          return this.partitions.find((p) => p.partition_id === key) || null;
+        }
+        return null;
+      },
+      filter(type, predicate) {
+        if (type === 'services') return this.services.filter(predicate);
+        if (type === 'partitions') return this.partitions.filter(predicate);
+        return [];
+      },
+    };
+    const router = {
+      async deliver(address) {
+        deliveredTo.push(address);
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rows: [{partition_id: 'partitions-p1', table_name: 'partitions'}],
+          rowSetComplete: true,
+          readAuthorityWitness: leaderWitness,
+        });
+      },
+    };
+    const executor = new QueryExecutor({
+      nodeId: 'node-follower',
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner({
+        projectedDimensions: {
+          serveEligible: true,
+          controlPlaneRecoveryEligible: true,
+          repairEligible: true,
+        },
+      }),
+      messageRouter: router,
+      systemCache,
+    });
+
+    const ast = parseSQL('SELECT * FROM partitions');
+    const result = await executor.executeSelect(ast, ['partitions-p1'], [], {
+      preferLeader: false,
+      routingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    });
+
+    t.equal(result.success, true);
+    t.equal(result.tableName, 'partitions', 'tableName must be normalized string from ast.from.name');
+    t.same(deliveredTo, ['node-leader/partition/partitions-p1-r2'],
+      'system-table SELECT must prefer leader even on a follower node');
+    t.equal(result.rowSetComplete, true, 'rowSetComplete must be preserved across parallel coordinator');
+    t.same(result.readAuthorityWitness, leaderWitness);
+    t.equal(result.authoritativeObservation?.scope, 'complete_table');
+    t.equal(result.authoritativeObservation?.tableName, 'partitions');
+    t.equal(result.authoritativeObservation?.servingNodeId, 'node-leader');
+    t.equal(result.authoritativeObservation?.term, 3);
+  });
