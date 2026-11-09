@@ -48,6 +48,7 @@ test('RUNTIME_SERVICE_CREATE_FAILED wakes remote operation owner via TARGET_EXEC
   const scheduledCallbacks = [];
   const owner = {
     isShuttingDown: false,
+    resolveTimeoutCheckNowMs: () => Date.now(),
     createdOperationHandoffRetryTimerByOperationId: new Map(),
     createdOperationHandoffRetryDeadlineMsByOperationId: new Map(),
     createdOperationHandoffRetryModeByOperationId: new Map(),

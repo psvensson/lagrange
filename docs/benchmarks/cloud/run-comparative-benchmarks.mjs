@@ -79,6 +79,9 @@ import {
   removeCampaignContainers,
 } from '../../../test/distributed/harness/real-product-cluster-deployers.js';
 import {
+  resolveLagrangeContainerImage,
+} from '../../../test/distributed/harness/real-product-deployer-lagrange.js';
+import {
   observeProductsAfterWindow,
 } from '../../../test/distributed/harness/real-product-identity.js';
 import {GIT_OUTPUT_BOUND, execGit} from '../../../scripts/checks/git-invocation.js';
@@ -150,8 +153,10 @@ const VALUE_FLAGS = Object.freeze({
   '--raw-observations': 'rawObservationsPath', '--output': 'outputPath',
   '--lock-wait-minutes': 'lockWaitMinutes', '--client-checkout': 'clientCheckout',
   '--client-node': 'clientNode', '--lagrange-version': 'lagrangeVersion',
+  '--lagrange-image-digest': 'lagrangeImageDigest',
   '--lagrange-image-content': 'lagrangeImageContent',
   '--lagrange-revision': 'lagrangeRevision',
+  '--lagrange-src-fingerprint': 'lagrangeSrcFingerprint',
 });
 
 function list(text) {
@@ -161,6 +166,22 @@ function list(text) {
 function generatedCampaignId() {
   const stamp = new Date().toISOString().replace(/[-:]/gu, '').replace(/\..*$/u, 'Z');
   return `bench-${stamp}-${randomBytes(3).toString('hex')}`;
+}
+
+const BOOLEAN_FLAGS = Object.freeze({
+  '--help': 'help', '-h': 'help', '--dry-run': 'dryRun',
+  '--from-recorded-facts': 'fromRecordedFacts',
+});
+
+function validateCliOptions(opts) {
+  if (!Object.values(TARGET).includes(opts.executionTarget)) {
+    throw new UsageError(`--execution-target must be lab or gcp, got ${opts.executionTarget}`);
+  }
+  if (opts.executionTarget === TARGET.LAB && (opts.hostsRaw || opts.sshHostsRaw)) {
+    throw new UsageError('lab hosts come from the registered lab inventory ' +
+      '(node scripts/lab.js); --hosts/--ssh-hosts are for --execution-target gcp');
+  }
+  if (!PROFILES[opts.profile]) throw new UsageError(`unknown profile ${opts.profile}`);
 }
 
 function parseCliArgs(argv, env) {
@@ -173,22 +194,13 @@ function parseCliArgs(argv, env) {
     dryRun: false, help: false};
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === '--help' || arg === '-h') opts.help = true;
-    else if (arg === '--dry-run') opts.dryRun = true;
-    else if (arg === '--from-recorded-facts') opts.fromRecordedFacts = true;
+    if (BOOLEAN_FLAGS[arg]) opts[BOOLEAN_FLAGS[arg]] = true;
     else if (VALUE_FLAGS[arg] && argv[index + 1] !== undefined) {
       opts[VALUE_FLAGS[arg]] = argv[index + 1];
       index += 1;
     } else throw new UsageError(`unknown or incomplete option ${arg}`);
   }
-  if (!Object.values(TARGET).includes(opts.executionTarget)) {
-    throw new UsageError(`--execution-target must be lab or gcp, got ${opts.executionTarget}`);
-  }
-  if (opts.executionTarget === TARGET.LAB && (opts.hostsRaw || opts.sshHostsRaw)) {
-    throw new UsageError('lab hosts come from the registered lab inventory ' +
-      '(node scripts/lab.js); --hosts/--ssh-hosts are for --execution-target gcp');
-  }
-  if (!PROFILES[opts.profile]) throw new UsageError(`unknown profile ${opts.profile}`);
+  validateCliOptions(opts);
   opts.campaignId = opts.campaignId || generatedCampaignId();
   opts.targets = list(opts.targetsRaw);
   opts.outputPath = opts.outputPath ||
@@ -249,6 +261,9 @@ function appendRecords(file, records) {
 }
 
 async function runCampaign({opts, manifest, hosts, physicalExtras}) {
+  if (manifest.targets.includes(COMPARATIVE_TARGET.LAGRANGE)) {
+    opts.lagrangeImage = resolveLagrangeContainerImage(opts);
+  }
   const sshRun = createSshRun(hosts, opts);
   const facts = await collectHostFacts({hosts, sshRun, opts});
   const physicalHosts = facts.map((fact, index) => ({...fact, name: hosts[index].name,
@@ -292,9 +307,12 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
   // The semantic proof journey runs here, on the controller; PostgreSQL admits
   // the controller's address (as the data host sees it) next to the load generator.
   const controllerIp = (await sshRun(dataIps[0], opts, 'echo "${SSH_CLIENT%% *}"')).trim();
-  const deployOpts = {lagrangeImage: opts.lagrangeImage, storageRoot: opts.storageRoot || null,
+  const deployOpts = {executionTarget: opts.executionTarget,
+    lagrangeImage: opts.lagrangeImage, lagrangeImageDigest: opts.lagrangeImageDigest || null,
+    storageRoot: opts.storageRoot || null,
     lagrangeVersion: opts.lagrangeVersion || null, lagrangeRevision: opts.lagrangeRevision || null,
     lagrangeImageContent: opts.lagrangeImageContent || null,
+    lagrangeSrcFingerprint: opts.lagrangeSrcFingerprint || null,
     lagrangeImageByHost: pinned ? Object.fromEntries(Object.entries(pinned).map(
       ([ip, entry]) => [ip, entry.runRef])) : null,
     proofClientIps: controllerIp ? [controllerIp] : []};
@@ -305,7 +323,7 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
     campaignId: manifest.campaignId, sshRun, opts});
   const deps = {
     runSemanticGate: createSemanticGateStage({journey: runScenarioASemanticProofJourney,
-      sshRun, opts,
+      sshRun, opts, loadGeneratorHost,
       redeploy: async (run) => {
         await teardown();
         return deployArm(run);

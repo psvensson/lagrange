@@ -156,6 +156,7 @@ function createAuthoritativeReadTransport(behavior, authorityClock) {
       const partitionId = INITIAL_PARTITION_IDS[tableName];
       return {
         success: true,
+        rowSetComplete: true,
         tableName,
         rows: [],
         count: 0,

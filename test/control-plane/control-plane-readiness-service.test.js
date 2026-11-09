@@ -15,6 +15,7 @@ import {
 import {
   CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
+  CONTROL_PLANE_READ_PURPOSE,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_REASON,
@@ -23,7 +24,12 @@ import {
 } from '../../src/control-plane/control-plane-constants.js';
 
 import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  ControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  createSystemMetadataOwners,
+} from '../../src/control-plane/owners/create-system-metadata-owners.js';
 import {
 } from '../../src/cdc/cdc-integration-service.js';
 import {
@@ -1232,6 +1238,153 @@ async (t) => {
       reason.code === CONTROL_PLANE_READINESS_REASON.NODE_ROW_MISSING,
     ),
     'repaired snapshots should not keep the missing-node blocker reason',
+  );
+  t.end();
+});
+
+test('ControlPlaneReadinessService falls back to owner RPC with ' +
+  'readiness_internal purpose when authoritative node/service refresh ' +
+  'runs on a node that does not host nodes-p1 or services-p1 locally',
+async (t) => {
+  const now = 64000;
+  const nodeId = 'node-remote-target';
+  const cache = createCache({
+    nodes: [],
+    services: [],
+    partitions: [
+      {
+        [COLUMN.PARTITION_ID]: 'nodes-p1',
+        [COLUMN.TABLE_NAME]: TABLES.NODES,
+      },
+      {
+        [COLUMN.PARTITION_ID]: 'services-p1',
+        [COLUMN.TABLE_NAME]: TABLES.SERVICES,
+      },
+    ],
+  });
+  const ownerRpcCalls = [];
+  const repairedNodeRow = {
+    ...createActiveNode(nodeId),
+    [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+    [COLUMN.LAST_HEARTBEAT]: now - 100,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+  };
+  const repairedServiceRow = createMessageGroupService(nodeId);
+  const cdcIntegrationService = {
+    async executeAuthoritativeSystemTableRead(
+      tableName,
+      _sql,
+      _params,
+      requestOptions,
+    ) {
+      ownerRpcCalls.push({tableName, requestOptions});
+      const readMode =
+        requestOptions?.readAuthority?.authoritativeReadMode || null;
+      if (
+        readMode !==
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+          .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK
+      ) {
+        return {
+          success: false,
+          error: 'authoritative_row_source_unavailable',
+          rows: [],
+        };
+      }
+      if (tableName === TABLES.NODES) {
+        return {
+          success: true,
+          rows: [repairedNodeRow],
+        };
+      }
+      if (tableName === TABLES.SERVICES) {
+        return {
+          success: true,
+          rows: [repairedServiceRow],
+        };
+      }
+      return {
+        success: true,
+        rows: [],
+      };
+    },
+  };
+  const controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-4-non-hosting',
+    cdcIntegrationService,
+    systemTableCache: cache,
+    now: () => now,
+  });
+  const {nodesOwner, servicesOwner} = createSystemMetadataOwners({
+    controlPlaneSystemTableGateway,
+    systemTableCache: cache,
+    now: () => now,
+  });
+  const readinessService = createReadinessServiceForTest({
+    nodeId: 'node-4-non-hosting',
+    systemTableCache: cache,
+    cacheMutationTarget: cache,
+    controlPlaneSystemTableGateway,
+    nodesOwner,
+    servicesOwner,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcIntegrationService,
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const singleReadiness = await readinessService.getNodeReadiness(
+    nodeId,
+    {
+      allowAuthoritativeRefresh: true,
+      decisionDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+    },
+  );
+  const allReadiness = await readinessService.getAllNodeReadiness({
+    allowAuthoritativeRefresh: true,
+    decisionDimension:
+      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+  });
+
+  t.equal(
+    singleReadiness.dimensions.repairEligible,
+    true,
+    'non-hosting node should resolve target node readiness via owner RPC fallback',
+  );
+  t.equal(
+    allReadiness.find((entry) => entry.nodeId === nodeId)?.dimensions
+      ?.repairEligible,
+    true,
+    'non-hosting node should resolve cluster node readiness via owner RPC fallback',
+  );
+  t.ok(
+    ownerRpcCalls.length >= 2,
+    'owner RPC fallback should be invoked for nodes and services when local partition is unavailable',
+  );
+  t.ok(
+    ownerRpcCalls.every(
+      (call) =>
+        call.requestOptions?.readAuthority?.purpose ===
+        CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
+    ),
+    'owner RPC fallback reads must carry readiness_internal purpose to prevent recursive readiness refresh',
   );
   t.end();
 });

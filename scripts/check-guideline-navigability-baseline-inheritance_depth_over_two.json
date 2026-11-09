@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T14:28:56.718Z",
+  "generatedAt": "2026-11-09T17:56:57.106Z",
   "rawViolationCount": 58,
   "violations": [
     {
@@ -356,7 +356,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-drain.js",
-      "line": 67,
+      "line": 110,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",

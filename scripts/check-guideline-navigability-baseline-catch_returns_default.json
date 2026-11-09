@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T14:28:56.727Z",
-  "rawViolationCount": 387,
+  "generatedAt": "2026-11-09T17:56:57.238Z",
+  "rawViolationCount": 386,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-diagnostic-loss-accounting.js",
@@ -149,7 +149,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 130,
+      "line": 169,
       "column": 6,
       "functionName": "resolveLoadLaneQueryTargetTableName",
       "kind": "catch_returns_default",
@@ -275,7 +275,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-cluster-view-owner.js",
-      "line": 95,
+      "line": 110,
       "column": 6,
       "functionName": "getStartupAuthorityReadyNodeIds",
       "kind": "catch_returns_default",
@@ -1436,7 +1436,7 @@
     },
     {
       "filePath": "src/node/replica-handler-participant-release.js",
-      "line": 354,
+      "line": 352,
       "column": 4,
       "functionName": "canFastPathPausedResume",
       "kind": "catch_returns_default",
@@ -2492,15 +2492,6 @@
       "line": 77,
       "column": 4,
       "functionName": "readOperationWorkflowDurableStepsHistory",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-drain.js",
-      "line": 251,
-      "column": 6,
-      "functionName": "isPriorityRecoveryAddSettledByOperationFact",
       "kind": "catch_returns_default",
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"

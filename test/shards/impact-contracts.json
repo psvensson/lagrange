@@ -412,17 +412,21 @@
       ]
     },
     "sql-engine-system-table-read": {
-      "description": "System-table reads answered by the SQL engine reflect rows written through the CDC owner; the engine is real on a production-booted node and a contract-bound seam in the membership-consistency harness.",
+      "description": "System-table reads and routing-overlay service states answered by the SQL engine agree with membership and service rows maintained by SystemTableCache and written through the CDC owner; the engine is real on a production-booted node and a contract-bound seam in the membership-consistency harness.",
       "owners": [
         "src/query/sql-query-engine.js",
         "src/query/sql-query-engine-statement-execution.js",
+        "src/query/sql-query-engine-routing-metadata-methods.js",
+        "src/query/sql-query-engine-instance-initializer.js",
+        "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
         "src/cache/system-table-cache.js",
         "src/cdc/cdc-integration-service.js"
       ],
       "tests": [
         "test/integration/sql-engine-system-writes-contract.integration.test.js",
         "test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js",
-        "test/integration/message-group-multi-join-formation.integration.test.js"
+        "test/integration/message-group-multi-join-formation.integration.test.js",
+        "test/query/sql-query-engine-routing-overlay-state.test.js"
       ]
     },
     "CL-041": {
@@ -2058,6 +2062,7 @@
       "owners": [
         "src/bootstrap/replication-target-authority.js",
         "src/policy/policy-constants.js",
+        "src/policy/table-policy-committed-base.js",
         "src/policy/table-policy-resolution.js",
         "src/policy/table-policy-validation.js",
         "src/policy/table-policy-service.js",
@@ -2088,6 +2093,32 @@
         "test/sql-engine-read-migration.test.js",
         "test/query/table-creation-service.test.js",
         "test/admin/admin-owner-operations.test.js"
+      ]
+    },
+    "management-v1-quorum-and-cluster-view-authority": {
+      "description": "Management v1 operations (facts, backup/restore, rolling upgrade, node decommission) consume leader-witnessed partition quorum and cluster-view snapshots exclusively from PartitionQuorumAuthority and BootstrapClusterViewOwner; cache-only or incomplete projections remain unavailable and never grant management mutation authority.",
+      "owners": [
+        "src/bootstrap/owners/management-v1-owner.js",
+        "src/bootstrap/owners/rolling-upgrade-owner.js",
+        "src/bootstrap/owners/backup-restore-owner.js",
+        "src/bootstrap/owners/partition-quorum-authority.js",
+        "src/bootstrap/owners/bootstrap-cluster-view-owner.js"
+      ],
+      "tests": [
+        "test/bootstrap/management-v1-route-authority.test.js",
+        "test/bootstrap/management-v1-l4-l3.test.js"
+      ]
+    },
+    "priority-recovery-drain-and-replica-observation": {
+      "description": "Priority-recovery drain and pending-dispatch reconciliation consume typed stopping/target replica observations from ReplicaOperationRepository without treating unmaterialized or stale replica projections as converged completion, preserving event-driven re-entry once authoritative state advances.",
+      "owners": [
+        "src/rebalancer/operation-workflow-recovery-drain.js",
+        "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
+        "src/rebalancer/replica-operation-repository-observation-methods.js"
+      ],
+      "tests": [
+        "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+        "test/rebalancer/rebalance-coordinator-stopping-reconcile-stale-priority.test.js"
       ]
     },
     "runtime-definition-create-authority": {
@@ -2576,13 +2607,16 @@
       ]
     },
     "sql-engine-cache-membership": {
-      "description": "The SQL engine and the system-table cache agree on membership rows: what the CDC owner writes, the engine reads back. Seamed in the membership-consistency harness, real in the seven-node probe.",
+      "description": "The SQL engine, its routing-metadata overlay and lifecycle callbacks, and SystemTableCache agree on membership and service rows: what the CDC owner writes, the engine reads back and reconciles without masking eligible cache services. Seamed in the membership-consistency harness, real in the seven-node probe.",
       "endpoints": [
         {
           "id": "sql-engine",
           "owners": [
             "src/query/sql-query-engine.js",
-            "src/query/sql-query-engine-statement-execution.js"
+            "src/query/sql-query-engine-statement-execution.js",
+            "src/query/sql-query-engine-routing-metadata-methods.js",
+            "src/query/sql-query-engine-instance-initializer.js",
+            "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js"
           ]
         },
         {
@@ -2597,7 +2631,8 @@
       "witnessTests": [
         "test/integration/sql-engine-system-writes-contract.integration.test.js",
         "test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js",
-        "test/integration/message-group-multi-join-formation.integration.test.js"
+        "test/integration/message-group-multi-join-formation.integration.test.js",
+        "test/query/sql-query-engine-routing-overlay-state.test.js"
       ],
       "harnessSeam": {
         "stub": "test/distributed/harness/sql-engine-seam.js",
@@ -4424,6 +4459,7 @@
           "owners": [
             "src/bootstrap/replication-target-authority.js",
             "src/policy/policy-constants.js",
+            "src/policy/table-policy-committed-base.js",
             "src/policy/table-policy-resolution.js",
             "src/policy/table-policy-validation.js",
             "src/policy/table-policy-service.js"
@@ -4452,6 +4488,54 @@
         "test/rebalancer/partition-policy-remove-retry.test.js",
         "test/rebalancer/rebalance-coordinator-topology-guard.test.js",
         "test/policy/table-policy-target-refusal.test.js"
+      ]
+    },
+    "management-v1-quorum-and-cluster-view-authority": {
+      "description": "Management v1 route, rolling-upgrade and backup/restore owners consume only leader-witnessed quorum and cluster-view snapshots supplied by PartitionQuorumAuthority and BootstrapClusterViewOwner, failing closed without side effects when authoritative cluster state is absent or incomplete.",
+      "endpoints": [
+        {
+          "id": "management-v1-operation-owners",
+          "owners": [
+            "src/bootstrap/owners/management-v1-owner.js",
+            "src/bootstrap/owners/rolling-upgrade-owner.js",
+            "src/bootstrap/owners/backup-restore-owner.js"
+          ]
+        },
+        {
+          "id": "partition-quorum-and-cluster-view-authority",
+          "owners": [
+            "src/bootstrap/owners/partition-quorum-authority.js",
+            "src/bootstrap/owners/bootstrap-cluster-view-owner.js"
+          ]
+        }
+      ],
+      "contract": "management-v1-quorum-and-cluster-view-authority",
+      "witnessTests": [
+        "test/bootstrap/management-v1-route-authority.test.js",
+        "test/bootstrap/management-v1-l4-l3.test.js"
+      ]
+    },
+    "priority-recovery-drain-and-replica-observation": {
+      "description": "Recovery drain and pending-dispatch reconciliation adjudicate stale or unmaterialized priority operations exclusively from ReplicaOperationRepository's typed replica observations and re-enter deterministically on event progression.",
+      "endpoints": [
+        {
+          "id": "operation-workflow-recovery-drain-and-pending",
+          "owners": [
+            "src/rebalancer/operation-workflow-recovery-drain.js",
+            "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js"
+          ]
+        },
+        {
+          "id": "replica-operation-repository-observation",
+          "owners": [
+            "src/rebalancer/replica-operation-repository-observation-methods.js"
+          ]
+        }
+      ],
+      "contract": "priority-recovery-drain-and-replica-observation",
+      "witnessTests": [
+        "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+        "test/rebalancer/rebalance-coordinator-stopping-reconcile-stale-priority.test.js"
       ]
     },
     "committed-node-floor-and-retained-wake": {

@@ -1340,3 +1340,80 @@ test('SQLQueryEngine - retryable control-plane deferred non-transactional ' +
   upsertResolvers = [];
   await new Promise((resolve) => setTimeout(resolve, SLOW_PERSIST_MS + 10));
 });
+
+test('SQLQueryEngine - readDistributedTransactionRow and ' +
+  'readDistributedTransactionRecoveryState use ' +
+  'OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK for non-hosting nodes in >3-node clusters',
+async (t) => {
+  const capturedCalls = [];
+  const sampleRow = {
+    transaction_id: 'tx-non-hosting-node-1',
+    session_id: 'split-child-left:child-right',
+    transaction_epoch: 1,
+    timeout_deadline: 9999999999999,
+    transaction_mode: 'READ_WRITE',
+    participant_set_state: 'FROZEN',
+    participant_set_text: '[]',
+    commit_mode: 'TWO_PHASE',
+    frozen_participant_count: 0,
+    decision: 'COMMIT',
+    decision_text: '{"transactionId":"tx-non-hosting-node-1","decision":"COMMIT","participants":[]}',
+    decision_digest: 'digest-1',
+  };
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    systemCache: createMockSystemCache([], [], []),
+    messageRouter: createMockMessageRouter(),
+    controlPlaneSystemTableGateway: {
+      async readAuthoritativeRows(tableName, sql, params, options = {}) {
+        capturedCalls.push({tableName, sql, params, options});
+        if (options.authoritativeReadMode === 'owner_local_only') {
+          return {
+            success: false,
+            rows: [],
+            error: 'authoritative_row_source_unavailable',
+          };
+        }
+        return {
+          success: true,
+          rows: tableName === TABLES.SQL_TRANSACTIONS ? [sampleRow] : [],
+        };
+      },
+    },
+  });
+
+  const decisionRow = await engine.readDistributedTransactionRow(
+    'tx-non-hosting-node-1',
+  );
+  t.same(
+    decisionRow,
+    sampleRow,
+    'readDistributedTransactionRow should succeed on non-hosting nodes via owner-RPC fallback',
+  );
+
+  const recoveryState = await engine.readDistributedTransactionRecoveryState(
+    'tx-non-hosting-node-1',
+  );
+  t.equal(
+    recoveryState?.state,
+    'available',
+    'readDistributedTransactionRecoveryState should succeed on non-hosting nodes via owner-RPC fallback',
+  );
+  t.equal(
+    capturedCalls.length,
+    4,
+    'decision read + before/participants/after recovery reads should all invoke readAuthoritativeRows',
+  );
+  for (const call of capturedCalls) {
+    t.not(
+      call.options?.authoritativeReadMode,
+      'owner_local_only',
+      `${call.tableName} authoritative read must allow owner-RPC fallback for >3-node RF=3 clusters`,
+    );
+    t.equal(
+      call.options?.workClass,
+      PRESSURE_WORK_CLASS.CRITICAL,
+      `${call.tableName} authoritative read must preserve CRITICAL workClass`,
+    );
+  }
+});

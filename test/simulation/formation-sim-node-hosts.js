@@ -13,9 +13,11 @@
 // from scenario data rather than written by a real bootstrap (slice 2c);
 // cross-node replication of cache changes is not hosted yet.
 
+import {
+  INITIAL_PARTITION_IDS,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
-
 import {
   ControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -30,6 +32,7 @@ import {
 } from '../../src/control-plane/control-plane-publications-leadership.js';
 import {assembleHeartbeatService} from '../../src/control-plane/heartbeat-service.js';
 import {TablePolicyService} from '../../src/policy/table-policy-service.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {StorageAdmissionService} from '../../src/rebalancer/storage-admission-service.js';
 import {
@@ -37,6 +40,7 @@ import {
 } from '../../src/rebalancer/storage-capacity-accounting-service.js';
 import {EntityType, UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
 import {TABLES} from '../../src/constants/index.js';
+import {createSqlEngineSeam} from '../distributed/harness/sql-engine-seam.js';
 import {
   createMessageRouterHost,
   createNodeEntry,
@@ -56,6 +60,234 @@ const SIM_CACHE_ID_SUFFIX = '/cache';
 const INSERT = 'INSERT';
 const READY_LEASE_MS = 30000;
 const PARTITION_SUFFIX = '-p1';
+const WITNESS_STATE_OBSERVED = 'observed';
+const DEFAULT_LEADER_TERM = 1;
+const DEFAULT_COMMITTED_INDEX = 0;
+const LEADER_UNAVAILABLE_ERROR = 'Partition leader unavailable';
+const TARGET_ENGINE_UNAVAILABLE_ERROR = 'Partition target engine unavailable';
+const INITIAL_SYSTEM_PARTITION_IDS = Object.freeze(
+  Object.values(INITIAL_PARTITION_IDS),
+);
+
+function buildLeaderReadAuthorityWitness(
+  partitionId,
+  servingNodeId,
+  observedAtMs,
+  leader,
+) {
+  return Object.freeze({
+    state: WITNESS_STATE_OBSERVED,
+    partitionId,
+    role: RAFT_ROLE.LEADER,
+    servingNodeId,
+    servingReplicaId: `${partitionId}-${servingNodeId}`,
+    observedAtMs,
+    term: Number.isSafeInteger(leader?.term) && leader.term >= DEFAULT_LEADER_TERM ?
+      leader.term : DEFAULT_LEADER_TERM,
+    appliedIndex:
+      Number.isSafeInteger(leader?.appliedIndex) &&
+      leader.appliedIndex >= DEFAULT_COMMITTED_INDEX ?
+        leader.appliedIndex : DEFAULT_COMMITTED_INDEX,
+    commitIndex:
+      Number.isSafeInteger(leader?.commitIndex) &&
+      leader.commitIndex >= DEFAULT_COMMITTED_INDEX ?
+        leader.commitIndex : DEFAULT_COMMITTED_INDEX,
+  });
+}
+
+function createLocalPartitionService(
+  nodeId,
+  partitionId,
+  localEngine,
+  now,
+  partitionAuthority,
+) {
+  const buildRemoteReadAuthorityWitness = () => {
+    const leader = partitionAuthority.resolvePartitionLeader(partitionId);
+    if (leader?.leaderId !== nodeId) return null;
+    return buildLeaderReadAuthorityWitness(partitionId, nodeId, now(), leader);
+  };
+  const executeLocalQuery = async (sql, params = []) => {
+    const result = await localEngine.executeQuery(sql, params);
+    const witness = buildRemoteReadAuthorityWitness();
+    if (!result?.success || !witness) return result;
+    return {...result, readAuthorityWitness: witness};
+  };
+  return Object.freeze({
+    partitionId,
+    replicaId: `${partitionId}-${nodeId}`,
+    initialized: true,
+    getRole: () =>
+      partitionAuthority.resolvePartitionLeader(partitionId)?.leaderId === nodeId ?
+        RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
+    buildRemoteReadAuthorityWitness,
+    executeLocalQuery,
+    executeQuery: executeLocalQuery,
+  });
+}
+
+function resolveTargetReplicaNodeId(
+  nodeId,
+  partitionId,
+  preferLeader,
+  leader,
+  partitionAuthority,
+) {
+  if (preferLeader) return leader?.leaderId || null;
+  if (partitionAuthority.hasLocalReplica(nodeId, partitionId)) return nodeId;
+  return leader?.leaderId || null;
+}
+
+function resolveTargetSqlEngine(nodeId, targetNodeId, localEngine, partitionAuthority) {
+  if (targetNodeId === nodeId) return localEngine;
+  return partitionAuthority.resolveNodeSqlEngine(targetNodeId);
+}
+
+function buildPartitionExecutionFailure(error) {
+  return {
+    success: false,
+    rows: [],
+    rowSetComplete: false,
+    error,
+  };
+}
+
+function formatPartitionExecutionSuccess({
+  result,
+  partitionId,
+  targetNodeId,
+  leader,
+  partitionAuthority,
+}) {
+  const witness = leader?.leaderId === targetNodeId ?
+    buildLeaderReadAuthorityWitness(
+      partitionId,
+      targetNodeId,
+      partitionAuthority.resolveNodeNow(targetNodeId),
+      leader,
+    ) :
+    null;
+  return {
+    ...result,
+    rowSetComplete: true,
+    participantNodeId: targetNodeId,
+    ...(witness ? {readAuthorityWitness: witness} : {}),
+  };
+}
+
+function createPartitionQueryExecutor(nodeId, localEngine, partitionAuthority) {
+  return Object.freeze({
+    async executeOnPartition(
+      partitionId,
+      statement,
+      params = [],
+      _isReadOnly = true,
+      preferLeader = true,
+    ) {
+      const leader = partitionAuthority.resolvePartitionLeader(partitionId);
+      const targetNodeId = resolveTargetReplicaNodeId(
+        nodeId,
+        partitionId,
+        preferLeader,
+        leader,
+        partitionAuthority,
+      );
+      if (!targetNodeId) {
+        return buildPartitionExecutionFailure(LEADER_UNAVAILABLE_ERROR);
+      }
+      const targetEngine = resolveTargetSqlEngine(
+        nodeId,
+        targetNodeId,
+        localEngine,
+        partitionAuthority,
+      );
+      if (!targetEngine) {
+        return buildPartitionExecutionFailure(TARGET_ENGINE_UNAVAILABLE_ERROR);
+      }
+      const result = await targetEngine.executeQuery(statement, params);
+      if (!result?.success) {
+        return {...result, rowSetComplete: false};
+      }
+      return formatPartitionExecutionSuccess({
+        result,
+        partitionId,
+        targetNodeId,
+        leader,
+        partitionAuthority,
+      });
+    },
+  });
+}
+
+function createSimulatedPublicationRuntimeOwner({
+  nodeId,
+  cdcIntegrationService,
+  cache,
+  messageRouter,
+  controlPlaneSystemTableGateway,
+  now,
+  hostSetTimeout,
+}) {
+  const controlPlaneWriteRetrySleep = (delayMs) =>
+    new Promise((resolve) => {
+      hostSetTimeout(resolve, delayMs);
+    });
+  const runtimeOwner = new MembershipPublicationRuntimeOwner({
+    nodeId,
+    cdcIntegrationService,
+    systemTableCache: cache,
+    messageRouter,
+    controlPlaneSystemTableGateway,
+    controlPlaneWriteRetryNow: now,
+    controlPlaneWriteRetrySleep,
+  });
+  for (const metadataOwner of [
+    runtimeOwner.nodesOwner,
+    runtimeOwner.nodeEndpointsOwner,
+    runtimeOwner.serviceEndpointsOwner,
+    runtimeOwner.messageGroupsOwner,
+    runtimeOwner.controlPlanePublicationsOwner,
+  ]) {
+    if (!metadataOwner) continue;
+    metadataOwner.controlPlaneWriteRetryNow = now;
+    metadataOwner.controlPlaneWriteRetrySleep = controlPlaneWriteRetrySleep;
+  }
+  return runtimeOwner;
+}
+
+function createNodePartitionAuthoritySeam(nodeId, cache, now, partitionAuthority) {
+  if (!partitionAuthority) {
+    return {
+      sqlQueryEngine: createSqlEngineSeamFor(cache),
+      partitionServicesProvider: null,
+    };
+  }
+  const localEngine = createSqlEngineSeam(cache);
+  const queryExecutor = createPartitionQueryExecutor(
+    nodeId,
+    localEngine,
+    partitionAuthority,
+  );
+  const sqlQueryEngine = createSqlEngineSeam(cache, {queryExecutor});
+  const partitionServicesProvider = () => {
+    const services = new Map();
+    for (const partitionId of INITIAL_SYSTEM_PARTITION_IDS) {
+      if (!partitionAuthority.hasLocalReplica(nodeId, partitionId)) continue;
+      services.set(
+        partitionId,
+        createLocalPartitionService(
+          nodeId,
+          partitionId,
+          localEngine,
+          now,
+          partitionAuthority,
+        ),
+      );
+    }
+    return services;
+  };
+  return {sqlQueryEngine, partitionServicesProvider};
+}
 
 /**
  * Build one node's real owners on its network clock.
@@ -63,6 +295,7 @@ const PARTITION_SUFFIX = '-p1';
  * @param {object} options.network the virtual network
  * @param {string} options.nodeId
  * @param {object} options.randomSource seeded random source for the node
+ * @param {object|null} [options.partitionAuthority] scenario partition leadership
  * @param {Function} [options.chargeDispatch] brackets a scheduled callback so
  *   the segments it produces are charged to this node; the default runs the
  *   callback uncharged, for construction-only uses
@@ -70,6 +303,7 @@ const PARTITION_SUFFIX = '-p1';
  */
 function createSimulatedNodeHosts({network, nodeId, randomSource,
   compositionRegistry = null,
+  partitionAuthority = null,
   chargeDispatch = (id, callback) => callback()}) {
   // This composer builds the node's cache, CDC service and router host, so it
   // declares itself where a scenario tracks composition. Scenarios that do
@@ -92,11 +326,13 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
       network.setTimer(nodeId, () => chargeDispatch(nodeId, callback),
         NEXT_TURN_DELAY_MS),
   });
-  const sqlQueryEngine = createSqlEngineSeamFor(cache);
+  const {sqlQueryEngine, partitionServicesProvider} =
+    createNodePartitionAuthoritySeam(nodeId, cache, now, partitionAuthority);
   const messageRouter = createMessageRouterHost(
     {nodeId, routerId: `${nodeId}${SIM_ROUTER_ID_SUFFIX}`});
   const cdcIntegrationService = new CDCIntegrationService({
-    nodeId, systemTableCache: cache, cacheMutationTarget: cache, sqlQueryEngine, timeSource,
+    nodeId, systemTableCache: cache, cacheMutationTarget: cache, sqlQueryEngine,
+    partitionServicesProvider, timeSource,
   });
   cdcIntegrationService.bootstrapMode = false;
   cdcIntegrationService.logger = QUIET_LOGGER;
@@ -104,7 +340,8 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
   let controlPlaneReadinessService = null;
   const controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
     nodeId, systemTableCache: cache, cdcIntegrationService, sqlQueryEngine, messageRouter,
-    getControlPlaneReadinessService: () => controlPlaneReadinessService, now,
+    getControlPlaneReadinessService: () => controlPlaneReadinessService,
+    logger: QUIET_LOGGER, now,
   });
   controlPlaneReadinessService = createReadinessServiceForTest({
     nodeId, systemTableCache: cache, cacheMutationTarget: cache, cdcIntegrationService,
@@ -121,6 +358,7 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
     systemTableCache: cache, sqlQueryEngine, cdcIntegrationService,
     controlPlaneSystemTableGateway, now,
   });
+  tablePolicyService.logger = QUIET_LOGGER;
   const storageAccountingService = new StorageCapacityAccountingService({
     systemTableCache: cache, sqlQueryEngine, controlPlaneSystemTableGateway, timeSource, now,
   });
@@ -129,23 +367,7 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
     cacheMutationTarget: cache, messageRouter, cdcIntegrationService,
     controlPlaneReadinessService, controlPlaneSystemTableGateway, now,
   });
-  const membershipPublicationService = new MembershipPublicationCoordinator({
-    nodeId, systemTableCache: cache, cdcIntegrationService, controlPlaneReadinessService,
-    now: controlPlaneReadinessService.now,
-    membershipPublicationRuntimeOwner: new MembershipPublicationRuntimeOwner({
-      nodeId, cdcIntegrationService, systemTableCache: cache, messageRouter,
-      controlPlaneSystemTableGateway,
-    }),
-    resolveIsControlPlanePublicationsWriteLeader: () =>
-      isControlPlanePublicationsWriteLeader(cache, nodeId, cdcIntegrationService),
-  });
-  controlPlaneReadinessService.syncOwnerDependencies({membershipPublicationService});
-  // The real upstream initiator of readiness work. Nothing here mentions
-  // readiness: the heartbeat writes this node's own row, the write reaches
-  // the system-table cache, the cache change rotates the node-local planning
-  // identity, and the planning queue drains a build. That chain is what
-  // produced the live rate, so the simulator hosts the chain rather than
-  // inventing a cadence (owner decision 2026-09-14).
+  storageAdmissionService.logger = QUIET_LOGGER;
   // One cancellable one-shot for every owner that arms its own timer. A
   // no-op canceller leaves watchdogs armed on work that already finished.
   const hostSetTimeout = (callback, delayMs) => {
@@ -159,7 +381,33 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
   const hostClearTimeout = (handle) => {
     if (handle) handle.cancelled = true;
   };
+  const membershipPublicationService = new MembershipPublicationCoordinator({
+    nodeId, systemTableCache: cache, cdcIntegrationService, controlPlaneReadinessService,
+    now: controlPlaneReadinessService.now,
+    membershipPublicationRuntimeOwner: createSimulatedPublicationRuntimeOwner({
+      nodeId,
+      cdcIntegrationService,
+      cache,
+      messageRouter,
+      controlPlaneSystemTableGateway,
+      now,
+      hostSetTimeout,
+    }),
+    resolveIsControlPlanePublicationsWriteLeader: () =>
+      isControlPlanePublicationsWriteLeader(cache, nodeId, cdcIntegrationService),
+  });
+  controlPlaneReadinessService.syncOwnerDependencies({membershipPublicationService});
+  // The real upstream initiator of readiness work. Nothing here mentions
+  // readiness: the heartbeat writes this node's own row, the write reaches
+  // the system-table cache, the cache change rotates the node-local planning
+  // identity, and the planning queue drains a build. That chain is what
+  // produced the live rate, so the simulator hosts the chain rather than
+  // inventing a cadence (owner decision 2026-09-14).
   const intervals = new Set();
+  const hostSetInterval = (callback, intervalMs) =>
+    repeatOnVirtualTime(network, nodeId, intervals,
+      () => chargeDispatch(nodeId, callback), intervalMs);
+  const hostClearInterval = (handle) => intervals.delete(handle);
   // Assembled by the production owner, so the collaborator list cannot drift:
   // omitting the publication service silently disabled the heartbeat's
   // scheduled reconcile, which production documents as the sole scheduler for
@@ -175,21 +423,22 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
     isNodeLifecycleReady: () => true,
     // The authoritative readback is real IO this seam cannot serve.
     verifyReporterVisibilityOnSuccess: false,
-    setIntervalFn: (callback, intervalMs) =>
-      repeatOnVirtualTime(network, nodeId, intervals,
-        () => chargeDispatch(nodeId, callback), intervalMs),
-    clearIntervalFn: (handle) => intervals.delete(handle),
+    setIntervalFn: hostSetInterval,
+    clearIntervalFn: hostClearInterval,
     // A cancellable one-shot. A no-op canceller left every heartbeat attempt's
     // 6 s watchdog armed, so each successful attempt still recorded a timeout
     // failure production never sees, and leaked a charged timer per attempt.
     setTimeoutFn: hostSetTimeout,
     clearTimeoutFn: hostClearTimeout,
   });
+  heartbeatService.logger = QUIET_LOGGER;
   const rebalanceCoordinator = new RebalanceCoordinator({
     nodeId, systemTableCache: cache, cdcIntegrationService, messageRouter, tablePolicyService,
     sqlQueryEngine, storageAccountingService, storageAdmissionService,
     controlPlaneReadinessService, controlPlaneSystemTableGateway, timeSource,
+    setIntervalFn: hostSetInterval, clearIntervalFn: hostClearInterval,
   });
+  rebalanceCoordinator.logger = QUIET_LOGGER;
   // Production initializes the coordinator during setup; without it every
   // operation creation throws "RebalanceCoordinator is shutting down", which
   // the guard raises for an uninitialized coordinator as well as a stopping
@@ -201,6 +450,7 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
     storageAccountingService, storageAdmissionService, membershipPublicationService,
     rebalanceCoordinator, randomSource, heartbeatService,
     setTimeoutFn: hostSetTimeout, clearTimeoutFn: hostClearTimeout,
+    stopIntervals: () => intervals.clear(),
   });
 }
 
@@ -226,7 +476,7 @@ function repeatOnVirtualTime(network, nodeId, live, callback, intervalMs) {
  * @returns {UnifiedRebalancer}
  */
 function createPriorityPartitionRebalancer(hosts, tableId) {
-  return new UnifiedRebalancer({
+  const rebalancer = new UnifiedRebalancer({
     entityId: `${tableId}${PARTITION_SUFFIX}`,
     entityType: EntityType.PARTITION,
     nodeId: hosts.nodeId,
@@ -245,6 +495,8 @@ function createPriorityPartitionRebalancer(hosts, tableId) {
     setTimeoutFn: hosts.setTimeoutFn,
     clearTimeoutFn: hosts.clearTimeoutFn,
   });
+  rebalancer.logger = QUIET_LOGGER;
+  return rebalancer;
 }
 
 /**

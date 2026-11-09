@@ -495,7 +495,9 @@ class LatencyMeasurementService extends EventEmitter {
         TABLES.INTER_GROUP_LATENCIES,
         INTER_GROUP_LATENCY_SQL.SELECT_BY_EDGE_ID,
         [edgeId],
-        {workClass: PRESSURE_WORK_CLASS.BACKGROUND},
+        {
+          workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        },
       );
     if (read?.success !== true || !Array.isArray(read.rows)) {
       return {

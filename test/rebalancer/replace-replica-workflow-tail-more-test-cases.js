@@ -166,6 +166,14 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         enableTimeouts: false,
         messageRouter,
         cacheData: {
+          nodes: [SOURCE_NODE_ID, 'node-b', 'node-c', TARGET_NODE_ID].map(
+            (nodeId) => ({
+              node_id: nodeId,
+              status: 'active',
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60_000,
+            }),
+          ),
           services: [
             {
               service_id: SOURCE_REPLICA_ID,
@@ -303,6 +311,14 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         enableTimeouts: false,
         messageRouter,
         cacheData: {
+          nodes: [SOURCE_NODE_ID, 'node-b', 'node-c', TARGET_NODE_ID].map(
+            (nodeId) => ({
+              node_id: nodeId,
+              status: 'active',
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60_000,
+            }),
+          ),
           services: [
             {
               service_id: SOURCE_REPLICA_ID,
@@ -441,6 +457,14 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         enableTimeouts: false,
         messageRouter,
         cacheData: {
+          nodes: [SOURCE_NODE_ID, 'node-b', 'node-c', TARGET_NODE_ID].map(
+            (nodeId) => ({
+              node_id: nodeId,
+              status: 'active',
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60_000,
+            }),
+          ),
           services: [
             {
               service_id: SOURCE_REPLICA_ID,
@@ -1032,14 +1056,10 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         isOutboundQueueAvailable: () => true,
       };
       const authoritativeLearnerRow = {
-        service_id: 'nodes-p1-r4',
-        replica_id: 'nodes-p1-r4',
-        service_type: 'partition',
-        partition_id: 'nodes-p1',
-        node_id: 'node-d',
-        status: ReplicaStatus.ACTIVE,
-        raft_role: 'learner',
-        address: 'node-d/partition/nodes-p1-r4',
+        service_id: 'nodes-p1-r4', replica_id: 'nodes-p1-r4',
+        service_type: 'partition', partition_id: 'nodes-p1', node_id: 'node-d',
+        status: ReplicaStatus.ACTIVE, raft_role: 'learner',
+        address: 'node-d/partition/nodes-p1-r4', created_at: 1, state_entered_at: 1,
       };
       const coordinator = createTestCoordinator({
         nodeId: 'node-d',
@@ -1048,7 +1068,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         sqlQueryResults: {
           'FROM services WHERE service_id = ?': {
             success: true,
-            rows: [{...authoritativeLearnerRow}],
+            rows: [authoritativeLearnerRow],
             affectedRows: 1,
           },
         },
@@ -1098,6 +1118,8 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           sourceNodeId: 'node-a',
           replicaId: 'nodes-p1-r1',
         });
+        authoritativeLearnerRow.service_id = operation.replicaId;
+        authoritativeLearnerRow.replica_id = operation.replicaId;
 
         await coordinator.executeOperation(operation);
         await coordinator.reconcileOperationProgress(operation);

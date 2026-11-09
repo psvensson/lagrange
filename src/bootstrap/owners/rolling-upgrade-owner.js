@@ -16,8 +16,15 @@ const UNSET = null;
 const ARTIFACT_SHA256_PREFIX = 'sha256:';
 const SEMVER_SEPARATOR_DOT = '.';
 const FUNCTION_TYPE = 'function';
+const OBJECT_TYPE = 'object';
+const QUORUM_HEALTHY_FIELD = 'quorumHealthy';
 const SEMVER_PARTS_COUNT = 3;
 const ARTIFACT_DIGEST_MIN_LENGTH = 10;
+const objectAssign = Object.assign;
+const objectCreate = Object.create;
+const objectHasOwn = Object.hasOwn;
+const objectKeys = Object.keys;
+const objectValues = Object.values;
 const D_VER = MANAGEMENT_V1_CONTRACT.DEFAULT_RELEASE_VERSION;
 const D_DIG = MANAGEMENT_V1_CONTRACT.DEFAULT_ARTIFACT_DIGEST;
 const D_TIMEOUT = MANAGEMENT_V1_CONTRACT.DEFAULT_NODE_UPGRADE_TIMEOUT_MS;
@@ -30,6 +37,15 @@ const OWNER_DEFAULTS = Object.freeze({
   nodePlan: UNSET, currentNodeIndex: -1, versionSkew: false,
   initialOperationState: OP_STATE.ACCEPTED, supportEnvelope: UNSET, exactVersionPair: UNSET,
 });
+
+function createNodeVersionsMap(source) {
+  const map = objectCreate(null);
+  if (!source || typeof source !== OBJECT_TYPE) return map;
+  for (const key of objectKeys(source)) {
+    if (objectHasOwn(source, key)) map[key] = source[key];
+  }
+  return map;
+}
 
 function parseSemver(v) {
   if (typeof v !== 'string') return UNSET;
@@ -52,12 +68,29 @@ function defaultVerifyArtifactDigest(tVer, tDig, expected) {
   if (typeof tDig !== 'string' || !tDig.startsWith(ARTIFACT_SHA256_PREFIX) ||
       tDig.length < ARTIFACT_DIGEST_MIN_LENGTH) return false;
   if (!expected) return true;
-  const exp = expected instanceof Map ? expected.get(tVer) : expected[tVer];
+  const exp = expected instanceof Map ? expected.get(tVer) :
+    (objectHasOwn(expected, tVer) ? expected[tVer] : undefined);
   return !exp || tDig === exp;
 }
 function checkSafetyFailure(quorumHealthy, mixedVersionViolated) {
-  return quorumHealthy === false ? L4_CODE.QUORUM_SAFETY_HALT :
-    (mixedVersionViolated === true ? L4_CODE.MIXED_VERSION_INVARIANT_VIOLATED : UNSET);
+  if (quorumHealthy !== true) return L4_CODE.QUORUM_SAFETY_HALT;
+  return mixedVersionViolated === true ? L4_CODE.MIXED_VERSION_INVARIANT_VIOLATED : UNSET;
+}
+function normalizeStepCall(nowMsOrOptions, options) {
+  if (nowMsOrOptions !== null && typeof nowMsOrOptions === OBJECT_TYPE) {
+    return {
+      timeMs: Number.isFinite(nowMsOrOptions.nowMs) ? nowMsOrOptions.nowMs : Date.now(),
+      quorumHealthy: nowMsOrOptions.quorumHealthy,
+      mixedVersionInvariantViolated: nowMsOrOptions.mixedVersionInvariantViolated,
+    };
+  }
+  const opts = options !== null && typeof options === OBJECT_TYPE ? options : {};
+  return {
+    timeMs: Number.isFinite(nowMsOrOptions) ? nowMsOrOptions :
+      (Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now()),
+    quorumHealthy: opts.quorumHealthy,
+    mixedVersionInvariantViolated: opts.mixedVersionInvariantViolated,
+  };
 }
 
 function isCount(value) {
@@ -73,7 +106,8 @@ function isSnapshotIncomplete(snap) {
     !isCount(snap.underReplicatedPartitionCount);
 }
 function isClusterNotReady(snap) {
-  return snap.ready === false || resolveReadyCount(snap) < snap.nodeIds.length;
+  return (snap.ready !== undefined && snap.ready !== true) ||
+    resolveReadyCount(snap) < snap.nodeIds.length;
 }
 function isOutsideSupportEnvelope(owner, targetVersion) {
   const configuredEnvelope = owner.supportEnvelope || owner.exactVersionPair;
@@ -95,13 +129,15 @@ function findPreflightFailure(owner, params, snap) {
     [!owner.checkVersionCompatible(tVer), L4_CODE.RELEASE_VERSION_INCOMPATIBLE],
     [Boolean(tDig && !owner.checkArtifactDigest(tVer, tDig)), L4_CODE.ARTIFACT_DIGEST_MISMATCH],
     [isClusterNotReady(snap), L4_CODE.CLUSTER_NOT_READY],
+    [snap.hasPartitionQuorum !== true, L4_CODE.QUORUM_SAFETY_HALT],
     [snap.underReplicatedPartitionCount > 0, L4_CODE.UNDER_REPLICATED_PARTITIONS],
     [snap.capacityState === FACTS.CAPACITY_PRESSURED, L4_CODE.STORAGE_CAPACITY_PRESSURED],
   ].find(([failed]) => failed);
   return hit ? hit[1] : UNSET;
 }
 function isClusterAlreadyUpgraded(owner, nodeIds, tVer, tDig, snapSkew) {
-  return nodeIds.every((id) => owner.nodeVersions[id] === tVer) &&
+  return nodeIds.every((id) => objectHasOwn(owner.nodeVersions, id) &&
+      owner.nodeVersions[id] === tVer) &&
     (!tDig || owner.currentArtifactDigest === tDig) &&
     (snapSkew === false || !owner.isVersionSkewActive());
 }
@@ -147,8 +183,8 @@ function commitActiveOp(owner, opId, op) {
   return op;
 }
 function restorePersistedCollections(owner, s) {
-  Object.assign(owner, {
-    nodeVersions: s.nodeVersions ? {...s.nodeVersions} : owner.nodeVersions,
+  objectAssign(owner, {
+    nodeVersions: s.nodeVersions ? createNodeVersionsMap(s.nodeVersions) : owner.nodeVersions,
     operations: new Map(s.operations || []),
     activeOperation: s.activeOperation ? {...s.activeOperation} : UNSET,
     nodePlan: s.nodePlan ? s.nodePlan.map((n) => ({...n})) : UNSET,
@@ -164,12 +200,12 @@ class RollingUpgradeOwner {
    *   installed; no option can claim the capability without them.
    */
   constructor(options = {}) {
-    Object.assign(this, OWNER_DEFAULTS, options);
+    objectAssign(this, OWNER_DEFAULTS, options);
     this.capabilitySupported = typeof this.onDrainNodeLeadership === FUNCTION_TYPE &&
       typeof this.onTriggerNodeRestart === FUNCTION_TYPE;
     this.operations = new Map();
     this.drainingNodeIds = new Set();
-    this.nodeVersions = {...(options.nodeVersions || {})};
+    this.nodeVersions = createNodeVersionsMap(options.nodeVersions);
     if (!options.verifyArtifactDigest) {
       this.verifyArtifactDigest = (v, d) =>
         defaultVerifyArtifactDigest(v, d, options.expectedArtifactDigests);
@@ -203,14 +239,19 @@ class RollingUpgradeOwner {
   initiatePlan(opId, lagrangeOpId, params, snap, timeMs) {
     const [tVer, tDig] = [params?.targetVersion, params?.targetArtifactDigest];
     const nodeIds = snap.nodeIds;
-    for (const id of nodeIds) this.nodeVersions[id] = this.nodeVersions[id] || this.currentVersion;
+    for (const id of nodeIds) {
+      if (!objectHasOwn(this.nodeVersions, id) || !this.nodeVersions[id]) {
+        this.nodeVersions[id] = this.currentVersion;
+      }
+    }
     if (isClusterAlreadyUpgraded(this, nodeIds, tVer, tDig, snap.versionSkew)) {
       return commitActiveOp(this, opId, buildOperationRecord(
         opId, lagrangeOpId, OP_STATE.SUCCEEDED, UNSET, params, timeMs, timeMs));
     }
     this.nodePlan = nodeIds.map((id) => ({
       nodeId: id, step: NODE_STEP.PENDING, targetVersion: tVer,
-      previousVersion: this.nodeVersions[id] || this.currentVersion,
+      previousVersion: objectHasOwn(this.nodeVersions, id) ?
+        this.nodeVersions[id] : this.currentVersion,
       startedAtMs: timeMs, updatedAtMs: timeMs, readyzWithdrawn: false, leadershipDrained: false,
     }));
     this.currentNodeIndex = 0;
@@ -222,7 +263,7 @@ class RollingUpgradeOwner {
   drainNodeAtIndex(index, timeMs) {
     const node = this.nodePlan?.[index];
     if (!node) return UNSET;
-    Object.assign(node, {
+    objectAssign(node, {
       step: NODE_STEP.AWAITING_RESTART, leadershipDrained: true, readyzWithdrawn: true,
       startedAtMs: timeMs, updatedAtMs: timeMs,
     });
@@ -233,18 +274,27 @@ class RollingUpgradeOwner {
       node.nodeId, node.targetVersion, this.activeOperation?.parameters?.targetArtifactDigest);
     return node;
   }
-  beginNextNodeDrain(nowMs) {
-    const timeMs = Number.isFinite(nowMs) ? nowMs : Date.now();
-    if (!this.activeOperation || this.currentNodeIndex < 0 || !this.nodePlan) return UNSET;
-    const node = this.drainNodeAtIndex(this.currentNodeIndex, timeMs);
-    if (node) touchActiveOp(this, timeMs);
-    return node;
+  beginNextNodeDrain(nowMsOrOptions, options = {}) {
+    if (!this.hasActiveUpgrade() || this.currentNodeIndex < 0 || !this.nodePlan) return UNSET;
+    const stepCall = normalizeStepCall(nowMsOrOptions, options);
+    const node = this.getActiveNode();
+    if (!node) return UNSET;
+    const safety = checkSafetyFailure(
+      stepCall.quorumHealthy, stepCall.mixedVersionInvariantViolated);
+    if (safety) return haltAndFail(this, node, safety, stepCall.timeMs);
+    const drained = this.drainNodeAtIndex(this.currentNodeIndex, stepCall.timeMs);
+    if (drained) touchActiveOp(this, stepCall.timeMs);
+    return drained;
   }
-  recordNodeRestarted(nodeId, {version, artifactDigest: _d, nowMs}) {
+  recordNodeRestarted(nodeId, details = {}) {
+    const {version, artifactDigest: _d, nowMs} = details;
     const timeMs = Number.isFinite(nowMs) ? nowMs : Date.now();
     const node = this.nodePlan?.find((n) => n.nodeId === nodeId);
-    if (!node || !this.activeOperation) return UNSET;
+    if (!node || !this.hasActiveUpgrade()) return UNSET;
     this.drainingNodeIds.delete(nodeId);
+    if (objectHasOwn(details, QUORUM_HEALTHY_FIELD) && details.quorumHealthy !== true) {
+      return haltAndFail(this, node, L4_CODE.QUORUM_SAFETY_HALT, timeMs);
+    }
     if (version !== node.targetVersion) {
       return haltAndFail(this, node, L4_CODE.MIXED_VERSION_INVARIANT_VIOLATED, timeMs);
     }
@@ -254,12 +304,13 @@ class RollingUpgradeOwner {
     return node;
   }
   completeNodeCatchUp(nodeId, options = {}) {
+    if (!this.hasActiveUpgrade()) return UNSET;
     const timeMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
     const safety = checkSafetyFailure(
       options.quorumHealthy, options.mixedVersionInvariantViolated);
     const node = this.nodePlan?.find((n) => n.nodeId === nodeId);
     if (safety) return haltAndFail(this, node, safety, timeMs);
-    if (!node || !this.activeOperation) return UNSET;
+    if (!node) return UNSET;
     if ((options.underReplicatedPartitionCount || 0) > 0) {
       return handleCatchUpLag(this, node, options, timeMs);
     }
@@ -267,7 +318,7 @@ class RollingUpgradeOwner {
   }
   finalizeCatchUp(node, timeMs) {
     this.onSetNodeReadyz?.(node.nodeId, true);
-    Object.assign(node, {readyzWithdrawn: false, step: NODE_STEP.COMPLETED, updatedAtMs: timeMs});
+    objectAssign(node, {readyzWithdrawn: false, step: NODE_STEP.COMPLETED, updatedAtMs: timeMs});
     this.nodeVersions[node.nodeId] = node.targetVersion;
     this.currentNodeIndex += 1;
     if (this.nodePlan.every((n) => n.step === NODE_STEP.COMPLETED)) {
@@ -325,7 +376,7 @@ class RollingUpgradeOwner {
     };
   }
   isVersionSkewActive() {
-    if (new Set(Object.values(this.nodeVersions)).size > 1) return true;
+    if (new Set(objectValues(this.nodeVersions)).size > 1) return true;
     if (this.nodePlan && this.nodePlan.length > 0) {
       const done = this.nodePlan.filter((n) => n.step === NODE_STEP.COMPLETED).length;
       if (done >= 1 && done < this.nodePlan.length) return true;

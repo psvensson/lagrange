@@ -34,6 +34,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
     OperationType,
     ReplicaStatus,
     ReplicaOperationField,
+    REPLICA_OPERATION_OWNER_PREFERRED_READ_QUERY_OPTIONS,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
     REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
     REPLICA_OPERATION_VISIBILITY_READ_MODE,
@@ -45,12 +46,19 @@ function assignReplicaOperationRepositoryEntityReadMethods(
     buildReplicaOperationVisibilityReadOptions,
     resolveReplicaOperationVisibilityReadMode,
   } = options;
+  const LOCAL_PREFERRED_AUTHORITATIVE_READ_OPTIONS = Object.freeze({
+    ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
+    authoritativeReadMode: undefined,
+    leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+    retryOnRetryableFailure: true,
+  });
 
   class ReplicaOperationRepositoryEntityReadMethods {
     async queryTerminalFailedCreateCleanupOperations() {
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_ALL_OPERATIONS,
         [],
+        LOCAL_PREFERRED_AUTHORITATIVE_READ_OPTIONS,
       );
       if (!result.success || !Array.isArray(result.rows)) {
         throw new Error(result?.error || REPLICA_OPERATION_REPOSITORY_ERROR_MSG
@@ -76,6 +84,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_OPERATIONS_BY_ENTITY,
         [entityType, entityId],
+        LOCAL_PREFERRED_AUTHORITATIVE_READ_OPTIONS,
       );
       if (!result.success || !Array.isArray(result.rows)) {
         throw new Error(
@@ -117,7 +126,11 @@ function assignReplicaOperationRepositoryEntityReadMethods(
           })
           .map((row) => this.rowToOperation(row));
       }
-      const result = await this.executeReplicaOperationsRead(SQL.SELECT_ALL_OPERATIONS, []);
+      const result = await this.executeReplicaOperationsRead(
+        SQL.SELECT_ALL_OPERATIONS,
+        [],
+        REPLICA_OPERATION_OWNER_PREFERRED_READ_QUERY_OPTIONS,
+      );
       if (!result.success || !result.rows) {
         return [];
       }
@@ -142,6 +155,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_OPERATIONS_BY_ENTITY,
         [entityType, entityId],
+        REPLICA_OPERATION_OWNER_PREFERRED_READ_QUERY_OPTIONS,
       );
       if (!result.success || !result.rows) {
         return [];

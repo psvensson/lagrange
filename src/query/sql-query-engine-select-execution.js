@@ -210,17 +210,25 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         sessionId, queryOptions, rawSql, transactionRead));
   }
 
-  resolveSelectPreferLeader(tableName, routingReadinessDimension, queryOptions,
-    transactionRead) {
+  resolveSelectPreferLeader(
+    tableName,
+    routingReadinessDimension,
+    queryOptions,
+    transactionRead,
+    preferSameLatencyGroup = false,
+  ) {
     if (transactionRead) return true;
     if (typeof queryOptions?.preferLeader === 'boolean') {
       return queryOptions.preferLeader;
     }
-    const recoveryLaneSystemTableSelect =
-      this.isSystemTable(tableName) &&
-      routingReadinessDimension ===
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
-    return !recoveryLaneSystemTableSelect;
+    if (this.isSystemTable(tableName)) {
+      return (
+        routingReadinessDimension !==
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+      );
+    }
+    if (preferSameLatencyGroup === true) return false;
+    return true;
   }
 
   validateSelectJoinPlans(ast, distributedPlan) {
@@ -328,11 +336,15 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       tableName,
       queryOptions.routingReadinessDimension,
     );
+    const preferSameLatencyGroup =
+      queryOptions.preferSameLatencyGroup === true ||
+      this.resolveIssuingServiceReadLocality(queryOptions);
     const preferLeader = this.resolveSelectPreferLeader(
       tableName,
       routingReadinessDimension,
       queryOptions,
       transactionRead,
+      preferSameLatencyGroup,
     );
 
     if (transactionRead) {
@@ -347,9 +359,6 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       tableName,
       queryOptions.deliveryPriority,
     );
-    const preferSameLatencyGroup =
-      queryOptions.preferSameLatencyGroup === true ||
-      this.resolveIssuingServiceReadLocality(queryOptions);
     const result = await this.queryExecutor.executeSelect(
       ast,
       partitionIds,
@@ -444,7 +453,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE
             .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC ||
         queryOptions.readAuthority.authoritativeReadMode ===
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_ONLY) ?
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED) ?
         queryOptions.readAuthority :
         null;
     const readAuthority = suppliedReadAuthority ||

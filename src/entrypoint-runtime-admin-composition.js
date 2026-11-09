@@ -269,6 +269,15 @@ function hydrateBootstrapApiRuntime(options) {
   options.bootstrapAPI.replicaHandler = options.replicaHandler;
   options.bootstrapAPI.epochManager = options.epochManager;
   options.bootstrapAPI.messageRouter = options.messageRouter;
+  if (options.cdcIntegrationService) {
+    options.bootstrapAPI.setCdcIntegrationService(
+      options.cdcIntegrationService,
+    );
+  }
+  if (options.controlPlaneReadinessService) {
+    options.bootstrapAPI.controlPlaneReadinessService =
+      options.controlPlaneReadinessService;
+  }
   if (Object.hasOwn(options, LOCAL_STR_STARTUPRECOVERYCOORDINATOR)) {
     options.bootstrapAPI.startupRecoveryCoordinator =
       options.startupRecoveryCoordinator || null;
@@ -669,14 +678,10 @@ async function shutdownAdminRuntimeComposition(adminRuntime) {
 }
 
 export {
-  createAdminAPIWithLiveQuery,
   createReadinessStateWithDiagnostics,
-  createServiceDiagnosticsProvider,
-  createSqlCallbackWasmExecutor,
   createSqlRuntimeComposition,
   hydrateBootstrapApiRuntime,
   isEarlyAdminSqlEngineEnabled,
-  resolvePartitionServiceByPartitionId,
   resolveSystemCacheHandles,
   reportStartupRuntimeHandoff,
   shutdownAdminRuntimeComposition,

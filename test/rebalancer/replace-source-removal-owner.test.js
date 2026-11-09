@@ -62,6 +62,23 @@ function targetRow(status) {
     status,
     raft_role: 'leader',
     address: `${TARGET_NODE_ID}/partition/${TARGET_REPLICA_ID}`,
+    created_at: 1,
+    state_entered_at: 1,
+  };
+}
+
+function sourceRow(status) {
+  return {
+    service_id: SOURCE_REPLICA_ID,
+    replica_id: SOURCE_REPLICA_ID,
+    partition_id: PARTITION_ID,
+    node_id: SOURCE_NODE_ID,
+    service_type: 'partition',
+    status,
+    raft_role: 'follower',
+    address: `${SOURCE_NODE_ID}/partition/${SOURCE_REPLICA_ID}`,
+    created_at: 1,
+    state_entered_at: 1,
   };
 }
 
@@ -130,10 +147,17 @@ async function createHarness({
       ),
     },
     sqlQueryResults: {
-      'FROM services WHERE service_id = ?': {
-        success: true,
-        rows: [{node_id: SOURCE_NODE_ID, status: sourceStatus}],
-        affectedRows: 1,
+      get 'FROM services WHERE service_id = ?'() {
+        const currentTarget =
+          coordinator?.systemTableCache?.get?.('services', TARGET_REPLICA_ID);
+        return {
+          success: true,
+          rows: [
+            sourceRow(sourceStatus),
+            ...(currentTarget ? [currentTarget] : []),
+          ],
+          affectedRows: 1,
+        };
       },
     },
   });

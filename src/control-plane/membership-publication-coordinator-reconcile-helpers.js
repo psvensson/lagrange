@@ -246,7 +246,7 @@ function resolveDeferredPropagatedCatchupCooldownMs(
 function reportOwnerMembershipReconcileSpent(coordinator, startedAtMs, observed) {
   reportWaitBoundSpent(coordinator.logger, {
     ...OWNER_MEMBERSHIP_RECONCILE_WAIT,
-    elapsedMs: Date.now() - startedAtMs,
+    startedAtMs,
     subject: coordinator.nodeId ?? null,
     lastObserved: observed,
     scope: {nodeId: coordinator.nodeId ?? null},

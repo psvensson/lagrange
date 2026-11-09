@@ -18,11 +18,8 @@ import {
   isTargetFailureDetectorDead,
 } from './operation-workflow-replace-owner.js';
 const {
-  FAILURE_LOG_LEVEL,
-  OPERATION_LIFECYCLE_ACTION,
-  OPERATION_WORKFLOW_OWNER_LITERAL,
-  OperationType,
-  PRIORITY_RECOVERY_BLOCKER_REASON,
+  FAILURE_LOG_LEVEL, OPERATION_LIFECYCLE_ACTION, OPERATION_WORKFLOW_OWNER_LITERAL,
+  OperationType, PRIORITY_RECOVERY_BLOCKER_REASON, PRIORITY_RECOVERY_COMPLETION_STATE,
   PRIORITY_RECOVERY_OPERATION_DRAIN_ABSENT_SOURCE_STATE_BY_WORKFLOW_STEP,
   PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE,
   PRIORITY_RECOVERY_OPERATION_DRAIN_ADD_TARGET_STATUSES,
@@ -41,22 +38,67 @@ const {
   PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION,
   PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION_TABLE,
   PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_SOURCE_STATE_BY_DECISION,
-  PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE,
-  REBALANCE_COORDINATOR_LOG_MSG,
-  STOPPING_REPLICA_OBSERVATION_STATE,
-  classifySystemPartition,
-  normalizeNodeIdList,
-  resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence,
+  PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE, REBALANCE_COORDINATOR_LOG_MSG,
+  STOPPING_REPLICA_OBSERVATION_STATE, UNIFIED_SERVICE_TYPE, classifySystemPartition,
+  normalizeNodeIdList, resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence,
 } = SHARED;
 
 const HAND_BACK_VERDICT_SEPARATOR = '|';
+const AUTHORITATIVE_REPLICA_OBSERVATION_SOURCE = 'authoritative';
+const AUTHORITATIVE_TARGET_CACHE_BYPASS_OPTION = 'allowCacheFallback';
+const UNAVAILABLE_ADD_TARGET_OBSERVATION = Object.freeze({
+  state: STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
+  source: STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
+  lifecycleStatus: null,
+});
 
-// The drain actions a non-owner may settle: a superseded target, and a
-// completion - except a partition REPLACE's, which its owner completes from
-// committed membership (R-1b hands it back).
-function isRemoteSettleDrainAction(operation, drainAction) {
-  if (drainAction ===
-      OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET) {
+function buildUnavailableAddTargetObservation(cause) {
+  return cause ?
+    Object.freeze({...UNAVAILABLE_ADD_TARGET_OBSERVATION, cause}) :
+    UNAVAILABLE_ADD_TARGET_OBSERVATION;
+}
+
+function normalizeAddTargetIdentifier(value) {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function matchesAuthoritativeAddTargetPrecondition(
+  observation, replicaId, partitionId, targetNodeId,
+) {
+  const target = observation?.observedTargetIdentity;
+  if (!target || typeof target !== 'object') return false;
+  const expectedReplica = normalizeAddTargetIdentifier(replicaId);
+  const expectedPartition = normalizeAddTargetIdentifier(partitionId);
+  const expectedNode = normalizeAddTargetIdentifier(targetNodeId);
+  if (!expectedReplica || !expectedPartition || !expectedNode) return false;
+  return [
+    [target.replicaId, expectedReplica],
+    [target.serviceId, expectedReplica],
+    [target.partitionId, expectedPartition],
+    [target.nodeId, expectedNode],
+    [target.serviceType, UNIFIED_SERVICE_TYPE.PARTITION],
+  ].every(([actual, expected]) =>
+    normalizeAddTargetIdentifier(actual) === expected);
+}
+
+function isAuthoritativeAddTargetSatisfied(observation) {
+  return observation?.state === STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED &&
+    observation?.source === AUTHORITATIVE_REPLICA_OBSERVATION_SOURCE &&
+    Boolean(observation?.observedTargetIdentity) &&
+    PRIORITY_RECOVERY_OPERATION_DRAIN_ADD_TARGET_STATUSES.has(
+      observation?.lifecycleStatus,
+    );
+}
+
+// The drain actions a non-owner may settle only when the recorded owner is
+// unavailable (or excluded from the recovery-eligible cohort for superseded
+// targets): a completion (except a partition REPLACE's, which its owner
+// completes from committed membership via R-1b hand-back) and a stale fail.
+function isOwnerUnavailableRemoteSettleDrainAction(operation, drainAction) {
+  if (
+    drainAction ===
+    OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_DRAIN_STALE
+  ) {
     return true;
   }
   return drainAction ===
@@ -169,47 +211,81 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     );
   }
 
-  isPriorityRecoveryAddOperationDrainTargetSatisfied(operation) {
-    if (operation?.type !== OperationType.ADD) {
-      return false;
-    }
+  extractAddDrainOperationIdentity(operation) {
+    const empty = OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
+    const replicaId = String(operation?.replicaId || empty).trim();
+    const partitionId = String(operation?.partitionId || empty).trim();
+    const targetNodeId = String(operation?.targetNodeId || empty).trim();
     if (
+      operation?.type !== OperationType.ADD ||
       !this.repository ||
-      typeof this.repository.getObservedReplicaStatusFromCache !==
-        'function'
+      replicaId.length === 0 ||
+      partitionId.length === 0 ||
+      targetNodeId.length === 0
     ) {
-      return false;
+      return null;
     }
-    const observedTargetStatus =
-      this.repository.getObservedReplicaStatusFromCache(
-        operation.replicaId,
-        operation.partitionId,
-        operation.targetNodeId,
-        this.buildObservedTargetReplicaObservationOptions(operation),
-      );
-    return PRIORITY_RECOVERY_OPERATION_DRAIN_ADD_TARGET_STATUSES.has(
-      observedTargetStatus,
-    );
+    return {replicaId, partitionId, targetNodeId};
   }
 
-  buildPriorityRecoveryAddOperationDrainSourceSnapshot(
-    operation,
-    completionState,
-  ) {
-    const completionAccepted =
-      PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATES.has(
-        completionState,
+  validateAuthoritativeAddTargetObservation(observation, identity) {
+    if (!observation || typeof observation !== 'object' || !identity) {
+      return UNAVAILABLE_ADD_TARGET_OBSERVATION;
+    }
+    if (
+      observation.state === STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED &&
+      (observation.source !== AUTHORITATIVE_REPLICA_OBSERVATION_SOURCE ||
+        !matchesAuthoritativeAddTargetPrecondition(
+          observation,
+          identity.replicaId,
+          identity.partitionId,
+          identity.targetNodeId,
+        ))
+    ) {
+      return UNAVAILABLE_ADD_TARGET_OBSERVATION;
+    }
+    return observation;
+  }
+
+  async observePriorityRecoveryAddDrainTarget(operation) {
+    const identity = this.extractAddDrainOperationIdentity(operation);
+    if (!identity) {
+      return UNAVAILABLE_ADD_TARGET_OBSERVATION;
+    }
+    try {
+      const observation = await this.repository.getActualReplicaObservation(
+        identity.replicaId,
+        identity.partitionId,
+        identity.targetNodeId,
+        {
+          ...this.buildObservedTargetReplicaObservationOptions(operation),
+          [AUTHORITATIVE_TARGET_CACHE_BYPASS_OPTION]: false,
+        },
       );
-    const targetSatisfied =
-      completionAccepted &&
-      this.isPriorityRecoveryAddOperationDrainTargetSatisfied(operation);
+      return this.validateAuthoritativeAddTargetObservation(
+        observation,
+        identity,
+      );
+    } catch (cause) {
+      return buildUnavailableAddTargetObservation(cause);
+    }
+  }
+
+  async isPriorityRecoveryAddOperationDrainTargetSatisfied(operation) {
+    return isAuthoritativeAddTargetSatisfied(
+      await this.observePriorityRecoveryAddDrainTarget(operation));
+  }
+
+  async buildPriorityRecoveryAddOperationDrainSourceSnapshot(operation, completionState) {
+    const observation = completionState === PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED ?
+      await this.observePriorityRecoveryAddDrainTarget(operation) : null;
     return Object.freeze({
-      state: targetSatisfied ?
+      state: isAuthoritativeAddTargetSatisfied(observation) ?
         PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.NOT_REQUIRED :
         PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.EVIDENCE_UNAVAILABLE,
       sourceReplicaId: null,
-      observationState: null,
-      lifecycleStatus: null,
+      observationState: observation?.state || null,
+      lifecycleStatus: readStateField(observation?.lifecycleStatus),
     });
   }
 
@@ -217,40 +293,22 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
    * A remote non-owner settles an intermediate priority ADD whose owner is
    * unavailable when the operation's OWN target replica is read ACTIVE from
    * the authoritative status (the orphan reconciler's evidence): an operation
-   * fact, decided without reading spread. Spread-accepted completions keep
-   * the cache-observed arm above; an available owner completes its own ADD.
+   * fact, decided without reading spread. Converged completions use the
+   * authoritative observation arm above; an available owner completes its own
+   * ADD.
    * @param {Object} operation
    * @param {string} completionState
    * @return {Promise<boolean>}
    */
-  async isPriorityRecoveryAddSettledByOperationFact(
-    operation,
-    completionState,
-  ) {
-    if (
-      operation?.type !== OperationType.ADD ||
-      PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATES.has(
-        completionState,
-      ) ||
-      this.repository.isOperationLocallyOwned(operation) ||
-      !this.isPriorityRecoveryDrainOwnerUnavailable(
-        this.repository.resolveOperationOwnerNodeId(operation) || null,
-        operation,
-      )
-    ) {
+  async isPriorityRecoveryAddSettledByOperationFact(operation, completionState) {
+    if (operation?.type !== OperationType.ADD ||
+        completionState === PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED ||
+        this.repository.isOperationLocallyOwned(operation) ||
+        !this.isPriorityRecoveryDrainOwnerUnavailable(
+          this.repository.resolveOperationOwnerNodeId(operation) || null, operation)) {
       return false;
     }
-    try {
-      return PRIORITY_RECOVERY_OPERATION_DRAIN_ADD_TARGET_STATUSES.has(
-        await this.getReconciledReplicaStatus(
-          operation.replicaId,
-          operation.partitionId,
-          operation.targetNodeId,
-        ),
-      );
-    } catch {
-      return false;
-    }
+    return this.isPriorityRecoveryAddOperationDrainTargetSatisfied(operation);
   }
 
   // The drain state, in precedence order: a superseded target, then the
@@ -259,21 +317,25 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     if (evidence.supersededTargetState) {
       return evidence.supersededTargetState;
     }
-    if (
-      await this.isPriorityRecoveryAddSettledByOperationFact(
-        evidence.operation,
-        evidence.completionState,
-      )
-    ) {
-      return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE
-        .ADD_TARGET_ACTIVE_OWNER_UNAVAILABLE;
+    if (await this.isPriorityRecoveryAddSettledByOperationFact(
+      evidence.operation, evidence.completionState)) {
+      return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.ADD_TARGET_ACTIVE_OWNER_UNAVAILABLE;
+    }
+    if (evidence.operation?.type === OperationType.ADD &&
+        evidence.sourceSnapshot?.state !==
+          PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.NOT_REQUIRED) {
+      if (evidence.sourceSnapshot?.observationState ===
+          STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE) {
+        return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.EVIDENCE_UNAVAILABLE;
+      }
+      if (evidence.sourceSnapshot?.observationState ===
+          STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED) {
+        return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.IN_FLIGHT;
+      }
     }
     return this.resolvePriorityRecoveryOperationDrainState(
-      evidence.completion,
-      evidence.sourceSnapshot,
-      evidence.releaseEvidence,
-      evidence.operation,
-    );
+      evidence.completion, evidence.sourceSnapshot, evidence.releaseEvidence,
+      evidence.operation);
   }
 
   resolvePriorityRecoveryPreSyncReplaceTargetState(operation) {
@@ -353,6 +415,36 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     });
   }
 
+  async observeStoppingDrainSourceReplicaSnapshot(operation) {
+    const targetResolver =
+      PRIORITY_RECOVERY_OPERATION_DRAIN_REPLICA_TARGET_BY_TYPE.get(
+        operation.type,
+      );
+    const sourceReplicaId = targetResolver?.getReplicaId(
+      operation,
+      this.repository,
+    );
+    if (!sourceReplicaId) {
+      return this.buildPriorityRecoveryOperationDrainSourceSnapshotForState(
+        PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.EVIDENCE_UNAVAILABLE,
+      );
+    }
+    const observation = await this.observeStoppingReplicaProgress(
+      sourceReplicaId,
+      operation.partitionId,
+      targetResolver.getNodeId(operation),
+    );
+    return Object.freeze({
+      state: this.resolvePriorityRecoveryOperationDrainSourceState(
+        observation,
+        operation,
+      ),
+      sourceReplicaId,
+      observationState: observation?.state || null,
+      lifecycleStatus: observation?.lifecycleStatus || null,
+    });
+  }
+
   async buildPriorityRecoveryOperationDrainSourceSnapshot(
     operation,
     completionState,
@@ -371,12 +463,9 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         completionState,
       )
     ) {
-      return Object.freeze({
-        state: PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.NOT_REQUIRED,
-        sourceReplicaId: null,
-        observationState: null,
-        lifecycleStatus: null,
-      });
+      return this.buildPriorityRecoveryOperationDrainSourceSnapshotForState(
+        PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.NOT_REQUIRED,
+      );
     }
     const preSyncReplaceDrainSourceState =
       this.resolvePriorityRecoveryPreSyncReplaceDrainSourceState(
@@ -392,37 +481,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
           preSyncReplaceDrainSourceState,
         );
     }
-    const targetResolver =
-      PRIORITY_RECOVERY_OPERATION_DRAIN_REPLICA_TARGET_BY_TYPE.get(
-        operation.type,
-      );
-    const sourceReplicaId = targetResolver?.getReplicaId(
-      operation,
-      this.repository,
-    );
-    if (!sourceReplicaId) {
-      return Object.freeze({
-        state:
-          PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.EVIDENCE_UNAVAILABLE,
-        sourceReplicaId: null,
-        observationState: null,
-        lifecycleStatus: null,
-      });
-    }
-    const observation = await this.observeStoppingReplicaProgress(
-      sourceReplicaId,
-      operation.partitionId,
-      targetResolver.getNodeId(operation),
-    );
-    return Object.freeze({
-      state: this.resolvePriorityRecoveryOperationDrainSourceState(
-        observation,
-        operation,
-      ),
-      sourceReplicaId,
-      observationState: observation?.state || null,
-      lifecycleStatus: observation?.lifecycleStatus || null,
-    });
+    return this.observeStoppingDrainSourceReplicaSnapshot(operation);
   }
 
   resolvePriorityRecoveryOperationDrainOwnerState(
@@ -436,18 +495,18 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_LANE_PARKED :
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_OWNER;
     }
-    if (isRemoteSettleDrainAction(operation, drainAction)) {
+    if (
+      drainAction ===
+      OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET
+    ) {
       return (
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_SETTLE_ALLOWED
       );
     }
-    if (
-      drainAction ===
-      OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_DRAIN_STALE
-    ) {
-      // Stale-FAIL settles remotely only against an unavailable owner: an
-      // available owner may merely have deferred visibility (its progress not
-      // yet readable here) and must be woken, not have its work killed.
+    if (isOwnerUnavailableRemoteSettleDrainAction(operation, drainAction)) {
+      // Non-owner drain settlement (completion or stale-FAIL) is permitted
+      // only against an unavailable owner: an available owner owns its
+      // workflow completion and may merely have deferred visibility.
       const ownerNodeId =
         this.repository.resolveOperationOwnerNodeId(operation) || null;
       if (this.isPriorityRecoveryDrainOwnerUnavailable(ownerNodeId, operation)) {
@@ -455,15 +514,6 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
           PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_SETTLE_ALLOWED
         );
       }
-      if (
-        this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) &&
-        this.isDispatchRetryableWorkflowStep(operation)
-      ) {
-        return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE
-          .REMOTE_REARM_REQUIRED;
-      }
-      return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE
-        .REMOTE_OWNER_REQUIRED;
     }
     if (
       this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) &&
@@ -511,7 +561,10 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     );
   }
 
-  hasActivePriorityRecoveryRemoteOwnerWakeRetry(operationId, now = Date.now()) {
+  hasActivePriorityRecoveryRemoteOwnerWakeRetry(
+    operationId,
+    now = this.resolveTimeoutCheckNowMs(),
+  ) {
     return (
       operationId.length > 0 &&
       this.hasActiveCreatedOperationHandoffRetry(operationId, now) &&
@@ -555,24 +608,16 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
 
   async buildPriorityRecoveryOperationDrainSnapshot(operation) {
     if (!this.isPriorityRecoveryOperationDrainCandidate(operation)) {
-      const action =
-        PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE.get(
-          PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.NOT_APPLICABLE,
-        ) || OPERATION_LIFECYCLE_ACTION.NOOP;
-      const ownerState =
-        this.resolvePriorityRecoveryOperationDrainOwnerState(
-          operation,
-          action,
-          PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.NOT_APPLICABLE,
-        );
+      const action = PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE.get(
+        PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.NOT_APPLICABLE,
+      ) || OPERATION_LIFECYCLE_ACTION.NOOP;
+      const ownerState = this.resolvePriorityRecoveryOperationDrainOwnerState(
+        operation, action, PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.NOT_APPLICABLE);
       return Object.freeze({
         state: PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.NOT_APPLICABLE,
-        action,
-        ownerState,
-        ownerAction:
-          this.resolvePriorityRecoveryOperationDrainOwnerAction(ownerState),
-        completionState:
-          PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATE_UNAVAILABLE,
+        action, ownerState,
+        ownerAction: this.resolvePriorityRecoveryOperationDrainOwnerAction(ownerState),
+        completionState: PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATE_UNAVAILABLE,
       });
     }
 
@@ -580,74 +625,37 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       await this.readAvailablePriorityRecoveryPlanningSnapshot(operation);
     const priorityRecoveryContext =
       this.buildPriorityRecoveryAssessmentContextForOperation(
-        operation,
-        planningSnapshot,
-      );
-    const completion =
-      this.buildPriorityRecoveryCompletionForOperation(
-        operation,
-        planningSnapshot,
-      ) ||
-      priorityRecoveryContext?.completion ||
-      null;
+        operation, planningSnapshot);
+    const completion = this.buildPriorityRecoveryCompletionForOperation(
+      operation, planningSnapshot) || priorityRecoveryContext?.completion || null;
     const supersededTargetError =
       this.resolvePriorityRecoveryRemoteSupersededTargetDrainError(
-        operation,
-        priorityRecoveryContext,
-      );
-    const supersededTargetState =
-      supersededTargetError ?
-        PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.SUPERSEDED_TARGET :
-        null;
-    const completionState =
-      completion?.state ||
+        operation, priorityRecoveryContext);
+    const supersededTargetState = supersededTargetError ?
+      PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.SUPERSEDED_TARGET : null;
+    const completionState = completion?.state ||
       PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATE_UNAVAILABLE;
-    const sourceSnapshot =
-      supersededTargetState ?
-        Object.freeze({
-          state: PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.NOT_REQUIRED,
-          sourceReplicaId: null,
-          observationState: null,
-          lifecycleStatus: null,
-        }) :
-        await this.buildPriorityRecoveryOperationDrainSourceSnapshot(
-          operation,
-          completionState,
-        );
-    const releaseEvidence =
-      this.buildPriorityRecoveryOperationDrainReleaseEvidence(
-        operation,
-        completion,
-        sourceSnapshot,
-      );
+    const sourceSnapshot = supersededTargetState ?
+      this.buildPriorityRecoveryOperationDrainSourceSnapshotForState(
+        PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.NOT_REQUIRED) :
+      await this.buildPriorityRecoveryOperationDrainSourceSnapshot(
+        operation, completionState);
+    const releaseEvidence = this.buildPriorityRecoveryOperationDrainReleaseEvidence(
+      operation, completion, sourceSnapshot);
     const state = await this.resolvePriorityRecoveryOperationDrainSnapshotState({
-      operation,
-      completion,
-      completionState,
-      sourceSnapshot,
-      releaseEvidence,
-      supersededTargetState,
+      operation, completion, completionState, sourceSnapshot,
+      releaseEvidence, supersededTargetState,
     });
-    const action =
-      PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE.get(state) ||
+    const action = PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE.get(state) ||
       OPERATION_LIFECYCLE_ACTION.NOOP;
     const ownerState = this.boundReplaceOwnerHandBack(
-      operation,
-      action,
-      this.resolvePriorityRecoveryOperationDrainOwnerState(
-        operation,
-        action,
-        state,
-      ),
-      [state, completionState, sourceSnapshot.state]
-        .join(HAND_BACK_VERDICT_SEPARATOR),
+      operation, action,
+      this.resolvePriorityRecoveryOperationDrainOwnerState(operation, action, state),
+      [state, completionState, sourceSnapshot.state].join(HAND_BACK_VERDICT_SEPARATOR),
     );
     return Object.freeze({
-      state,
-      action,
-      ownerState,
-      ownerAction:
-        this.resolvePriorityRecoveryOperationDrainOwnerAction(ownerState),
+      state, action, ownerState,
+      ownerAction: this.resolvePriorityRecoveryOperationDrainOwnerAction(ownerState),
       completionState,
       sourceState: sourceSnapshot.state,
       sourceReplicaId: sourceSnapshot.sourceReplicaId,
@@ -733,7 +741,10 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     }
     if (
       resolvedDrainSnapshot.action !==
-      OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN
+      OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN ||
+      (resolvedDrainSnapshot.ownerAction &&
+        resolvedDrainSnapshot.ownerAction !==
+          PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION.ALLOW_RECONCILE)
     ) {
       return false;
     }

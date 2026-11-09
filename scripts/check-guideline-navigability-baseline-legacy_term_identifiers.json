@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T14:28:56.730Z",
-  "rawViolationCount": 2900,
+  "generatedAt": "2026-11-10T05:03:00.835Z",
+  "rawViolationCount": 2865,
   "violations": [
     {
       "filePath": "src/admin/admin-cli-compat.js",
@@ -968,7 +968,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-api-shared.js",
-      "line": 539,
+      "line": 557,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -977,7 +977,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 26,
+      "line": 31,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -986,7 +986,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 157,
+      "line": 196,
       "column": 49,
       "functionName": "normalizeLoadLaneAdmissionReasonCodes",
       "kind": "legacy_term_identifiers",
@@ -995,7 +995,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 167,
+      "line": 206,
       "column": 13,
       "functionName": "normalizeLoadLaneAdmissionReasonCodes",
       "kind": "legacy_term_identifiers",
@@ -1004,7 +1004,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 168,
+      "line": 207,
       "column": 6,
       "functionName": "normalizeLoadLaneAdmissionReasonCodes",
       "kind": "legacy_term_identifiers",
@@ -1013,7 +1013,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 170,
+      "line": 209,
       "column": 14,
       "functionName": "normalizeLoadLaneAdmissionReasonCodes",
       "kind": "legacy_term_identifiers",
@@ -1022,7 +1022,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 313,
+      "line": 352,
       "column": 8,
       "functionName": "buildLoadLaneBenchmarkAdmissionResult",
       "kind": "legacy_term_identifiers",
@@ -1031,7 +1031,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 339,
+      "line": 378,
       "column": 8,
       "functionName": "buildLoadLaneReadinessAdmissionResult",
       "kind": "legacy_term_identifiers",
@@ -1193,7 +1193,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api-server-methods.js",
-      "line": 330,
+      "line": 331,
       "column": 16,
       "functionName": "getManagementV1Owner",
       "kind": "legacy_term_identifiers",
@@ -1976,7 +1976,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 133,
+      "line": 134,
       "column": 35,
       "functionName": "checkPayloadSize",
       "kind": "legacy_term_identifiers",
@@ -1985,7 +1985,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 184,
+      "line": 185,
       "column": 12,
       "functionName": "buildReleaseSection",
       "kind": "legacy_term_identifiers",
@@ -1994,7 +1994,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 248,
+      "line": 269,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -2003,7 +2003,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 343,
+      "line": 362,
       "column": 14,
       "functionName": "_formatStatus",
       "kind": "legacy_term_identifiers",
@@ -2012,7 +2012,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 366,
+      "line": 385,
       "column": 14,
       "functionName": "_executeOperation",
       "kind": "legacy_term_identifiers",
@@ -2021,7 +2021,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 394,
+      "line": 414,
       "column": 4,
       "functionName": "submitOperation",
       "kind": "legacy_term_identifiers",
@@ -2030,7 +2030,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 424,
+      "line": 444,
       "column": 14,
       "functionName": "getOperationStatus",
       "kind": "legacy_term_identifiers",
@@ -2039,7 +2039,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 460,
+      "line": 480,
       "column": 14,
       "functionName": "getClusterFacts",
       "kind": "legacy_term_identifiers",
@@ -2048,7 +2048,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 488,
+      "line": 513,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -2057,7 +2057,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 490,
+      "line": 515,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -2210,7 +2210,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 21,
+      "line": 28,
       "column": 14,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -2219,7 +2219,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 22,
+      "line": 29,
       "column": 14,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -2228,7 +2228,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 23,
+      "line": 30,
       "column": 18,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -2237,7 +2237,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 27,
+      "line": 34,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -2246,7 +2246,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 27,
+      "line": 34,
       "column": 23,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -2255,7 +2255,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 40,
+      "line": 56,
       "column": 29,
       "functionName": "compareParsedSemver",
       "kind": "legacy_term_identifiers",
@@ -2264,7 +2264,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 42,
+      "line": 58,
       "column": 8,
       "functionName": "compareParsedSemver",
       "kind": "legacy_term_identifiers",
@@ -2273,7 +2273,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 42,
+      "line": 58,
       "column": 32,
       "functionName": "compareParsedSemver",
       "kind": "legacy_term_identifiers",
@@ -2282,7 +2282,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 46,
+      "line": 62,
       "column": 9,
       "functionName": "defaultIsVersionCompatible",
       "kind": "legacy_term_identifiers",
@@ -2291,7 +2291,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 179,
+      "line": 215,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -2300,7 +2300,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 180,
+      "line": 216,
       "column": 29,
       "functionName": "checkVersionCompatible",
       "kind": "legacy_term_identifiers",
@@ -6701,7 +6701,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
-      "line": 530,
+      "line": 540,
       "column": 4,
       "functionName": "buildReconciliationContext",
       "kind": "legacy_term_identifiers",
@@ -7016,7 +7016,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-      "line": 149,
+      "line": 160,
       "column": 6,
       "functionName": "resolveAuthoritativeReadModeContract",
       "kind": "legacy_term_identifiers",
@@ -7025,7 +7025,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-      "line": 150,
+      "line": 161,
       "column": 6,
       "functionName": "resolveAuthoritativeReadModeContract",
       "kind": "legacy_term_identifiers",
@@ -7034,7 +7034,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-      "line": 158,
+      "line": 169,
       "column": 6,
       "functionName": "resolveAuthoritativeReadModeContract",
       "kind": "legacy_term_identifiers",
@@ -7043,7 +7043,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-      "line": 159,
+      "line": 170,
       "column": 6,
       "functionName": "resolveAuthoritativeReadModeContract",
       "kind": "legacy_term_identifiers",
@@ -7052,7 +7052,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-      "line": 167,
+      "line": 178,
       "column": 6,
       "functionName": "resolveAuthoritativeReadModeContract",
       "kind": "legacy_term_identifiers",
@@ -7061,7 +7061,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-      "line": 168,
+      "line": 179,
       "column": 6,
       "functionName": "resolveAuthoritativeReadModeContract",
       "kind": "legacy_term_identifiers",
@@ -7070,7 +7070,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-      "line": 176,
+      "line": 187,
       "column": 6,
       "functionName": "resolveAuthoritativeReadModeContract",
       "kind": "legacy_term_identifiers",
@@ -7079,25 +7079,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-      "line": 177,
-      "column": 6,
-      "functionName": "resolveAuthoritativeReadModeContract",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-      "line": 185,
-      "column": 6,
-      "functionName": "resolveAuthoritativeReadModeContract",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-      "line": 186,
+      "line": 188,
       "column": 6,
       "functionName": "resolveAuthoritativeReadModeContract",
       "kind": "legacy_term_identifiers",
@@ -7124,7 +7106,25 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-      "line": 306,
+      "line": 207,
+      "column": 6,
+      "functionName": "resolveAuthoritativeReadModeContract",
+      "kind": "legacy_term_identifiers",
+      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
+      "line": 208,
+      "column": 6,
+      "functionName": "resolveAuthoritativeReadModeContract",
+      "kind": "legacy_term_identifiers",
+      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
+      "line": 317,
       "column": 4,
       "functionName": "buildControlPlaneReadAuthority",
       "kind": "legacy_term_identifiers",
@@ -7133,7 +7133,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-      "line": 351,
+      "line": 362,
       "column": 4,
       "functionName": "buildAuthoritativeReadDeliveryOptions",
       "kind": "legacy_term_identifiers",
@@ -7465,26 +7465,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/control-plane/membership-lifecycle-controller.js",
-      "line": 52,
-      "column": 35,
-      "functionName": "normalizeTimestamp",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/membership-lifecycle-controller.js",
-      "line": 56,
-      "column": 9,
-      "functionName": "normalizeTimestamp",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 293,
+      "line": 300,
       "column": 6,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "legacy_term_identifiers",
@@ -7493,7 +7475,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 323,
+      "line": 330,
       "column": 8,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "legacy_term_identifiers",
@@ -7502,7 +7484,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 354,
+      "line": 361,
       "column": 4,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "legacy_term_identifiers",
@@ -7511,7 +7493,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 354,
+      "line": 361,
       "column": 37,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "legacy_term_identifiers",
@@ -7673,7 +7655,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 219,
+      "line": 226,
       "column": 2,
       "functionName": "mergeDispatchRetryRowsByOperationId",
       "kind": "legacy_term_identifiers",
@@ -7682,7 +7664,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 238,
+      "line": 245,
       "column": 20,
       "functionName": "mergeDispatchRetryRowsByOperationId",
       "kind": "legacy_term_identifiers",
@@ -11642,7 +11624,7 @@
     },
     {
       "filePath": "src/node/replica-handler-class.js",
-      "line": 246,
+      "line": 251,
       "column": 0,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -13225,267 +13207,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 57,
-      "column": 4,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 59,
-      "column": 41,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 60,
-      "column": 37,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 61,
-      "column": 39,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 62,
-      "column": 49,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 63,
-      "column": 50,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 64,
-      "column": 54,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 67,
-      "column": 4,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 71,
-      "column": 54,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 74,
-      "column": 4,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 76,
-      "column": 49,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 77,
-      "column": 48,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 80,
-      "column": 4,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 82,
-      "column": 53,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 85,
-      "column": 4,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 88,
-      "column": 54,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 89,
-      "column": 63,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 90,
-      "column": 55,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 93,
-      "column": 4,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 95,
-      "column": 47,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 96,
-      "column": 49,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 97,
-      "column": 46,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 99,
-      "column": 50,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 100,
-      "column": 42,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 105,
-      "column": 4,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 109,
-      "column": 4,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 113,
-      "column": 4,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 136,
-      "column": 24,
-      "functionName": "applyManagedSplitTopologyBindings",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 140,
-      "column": 6,
-      "functionName": "applyManagedSplitTopologyBindings",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/partition/managed-split-workflow.js",
       "line": 124,
       "column": 6,
@@ -14504,7 +14225,7 @@
     },
     {
       "filePath": "src/policy/table-policy-resolution.js",
-      "line": 47,
+      "line": 44,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -14513,7 +14234,7 @@
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 453,
+      "line": 445,
       "column": 8,
       "functionName": "updateTablePolicy",
       "kind": "legacy_term_identifiers",
@@ -18320,7 +18041,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 361,
+      "line": 342,
       "column": 18,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18329,7 +18050,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 364,
+      "line": 345,
       "column": 12,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18338,7 +18059,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 366,
+      "line": 347,
       "column": 19,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18446,7 +18167,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 38,
+      "line": 39,
       "column": 4,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18455,7 +18176,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-select-execution.js",
-      "line": 458,
+      "line": 467,
       "column": 8,
       "functionName": "tryExecuteAuthoritativeSystemTableSelect",
       "kind": "legacy_term_identifiers",
@@ -18500,7 +18221,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 522,
+      "line": 533,
       "column": 12,
       "functionName": "probeAuthoritativeRow",
       "kind": "legacy_term_identifiers",
@@ -18509,7 +18230,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 522,
+      "line": 533,
       "column": 32,
       "functionName": "probeAuthoritativeRow",
       "kind": "legacy_term_identifiers",
@@ -18518,7 +18239,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 523,
+      "line": 534,
       "column": 13,
       "functionName": "probeAuthoritativeRow",
       "kind": "legacy_term_identifiers",
@@ -18527,7 +18248,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 524,
+      "line": 535,
       "column": 32,
       "functionName": "probeAuthoritativeRow",
       "kind": "legacy_term_identifiers",
@@ -18536,7 +18257,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 577,
+      "line": 588,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -20201,7 +19922,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-owner-wake.js",
-      "line": 190,
+      "line": 191,
       "column": 5,
       "functionName": "sourceRowLevel",
       "kind": "legacy_term_identifiers",
@@ -20921,7 +20642,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 179,
+      "line": 193,
       "column": 12,
       "functionName": "getOperationsByEntityAuthoritativeObservation",
       "kind": "legacy_term_identifiers",
@@ -20930,7 +20651,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 180,
+      "line": 194,
       "column": 11,
       "functionName": "getOperationsByEntityAuthoritativeObservation",
       "kind": "legacy_term_identifiers",
@@ -20939,7 +20660,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 184,
+      "line": 198,
       "column": 12,
       "functionName": "getOperationsByEntityAuthoritativeObservation",
       "kind": "legacy_term_identifiers",
@@ -20948,7 +20669,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 188,
+      "line": 202,
       "column": 12,
       "functionName": "getOperationsByEntityAuthoritativeObservation",
       "kind": "legacy_term_identifiers",
@@ -20957,7 +20678,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 199,
+      "line": 213,
       "column": 28,
       "functionName": "getOperationsByEntityAuthoritativeObservation",
       "kind": "legacy_term_identifiers",
@@ -20966,7 +20687,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 200,
+      "line": 214,
       "column": 10,
       "functionName": "getOperationsByEntityAuthoritativeObservation",
       "kind": "legacy_term_identifiers",
@@ -20975,7 +20696,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 210,
+      "line": 224,
       "column": 12,
       "functionName": "getOperationsByEntityAuthoritativeObservation",
       "kind": "legacy_term_identifiers",
@@ -20984,7 +20705,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 221,
+      "line": 235,
       "column": 12,
       "functionName": "getOperationsByEntityAuthoritativeObservation",
       "kind": "legacy_term_identifiers",
@@ -20993,7 +20714,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 228,
+      "line": 242,
       "column": 28,
       "functionName": "getOperationsByEntityAuthoritativeObservation",
       "kind": "legacy_term_identifiers",
@@ -21002,7 +20723,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 229,
+      "line": 243,
       "column": 10,
       "functionName": "getOperationsByEntityAuthoritativeObservation",
       "kind": "legacy_term_identifiers",
@@ -21011,7 +20732,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 239,
+      "line": 253,
       "column": 12,
       "functionName": "getOperationsByEntityAuthoritativeObservation",
       "kind": "legacy_term_identifiers",
@@ -21254,25 +20975,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 188,
-      "column": 13,
-      "functionName": "doesObservedReplicaRowMatchTarget",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 203,
-      "column": 4,
-      "functionName": "assignReplicaOperationRepositoryObservationMethods",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 223,
+      "line": 296,
       "column": 12,
       "functionName": "getObservedReplicaRowFromCache",
       "kind": "legacy_term_identifiers",
@@ -21281,7 +20984,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 267,
+      "line": 336,
       "column": 11,
       "functionName": "getObservedReplicaRowFromCache",
       "kind": "legacy_term_identifiers",
@@ -21290,7 +20993,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 378,
+      "line": 449,
       "column": 12,
       "functionName": "readAuthoritativeReplicaRowForObservation",
       "kind": "legacy_term_identifiers",
@@ -21299,7 +21002,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 411,
+      "line": 484,
       "column": 26,
       "functionName": "readAuthoritativeReplicaRowForObservation",
       "kind": "legacy_term_identifiers",
@@ -21308,7 +21011,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 435,
+      "line": 517,
       "column": 4,
       "functionName": "assignReplicaOperationRepositoryObservationMethods",
       "kind": "legacy_term_identifiers",
@@ -21317,7 +21020,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 525,
+      "line": 607,
       "column": 12,
       "functionName": "getActualReplicaObservation",
       "kind": "legacy_term_identifiers",
@@ -21326,7 +21029,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 538,
+      "line": 621,
       "column": 8,
       "functionName": "getActualReplicaObservation",
       "kind": "legacy_term_identifiers",
@@ -21335,7 +21038,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 541,
+      "line": 624,
       "column": 38,
       "functionName": "getActualReplicaObservation",
       "kind": "legacy_term_identifiers",
@@ -21344,7 +21047,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 350,
+      "line": 355,
       "column": 13,
       "functionName": "queryAuthoritativeOperationVisibilityObservation",
       "kind": "legacy_term_identifiers",
@@ -21353,7 +21056,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 583,
+      "line": 590,
       "column": 12,
       "functionName": "getOperationByIdVisibilityObservation",
       "kind": "legacy_term_identifiers",
@@ -21362,7 +21065,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 586,
+      "line": 593,
       "column": 13,
       "functionName": "getOperationByIdVisibilityObservation",
       "kind": "legacy_term_identifiers",
@@ -21371,7 +21074,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 587,
+      "line": 594,
       "column": 12,
       "functionName": "getOperationByIdVisibilityObservation",
       "kind": "legacy_term_identifiers",
@@ -21380,7 +21083,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 588,
+      "line": 595,
       "column": 12,
       "functionName": "getOperationByIdVisibilityObservation",
       "kind": "legacy_term_identifiers",
@@ -21389,7 +21092,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 589,
+      "line": 596,
       "column": 6,
       "functionName": "getOperationByIdVisibilityObservation",
       "kind": "legacy_term_identifiers",
@@ -21398,7 +21101,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 589,
+      "line": 596,
       "column": 41,
       "functionName": "getOperationByIdVisibilityObservation",
       "kind": "legacy_term_identifiers",
@@ -21407,7 +21110,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 591,
+      "line": 598,
       "column": 8,
       "functionName": "getOperationByIdVisibilityObservation",
       "kind": "legacy_term_identifiers",
@@ -21416,7 +21119,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 618,
+      "line": 625,
       "column": 12,
       "functionName": "queryExistingInFlightOperation",
       "kind": "legacy_term_identifiers",
@@ -21425,7 +21128,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 642,
+      "line": 649,
       "column": 11,
       "functionName": "queryExistingInFlightOperation",
       "kind": "legacy_term_identifiers",
@@ -21749,7 +21452,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 29,
+      "line": 32,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -21758,7 +21461,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 107,
+      "line": 110,
       "column": 4,
       "functionName": "collectCriticalNodeEvidence",
       "kind": "legacy_term_identifiers",
@@ -21767,7 +21470,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 140,
+      "line": 143,
       "column": 9,
       "functionName": "buildTransitionalNodeBlocker",
       "kind": "legacy_term_identifiers",
@@ -21776,7 +21479,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 266,
+      "line": 269,
       "column": 50,
       "functionName": "readFirstTruthyField",
       "kind": "legacy_term_identifiers",
@@ -21785,7 +21488,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 268,
+      "line": 271,
       "column": 41,
       "functionName": "readFirstTruthyField",
       "kind": "legacy_term_identifiers",
@@ -21794,7 +21497,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 445,
+      "line": 448,
       "column": 11,
       "functionName": "getCriticalSystemTopologySettlingBlocker",
       "kind": "legacy_term_identifiers",
@@ -22712,27 +22415,9 @@
     },
     {
       "filePath": "src/runtime/pgwire-runtime-module.js",
-      "line": 106,
+      "line": 116,
       "column": 2,
       "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/runtime/pgwire-runtime-module.js",
-      "line": 148,
-      "column": 71,
-      "functionName": "resolveConfigValue",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/runtime/pgwire-runtime-module.js",
-      "line": 152,
-      "column": 30,
-      "functionName": "resolveConfigValue",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -23864,7 +23549,7 @@
     },
     {
       "filePath": "src/topology/latency-measurement-service.js",
-      "line": 611,
+      "line": 613,
       "column": 28,
       "functionName": "resolveNumericConfig",
       "kind": "legacy_term_identifiers",
@@ -23873,7 +23558,7 @@
     },
     {
       "filePath": "src/topology/latency-measurement-service.js",
-      "line": 614,
+      "line": 616,
       "column": 13,
       "functionName": "resolveNumericConfig",
       "kind": "legacy_term_identifiers",
@@ -23882,7 +23567,7 @@
     },
     {
       "filePath": "src/topology/latency-measurement-service.js",
-      "line": 627,
+      "line": 629,
       "column": 28,
       "functionName": "resolveIntegerConfig",
       "kind": "legacy_term_identifiers",
@@ -23891,7 +23576,7 @@
     },
     {
       "filePath": "src/topology/latency-measurement-service.js",
-      "line": 630,
+      "line": 632,
       "column": 13,
       "functionName": "resolveIntegerConfig",
       "kind": "legacy_term_identifiers",

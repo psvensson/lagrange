@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T14:28:56.718Z",
+  "generatedAt": "2026-11-09T17:56:57.105Z",
   "rawViolationCount": 59,
   "violations": [
     {
@@ -365,7 +365,7 @@
     },
     {
       "filePath": "src/partition/partition-split-merge-manager-core-methods.js",
-      "line": 581,
+      "line": 588,
       "column": 21,
       "functionName": "createPartitionSplitMergeManagerCoreMethods",
       "kind": "prototype_copy_bags",
@@ -410,7 +410,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 335,
+      "line": 349,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryEntityReadMethods",
       "kind": "prototype_copy_bags",
@@ -500,7 +500,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 667,
+      "line": 673,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryReadMethods",
       "kind": "prototype_copy_bags",

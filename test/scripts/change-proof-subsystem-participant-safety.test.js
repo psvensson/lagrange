@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {test} from 'node:test';
+import {isolatedCensusNodeOptions} from '../test-helpers/census-pre-kill-flush.js';
 
 const root = process.cwd();
 const UTF8 = 'utf8';
@@ -54,7 +55,7 @@ test('the real subsystem participant resists every mutable input intrinsic', () 
     process.stdout.write(JSON.stringify({
       packaging, expectedCount: expected.size, results}));
   `;
-  const env = {...process.env, NODE_OPTIONS: ''};
+  const env = {...process.env, NODE_OPTIONS: isolatedCensusNodeOptions(process.env)};
   const result = spawnSync(process.execPath,
     ['--input-type=module', '--eval', source],
     {cwd: root, encoding: UTF8, env});

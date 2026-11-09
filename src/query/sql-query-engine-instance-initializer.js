@@ -18,6 +18,12 @@ import {
 } from './sql-query-engine-participant-wire.js';
 import {IndexService} from '../index-management/index-service.js';
 import {QueryOptimizer} from '../index-management/query-optimizer.js';
+import {
+  CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED,
+} from '../control-plane/control-plane-readiness-constants.js';
+import {
+  readCacheApplyChangeChannel,
+} from '../control-plane/control-plane-readiness-collaborators.js';
 
 const LOCAL_STR_SQL_CONTROL_PLANE = 'sql_control_plane';
 const LOCAL_STR_FUNCTION = 'function';
@@ -46,6 +52,39 @@ const {
   createControlPlaneRuntimeBundle,
   createEmptyTransactionRecoveryReplaySummary,
 } = SQL_QUERY_ENGINE_SHARED;
+
+function attachAuthoritativeRoutingOverlayCacheApplyListener(
+  engine,
+  systemCache,
+) {
+  const cacheApplyChannel = readCacheApplyChangeChannel(systemCache);
+  if (cacheApplyChannel === CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED) {
+    engine.authoritativeRoutingOverlayCacheApplyListener = null;
+    engine.authoritativeRoutingOverlayCacheApplyUnsubscribe = null;
+    return;
+  }
+  const listener = (tableName, operation, record) => {
+    engine.handleAuthoritativeRoutingOverlayCacheApplyChange(
+      tableName,
+      operation,
+      record,
+    );
+  };
+  cacheApplyChannel.onCacheApplyChange(listener);
+  engine.authoritativeRoutingOverlayCacheApplyListener = listener;
+  engine.authoritativeRoutingOverlayCacheApplyUnsubscribe = () => {
+    cacheApplyChannel.offCacheApplyChange(listener);
+  };
+}
+
+function detachAuthoritativeRoutingOverlayCacheApplyListener(engine) {
+  const unsubscribe = engine.authoritativeRoutingOverlayCacheApplyUnsubscribe;
+  engine.authoritativeRoutingOverlayCacheApplyUnsubscribe = null;
+  engine.authoritativeRoutingOverlayCacheApplyListener = null;
+  if (unsubscribe) {
+    unsubscribe();
+  }
+}
 
 function createRuntimeReplicaStateProjectionOwner(engine, options) {
   if (options.runtimeReplicaStateProjectionOwner) {
@@ -94,8 +133,13 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     typeof options.partitionServicesProvider === LOCAL_STR_FUNCTION ?
       options.partitionServicesProvider :
       null;
+  engine.isShutDown = false;
   engine.authoritativeRoutingOverlayEntries = new Map();
   engine.bootstrapRoutingOverlayEntries = new Map();
+  attachAuthoritativeRoutingOverlayCacheApplyListener(
+    engine,
+    engine.systemCache,
+  );
   engine.localRuntimeRoutingOverlay = {
     getServicesForPartition: (partitionId) =>
       engine.getLocalRuntimeRoutingOverlayServices(partitionId),
@@ -369,4 +413,8 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
   }
 }
 
-export {initializeSqlQueryEngineInstance};
+export {
+  attachAuthoritativeRoutingOverlayCacheApplyListener,
+  detachAuthoritativeRoutingOverlayCacheApplyListener,
+  initializeSqlQueryEngineInstance,
+};

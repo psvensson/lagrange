@@ -570,6 +570,10 @@ function createBootstrapApiRuntimeMethods(options = {}) {
       return this.bootstrapClusterViewOwner.getClusterState();
     },
 
+    async getManagementClusterSnapshot() {
+      return this.bootstrapClusterViewOwner.getManagementClusterSnapshot();
+    },
+
     updateNodeStatus(_nodeId, _status) {
       this.logger.error(bootstrapApiLogMsg.UPDATE_NODE_STATUS_UNSUPPORTED);
       throw new Error(bootstrapApiError.UPDATE_NODE_STATUS_UNSUPPORTED);
@@ -580,7 +584,10 @@ function createBootstrapApiRuntimeMethods(options = {}) {
     },
 
     getReplicaHandler() {
-      return this.replicaHandler;
+      if (this.replicaHandler) {
+        return this.replicaHandler;
+      }
+      return this.runtimeOwner?.replicaHandler ?? null;
     },
 
     isInitialized() {

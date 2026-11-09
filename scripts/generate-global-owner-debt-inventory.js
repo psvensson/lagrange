@@ -912,9 +912,8 @@ async function buildImportGraph(root, files) {
   if (cachedGraph !== null) {
     return cachedGraph;
   }
-  const result = await cruise(SOURCE_DIRECTORIES.map((directory) =>
-    path.join(root, directory)), {
-    baseDir: root,
+  const result = await cruise([...SOURCE_DIRECTORIES], {
+    baseDir: path.resolve(root),
     doNotFollow: {path: 'node_modules'},
   });
   const policy = loadDependencyPolicy(root);

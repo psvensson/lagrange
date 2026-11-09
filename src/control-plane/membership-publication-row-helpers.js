@@ -61,6 +61,13 @@ function normalizePositiveInteger(value, fallback = null) {
   return fallback;
 }
 
+function resolveNowMs(value) {
+  const candidate = Number(value);
+  return Number.isFinite(candidate) && candidate >= 0 ?
+    Math.trunc(candidate) :
+    Date.now();
+}
+
 function normalizeMembershipPublicationNodeId(value) {
   return typeof value === 'string' && value.length > 0 ?
     value :
@@ -260,7 +267,7 @@ function isDispatchRetryOperation(operation) {
 function buildTransitionHistoryEntry({state, reasonCode, at, metadata} = {}) {
   const entry = {
     state: String(state || MEMBERSHIP_PUBLICATION_STATUS.OPEN),
-    at: normalizePositiveInteger(at, Date.now()),
+    at: resolveNowMs(at),
   };
   if (typeof reasonCode === 'string' && reasonCode.length > 0) {
     entry.reasonCode = reasonCode;
@@ -285,7 +292,7 @@ function didOptionalSourceVersionChange(previousValue, nextValue) {
 function hasPublicationTimedOut(publicationRow, options = {}) {
   const normalizedPublication = normalizeControlPlanePublicationRow(publicationRow);
   const timeoutMs = normalizePositiveInteger(options.timeoutMs, null);
-  const nowMs = normalizePositiveInteger(options.nowMs, Date.now());
+  const nowMs = resolveNowMs(options.nowMs);
   const createdAt = normalizePositiveInteger(
     publicationRow?.created_at,
     normalizePositiveInteger(publicationRow?.createdAt, null),
@@ -301,7 +308,7 @@ function hasPublicationTimedOut(publicationRow, options = {}) {
 
 function abandonMembershipPublication(options = {}) {
   const publicationRow = options.publicationRow || {};
-  const nowMs = normalizePositiveInteger(options.nowMs, Date.now());
+  const nowMs = resolveNowMs(options.nowMs);
   const reasonCode =
     typeof options.reasonCode === 'string' && options.reasonCode.length > 0 ?
       options.reasonCode :
@@ -468,5 +475,6 @@ export {
   resolveAcknowledgementBaselinePublicationRow,
   resolveCarriedAcknowledgedNodeIds,
   resolveDispatchRetryNodeIds,
+  resolveNowMs,
   safelyGetLatestMembershipPublicationRow,
 };

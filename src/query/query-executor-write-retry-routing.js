@@ -506,7 +506,10 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
         partitionId,
         partitionRow: this.getPartitionRecord(partitionId),
       }).priorityControlPlane;
-    if (systemTableWrite && deferredFailure) {
+    const removalFencedFailure =
+      typeof failure?.error === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+      failure.error.includes(ERRORS.SERVING_ADMISSION_FENCED_FOR_REMOVAL);
+    if (systemTableWrite && deferredFailure && !removalFencedFailure) {
       if (priorityControlPlaneWrite && retryable) {
         return this.buildControlPlaneWriteRetryDecision(
           CONTROL_PLANE_WRITE_RETRY_DECISION_STATE

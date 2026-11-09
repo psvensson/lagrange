@@ -39,6 +39,7 @@ import {RUNTIME_PHASE} from '../../src/raft/raft-rs-runtime-owner-constants.js';
 import {recoveryRetryWindowMsOf} from
   '../../src/raft/raft-rs-runtime-tuning.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
@@ -48,6 +49,7 @@ const DB_FILE = 'partition.sqlite';
 const TABLE_NAME = 'hold_log_rows';
 const INSERT_SQL = `INSERT INTO ${TABLE_NAME} (id, value) VALUES (?, ?)`;
 const TEST_TIMEOUT_MS = 30000;
+const INITIAL_CLOCK_MS = 1_000_000;
 const WINDOW_MARGIN_MS = 80;
 // Windows the throwing listener is left in place: each lets the port's own
 // scheduled ticks reconstruct the group once more.
@@ -75,12 +77,32 @@ function resetEnvironment() {
   LoggingService.resetInstance();
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function nextTurn() {
   return new Promise((resolve) => setImmediate(resolve));
+}
+
+function createDeterministicClock(startMs) {
+  const base = new VirtualTimeSource({startMs});
+  let blockedMs = 0;
+  return {
+    now: () => base.now() + blockedMs,
+    setTimeout: (fn, ms, ...args) => base.setTimeout(fn, ms, ...args),
+    clearTimeout: (handle) => base.clearTimeout(handle),
+    setInterval: (fn, ms, ...args) => base.setInterval(fn, ms, ...args),
+    clearInterval: (handle) => base.clearInterval(handle),
+    advance: (ms) => base.advance(ms),
+    blockThread: (ms) => {
+      blockedMs += ms;
+    },
+  };
+}
+
+async function advanceScheduledClock(clock, tickIntervalMs, spanMs) {
+  const end = clock.now() + spanMs;
+  while (clock.now() < end) {
+    clock.advance(Math.min(tickIntervalMs, end - clock.now()));
+    await nextTurn();
+  }
 }
 
 function insert(service, id, value, entryId) {
@@ -130,12 +152,13 @@ function fillOnNextWrite(service) {
   };
 }
 
-test('F-an: a hold on a contained unexpected throw is named once at error ' +
-  'level with its message, however often it throws again, and its end ' +
-  'once at info', {timeout: TEST_TIMEOUT_MS}, async () => {
+async function verifyContainedHoldLogScenario({
+  partitionId,
+  slowReconstructionWindowMultiple = 0,
+}) {
   quietEnvironment();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
-  const partitionId = 'fan-hold-log';
+  const clock = createDeterministicClock(INITIAL_CLOCK_MS);
   const service = new PartitionService(withFoundingStamp({
     partitionId,
     tableId: TABLE_NAME,
@@ -144,6 +167,7 @@ test('F-an: a hold on a contained unexpected throw is named once at error ' +
     replicaIds: [`${partitionId}-r1`],
     nodeId: 'hold-log-node',
     systemTableCache: new SystemTableCache(),
+    timeSource: clock,
     dbPath: path.join(directory, DB_FILE),
     schema: {columns: [
       {name: 'id', type: 'TEXT', primaryKey: true},
@@ -159,7 +183,12 @@ test('F-an: a hold on a contained unexpected throw is named once at error ' +
     assert.equal((await insert(service, 'row-0', 'setup', 'fan-setup'))
       .success, true, 'setup: the lone leader serves a write');
     const window = recoveryRetryWindowMsOf(service.raftTimingConfig);
+    const tickIntervalMs = service.raftTimingConfig.tickIntervalMs;
     const unsubscribe = service.raft.subscribe(RAFT_EVENT.LEADER, () => {
+      if (slowReconstructionWindowMultiple > 0) {
+        clock.blockThread(window * slowReconstructionWindowMultiple +
+          WINDOW_MARGIN_MS);
+      }
       throw new Error(LISTENER_FAILURE);
     });
     const release = fillOnNextWrite(service);
@@ -168,7 +197,10 @@ test('F-an: a hold on a contained unexpected throw is named once at error ' +
     assert.equal(failed.success, false, 'setup: the write met the full ' +
       `database (${JSON.stringify(failed)})`);
 
-    await sleep(window * HELD_WINDOWS + WINDOW_MARGIN_MS);
+    for (let index = 0; index < HELD_WINDOWS; index += 1) {
+      await advanceScheduledClock(
+        clock, tickIntervalMs, window + WINDOW_MARGIN_MS);
+    }
     const held = service.raft.readStatus();
     assert.equal(held.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE,
       `setup: the group is held (${JSON.stringify(held)})`);
@@ -197,7 +229,8 @@ test('F-an: a hold on a contained unexpected throw is named once at error ' +
     'and the reconstructions it had cost when it was named');
 
     unsubscribe();
-    await sleep(window + WINDOW_MARGIN_MS);
+    await advanceScheduledClock(
+      clock, tickIntervalMs, window + WINDOW_MARGIN_MS);
     // The reconstructed runtime is a new admission generation: production's
     // release recovery resumes it on the existing origin before it serves.
     await resumeFixtureParticipantAdmission(service);
@@ -206,6 +239,7 @@ test('F-an: a hold on a contained unexpected throw is named once at error ' +
       'throws');
     assert.equal(service.raft.readStatus().role, RAFT_ROLE.LEADER,
       'the sole voter leads again');
+    clock.advance(0);
     await nextTurn();
     const healed = namingHold('info');
     assert.equal(healed.length, 1, 'one info line names the end of the ' +
@@ -218,4 +252,19 @@ test('F-an: a hold on a contained unexpected throw is named once at error ' +
     fs.rmSync(directory, {recursive: true, force: true});
     resetEnvironment();
   }
+}
+
+test('F-an: a hold on a contained unexpected throw is named once at error ' +
+  'level with its message, however often it throws again, and its end ' +
+  'once at info', {timeout: TEST_TIMEOUT_MS}, async () => {
+  await verifyContainedHoldLogScenario({partitionId: 'fan-hold-log'});
+});
+
+test('F-an: reconstruction attempts slower than the retry window still ' +
+  'accumulate attempts on the same persisting hold episode',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await verifyContainedHoldLogScenario({
+    partitionId: 'fan-hold-log-slow-reconstruct',
+    slowReconstructionWindowMultiple: 1,
+  });
 });

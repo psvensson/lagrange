@@ -13,7 +13,8 @@ import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {readCommittedStatementOutcome} from '../../src/partition/partition-committed-statement-outcome.js';
 import {readOwedCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
-import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_STANDING} from
+import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_DRIVE_STATE,
+  PARTITION_CDC_OBLIGATION_STANDING} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {isCommittedCdcDelivery, isProvisionalCdcDelivery, isProvisionalCdcOutcome} from
   '../../src/cdc/cdc-delivery-outcome.js';
@@ -27,9 +28,10 @@ import {CDC_GROUP_PROPAGATION_STATE} from '../../src/topology/cdc-group-propagat
 import {LatencyTreeService} from '../../src/topology/latency-tree-service.js';
 import {buildSafeTargets} from '../../src/topology/cdc-group-propagation-routing.js';
 import {provisionalRouteFixture, registrationInsert, sourceView, targetView, recordOf,
-  json, note, pump, tick, releaseB, releaseFollower, addressOf, payloadOf, cdcEvents,
-  NODE_ID, SOURCE_GROUP, TARGET_GROUP, SOURCE_REPLICA, TARGET_REPLICAS,
-  LEADER, FIRST_HOP, FOLLOWER, PARTITION_ID} from './message-group-native-provisional-route-fixture.js';
+  json, note, pump, tick, releaseB, releaseFollower, disarmProducerRetryTimer, driveWithPump,
+  addressOf, payloadOf, cdcEvents, NODE_ID, SOURCE_GROUP, TARGET_GROUP, SOURCE_REPLICA,
+  TARGET_REPLICAS, LEADER, FIRST_HOP, FOLLOWER, PARTITION_ID} from
+  './message-group-native-provisional-route-fixture.js';
 
 function commandOf(entry) {
   return entry.entryType === RAFT_RS_ENTRY_TYPE.NORMAL && entry.data ?
@@ -331,8 +333,10 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   assert.deepEqual(targets(f), f.capturedTargets);
   t.diagnostic(json({stage: 'semantic-provisional-a-retains-custody-and-scan-reaches-b', provisional, held}));
 
+  const handshakeDrives = [...f.producerLeader.pendingCDCEventDeliveries];
   releaseB(f);
-  await tick(f);
+  await driveWithPump(f, () => Promise.all(handshakeDrives));
+  disarmProducerRetryTimer(f);
   const hydrated = requireReturn(f, FOLLOWER, b, isProvisionalCdcDelivery, 'S2_PROVISIONAL_B');
   assert.equal(payloadOf(hydrated.envelope).relayDepth, 1);
   assertActualIngress(f, FIRST_HOP, b, 0);
@@ -355,9 +359,10 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   assert.deepEqual(targets(f), f.capturedTargets, 'STOPPED B does not replace the captured F1 target');
   t.diagnostic(json({stage: 'semantic-follower-hears-leader-releases-route', hydrated, after}));
 
-  const drive = f.producerLeader.cdcDelivery.driveCdcObligations('native-provisional-route-redrive')
-    .then((answer) => ({answer}), (error) => ({error}));
-  await tick(f);
+  disarmProducerRetryTimer(f);
+  const driven = await driveWithPump(f, () =>
+    f.producerLeader.cdcDelivery.driveCdcObligations('native-provisional-route-redrive')
+      .then((answer) => ({answer}), (error) => ({error})));
   // An always-local-after-B mutation produces a concrete provisional result
   // here. It cannot pass by eventually timing out or merely touching the cache.
   const forwarded = requireReturn(f, FOLLOWER, a, isCommittedCdcDelivery,
@@ -393,8 +398,9 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   }
   assert.ok(f.heldNative.some(({envelope}) => envelope.from === f.cutPeer));
   assert.ok(f.heldNative.some(({envelope}) => envelope.to === f.cutPeer));
-  const driven = await drive;
   assert.equal(driven.error, undefined, json(driven.error));
+  assert.equal(driven.answer.state, PARTITION_CDC_OBLIGATION_DRIVE_STATE.DRAINED,
+    json(driven.answer));
   await f.producerLeader.cdcDelivery.flushCdcAcknowledgements('native-provisional-route-receipts');
   const delivered = [PARTITION_CDC_OBLIGATION_STANDING.DELIVERED,
     PARTITION_CDC_OBLIGATION_STANDING.RECLAIMED];

@@ -17,8 +17,8 @@ import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {spawn} from 'node:child_process';
-import {pathToFileURL} from 'node:url';
+import {spawn, spawnSync} from 'node:child_process';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 import {test} from 'node:test';
 
 import {
@@ -31,6 +31,7 @@ import {
   laneProblems,
 } from '../../scripts/checks/fallback-branch-census.js';
 import {
+  currentPreloadSha256,
   executedIntervalsOfScript,
   intervalsOverlap,
   mergeRuns,
@@ -43,8 +44,13 @@ import {
   CENSUS_SCHEMA,
   CENSUS_TEST_HEAP_MB,
   DEMO_STOP_DEADLINE_ENV,
+  PRELOAD_MODULE_RELATIVE,
+  REQUIRED_CENSUS_LANES,
   TEST_HEAP_ENV,
 } from '../../scripts/checks/fallback-branch-census-constants.js';
+import {
+  measureNavigabilityBudgetWithFailures,
+} from '../../scripts/checks/code-navigability-budget.js';
 
 const RUN_A = 'unit-hostA-20261108T100000Z';
 const RUN_B = 'formation-hostB-20261108T110000Z';
@@ -89,6 +95,16 @@ function writeProcess(dir, name, root, scripts) {
     })),
   }));
   fs.writeFileSync(path.join(dir, name), JSON.stringify({result}));
+  const match = /^coverage-(\d+)-(\d+)-(\d+)\.json$/u.exec(name);
+  if (match && !fs.existsSync(path.join(dir, `witness-${match[1]}-${match[3]}.json`))) {
+    const pid = Number(match[1]);
+    const writtenAtMs = Number(match[2]);
+    const threadId = Number(match[3]);
+    writeMarkers(dir, pid, threadId, {
+      pid, threadId, ppid: 1, entry: path.join(root, 'test', 'fixture.test.js'),
+      cwd: root, startedAt: '2026-11-08T10:00:00.000Z', isMainThread: threadId === 0,
+    }, {complete: true, by: 'exit', exitCode: 0, at: new Date(writtenAtMs).toISOString()});
+  }
 }
 
 function v8Digest(dir) {
@@ -104,11 +120,19 @@ function writeRunJson(runDir, record) {
 function runRecord(id, lane, host, runDir, root, overrides = {}) {
   const fileDigests = {};
   for (const [file, text] of Object.entries(SOURCE)) fileDigests[file] = sha256(text);
+  const coveragePreload = overrides.coveragePreload !== undefined ?
+    overrides.coveragePreload : {
+      active: true,
+      option: coveragePreloadOption(),
+      module: PRELOAD_MODULE_RELATIVE,
+      sha256: currentPreloadSha256(),
+    };
   return {
     id, lane, host, commit: COMMIT, root,
     startedAt: '2026-11-08T10:00:00.000Z', finishedAt: '2026-11-08T10:05:00.000Z',
-    exitCode: 0, coverageDigest: v8Digest(path.join(runDir, 'v8')),
+    exitCode: 0, coveragePreload, coverageDigest: v8Digest(path.join(runDir, 'v8')),
     fileDigests: {...fileDigests, ...(overrides.fileDigests || {})},
+    ...(overrides.problems !== undefined ? {problems: overrides.problems} : {}),
   };
 }
 
@@ -502,8 +526,14 @@ const END_AT_MS = Date.parse(END_AT);
 // Start/end markers named the way the preload writes them.
 function writeMarkers(dir, pid, threadId, start, end) {
   fs.mkdirSync(dir, {recursive: true});
-  if (start) fs.writeFileSync(path.join(dir, `witness-${pid}-${threadId}.json`), JSON.stringify(start));
-  if (end) fs.writeFileSync(path.join(dir, `witness-${pid}-${threadId}-exit.json`), JSON.stringify(end));
+  const startPath = path.join(dir, `witness-${pid}-${threadId}.json`);
+  const endPath = path.join(dir, `witness-${pid}-${threadId}-exit.json`);
+  if (start) fs.writeFileSync(startPath, JSON.stringify(start));
+  if (end) {
+    fs.writeFileSync(endPath, JSON.stringify(end));
+  } else if (fs.existsSync(endPath)) {
+    fs.rmSync(endPath);
+  }
 }
 
 test('witness accounting: an end marker, or an orderly process exit for a worker, completes', () => {
@@ -605,7 +635,7 @@ test('merge names each lost witness with the repository files its coverage shows
   writeRunJson(offsets.runB, {...runRecord(RUN_B, 'formation', 'hostB', offsets.runB, root),
     startedAt: '2026-11-08T11:00:00.000Z'});
   const merged = mergeRuns([offsets.runA, offsets.runB]);
-  assert.deepEqual(merged.witnesses[RUN_A], {started: 0, complete: 0, flushed: 0, lost: [],
+  assert.deepEqual(merged.witnesses[RUN_A], {started: 2, complete: 2, flushed: 0, lost: [],
     external: []});
   assert.equal(merged.witnesses[RUN_B].lost.length, 1);
   assert.deepEqual(merged.witnesses[RUN_B].lost[0].seenFiles, ['src/a.js']);
@@ -634,7 +664,7 @@ test('a lost witness voids every acquittal in its closure; both and other files 
     ['src/b.js', 'unobserved', [`${RUN_A}:7:0`]],
     ['src/never-loaded.js', 'unloaded', undefined],
   ]);
-  assert.deepEqual(census.runs[0].witnesses, {started: 1, complete: 0, flushed: 0, lost: 1,
+  assert.deepEqual(census.runs[0].witnesses, {started: 3, complete: 2, flushed: 0, lost: 1,
     external: 0});
   // A run whose tree had other content for the file cannot void it.
   writeRunJson(offsets.runA, runRecord(RUN_A, 'unit', 'hostA', offsets.runA, root,
@@ -664,7 +694,10 @@ test('a process that signals itself and returns still dies by the signal', () =>
 
 // ---- Round 3: losses eliminated, not accepted -------------------------------
 
-const PRE_KILL_HELPER = new URL('../test-helpers/census-pre-kill-flush.js', import.meta.url).href;
+const PRE_KILL_HELPER = new URL(
+  '../../scripts/checks/census-pre-kill-flush.js',
+  import.meta.url,
+).href;
 
 // A child that starts one file-backed worker and says `ready` once the
 // worker runs (its preload - start marker, flush channel - is in place by
@@ -930,7 +963,7 @@ test('a lost witness outside the repository is external and voids nothing', () =
     ['src/b.js', 'unobserved', [`${RUN_A}:82:0`]],
     ['src/never-loaded.js', 'unloaded', undefined],
   ]);
-  assert.deepEqual(census.runs[0].witnesses, {started: 6, complete: 0, flushed: 0, lost: 4,
+  assert.deepEqual(census.runs[0].witnesses, {started: 8, complete: 2, flushed: 0, lost: 4,
     external: 2});
 });
 
@@ -1191,3 +1224,274 @@ test('markers are written in full whatever the process did to the globals', () =
   assert.deepEqual(record.witnesses, {started: 1, complete: 1, flushed: 0, lost: [],
     external: []});
 });
+
+// ---- Round 5: R7-R9 counterexamples, 5-lane CLI & truthful reporting --------
+
+const CENSUS_CLI = fileURLToPath(
+  new URL('../../scripts/checks/fallback-branch-census.js', import.meta.url),
+);
+const BUDGET_CLI = fileURLToPath(
+  new URL('../../scripts/checks/code-navigability-budget.js', import.meta.url),
+);
+const noEslintPromotion = () => ({status: 0, stdout: JSON.stringify({rules: {}})});
+const makeBudgetCensusRun = (lane, overrides = {}) => ({
+  id: `${lane}-1`, lane, host: 'fixture', commit: COMMIT,
+  startedAt: '2026-11-08T10:00:00.000Z', coverageDigest: 'a'.repeat(64),
+  witnesses: {started: 1, complete: 1, flushed: 0, lost: 0, external: 0}, ...overrides,
+});
+
+test('R7: navigability budget enforces five-lane metadata, zero lost witnesses, and site binding',
+  () => {
+    const budgetText = fs.readFileSync(BUDGET_CLI, 'utf8');
+    for (const lane of REQUIRED_CENSUS_LANES) assert.match(budgetText, new RegExp(`'${lane}'`, 'u'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'census-r7-'));
+    const srcRel = 'src/fallbacks.js';
+    const srcText = 'export function check(a, b, fn) {\n  const x = a.v || b.v;\n' +
+      '  const y = typeof fn === \'function\' ? fn() : 0;\n' +
+      '  try { return [x, y]; } catch { return null; }\n}\n';
+    fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+    fs.writeFileSync(path.join(root, srcRel), srcText);
+    const makeSite = (slice, row, klass = 'primary-only', overrides = {}) => {
+      const start = srcText.indexOf(slice);
+      const primary = klass !== 'never' && klass !== 'fallback-only';
+      const fallback = klass === 'fallback-only' || klass === 'both';
+      return {
+        file: srcRel, row, range: [start, start + slice.length], occurrence: 0,
+        hash: sha256(`${srcRel}\n${slice}`), class: klass, sidesExecuted: {primary, fallback},
+        runs: ['unit-1'], sidesByRun: {'unit-1': {primary, fallback}}, ...overrides,
+      };
+    };
+    const validSites = [
+      makeSite('a.v || b.v', 'two_source_fallback_reads'),
+      makeSite('typeof fn === \'function\' ? fn() : 0', 'typeof_dual_paths'),
+      makeSite('catch { return null; }', 'catch_returns_default'),
+    ];
+    const validRuns = REQUIRED_CENSUS_LANES.map((lane) => makeBudgetCensusRun(lane));
+    const censusPath = path.join(root, 'data', 'fallback-census', 'census.json');
+    fs.mkdirSync(path.dirname(censusPath), {recursive: true});
+    const measureCensus = (doc) => {
+      fs.writeFileSync(censusPath, JSON.stringify(doc));
+      const measured = measureNavigabilityBudgetWithFailures(root,
+        {eslintRunner: noEslintPromotion});
+      return {byRow: new Map(measured.rows.map((row) => [row.name, row])),
+        summary: measured.fallbackSummary};
+    };
+    const ok = measureCensus({
+      schema: CENSUS_SCHEMA, generatedAt: END_AT, head: HEAD, runs: validRuns, sites: validSites,
+    });
+    assert.equal(ok.byRow.get('fallback_sites_uncensused').value, 0);
+    assert.deepEqual([ok.summary.totalFallbackSites, ok.summary.censusedSites,
+      ok.summary.uncensusedSites], [3, 3, 0]);
+    assert.match(ok.summary.note, /never zero fallback logic/u);
+
+    const badRunVariants = [
+      undefined, [], [makeBudgetCensusRun('corpus')],
+      REQUIRED_CENSUS_LANES.map((lane) => ({lane})), validRuns.slice(0, 4),
+      [...validRuns, makeBudgetCensusRun('corpus', {id: 'extra-1'})],
+      [validRuns[0], {...validRuns[1], id: 'unit-1'}, ...validRuns.slice(2)],
+      [{...validRuns[0], incomplete: true}, ...validRuns.slice(1)],
+      [{...validRuns[0], problems: ['lost']}, ...validRuns.slice(1)],
+      [{...validRuns[0], witnesses: {started: 2, complete: 1, lost: 1}}, ...validRuns.slice(1)],
+      [{...validRuns[0], witnesses: {started: 3, complete: 1, lost: 0, external: 1}},
+        ...validRuns.slice(1)],
+    ];
+    for (const runs of badRunVariants) {
+      const {byRow} = measureCensus({schema: CENSUS_SCHEMA,
+        ...(runs === undefined ? {} : {runs}), sites: validSites});
+      assert.equal(byRow.get('fallback_sites_uncensused').value, 3);
+      assert.equal(byRow.get('fallback_branches_never_taken').value, null);
+    }
+
+    const badSiteOverrides = [
+      ['primary-only', {runs: []}],
+      ['primary-only', {runs: ['foreign-1']}],
+      ['primary-only', {runs: ['unit-1', 'unit-1']}],
+      ['primary-only', {lostWitnesses: ['unit-1:9:0']}],
+      ['primary-only', {sidesExecuted: {primary: false, fallback: false}}],
+      ['both', {sidesByRun: {'unit-1': {primary: true, fallback: false}}}],
+    ];
+    for (const [klass, overrides] of badSiteOverrides) {
+      const badSite = makeSite('a.v || b.v', 'two_source_fallback_reads', klass, overrides);
+      const {byRow} = measureCensus({
+        schema: CENSUS_SCHEMA, runs: validRuns, sites: [badSite, ...validSites.slice(1)],
+      });
+      assert.equal(byRow.get('fallback_sites_uncensused').value, 1);
+    }
+  });
+
+test('R8: stripped or omitted env, shell env -i/unset, eval worker, and markerless writer void',
+  () => {
+    const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'fallback-bare-'));
+    fs.writeFileSync(path.join(bare, 'coverage-999-1794000000000-0.json'), '{"result":[]}');
+    const bareAccounted = accountWitnesses(bare, ['coverage-999-1794000000000-0.json']);
+    assert.equal(bareAccounted.lost.length, 1);
+    assert.deepEqual([bareAccounted.lost[0].uninstrumented, bareAccounted.lost[0].cause],
+      [true, 'uninstrumented']);
+
+    const root = makeRoot();
+    const offsets = buildTwoRuns(root);
+    const out = path.join(root, 'test-output', 'coverage', 'r8-unit');
+    const driver = path.join(root, 'test', 'r8-driver.mjs');
+    const child = path.join(root, 'test', 'r8-child.mjs');
+    fs.mkdirSync(path.dirname(driver), {recursive: true});
+    const targetUrl = pathToFileURL(path.join(root, 'src', 'b.js')).href;
+    fs.writeFileSync(child, `await import(${JSON.stringify(targetUrl)});\n`);
+    fs.writeFileSync(driver, [
+      'import {execFileSync, execSync, fork, spawnSync} from \'node:child_process\';',
+      'import {Worker} from \'node:worker_threads\';',
+      `import ${JSON.stringify(targetUrl)};`,
+      'await new Promise((resolve, reject) => {',
+      '  const w = new Worker(\'1 + 1\', {eval: true});',
+      '  w.on(\'exit\', resolve); w.on(\'error\', reject);',
+      '});',
+      `spawnSync(process.execPath, [${JSON.stringify(child)}], {`,
+      '  env: {...process.env, NODE_OPTIONS: \'\', NODE_V8_COVERAGE: \'\'}});',
+      `spawnSync(process.execPath, [${JSON.stringify(child)}], {env: {PATH: process.env.PATH}});`,
+      `await new Promise((r) => fork(${JSON.stringify(child)}, [],`,
+      '  {env: {PATH: process.env.PATH}}).on(\'exit\', r));',
+      'execFileSync(process.execPath, [\'-e\', \'1 + 1\'], {env: {PATH: process.env.PATH}});',
+      'execSync(`${process.execPath} -e \'1+1\'; NODE_OPTIONS=\'\' ${process.execPath} -e \'1+1\'`);',
+      'execSync(\'"$NODE_BINARY" -e "1+1"\', {env: {PATH: process.env.PATH,',
+      '  NODE_BINARY: process.execPath}});',
+      'execSync(`env -i PATH="${process.env.PATH}" ${process.execPath} -e \'1+1\'`);',
+      'execSync(`unset NODE_OPTIONS; ${process.execPath} -e \'1+1\'`);',
+    ].join('\n'));
+    const record = collectRun({lane: 'unit', out, root, command: [process.execPath, driver],
+      host: 'hostR8', commit: COMMIT});
+    assert.deepEqual([record.exitCode, record.witnesses.external.length,
+      record.witnesses.lost.length], [0, 0, 12]);
+    for (const lost of record.witnesses.lost) {
+      assert.deepEqual([lost.uninstrumented, lost.cause], [true, 'uninstrumented']);
+    }
+    const census = joinCensus({merged: mergeRuns([out]), runDirs: [out],
+      sites: [sitesFor(root, offsets)[0]], root, head: HEAD,
+      importers: {'src/a.js': ['test/r8-child.mjs']}});
+    assert.deepEqual([census.sites[0].class, census.sites[0].lostWitnesses.length],
+      ['unobserved', 12]);
+    const loaderDir = fs.mkdtempSync(path.join(os.tmpdir(), 'census-loader-'));
+    const mk = (url) => ({url, functions: [{ranges: [{startOffset: 0, endOffset: 1, count: 1}]}]});
+    for (const [k, v] of [['witness-500-0.json', '{"pid":500,"threadId":0}'],
+      ['witness-500-0-exit.json', '{"at":"2026-11-08T00:00:00Z"}'],
+      ['coverage-500-1794096001000-0.json', '{"result":[]}'],
+      ['coverage-500-1794096001000-1.json', JSON.stringify({result: [
+        mk('node:internal/modules/esm/worker'), mk('file:///x/node_modules/m/i.js')]})]]) {
+      fs.writeFileSync(path.join(loaderDir, k), v);
+    }
+    assert.equal(accountWitnesses(loaderDir, fs.readdirSync(loaderDir)).lost.length, 0);
+    fs.writeFileSync(path.join(loaderDir, 'coverage-500-1794096001000-2.json'), JSON.stringify(
+      {result: [mk('node:internal/modules/esm/worker'), mk('file:///x/src/a.js')]}));
+    assert.equal(accountWitnesses(loaderDir, fs.readdirSync(loaderDir)).lost.length, 1);
+  });
+
+test('preload launch wrappers preserve promisify(exec/execFile) and sync error semantics', () => {
+  const root = makeRoot();
+  const out = path.join(root, 'test-output', 'coverage', 'semantics');
+  const probe = path.join(root, 'test', 'semantics-probe.mjs');
+  fs.mkdirSync(path.dirname(probe), {recursive: true});
+  fs.writeFileSync(probe, [
+    'import assert from \'node:assert/strict\';',
+    'import {exec, execFile, execFileSync, execSync} from \'node:child_process\';',
+    'import {promisify} from \'node:util\';',
+    'const script = \'process.stdout.write("OUT");process.stderr.write("ERR");\';',
+    'assert.deepEqual(await promisify(execFile)(process.execPath, [\'-e\', script]),',
+    '  {stdout: \'OUT\', stderr: \'ERR\'});',
+    'assert.deepEqual(await promisify(exec)(`${process.execPath} -e \'${script}\'`),',
+    '  {stdout: \'OUT\', stderr: \'ERR\'});',
+    'const fail = \'process.stderr.write("E7");process.exit(7)\';',
+    'assert.throws(() => execFileSync(process.execPath, [\'-e\', fail], {stdio: \'pipe\'}),',
+    '  (err) => err.status === 7 && String(err.stderr) === \'E7\' && err.message.endsWith(\'\\nE7\'));',
+    'assert.throws(() => execSync(`${process.execPath} -e \'${fail}\'`, {stdio: \'pipe\'}),',
+    '  (err) => err.status === 7 && String(err.stderr) === \'E7\' && err.message.endsWith(\'\\nE7\'));',
+    'const hang = \'process.stdout.write("PRE");setTimeout(()=>{},1000)\';',
+    'assert.throws(() => execFileSync(process.execPath, [\'-e\', hang],',
+    '  {timeout: 80, stdio: \'pipe\'}),',
+    '  (err) => err.code === \'ETIMEDOUT\' && err.signal === \'SIGTERM\' &&',
+    '    String(err.stdout) === \'PRE\' && Array.isArray(err.output) && Number.isInteger(err.pid));',
+  ].join('\n'));
+  const record = collectRun({
+    lane: 'unit', out, root, command: [process.execPath, probe], host: 'hostSem', commit: COMMIT,
+  });
+  assert.deepEqual([record.exitCode, record.witnesses.lost.length], [0, 1]);
+});
+
+test('R9: missing/empty coverage dir, malformed V8/marker JSON, and stale preload fail closed',
+  () => {
+    const root = makeRoot();
+    const offsets = buildTwoRuns(root);
+    const {runA, runB} = offsets;
+    fs.writeFileSync(path.join(runA, 'v8', 'coverage-1-1794000009999-0.json'), '{"result": [');
+    fs.writeFileSync(path.join(runA, 'v8', 'coverage-2-1794000009999-0.json'), '{}');
+    fs.writeFileSync(path.join(runA, 'v8', 'roster-77-0.json'), '{corrupt');
+    writeRunJson(runA, runRecord(RUN_A, 'unit', 'hostA', runA, root));
+    const merged = mergeRuns([runA]);
+    assert.deepEqual(merged.unreadable, [
+      {run: RUN_A, file: 'coverage-1-1794000009999-0.json'},
+      {run: RUN_A, file: 'coverage-2-1794000009999-0.json'},
+      {run: RUN_A, file: 'roster-77-0.json'},
+    ]);
+    assert.equal(merged.witnesses[RUN_A].complete, 0);
+    const census = joinCensus({
+      merged, runDirs: [runA], sites: [sitesFor(root, offsets)[0]], root, head: HEAD, importers: {},
+    });
+    assert.equal(census.sites[0].class, 'unobserved');
+
+    const driftedHashSite = {...sitesFor(root, offsets)[1], hash: 'f'.repeat(64)};
+    assert.equal(joinCensus({
+      merged: mergeRuns([runB]), runDirs: [runB], sites: [driftedHashSite], root, head: HEAD,
+    }).sites[0].class, 'unloaded');
+
+    writeRunJson(runB, runRecord(RUN_B, 'formation', 'hostB', runB, root, {
+      coveragePreload: {active: true, option: '--import=x', module: PRELOAD_MODULE_RELATIVE,
+        sha256: '0'.repeat(64)},
+    }));
+    assert.throws(() => mergeRuns([runB]), /coveragePreload/u);
+    writeRunJson(runB, runRecord(RUN_B, 'formation', 'hostB', runB, root, {problems: ['bad']}));
+    assert.throws(() => mergeRuns([runB]), /recorded collection problems/u);
+
+    const emptyRun = path.join(root, 'test-output', 'emptyRun');
+    fs.mkdirSync(path.join(emptyRun, 'v8'), {recursive: true});
+    writeRunJson(emptyRun, runRecord('unit-empty-1', 'unit', 'hostA', emptyRun, root));
+    assert.throws(() => mergeRuns([emptyRun]), /zero V8 coverage files/u);
+    fs.rmSync(path.join(emptyRun, 'v8'), {recursive: true});
+    assert.throws(() => mergeRuns([emptyRun]), /missing or unreadable coverage directory/u);
+  });
+
+test('five-lane CLI pipeline enforces complete 5-lane runs and reports fallback totals truthfully',
+  () => {
+    const root = makeRoot();
+    for (const extra of ['a.js', 'never-loaded.js']) fs.rmSync(path.join(root, 'src', extra));
+    const driver = path.join(root, 'lane-driver.mjs');
+    fs.writeFileSync(driver, `globalThis.h = () => 1;\nawait import(${
+      JSON.stringify(pathToFileURL(path.join(root, 'src', 'b.js')).href)});\n`);
+    const runDirs = REQUIRED_CENSUS_LANES.map((lane) => {
+      const out = path.join(root, 'test-output', 'five', lane);
+      const record = collectRun({lane, out, root, command: [process.execPath, driver],
+        host: 'lab', commit: COMMIT});
+      assert.deepEqual([record.exitCode, record.witnesses.lost.length], [0, 0]);
+      return out;
+    });
+    const mergedFour = path.join(root, 'merged-4.json');
+    fs.writeFileSync(mergedFour, JSON.stringify(mergeRuns(runDirs.slice(0, 4))));
+    const outFour = path.join(root, 'census-4.json');
+    const joinFour = spawnSync(process.execPath, [CENSUS_CLI, 'join', '--root', root,
+      '--head', HEAD, '--merged', mergedFour, '--runs', ...runDirs.slice(0, 4), '--out', outFour],
+    {encoding: 'utf8'});
+    assert.equal(joinFour.status, 1);
+    assert.match(joinFour.stderr, /missing: formation/u);
+    assert.equal(fs.existsSync(outFour), false);
+    const mergedFive = path.join(root, 'merged-5.json');
+    fs.writeFileSync(mergedFive, JSON.stringify(mergeRuns(runDirs)));
+    const censusPath = path.join(root, 'data', 'fallback-census', 'census.json');
+    const joinFive = spawnSync(process.execPath, [CENSUS_CLI, 'join', '--root', root,
+      '--head', HEAD, '--merged', mergedFive, '--runs', ...runDirs, '--out', censusPath],
+    {encoding: 'utf8'});
+    assert.equal(joinFive.status, 0, joinFive.stderr);
+    assert.match(joinFive.stdout, /fallback logic sites detected: 1; censused: 1, uncensused: 0/u);
+    assert.match(joinFive.stdout, /0 uncensused never means zero fallback logic/u);
+    const budget = measureNavigabilityBudgetWithFailures(root,
+      {eslintRunner: () => ({status: 0, stdout: '[]'})});
+    const uncensusedRow = budget.rows.find((row) => row.name === 'fallback_sites_uncensused');
+    assert.deepEqual([uncensusedRow.value, budget.fallbackSummary.totalFallbackSites,
+      budget.fallbackSummary.censusedSites, budget.fallbackSummary.uncensusedSites], [0, 1, 1, 0]);
+    assert.match(budget.fallbackSummary.note, /never zero fallback logic/u);
+  });

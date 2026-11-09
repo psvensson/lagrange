@@ -577,8 +577,28 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
       timeoutError:
         QUERY_ERROR_MSG.TABLE_PARTITION_LEADER_TIMEOUT_PREFIX + partitionId,
     });
+    const repairOptions = {
+      timeoutBudget: effectiveBudget,
+      cancellationToken: options.cancellationToken || null,
+    };
+    const checkLeaderRouteWithRepair = async () => {
+      if (hasLeaderRoute()) {
+        return true;
+      }
+      return (
+        (await this.maybeAwaitPartitionRoutingRepair(
+          partitionId,
+          routingReadinessDimension,
+          repairOptions,
+        )) && hasLeaderRoute()
+      );
+    };
+    if (await checkLeaderRouteWithRepair()) {
+      return;
+    }
+
     await this.waitForCondition(
-      hasLeaderRoute,
+      checkLeaderRouteWithRepair,
       getRemainingBudgetMs(effectiveBudget, {now: this.nowFn}),
       this.tablePartitionProvisioningPollIntervalMs,
       QUERY_ERROR_MSG.TABLE_PARTITION_LEADER_TIMEOUT_PREFIX + partitionId,

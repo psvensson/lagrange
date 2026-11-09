@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T14:28:56.719Z",
-  "rawViolationCount": 697,
+  "generatedAt": "2026-11-10T05:02:58.233Z",
+  "rawViolationCount": 687,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -473,7 +473,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-cluster-view-owner.js",
-      "line": 25,
+      "line": 30,
       "column": 9,
       "functionName": "extractCandidateNodeId",
       "kind": "row_field_alias_reads",
@@ -1129,42 +1129,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/cdc/cdc-integration-service-local-system-table-routing.js",
-      "line": 178,
-      "column": 25,
-      "functionName": "partitionPredicate",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cdc/cdc-integration-service-local-system-table-routing.js",
-      "line": 179,
-      "column": 23,
-      "functionName": "partitionPredicate",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cdc/cdc-integration-service-local-system-table-routing.js",
-      "line": 265,
-      "column": 20,
-      "functionName": "resolveLeaderRole",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cdc/cdc-integration-service-local-system-table-routing.js",
-      "line": 298,
-      "column": 19,
-      "functionName": "<anonymous>",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/cli/core/remote-cache-service-rows.js",
       "line": 103,
       "column": 20,
@@ -1679,7 +1643,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
-      "line": 454,
+      "line": 465,
       "column": 17,
       "functionName": "isRecentHeartbeat",
       "kind": "row_field_alias_reads",
@@ -1778,7 +1742,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 73,
+      "line": 80,
       "column": 36,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -1787,7 +1751,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 76,
+      "line": 83,
       "column": 46,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -3182,7 +3146,7 @@
     },
     {
       "filePath": "src/partition/managed-split-topology-adapter.js",
-      "line": 144,
+      "line": 143,
       "column": 25,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -3191,7 +3155,7 @@
     },
     {
       "filePath": "src/partition/managed-split-topology-adapter.js",
-      "line": 160,
+      "line": 159,
       "column": 29,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -3200,7 +3164,7 @@
     },
     {
       "filePath": "src/partition/managed-split-topology-adapter.js",
-      "line": 230,
+      "line": 229,
       "column": 33,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -3631,15 +3595,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/partition/partition-transition-overlap-guard.js",
-      "line": 196,
-      "column": 6,
-      "functionName": "checkTableInfoTransitionOverlap",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/partition/partition-transition-row.js",
       "line": 19,
       "column": 16,
@@ -3659,7 +3614,7 @@
     },
     {
       "filePath": "src/policy/table-policy-resolution.js",
-      "line": 362,
+      "line": 375,
       "column": 23,
       "functionName": "parseAndCacheMessageGroupPolicyDecision",
       "kind": "row_field_alias_reads",
@@ -3668,7 +3623,7 @@
     },
     {
       "filePath": "src/policy/table-policy-resolution.js",
-      "line": 488,
+      "line": 507,
       "column": 26,
       "functionName": "isFreshCachedMessageGroupPolicy",
       "kind": "row_field_alias_reads",
@@ -4451,7 +4406,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 574,
+      "line": 555,
       "column": 10,
       "functionName": "provisionInitialTablePartition",
       "kind": "row_field_alias_reads",
@@ -4460,7 +4415,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 605,
+      "line": 586,
       "column": 24,
       "functionName": "provisionInitialTablePartition",
       "kind": "row_field_alias_reads",
@@ -4622,7 +4577,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 178,
+      "line": 312,
       "column": 21,
       "functionName": "getRoutablePartitionServiceNodeIds",
       "kind": "row_field_alias_reads",
@@ -5359,42 +5314,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 259,
-      "column": 12,
-      "functionName": "<anonymous>",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 259,
-      "column": 49,
-      "functionName": "<anonymous>",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 272,
-      "column": 35,
-      "functionName": "<anonymous>",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 273,
-      "column": 40,
-      "functionName": "<anonymous>",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
       "line": 248,
       "column": 33,
@@ -5738,16 +5657,7 @@
     },
     {
       "filePath": "src/runtime/pgwire-runtime-module.js",
-      "line": 156,
-      "column": 14,
-      "functionName": "resolveConfig",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/runtime/pgwire-runtime-module.js",
-      "line": 242,
+      "line": 331,
       "column": 24,
       "functionName": "prepare",
       "kind": "row_field_alias_reads",

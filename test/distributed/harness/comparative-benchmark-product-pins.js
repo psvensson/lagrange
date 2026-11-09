@@ -47,6 +47,22 @@ function versionProblems(role, containers) {
   return problems;
 }
 
+function bootProvenanceProblems(role, containers) {
+  if (arrayEvery(containers, (one) => one.bootProvenance === undefined)) return [];
+  if (arrayEvery(containers, (one) => one.reportedVersion === null &&
+      Boolean(one.bootProvenance?.unavailable))) return [];
+  const firstFingerprint = containers[0].bootProvenance?.bootedSrcFingerprint ?? null;
+  const problems = [];
+  if (!isText(firstFingerprint)) {
+    problems.push(`${role}: no bootedSrcFingerprint in bootProvenance`);
+  }
+  if (arraySome(containers,
+    (other) => (other.bootProvenance?.bootedSrcFingerprint ?? null) !== firstFingerprint)) {
+    problems.push(`${role}: containers differ in bootedSrcFingerprint`);
+  }
+  return problems;
+}
+
 function pinOfRole(targetId, product, role, containers) {
   const first = containers[0];
   const problems = [];
@@ -57,6 +73,7 @@ function pinOfRole(targetId, product, role, containers) {
     problems.push(`${role}: containers differ in contentIdentity`);
   }
   problems.push(...versionProblems(role, containers));
+  problems.push(...bootProvenanceProblems(role, containers));
   if (problems.length > 0) {
     throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
       `product identity of ${targetId} cannot be pinned: ${problems[0]}`, {targetId, problems});
@@ -65,6 +82,7 @@ function pinOfRole(targetId, product, role, containers) {
     reportedVersion: first.reportedVersion,
     ...(first.reportedVersion === null ?
       {reportedVersionError: first.reportedVersionError} : {}),
+    ...(first.bootProvenance !== undefined ? {bootProvenance: first.bootProvenance} : {}),
     images: arrayMap(containers, (one) => ({host: one.host, imageId: one.imageId,
       repoDigest: one.repoDigest ?? null, imageStore: one.imageStore ?? null,
       provenance: one.provenance ?? null}))});

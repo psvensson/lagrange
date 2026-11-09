@@ -233,10 +233,18 @@ function buildLeaseVerdictServiceRows(
  * @param {string} ownerNodeId
  * @return {Object}
  */
-function buildLeaseVerdictReadinessService(ownerRoutingReady, ownerNodeId) {
+function buildLeaseVerdictReadinessService(
+  ownerRoutingReady,
+  ownerNodeId,
+  options = {},
+) {
   return buildPriorityDrainOwnerUnavailableReadinessService(
     LEASE_VERDICT_PARTITION_ID,
     ownerRoutingReady ? LEASE_VERDICT_NO_UNAVAILABLE_NODE : ownerNodeId,
+    {
+      readyNodeIds: Object.values(LEASE_VERDICT_NODE),
+      now: options.now || (() => LEASE_VERDICT_NOW_MS),
+    },
   );
 }
 

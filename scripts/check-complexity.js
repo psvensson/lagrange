@@ -150,7 +150,8 @@ const TARGET_THRESHOLD = 12;
 // 2026-11-08 (state-read-named-defaults): tightened 1731 -> 1714 on its own
 // branch; merged into the stream at the lower 1711, then 1711 -> 1699 on the
 // checker's hint (the merged tree).
-const BASELINE_COUNT = 1699;
+// 2026-11-09 (candidate-integration): tightened 1699 -> 1698 on the checker hint.
+const BASELINE_COUNT = 1698;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

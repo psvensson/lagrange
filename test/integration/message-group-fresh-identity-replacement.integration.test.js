@@ -281,10 +281,25 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
       return undefined;
     };
 
-    const cache = new SystemTableCache();
-    const nodeService = {
-      getSystemTableCache: () => cache,
-      getReadOnlySystemTableCache: () => cache,
+    const cachesByNode = new Map(
+      [SEED_NODE, NODE_B, NODE_C].map((nodeId) => [nodeId, new SystemTableCache()]),
+    );
+    const cacheFor = (nodeId) => {
+      const nodeCache = cachesByNode.get(nodeId);
+      assert.ok(nodeCache, `cache must exist for ${nodeId}`);
+      return nodeCache;
+    };
+    const applySharedServicesChange = (action, row) => {
+      for (const nodeCache of cachesByNode.values()) {
+        nodeCache.applySystemTableChange(TABLES.SERVICES, action, {...row});
+      }
+    };
+    const nodeServiceFor = (nodeId) => {
+      const nodeCache = cacheFor(nodeId);
+      return {
+        getSystemTableCache: () => nodeCache,
+        getReadOnlySystemTableCache: () => nodeCache,
+      };
     };
 
     const cpStore = createControlPlaneStore(
@@ -325,7 +340,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
         `INSERT INTO services (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
         cols.map((col) => built[col]),
       );
-      cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      applySharedServicesChange('INSERT', {
         service_id: replicaId,
         replica_id: replicaId,
         group_id: GROUP_ID,
@@ -353,7 +368,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
         timeSource: {now: () => nowMs},
         controlPlaneSystemTableGateway: cpStore.gateway,
         logger: noLog,
-        systemTableCache: cache,
+        systemTableCache: cacheFor(nodeId),
         cdcIntegrationService: {},
         authoritativeVisibilityTimeoutMs: 0,
         authoritativeVisibilityRetryDelayMs: 0,
@@ -375,7 +390,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
           replicaIds: [...FOUNDERS],
           founderNodeIds,
           transport: router,
-          nodeService,
+          nodeService: nodeServiceFor(SEED_NODE),
           dbPath: path.join(seedStorage, `${replicaId}.db`),
           publishRoleMetadata: false,
           publishLeaderNodeMetadata: false,
@@ -695,7 +710,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
             joinedLearnerService = service;
             replicas.set(targetReplicaId, service);
           },
-          serviceOptions: {nodeService},
+          serviceOptions: {nodeService: nodeServiceFor(targetNodeId)},
           catchUp: {timeoutMs: 6000, pollIntervalMs: 15},
         });
 
@@ -907,7 +922,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
         });
         assert.equal(retired.outcome, 'retired');
         replicas.delete(sourceReplicaId);
-        cache.applySystemTableChange(TABLES.SERVICES, 'DELETE', {
+        applySharedServicesChange('DELETE', {
           service_id: sourceReplicaId,
           replica_id: sourceReplicaId,
           group_id: GROUP_ID,
@@ -1012,7 +1027,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
           nodeId,
           replicaIds: ['mg-1-r1', 'mg-1-r4', 'mg-1-r5'],
           transport: router,
-          nodeService,
+          nodeService: nodeServiceFor(nodeId),
           dbPath: dbFile,
           bootstrapMembership: durableRecordBootstrap(),
           publishRoleMetadata: false,

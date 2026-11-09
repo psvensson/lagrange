@@ -326,11 +326,7 @@ function serializeControlPlanePublicationRow(row) {
       row?.created_at,
       row?.createdAt,
     ),
-    updated_at: readInteger(
-      row?.updated_at,
-      row?.updatedAt,
-      Date.now(),
-    ),
+    updated_at: resolveSerializedPublicationUpdatedAt(row),
     published_at: readInteger(
       row?.published_at,
       row?.publishedAt,
@@ -345,6 +341,11 @@ function serializeControlPlanePublicationRow(row) {
       normalizedRow.transitionHistory,
     ),
   };
+}
+
+function resolveSerializedPublicationUpdatedAt(row) {
+  const updatedAt = readInteger(row?.updated_at, row?.updatedAt);
+  return updatedAt !== null ? updatedAt : Date.now();
 }
 
 function canonicalizeSystemTableRow(tableName, row) {

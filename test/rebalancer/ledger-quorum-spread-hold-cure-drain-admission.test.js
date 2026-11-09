@@ -78,9 +78,11 @@ import {
   classifyLedgerSpreadSurplusDrainCureCondition,
 } from '../../src/rebalancer/replica-placement-cure-policy.js';
 import {
+  buildMockPolicyAuthorityWitness,
   createAllowAllStorageAdmissionService,
   createMockCache,
   createMockControlPlaneReadinessService,
+  createMockPolicyService,
   createTestCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
@@ -116,6 +118,7 @@ const TEST_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const TEST_SERVICES_BY_PARTITION_SQL_PATTERN =
   'WHERE service_type = ? AND partition_id = ?';
 const TEST_LEDGER_SURPLUS_DRAIN_CAPABILITY_KIND = 'ledger_surplus_drain';
+const TEST_READY_LEASE_EXTENSION_MS = 60_000;
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -136,6 +139,8 @@ function createReadyNodeRow(nodeId) {
   return {
     node_id: nodeId,
     status: NodeStatus.ACTIVE,
+    connection_state: NODE_STATE.READY,
+    ready_lease_expires_at: Date.now() + TEST_READY_LEASE_EXTENSION_MS,
   };
 }
 
@@ -184,12 +189,12 @@ function createSurplusLedgerServiceRows() {
 }
 
 function createFixedTargetPolicyService() {
-  return {
+  return createMockPolicyService({
     getPolicyForPartition: () => ({
       minReplicaCount: TEST_TARGET_REPLICA_COUNT,
       targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
     }),
-  };
+  });
 }
 
 // Full-fidelity readiness service: per-node readiness derives from the
@@ -253,6 +258,8 @@ function installAuthoritativeServicesRead(coordinator, cache) {
           .getAll(SYSTEM_TABLE_NAME.SERVICES)
           .filter((row) => row.partition_id === params[1])
           .map((row) => ({...row})),
+        rowSetComplete: true,
+        readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
       };
     }
     return originalReadAuthoritativeRows(tableName, sql, params, readOptions);

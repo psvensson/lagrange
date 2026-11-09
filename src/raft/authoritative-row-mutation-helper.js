@@ -17,7 +17,6 @@ import {
   withDefault,
 } from './authoritative-row-mutation-vocabulary.js';
 
-
 class AuthoritativeRowMutationHelper {
   constructor(options = {}) {
     const {
@@ -106,6 +105,7 @@ class AuthoritativeRowMutationHelper {
     this.pendingRevision = 0;
     this.persistedValue = null;
     this.inFlight = false;
+    this.inFlightPromise = null;
     this.retryTimer = null;
     this.retryAttemptCount = 0;
     this.followUpFlushScheduled = false;
@@ -185,11 +185,20 @@ class AuthoritativeRowMutationHelper {
   }
 
   async flush() {
+    let settled = null;
+    while (this.inFlightPromise) {
+      settled = await this.inFlightPromise;
+    }
+    if (settled && (this.shuttingDown || !this.pendingValue ||
+        this.pendingValue === this.persistedValue || this.retryTimer)) {
+      return settled;
+    }
     const admissionResult = this.resolveFlushAdmission();
     if (admissionResult) {
       return admissionResult;
     }
-    return this.executeFlush();
+    this.inFlightPromise = this.executeFlush();
+    return this.inFlightPromise;
   }
 
   resolveFlushAdmission() {
@@ -430,7 +439,8 @@ class AuthoritativeRowMutationHelper {
 
   recordAppliedMutation(value, flushRevision, partitionResult) {
     this.persistedValue = value;
-    if (!this.isFlushSuperseded(value, flushRevision)) {
+    if (this.pendingValue === value ||
+        !this.isFlushSuperseded(value, flushRevision)) {
       this.pendingValue = null;
     }
     this.retryAttemptCount = 0;
@@ -456,6 +466,7 @@ class AuthoritativeRowMutationHelper {
 
   completeFlush(writeSucceeded, supersededByNewerPending = false) {
     this.inFlight = false;
+    this.inFlightPromise = null;
     const followUpOwed = this.followUpFlushOwed || supersededByNewerPending;
     this.followUpFlushOwed = false;
     if (this.shuttingDown) {
@@ -744,14 +755,10 @@ class AuthoritativeRowMutationHelper {
   shutdown() {
     this.shuttingDown = true;
     this.followUpFlushOwed = false;
-    if (!this.retryTimer) {
-      this.followUpFlushScheduled = false;
-      this.pendingValue = null;
-      this.retryAttemptCount = 0;
-      return;
+    if (this.retryTimer) {
+      this.clearTimeoutFn(this.retryTimer);
+      this.retryTimer = null;
     }
-    this.clearTimeoutFn(this.retryTimer);
-    this.retryTimer = null;
     this.followUpFlushScheduled = false;
     this.pendingValue = null;
     this.retryAttemptCount = 0;

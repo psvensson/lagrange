@@ -62,6 +62,13 @@ import {
 const MEMBERSHIP_PUBLICATION_STATUS = CONTROL_PLANE_PUBLICATION_STATUS;
 const AUTHORITATIVE_MEMBERSHIP_CHANGED_REASON = 'authoritative_membership_changed';
 
+function resolveNowMs(value) {
+  const candidate = Number(value);
+  return Number.isFinite(candidate) && candidate >= 0 ?
+    Math.trunc(candidate) :
+    Date.now();
+}
+
 function buildPublicationMetadataRefreshRow(options = {}, helperFns = {}) {
   const publicationRow = options.publicationRow;
   if (!publicationRow || typeof publicationRow !== 'object') {
@@ -92,7 +99,7 @@ function buildPublicationMetadataRefreshRow(options = {}, helperFns = {}) {
     priorityPartitionSummary,
     membership_lifecycle_summary: membershipLifecycleSummary,
     membershipLifecycleSummary,
-    updated_at: helperFns.normalizePositiveInteger(options.nowMs, Date.now()),
+    updated_at: resolveNowMs(options.nowMs),
     transition_history: Array.isArray(publicationRow.transition_history) ?
       publicationRow.transition_history :
       normalizedPublication.transitionHistory,

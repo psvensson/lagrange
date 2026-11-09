@@ -189,6 +189,7 @@ function createMockCache(options = {}) {
     tables = [],
     replicaOperations = [],
     messageGroups = [],
+    serviceDefinitions = [],
   } = options;
 
   const now = Date.now();
@@ -209,6 +210,9 @@ function createMockCache(options = {}) {
     tables: new Map(tables.map((t) => [t.table_id, t])),
     message_groups: new Map(
       messageGroups.map((mg) => [mg.group_id ?? mg.message_group_id, mg]),
+    ),
+    service_definitions: new Map(
+      serviceDefinitions.map((sd) => [sd.service_id, sd]),
     ),
     replica_operations: new Map(
       normalizedReplicaOperations
@@ -363,17 +367,35 @@ function createMockCdcService() {
   };
 }
 
+function withAuthoritativeReadDefaults(tableName, rawResult) {
+  if (!rawResult || rawResult.success !== true || !Array.isArray(rawResult.rows)) {
+    return rawResult;
+  }
+  const next = {...rawResult};
+  if (next.rowSetComplete === undefined && next.partial !== true) {
+    next.rowSetComplete = true;
+  }
+  if (next.readAuthorityWitness === undefined) {
+    next.readAuthorityWitness = buildMockPolicyAuthorityWitness(
+      `${tableName || SYSTEM_TABLE_NAME.SERVICES}-p1`,
+    );
+  }
+  return next;
+}
+
 function createMockControlPlaneSystemTableGateway(sqlQueryEngine = null) {
   const gateway = {
     async executeQuery(sql, params = [], _queryOptions = {}) {
-      if (sqlQueryEngine &&
-          typeof sqlQueryEngine.executeQuery === 'function') {
+      if (sqlQueryEngine && typeof sqlQueryEngine.executeQuery === 'function') {
         return sqlQueryEngine.executeQuery(sql, params, _queryOptions);
       }
-      return {success: true, rows: []};
+      return {success: true, rows: [], rowSetComplete: true};
     },
-    async readAuthoritativeRows(_tableName, sql, params = [], queryOptions = {}) {
-      return gateway.executeQuery(sql, params, queryOptions);
+    async readAuthoritativeRows(tableName, sql, params = [], queryOptions = {}) {
+      return withAuthoritativeReadDefaults(
+        tableName,
+        await gateway.executeQuery(sql, params, queryOptions),
+      );
     },
     async readRows(_tableName, sql, params = [], queryOptions = {}) {
       return gateway.executeQuery(sql, params, queryOptions);
@@ -741,7 +763,7 @@ function createMockSqlQueryEngine(options = {}) {
   const {queryResults = {}} = options;
 
   // Default empty results
-  const defaultResult = {success: true, rows: []};
+  const defaultResult = {success: true, rows: [], rowSetComplete: true};
 
   return {
     executeQuery: async (sql, _params) => {
@@ -1117,7 +1139,7 @@ function createTestCoordinator(options = {}) {
           const expiresAt = params[paramIndex++];
           rows = rows.filter((row) => row.expires_at <= expiresAt);
         }
-        return {success: true, rows};
+        return {success: true, rows, rowSetComplete: true};
       }
 
       // Handle SELECT queries for replica_operations
@@ -1134,10 +1156,7 @@ function createTestCoordinator(options = {}) {
           {pattern: 'entity_type = ?', field: 'entity_type'},
           {pattern: 'entity_id = ?', field: 'entity_id'},
         ]
-          .map((filter) => ({
-            ...filter,
-            index: sql.indexOf(filter.pattern),
-          }))
+          .map((filter) => ({...filter, index: sql.indexOf(filter.pattern)}))
           .filter((filter) => filter.index !== -1)
           .sort((left, right) => left.index - right.index);
 
@@ -1157,39 +1176,33 @@ function createTestCoordinator(options = {}) {
             isTrackedOperationInFlight(op));
         }
 
-        return {success: true, rows: filteredOps};
+        return {success: true, rows: filteredOps, rowSetComplete: true};
       }
 
       if (sql.includes('FROM services')) {
         let serviceRows = typeof mockCache.getAll === 'function' ?
-          mockCache.getAll(SYSTEM_TABLE_NAME.SERVICES) :
-          [];
+          mockCache.getAll(SYSTEM_TABLE_NAME.SERVICES) : [];
         let paramIndex = 0;
         if (sql.includes('service_id = ?')) {
           const serviceId = params[paramIndex++];
-          serviceRows = serviceRows.filter((row) =>
-            row.service_id === serviceId);
+          serviceRows = serviceRows.filter((row) => row.service_id === serviceId);
         }
         if (sql.includes('service_type = ?')) {
           const serviceType = params[paramIndex++];
-          serviceRows = serviceRows.filter((row) =>
-            row.service_type === serviceType);
+          serviceRows = serviceRows.filter((row) => row.service_type === serviceType);
         }
         if (sql.includes('partition_id = ?')) {
           const partitionId = params[paramIndex++];
-          serviceRows = serviceRows.filter((row) =>
-            row.partition_id === partitionId);
+          serviceRows = serviceRows.filter((row) => row.partition_id === partitionId);
         }
         if (sql.includes('group_id = ?')) {
           const groupId = params[paramIndex++];
-          serviceRows = serviceRows.filter((row) =>
-            row.group_id === groupId);
+          serviceRows = serviceRows.filter((row) => row.group_id === groupId);
         }
         if (sql.includes('service_id LIKE ?')) {
           const serviceIdPattern = String(params[paramIndex++] || '');
           const serviceIdPrefix = serviceIdPattern.endsWith('%') ?
-            serviceIdPattern.slice(0, -1) :
-            serviceIdPattern;
+            serviceIdPattern.slice(0, -1) : serviceIdPattern;
           serviceRows = serviceRows.filter((row) =>
             String(row.service_id || '').startsWith(serviceIdPrefix));
         }
@@ -1201,20 +1214,15 @@ function createTestCoordinator(options = {}) {
         };
       }
 
-      return {success: true, rows: []};
+      return {success: true, rows: [], rowSetComplete: true};
     },
   };
   const controlPlaneSystemTableGateway =
     options.controlPlaneSystemTableGateway || {
-      readAuthoritativeRows: async (_tableName, sql, params = []) => {
-        return mockSqlEngine.executeQuery(sql, params);
-      },
-      readRows: async (_tableName, sql, params = []) => {
-        return mockSqlEngine.executeQuery(sql, params);
-      },
-      executeQuery: async (sql, params = []) => {
-        return mockSqlEngine.executeQuery(sql, params);
-      },
+      readAuthoritativeRows: async (tableName, sql, params = []) =>
+        withAuthoritativeReadDefaults(tableName, await mockSqlEngine.executeQuery(sql, params)),
+      readRows: async (_tableName, sql, params = []) => mockSqlEngine.executeQuery(sql, params),
+      executeQuery: async (sql, params = []) => mockSqlEngine.executeQuery(sql, params),
       async submitMutation(mutation) {
         if (mutation?.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
           return submitReplicaOperationMutation(mutation);
@@ -1434,32 +1442,18 @@ function buildSpreadScenarioHelpers({
 // callers check `allowed`/`decisionType`; provide both shapes so storage
 // capacity never interferes.
 function createAllowAllStorageAdmissionService() {
-  const allow = async () => ({
-    decision: 'allow',
-    allowed: true,
-    decisionType: 'admitted',
-  });
-  return {
-    checkAdd: allow,
-    checkReplace: allow,
-    checkSplit: allow,
-  };
+  const allow = async () => ({decision: 'allow', allowed: true, decisionType: 'admitted'});
+  return {checkAdd: allow, checkReplace: allow, checkSplit: allow};
 }
 
 function isAddLikeMoveResult(moveResult) {
-  return (
-    moveResult?.operation === MoveType.ADD ||
-    moveResult?.operation === MoveType.REPLACE
-  );
+  return moveResult?.operation === MoveType.ADD || moveResult?.operation === MoveType.REPLACE;
 }
 
 function installActualReplicaObservationResolver(coordinator, resolver) {
   const repository = coordinator.repository;
-  const originalObservation =
-    repository.getActualReplicaObservation.bind(repository);
-  const resolveStatus = typeof resolver === 'function' ?
-    resolver :
-    async () => resolver;
+  const originalObservation = repository.getActualReplicaObservation.bind(repository);
+  const resolveStatus = typeof resolver === 'function' ? resolver : async () => resolver;
   repository.getActualReplicaObservation = async (...args) => {
     const lifecycleStatus = await resolveStatus(...args);
     if (lifecycleStatus === undefined) {
@@ -1467,33 +1461,17 @@ function installActualReplicaObservationResolver(coordinator, resolver) {
     }
     return lifecycleStatus === null ?
       Object.freeze({state: 'absent', source: 'authoritative'}) :
-      Object.freeze({
-        state: 'observed',
-        source: 'authoritative',
-        lifecycleStatus,
-      });
+      Object.freeze({state: 'observed', source: 'authoritative', lifecycleStatus});
   };
 }
 
 export {
-  buildSpreadScenarioHelpers,
-  createAllowAllStorageAdmissionService,
-  createMockCache,
-  createMockCdcService,
-  createMockControlPlaneSystemTableGateway,
-  createMockTransactionCoordinator,
-  createMockPolicyService,
-  createMockMessageRouter,
-  createMockSqlQueryEngine,
-  createMockControlPlaneReadinessService,
-  createMockCoordinator,
-  createMockReplicaHandler,
-  createMockRpcClient,
-  createTestCoordinator,
-  createTestRebalancer,
-  initializeSpreadTestEnvironment,
-  installActualReplicaObservationResolver,
-  isAddLikeMoveResult,
-  withSuccessfulStorageReservationInsert,
-  withFixtureReplaceWitness,
+  buildMockPolicyAuthorityWitness, buildSpreadScenarioHelpers,
+  createAllowAllStorageAdmissionService, createMockCache, createMockCdcService,
+  createMockControlPlaneSystemTableGateway, createMockTransactionCoordinator,
+  createMockPolicyService, createMockMessageRouter, createMockSqlQueryEngine,
+  createMockControlPlaneReadinessService, createMockCoordinator, createMockReplicaHandler,
+  createMockRpcClient, createTestCoordinator, createTestRebalancer,
+  initializeSpreadTestEnvironment, installActualReplicaObservationResolver,
+  isAddLikeMoveResult, withSuccessfulStorageReservationInsert, withFixtureReplaceWitness,
 };

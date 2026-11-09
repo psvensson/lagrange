@@ -1,9 +1,17 @@
 import fs from 'node:fs';
 import {test} from '../../src/test-helpers/tap.js';
 
+/**
+ * R09 supersession note: sealed quest `serve-eligibility-committed-epoch-read`
+ * (commit `2f83f97fdc48`) retired internal SQLQueryEngine transient-hold
+ * admission polling (`SQLQueryEngineProvisioningDeadlineMethods` /
+ * `waitOutWholeClusterTransientProvisioningHold`), delegating retry pacing to
+ * `SchemaProvisioningJobOwner` while bounding cohort-readiness refreshes via
+ * `controlPlaneReadinessService.readServeEligibility({timeoutBudget, ...})`.
+ */
 const PROVISIONING_SOURCE =
   'src/query/sql-query-engine-initial-partition-provisioning.js';
-const DEADLINE_SOURCE =
+const RETIRED_DEADLINE_SOURCE =
   'src/query/sql-query-engine-provisioning-deadline-methods.js';
 const PROVISION_TARGET_SOURCE =
   'src/query/sql-query-engine-provision-target-methods.js';
@@ -19,18 +27,6 @@ const TABLE_CREATION_SOURCES = [
   'src/query/table-creation-service-partition-provisioning.js',
 ];
 
-function extractTransientHoldWait(source) {
-  const start = source.indexOf(
-    'async waitOutWholeClusterTransientProvisioningHold',
-  );
-  const end = source.indexOf(
-    '\n  logTransientProvisioningHoldWait(',
-    start + 'async waitOutWholeClusterTransientProvisioningHold'.length,
-  );
-  if (start < 0 || end < 0) return '';
-  return source.slice(start, end);
-}
-
 function extractWaitForCondition(source) {
   const start = source.indexOf('async waitForCondition(');
   const end = source.indexOf(
@@ -43,8 +39,12 @@ function extractWaitForCondition(source) {
 
 test('provisioning parent deadline dependency guard - nested progress waits ' +
   'cannot mint top-level budgets', (t) => {
+  t.equal(
+    fs.existsSync(RETIRED_DEADLINE_SOURCE),
+    false,
+    'retired transient-hold deadline stub remains deleted',
+  );
   const provisioningSource = fs.readFileSync(PROVISIONING_SOURCE, 'utf8');
-  const deadlineSource = fs.readFileSync(DEADLINE_SOURCE, 'utf8');
   const provisionTargetSource = fs.readFileSync(
     PROVISION_TARGET_SOURCE,
     'utf8',
@@ -66,33 +66,20 @@ test('provisioning parent deadline dependency guard - nested progress waits ' +
   ).join('\n');
   const combinedSource = [
     provisioningSource,
-    deadlineSource,
     provisionTargetSource,
     routingReadinessSource,
     selectExecutionSource,
     statementExecutionSource,
     tableCreationSource,
   ].join('\n');
-  const methodSource = extractTransientHoldWait(deadlineSource);
   const waitForConditionSource = extractWaitForCondition(
     selectExecutionSource,
   );
 
-  t.ok(methodSource.length > 0, 'the guarded progress-wait owner exists');
   t.notMatch(
-    methodSource,
-    /createControlPlaneTimeoutBudget\s*\(/,
-    'the nested progress path cannot create a new top-level timeout budget',
-  );
-  t.match(
-    methodSource,
-    /getRemainingBudgetMs\s*\(\s*options\.timeoutBudget/,
-    'the progress path derives its wait from the parent remaining budget',
-  );
-  t.match(
-    methodSource,
-    /timeoutBudget:\s*options\.timeoutBudget/,
-    'the same parent budget is passed to the nested wait',
+    combinedSource,
+    /waitOutWholeClusterTransientProvisioningHold|isWholeClusterTransientProvisioningHold/,
+    'retired internal transient-hold re-wait stub is absent across query provisioning',
   );
   t.equal(
     combinedSource.match(/this\.createControlPlaneTimeoutBudget\s*\(/g)
@@ -113,7 +100,7 @@ test('provisioning parent deadline dependency guard - nested progress waits ' +
   t.match(
     provisionTargetSource,
     /timeoutBudget:\s*options\.timeoutBudget\s*\|\|\s*null/,
-    'target convergence passes its parent budget into waitForCondition',
+    'target convergence passes its parent budget into readServeEligibility',
   );
   t.ok(
     waitForConditionSource.length > 0,

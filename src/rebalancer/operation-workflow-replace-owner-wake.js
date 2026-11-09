@@ -1,4 +1,5 @@
 import {readStateField} from '../utils/state-field-read.js';
+import {copyDenseOwnDataRecordArray} from '../utils/strict-own-data.js';
 import {committedNodeFloorLevel} from './operation-workflow-committed-node-floor.js';
 /**
  * Owner contract:
@@ -262,10 +263,10 @@ function captureReplaceOwnerLevel(owner, operation) {
   return entryLevel;
 }
 
-function recordObservedReplicaNodes(owner, operation, replicaRows) {
+function recordObservedReplicaNodes(owner, operation, safeReplicaRows) {
   const observed = new Set(operation?.waitedPeerNodeIds || []);
-  for (const row of replicaRows) {
-    addNodeId(observed, row?.node_id);
+  for (let index = 0; index < safeReplicaRows.length; index += 1) {
+    addNodeId(observed, safeReplicaRows[index].node_id);
   }
   if (observed.size === 0) {
     return null;
@@ -283,13 +284,17 @@ function recordObservedReplicaNodes(owner, operation, replicaRows) {
 }
 
 function noteReplaceOwnerObservedReplicaRows(owner, operation, replicaRows) {
-  if (!owner || !operation || !Array.isArray(replicaRows)) {
+  if (!owner || !operation) {
+    return;
+  }
+  const safeReplicaRows = copyDenseOwnDataRecordArray(replicaRows);
+  if (!safeReplicaRows || safeReplicaRows.length === 0) {
     return;
   }
   const sortedObserved = recordObservedReplicaNodes(
     owner,
     operation,
-    replicaRows,
+    safeReplicaRows,
   );
   const captured = WAKE_STATE_BY_OWNER.get(owner)
     ?.lastCapturedByOperationId.get(operation.operationId);

@@ -1,11 +1,13 @@
 import {readLowerStateField, readStateField} from '../utils/state-field-read.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
-import {isAuthoritativeControlPlaneRowReadSuccessful} from
-  './control-plane-system-table-gateway.js';
+import {
+  isAuthoritativeControlPlaneRowReadSuccessful,
+} from './control-plane-system-table-gateway.js';
 import {NODE_LIVENESS_SEMANTIC_STATE} from
   './node-liveness-semantic-projection-owner.js';
 import {readWiredCollaborator} from './control-plane-readiness-collaborators.js';
 import {
+  CONTROL_PLANE_READ_PURPOSE,
   CONTROL_PLANE_READINESS_COLLABORATOR as COLLABORATOR,
   CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED as UNWIRED,
 } from './control-plane-readiness-constants.js';
@@ -29,6 +31,11 @@ const {
   normalizeLocalQueryTransportEvidence,
 } = SHARED;
 
+function withReadinessInternalPurpose(options = {}) {
+  const {purpose = CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL} = options;
+  return {...options, purpose};
+}
+
 async function readNodeRows(service, options = {}) {
   const nodesOwner = readWiredCollaborator(service, COLLABORATOR.NODES_OWNER);
   if (nodesOwner === UNWIRED) {
@@ -40,7 +47,9 @@ async function readNodeRows(service, options = {}) {
     // rows" - collapsed to [], it made every node look missing to the
     // publication-planning evaluation and alternated the shared liveness
     // projection and the readiness feedback (fix-f4).
-    const result = await nodesOwner.listNodes(options);
+    const result = await nodesOwner.listNodes(
+      withReadinessInternalPurpose(options),
+    );
     if (isAuthoritativeControlPlaneRowReadSuccessful(result)) {
       return Array.isArray(result?.rows) ? result.rows : [];
     }
@@ -84,7 +93,9 @@ async function readAuthoritativeServiceRows(service, options = {}) {
   ) {
     return null;
   }
-  const result = await servicesOwner.listServices(options);
+  const result = await servicesOwner.listServices(
+    withReadinessInternalPurpose(options),
+  );
   if (!isAuthoritativeControlPlaneRowReadSuccessful(result)) return null;
   return Array.isArray(result?.rows) ? result.rows : [];
 }

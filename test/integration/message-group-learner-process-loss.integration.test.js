@@ -10,7 +10,7 @@ import {fork} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
-import {flushCoverageBeforeKill} from '../test-helpers/census-pre-kill-flush.js';
+import {flushCoverageBeforeKill} from '../../scripts/checks/census-pre-kill-flush.js';
 
 refuseUnderProbe('learner process-loss integration');
 const worker = fileURLToPath(new URL('../test-helpers/learner-process-loss-worker.js', import.meta.url));

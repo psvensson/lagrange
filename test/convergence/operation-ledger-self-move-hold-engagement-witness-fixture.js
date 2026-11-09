@@ -28,6 +28,7 @@ import {
   buildStartupAuthoritySnapshotFromPlanningAnswer,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
 import {installReplaceWitnesses, recordModelledRemovalIntent} from '../rebalancer/replace-witness-fixture.js';
+import {buildMockPolicyAuthorityWitness} from '../rebalancer/test-helpers.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
 import {
   initializeEnvironment,
@@ -475,6 +476,8 @@ function injectAuthoritativeServiceRows({coordinator, getServiceRows}) {
     return {
       success: true,
       rows: getServiceRows().filter((row) => row.partition_id === partitionId),
+      rowSetComplete: true,
+      readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
       source: AUTHORITATIVE_READ_SOURCE_OWNER_RPC_LANE,
     };
   };
@@ -1466,31 +1469,13 @@ async function runSelfMovePlannedBeforeAddsScenario(
 }
 
 export {
-  DEFAULT_SCENARIO_PROFILE,
-  DEPENDENTS_PLANNED_AT_MS,
-  EXEMPT_TABLE_ID,
-  FORMATION_READINESS_BUDGET_MS,
-  JOINER_1_NODE_ID,
-  JOINER_3_NODE_ID,
-  JOINER_4_NODE_ID,
-  LEADER_REPLICA_INDEX,
-  LEDGER_PARTITION_ID,
-  LEDGER_TABLE_ID,
-  MOVED_REPLICA_INDEX,
-  TARGET_READY_AT_MS,
-  buildMove,
-  buildUniformNodeReadiness,
-  isTypedRetryableSkip,
-  skipReasonOf,
-  HEAD_CRITICAL_CHECK_DELAY_MS,
-  HEAD_MAX_CONCURRENT_ADDS,
-  PRIORITY_ADD_BUDGET_LIMIT,
-  PRIORITY_RETRY_DELAY_MS,
-  QUORUM_CONCENTRATED_REASON,
-  SELF_MOVE_ACTIVE_AFTER_ACK_MS,
-  SELF_MOVE_CREATE_ACK_MS,
-  SELF_MOVE_IN_FLIGHT_REASON,
-  SELF_MOVE_TERMINAL_AFTER_ACTIVE_MS,
-  SELF_MOVE_WAITING_REASON,
+  DEFAULT_SCENARIO_PROFILE, DEPENDENTS_PLANNED_AT_MS, EXEMPT_TABLE_ID,
+  FORMATION_READINESS_BUDGET_MS, JOINER_1_NODE_ID, JOINER_3_NODE_ID, JOINER_4_NODE_ID,
+  LEADER_REPLICA_INDEX, LEDGER_PARTITION_ID, LEDGER_TABLE_ID, MOVED_REPLICA_INDEX,
+  TARGET_READY_AT_MS, buildMove, buildUniformNodeReadiness, isTypedRetryableSkip,
+  skipReasonOf, HEAD_CRITICAL_CHECK_DELAY_MS, HEAD_MAX_CONCURRENT_ADDS,
+  PRIORITY_ADD_BUDGET_LIMIT, PRIORITY_RETRY_DELAY_MS, QUORUM_CONCENTRATED_REASON,
+  SELF_MOVE_ACTIVE_AFTER_ACK_MS, SELF_MOVE_CREATE_ACK_MS, SELF_MOVE_IN_FLIGHT_REASON,
+  SELF_MOVE_TERMINAL_AFTER_ACTIVE_MS, SELF_MOVE_WAITING_REASON,
   runSelfMovePlannedBeforeAddsScenario,
 };
