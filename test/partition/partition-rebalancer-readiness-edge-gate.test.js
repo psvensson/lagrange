@@ -37,18 +37,9 @@ import {
   createMockCdcService,
   createMockPolicyService,
   createMockMessageRouter,
-  createMockControlPlaneReadinessService,
-  createMockCoordinator,
 } from '../rebalancer/test-helpers.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
-
-// A coordinator mock carrying the node's readiness service, as every
-// production coordinator does (the rebalancer requires it).
-function createReadinessHoldingCoordinator() {
-  return createMockCoordinator({
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
-  });
-}
+import {createReadinessHoldingCoordinator} from './readiness-holding-coordinator-fixture.js';
 
 const PARTITION_ID = 'test-partition-1';
 const TABLE_ID = 'test-table-1';

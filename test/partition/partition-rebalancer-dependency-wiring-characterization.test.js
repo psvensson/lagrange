@@ -38,20 +38,12 @@ import {
   createMockCdcService,
   createMockPolicyService,
   createMockMessageRouter,
-  createMockCoordinator,
   createMockControlPlaneReadinessService,
   createTestCoordinator,
 } from '../rebalancer/test-helpers.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
-
-// A coordinator mock carrying the node's readiness service, as every
-// production coordinator does (the rebalancer requires it).
-function createReadinessHoldingCoordinator() {
-  return createMockCoordinator({
-    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
-  });
-}
+import {createReadinessHoldingCoordinator} from './readiness-holding-coordinator-fixture.js';
 
 // ── Suite-local fixture constants ──────────────────────────────────
 

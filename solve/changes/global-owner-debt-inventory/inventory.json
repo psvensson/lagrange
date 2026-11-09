@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3486411,
-        "sha256": "a63b1fb2dcd0d4f42a79a9d16a13873f5b4fe72eada5385aa3bd00f27ba4e0e8"
+        "bytes": 3486878,
+        "sha256": "d731934be99a68ef24da94a9e6e0ba8e4b53797d4ec5b58819b380c0e1d98654"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "c5f3388280ee15a99dea07aeb17af40d93deaf2e6c38968bac7092cc509cfdbd"
+        "sha256": "a1933c76869b8a6d4a3243a6f4d19257f2e8b15ef03c0817d8b017ee87103496"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "88416db88954d893bbc702604da3d267c5dbb3177b2327373fe76720b6902c19"
+    "inputDigest": "1bf5be06f2634989b86f8adb18281c781523d864fa590433573b8ee38a0da844"
   },
   "reconciliation": {
     "complexity": {
@@ -135,12 +135,12 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "c5f3388280ee15a99dea07aeb17af40d93deaf2e6c38968bac7092cc509cfdbd"
+          "sha256": "a1933c76869b8a6d4a3243a6f4d19257f2e8b15ef03c0817d8b017ee87103496"
         },
         "cloneGroups": 629,
-        "duplicatedLines": 23633,
+        "duplicatedLines": 23624,
         "sourceCloneTouches": 1258,
-        "sourceDuplicatedLineTouches": 47266,
+        "sourceDuplicatedLineTouches": 47248,
         "nonzeroSourceCount": 405,
         "touchMultiplicity": 2
       }
@@ -173,17 +173,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3486411,
-        "sha256": "a63b1fb2dcd0d4f42a79a9d16a13873f5b4fe72eada5385aa3bd00f27ba4e0e8"
+        "bytes": 3486878,
+        "sha256": "d731934be99a68ef24da94a9e6e0ba8e4b53797d4ec5b58819b380c0e1d98654"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "14fdcc56b1fe2164e01331db68706d7a7548e4a8ef4ee742dbd8fcac3ccc7b0d",
-      "moduleCount": 6115,
-      "edgeCount": 34288,
+      "sourceDigest": "ab48fc02e4cc4f481868e31558b286891fdec7db882fa6d6637f09d003ff9a9e",
+      "moduleCount": 6116,
+      "edgeCount": 34291,
       "unresolvedCount": 46
     }
   },
@@ -191,7 +191,7 @@
     "sourceSignalCount": 2395,
     "assignedSignalCount": 2395,
     "uniqueAssignmentCount": 2395,
-    "digest": "4ccc673bc17574502bfdb9665bb6e5929aa158ad84fbb497107b7ab61576c90c"
+    "digest": "3f9b69671c12e150d11537ed6ecde2eccee811582ac8e4aac0bac460c7400d6c"
   },
   "signalCounts": {
     "cognitive": 145,
@@ -253,8 +253,8 @@
       "cloneTouches": 282,
       "cycleGroups": 0,
       "lintExclusions": 15,
-      "importIn": 239,
-      "importOut": 817,
+      "importIn": 240,
+      "importOut": 816,
       "score": 1480.4,
       "topPaths": [
         "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
@@ -837,13 +837,13 @@
       "complexity": 4,
       "cognitive": 0,
       "oversizedFiles": 0,
-      "duplicatedLines": 1015,
+      "duplicatedLines": 997,
       "cloneTouches": 37,
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 78,
-      "importOut": 147,
-      "score": 117.5,
+      "importOut": 149,
+      "score": 115.7,
       "topPaths": [
         "test/partition/median-split-point.property.test.js",
         "test/partition/raft-leadership-stability.property.test.js",
@@ -2443,7 +2443,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 133,
+      "importIn": 132,
       "importOut": 4,
       "score": 8,
       "topPaths": [
