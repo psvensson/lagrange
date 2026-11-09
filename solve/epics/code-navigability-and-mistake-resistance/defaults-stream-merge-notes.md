@@ -110,3 +110,152 @@ admission-path 3, partition-service bags 12, formation decoders 3, directories
   and admin-control-snapshot.js imports them (its copies deleted). The two
   copies were identical except `null` vs `MEMBERSHIP_PUBLICATION_HANDOFF_ABSENT_ROW`,
   which is `null`. Baseline tightened on the hint 37/1187 -> 35/1109.
+
+## Commit and checks
+
+Merge commit **daab6792c** (parents 5c6fe7db5, f7fe3d297), committed with the
+hook on (`LAGRANGE_SOLVER_LANDING=1`), pushed to
+`origin/work/code-navigability-merge-defaults-20261109`.
+
+Checks on the merge tree (staged = committed):
+- `npx eslint src`: exit 0 (the promoted state_read_defaults rule now covers
+  the PR's code: 4 sites before the rewrites, 0 after).
+- `node scripts/checks/code-navigability-budget.js`: state_read_defaults 0/0,
+  no capped row over its cap (table above; after the owner-index
+  regeneration the OVER count is 10: stale_owner_indexes met).
+- `npm run -s audit:guideline:navigability`: 0 violations (baselines
+  regenerated with `--update-baseline`; counts only lowered:
+  row_field_alias_reads 737 -> 697, two_source_fallback_reads 1788 -> 1696,
+  others re-identified at equal counts).
+- `LAGRANGE_SOLVER_LANDING=1 bash .githooks/pre-commit`: exit 0.
+- `npm run -s test:duplication`: OK 35/35, 1109/1109 (test 629/23624).
+- `npm run -s audit:file-size`: 21/21, 21/21.
+- `node scripts/check-fast-static.js`: exit 0.
+- complexity ratchet 1699/1699 (tightened on the hint).
+- Regenerated: test metadata, global owner debt inventory, priority-recovery
+  owner inventory, 57 source owner indexes.
+
+## Local tests (node --test per file, 4 parallel, thermal gate per 60 files)
+
+Batch 1 (88 files: the quest witnesses state-field-read,
+state-read-named-defaults, operation-record-step-shape,
+registered-service-row-raft-role, code-navigability-detectors,
+check-guideline-navigability, plus every test importing a file this merge
+rewrote, outside the four directories): 85 pass, 3 red:
+- dt-ledger-completion-continuity-discriminator (41/1) and
+  committed-membership-census (8/1): identical counts on an archive of
+  5c6fe7db5 (both already listed red on the PR head in the alignment notes).
+- fresh-join-via-non-seed-node.integration: every assertion passes, then the
+  file hits the 30 s `timeout!` during teardown. Red at 5c6fe7db5 as well
+  (2 of 4 base runs, same `timeout!`, 31-41 s); merge 4 of 4 (30-41 s). Host /
+  timing at the edge of the bound, recorded for the lab run.
+- No test file conflicted in the merge.
+
+Batch 2 (660 files: every test under test/rebalancer, test/control-plane,
+test/query, test/policy not in batch 1): 626 pass, 34 red. Every red re-run on
+an archive of 5c6fe7db5 on the same machine (pass/fail subtests, merge | base):
+- identical counts (31 files): query cache-based-routing.property 5/1,
+  cache-based-routing 7/1, queryable-core-j2-sql-key-read-journey (no TAP
+  summary on either side), service-read-locality-routing 23/1,
+  sql-query-engine-provisioning-parent-deadline 8/8, -provision-ledger-hold-
+  transient-wait 7/1, -provision-progress-gated-rewait 2/3; rebalancer
+  committed-node-remove-safety 39/55, -wake 24/9,
+  coordinator-created-operation-progress 33/1,
+  formation-ledger-spread-voter-ready-readiness 8/3,
+  ledger-quorum-spread-hold-cure-drain-admission 10/2,
+  operation-workflow-remove-safety-concurrent-down-target 0/4,
+  -concurrent-stale-phantom 0/2, -universal-floor 7/3,
+  rebalance-coordinator-outcome-routing 70/5,
+  rebalancer-entity-interaction-contract 24/1, replace-named-handoff-attempt
+  7/16, replace-owner-lease-causal 6/12, replace-owner-wake 121/43,
+  replace-real-group-completion 85/40, -d2 47/36, -deposed-leader 11/11,
+  -handoff 31/22, -latency 15/10, -scheduling 64/49,
+  replace-remove-safety-post-intent 0/6, replace-replica-workflow 213/31,
+  replica-retirement-terminal-actuals-coherence 4/4,
+  unified-rebalancer-affinity-policy-refetch-parity 0/3,
+  user-table-leader-placement-cure 52/2. These are the PR-head reds listed in
+  pr201-alignment-notes.md (red at 5c6fe7db5, not this merge).
+- flaky on both sides: rebalance-budget-enforcement.property (seeded property,
+  merge 2/3, base 1/4); replace-owner-recovery-equivalence (merge 146/90,
+  148/88, 147/89; base 148/88, 148/88, 146/90); existing-group-add-topology-
+  guard (merge 9/1 under batch load with a 30 s `timeout!`, then 11/0 twice
+  alone; base 11/0).
+- merge-caused: none.
+
+## Lab
+
+Owner constraint received mid-run (household Wi-Fi): at most one lab host at a
+time, narrow `test changed` lanes only, no new full suites, bulk copies capped
+(rsync --bwlimit=2500), base runs only as a narrow cone of the red files. The
+one run already in flight (below) was allowed to finish; its reds are
+classified locally against an archive of 5c6fe7db5, with no lab base run.
+
+- Run 1: `lab test changed --lane all --sha daab6792c --base-sha 5c6fe7db5 --on
+  adam-laptop` (holder claude:nav-merge-defaults) was refused at placement:
+  "generated metadata is stale ... impact-graph-seal.json" (2460 files no
+  result, exit 97). Cause: merge-caused. scripts/check-complexity.js was
+  tightened after the metadata refresh, so the committed seal's sourceDigest
+  was stale. This was reproduced in a clean checkout of daab6792c (the
+  producer rewrote the seal) and fixed in **6606cd9df** (seal regenerated).
+  The clean checkout of 6606cd9df regenerates with no diff.
+- Run 2: same command at 6606cd9df (pid 2620800). The cone selected the
+  whole suite (2460 files).
+- Result: 2460 files, **2390 pass, 70 fail**, 99338 assertions
+  (test-output/reports/test-results-adam-laptop.ndjson in the worktree).
+  The alignment's whole-suite run at c82167e1e on the same host gave 2544 pass
+  and 74 fail. All 70 reds here are files that run already had red and
+  classified; this merge adds no new red file.
+
+| Class | Files | Evidence |
+| --- | ---: | --- |
+| red at 5c6fe7db5, proven locally with the same pass/fail counts on an archive of 5c6fe7db5 | 33 | the 31 rebalancer/query files of batch 2, plus committed-membership-census 8/1 and dt-ledger-completion-continuity-discriminator 41/1 (batch 1) |
+| flaky on both sides locally | 3 | rebalance-budget-enforcement.property, replace-owner-recovery-equivalence (batch 2). The third is existing-group-add-topology-guard, which was green on the lab. |
+| lab host/timing, green locally on both sides | 2 | admin-websocket-api-control-snapshot-query (lab: "query should complete within local bound"), admin-websocket-api-diagnostics-and-control-snapshot; locally 57/0 and 96/0 at both the merge and 5c6fe7db5 |
+| red on the PR head per the alignment notes; local base re-run INCOMPLETE | 22 | active-gate-authoritative-repair-convergence, join-resume-replica-lifecycle-owner, dt6-authoritative-observation-watermark, dt6-voter-surplus-promotion-drain-livelock, dt-formation-barrier-spread-release-oscillation, dt-formation-priority-placement-before-active, authoritative-discovery-repair-pressure, leader-metadata-validation, managed-split-admission-reliability, pgwire-bootstrap, seed-node-bootstrap, replica-handler, child-partition-leader-propagation, merge-auto-execution, partition-deferred-evaluation-obligation-scheduler, split-merge-hysteresis, movielens-formation-probe-wiring, check-operation-dispatch-completion-owner, solve-footprint-accounting, minimal-deployment-request-binding-compilation-owner-guard, formation-sim-attribution-isolation, formation-sim-runner |
+| lab host/timing per the alignment notes; local base re-run INCOMPLETE | 9 | bootstrap-epoch-manager-lifecycle, bootstrap-sequence, node-bootstrap-consistency.property, cdc-source-occurrence-delivery, create-table-partition-provisioning, raft-leader-election, three-node-seed-rebalance, message-group-native-provisional-route, cdc-group-propagation-foreground-boundary |
+| time out at 600 s on both sides per the alignment notes | 2 | dt6-operation-ledger-self-move-hold-engagement, -fairness (not re-run: 600 s per side) |
+
+The local merge-vs-5c6fe7db5 re-run of the last three classes (31 files, both
+sides, 2 in parallel) was stopped by Claude Code's low-memory reaper after 3
+merge-side results: bootstrap-epoch-manager-lifecycle, bootstrap-sequence and
+active-gate-authoritative-repair-convergence were red on the merge, with no
+base result. As instructed, it was not restarted. Those 33 files therefore
+rest on the alignment's classification of the same files, not on a fresh
+base proof against 5c6fe7db5. The one-host narrow cone the owner allows for
+that is `lab test changed` on a commit that touches only those red files
+(the comment-touch method in the quest notes).
+
+## Verifier's checklist
+
+1. Parents: `git log -1 --format=%P daab6792c` = 5c6fe7db5 f7fe3d297;
+   6606cd9df only regenerates test/shards/impact-graph-seal.json.
+2. PR behaviour kept: for each of the 13 src conflict files, `git diff
+   877eb01fa 5c6fe7db5 -- <file>` (stream/PR change) is present in daab6792c.
+   Key spots: the dispatch-failure `rowWorkflowStep` hoist,
+   `retryOperation` in the deferred re-arm, `settleRetainedLifecycleProgress`,
+   the ready-lease decoder and `statusSemantics.valid`, the fence's
+   `isValidLeaderReadAuthorityWitness` / `rowSetComplete`, the canonical sync
+   planning reader import, the admin consolidation (helpers imported from
+   node-view-projection).
+3. Quest invariant applied: `npx eslint src` exit 0; budget
+   state_read_defaults 0/0; `git grep -n "workflow_step || null\|role || null\|raftRole,\|NO_STATUS" src` finds nothing in the rewritten functions.
+4. Each PR rewrite (table above): compare the old and new expression for
+   absent, null, '' and every constant value; the only differences are '' and
+   whitespace, and those values have no producer (NOT NULL columns written
+   from constants). Read the citation on each line.
+5. Known-bad input: restore `const liveRole = this.role || null;` in
+   message-group-service-metadata-publication.js and `npx eslint` on that file
+   fails with navigability-rule:state_read_defaults.
+6. Ratchets only lowered: complexity 1711 -> 1699, duplication 37/1187 ->
+   35/1109 (one resolver instead of two copies), navigability baselines
+   regenerated (row_field_alias_reads 697, two_source_fallback_reads 1696);
+   state_read_defaults baseline deleted (promoted row).
+7. Judgement calls: (a) the PR-originated typed readers with a named empty
+   status ('') were treated as state-read defaults and folded; the
+   pre-existing (merge-base) typeof copies were left as routed by the quest;
+   (b) serve-eligibility-owner keeps "a status-less publication counts as
+   published", now explicit on STATE_ABSENT, and is routed to the publication
+   owner (R17); (c) `readLowerStateField(row.previous_state,
+   row.previousState)` keeps a two-spelling read for system-table-row-decoders;
+   (d) the admin resolver dedupe goes slightly beyond the conflict list and
+   was forced by the duplication ratchet.
