@@ -1304,7 +1304,10 @@ function discoveryFailure(code, message, cause = undefined) {
   return Object.assign(new Error(message, {cause}), {code});
 }
 const PLACEMENT_UPLOAD_SCRIPT = 'mkdir -p "${1%/*}" && cat > "$1"';
-const PLACEMENT_KILL_SCRIPT = 'kill -TERM "$1" 2>/dev/null';
+const PLACEMENT_KILL_SCRIPT = 'kill -s TERM -- "-$1" 2>/dev/null || kill -TERM "$1" 2>/dev/null';
+export function placementKillScript() {
+  return PLACEMENT_KILL_SCRIPT;
+}
 const PLACEMENT_TEXT = Object.freeze({
   PREFIX: 'placement: ',
   LOCAL: 'placement: local - ',
@@ -1995,7 +1998,7 @@ const PLACEMENT_SCRIPT_TAIL = [
   'exit "$status"',
 ];
 
-function placementScript(files) {
+export function placementScript(files) {
   return [...PLACEMENT_SCRIPT_HEAD, ...files, ...PLACEMENT_SCRIPT_TAIL]
     .join(PLACEMENT_NEWLINE) + PLACEMENT_NEWLINE;
 }

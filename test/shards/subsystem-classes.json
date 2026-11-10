@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 217,
     "storage-raft": 151,
-    "test-infrastructure": 166,
+    "test-infrastructure": 167,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2629,
-  "digest": "fnv1a32-0e393093",
+  "censusSize": 2630,
+  "digest": "fnv1a32-bb142b35",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-5db16e08",
+  "observationDigest": "fnv1a32-4cc628dc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2327,6 +2327,7 @@
     "test/scripts/import-graph-repository-boundary.test.js": "test-infrastructure",
     "test/scripts/install-git-hooks-stdout-purity.test.js": "test-infrastructure",
     "test/scripts/inventory-ordinal-segments.test.js": "test-infrastructure",
+    "test/scripts/lab-census-benchmark-evidence-custody.test.js": "test-infrastructure",
     "test/scripts/lab-fleet-discovery.test.js": "test-infrastructure",
     "test/scripts/lab-test-base.test.js": "test-infrastructure",
     "test/scripts/lab-worker-provisioning.test.js": "test-infrastructure",
@@ -19485,6 +19486,7 @@
     },
     "test/scripts/fallback-branch-census-launch-coordinators.test.js": {
       "files": [
+        "package-lock.json",
         "scripts/checks/code-navigability-detectors.js",
         "scripts/checks/fallback-branch-census-constants.js",
         "scripts/checks/fallback-branch-census-shell.js",
@@ -19504,6 +19506,7 @@
     "test/scripts/fallback-branch-census.test.js": {
       "files": [
         "data/fallback-census/census.json",
+        "package-lock.json",
         "scripts/checks/census-pre-kill-flush.js",
         "scripts/checks/code-navigability-budget.js",
         "scripts/checks/code-navigability-detectors.js",
@@ -19853,6 +19856,56 @@
     "test/scripts/inventory-ordinal-segments.test.js": {
       "files": [
         "src/query/partition-resolver.js"
+      ]
+    },
+    "test/scripts/lab-census-benchmark-evidence-custody.test.js": {
+      "files": [
+        "Dockerfile",
+        "README.md",
+        "data/tidb-comparison/admitted-lab-measurements.json",
+        "data/tidb-comparison/history.ndjson",
+        "data/tidb-comparison/invalidations.ndjson",
+        "data/tidb-comparison/multi-system-matrix.json",
+        "data/tidb-comparison/progress-summary.json",
+        "data/tidb-comparison/raw-observations.ndjson",
+        "docs/benchmarks/README.md",
+        "docs/benchmarks/tidb-comparison-progress.html",
+        "docs/benchmarks/tidb-comparison-progress.md",
+        "docs/benchmarks/tidb-comparison-progress.svg",
+        "docs/benchmarks/tidb-scenario-b-comparison.svg",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/code-navigability-detectors.js",
+        "scripts/checks/fallback-branch-census-constants.js",
+        "scripts/checks/fallback-branch-census-preload.js",
+        "scripts/checks/fallback-branch-census-shell.js",
+        "scripts/checks/formation-health.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/index.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/raw-observation-campaign-specs.js",
+        "test/distributed/harness/scaleout-series-experiments.js"
+      ],
+      "directories": [
+        "data/tidb-comparison",
+        "data/tidb-comparison/forensic",
+        "docs/benchmarks",
+        "src",
+        "src/test-helpers",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
       ]
     },
     "test/scripts/lab-fleet-discovery.test.js": {

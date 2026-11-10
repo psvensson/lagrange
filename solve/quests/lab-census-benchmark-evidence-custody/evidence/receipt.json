@@ -1,0 +1,60 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "lab-census-benchmark-evidence-custody",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/lab-census-benchmark-evidence-custody.test.js": "deb7d3fdc3b0972851c0ce6fee261b20aeb84800d509f8387fde701dfa8964d1"
+  },
+  "generatedAt": "2026-11-10T08:16:50.740Z",
+  "receipts": [
+    {
+      "id": "canonical-runner-placement-and-cleanup",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R1 canonical runner placement and cleanup binds machine lock holder and terminates runner process group$\" test/scripts/lab-census-benchmark-evidence-custody.test.js",
+      "detail": "Lab runner placement binds machine lock holder, terminates process group, and cleans up on exit.",
+      "testFile": "test/scripts/lab-census-benchmark-evidence-custody.test.js"
+    },
+    {
+      "id": "complete-source-bound-witness-manifest",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R2 complete source-bound witness manifest records digests and full witness accounting$\" test/scripts/lab-census-benchmark-evidence-custody.test.js",
+      "detail": "Census collection produces a complete source-bound witness manifest with digests and witness accounting.",
+      "testFile": "test/scripts/lab-census-benchmark-evidence-custody.test.js"
+    },
+    {
+      "id": "invalid-or-incomplete-evidence-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R3 merge and join refuse runs with mismatched digests incomplete witnesses non-zero exits or unreadable coverage$\" test/scripts/lab-census-benchmark-evidence-custody.test.js",
+      "detail": "Census merge and join refuse mismatched digests, incomplete witnesses, and non-zero exit codes.",
+      "testFile": "test/scripts/lab-census-benchmark-evidence-custody.test.js"
+    },
+    {
+      "id": "dependency-aware-shard-applicability",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R4 dependency-aware shard applicability accepts matching shards and rejects drifted dependencies or files$\" test/scripts/lab-census-benchmark-evidence-custody.test.js",
+      "detail": "Shard applicability validation checks source file and dependency drift before reuse.",
+      "testFile": "test/scripts/lab-census-benchmark-evidence-custody.test.js"
+    },
+    {
+      "id": "executed-semantic-proof-ids",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R5 admitClaim and checkSemanticGate award only executed and passed semantic proof IDs rejecting skipped or unproven cases$\" test/scripts/lab-census-benchmark-evidence-custody.test.js",
+      "detail": "Claim admission awards only executed and passed semantic proof IDs, rejecting skipped cases.",
+      "testFile": "test/scripts/lab-census-benchmark-evidence-custody.test.js"
+    },
+    {
+      "id": "actual-deployment-binding",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R6 gateBindingHolds strictly enforces deployment identity across all proof cases refusing cross-deployment evidence$\" test/scripts/lab-census-benchmark-evidence-custody.test.js",
+      "detail": "Gate binding strictly requires matching deployment identity across all semantic proof cases.",
+      "testFile": "test/scripts/lab-census-benchmark-evidence-custody.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/lab-census-benchmark-evidence-custody.js --check-verification",
+      "detail": "An approving subagent verification newer than the last attempt.",
+      "testFile": null
+    }
+  ]
+}

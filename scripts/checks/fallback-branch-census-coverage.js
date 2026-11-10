@@ -93,7 +93,7 @@ const PROBLEM = Object.freeze({
   RUN_LANE: 'run.json names an unknown lane: ',
   RUN_METADATA: 'run.json lacks required host, commit, timestamp, or fileDigests metadata: ',
   RUN_PROBLEMS: 'run.json recorded collection problems: ',
-  RUN_PRELOAD: 'run.json coveragePreload is missing or does not match current preload sha256: ',
+  RUN_PRELOAD: 'run.json preloadDigest / coveragePreload is missing or does not match current preload sha256: ',
   COVERAGE_DIRECTORY: 'missing or unreadable coverage directory: ',
   EMPTY_COVERAGE: 'coverage directory holds zero V8 coverage files: ',
   DUPLICATE_RUN: 'one run given twice: ',
@@ -339,6 +339,19 @@ function assertValidRunRecord(record, runDir) {
   if (!hasValidPreloadRecord(record.coveragePreload)) {
     throw new Error(`${PROBLEM.RUN_PRELOAD}${runDir}`);
   }
+  if (record.exitCode !== undefined && record.exitCode !== 0) {
+    throw new Error(`non-zero exit code: ${runDir} exited ${record.exitCode}`);
+  }
+  const preloadSha = record.preloadDigest || record.coveragePreload?.sha256;
+  if (!preloadSha || preloadSha !== currentPreloadSha256()) {
+    throw new Error(`invalid or missing preloadDigest in ${runDir}`);
+  }
+  if (record.srcDigest && record.fileDigests) {
+    const expectedSrc = digestOfFileDigests(arrayMap(arraySort(objectKeys(record.fileDigests)), (k) => `${k}:${record.fileDigests[k]}`));
+    if (record.srcDigest !== expectedSrc) {
+      throw new Error(`srcDigest mismatch: ${runDir}`);
+    }
+  }
 }
 
 export function readRunRecord(runDir) {
@@ -469,6 +482,10 @@ function runSummary(record) {
     startedAt: record.startedAt,
     finishedAt: record.finishedAt,
     exitCode: record.exitCode,
+    srcDigest: record.srcDigest,
+    preloadDigest: record.preloadDigest,
+    dependencyFingerprint: record.dependencyFingerprint,
+    witnessAccounting: record.witnessAccounting,
     coverageDigest: record.coverageDigest,
     ...(record.incomplete === true ? {incomplete: true} : {}),
   };
@@ -480,7 +497,8 @@ function runSummary(record) {
  * @param {{now?: Function, onFile?: Function}} [options]
  * @return {Object} the merged coverage record
  */
-export function mergeRuns(runDirs, {now = () => new Date(), onFile = null} = {}) {
+export function mergeRuns(runDirs, options = {}) {
+  const {now = () => new Date(), onFile = null, strictWitnesses = false} = options;
   const files = {};
   const runs = [];
   const processes = {};
@@ -488,6 +506,11 @@ export function mergeRuns(runDirs, {now = () => new Date(), onFile = null} = {})
   const witnesses = {};
   for (const runDir of runDirs) {
     const record = readRunRecord(runDir);
+    if (strictWitnesses &&
+        (record.witnessAccounting?.complete === false ||
+         (record.witnessAccounting?.missingWitnesses || 0) > 0)) {
+      throw new Error(`incomplete witness manifest in ${runDir}`);
+    }
     if (objectHasOwn(processes, record.id)) throw new Error(`${PROBLEM.DUPLICATE_RUN}${record.id}`);
     const roots = rootsOf(record, runDir);
     const directory = path.join(runDir, V8_DIRECTORY);

@@ -186,6 +186,17 @@ const PROBLEM = Object.freeze({
   NODE_LOST: 'a formation node left no complete coverage (SIGKILLed past the stop deadline?): ',
   EMPTY_COVERAGE: 'lane produced zero V8 coverage files: ',
 });
+const SHARD_APPLICABILITY_REASON = Object.freeze({
+  PRELOAD_DIGEST_MISMATCH: 'preload-digest-mismatch',
+  INCOMPLETE_WITNESSES: 'incomplete-witnesses',
+  SRC_DIGEST_MISMATCH: 'src-digest-mismatch',
+  DEPENDENCY_FINGERPRINT_MISMATCH: 'dependency-fingerprint-mismatch',
+  VALID: 'valid',
+});
+const NO_PACKAGE_LOCK = 'no-package-lock';
+const NO_SRC_DIGEST = 'no-src';
+const FILE_MISSING_PREFIX = 'file-missing:';
+const FILE_DRIFT_PREFIX = 'file-drift:';
 
 function gitHead(root) {
   try {
@@ -224,6 +235,67 @@ function walkFiles(directory, root, into) {
 
 export function sourceFileDigests(root) {
   return walkFiles(path.join(root, SOURCE_DIRECTORY), root, {});
+}
+
+export function computeSrcDigest(fileDigests) {
+  if (!fileDigests || typeof fileDigests !== 'object') return '';
+  const keys = arraySort(objectKeys(fileDigests));
+  const lines = arrayMap(keys, (key) => `${key}:${fileDigests[key]}`);
+  return sha256Hex(arrayJoin(lines, NEWLINE));
+}
+
+export function computeDependencyFingerprint(root, fileDigests = null) {
+  const lockPath = path.join(root, 'package-lock.json');
+  const lockHash = fs.existsSync(lockPath) ?
+    sha256Hex(fs.readFileSync(lockPath)) : NO_PACKAGE_LOCK;
+  const preloadHash = currentPreloadSha256();
+  const srcHash = fileDigests ? computeSrcDigest(fileDigests) : NO_SRC_DIGEST;
+  return sha256Hex(arrayJoin([lockHash, preloadHash, srcHash], NEWLINE));
+}
+
+function checkFileDigests(root, fileDigests) {
+  for (const [file, recordedDigest] of objectEntries(fileDigests)) {
+    const fullPath = path.join(root, file);
+    if (!fs.existsSync(fullPath)) {
+      return `${FILE_MISSING_PREFIX}${file}`;
+    }
+    const currentDigest = sha256Hex(fs.readFileSync(fullPath));
+    if (currentDigest !== recordedDigest) {
+      return `${FILE_DRIFT_PREFIX}${file}`;
+    }
+  }
+  return SHARD_APPLICABILITY_REASON.VALID;
+}
+
+function determineInapplicabilityReason(shardRecord, options, root, currentPreloadDigest) {
+  if (shardRecord.preloadDigest && shardRecord.preloadDigest !== currentPreloadDigest) {
+    return SHARD_APPLICABILITY_REASON.PRELOAD_DIGEST_MISMATCH;
+  }
+  if (shardRecord.witnessAccounting && shardRecord.witnessAccounting.complete !== true) {
+    return SHARD_APPLICABILITY_REASON.INCOMPLETE_WITNESSES;
+  }
+  if (shardRecord.fileDigests) {
+    const fileResult = checkFileDigests(root, shardRecord.fileDigests);
+    if (fileResult !== SHARD_APPLICABILITY_REASON.VALID) return fileResult;
+  }
+  const currentSrc = options.currentSrcDigest || (shardRecord.fileDigests ?
+    computeSrcDigest(sourceFileDigests(root)) : null);
+  if (shardRecord.srcDigest && currentSrc && shardRecord.srcDigest !== currentSrc) {
+    return SHARD_APPLICABILITY_REASON.SRC_DIGEST_MISMATCH;
+  }
+  if (options.currentDependencyFingerprint && shardRecord.dependencyFingerprint &&
+      shardRecord.dependencyFingerprint !== options.currentDependencyFingerprint) {
+    return SHARD_APPLICABILITY_REASON.DEPENDENCY_FINGERPRINT_MISMATCH;
+  }
+  return SHARD_APPLICABILITY_REASON.VALID;
+}
+
+export function validateShardApplicability(shardRecord, options = {}) {
+  const root = options.root ? path.resolve(options.root) : ROOT;
+  const currentPreloadDigest = options.currentPreloadDigest || currentPreloadSha256();
+  const reason = determineInapplicabilityReason(shardRecord, options, root, currentPreloadDigest);
+  const applicable = reason === SHARD_APPLICABILITY_REASON.VALID;
+  return {applicable, reason};
 }
 
 export function laneCommand(lane, out) {
@@ -310,6 +382,25 @@ export function collectRun({lane, out, root = ROOT, command = null, env = proces
   const witnesses = accountRunWitnesses(coverageDir, names,
     rootsOf({root: path.resolve(root)}, runDir));
   const incomplete = result.signal !== null;
+  const fileDigests = sourceFileDigests(root);
+  const srcDigest = computeSrcDigest(fileDigests);
+  const preloadDigest = currentPreloadSha256();
+  const dependencyFingerprint = computeDependencyFingerprint(root, fileDigests);
+  const missingWitnesses = (witnesses.lost || []).length;
+  const uninstrumentedCount = arrayFilter(witnesses.lost || [],
+    (w) => w.uninstrumented === true || w.cause === 'uninstrumented').length;
+  const exitCode = result.status ?? 0;
+  const problems = laneProblems(lane, witnesses, root, incomplete ? null : names);
+  const complete = exitCode === 0 && !incomplete &&
+    problems.length === 0 && missingWitnesses === 0 && uninstrumentedCount === 0;
+  const witnessAccounting = {
+    complete,
+    started: witnesses.started,
+    completeCount: witnesses.complete,
+    missingWitnesses,
+    uninstrumentedCount,
+    exitCode,
+  };
   const record = {
     id: arrayJoin([lane, host, compactTimestamp(startedAt)], RUN_ID_SEPARATOR),
     lane,
@@ -318,19 +409,23 @@ export function collectRun({lane, out, root = ROOT, command = null, env = proces
     root: path.resolve(root),
     startedAt,
     finishedAt,
-    exitCode: result.status,
+    exitCode,
     signal: result.signal,
     incomplete,
+    srcDigest,
+    preloadDigest,
+    dependencyFingerprint,
+    witnessAccounting,
     coveragePreload: {
       active: true,
       option: preload,
       module: PRELOAD_MODULE_RELATIVE,
-      sha256: currentPreloadSha256(),
+      sha256: preloadDigest,
     },
     witnesses,
-    problems: laneProblems(lane, witnesses, root, incomplete ? null : names),
+    problems,
     coverageDigest: coverageDirectoryDigest(coverageDir),
-    fileDigests: sourceFileDigests(root),
+    fileDigests,
   };
   fs.writeFileSync(path.join(runDir, RUN_RECORD_FILE),
     `${jsonStringify(record, null, JSON_INDENT)}${NEWLINE}`);
@@ -654,7 +749,7 @@ function runMerge(flags, write) {
   return merged.unreadable.length === 0 ? 0 : FAILED_STATUS;
 }
 
-function assertCompleteFiveLaneJoin(merged, census) {
+export function assertCompleteFiveLaneJoin(merged, census) {
   if ((merged.unreadable || []).length > 0) {
     const names = arrayMap(merged.unreadable, (item) => `${item.run}:${item.file}`);
     throw new Error(`${PROBLEM.UNREADABLE_MERGED}${arrayJoin(names, LIST_SEPARATOR)}`);
@@ -666,7 +761,11 @@ function assertCompleteFiveLaneJoin(merged, census) {
   }
   const badRuns = arrayFilter(
     census.runs,
-    (run) => run.incomplete === true || !run.witnesses || run.witnesses.lost > 0,
+    (run) => run.incomplete === true ||
+      (run.exitCode !== undefined && run.exitCode !== 0) ||
+      !run.witnesses ||
+      run.witnesses.lost > 0 ||
+      (run.witnessAccounting && run.witnessAccounting.complete !== true),
   );
   if (badRuns.length > 0) {
     const ids = arrayMap(badRuns, (run) => run.id);

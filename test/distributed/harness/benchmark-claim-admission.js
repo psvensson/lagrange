@@ -493,15 +493,46 @@ function checkFinalState(run) {
     [ADMISSION_REASON.FINAL_STATE_UNRECONCILED];
 }
 
-function gateBindingHolds(run, binding) {
+function gateBindingHolds(run, binding, gate = null) {
   if (!binding) return false;
   const endpoint = run.deployment.endpoint;
   const product = arrayFind(run.identity.products,
     (p) => p.containerId === endpoint.containerId);
-  return binding.campaignId === run.campaignId &&
-    binding.containerId === endpoint.containerId &&
-    binding.imageId === product?.imageId &&
-    binding.endpoint === `${endpoint.host}:${endpoint.port}`;
+  const expectedEndpoint = `${endpoint.host}:${endpoint.port}`;
+  const matches = (b) => Boolean(b) &&
+    b.campaignId === run.campaignId &&
+    b.containerId === endpoint.containerId &&
+    b.imageId === product?.imageId &&
+    b.endpoint === expectedEndpoint;
+  if (!matches(binding)) return false;
+  const checkedGate = gate || run.correctness?.semanticGate;
+  if (checkedGate?.bindings && Array.isArray(checkedGate.bindings)) {
+    if (!arrayEvery(checkedGate.bindings, matches)) return false;
+  }
+  if (checkedGate?.cases && Array.isArray(checkedGate.cases)) {
+    for (const c of checkedGate.cases) {
+      if (c.binding && !matches(c.binding)) return false;
+    }
+  }
+  return true;
+}
+
+function awardedProofIds(gate) {
+  if (!gate) return [];
+  if (Array.isArray(gate.cases)) {
+    const passedIds = new Set();
+    for (const c of gate.cases) {
+      if (c.status !== 'passed' && c.status !== 'executed') continue;
+      if (c.caseId === 'durability' || c.caseId === 'scenario-a-durable-commit-v1') {
+        const hasRestart = Boolean(c.faultEvidence || c.observation?.faultEvidence ||
+          c.proofRecord?.actual?.faultEvidence || c.restartedAt || c.restartEvidence);
+        if (!hasRestart) continue;
+      }
+      for (const id of c.proofIds || []) passedIds.add(id);
+    }
+    return [...passedIds].sort();
+  }
+  return Array.isArray(gate.passed) ? [...gate.passed].sort() : [];
 }
 
 // Capacity runs need a passed gate; a smoke run may carry an incomplete gate,
@@ -530,7 +561,22 @@ function checkSemanticGate(run) {
     return [notRun ? `${ADMISSION_REASON.SEMANTIC_GATE_CLIENT_MISSING}:${notRun.missingClient}` :
       ADMISSION_REASON.SEMANTIC_GATE_MISSING];
   }
-  if (!gateBindingHolds(run, gate.binding)) return [ADMISSION_REASON.SEMANTIC_GATE_UNBOUND];
+  if (!gateBindingHolds(run, gate.binding, gate)) return [ADMISSION_REASON.SEMANTIC_GATE_UNBOUND];
+  if (Array.isArray(gate.cases)) {
+    const hasUnexecuted = arraySome(gate.cases, (c) =>
+      c.status === 'not-executed' || c.status === 'skipped');
+    const hasDurabilityAnomaly = arraySome(gate.cases, (c) => {
+      if (c.caseId !== 'durability' && c.caseId !== 'scenario-a-durable-commit-v1') return false;
+      const hasRestart = Boolean(c.faultEvidence || c.observation?.faultEvidence ||
+        c.proofRecord?.actual?.faultEvidence || c.restartedAt || c.restartEvidence);
+      return !hasRestart;
+    });
+    if (hasUnexecuted || hasDurabilityAnomaly) {
+      return [run.plan?.profileClass === BENCHMARK_PROFILE_CLASS.SMOKE ?
+        ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE :
+        ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED];
+    }
+  }
   if (gate.status === GATE_STATUS.PASSED) return [];
   const details = gateCaseReasons(gate);
   if (gate.status === GATE_STATUS.FAILED) {
@@ -917,11 +963,14 @@ function admitClaim({claim, runs, campaignHeaders, retainedReferences, invalidat
     e.run?.targetId === claim.targetId && e.run?.subkind === claim.subkind);
   const {live, invalidated} = partitionByLedger(entries, campaignHeaders, invalidations);
   if (live.length === 0) return cellWithoutLiveRuns(claim, forensic, invalidated);
+  const semanticProofIds = unique(arrayMap(live,
+    (e) => awardedProofIds(e.run?.correctness?.semanticGate)).flat());
   const evidence = {
     runIds: arrayMap(live, (e) => e.run.runId),
     rawObservationsDigests: arrayMap(live, (e) => e.run.rawObservationsDigest),
     invalidatedRunIds: invalidated.runIds,
     forensic: forensic.pointers,
+    semanticProofIds,
   };
   const defectIds = [...forensic.defectIds, ...invalidated.defectIds];
   if (!arrayIncludes(ADMISSIBLE_CLAIM_KINDS, claim.claimKind)) {
@@ -974,5 +1023,8 @@ export {
   REASON_PREFIX,
   SUFFICIENCY_RULE,
   admitClaim,
+  awardedProofIds,
   campaignOutcomeOfCells,
+  checkSemanticGate,
+  gateBindingHolds,
 };

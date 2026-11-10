@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2275,
+    "unit": 2276,
     "integration": 124,
     "bootstrap": 223,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2629,
-  "digest": "fnv1a32-fc9b7fd4",
+  "censusSize": 2630,
+  "digest": "fnv1a32-076c01ec",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2308,6 +2308,7 @@
     "test/scripts/import-graph-repository-boundary.test.js": "unit",
     "test/scripts/install-git-hooks-stdout-purity.test.js": "unit",
     "test/scripts/inventory-ordinal-segments.test.js": "unit",
+    "test/scripts/lab-census-benchmark-evidence-custody.test.js": "unit",
     "test/scripts/lab-fleet-discovery.test.js": "unit",
     "test/scripts/lab-test-base.test.js": "unit",
     "test/scripts/lab-worker-provisioning.test.js": "unit",
