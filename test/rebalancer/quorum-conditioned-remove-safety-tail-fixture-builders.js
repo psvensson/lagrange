@@ -50,9 +50,6 @@ export function createPublishedPlanningReadinessService({
     async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
-    async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
-      return buildPlanningSnapshot(nodeId);
-    },
     getPriorityRecoveryPlanningAnswerSync(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },

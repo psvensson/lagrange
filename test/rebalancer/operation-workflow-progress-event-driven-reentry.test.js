@@ -488,8 +488,6 @@ function createEventDrivenCoordinator(
     controlPlaneReadinessService: {
       getPriorityRecoveryPlanningAnswerSync: () =>
         buildEventDrivenPlanningSnapshot(planningOptions),
-      getPriorityRecoveryPlanningSnapshotBestEffort: () =>
-        buildEventDrivenPlanningSnapshot(planningOptions),
       getNodeReadinessSync(nodeId) {
         return {nodeId, dimensions: {
           controlPlaneRecoveryEligible: true,

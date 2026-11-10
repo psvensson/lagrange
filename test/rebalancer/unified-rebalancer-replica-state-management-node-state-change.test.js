@@ -261,8 +261,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
   await t.test(
     'uses the local canonical planning view for priority blocker snapshots',
     async (t) => {
-      const asyncCalls = [];
-      const syncCalls = [];
+      const answerCalls = [];
       const planningSnapshot = Object.freeze({
         publishedActiveNodeIdsPresent: true,
         publishedActiveNodeIds: Object.freeze([
@@ -298,12 +297,8 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
           {node_id: 'node-a', status: NodeStatus.ACTIVE},
         ],
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
-            asyncCalls.push(nodeId);
-            return Promise.resolve(planningSnapshot);
-          },
           getPriorityRecoveryPlanningAnswerSync(nodeId) {
-            syncCalls.push(nodeId);
+            answerCalls.push(nodeId);
             return planningSnapshot;
           },
         },
@@ -331,14 +326,10 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         'sync priority blocker planning should still resolve the canonical snapshot',
       );
       t.same(
-        asyncCalls,
-        ['node-local'],
-        'async priority blocker planning should consult the local canonical planning view',
-      );
-      t.same(
-        syncCalls,
-        ['node-local'],
-        'sync priority blocker planning should consult the local canonical planning view',
+        answerCalls,
+        ['node-local', 'node-local'],
+        'the async and the sync priority blocker reads each consult the one ' +
+          'local canonical planning answer',
       );
     },
   );

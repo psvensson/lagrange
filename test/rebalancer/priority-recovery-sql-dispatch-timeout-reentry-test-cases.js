@@ -860,9 +860,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       },
       controlPlaneReadinessService: {
         getPriorityRecoveryPlanningAnswerSync: buildDispatchPendingReentryPlanningSnapshot,
-        getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return buildDispatchPendingReentryPlanningSnapshot();
-        },
         getNodeReadinessSync(nodeId) {
           return {
             nodeId,
@@ -1389,9 +1386,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       },
       controlPlaneReadinessService: {
         getPriorityRecoveryPlanningAnswerSync: buildDispatchPendingReentryPlanningSnapshot,
-        getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return buildDispatchPendingReentryPlanningSnapshot();
-        },
         getNodeReadinessSync(nodeId) {
           return {
             nodeId,

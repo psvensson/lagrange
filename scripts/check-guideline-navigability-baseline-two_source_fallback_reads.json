@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-10T05:02:59.392Z",
+  "generatedAt": "2026-11-10T19:56:04.377Z",
   "rawViolationCount": 1694,
   "violations": [
     {
@@ -3452,8 +3452,8 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 156,
-      "column": 14,
+      "line": 157,
+      "column": 10,
       "functionName": "readPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -11345,7 +11345,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 196,
+      "line": 195,
       "column": 12,
       "functionName": "getEntityRemoveSafetyMinReplicaCount",
       "kind": "two_source_fallback_reads",
@@ -11354,7 +11354,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 318,
+      "line": 317,
       "column": 12,
       "functionName": "getCriticalMinReplicaCount",
       "kind": "two_source_fallback_reads",
@@ -12308,7 +12308,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 164,
+      "line": 163,
       "column": 6,
       "functionName": "resolveAvailableNodeMembershipConstraintState",
       "kind": "two_source_fallback_reads",

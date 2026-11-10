@@ -150,16 +150,15 @@ function anchorRowStepEntryOnClock(row, atMs) {
   row.steps_history = JSON.stringify(history);
 }
 
-// Boundary injection (readiness owner): the target's own planning view of
+// Boundary injection (read-policy owner): the target's own planning view of
 // the ledger spread from its READY lease on (see the header): the shared
 // planning answer with the ledger counted spread-satisfied.
 function injectTargetPlanningView({target, elapsed, extras}) {
-  const readinessService = target.controlPlaneReadinessService;
-  const shared =
-    readinessService.getPriorityRecoveryPlanningSnapshotBestEffort;
-  readinessService.getPriorityRecoveryPlanningSnapshotBestEffort =
-    async () => {
-      const answer = await shared();
+  const owner = target.workflowOwner;
+  const shared = owner.readAvailablePriorityRecoveryPlanningSnapshot;
+  owner.readAvailablePriorityRecoveryPlanningSnapshot =
+    async (operation) => {
+      const answer = await shared(operation);
       if (
         elapsed() < TARGET_READY_AT_MS ||
         !answer?.priorityPartitionSummary

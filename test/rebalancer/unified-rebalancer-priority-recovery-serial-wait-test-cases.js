@@ -207,9 +207,6 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
       const createdOperationsWithMissingSerialWait = [];
       const missingSerialWaitReadinessService = {
         ...createMockControlPlaneReadinessService({systemTableCache: cache}),
-        getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return missingSerialWaitPlanningSnapshot;
-        },
         getPriorityRecoveryPlanningAnswerSync() {
           return missingSerialWaitPlanningSnapshot;
         },
@@ -290,9 +287,6 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
 
       const readinessService = {
         ...createMockControlPlaneReadinessService({systemTableCache: cache}),
-        getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return planningSnapshot;
-        },
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
@@ -454,9 +448,6 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
       );
       const readinessService = {
         ...createMockControlPlaneReadinessService({systemTableCache: cache}),
-        getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return planningSnapshot;
-        },
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
@@ -747,9 +738,6 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
       );
       const readinessService = {
         ...createMockControlPlaneReadinessService({systemTableCache: cache}),
-        getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return planningSnapshot;
-        },
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },

@@ -144,8 +144,6 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
       controlPlaneReadinessService: {
         getPriorityRecoveryPlanningAnswerSync:
           buildSerialWaitReentryPlanningSnapshot,
-        getPriorityRecoveryPlanningSnapshotBestEffort:
-          buildSerialWaitReentryPlanningSnapshot,
         getNodeReadinessSync(targetNodeId) {
           return {
             nodeId: targetNodeId,

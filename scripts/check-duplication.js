@@ -291,8 +291,11 @@ const RATCHET_TARGETS = [
     // Alignment with PR #201 (code-navigability stream): the lower of the two
     // one-way baselines, then tightened 23689 -> 23629 -> 23624 on the hint.
     // 2026-11-09 (candidate-integration): tightened 629/23624 -> 624/23388 -> 623/23344 -> 623/23339 on the checker hint.
-    baselineCloneGroupCount: 623,
-    baselineDuplicatedLineCount: 23339,
+    // 2026-11-10 (priority-recovery-owner-read-snapshot-await on this stream):
+    // the lower baseline kept (623/23339 over 627/23539), then tightened
+    // 623/23339 -> 621/23257 on the checker hint.
+    baselineCloneGroupCount: 621,
+    baselineDuplicatedLineCount: 23257,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

@@ -14,6 +14,9 @@ import {
 } from '../../src/control-plane/control-plane-constants.js';
 
 import {
+  readAvailablePriorityRecoveryPlanningSnapshot,
+} from '../../src/rebalancer/priority-recovery-planning-read.js';
+import {
   DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
@@ -110,8 +113,7 @@ test('ControlPlaneReadinessService returns the AVAILABLE planning answer whateve
     return {publishedPlanningEpoch: 22};
   };
   const snapshot =
-    await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
-      'node-available', 1500);
+    readinessService.getPriorityRecoveryPlanningAnswerSync('node-available', 1500);
   t.equal(snapshot?.publishedPlanningEpoch, 21,
     'the available answer is returned; a fresher async answer cannot replace it');
   t.equal(timeoutArmed, false,
@@ -212,12 +214,13 @@ test('ControlPlaneReadinessService enriches the local planning answer with start
     t.end();
   });
 
-test('ControlPlaneReadinessService exposes the canonical AVAILABLE priority-recovery ' +
-  'answer through the best-effort compatibility surface', async (t) => {
+test('the AVAILABLE planning read answers the canonical priority-recovery ' +
+  'planning answer of the readiness service', async (t) => {
   // The two evidence sources deliberately disagree, which is what makes this
   // witness strong: available evidence is epoch 31 and authoritative owner
-  // evidence is epoch 34. The compatibility surface must not upgrade itself
-  // opportunistically just because the owner answer could be fetched.
+  // evidence is epoch 34. The AVAILABLE read (the read-policy owner's, over
+  // the one planning answer) must not upgrade itself opportunistically just
+  // because the owner answer could be fetched.
   let ownerReadCalled = false;
   let timeoutArmed = false;
   const readinessService = createReadinessServiceForTest({
@@ -249,24 +252,24 @@ test('ControlPlaneReadinessService exposes the canonical AVAILABLE priority-reco
     return {};
   };
 
-  const answer =
-    await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
-      'node-priority-best-effort-contract',
-      1500,
-    );
+  const answer = readAvailablePriorityRecoveryPlanningSnapshot({
+    readinessService,
+    publicationNodeId: 'node-priority-best-effort-contract',
+    observedAt: 1500,
+  });
   const sync = readinessService.getPriorityRecoveryPlanningAnswerSync(
     'node-priority-best-effort-contract',
     1500,
   );
 
   t.equal(answer?.publishedPlanningEpoch, 31,
-    'the compatibility surface returns the AVAILABLE answer, not the owner one');
+    'the AVAILABLE read returns the AVAILABLE answer, not the owner one');
   t.equal(ownerReadCalled, false,
     'and performs no owner read for this invocation');
   t.equal(timeoutArmed, false,
     'and arms no planning-refresh deadline');
   t.equal(answer?.publishedPlanningEpoch, sync?.publishedPlanningEpoch,
-    'best-effort and the canonical sync surface agree by construction');
+    'the AVAILABLE read and the canonical sync answer agree by construction');
   t.equal(answer?.recoveryProtocolState, sync?.recoveryProtocolState,
     'including the recovery protocol state they report');
   t.end();

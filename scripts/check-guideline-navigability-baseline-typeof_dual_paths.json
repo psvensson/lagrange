@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T17:56:57.211Z",
-  "rawViolationCount": 603,
+  "generatedAt": "2026-11-10T19:56:04.381Z",
+  "rawViolationCount": 602,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -545,7 +545,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-cluster-view-owner.js",
-      "line": 220,
+      "line": 271,
       "column": 11,
       "functionName": "getCurrentEpoch",
       "kind": "typeof_dual_paths",
@@ -1895,7 +1895,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
-      "line": 546,
+      "line": 556,
       "column": 4,
       "functionName": "buildReconciliationContext",
       "kind": "typeof_dual_paths",
@@ -2147,7 +2147,7 @@
     },
     {
       "filePath": "src/control-plane/membership-lifecycle-controller.js",
-      "line": 215,
+      "line": 216,
       "column": 15,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -2156,7 +2156,7 @@
     },
     {
       "filePath": "src/control-plane/membership-lifecycle-controller.js",
-      "line": 219,
+      "line": 220,
       "column": 20,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -2165,7 +2165,7 @@
     },
     {
       "filePath": "src/control-plane/membership-lifecycle-controller.js",
-      "line": 222,
+      "line": 223,
       "column": 21,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -2192,7 +2192,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 26,
+      "line": 29,
       "column": 5,
       "functionName": "resolvePlanningLivenessContext",
       "kind": "typeof_dual_paths",
@@ -2201,7 +2201,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 32,
+      "line": 35,
       "column": 4,
       "functionName": "resolvePlanningLivenessContext",
       "kind": "typeof_dual_paths",
@@ -2210,7 +2210,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 39,
+      "line": 42,
       "column": 5,
       "functionName": "resolvePlanningLivenessContext",
       "kind": "typeof_dual_paths",
@@ -2219,17 +2219,8 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 123,
+      "line": 126,
       "column": 6,
-      "functionName": "readPublicationPlanningSnapshot",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 151,
-      "column": 8,
       "functionName": "readPublicationPlanningSnapshot",
       "kind": "typeof_dual_paths",
       "reason": "typeof dual path; keep one path and delete the other",
@@ -2984,7 +2975,7 @@
     },
     {
       "filePath": "src/logging/wait-bound-spent.js",
-      "line": 235,
+      "line": 243,
       "column": 16,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -3839,7 +3830,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 584,
+      "line": 565,
       "column": 8,
       "functionName": "provisionInitialTablePartition",
       "kind": "typeof_dual_paths",
@@ -3848,7 +3839,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-instance-initializer.js",
-      "line": 94,
+      "line": 133,
       "column": 4,
       "functionName": "initializeSqlQueryEngineInstance",
       "kind": "typeof_dual_paths",
@@ -3857,7 +3848,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-instance-initializer.js",
-      "line": 289,
+      "line": 333,
       "column": 4,
       "functionName": "initializeSqlQueryEngineInstance",
       "kind": "typeof_dual_paths",
@@ -3866,7 +3857,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
-      "line": 312,
+      "line": 335,
       "column": 6,
       "functionName": "_wireStateProjectionWriter",
       "kind": "typeof_dual_paths",
@@ -3947,7 +3938,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 240,
+      "line": 374,
       "column": 10,
       "functionName": "getPartitionById",
       "kind": "typeof_dual_paths",
@@ -3956,7 +3947,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 246,
+      "line": 380,
       "column": 15,
       "functionName": "getPartitionById",
       "kind": "typeof_dual_paths",
@@ -3965,7 +3956,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 326,
+      "line": 460,
       "column": 6,
       "functionName": "getLocalRuntimeRoutingOverlayServices",
       "kind": "typeof_dual_paths",
@@ -3974,7 +3965,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 373,
+      "line": 507,
       "column": 8,
       "functionName": "getLocalRuntimeRoutingOverlayServices",
       "kind": "typeof_dual_paths",
@@ -4019,7 +4010,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 543,
+      "line": 554,
       "column": 6,
       "functionName": "probeAuthoritativeRow",
       "kind": "typeof_dual_paths",
@@ -4055,7 +4046,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 2382,
+      "line": 2409,
       "column": 28,
       "functionName": "setActualCoreEntryObserver",
       "kind": "typeof_dual_paths",
@@ -4064,7 +4055,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 2386,
+      "line": 2413,
       "column": 31,
       "functionName": "setNativeInboundStageObserver",
       "kind": "typeof_dual_paths",
@@ -4073,7 +4064,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 2395,
+      "line": 2422,
       "column": 22,
       "functionName": "setCoreFaultInjector",
       "kind": "typeof_dual_paths",
@@ -4397,7 +4388,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-owner-wake.js",
-      "line": 126,
+      "line": 127,
       "column": 15,
       "functionName": "collectReplaceOwnerNodeIds",
       "kind": "typeof_dual_paths",
@@ -4460,7 +4451,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 397,
+      "line": 396,
       "column": 18,
       "functionName": "resolvePriorityRecoveryPlanningReadContext",
       "kind": "typeof_dual_paths",
@@ -4469,7 +4460,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-planning-read.js",
-      "line": 144,
+      "line": 137,
       "column": 9,
       "functionName": "resolveRemoveSafetyPlanningSnapshotReader",
       "kind": "typeof_dual_paths",

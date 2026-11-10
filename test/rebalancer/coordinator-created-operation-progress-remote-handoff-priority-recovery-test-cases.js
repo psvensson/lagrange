@@ -68,7 +68,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
     coordinator.initialize();
 
     coordinator.controlPlaneReadinessService
-      .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
+      .getPriorityRecoveryPlanningAnswerSync = () => {
         return buildRemotePrioritySerialWaitPlanningSnapshot();
       };
     coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
@@ -125,7 +125,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
     coordinator.initialize();
 
     coordinator.controlPlaneReadinessService
-      .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
+      .getPriorityRecoveryPlanningAnswerSync = () => {
         return buildRemotePrioritySerialWaitSourcePlanningSnapshot();
       };
     coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
@@ -233,7 +233,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
     coordinator.initialize();
 
     coordinator.controlPlaneReadinessService
-      .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
+      .getPriorityRecoveryPlanningAnswerSync = () => {
         return buildRemotePriorityDispatchPendingPlanningSnapshot();
       };
     coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
@@ -302,7 +302,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
     coordinator.initialize();
 
     coordinator.controlPlaneReadinessService
-      .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
+      .getPriorityRecoveryPlanningAnswerSync = () => {
         const planning = buildRemotePriorityDispatchPendingPlanningSnapshot();
         const snapshot =
           planning.priorityRecoveryDecisionSnapshots.snapshots[0];
@@ -409,7 +409,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
     };
 
     coordinator.controlPlaneReadinessService
-      .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
+      .getPriorityRecoveryPlanningAnswerSync = () => {
         const planning = buildRemotePriorityTimeoutPlanningSnapshot();
         const snapshot =
           planning.priorityRecoveryDecisionSnapshots.snapshots[0];
@@ -518,7 +518,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
     coordinator.initialize();
 
     coordinator.controlPlaneReadinessService
-      .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
+      .getPriorityRecoveryPlanningAnswerSync = () => {
         return buildRemotePriorityDispatchPendingTimeoutPlanningSnapshot();
       };
 
@@ -718,7 +718,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
     coordinator.initialize();
 
     coordinator.controlPlaneReadinessService
-      .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
+      .getPriorityRecoveryPlanningAnswerSync = () => {
         return buildRemotePrioritySerialWaitPlanningSnapshot();
       };
     coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
@@ -773,7 +773,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
     coordinator.initialize();
 
     coordinator.controlPlaneReadinessService
-      .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
+      .getPriorityRecoveryPlanningAnswerSync = () => {
         return buildRemotePriorityTimeoutPlanningSnapshot();
       };
 
@@ -860,7 +860,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
     coordinator.initialize();
 
     coordinator.controlPlaneReadinessService
-      .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
+      .getPriorityRecoveryPlanningAnswerSync = () => {
         return buildRemotePriorityTimeoutPlanningSnapshot();
       };
 

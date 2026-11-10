@@ -193,9 +193,6 @@ function createCoordinator(operation, operationRow) {
       getPriorityRecoveryPlanningAnswerSync() {
         return buildPlanningSnapshot(operation);
       },
-      getPriorityRecoveryPlanningSnapshotBestEffort() {
-        return buildPlanningSnapshot(operation);
-      },
       getNodeReadinessSync(nodeId) {
         return {
           nodeId,

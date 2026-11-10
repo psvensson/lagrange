@@ -27,6 +27,7 @@ import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
   PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
 } from '../../src/control-plane/publication-active-gate-handoff-contract.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 const PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS = 'active';
 const PUBLICATION_CONVERGENCE_REPAIR_READY_CONNECTION = 'ready';
@@ -233,7 +234,7 @@ test('readPublicationPlanningSnapshot uses authoritative membership evidence for
           };
         },
       },
-      controlPlaneReadinessService: {
+      controlPlaneReadinessService: partialReadinessFake({
         async getAllNodeReadiness(options = {}) {
           readinessRefreshModes.push(options.allowAuthoritativeRefresh === true);
           return [];
@@ -241,10 +242,7 @@ test('readPublicationPlanningSnapshot uses authoritative membership evidence for
         getRecoveryEpochHistoryByNodeId() {
           return {};
         },
-        async getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return null;
-        },
-      },
+      }),
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.NODES) {
@@ -354,7 +352,7 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
           };
         },
       },
-      controlPlaneReadinessService: {
+      controlPlaneReadinessService: partialReadinessFake({
         async getAllNodeReadiness(options = {}) {
           readinessRefreshModes.push(options.allowAuthoritativeRefresh === true);
           return [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS];
@@ -362,10 +360,7 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
         getRecoveryEpochHistoryByNodeId() {
           return {};
         },
-        async getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return null;
-        },
-      },
+      }),
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {

@@ -12,7 +12,7 @@
     "distributed-harness": 214,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 279,
+    "placement-rebalance": 281,
     "query-sql": 192,
     "release-packaging": 15,
     "runtime-primitives": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2627,
-  "digest": "fnv1a32-63a63a79",
+  "censusSize": 2629,
+  "digest": "fnv1a32-0df9bc50",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-56907393",
+  "observationDigest": "fnv1a32-38f72b1c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1970,6 +1970,8 @@
     "test/rebalancer/priority-publication-per-leg-evidence-census.test.js": "placement-rebalance",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js": "placement-rebalance",
     "test/rebalancer/priority-recovery-follow-up-count-aware-add-gate.test.js": "placement-rebalance",
+    "test/rebalancer/priority-recovery-owner-read-settled-snapshot.test.js": "placement-rebalance",
+    "test/rebalancer/priority-recovery-planning-best-effort-alias-collapsed.test.js": "placement-rebalance",
     "test/rebalancer/priority-recovery-planning-gate-diagnostic.test.js": "placement-rebalance",
     "test/rebalancer/priority-recovery-reserved-slot-authoritative-admission.test.js": "placement-rebalance",
     "test/rebalancer/priority-recovery-stale-planning-visibility.test.js": "placement-rebalance",
@@ -4860,6 +4862,7 @@
     },
     "test/control-plane/membership-publication-candidate-planning-surface.test.js": {
       "files": [
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/membership-publication-coordinator.js"
       ]
     },
@@ -16857,6 +16860,18 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
+    "test/rebalancer/priority-recovery-owner-read-settled-snapshot.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "test/control-plane/control-plane-readiness-service-test-support.js",
+        "test/helpers/readiness-service-fixture.js"
+      ]
+    },
+    "test/rebalancer/priority-recovery-planning-best-effort-alias-collapsed.test.js": {
+      "directories": [
+        "src"
       ]
     },
     "test/rebalancer/priority-recovery-planning-gate-diagnostic.test.js": {

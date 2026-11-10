@@ -433,9 +433,6 @@ export function registerReplicaOperationRepositoryTailTests({
           executeQuery: async () => ({success: true, changes: 1}),
         },
         controlPlaneReadinessService: {
-          async getPriorityRecoveryPlanningSnapshotBestEffort() {
-            return this.getPriorityRecoveryPlanningAnswerSync();
-          },
           getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
@@ -518,9 +515,6 @@ export function registerReplicaOperationRepositoryTailTests({
           executeQuery: async () => ({success: true, changes: 1}),
         },
         controlPlaneReadinessService: {
-          async getPriorityRecoveryPlanningSnapshotBestEffort() {
-            return this.getPriorityRecoveryPlanningAnswerSync();
-          },
           getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
@@ -603,9 +597,6 @@ export function registerReplicaOperationRepositoryTailTests({
           executeQuery: async () => ({success: true, changes: 1}),
         },
         controlPlaneReadinessService: {
-          async getPriorityRecoveryPlanningSnapshotBestEffort() {
-            return this.getPriorityRecoveryPlanningAnswerSync();
-          },
           getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',

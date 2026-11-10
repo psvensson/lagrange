@@ -18,7 +18,6 @@ import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.
 import {projectNodeLivenessSemantics} from
   '../control-plane/node-liveness-semantic-projection.js';
 import {
-  hasAvailablePriorityRecoveryPlanningProvider as hasAvailablePlanningProvider,
   readAvailablePriorityRecoveryPlanningSnapshot as readAvailablePlanningSnapshot,
 } from './priority-recovery-planning-read.js';
 import {
@@ -456,7 +455,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       return null;
     }
     const readinessService = this.controlPlaneReadinessService;
-    if (!hasAvailablePlanningProvider(readinessService)) {
+    if (!readinessService) {
       return null;
     }
     return readAvailablePlanningSnapshot({

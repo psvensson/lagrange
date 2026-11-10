@@ -772,9 +772,6 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
             }),
           };
         },
-        async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
-          return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
-        },
       },
       cdcIntegrationService: {
         refreshAuthoritativeCacheRow: async () => true,

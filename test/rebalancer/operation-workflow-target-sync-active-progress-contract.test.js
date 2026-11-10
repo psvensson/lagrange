@@ -239,9 +239,6 @@ function createCoordinator(deliveries, deferredTimers, operationRow) {
       getPriorityRecoveryPlanningAnswerSync() {
         return buildPlanningSnapshot();
       },
-      getPriorityRecoveryPlanningSnapshotBestEffort() {
-        return buildPlanningSnapshot();
-      },
       getNodeReadinessSync(nodeId) {
         return {
           nodeId,

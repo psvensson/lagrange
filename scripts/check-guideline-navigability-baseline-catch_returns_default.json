@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T17:56:57.238Z",
+  "generatedAt": "2026-11-10T19:56:04.383Z",
   "rawViolationCount": 386,
   "violations": [
     {
@@ -275,7 +275,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-cluster-view-owner.js",
-      "line": 110,
+      "line": 148,
       "column": 6,
       "functionName": "getStartupAuthorityReadyNodeIds",
       "kind": "catch_returns_default",
@@ -734,7 +734,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
-      "line": 511,
+      "line": 521,
       "column": 4,
       "functionName": "publishAuthoritativeObservation",
       "kind": "catch_returns_default",
@@ -851,7 +851,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 409,
+      "line": 416,
       "column": 4,
       "functionName": "safelyGetLatestMembershipPublicationRow",
       "kind": "catch_returns_default",
@@ -1175,7 +1175,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-shutdown-lifecycle.js",
-      "line": 84,
+      "line": 85,
       "column": 4,
       "functionName": "connectLogsTablePersistence",
       "kind": "catch_returns_default",
@@ -1184,7 +1184,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-shutdown-lifecycle.js",
-      "line": 169,
+      "line": 170,
       "column": 4,
       "functionName": "startDynamicConfigWiring",
       "kind": "catch_returns_default",
@@ -1193,7 +1193,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-shutdown-lifecycle.js",
-      "line": 432,
+      "line": 440,
       "column": 6,
       "functionName": "resolveContext",
       "kind": "catch_returns_default",
@@ -2102,7 +2102,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 506,
+      "line": 517,
       "column": 6,
       "functionName": "probeAuthoritativeRow",
       "kind": "catch_returns_default",
@@ -2192,7 +2192,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1168,
+      "line": 1194,
       "column": 4,
       "functionName": "resolveEntryConfStateOrFailure",
       "kind": "catch_returns_default",
@@ -2201,7 +2201,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1192,
+      "line": 1218,
       "column": 4,
       "functionName": "applyEntryDurablyOrFailure",
       "kind": "catch_returns_default",
@@ -2210,7 +2210,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1336,
+      "line": 1362,
       "column": 4,
       "functionName": "processReadyCycle",
       "kind": "catch_returns_default",
@@ -2219,7 +2219,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1396,
+      "line": 1422,
       "column": 4,
       "functionName": "semanticLeaderIdentity",
       "kind": "catch_returns_default",
@@ -2561,7 +2561,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 295,
+      "line": 294,
       "column": 6,
       "functionName": "getCriticalPartitionRowForSafety",
       "kind": "catch_returns_default",
@@ -2813,7 +2813,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 316,
+      "line": 315,
       "column": 6,
       "functionName": "getStartupAuthorityNodeIdSet",
       "kind": "catch_returns_default",

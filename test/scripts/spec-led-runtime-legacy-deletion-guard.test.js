@@ -16,6 +16,7 @@ const DELETED_RUNTIME_TERMS = Object.freeze([
   'buildLegacyNoProgress',
   'getPriorityRecoveryPlanningAnswerBestEffort',
   'getMembershipPublicationPlanningAnswerBestEffort',
+  'getPriorityRecoveryPlanningSnapshotBestEffort',
   'resolveLegacy',
   'inferPriorityRecoverySemanticState',
   'pending_ack_nodes',

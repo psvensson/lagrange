@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T17:56:57.105Z",
+  "generatedAt": "2026-11-10T19:56:04.373Z",
   "rawViolationCount": 59,
   "violations": [
     {
@@ -491,7 +491,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 654,
+      "line": 740,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryObservationMethods",
       "kind": "prototype_copy_bags",
@@ -500,7 +500,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 673,
+      "line": 674,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryReadMethods",
       "kind": "prototype_copy_bags",

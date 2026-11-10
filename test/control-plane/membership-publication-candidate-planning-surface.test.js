@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {MembershipPublicationCoordinator} from
   '../../src/control-plane/membership-publication-coordinator.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 // The publication coordinator derives the membership CANDIDATE with the
 // planner's recovery evidence: the AVAILABLE planning answer. The owner-read
@@ -32,14 +33,14 @@ function createCoordinator({availableAnswer, ownerReadAnswer, calls}) {
         return {success: true, rows: []};
       },
     },
-    controlPlaneReadinessService: {
+    controlPlaneReadinessService: partialReadinessFake({
       async getAllNodeReadiness() {
         return [];
       },
       getRecoveryEpochHistoryByNodeId() {
         return {};
       },
-      async getPriorityRecoveryPlanningSnapshotBestEffort() {
+      getPriorityRecoveryPlanningAnswerSync() {
         calls.push('available');
         return availableAnswer;
       },
@@ -47,7 +48,7 @@ function createCoordinator({availableAnswer, ownerReadAnswer, calls}) {
         calls.push('owner-read');
         return ownerReadAnswer;
       },
-    },
+    }),
     systemTableCache: {
       getAll() {
         return [];

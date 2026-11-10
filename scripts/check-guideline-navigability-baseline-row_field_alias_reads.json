@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-10T05:02:58.233Z",
+  "generatedAt": "2026-11-10T19:56:04.374Z",
   "rawViolationCount": 687,
   "violations": [
     {
@@ -1661,7 +1661,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 603,
+      "line": 593,
       "column": 4,
       "functionName": "buildMembershipPublicationDiagnostics",
       "kind": "row_field_alias_reads",
@@ -1670,7 +1670,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 606,
+      "line": 596,
       "column": 4,
       "functionName": "buildMembershipPublicationDiagnostics",
       "kind": "row_field_alias_reads",
@@ -1679,7 +1679,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 609,
+      "line": 599,
       "column": 4,
       "functionName": "buildMembershipPublicationDiagnostics",
       "kind": "row_field_alias_reads",
@@ -1688,7 +1688,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 612,
+      "line": 602,
       "column": 4,
       "functionName": "buildMembershipPublicationDiagnostics",
       "kind": "row_field_alias_reads",
@@ -5396,7 +5396,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 338,
+      "line": 337,
       "column": 8,
       "functionName": "isStartupAuthorityControlPlanePlacementEligibleNode",
       "kind": "row_field_alias_reads",
@@ -5405,7 +5405,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 449,
+      "line": 448,
       "column": 6,
       "functionName": "readAvailablePriorityRecoveryPlanningSnapshot",
       "kind": "row_field_alias_reads",
@@ -5414,7 +5414,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 504,
+      "line": 503,
       "column": 6,
       "functionName": "getPriorityRecoveryPlanningSnapshotSync",
       "kind": "row_field_alias_reads",

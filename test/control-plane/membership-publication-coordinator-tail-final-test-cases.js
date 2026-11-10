@@ -7,6 +7,7 @@ import {
 } from '../../src/constants/index.js';
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
   '../../src/control-plane/membership-publication-row-contract.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 export function registerMembershipPublicationCoordinatorTailFinalTests({
   test,
@@ -58,7 +59,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
             persistedRows.push(row);
           },
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: partialReadinessFake({
           async getAllNodeReadiness(options = {}) {
             if (options.allowAuthoritativeRefresh === true) {
               return [{
@@ -87,7 +88,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
           getRecoveryEpochHistoryByNodeId() {
             return {};
           },
-        },
+        }),
         systemTableCache: {
           getAll(tableName) {
             if (tableName === 'nodes') {
@@ -212,7 +213,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
             persistedRows.push(row);
           },
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: partialReadinessFake({
           async getAllNodeReadiness(options = {}) {
             if (options.allowAuthoritativeRefresh === true) {
               return [{
@@ -241,7 +242,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
           getRecoveryEpochHistoryByNodeId() {
             return {};
           },
-        },
+        }),
         systemTableCache: {
           getAll(tableName) {
             if (tableName === 'nodes') {
@@ -1055,7 +1056,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       const readinessOptions = [];
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: 'node-1',
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: partialReadinessFake({
           async getAllNodeReadiness(options = {}) {
             readinessOptions.push(options);
             return [];
@@ -1065,7 +1066,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
               return [];
             },
           },
-        },
+        }),
       });
       coordinator.readTableRows = async (tableName, options = {}) => {
         tableReadRequests.push({tableName, options});
@@ -1229,17 +1230,14 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
           };
         },
       },
-      controlPlaneReadinessService: {
+      controlPlaneReadinessService: partialReadinessFake({
         async getAllNodeReadiness() {
           return [];
         },
         getRecoveryEpochHistoryByNodeId() {
           return {};
         },
-        async getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return null;
-        },
-      },
+      }),
       systemTableCache: {
         getAll(tableName) {
           return cacheRowsByTableName.get(tableName) || [];
@@ -1406,17 +1404,14 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
           };
         },
       },
-      controlPlaneReadinessService: {
+      controlPlaneReadinessService: partialReadinessFake({
         async getAllNodeReadiness() {
           return [];
         },
         getRecoveryEpochHistoryByNodeId() {
           return {};
         },
-        async getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return null;
-        },
-      },
+      }),
       systemTableCache: {
         getAll() {
           return [];

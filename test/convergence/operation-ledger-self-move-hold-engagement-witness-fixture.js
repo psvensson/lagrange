@@ -544,10 +544,13 @@ function bindStartupAuthority({
   };
   readinessService.getStartupAuthoritySnapshotSync = () => getStartupAuthority();
   // Published-membership REMOVE safety reads the owner surface; the same
-  // owner-derived planning answer is presented there, unchanged. The
-  // best-effort surface stays for the AVAILABLE consumers in this scenario.
+  // owner-derived planning answer is presented there, unchanged, and to the
+  // workflow owner's AVAILABLE reads at the read-policy boundary (priority
+  // partitions only); the service's sync answer stays the real derivation.
   readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead = async () => getPlanningAnswer();
-  readinessService.getPriorityRecoveryPlanningSnapshotBestEffort = async () => getPlanningAnswer();
+  const owner = coordinator.workflowOwner;
+  owner.readAvailablePriorityRecoveryPlanningSnapshot = async (operation) =>
+    (owner.resolvePriorityRecoveryPlanningReadContext(operation) && getPlanningAnswer()) || null;
 }
 
 async function flushMicrotasks() {

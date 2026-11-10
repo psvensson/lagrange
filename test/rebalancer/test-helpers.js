@@ -346,9 +346,6 @@ function createMockControlPlaneReadinessService(options = {}) {
     getPriorityRecoveryPlanningAnswerSync(nodeId = null, observedAt = Date.now()) {
       return buildPlanningSnapshot(nodeId, observedAt);
     },
-    async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId = null, observedAt = Date.now()) {
-      return this.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt);
-    },
     ...callbacks,
   };
   // The one completer: an unstated consumer member answers as absent.

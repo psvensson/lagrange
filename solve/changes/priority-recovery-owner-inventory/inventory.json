@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "41fe50cf9cfba40b4682e387ba0760df69761ebd5573fa62ce0e99755821ae53"
+    "sourceSha256": "873fdb86367a50a6a6f8954cdf992cd9defa93374c584f10e7c71272d2e674fa"
   },
   "layerDirection": [
     "raw_observation",
@@ -18,8 +18,8 @@
   },
   "metrics": {
     "moduleCount": 67,
-    "publicExportCount": 773,
-    "importEdgeCount": 320,
+    "publicExportCount": 772,
+    "importEdgeCount": 321,
     "crossLayerEdgeCount": 96,
     "layerDirectionViolationCount": 48,
     "largestStronglyConnectedComponent": 1,
@@ -1997,7 +1997,6 @@
       "exports": [
         "createRemoveSafetyPlanningSnapshotReader",
         "hasAuthoritativeRemoveSafetyPlanningProvider",
-        "hasAvailablePriorityRecoveryPlanningProvider",
         "readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety",
         "readAvailablePriorityRecoveryPlanningSnapshot",
         "resolveRemoveSafetyPlanningSnapshotReader"
@@ -2005,7 +2004,6 @@
       "localExports": [
         "createRemoveSafetyPlanningSnapshotReader",
         "hasAuthoritativeRemoveSafetyPlanningProvider",
-        "hasAvailablePriorityRecoveryPlanningProvider",
         "readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety",
         "readAvailablePriorityRecoveryPlanningSnapshot",
         "resolveRemoveSafetyPlanningSnapshotReader"
@@ -5012,6 +5010,16 @@
       "targetLayer": null,
       "crossLayer": false,
       "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/rebalancer/priority-recovery-planning-read.js",
+      "specifier": "../control-plane/priority-recovery-planning-answer-origin.js",
+      "to": "src/control-plane/priority-recovery-planning-answer-origin.js",
+      "targetModule": true,
+      "sourceLayer": "owner_decision",
+      "targetLayer": "owner_decision",
+      "crossLayer": false,
+      "conformsToLayerDirection": true
     },
     {
       "from": "src/rebalancer/priority-recovery-superseded-target.js",

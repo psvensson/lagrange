@@ -180,8 +180,6 @@ export function registerPriorityRecoverySpreadSatisfiedStallReentryTestCases(
       controlPlaneReadinessService: {
         getPriorityRecoveryPlanningAnswerSync:
           buildDispatchPendingReentryPlanningSnapshot,
-        getPriorityRecoveryPlanningSnapshotBestEffort:
-          buildDispatchPendingReentryPlanningSnapshot,
         getNodeReadinessSync: (nodeId) => ({
           nodeId,
           dimensions: {

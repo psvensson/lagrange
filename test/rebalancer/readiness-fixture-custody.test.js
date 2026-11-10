@@ -104,7 +104,7 @@ test('helper-owned port reads its live world without borrowing another cache', a
   cache.upsert('nodes', {...readyNode('first'), ready_lease_expires_at: 0});
   t.equal(port.answerCommittedNodes().nodeRows[0].ready_lease_expires_at, 0);
   t.equal(port.getNodeReadinessSync('first').dimensions.repairEligible, false);
-  t.equal(await port.getPriorityRecoveryPlanningSnapshotBestEffort(), null,
+  t.equal(port.getPriorityRecoveryPlanningAnswerSync(), null,
     'nodes alone do not fabricate a successful publication');
   cache.delete('nodes', 'first');
   t.same(port.answerCommittedNodes().nodeRows, [], 'empty world remains empty');
@@ -188,9 +188,9 @@ test('explicit live callbacks preserve readiness and planning arguments', async 
   });
   const options = {decisionDimension: 'repairEligible', refresh: false};
   t.equal(await port.getNodeReadiness('node-1', options), world);
-  t.equal(await port.getPriorityRecoveryPlanningSnapshotBestEffort('node-1', 123), world);
+  t.equal(port.getPriorityRecoveryPlanningAnswerSync('node-1', 123), world);
   world = {phase: 'recovered'};
-  t.equal(await port.getPriorityRecoveryPlanningSnapshotBestEffort('node-2', 456), world);
+  t.equal(port.getPriorityRecoveryPlanningAnswerSync('node-2', 456), world);
   t.equal(calls[0][1], options, 'options pass through by identity');
   t.same(calls.slice(1), [['node-1', 123], ['node-2', 456]]);
   t.equal(createMockControlPlaneReadinessService().getNodeReadinessSync('absent')
