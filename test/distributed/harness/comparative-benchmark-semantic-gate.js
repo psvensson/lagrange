@@ -22,28 +22,22 @@ import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
 import {
-  OLTP_PAIRED_RETRY_OUTCOME, executePairedOltpTransactionWithRetry,
+  executePairedOltpTransactionWithRetry,
 } from './oltp-paired-retry-owner.js';
 import {
-  OLTP_SCENARIO_A_DURABILITY_FAULT_EVIDENCE_CODES, OLTP_SCENARIO_A_DURABILITY_PROOF_IDS,
-  buildScenarioADurabilityCase, evaluateScenarioADurabilityObservation,
+  OLTP_SCENARIO_A_DURABILITY_FAULT_EVIDENCE_CODES,
+  OLTP_SCENARIO_A_DURABILITY_PROOF_IDS,
+  buildScenarioADurabilityCase,
+  evaluateScenarioADurabilityObservation,
 } from './oltp-scenario-a-durability-case.js';
 import {
-  OLTP_SCENARIO_A_FAILURE_ATOMICITY_PROOF_IDS, OLTP_SCENARIO_A_FAILURE_ATOMICITY_WORKLOAD,
-  buildScenarioAFailureAtomicityCase, evaluateScenarioAFailureAtomicityObservation,
-} from './oltp-scenario-a-failure-atomicity-case.js';
-import {
-  OLTP_SCENARIO_A_PAYMENT_PROOF_IDS, OLTP_SCENARIO_A_PAYMENT_WORKLOAD,
-  buildScenarioAPaymentCase, evaluateScenarioAPaymentObservation,
+  buildScenarioAPaymentCase,
 } from './oltp-scenario-a-payment-case.js';
 import {OLTP_SCENARIO_A_PROOF_CASES} from './oltp-scenario-a-proof-cases.js';
 import {
-  OLTP_SCENARIO_A_PROOF_FAILURE_KIND, buildScenarioASemanticGateEvidence,
+  OLTP_SCENARIO_A_PROOF_FAILURE_KIND,
+  buildScenarioASemanticGateEvidence,
 } from './oltp-scenario-a-semantic-gate.js';
-import {
-  OLTP_SCENARIO_A_VISIBILITY_PROOF_IDS, OLTP_SCENARIO_A_VISIBILITY_WORKLOAD,
-  buildScenarioAVisibilityCase, evaluateScenarioAVisibilityObservation,
-} from './oltp-scenario-a-visibility-case.js';
 import {
   DateConstructor, MapConstructor, arrayEvery, arrayFilter, arrayFind, arrayIncludes,
   arrayIsArray, arrayJoin, arrayMap, arrayPush, arraySome, dateNow, dateParse, dateToISOString,
@@ -61,10 +55,15 @@ import {observeLagrangeOltpStateSnapshot} from '../reference-client/lagrange-olt
 import {observeLagrangePaymentState} from '../reference-client/lagrange-payment-observer.js';
 import {OLTP_ADAPTER_KEEP_DATASET} from '../reference-client/oltp-adapter-contract.js';
 import {createPostgreSqlOltpAdapter} from '../reference-client/postgresql-oltp-adapter.js';
-import {createTiDbOltpAdapter} from '../reference-client/tidb-oltp-adapter.js';
-import {observeTiDbOltpStateSnapshot} from '../reference-client/tidb-oltp-state-snapshot.js';
-import {observeTiDbPaymentState} from '../reference-client/tidb-payment-observer.js';
-import {runTiDbVisibilityProbe} from '../reference-client/tidb-visibility-probe.js';
+import {
+  TIDB_CASE_EXECUTORS,
+  TIDB_DATABASE_BY_CASE,
+  TIDB_EXECUTED_CASE_IDS,
+  dropTiDbDatabase,
+  executeTiDbDurabilityAfter,
+  executeTiDbDurabilityBefore,
+  mysqlConnectionFactoryOf,
+} from './comparative-benchmark-tidb-cases.js';
 import {executeProof as executeDeliveryProof} from '../scenarios/scenario-a-delivery-lagrange.js';
 import {
   executeProof as executeFailureAtomicityProof,
@@ -114,8 +113,6 @@ const BEFORE_MEASUREMENT = 'before-measurement';
 const DURABILITY_CASE_ID = 'durability';
 const MAX_READINESS_DEPTH = 8;
 const TIDB_SQL_READINESS_KEY_COUNT = 3;
-const NON_COMPARABLE_REASON =
-  'Partial Scenario A semantic proof only; full semantic and paired gates remain incomplete.';
 
 const DATA_REPLICA_ROLES = objectFreeze([
   'lagrange-node',
@@ -136,18 +133,6 @@ const STORAGE_CONTINUITY_PRESERVED = 'preserved';
 const STORAGE_CONTINUITY_UNPRESERVED = 'unpreserved';
 const TIKV_ROLE = 'tikv';
 
-const TIDB_DATABASE_BY_CASE = objectFreeze({
-  'visibility': 'bench_gate_visibility',
-  'payment': 'bench_gate_payment',
-  'failure-atomicity': 'bench_gate_failure_atomicity',
-  [DURABILITY_CASE_ID]: 'bench_gate_durability',
-});
-const TIDB_EXECUTED_CASE_IDS = objectFreeze([
-  'visibility',
-  'payment',
-  'failure-atomicity',
-  DURABILITY_CASE_ID,
-]);
 
 const PG_CASE_EXECUTORS = objectFreeze({
   'new-order-contention': executeNewOrderContentionProof,
@@ -617,357 +602,6 @@ async function executeRemotePgDurabilityAfter(req, overrides) {
   return {evaluation, proofRecord: evidence.proofRecord, evidence};
 }
 
-async function defaultMysqlConnection(connOpts) {
-  const mysql = await import('mysql2/promise');
-  const hasDirectCreate = mysql !== null &&
-    (typeof mysql === 'object' || typeof mysql === 'function') &&
-    objectHasOwn(mysql, 'createConnection') &&
-    typeof mysql.createConnection === 'function';
-  const driver = hasDirectCreate ? mysql : mysql.default;
-  return driver.createConnection(connOpts);
-}
-
-function mysqlConnectionFactoryOf(connection, createMysqlConnection) {
-  const rawFactory = createMysqlConnection || defaultMysqlConnection;
-  const credentials = ownField(connection, 'credentials');
-  const user = ownField(credentials, 'user');
-  const password = ownField(credentials, 'password');
-  return (connOpts) => rawFactory({
-    ...connOpts,
-    ...(typeof user === 'string' && user !== '' ? {user} : {}),
-    ...(password !== undefined ? {password} : {}),
-  });
-}
-
-async function openValidatedTiDbAdapter({endpoint, databaseName, workload, expectedDatasetSha256,
-  createConnection, caseId}) {
-  const adapter = await createTiDbOltpAdapter({
-    endpoint,
-    databaseName,
-    workload,
-    createConnection,
-  });
-  if (expectedDatasetSha256 && adapter.datasetSha256 !== expectedDatasetSha256) {
-    await adapter.close();
-    throw new Error(`TiDB ${caseId} proof dataset identity mismatch`);
-  }
-  return adapter;
-}
-
-function buildTiDbCasePayload({evidenceId, definition, binding, endpoint, extra}) {
-  return objectFreeze({
-    schemaVersion: 1,
-    evidenceId,
-    system: SYSTEM.TIDB_TIKV,
-    caseId: definition.identity.caseId,
-    caseSha256: definition.caseSha256,
-    datasetSha256: definition.identity.datasetSha256,
-    endpoint,
-    binding,
-    ...extra,
-    comparable: false,
-    nonComparableReason: NON_COMPARABLE_REASON,
-  });
-}
-
-async function closeTiDbAdapter(adapter, closeOptions = {}) {
-  if (!adapter) return;
-  await adapter.close(closeOptions);
-}
-
-async function dropTiDbDatabase(endpoint, databaseName, createConnection) {
-  const conn = await createConnection({
-    host: endpoint.host,
-    port: endpoint.port,
-    user: 'root',
-    password: '',
-  });
-  try {
-    await conn.query(`DROP DATABASE IF EXISTS \`${databaseName}\``);
-  } finally {
-    await conn.end();
-  }
-}
-
-async function executeTiDbVisibilityCase({connection, binding, createMysqlConnection}) {
-  const definition = buildScenarioAVisibilityCase();
-  const createConnection = mysqlConnectionFactoryOf(connection, createMysqlConnection);
-  const databaseName = TIDB_DATABASE_BY_CASE.visibility;
-  const adapter = await openValidatedTiDbAdapter({
-    endpoint: connection.endpoint,
-    databaseName,
-    workload: OLTP_SCENARIO_A_VISIBILITY_WORKLOAD,
-    expectedDatasetSha256: definition.identity.datasetSha256,
-    createConnection,
-    caseId: 'visibility',
-  });
-  try {
-    const observation = await runTiDbVisibilityProbe({
-      endpoint: connection.endpoint,
-      databaseName,
-      warehouseId: definition.identity.target.key.id,
-      writeDeltaCents: definition.identity.writeDeltaCents,
-      createConnection,
-    });
-    const evaluation = evaluateScenarioAVisibilityObservation(observation);
-    const payload = buildTiDbCasePayload({
-      evidenceId: 'tidb-scenario-a-visibility',
-      definition,
-      binding,
-      endpoint: connection.endpoint,
-      extra: {observation, evaluation},
-    });
-    const evidence = buildProofEvidence({
-      payload,
-      proofIds: OLTP_SCENARIO_A_VISIBILITY_PROOF_IDS,
-      evaluation,
-    });
-    return {evaluation, proofRecord: evidence.proofRecord, evidence};
-  } finally {
-    await closeTiDbAdapter(adapter);
-  }
-}
-
-async function executeTiDbPaymentCase({connection, binding, createMysqlConnection}) {
-  const definition = buildScenarioAPaymentCase();
-  const createConnection = mysqlConnectionFactoryOf(connection, createMysqlConnection);
-  const databaseName = TIDB_DATABASE_BY_CASE.payment;
-  const adapter = await openValidatedTiDbAdapter({
-    endpoint: connection.endpoint,
-    databaseName,
-    workload: OLTP_SCENARIO_A_PAYMENT_WORKLOAD,
-    expectedDatasetSha256: definition.identity.datasetSha256,
-    createConnection,
-    caseId: 'payment',
-  });
-  try {
-    const retryOutcome = await executePairedOltpTransactionWithRetry({
-      executeAttempt: () => adapter.executeTransaction(definition.identity.operation),
-    });
-    const observedState = await observeTiDbPaymentState({
-      endpoint: connection.endpoint,
-      databaseName,
-      operation: definition.identity.operation,
-      createConnection,
-    });
-    const observation = objectFreeze({
-      paidCents: toNumber(retryOutcome.result?.paidCents),
-      ...observedState,
-    });
-    const evaluation = evaluateScenarioAPaymentObservation(observation);
-    const payload = buildTiDbCasePayload({
-      evidenceId: 'tidb-scenario-a-payment',
-      definition,
-      binding,
-      endpoint: connection.endpoint,
-      extra: {
-        operation: definition.identity.operation,
-        retryEvidence: retryOutcome.evidence,
-        observation,
-        evaluation,
-      },
-    });
-    const evidence = buildProofEvidence({
-      payload,
-      proofIds: OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
-      evaluation,
-    });
-    return {evaluation, proofRecord: evidence.proofRecord, evidence};
-  } finally {
-    await closeTiDbAdapter(adapter);
-  }
-}
-
-function isTerminalRetryClassificationValid(error) {
-  const retryEvidence = ownField(error, 'oltpRetryEvidence');
-  if (!retryEvidence) return false;
-  if (toNumber(ownField(retryEvidence, 'retries')) !== 0 ||
-      toNumber(ownField(retryEvidence, 'attempts')) !== 1) {
-    return false;
-  }
-  const failures = ownField(retryEvidence, 'failures');
-  if (!arrayIsArray(failures) || failures.length !== 1) return false;
-  const failure = failures[0];
-  return ownField(failure, 'outcome') === OLTP_PAIRED_RETRY_OUTCOME.TERMINAL_FAILURE &&
-    ownField(failure, 'retryable') === false;
-}
-
-function finalizeFailureAtomicityEvaluation(baseEvaluation, terminalError) {
-  if (!terminalError || isTerminalRetryClassificationValid(terminalError)) return baseEvaluation;
-  const failures = copyArray(baseEvaluation.failures);
-  arrayPush(failures, 'terminal_retry_classification');
-  return objectFreeze({
-    ...baseEvaluation,
-    passed: false,
-    failures: objectFreeze(failures),
-    proofIds: objectFreeze([]),
-  });
-}
-
-async function executeTiDbFailureAtomicityCase({connection, binding, createMysqlConnection}) {
-  const definition = buildScenarioAFailureAtomicityCase();
-  const createConnection = mysqlConnectionFactoryOf(connection, createMysqlConnection);
-  const databaseName = TIDB_DATABASE_BY_CASE['failure-atomicity'];
-  const adapter = await openValidatedTiDbAdapter({
-    endpoint: connection.endpoint,
-    databaseName,
-    workload: OLTP_SCENARIO_A_FAILURE_ATOMICITY_WORKLOAD,
-    expectedDatasetSha256: definition.identity.datasetSha256,
-    createConnection,
-    caseId: 'failure-atomicity',
-  });
-  try {
-    const before = await observeTiDbOltpStateSnapshot({
-      endpoint: connection.endpoint,
-      databaseName,
-      createConnection,
-    });
-    let terminalError = null;
-    try {
-      await executePairedOltpTransactionWithRetry({
-        executeAttempt: () => adapter.executeTransaction(definition.identity.operation),
-      });
-    } catch (error) {
-      terminalError = error;
-    }
-    const after = await observeTiDbOltpStateSnapshot({
-      endpoint: connection.endpoint,
-      databaseName,
-      createConnection,
-    });
-    const observation = objectFreeze({
-      terminalFailureObserved: Boolean(terminalError),
-      errorMessage: terminalError ? errorText(terminalError) : '',
-      stateBeforeSha256: before.stateSha256,
-      stateAfterSha256: after.stateSha256,
-    });
-    const evaluation = finalizeFailureAtomicityEvaluation(
-      evaluateScenarioAFailureAtomicityObservation(observation),
-      terminalError,
-    );
-    const payload = buildTiDbCasePayload({
-      evidenceId: 'tidb-scenario-a-failure-atomicity',
-      definition,
-      binding,
-      endpoint: connection.endpoint,
-      extra: {
-        operation: definition.identity.operation,
-        retryEvidence: ownField(terminalError, 'oltpRetryEvidence') ?? null,
-        observation,
-        evaluation,
-      },
-    });
-    const evidence = buildProofEvidence({
-      payload,
-      proofIds: OLTP_SCENARIO_A_FAILURE_ATOMICITY_PROOF_IDS,
-      evaluation,
-    });
-    return {evaluation, proofRecord: evidence.proofRecord, evidence};
-  } finally {
-    await closeTiDbAdapter(adapter);
-  }
-}
-
-async function executeTiDbDurabilityBefore({connection, createMysqlConnection}) {
-  const definition = buildScenarioADurabilityCase();
-  const payment = buildScenarioAPaymentCase();
-  const createConnection = mysqlConnectionFactoryOf(connection, createMysqlConnection);
-  const databaseName = TIDB_DATABASE_BY_CASE[DURABILITY_CASE_ID];
-  const adapter = await openValidatedTiDbAdapter({
-    endpoint: connection.endpoint,
-    databaseName,
-    workload: definition.identity.workload,
-    expectedDatasetSha256: definition.identity.datasetSha256,
-    createConnection,
-    caseId: DURABILITY_CASE_ID,
-  });
-  try {
-    const retryOutcome = await executePairedOltpTransactionWithRetry({
-      executeAttempt: () => adapter.executeTransaction(definition.identity.operation),
-    });
-    const paymentBeforeRestart = await observeTiDbPaymentState({
-      endpoint: connection.endpoint,
-      databaseName,
-      operation: payment.identity.operation,
-      createConnection,
-    });
-    const stateBeforeRestart = await observeTiDbOltpStateSnapshot({
-      endpoint: connection.endpoint,
-      databaseName,
-      createConnection,
-    });
-    return {
-      paidCents: toNumber(retryOutcome.result?.paidCents),
-      retryEvidence: retryOutcome.evidence,
-      paymentBeforeRestart,
-      stateBeforeRestart,
-    };
-  } finally {
-    await closeTiDbAdapter(adapter, OLTP_ADAPTER_KEEP_DATASET);
-  }
-}
-
-async function executeTiDbDurabilityAfter({connection, binding, before, faultEvidence,
-  createMysqlConnection}) {
-  const definition = buildScenarioADurabilityCase();
-  const payment = buildScenarioAPaymentCase();
-  const createConnection = mysqlConnectionFactoryOf(connection, createMysqlConnection);
-  const databaseName = TIDB_DATABASE_BY_CASE[DURABILITY_CASE_ID];
-  try {
-    const paymentAfterRestart = await observeTiDbPaymentState({
-      endpoint: connection.endpoint,
-      databaseName,
-      operation: payment.identity.operation,
-      createConnection,
-    });
-    const stateAfterRestart = await observeTiDbOltpStateSnapshot({
-      endpoint: connection.endpoint,
-      databaseName,
-      createConnection,
-    });
-    const paymentObservation = objectFreeze({
-      paidCents: before.paidCents,
-      ...paymentAfterRestart,
-    });
-    const evaluation = evaluateScenarioADurabilityObservation({
-      commitAcknowledged: true,
-      paymentObservation,
-      stateBeforeRestartSha256: before.stateBeforeRestart.stateSha256,
-      stateAfterRestartSha256: stateAfterRestart.stateSha256,
-      faultEvidence,
-    });
-    const payload = buildTiDbCasePayload({
-      evidenceId: 'tidb-scenario-a-durability',
-      definition,
-      binding,
-      endpoint: connection.endpoint,
-      extra: {
-        operation: definition.identity.operation,
-        retryEvidence: before.retryEvidence ?? null,
-        paymentBeforeRestart: before.paymentBeforeRestart,
-        paymentAfterRestart,
-        stateBeforeRestartSha256: before.stateBeforeRestart.stateSha256,
-        stateAfterRestartSha256: stateAfterRestart.stateSha256,
-        faultEvidence,
-        evaluation,
-      },
-    });
-    const evidence = buildProofEvidence({
-      payload,
-      proofIds: OLTP_SCENARIO_A_DURABILITY_PROOF_IDS,
-      evaluation,
-    });
-    return {evaluation, proofRecord: evidence.proofRecord, evidence};
-  } finally {
-    await dropTiDbDatabase(connection.endpoint, databaseName, createConnection);
-  }
-}
-
-const TIDB_CASE_EXECUTORS = objectFreeze({
-  'visibility': executeTiDbVisibilityCase,
-  'payment': executeTiDbPaymentCase,
-  'failure-atomicity': executeTiDbFailureAtomicityCase,
-});
 
 async function executeRemoteTiDbCase(req, overrides) {
   const caseId = ownField(req, 'caseId');
@@ -1267,9 +901,10 @@ async function advanceCaseTarget(beforeCase, caseId, current) {
 async function runTiDbSemanticGate(input) {
   let target = {connection: input.connection, binding: input.binding};
   const cases = [];
+  const executedCaseIds = input.executedCaseIds || TIDB_EXECUTED_CASE_IDS;
   for (let index = 0; index < OLTP_SCENARIO_A_PROOF_CASES.length; index += 1) {
     const proofCase = OLTP_SCENARIO_A_PROOF_CASES[index];
-    if (!arrayIncludes(TIDB_EXECUTED_CASE_IDS, proofCase.id)) {
+    if (!arrayIncludes(executedCaseIds, proofCase.id)) {
       arrayPush(cases, objectFreeze({
         caseId: proofCase.id,
         proofIds: proofCase.proofIds,
@@ -1415,6 +1050,7 @@ function createSemanticGateStage({journey, tidbJourney = null, redeploy, sshRun,
       beforeCase,
       restartProduct,
       persistentStorage: hasPersistentStorage(current),
+      ...(run.executedCaseIds ? {executedCaseIds: run.executedCaseIds} : {}),
     };
     let gate;
     if (run.system === SYSTEM.TIDB_TIKV) {
@@ -1442,6 +1078,9 @@ function createSemanticGateStage({journey, tidbJourney = null, redeploy, sshRun,
 }
 
 export {
+  TIDB_CASE_EXECUTORS,
+  TIDB_DATABASE_BY_CASE,
+  TIDB_EXECUTED_CASE_IDS,
   buildObservedFaultEvidence,
   createSemanticGateStage,
   executeRemoteGateAction,

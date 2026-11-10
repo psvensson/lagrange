@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2285,
+    "unit": 2286,
     "integration": 124,
     "bootstrap": 223,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2639,
-  "digest": "fnv1a32-4d006954",
+  "censusSize": 2640,
+  "digest": "fnv1a32-f175d84c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1023,6 +1023,7 @@
     "test/distributed/harness/__tests__/table-distribution-helpers-read-path.test.js": "unit",
     "test/distributed/harness/__tests__/table-distribution-helpers-scenario-policy.test.js": "unit",
     "test/distributed/harness/__tests__/three-node-seed-rebalance-scenario.test.js": "unit",
+    "test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js": "unit",
     "test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js": "unit",
     "test/distributed/harness/__tests__/topology-failure-gate-runner.test.js": "unit",
     "test/distributed/harness/__tests__/trace-artifact-recorder.test.js": "unit",

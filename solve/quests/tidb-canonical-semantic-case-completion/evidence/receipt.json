@@ -1,0 +1,60 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "tidb-canonical-semantic-case-completion",
+  "status": "pass",
+  "testFileDigests": {
+    "test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js": "aee63d567b22ee8c22def467afb792d3775c1ec1c7507cf9d66427adc4c7c603"
+  },
+  "generatedAt": "2026-11-10T15:00:16.517Z",
+  "receipts": [
+    {
+      "id": "canonical-case-inventory",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^canonical-case-inventory:.*$\" test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js",
+      "detail": "All 9 canonical cases from OLTP_SCENARIO_A_PROOF_CASES are wired to TiDB and cover all 31 required system proof IDs.",
+      "testFile": "test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js"
+    },
+    {
+      "id": "all-required-cases-executed",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^all-required-cases-executed:.*$\" test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js",
+      "detail": "Complete TiDB Scenario A journey executes all 9 canonical cases and passes with all 31 proof IDs awarded.",
+      "testFile": "test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js"
+    },
+    {
+      "id": "native-product-results-and-independent-effects",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^native-product-results-and-independent-effects:.*$\" test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js",
+      "detail": "The 5 missing cases execute natively against TiDB via MySQL client and verify independent query and storage effects.",
+      "testFile": "test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js"
+    },
+    {
+      "id": "durability-restart-evidence",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^durability-restart-evidence:.*$\" test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js",
+      "detail": "Durability restart targets a TiKV data-bearing replica, verifies incarnation advancement, preserves storage continuity, and checks post-restart state.",
+      "testFile": "test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js"
+    },
+    {
+      "id": "missing-skipped-cases-not-credited",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^missing-skipped-cases-not-credited:.*$\" test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js",
+      "detail": "Skipped or unexecuted cases (such as durability without persistent storage or restart capability) receive zero proof credit and leave the gate incomplete.",
+      "testFile": "test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js"
+    },
+    {
+      "id": "deployment-bound-claim-admission",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^deployment-bound-claim-admission:.*$\" test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js",
+      "detail": "Complete 9-case TiDB gate evidence binds to the deployment and is admitted by benchmark-claim-admission as valid-observed.",
+      "testFile": "test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/tidb-canonical-semantic-case-completion.js --check-verification",
+      "detail": "Independent verification approval recorded in quest log.",
+      "testFile": null
+    }
+  ]
+}

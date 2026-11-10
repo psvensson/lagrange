@@ -9,7 +9,7 @@
     "cli-tooling": 99,
     "control-plane": 237,
     "convergence-topology": 80,
-    "distributed-harness": 214,
+    "distributed-harness": 215,
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 281,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2639,
-  "digest": "fnv1a32-a82048d9",
+  "censusSize": 2640,
+  "digest": "fnv1a32-97b4647d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ddc6ff11",
+  "observationDigest": "fnv1a32-21de62fa",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1042,6 +1042,7 @@
     "test/distributed/harness/__tests__/table-distribution-helpers-read-path.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/table-distribution-helpers-scenario-policy.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/three-node-seed-rebalance-scenario.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/topology-failure-gate-runner.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/trace-artifact-recorder.test.js": "distributed-harness",
@@ -8715,6 +8716,46 @@
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json"
+      ]
+    },
+    "test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js": {
+      "files": [
+        "Dockerfile",
+        "README.md",
+        "data/tidb-comparison/admitted-lab-measurements.json",
+        "data/tidb-comparison/history.ndjson",
+        "data/tidb-comparison/invalidations.ndjson",
+        "data/tidb-comparison/multi-system-matrix.json",
+        "data/tidb-comparison/progress-summary.json",
+        "data/tidb-comparison/raw-observations.ndjson",
+        "docs/benchmarks/README.md",
+        "docs/benchmarks/tidb-comparison-progress.html",
+        "docs/benchmarks/tidb-comparison-progress.md",
+        "docs/benchmarks/tidb-comparison-progress.svg",
+        "docs/benchmarks/tidb-scenario-b-comparison.svg",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/raw-observation-campaign-specs.js",
+        "test/distributed/harness/scaleout-series-experiments.js"
+      ],
+      "directories": [
+        "data/tidb-comparison",
+        "data/tidb-comparison/forensic",
+        "docs/benchmarks",
+        "src"
+      ],
+      "env": [
+        "LAGRANGE_SCENARIO_A_CONFLICT_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_CONTENTION_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_DELIVERY_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_FAILURE_ATOMICITY_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_ORDER_STATUS_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_PAYMENT_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_STOCK_LEVEL_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_VISIBILITY_EVIDENCE_PATH"
       ]
     },
     "test/distributed/harness/__tests__/topology-failure-gate-matrix.test.js": {

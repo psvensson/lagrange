@@ -28,13 +28,19 @@ authorizes:
   - src/bootstrap/shared
   - src/control-plane/owners
   - src/query/pg/postgres-wire-adapter.js
+  - src/query/parser-constants.js
+  - src/query/query-constants.js
   - src/query/service-lifecycle-sql-contract.js
+  - src/query/sql-parser.js
   - src/query/sql-query-engine-service-lifecycle-execution.js
+  - src/query/sql-query-engine-statement-execution.js
+  - src/query/sql-query-engine-write-execution.js
   - src/runtime/pgwire-result-mapper.js
   - src/wasm-service
   - data/tidb-comparison
   - scripts/checks
   - scripts/lab
+  - scripts/quest-evidence
   - scripts/check-complexity.js
   - scripts/check-current-capabilities.js
   - scripts/check-unused-exports.js
@@ -172,6 +178,12 @@ three-node formation does not certify this epic's five-node comparisons.
   rewritten or promoted to real compiled/multi-host observations.
 
 
+- 2026-11-10: Scope widened (R16, recorded): `scripts/quest-evidence` (quest receipt
+  generators for `tidb-canonical-semantic-case-completion` and
+  `benchmark-cohort-preserving-dataset-reset`) and `src/query/{parser-constants,query-constants,sql-parser,sql-query-engine-statement-execution,sql-query-engine-write-execution}.js`
+  (canonical `TRUNCATE TABLE` product capability for cohort-preserving dataset reset in C1)
+  join `authorizes`. Decided by `tidb-canonical-semantic-case-completion` and
+  `benchmark-cohort-preserving-dataset-reset` at landing.
 - 2026-11-10: Registered C1/C2 as bounded P4 continuations after source review of
   `947fbe658ebb2efe993900b672ded51d5610dbcb` and the supplied independent report.
   Preserve deployment-bound refusal, required durability restart and unexecuted

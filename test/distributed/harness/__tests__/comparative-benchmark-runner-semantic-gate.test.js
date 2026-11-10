@@ -74,6 +74,12 @@ import {
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
 
 const stringToUpperCase = Function.call.bind(String.prototype.toUpperCase);
+const TIDB_PROBE_PARTIAL_CASE_IDS = Object.freeze([
+  'visibility',
+  'payment',
+  'failure-atomicity',
+  'durability',
+]);
 const IMAGE = `sha256:${'a'.repeat(64)}`;
 const STATEMENT_VERB = /^\s*([A-Za-z]+)/u;
 const SNAPSHOT_PATTERN = /^SELECT ([a-z_, ]+) FROM ([a-z_]+) ORDER BY ([a-z_, ]+)$/u;
@@ -802,7 +808,7 @@ test('Item 4: TiDB gate probe claims only canonical case invariants, stays incom
     redeploy: async () => smokeDeployment,
   });
   const smokeResult = await smokeStage({
-    run: {runId: 'r-tidb-smoke', system: 'tidb-tikv'},
+    run: {runId: 'r-tidb-smoke', system: 'tidb-tikv', executedCaseIds: TIDB_PROBE_PARTIAL_CASE_IDS},
     manifest: {campaignId: 'camp-tidb'},
     deployment: smokeDeployment,
   });
@@ -838,6 +844,7 @@ test('Item 4: TiDB gate probe claims only canonical case invariants, stays incom
     binding: smokeResult.gate.binding,
     persistentStorage: true,
     restartProduct: null,
+    executedCaseIds: TIDB_PROBE_PARTIAL_CASE_IDS,
     createMysqlConnection: createTransactionalOltpStore().createMysqlConnection,
   });
   assert.equal(noRestartGate.status, 'incomplete');
@@ -873,7 +880,7 @@ async () => {
     redeploy: async () => persistentDeployment,
   });
   const localResult = await stage({
-    run: {runId: 'r-tidb-pub', system: 'tidb-tikv'},
+    run: {runId: 'r-tidb-pub', system: 'tidb-tikv', executedCaseIds: TIDB_PROBE_PARTIAL_CASE_IDS},
     manifest: {campaignId: 'camp-tidb'},
     deployment: persistentDeployment,
   });
@@ -927,7 +934,7 @@ async () => {
     redeploy: async () => remoteDeployment,
   });
   const remoteResult = await remoteStage({
-    run: {runId: 'r-tidb-remote', system: 'tidb-tikv'},
+    run: {runId: 'r-tidb-remote', system: 'tidb-tikv', executedCaseIds: TIDB_PROBE_PARTIAL_CASE_IDS},
     manifest: {campaignId: 'camp-tidb'},
     deployment: remoteDeployment,
   });
@@ -1012,6 +1019,7 @@ test('Item 4: negative controls fail closed for every claimed TiDB canonical inv
         binding,
         persistentStorage: false,
         restartProduct: null,
+        executedCaseIds: TIDB_PROBE_PARTIAL_CASE_IDS,
         createMysqlConnection: engine.createMysqlConnection,
       });
       assert.equal(gate.status, 'failed', `${control.label}: gate must fail`);
@@ -1046,7 +1054,7 @@ test('Item 4: negative controls fail closed for every claimed TiDB canonical inv
       redeploy: async () => deployment,
     });
     const lostCommit = await stage({
-      run: {runId: 'r-tidb-loss', system: 'tidb-tikv'},
+      run: {runId: 'r-tidb-loss', system: 'tidb-tikv', executedCaseIds: TIDB_PROBE_PARTIAL_CASE_IDS},
       manifest: {campaignId: 'camp-neg'},
       deployment,
     });
