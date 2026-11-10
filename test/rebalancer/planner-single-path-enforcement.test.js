@@ -7,6 +7,7 @@ import {
   EntityType,
   TriggerType,
 } from '../../src/rebalancer/unified-rebalancer.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -66,7 +67,7 @@ function createTestRebalancer({
   const dispatchedMoves = [];
   const systemTableCache = createMockCache(nodes, services);
 
-  const rebalancer = new UnifiedRebalancer({
+  const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
     entityId: 'partition-1',
     entityType: EntityType.PARTITION,
     nodeId: 'node-1',
@@ -133,7 +134,7 @@ function createTestRebalancer({
         };
       },
     },
-  });
+  }));
 
   rebalancer.initialize();
   rebalancer.isLeader = true;

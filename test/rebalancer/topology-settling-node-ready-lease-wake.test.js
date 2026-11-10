@@ -43,6 +43,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 const SEED_NODE_ID = 'node-seed';
 const JOINER_NODE_ID = 'node-joiner';
@@ -159,6 +160,7 @@ function buildReadinessSnapshot(cache, nodeId) {
 }
 
 function createRebalancer(cache, partitionId) {
+  const ownerClock = () => 1_800_000_000_000;
   const rebalancer = new UnifiedRebalancer({
     entityId: partitionId,
     entityType: EntityType.PARTITION,
@@ -186,11 +188,11 @@ function createRebalancer(cache, partitionId) {
       },
     },
     sqlQueryEngine: {executeQuery: async () => ({success: true, rows: []})},
-    controlPlaneReadinessService: {
+    controlPlaneReadinessService: partialReadinessFake({
       getNodeReadinessSync: (nodeId) =>
         buildReadinessSnapshot(cache, nodeId),
-    },
-    nowFn: () => 1_800_000_000_000,
+    }, ownerClock),
+    nowFn: ownerClock,
     randomSource: {random: () => 0},
   });
   rebalancer.initialize();

@@ -1,4 +1,9 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
+import {readWiredCollaborator} from './control-plane-readiness-collaborators.js';
+import {
+  CONTROL_PLANE_READINESS_COLLABORATOR as COLLABORATOR,
+  CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED as UNWIRED,
+} from './control-plane-readiness-constants.js';
 import {buildNodeTrustState} from './node-trust-state.js';
 import {resolvePublishedActiveNodeIds} from
   './active-node-publication-snapshots.js';
@@ -27,9 +32,8 @@ const TRUST_GRACE_KEY_FIELDS = Object.freeze([
 ]);
 
 function readTrustCacheRows(service, tableName) {
-  return typeof service.systemTableCache?.getAll === 'function' ?
-    service.systemTableCache.getAll(tableName) || [] :
-    [];
+  const cache = readWiredCollaborator(service, COLLABORATOR.SYSTEM_TABLE_CACHE);
+  return cache === UNWIRED ? [] : cache.getAll(tableName) || [];
 }
 
 function readTrustCacheWatermark(service, tableName, methodName) {
@@ -241,12 +245,10 @@ const controlPlaneReadinessNodeMethods = {
     const serviceRows = await this.readAllNodeServiceRows(options);
     const bulkNodeRowsAreAuthoritative =
       options.allowAuthoritativeRefresh === true &&
-      this.nodesOwner &&
-      typeof this.nodesOwner.listNodes === 'function';
+      readWiredCollaborator(this, COLLABORATOR.NODES_OWNER) !== UNWIRED;
     const bulkServiceRowsAreAuthoritative =
       options.allowAuthoritativeRefresh === true &&
-      this.servicesOwner &&
-      typeof this.servicesOwner.listServices === 'function';
+      readWiredCollaborator(this, COLLABORATOR.SERVICES_OWNER) !== UNWIRED;
     const nodeIds = new Set();
     for (const nodeRow of nodeRows) {
       const nodeId = nodeRow?.[COLUMN.NODE_ID] || null;
@@ -256,7 +258,7 @@ const controlPlaneReadinessNodeMethods = {
     }
     if (
       serviceRows.length > 0 ||
-      typeof this.systemTableCache?.getAll === 'function'
+      readWiredCollaborator(this, COLLABORATOR.SYSTEM_TABLE_CACHE) !== UNWIRED
     ) {
       const nodeEndpointRows =
         readCurrentEndpointRows(this.systemTableCache, TABLES.NODE_ENDPOINTS);
@@ -294,14 +296,8 @@ const controlPlaneReadinessNodeMethods = {
   },
 
   getAllNodeReadinessSync(options = {}) {
-    const nodeRows =
-      typeof this.systemTableCache?.getAll === 'function' ?
-        this.systemTableCache.getAll(TABLES.NODES) || [] :
-        [];
-    const serviceRows =
-      typeof this.systemTableCache?.getAll === 'function' ?
-        this.systemTableCache.getAll(TABLES.SERVICES) || [] :
-        [];
+    const nodeRows = readTrustCacheRows(this, TABLES.NODES);
+    const serviceRows = readTrustCacheRows(this, TABLES.SERVICES);
     const nodeEndpointRows =
       readCurrentEndpointRows(this.systemTableCache, TABLES.NODE_ENDPOINTS);
     const nodeIds = new Set();

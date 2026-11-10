@@ -34,6 +34,7 @@ import {
 } from '../query/sql-query-engine-test-support.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -228,7 +229,7 @@ test('the rebalancer currentReplicas view uses exact canonical runtime IDs',
       get: () => null,
       getAll: () => [],
     };
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
       entityId: RUNTIME_ENTITY_ID,
       entityType: 'runtime_service',
       systemTableCache: cache,
@@ -237,7 +238,7 @@ test('the rebalancer currentReplicas view uses exact canonical runtime IDs',
       nodeId: 'node-a',
       messageRouter: {},
       rebalanceCoordinator: {},
-    });
+    }));
     const replicas = rebalancer.getCurrentReplicas();
     t.same(
       replicas.map((row) => row.service_id),

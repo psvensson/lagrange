@@ -1,4 +1,5 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 function findPriorityRecoveryDecisionSnapshot(
   planningSnapshot,
   partitionId,
@@ -46,7 +47,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
     'RebalanceCoordinator does not let spread-satisfied priority REPLACE rows ' +
     'monopolize the priority add budget',
     async (t) => {
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -74,7 +75,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       coordinator.config.maxConcurrentAdds = 1;
 
@@ -154,7 +155,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
     'RebalanceCoordinator does not let combined spread-satisfied priority ' +
     'REPLACE rows monopolize the priority add budget',
     async (t) => {
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -182,7 +183,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       coordinator.config.maxConcurrentAdds = 1;
 
@@ -290,7 +291,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
     'before falling back to planning snapshots for grouped priority add budget',
     async (t) => {
       const spreadSatisfiedInFlightState = 'spread_satisfied_in_flight';
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -318,7 +319,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       coordinator.config.maxConcurrentAdds = 1;
 
@@ -401,7 +402,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       const staleOperationId = 'op-priority-planning-spread-satisfied';
       const stalePartitionId = 'sql_transactions-p1';
       const nextPartitionId = 'sql_write_operations-p1';
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -429,7 +430,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       coordinator.config.maxConcurrentAdds = 1;
 
@@ -698,7 +699,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       const stalePartitionId = 'sql_transaction_participants-p1';
       const blockedPartitionId = 'sql_write_operations-p1';
       const staleOperationId = 'op-priority-admission-released';
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -726,7 +727,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       coordinator.config.maxConcurrentAdds = 1;
 
@@ -836,7 +837,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         })]),
         missingPartitionIds: Object.freeze([blockedPartitionId]),
       });
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: pressuredNodeId,
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -867,7 +868,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       coordinator.config.maxConcurrentAdds = maxConcurrentAdds;
       coordinator.getPriorityRecoveryAdmissionPlan = () =>
@@ -917,7 +918,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       const stalePartitionId = 'sql_transaction_participants-p1';
       const requestedPartitionId = 'sql_transactions-p1';
       const staleOperationId = 'op-priority-stale-yields-to-next';
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -945,7 +946,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       coordinator.config.maxConcurrentAdds = 1;
 

@@ -1,5 +1,12 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {
+  readCacheApplyChangeChannel, readWiredCollaborator,
+} from './control-plane-readiness-collaborators.js';
+import {
+  CONTROL_PLANE_READINESS_COLLABORATOR as COLLABORATOR,
+  CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED as UNWIRED,
+} from './control-plane-readiness-constants.js';
+import {
   isStoredNodeLivenessCurrent,
   recordNodeLivenessSourceChange,
 } from './control-plane-readiness-node-liveness-methods.js';
@@ -41,13 +48,12 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    * @private
    */
   getServicesTableMutationVersionForSnapshotReuse() {
-    if (
-      typeof this.systemTableCache?.getTableMutationVersion !== 'function'
-    ) {
+    const cache = readWiredCollaborator(this, COLLABORATOR.SYSTEM_TABLE_CACHE);
+    if (cache === UNWIRED) {
       return null;
     }
     try {
-      return this.systemTableCache.getTableMutationVersion(TABLES.SERVICES);
+      return cache.getTableMutationVersion(TABLES.SERVICES);
     } catch {
       return null;
     }
@@ -66,9 +72,6 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    * @private
    */
   hasStoredSnapshotLocalQueryTransportDrift(nodeId, storedSnapshot) {
-    if (typeof this.getLocalQueryTransportEvidence !== 'function') {
-      return false;
-    }
     const liveEvidence = this.getLocalQueryTransportEvidence(nodeId);
     if (!liveEvidence || typeof liveEvidence !== 'object') {
       return false;
@@ -509,33 +512,32 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    * @private
    */
   subscribeToCacheChanges() {
-    if (
-      this.isShutDown === true ||
-      !this.systemTableCache ||
-      typeof this.systemTableCache.onCacheChange !== 'function'
-    ) {
+    const cache = readWiredCollaborator(this, COLLABORATOR.SYSTEM_TABLE_CACHE);
+    if (this.isShutDown === true || cache === UNWIRED) {
       return;
     }
     this.cacheChangeListener = (tableName, operation, record, metadata) => {
       this.handleCacheChange(tableName, operation, record, metadata);
     };
-    this.systemTableCache.onCacheChange(this.cacheChangeListener);
-    if (typeof this.systemTableCache.onCacheApplyChange === 'function') {
-      // Apply-time semantic classification: the readiness-planning identity
-      // must never report an already-applied source revision as unclassified
-      // pending the deferred notification turn. The classification is
-      // revision-keyed and idempotent, so the deferred delivery below
-      // re-observes the same revision as a duplicate and changes nothing.
-      // The apply channel intentionally carries the classification step
-      // only: liveness/capacity semantic recording and readiness
-      // invalidation remain owned by the deferred change notification.
-      this.cacheApplyChangeListener =
-        (tableName, operation, record, metadata) => {
-          this.classifyCacheChangeForPlanning(tableName, operation, record,
-            metadata);
-        };
-      this.systemTableCache.onCacheApplyChange(this.cacheApplyChangeListener);
+    cache.onCacheChange(this.cacheChangeListener);
+    const applyChannel = readCacheApplyChangeChannel(cache);
+    if (applyChannel === UNWIRED) {
+      return;
     }
+    // Apply-time semantic classification: the readiness-planning identity
+    // must never report an already-applied source revision as unclassified
+    // pending the deferred notification turn. The classification is
+    // revision-keyed and idempotent, so the deferred delivery below
+    // re-observes the same revision as a duplicate and changes nothing.
+    // The apply channel intentionally carries the classification step
+    // only: liveness/capacity semantic recording and readiness
+    // invalidation remain owned by the deferred change notification.
+    this.cacheApplyChangeListener =
+      (tableName, operation, record, metadata) => {
+        this.classifyCacheChangeForPlanning(tableName, operation, record,
+          metadata);
+      };
+    applyChannel.onCacheApplyChange(this.cacheApplyChangeListener);
   },
 
   /**
@@ -545,11 +547,9 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    * @private
    */
   detachCacheApplyChangeListener(systemTableCache) {
-    if (
-      this.cacheApplyChangeListener &&
-      typeof systemTableCache?.offCacheApplyChange === 'function'
-    ) {
-      systemTableCache.offCacheApplyChange(this.cacheApplyChangeListener);
+    const applyChannel = readCacheApplyChangeChannel(systemTableCache);
+    if (this.cacheApplyChangeListener && applyChannel !== UNWIRED) {
+      applyChannel.offCacheApplyChange(this.cacheApplyChangeListener);
     }
     this.cacheApplyChangeListener = null;
   },

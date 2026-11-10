@@ -9,11 +9,7 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
-import {
-  ControlPlaneReadinessService,
-  MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,
-} from
-  '../../src/control-plane/control-plane-readiness-service.js';
+import {MEMBERSHIP_PUBLICATION_PLANNING_SOURCE} from '../../src/control-plane/control-plane-readiness-service.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {AuthoritativeControlPlaneView} from
   '../../src/control-plane/authoritative-control-plane-view.js';
@@ -57,6 +53,10 @@ import {
 } from './publication-readiness-churn-liveness-test-support.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
+import {
+  createReadinessServiceForTest,
+  readinessCollaboratorFakes,
+} from '../helpers/readiness-service-fixture.js';
 test('readiness planning dependency registry is complete and explicit',
   async (t) => {
     t.same(
@@ -136,10 +136,20 @@ test('readiness planning inputs reject hostile data and ignore mutated ' +
     now: () => NOW_MS,
     scheduleDrainFn: (callback) => scheduled.push(callback),
   });
-  const replacementNodesOwner = {listNodes: async () => []};
-  const syncReadiness = new ControlPlaneReadinessService({
+  const syncCache = createProductionShapedCache();
+  // A replacement owner is validated when wired; the members this test does
+  // not exercise answer the cache rows (the reader's answer before the owner
+  // interface was validated: no such member meant the cache).
+  const replacementNodesOwner = {
+    listNodes: async () => [],
+    listNodesFromCache: async () =>
+      ({success: true, rows: syncCache.getAll(TABLES.NODES)}),
+    getNode: async (nodeId) => syncCache.get(TABLES.NODES, nodeId),
+    getNodeFromCache: async (nodeId) => syncCache.get(TABLES.NODES, nodeId),
+  };
+  const syncReadiness = createReadinessServiceForTest({
     nodeId: 'node-0',
-    systemTableCache: createProductionShapedCache(),
+    systemTableCache: syncCache,
     readinessPlanningScheduleDrainFn: (callback) => scheduled.push(callback),
   });
   const original = {
@@ -238,7 +248,7 @@ test('readiness planning inputs reject hostile data and ignore mutated ' +
 test('readiness churn never performs heavy builds from routing callers',
   async (t) => {
     const cache = createProductionShapedCache();
-    const readiness = new ControlPlaneReadinessService({
+    const readiness = createReadinessServiceForTest({
       nodeId: 'node-0',
       systemTableCache: cache,
       now: () => NOW_MS,
@@ -387,7 +397,7 @@ test('versioned readiness owner is latest-wins, fair, and macrotask bounded',
     let nowMs = NOW_MS;
     let timerSentinel = 0;
     let transportState = 'connected';
-    const readiness = new ControlPlaneReadinessService({
+    const readiness = createReadinessServiceForTest({
       nodeId: 'node-0',
       systemTableCache: cache,
       now: () => nowMs,
@@ -459,7 +469,7 @@ test('versioned readiness owner is latest-wins, fair, and macrotask bounded',
     );
 
     const finalSnapshot = readiness.getNodeReadinessSync('node-0');
-    const reference = new ControlPlaneReadinessService({
+    const reference = createReadinessServiceForTest({
       nodeId: 'node-0',
       systemTableCache: cache,
       now: () => nowMs,
@@ -591,7 +601,7 @@ test('full production-composition storm closes cache, owner-RPC, dependency, ' +
   };
   let cdcIntegrationService = null;
   let internalRpcActive = false;
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: 'node-0',
     systemTableCache: activeCache,
     now: () => NOW_MS,
@@ -764,7 +774,7 @@ test('full production-composition storm closes cache, owner-RPC, dependency, ' +
   readiness.getNodeReadinessSync('node-0');
   readiness.recordReadinessPlanningSnapshotChange('node-0');
   readiness.recordReadinessPlanningRecoveryEpochChange('node-0');
-  readiness.syncOwnerDependencies({
+  readiness.syncOwnerDependencies(readinessCollaboratorFakes({
     nodeLifecycleStateMachine: replacementLifecycleOwner,
     storageAccountingService: new StorageCapacityAccountingService({
       systemTableCache: activeCache,
@@ -784,12 +794,13 @@ test('full production-composition storm closes cache, owner-RPC, dependency, ' +
     }),
     messageRouter: {...messageRouter},
     cdcIntegrationService: {...cdcIntegrationService},
-  });
+  }));
 
   const replacementCache = createProductionShapedCache();
   installOwnerRoute(replacementCache);
   activeCache = replacementCache;
-  readiness.syncOwnerDependencies({systemTableCache: replacementCache});
+  readiness.syncOwnerDependencies(
+    readinessCollaboratorFakes({systemTableCache: replacementCache}));
   executor.systemCache = replacementCache;
   membershipOwner.systemTableCache = replacementCache;
   transportState = 'disconnected';
@@ -858,7 +869,7 @@ test('full production-composition storm closes cache, owner-RPC, dependency, ' +
     'the final completion is reusable by the ordinary public read contract',
   );
   const finalSnapshot = readiness.getNodeReadinessSync('node-0');
-  const freshOwner = new ControlPlaneReadinessService({
+  const freshOwner = createReadinessServiceForTest({
     nodeId: 'node-0',
     systemTableCache: activeCache,
     now: () => NOW_MS,
@@ -923,7 +934,7 @@ test('mid-build changes and identical-counter owner swaps cannot publish fresh',
     const cache = createProductionShapedCache();
     const scheduled = [];
     const connectedNodeIds = new Set();
-    const readiness = new ControlPlaneReadinessService({
+    const readiness = createReadinessServiceForTest({
       nodeId: 'node-0',
       systemTableCache: cache,
       now: () => NOW_MS,
@@ -987,10 +998,13 @@ test('mid-build changes and identical-counter owner swaps cannot publish fresh',
       [COLUMN.NODE_ID]: 'node-1',
       [COLUMN.STATUS]: NODE_STATE.JOINING,
     });
-    readiness.syncOwnerDependencies({systemTableCache: replacementCache});
-    readiness.syncOwnerDependencies({membershipPublicationService: {
-      getLatestClusterPublicationSync: () => null,
-    }});
+    readiness.syncOwnerDependencies(
+      readinessCollaboratorFakes({systemTableCache: replacementCache}));
+    readiness.syncOwnerDependencies(readinessCollaboratorFakes({
+      membershipPublicationService: {
+        getLatestClusterPublicationSync: () => null,
+      },
+    }));
     await readiness.getNodeReadiness('node-1');
     connectedNodeIds.add('node-1');
     const after = readiness.getReadinessPlanningDiagnostics().currentToken;
@@ -1032,9 +1046,26 @@ test('mid-build changes and identical-counter owner swaps cannot publish fresh',
       },
     };
     const capacityReplacementOrder = [];
+    // Each replacement owner is validated when wired. The owner members
+    // this test does not exercise answer what the reader answered before
+    // the owner interface was validated (no such member meant the service's
+    // own cache read); the fixture completes the other collaborators.
     const replacementDependencies = {
-      nodesOwner: {listNodes: async () => []},
-      servicesOwner: {listServices: async () => []},
+      nodesOwner: {
+        listNodes: async () => [],
+        listNodesFromCache: async () =>
+          ({success: true, rows: readiness.getNodeRows()}),
+        getNode: async (nodeId) => readiness.getNodeRow(nodeId),
+        getNodeFromCache: async (nodeId) => readiness.getNodeRow(nodeId),
+      },
+      servicesOwner: {
+        listServices: async () => [],
+        listServicesFromCache: async () =>
+          ({success: true, rows: readiness.getNodeRows().flatMap(
+            (row) => readiness.getNodeServiceRows(row[COLUMN.NODE_ID]))}),
+        listServicesForNodeFromCache: async (nodeId) =>
+          ({success: true, rows: readiness.getNodeServiceRows(nodeId)}),
+      },
       messageRouter: {
         getConnectionState: () => 'connected',
         getConnectedNodes: () => new Set(['node-1']),
@@ -1074,7 +1105,8 @@ test('mid-build changes and identical-counter owner swaps cannot publish fresh',
       },
       localClusterIncarnationFenceProvider: () => null,
     };
-    readiness.syncOwnerDependencies(replacementDependencies);
+    readiness.syncOwnerDependencies(
+      readinessCollaboratorFakes(replacementDependencies));
     const dependencyToken =
       readiness.getReadinessPlanningDiagnostics().currentToken;
     for (const ownerName of Object.keys(replacementDependencies)) {
@@ -1097,9 +1129,9 @@ test('mid-build changes and identical-counter owner swaps cannot publish fresh',
         return () => capacityReplacementOrder.push('unsubscribe-second');
       },
     };
-    readiness.syncOwnerDependencies({
+    readiness.syncOwnerDependencies(readinessCollaboratorFakes({
       storageAccountingService: secondCapacityOwner,
-    });
+    }));
     t.same(capacityReplacementOrder.slice(2), [
       'unsubscribe-first',
       'configure-second',
@@ -1152,7 +1184,7 @@ test('mutable lifecycle, capacity, CDC, and heartbeat inputs veto completed ' +
       consecutiveFailures: 0,
     }),
   };
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: 'node-0',
     systemTableCache: cache,
     now: () => NOW_MS,
@@ -1218,7 +1250,7 @@ test('mutable lifecycle, capacity, CDC, and heartbeat inputs veto completed ' +
 test('every readiness dimension participates in snapshot generation',
   async (t) => {
     const cache = createProductionShapedCache();
-    const readiness = new ControlPlaneReadinessService({
+    const readiness = createReadinessServiceForTest({
       nodeId: 'node-0',
       systemTableCache: cache,
       now: () => NOW_MS,
@@ -1251,7 +1283,7 @@ test('node deletion and option changes cannot rebase a stale positive snapshot',
   async (t) => {
     const cache = createProductionShapedCache();
     const scheduled = [];
-    const readiness = new ControlPlaneReadinessService({
+    const readiness = createReadinessServiceForTest({
       nodeId: 'node-0',
       systemTableCache: cache,
       now: () => NOW_MS,
@@ -1338,7 +1370,7 @@ test('completion wakes isolate listeners and transient build failure retries',
   async (t) => {
     const cache = createProductionShapedCache();
     const scheduled = [];
-    const readiness = new ControlPlaneReadinessService({
+    const readiness = createReadinessServiceForTest({
       nodeId: 'node-0',
       systemTableCache: cache,
       now: () => NOW_MS,
@@ -1408,7 +1440,7 @@ test('formation work is priority-ordered and shutdown cancels pending builds',
       [COLUMN.STATUS]: NODE_STATE.JOINING,
     });
     const scheduled = [];
-    const readiness = new ControlPlaneReadinessService({
+    const readiness = createReadinessServiceForTest({
       nodeId: 'node-0',
       systemTableCache: cache,
       now: () => NOW_MS,

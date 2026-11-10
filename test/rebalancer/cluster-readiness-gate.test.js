@@ -16,6 +16,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CLUSTER_READINESS_TIMEOUT_MS,
 } from '../../src/constants/cdc-lifecycle-constants.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -117,7 +118,7 @@ function createRebalancerWithSignal(signal, options = {}) {
     options.nodes || [],
     options.services || [],
   );
-  return new UnifiedRebalancer({
+  return new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
     entityId: options.entityId || 'partition-1',
     entityType: options.entityType || EntityType.PARTITION,
     nodeId: options.nodeId || 'node-1',
@@ -127,7 +128,7 @@ function createRebalancerWithSignal(signal, options = {}) {
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator: createMockCoordinator(),
     clusterReadinessSignal: signal,
-  });
+  }));
 }
 
 test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
@@ -362,7 +363,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
       const customPartitionServices = new Map([['p1', {}]]);
       const customMessageGroupServices = new Map([['mg1', {}]]);
 
-      const rebalancer = new UnifiedRebalancer({
+      const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
         entityId: 'partition-1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
@@ -375,7 +376,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
         partitionServices: customPartitionServices,
         messageGroupServices: customMessageGroupServices,
         requirePropagationLeader: false,
-      });
+      }));
 
       rebalancer.initialize();
       rebalancer.setLeader(true);

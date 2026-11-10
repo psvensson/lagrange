@@ -53,6 +53,7 @@ import {REBALANCE_COORDINATOR_EVENT} from '../../src/rebalancer/rebalancer-const
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
 import {createTestCoordinator} from './test-helpers.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {registerReplicaOperationRepositoryDeferredVisibilityTests} from './replica-operation-repository-deferred-visibility-test-cases.js';
 import {registerReplicaOperationRepositoryIncompleteVisibilityTests} from './replica-operation-repository-incomplete-visibility-test-cases.js';
 import {registerReplicaOperationRepositoryTailTests} from './replica-operation-repository-tail-test-cases.js';
@@ -157,7 +158,9 @@ function createTestRepository(overrides = {}) {
     controlPlaneSystemTableGateway: mockGateway,
     authoritativeVisibilityTimeoutMs: overrides.authoritativeVisibilityTimeoutMs,
     authoritativeVisibilityRetryDelayMs: overrides.authoritativeVisibilityRetryDelayMs,
-    controlPlaneReadinessService: overrides.controlPlaneReadinessService || null,
+    controlPlaneReadinessService: overrides.controlPlaneReadinessService ?
+      readinessServiceFake(overrides.controlPlaneReadinessService) :
+      null,
     logger: mockLogger,
     emitter: overrides.emitter || null,
   });

@@ -13,15 +13,14 @@ import {
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   READINESS_CHURN_NODE_COUNT,
   READINESS_CHURN_NOW_MS,
   createReadinessChurnCache,
 } from './control-plane-readiness-service-test-support.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 test('alternating formation owners cannot repeatedly jump the fair owner queue',
   async (t) => {
     const cache = createReadinessChurnCache();
@@ -33,7 +32,7 @@ test('alternating formation owners cannot repeatedly jump the fair owner queue',
     }
     const scheduled = [];
     let connectedFormationOwner = 'node-3';
-    const readiness = new ControlPlaneReadinessService({
+    const readiness = createReadinessServiceForTest({
       nodeId: 'node-0',
       systemTableCache: cache,
       now: () => READINESS_CHURN_NOW_MS,

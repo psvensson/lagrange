@@ -30,6 +30,7 @@ import {
   StorageCapacityMigration,
   MIGRATION_ERROR_MSG,
 } from '../../src/rebalancer/storage-capacity-migration.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function initializeConfig(overrides = {}) {
   ConfigurationManager.resetInstance();
@@ -71,7 +72,7 @@ function createMockCdc() {
 }
 
 function createAdmissionService(accountingService) {
-  return new StorageAdmissionService({
+  return new StorageAdmissionService(withNodeReadinessService('StorageAdmissionService', {
     accountingService,
     cdcGroupPropagationService: {
       getPublicationModeDiagnostics: () => ({
@@ -81,7 +82,7 @@ function createAdmissionService(accountingService) {
         recentTransitions: [],
       }),
     },
-  });
+  }));
 }
 
 // --- getBackfillBudget ---

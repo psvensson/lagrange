@@ -242,7 +242,7 @@ test('readPublicationPlanningSnapshot uses authoritative membership evidence for
         getRecoveryEpochHistoryByNodeId() {
           return {};
         },
-        async getMembershipPublicationPlanningSnapshotBestEffort() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return null;
         },
       },
@@ -362,7 +362,7 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
         getRecoveryEpochHistoryByNodeId() {
           return {};
         },
-        async getMembershipPublicationPlanningSnapshotBestEffort() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return null;
         },
       },

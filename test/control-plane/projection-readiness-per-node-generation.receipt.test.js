@@ -43,9 +43,6 @@ import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
-  ControlPlaneReadinessDiagnosticsEligibility,
-} from '../../src/control-plane/control-plane-readiness-diagnostics-eligibility.js';
-import {
   PROJECTION_READINESS_MAX_OWN_DATA_DEPTH,
 } from '../../src/control-plane/projection-readiness-evidence.js';
 import {
@@ -60,6 +57,7 @@ import {
   buildProjectionReadinessGenerationKey,
 } from '../../src/control-plane/projection-readiness-evidence-generation.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const CLOCK_START_MS = 350000;
 // Keep observation time moving without crossing a node-liveness semantic
 // deadline; this suite isolates mutation-driven planning generation scope.
@@ -144,7 +142,7 @@ function buildCluster({realClock = false} = {}) {
   });
   const transport = new Map();
   const publicationMode = {snapshot: PUBLICATION_MODE_SNAPSHOT};
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: SEED,
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -222,7 +220,7 @@ test('DEP-SCOPE: every field reaching the owner seam on both production ' +
   'paths is classified, the global revision is the publication table, and ' +
   'the digested verdicts stay inside the digest depth cap', async (t) => {
   const seen = [];
-  const proto = ControlPlaneReadinessDiagnosticsEligibility.prototype;
+  const proto = ControlPlaneReadinessService.prototype;
   const original = proto.computeProjectionReadinessGeneration;
   proto.computeProjectionReadinessGeneration = function(context, source, verdicts) {
     seen.push({
@@ -460,7 +458,7 @@ test('DEP-SCOPE (fail-closed): an unclassified seam field, a digest depth ' +
     nodes: [nodeRow(nodeId, CLOCK_START_MS)],
     services: [createMessageGroupService(nodeId)],
   });
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId,
     systemTableCache: unversioned,
     cacheMutationTarget: unversioned,
@@ -483,7 +481,7 @@ test('DEP-SCOPE (fail-closed): an unclassified seam field, a digest depth ' +
   // Integration: an unclassified field injected at the seam is never
   // memoized, even on the production-shaped cluster.
   const cluster = buildCluster();
-  const proto = ControlPlaneReadinessDiagnosticsEligibility.prototype;
+  const proto = ControlPlaneReadinessService.prototype;
   const original = proto.resolveNormalizedProjectionReadinessContract;
   proto.resolveNormalizedProjectionReadinessContract = function(context, source, verdicts) {
     return original.call(this, context, {...source, status: 'injected'}, verdicts);

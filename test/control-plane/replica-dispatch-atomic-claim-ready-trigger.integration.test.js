@@ -21,6 +21,7 @@ import {
   createCanonicalPartitionOperationRow,
   initializeAtomicClaimTestEnvironment as initEnv,
 } from './replica-dispatch-atomic-claim-test-support.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 async function waitForRetryDrain(service) {
   while (service.retryInFlightNodes.size > 0) {
@@ -59,7 +60,7 @@ test(
     let executeCount = 0;
     let pendingReadCount = 0;
     let exposeOperationRows = false;
-    const service = new ReplicaDispatchService({
+    const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
       nodeId: 'node-1',
       messageRouter: {
         getConnectionState: () => STATE.CONNECTED,
@@ -157,7 +158,7 @@ test(
           return {success: true};
         },
       },
-    });
+    }));
     service.initialize();
     await waitForRetryDrain(service);
     pendingReadCount = 0;
@@ -226,7 +227,7 @@ test(
     let executeCount = 0;
     let pendingReadCount = 0;
     let exposeOperationRows = false;
-    const service = new ReplicaDispatchService({
+    const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
       nodeId: 'node-1',
       messageRouter: {
         getConnectionState: () => STATE.CONNECTED,
@@ -324,7 +325,7 @@ test(
           return {success: true};
         },
       },
-    });
+    }));
     service.initialize();
     await waitForRetryDrain(service);
     pendingReadCount = 0;
@@ -400,7 +401,7 @@ test(
     let claimAttemptCount = 0;
     let executeCount = 0;
     let exposeOperationRows = false;
-    const service = new ReplicaDispatchService({
+    const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
       nodeId: 'node-1',
       messageRouter: {
         getConnectionState: () => STATE.CONNECTED,
@@ -499,7 +500,7 @@ test(
           return {success: true};
         },
       },
-    });
+    }));
     service.initialize();
     await waitForRetryDrain(service);
     claimAttemptCount = 0;
@@ -593,7 +594,7 @@ test(
     const serviceRows = [];
     let executeCount = 0;
 
-    const service = new ReplicaDispatchService({
+    const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
       nodeId: 'node-1',
       messageRouter: {
         getConnectionState: () => STATE.CONNECTED,
@@ -662,7 +663,7 @@ test(
           return {success: true};
         },
       },
-    });
+    }));
     service.initialize();
 
     try {

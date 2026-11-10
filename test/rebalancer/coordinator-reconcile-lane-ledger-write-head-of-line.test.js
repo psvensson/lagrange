@@ -26,6 +26,7 @@ import {
   createMockMessageRouter,
   createMockPolicyService,
 } from './test-helpers.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const TEST_NODE_ID = 'coordinator-hol-owner-node';
 const TEST_SLOW_OPERATION_ID = 'coordinator-hol-slow-ledger-insert';
@@ -153,7 +154,7 @@ function createCoordinatorHarness() {
       return {success: true, rows: []};
     },
   };
-  coordinator = new RebalanceCoordinator({
+  coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: TEST_NODE_ID,
     systemTableCache: createMockCache(),
     cdcIntegrationService: {
@@ -171,7 +172,7 @@ function createCoordinatorHarness() {
     },
     storageAccountingService: {estimateReplicaBytes: () => 1},
     enableTimeouts: false,
-  });
+  }));
   rowsByOperationId.set(
     siblingOperation.operationId,
     coordinator.repository.buildReplicaOperationRow(siblingOperation),

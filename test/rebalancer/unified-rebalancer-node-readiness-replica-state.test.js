@@ -48,6 +48,7 @@ import {
   createMockReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 // Initialize test environment
 // Create a mock system table cache
@@ -102,7 +103,7 @@ function createTestRebalancer(options = {}) {
     },
   };
   const mockReadinessService = controlPlaneReadinessService ||
-    createMockReadinessService(mockCache);
+    createMockReadinessService(mockCache, nowFn);
 
   return new UnifiedRebalancer({
     entityId,
@@ -751,7 +752,7 @@ test('UnifiedRebalancer - Readiness Checks', async (t) => {
       isOutboundQueueAvailable: () => true,
     };
 
-    const rebalancer = new UnifiedRebalancer({
+    const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-0',
@@ -760,7 +761,7 @@ test('UnifiedRebalancer - Readiness Checks', async (t) => {
       tablePolicyService: mockPolicyService,
       messageRouter,
       rebalanceCoordinator: mockCoordinator,
-    });
+    }));
     rebalancer.enableReadinessPing = true;
 
     const ready = await rebalancer.isNodeReady('node-1');

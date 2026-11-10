@@ -10,6 +10,7 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {withRegisteredIncarnations} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 const TEST_SEED_NODE_ID = 'seed-node';
 const TEST_COHORT_NODE_ID_B = 'node-2';
@@ -103,7 +104,7 @@ function createCache() {
 }
 
 function createReadinessService(cache) {
-  return {
+  return partialReadinessFake({
     getNodeReadinessSync(nodeId) {
       const nodeRow = cache.get('nodes', nodeId);
       const ready =
@@ -137,7 +138,7 @@ function createReadinessService(cache) {
         ],
       };
     },
-  };
+  });
 }
 
 function createRebalancer() {

@@ -84,6 +84,7 @@ import {
   createTestCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 
 const TEST_LEDGER_PARTITION_ID = 'replica_operations-p1';
 const TEST_SEED_NODE_ID = 'node-1';
@@ -219,7 +220,7 @@ function createFormationReadinessService(
       missingPartitionIds: [],
     },
   });
-  return {
+  return readinessServiceFake({
     getNodeReadinessSync: (nodeId, readOptions) =>
       base.getNodeReadinessSync(nodeId, readOptions),
     // REMOVE safety reads the owner surface; this fixture models the same
@@ -227,13 +228,13 @@ function createFormationReadinessService(
     // narration and admission consumers that read AVAILABLE evidence.
     getPriorityRecoveryPlanningAnswerForOwnerRead: async (nodeId) =>
       buildPlanningSnapshot(nodeId),
-    getMembershipPublicationPlanningSnapshotBestEffort: async (nodeId) =>
+    getPriorityRecoveryPlanningSnapshotBestEffort: async (nodeId) =>
       buildPlanningSnapshot(nodeId),
     getMembershipPublicationPlanningSnapshot: async (nodeId) =>
       buildPlanningSnapshot(nodeId),
-    getMembershipPublicationPlanningSnapshotSync: (nodeId) =>
+    getPriorityRecoveryPlanningAnswerSync: (nodeId) =>
       buildPlanningSnapshot(nodeId),
-  };
+  });
 }
 
 // Answer the coordinator's authoritative (owner-lane) services reads from

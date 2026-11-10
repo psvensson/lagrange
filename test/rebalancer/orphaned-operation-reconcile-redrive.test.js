@@ -22,6 +22,7 @@ import {
   createMockPolicyService,
   createMockMessageRouter,
 } from './test-helpers.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function buildCoordinator({operationRow, serviceRow}) {
   const trackedOperations = new Map();
@@ -89,7 +90,7 @@ function buildCoordinator({operationRow, serviceRow}) {
       return {success: true, rows: []};
     },
   };
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: 'test-node-1',
     systemTableCache: createMockCache(),
     cdcIntegrationService: cdcService,
@@ -108,7 +109,7 @@ function buildCoordinator({operationRow, serviceRow}) {
     },
     storageAccountingService: {estimateReplicaBytes: () => 1},
     enableTimeouts: false,
-  });
+  }));
   return {coordinator, getOp: (id) => trackedOperations.get(id) || null};
 }
 

@@ -1,7 +1,7 @@
 import t from 'tap';
 import {
-  ControlPlaneReadinessPublicationPlanningSnapshot,
-} from '../../src/control-plane/control-plane-readiness-publication-planning-snapshot.js';
+  ControlPlaneReadinessService,
+} from '../../src/control-plane/control-plane-readiness-service.js';
 
 // CL-033: getNodeReadinessSync is the query-routing hot path; during recovery the
 // stored-snapshot fast path misses every call, so the priority-recovery planning
@@ -16,7 +16,7 @@ import {
 // (`Number(observedAt)` → NaN → `NaN <= grace` → memo never hits) makes the
 // build-once / reuse assertions fail.
 const resolveMemo =
-  ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+  ControlPlaneReadinessService.prototype
     .resolveMemoizedPriorityRecoveryPlanningProjectionSync;
 
 const T0 = Date.parse('2026-06-14T06:00:00.000Z');
@@ -37,25 +37,30 @@ function memoCtx({nodeId = 'seed'} = {}) {
     // observedAt this must parse to ms (not collapse to a NaN comparison that
     // silently disables the memo — the 54db83b9 regression these tests catch).
     readPlanningProjectionSourceGeneration:
-      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+      ControlPlaneReadinessService.prototype
         .readPlanningProjectionSourceGeneration,
+    // This host states its collaborator state explicitly: no planning
+    // identity owner and no versioned derivation key, so the memo keys on
+    // the source revision (the state the tier prototype gave it).
+    readPlanningProjectionMemoIdentity: () => null,
+    readMembershipPlanningDerivationVersionKey: () => null,
     isReadinessPlanningMemoWithinStaleGrace:
-      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+      ControlPlaneReadinessService.prototype
         .isReadinessPlanningMemoWithinStaleGrace,
     readLatestMembershipPublicationEpochStatusProbe:
-      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+      ControlPlaneReadinessService.prototype
         .readLatestMembershipPublicationEpochStatusProbe,
     buildMembershipPublicationPlanningMemoKeyComponent:
-      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+      ControlPlaneReadinessService.prototype
         .buildMembershipPublicationPlanningMemoKeyComponent,
     readMembershipPublicationPlanningMemoVersionKey:
-      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+      ControlPlaneReadinessService.prototype
         .readMembershipPublicationPlanningMemoVersionKey,
     membershipPublicationPlanningMemoVersionKeyMatches:
-      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+      ControlPlaneReadinessService.prototype
         .membershipPublicationPlanningMemoVersionKeyMatches,
     // The deep cluster read — counted, returns a per-node sentinel payload.
-    getMembershipPublicationPlanningSnapshotSync: (id) => ({read: id}),
+    deriveMembershipPublicationPlanningSnapshotSync: (id) => ({read: id}),
     // The parse/clone-heavy projection — counted; returns a fresh frozen object
     // per build so identity distinguishes a memo hit from a rebuild.
     buildTrackedPriorityRecoveryPlanningProjection: (snapshot) => {

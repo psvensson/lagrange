@@ -1,4 +1,5 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {registerQuorumConditionedRemoveSafetyTailReplacementElection} from './quorum-conditioned-remove-safety-tail-replacement-election.js';
 import {
   withOwnerReadPlanningEvidence,
@@ -60,7 +61,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               },
             };
           },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             return {
               publishedActiveNodeIdsPresent: true,
               publishedActiveNodeIds: Object.freeze(['node-a', 'node-b', 'node-c']),
@@ -108,7 +109,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               }),
             };
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publishedActiveNodeIdsPresent: true,
               publishedActiveNodeIds: Object.freeze(['node-a', 'node-b', 'node-c']),
@@ -248,7 +249,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               },
             };
           },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
               publishedActiveNodeIdsPresent: true,
@@ -280,11 +281,11 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
             };
           },
           async getMembershipPublicationPlanningSnapshot(nodeId) {
-            return this.getMembershipPublicationPlanningSnapshotBestEffort(
+            return this.getPriorityRecoveryPlanningSnapshotBestEffort(
               nodeId,
             );
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
               publishedActiveNodeIdsPresent: true,
@@ -465,7 +466,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               },
             };
           },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             return {
               publicationStatus,
               publishedActiveNodeIdsPresent: true,
@@ -491,9 +492,9 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
             };
           },
           async getMembershipPublicationPlanningSnapshot(nodeId) {
-            return this.getMembershipPublicationPlanningSnapshotBestEffort(nodeId);
+            return this.getPriorityRecoveryPlanningSnapshotBestEffort(nodeId);
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publicationStatus,
               publishedActiveNodeIdsPresent: true,
@@ -697,7 +698,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               },
             };
           },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
               publishedActiveNodeIdsPresent: true,
@@ -723,9 +724,9 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
             };
           },
           async getMembershipPublicationPlanningSnapshot(nodeId) {
-            return this.getMembershipPublicationPlanningSnapshotBestEffort(nodeId);
+            return this.getPriorityRecoveryPlanningSnapshotBestEffort(nodeId);
           },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
               publishedActiveNodeIdsPresent: true,
@@ -1063,7 +1064,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: readinessServiceFake({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -1085,7 +1086,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               priorityPartitionSummary: TEST_STALE_PRIORITY_PARTITION_SUMMARY,
             };
           },
-        },
+        }),
         tablePolicyService: {
           getPolicyForPartition: () => ({minReplicaCount: 3}),
         },

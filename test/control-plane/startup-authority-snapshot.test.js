@@ -1,8 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const STARTUP_AUTHORITY_ADMISSION_STATE_BLOCKED = 'blocked';
 const TEST_CLUSTER_INCARNATION_FENCE_BLOCKED = Object.freeze({
   state: 'identity_mismatch',
@@ -29,7 +27,7 @@ function createCache() {
 }
 
 test('ControlPlaneReadinessService builds recovery-pending startup authority snapshot', async (t) => {
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: createCache(),
   });
@@ -76,7 +74,7 @@ test('ControlPlaneReadinessService builds recovery-pending startup authority sna
 });
 
 test('ControlPlaneReadinessService marks startup authority unavailable when planning is incomplete', async (t) => {
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: createCache(),
   });
@@ -104,7 +102,7 @@ test('ControlPlaneReadinessService marks startup authority unavailable when plan
 });
 
 test('ControlPlaneReadinessService keeps startup authority available when an active recovery gate exists but publication details are still converging', async (t) => {
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: createCache(),
   });
@@ -156,7 +154,7 @@ test('ControlPlaneReadinessService keeps startup authority available when an act
 });
 
 test('ControlPlaneReadinessService treats unpublished observation as explicit startup state', async (t) => {
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: createCache(),
   });
@@ -196,7 +194,7 @@ test('ControlPlaneReadinessService treats unpublished observation as explicit st
 });
 
 test('ControlPlaneReadinessService marks startup authority blocked when explicit admission evidence blocks the target node', async (t) => {
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: createCache(),
   });
@@ -238,7 +236,7 @@ test('ControlPlaneReadinessService marks startup authority blocked when explicit
 });
 
 test('ControlPlaneReadinessService does not treat steady published participation reasons as recovery blockers once the publication gate is ready', async (t) => {
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: createCache(),
   });

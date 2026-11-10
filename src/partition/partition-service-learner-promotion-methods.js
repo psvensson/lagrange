@@ -12,6 +12,9 @@ import {
   evaluateLearnerPromotionCountCheck,
 } from './learner-promotion-count-check.js';
 import {
+  readPriorityRecoveryPlanningAnswerSync,
+} from '../control-plane/priority-recovery-planning-answer-origin.js';
+import {
   createPartitionServiceLearnerPromotionCountCheckMethods,
 } from './partition-service-learner-promotion-count-check-methods.js';
 
@@ -178,52 +181,11 @@ class PartitionServiceLearnerPromotionMethods {
     if (!readinessService) {
       return null;
     }
-    const observedAt = Date.now();
-    if (
-      typeof readinessService.getPriorityRecoveryPlanningAnswerSync ===
-      PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
-      return (
-        readinessService.getPriorityRecoveryPlanningAnswerSync(
-          this.nodeId,
-          observedAt,
-        ) || null
-      );
-    }
-    if (
-      typeof readinessService.getMembershipPublicationPlanningAnswerSync ===
-      PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
-      return (
-        readinessService.getMembershipPublicationPlanningAnswerSync(
-          this.nodeId,
-          observedAt,
-        ) || null
-      );
-    }
-    if (
-      typeof readinessService.getPriorityRecoveryPlanningSnapshotSync ===
-      PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
-      return (
-        readinessService.getPriorityRecoveryPlanningSnapshotSync(
-          this.nodeId,
-          observedAt,
-        ) || null
-      );
-    }
-    if (
-      typeof readinessService.getMembershipPublicationPlanningSnapshotSync ===
-      PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
-      return (
-        readinessService.getMembershipPublicationPlanningSnapshotSync(
-          this.nodeId,
-          observedAt,
-        ) || null
-      );
-    }
-    return null;
+    return readPriorityRecoveryPlanningAnswerSync(
+      readinessService,
+      this.nodeId,
+      Date.now(),
+    );
   }
   getPriorityRecoveryOperationContextsForLearnerPromotion() {
     if (

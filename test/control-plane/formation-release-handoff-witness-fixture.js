@@ -36,9 +36,7 @@
 import assert from 'node:assert/strict';
 
 import {TABLES} from '../../src/constants/index.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   buildControlPlaneReadAuthority,
 } from '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
@@ -63,6 +61,7 @@ import {
 } from '../../src/bootstrap/node-joining-service-shared.js';
 import {NodeService} from '../../src/node/node-service.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const {STARTUP_JOIN_MODE} = NODE_JOINING_SERVICE_SHARED;
 const {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON: RECOVERY_REASON,
@@ -136,7 +135,6 @@ const BLOCKED_JOINER_FENCE = buildClusterIncarnationFence({
   peerProofRequired: true,
   peerAddresses: [SEED_ADDRESS],
 });
-
 
 // ── fixture ────────────────────────────────────────────────────────────────
 function buildAdmission(fence) {
@@ -384,7 +382,7 @@ function buildHydratedCache(rows, storageOwner, forgeRow = (row) => row) {
 }
 
 function buildService({nodeId, cache, router, storageOwner, authority}) {
-  const service = new ControlPlaneReadinessService({
+  const service = createReadinessServiceForTest({
     nodeId,
     formationReleaseAuthorityNodeId: SEED,
     systemTableCache: cache,

@@ -2,6 +2,7 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {
   OPERATION_TRANSITION_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const NON_PRIORITY_SYSTEM_REPLACE_OPERATION_ID =
   'op-system-replace-target-owner';
@@ -157,7 +158,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
     async (t) => {
       const now = Date.now();
       const reconciledOperationIds = [];
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -185,7 +186,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
 
       coordinator.workflowOwner.repository.queryIncompleteOperations =
@@ -283,7 +284,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
   test('RebalanceCoordinator re-arms critical PENDING operations when ' +
   'observed replica status remains pending',
   async (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-local',
       transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
@@ -317,7 +318,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       },
       ...createStorageOwners(),
       enableTimeouts: false,
-    });
+    }));
     coordinator.initialize();
 
     const operation = {
@@ -373,7 +374,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
   test('RebalanceCoordinator re-arms overdue critical PENDING operations ' +
   'while operation budget remains active',
   async (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: PRIORITY_PENDING_REARM_NODE_ID,
       transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
@@ -407,7 +408,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       },
       ...createStorageOwners(),
       enableTimeouts: false,
-    });
+    }));
     coordinator.initialize();
 
     const now = Date.now();
@@ -506,7 +507,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
             },
           };
         },
-        async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+        async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: Object.freeze(['node-a', 'node-local']),
@@ -598,7 +599,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
   test('OperationWorkflowOwner prefers canonical priority-recovery planning answers',
     async (t) => {
       const canonicalCalls = [];
-      const legacyCalls = [];
       const coordinator = createCoordinator({
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
@@ -650,34 +650,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
                 missingPartitionIds: ['sql_write_operations-p1'],
               }),
             });
-          },
-          async getMembershipPublicationPlanningSnapshotBestEffort() {
-            legacyCalls.push(1);
-            return {
-              publishedActiveNodeIdsPresent: true,
-              publishedActiveNodeIds: Object.freeze([
-                'legacy-node-a',
-                'legacy-node-local',
-              ]),
-              recoveryActiveNodeIds: Object.freeze([
-                'legacy-node-a',
-                'legacy-node-local',
-              ]),
-              projectedServingNodeIds: Object.freeze([
-                'legacy-node-a',
-                'legacy-node-local',
-              ]),
-              locallyEligibleNodeIds: Object.freeze([
-                'legacy-node-a',
-                'legacy-node-local',
-              ]),
-              publishedMembershipIncludesTargetNode: false,
-              priorityPartitionSummary: Object.freeze({
-                satisfied: false,
-                requiredDistinctNodeCount: 2,
-                missingPartitionIds: ['sql_write_operations-p1'],
-              }),
-            };
           },
         },
         messageRouter: {
@@ -737,11 +709,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           'node-local',
           'priority create-budget gates should read the local canonical planning view instead of a remote operation participant snapshot',
         );
-        t.equal(
-          legacyCalls.length,
-          0,
-          'legacy fallback planning surface should not be called when canonical answer exists',
-        );
       } finally {
         await coordinator.shutdown();
       }
@@ -784,7 +751,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
             },
           };
         },
-        async getMembershipPublicationPlanningSnapshotBestEffort() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: Object.freeze(['node-a', 'node-b']),
@@ -897,7 +864,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       };
       let failedCount = 0;
 
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -925,7 +892,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
 
       coordinator.workflowOwner.repository.queryIncompleteOperations =
@@ -974,7 +941,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
 
   test('RebalanceCoordinator updateStep persists durable transition fields',
     async (t) => {
-      const coordinator = new RebalanceCoordinator({
+      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
         nodeId: 'node-local',
         transactionCoordinator: createTransactionCoordinator(),
         systemTableCache: {
@@ -1002,7 +969,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
         ...createStorageOwners(),
         enableTimeouts: false,
-      });
+      }));
       coordinator.initialize();
       disablePersistenceConfirmation(coordinator);
 
@@ -1219,7 +1186,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       return originalTransitionStep(...args);
     };
 
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-local',
       transactionCoordinator: createTransactionCoordinator(),
       operationWorkflowCoordinator: workflowCoordinator,
@@ -1248,7 +1215,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       },
       ...createStorageOwners(),
       enableTimeouts: false,
-    });
+    }));
     coordinator.initialize();
     disablePersistenceConfirmation(coordinator);
 

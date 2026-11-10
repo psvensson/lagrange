@@ -7,6 +7,7 @@
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 
 const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
 
@@ -49,13 +50,13 @@ export function createPublishedPlanningReadinessService({
     async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
-    async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+    async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
     async getMembershipPublicationPlanningSnapshot(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
-    getMembershipPublicationPlanningSnapshotSync(nodeId) {
+    getPriorityRecoveryPlanningAnswerSync(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
   };
@@ -83,9 +84,9 @@ export function withOwnerReadPlanningEvidence(readinessService) {
     typeof readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead ===
       'function'
   ) {
-    return readinessService;
+    return readinessServiceFake(readinessService);
   }
-  return {
+  return readinessServiceFake({
     ...readinessService,
     async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId, observedAt) {
       if (
@@ -95,17 +96,9 @@ export function withOwnerReadPlanningEvidence(readinessService) {
         return readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
           nodeId, observedAt);
       }
-      if (
-        typeof readinessService
-          .getMembershipPublicationPlanningSnapshotBestEffort === 'function'
-      ) {
-        return readinessService
-          .getMembershipPublicationPlanningSnapshotBestEffort(
-            nodeId, observedAt);
-      }
       return null;
     },
-  };
+  });
 }
 
 /**

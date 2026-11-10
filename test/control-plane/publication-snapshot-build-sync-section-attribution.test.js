@@ -16,8 +16,10 @@ import {
   buildPublicationRecoveryGateSnapshot,
 } from '../../src/control-plane/publication-recovery-gate.js';
 import {
-  ControlPlaneReadinessPriorityRecoveryPlanning,
-} from '../../src/control-plane/control-plane-readiness-priority-recovery-planning.js';
+  ControlPlaneReadinessService,
+} from '../../src/control-plane/control-plane-readiness-service.js';
+
+const PLANNING_NOW_MS = 1_760_000_000_000;
 
 const GATE_SNAPSHOT_SITE = 'publication_recovery_gate_snapshot_build';
 const PLANNING_PROJECTION_SITE = 'priority_recovery_planning_projection_build';
@@ -69,8 +71,15 @@ test('publication_recovery_gate_snapshot_build section is recorded and the ' +
 test('priority_recovery_planning_projection_build section is recorded and ' +
   'the projection return value is unchanged', async (t) => {
   const planning = Object.create(
-    ControlPlaneReadinessPriorityRecoveryPlanning.prototype,
+    ControlPlaneReadinessService.prototype,
   );
+  // This fixture was built on the planning tier's prototype, which had no
+  // planning-projection source generation; the one service class has it, so
+  // the fixture states that absence explicitly (no generation, no identity
+  // memo) and its clock, exactly the collaborator state the tier prototype
+  // gave it.
+  planning.readPlanningProjectionSourceGeneration = () => null;
+  planning.now = () => PLANNING_NOW_MS;
 
   const before = siteSnapshot(PLANNING_PROJECTION_SITE)?.count || 0;
   // The non-object guard is part of the wrapped body: null in, null out.

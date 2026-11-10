@@ -294,7 +294,8 @@ function createRuntime(options) {
         return {success: true};
       },
     },
-    controlPlaneReadinessService: createProvisioningReadyService(cache),
+    controlPlaneReadinessService:
+      createProvisioningReadyService(cache, () => clock.value),
     controlPlaneSystemTableGateway: gateway,
     storageAccountingService: {estimateReplicaBytes: () => 1},
     storageAdmissionService: {
@@ -339,7 +340,8 @@ function createRuntime(options) {
     systemCache: cache,
     messageRouter,
     rebalanceCoordinator: coordinator,
-    controlPlaneReadinessService: createProvisioningReadyService(cache),
+    controlPlaneReadinessService:
+      createProvisioningReadyService(cache, () => clock.value),
     tablePartitionProvisioningTimeoutMs: 50,
     tablePartitionProvisioningPollIntervalMs: 1,
     tablePartitionTargetNodeConvergenceTimeoutMs: 5,

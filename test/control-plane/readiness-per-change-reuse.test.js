@@ -35,8 +35,8 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  ControlPlaneReadinessEvidenceReasons,
-} from '../../src/control-plane/control-plane-readiness-evidence-reasons.js';
+  ControlPlaneReadinessService,
+} from '../../src/control-plane/control-plane-readiness-service.js';
 import {
   buildNodeLivenessTestEvidence,
   createReadinessSnapshotStoreTestStub,
@@ -407,7 +407,7 @@ test('CL-019: per-change readiness snapshot reuse', async (t) => {
         },
       };
       const method =
-        ControlPlaneReadinessEvidenceReasons.prototype
+        ControlPlaneReadinessService.prototype
           .getMembershipPublicationDiagnosticsSync;
 
       const first = method.call(stub, NODE_ID, BASE_NOW_MS);
@@ -460,7 +460,7 @@ test('CL-019: per-change readiness snapshot reuse', async (t) => {
         },
       };
       const method =
-        ControlPlaneReadinessEvidenceReasons.prototype
+        ControlPlaneReadinessService.prototype
           .getMembershipPublicationDiagnosticsSync;
 
       const first = method.call(stub, NODE_ID, BASE_NOW_MS);
@@ -497,7 +497,7 @@ test('CL-019: per-change readiness snapshot reuse', async (t) => {
         readinessTransitionHistoryViewByNodeId: new Map(),
       };
       const method =
-        ControlPlaneReadinessEvidenceReasons.prototype
+        ControlPlaneReadinessService.prototype
           .getReadinessTransitionHistory;
 
       const first = method.call(stub, NODE_ID);

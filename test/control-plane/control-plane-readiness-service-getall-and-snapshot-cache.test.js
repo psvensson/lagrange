@@ -20,9 +20,7 @@ import {
 import {
   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   PUBLICATION_PROJECTION_BOUNDARY_ACK_STATE,
   PUBLICATION_PROJECTION_BOUNDARY_FRESHNESS_STATE,
@@ -35,7 +33,7 @@ import {
 import {
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
-
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 test('ControlPlaneReadinessService getAllNodeReadiness propagates ' +
   'authoritative refresh for stale connected rows',
 async (t) => {
@@ -56,7 +54,7 @@ async (t) => {
     [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
   };
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -144,7 +142,7 @@ test('ControlPlaneReadinessService getAllNodeReadiness invalidates stored readin
         createMessageGroupService('node-lagged'),
       ],
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'seed-node',
       systemTableCache: cache,
       cacheMutationTarget: cache,
@@ -230,13 +228,20 @@ test('ControlPlaneReadinessService getAllNodeReadiness includes authoritative-on
     let cachedNodeListCalls = 0;
     let authoritativeServiceListCalls = 0;
     let cachedServiceListCalls = 0;
-    const readinessService = new ControlPlaneReadinessService({
+    const cache = createCache({
+      nodes: [cacheVisibleNode],
+      services: [createMessageGroupService('node-cache-visible')],
+    });
+    // The single-row and per-node owner reads are not under test here; they
+    // answer the cache rows, which is what the readers answered before the
+    // owner interface was validated (no such member meant the cache).
+    const cacheNodeRow = async (nodeId) => cache.get(TABLES.NODES, nodeId);
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'seed-node',
-      systemTableCache: createCache({
-        nodes: [cacheVisibleNode],
-        services: [createMessageGroupService('node-cache-visible')],
-      }),
+      systemTableCache: cache,
       nodesOwner: {
+        getNode: cacheNodeRow,
+        getNodeFromCache: cacheNodeRow,
         async listNodes() {
           authoritativeNodeListCalls += 1;
           return {
@@ -268,6 +273,13 @@ test('ControlPlaneReadinessService getAllNodeReadiness includes authoritative-on
           return {
             success: true,
             rows: [createMessageGroupService('node-cache-visible')],
+          };
+        },
+        async listServicesForNodeFromCache(nodeId) {
+          return {
+            success: true,
+            rows: cache.filter(TABLES.SERVICES,
+              (row) => row[COLUMN.NODE_ID] === nodeId),
           };
         },
       },
@@ -354,7 +366,7 @@ async (t) => {
     [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
   };
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -437,7 +449,7 @@ async (t) => {
     services: [createMessageGroupService(nodeId)],
   });
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -538,7 +550,7 @@ async (t) => {
     services: [createMessageGroupService(nodeId)],
   });
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -622,7 +634,7 @@ async (t) => {
     created_at: now - 2000,
     updated_at: now - 1000,
   };
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: createCache({
       nodes: [createActiveNode(nodeId)],
@@ -647,9 +659,11 @@ async (t) => {
         };
       },
     },
+    // Readiness reads the cluster's latest publication row (the production
+    // coordinator's cluster read); the fixture derives the per-node read.
     membershipPublicationService: {
-      getLatestPublicationForNodeSync(requestedNodeId) {
-        return requestedNodeId === nodeId ? publicationRow : null;
+      getLatestClusterPublicationSync() {
+        return publicationRow;
       },
     },
     cdcGroupPropagationService: createPublicationService({
@@ -724,7 +738,7 @@ async (t) => {
     services: [createMessageGroupService(nodeId)],
   });
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -789,7 +803,7 @@ async (t) => {
     services: [createMessageGroupService('node-hot-path-cache')],
   });
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -874,7 +888,7 @@ async (t) => {
     services: [createMessageGroupService('node-repair-backoff')],
   });
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -965,7 +979,7 @@ async (t) => {
     }],
     services: [createMessageGroupService('node-cache-invalidation')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -1033,7 +1047,7 @@ async (t) => {
     }],
     services: [createMessageGroupService('node-stale-on-change')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -1121,7 +1135,7 @@ test('ControlPlaneReadinessService refreshes invalidated ineligible snapshots ' 
     }],
   });
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,

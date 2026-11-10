@@ -37,6 +37,7 @@ import {
   SPLIT_MERGE_ERROR_MSG,
   SPLIT_MERGE_REASON,
 } from '../../src/partition/partition-constants.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function insertRow(cache, tableName, row) {
   cache.applySystemTableChange(
@@ -91,10 +92,10 @@ function buildServices(nodeId, budgetBytes) {
     }),
   };
 
-  const admission = new StorageAdmissionService({
+  const admission = new StorageAdmissionService(withNodeReadinessService('StorageAdmissionService', {
     accountingService: accounting,
     cdcGroupPropagationService,
-  });
+  }));
 
   return {cache, accounting, admission};
 }

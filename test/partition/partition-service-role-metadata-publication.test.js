@@ -53,6 +53,7 @@ import {
   PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 
 
 beforeEach(() => {
@@ -724,6 +725,7 @@ test(
       executeQuery: async () => ({success: true, rows: []}),
     };
     partition.rebalanceCoordinator = {
+      controlPlaneReadinessService: createReadinessServiceForTest(),
       initialize: () => {},
     };
 
@@ -791,6 +793,7 @@ test(
       executeQuery: async () => ({success: true, rows: []}),
     };
     partition.rebalanceCoordinator = {
+      controlPlaneReadinessService: createReadinessServiceForTest(),
       initialize: () => {},
     };
 
@@ -1297,6 +1300,7 @@ test('PartitionService - initializeRebalancer passes sqlQueryEngine to gateway',
       cdcIntegrationService: null,
       tablePolicyService: null,
       sqlQueryEngine: null,
+      controlPlaneReadinessService: createReadinessServiceForTest(),
       initialize: () => {},
     };
 
@@ -1380,6 +1384,7 @@ async (t) => {
     cdcIntegrationService: null,
     tablePolicyService: null,
     sqlQueryEngine: null,
+    controlPlaneReadinessService: createReadinessServiceForTest(),
     initialize: () => {},
   };
 

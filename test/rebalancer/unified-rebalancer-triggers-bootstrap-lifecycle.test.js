@@ -29,6 +29,7 @@ import {
   createPostgresWireEndpoint,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 // Initialize test environment
 // Create a mock system table cache
@@ -38,7 +39,7 @@ import {
 // Create mock rebalance coordinator
 // Create mock readiness service backed by the same cache
 function createMockReadinessService(mockCache) {
-  return {
+  return partialReadinessFake({
     getNodeReadinessSync: (nodeId) => {
       const nodeRow = mockCache.get('nodes', nodeId);
       if (!nodeRow) {
@@ -97,7 +98,7 @@ function createMockReadinessService(mockCache) {
       return createMockReadinessService(mockCache)
         .getNodeReadinessSync(nodeId);
     },
-  };
+  });
 }
 
 // Create a fully configured rebalancer for testing
@@ -295,7 +296,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
   await t.test(
     'checkRebalance still requires lifecycle readiness when local serve readiness is true',
     async (t) => {
-      const readinessService = {
+      const readinessService = partialReadinessFake({
         getNodeReadinessSync: (nodeId) => ({
           nodeId,
           dimensions: {
@@ -311,7 +312,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           },
           reasons: [],
         }),
-      };
+      });
       const rebalancer = createTestRebalancer({
         entityId: 'services-p1',
         entityType: EntityType.PARTITION,
@@ -357,7 +358,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
   await t.test(
     'checkRebalance still evaluates non-system entities while priority control-plane partitions remain concentrated',
     async (t) => {
-      const readinessService = {
+      const readinessService = partialReadinessFake({
         ...createMockReadinessService(createMockCache([
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
@@ -373,7 +374,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
             },
           },
         ),
-      };
+      });
 
       const rebalancer = createTestRebalancer({
         entityId: 'benchmark_events-p1',
@@ -450,7 +451,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
   await t.test(
     'checkRebalance allows non-system entities once priority control-plane partitions reach quorum spread',
     async (t) => {
-      const readinessService = {
+      const readinessService = partialReadinessFake({
         ...createMockReadinessService(createMockCache([
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
@@ -473,7 +474,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
             },
           },
         ),
-      };
+      });
 
       const rebalancer = createTestRebalancer({
         entityId: 'benchmark_events-p1',

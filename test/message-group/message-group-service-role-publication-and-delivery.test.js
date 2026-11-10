@@ -52,6 +52,7 @@ import {
 import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 
 const TEST_CRITICAL_TRANSPORT_PARTITION_ADDRESS =
   'seed-node/partition/control_plane_publications-p1-r1';
@@ -707,6 +708,7 @@ test(
       };
       service.tablePolicyService = {};
       service.rebalanceCoordinator = {
+        controlPlaneReadinessService: createReadinessServiceForTest(),
         initialize: () => {},
       };
       service.isLeaderReplica = () => true;

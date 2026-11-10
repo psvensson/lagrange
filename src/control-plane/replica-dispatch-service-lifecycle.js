@@ -9,11 +9,15 @@ import {
   runMembershipPublicationActivity,
   runRebalancerActivity,
 } from '../diagnostics/formation-owner-attribution.js';
+import {
+  requireControlPlaneReadinessService,
+} from './control-plane-readiness-collaborators.js';
+
+const REPLICA_DISPATCH_SERVICE_OWNER_NAME = 'ReplicaDispatchService';
 
 const {
   CONTROL_PLANE_EVENT,
   ControlPlaneMessageType,
-  ControlPlaneReadinessService,
   DISPATCH_DEFAULT,
   DISPATCH_ERROR_MSG,
   DISPATCH_LOG_MSG,
@@ -92,19 +96,10 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
     // Node-owned readiness service: resolve from the coordinator container
     // before constructing (quest single-readiness-owner); a private instance
     // exists only for standalone/unit composition without a container.
-    this.controlPlaneReadinessService =
-      options.controlPlaneReadinessService ||
-      this.rebalanceCoordinator?.controlPlaneReadinessService ||
-      new ControlPlaneReadinessService({
-        nodeId: this.nodeId,
-        systemTableCache: this.systemTableCache,
-        nodesOwner: this.nodesOwner,
-        servicesOwner: this.servicesOwner,
-        messageRouter: this.messageRouter,
-        storageAccountingService: this.storageAccountingService,
-        cdcGroupPropagationService: this.cdcGroupPropagationService,
-        controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
-      });
+    // The node's one readiness service is a named collaborator: dispatch
+    // never builds a second instance of that authority.
+    this.controlPlaneReadinessService = requireControlPlaneReadinessService(
+      options, REPLICA_DISPATCH_SERVICE_OWNER_NAME);
 
     this.messageGroupServices = new Set();
     this.messageGroupHandlers = new Map();

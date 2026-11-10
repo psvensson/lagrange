@@ -18,6 +18,7 @@ import {
   buildActivationLeaseId,
   liveActivationPinNodeIds,
 } from '../../src/service/call-activation-lease-owner.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const SERVICE_ID = 'svc-data-local';
 const OTHER_SERVICE_ID = 'svc-other';
@@ -140,7 +141,7 @@ test('a REAL UnifiedRebalancer policy pass attaches live pins from the ' +
         []),
     filter: () => [],
   };
-  const rebalancer = new UnifiedRebalancer({
+  const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
     cdcIntegrationService: {
       insertSystemTableRow: async () => ({success: true}),
       updateSystemTableRow: async () => ({success: true}),
@@ -162,7 +163,7 @@ test('a REAL UnifiedRebalancer policy pass attaches live pins from the ' +
       getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
       getPolicyForPartition: () => ({targetReplicaCount: 3}),
     },
-  });
+  }));
   const policy = await rebalancer.getPolicy();
   t.same(policy.activationPinNodeIds, [PINNED_NODE],
     'the real policy pass reads the live lease rows into deterministic ' +

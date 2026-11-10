@@ -19,9 +19,7 @@ import {
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {OwnerKeyReconcileQueue} from '../../src/workflow/owner-key-reconcile-queue.js';
 import {
   READINESS_CHURN_NODE_COUNT,
@@ -29,13 +27,14 @@ import {
   createReadinessChurnCache,
 } from './control-plane-readiness-service-test-support.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const OPTION_VARIANT_LIMIT = 16;
 const OPTION_VARIANT_PRESSURE_COUNT = 80;
 
 test('sync snapshot uses synchronous publication and capacity accessors ' +
   'for recovery admission', async (t) => {
   const nodeId = 'node-sync-priority-recovery';
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: createCache({
       nodes: [createActiveNode(nodeId)],
@@ -62,14 +61,13 @@ test('sync snapshot uses synchronous publication and capacity accessors ' +
       enteredAt: '2026-03-04T00:00:00.000Z',
       recentTransitions: [],
     }),
+    // Readiness reads the cluster's latest publication row (the production
+    // coordinator's cluster read); the fixture derives the per-node read.
     membershipPublicationService: {
-      async getLatestPublicationForNode() {
+      async getLatestClusterPublication() {
         return null;
       },
-      getLatestPublicationForNodeSync(targetNodeId) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
+      getLatestClusterPublicationSync() {
         return {
           publicationEpoch: 23,
           status: 'ACK_PENDING',
@@ -114,7 +112,7 @@ test('ordinary CL-012 reuse may bridge a regressed row while planning reads ' +
     }],
     services: [createMessageGroupService(nodeId)],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cdcGroupPropagationService: createPublicationService({
@@ -181,7 +179,7 @@ test('sync readiness starts one deduped authoritative refresh for stale ' +
     }],
   });
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -268,7 +266,7 @@ test('missing node row sets both repairEligible and serveEligible false ' +
   '(uses ControlPlaneReadinessService as canonical readiness owner)',
 async (t) => {
   const cache = createCache({nodes: [], services: []});
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     cdcGroupPropagationService: createPublicationService({
@@ -299,7 +297,7 @@ async (t) => {
     nodes: [],
     services: [createMessageGroupService(nodeId)],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -376,7 +374,7 @@ async (t) => {
     nodes: [],
     services: [createMessageGroupService(nodeId)],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: cache,
     cacheMutationTarget: cache,
@@ -451,7 +449,7 @@ test('ControlPlaneReadinessService keeps self runtime grace when the ' +
 async (t) => {
   const nodeId = 'node-self-missing-row-no-services';
   const authoritativeReads = [];
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId,
     systemTableCache: createCache({
       nodes: [],
@@ -547,7 +545,7 @@ async (t) => {
       createMessageGroupService('node-valid-lease-disconnected'),
     ],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -600,7 +598,7 @@ async (t) => {
       createMessageGroupService('node-connected-valid'),
     ],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -651,7 +649,7 @@ async (t) => {
       createMessageGroupService('node-no-router-evidence'),
     ],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -702,7 +700,7 @@ async (t) => {
     }],
     services: [createMessageGroupService('node-split-lag')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -765,7 +763,7 @@ async (t) => {
       createPartitionService(joiningNodeId, 'services-p1-r1'),
     ],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -825,7 +823,7 @@ test('transport-connected startup node remains recovery-eligible when the ' +
       createPartitionService(joiningNodeId, 'sql_write_operations-p1-r2'),
     ],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -883,7 +881,7 @@ test('priority recovery keeps a transport-connected active node recovery-eligibl
       ),
     ],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -940,122 +938,6 @@ test('priority recovery keeps a transport-connected active node recovery-eligibl
   t.end();
 });
 
-test('priority recovery current sync evaluation closes recovery eligibility ' +
-  'when a newer planning epoch clears priority blockers', (t) => {
-  const nowAtStart = 215000;
-  let now = nowAtStart;
-  const joiningNodeId = 'node-priority-recovery-sync-stale-grace';
-  const planningReadProfile = 'planning';
-  const diagnosticsPublicationRow = {
-    publicationEpoch: 41,
-    status: 'ACK_PENDING',
-    publishedActiveNodeIds: ['seed-node'],
-  };
-  let planningPublicationRow = {
-    publicationEpoch: 41,
-    status: 'PUBLISHED',
-    publishedActiveNodeIds: ['seed-node'],
-    priorityPartitionSummary: {
-      satisfied: false,
-    },
-  };
-  const cache = createCache({
-    nodes: [{
-      ...createActiveNode(joiningNodeId),
-      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-      [COLUMN.LAST_HEARTBEAT]: nowAtStart - 1000,
-      [COLUMN.READY_LEASE_EXPIRES_AT]: nowAtStart - 5000,
-    }],
-    services: [
-      createPartitionService(
-        joiningNodeId,
-        'control_plane_publications-p1-r5',
-      ),
-    ],
-  });
-  const readinessService = new ControlPlaneReadinessService({
-    nodeId: 'seed-node',
-    systemTableCache: cache,
-    messageRouter: {
-      getConnectionState() {
-        return STATE.CONNECTED;
-      },
-    },
-    storageAccountingService: createAccountingService({
-      [joiningNodeId]: {
-        nodeId: joiningNodeId,
-        budgetBytes: 1000,
-        pressureState: 'normal',
-      },
-    }),
-    cdcGroupPropagationService: createPublicationService({
-      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
-      reasonCode: null,
-      enteredAt: '2026-03-04T00:00:00.000Z',
-      recentTransitions: [],
-    }),
-    membershipPublicationService: {
-      getLatestPublicationForNodeSync(targetNodeId, options = {}) {
-        if (targetNodeId !== joiningNodeId) {
-          return null;
-        }
-        return options?.readProfile === planningReadProfile ?
-          planningPublicationRow :
-          diagnosticsPublicationRow;
-      },
-    },
-    now: () => now,
-  });
-
-  const activeReadiness = readinessService.buildNodeReadinessSyncCurrent(
-    joiningNodeId,
-    {readinessPlanningOwnerBuild: true},
-  );
-
-  t.equal(
-    activeReadiness?.dimensions?.controlPlaneRecoveryEligible,
-    true,
-    'sync readiness should start with active recovery eligibility',
-  );
-
-  planningPublicationRow = {
-    publicationEpoch: 42,
-    status: 'PUBLISHED',
-    publishedActiveNodeIds: ['seed-node'],
-  };
-  readinessService.syncOwnerDependencies({
-    membershipPublicationService: {
-      getLatestPublicationForNodeSync(targetNodeId, options = {}) {
-        if (targetNodeId !== joiningNodeId) {
-          return null;
-        }
-        return options?.readProfile === planningReadProfile ?
-          planningPublicationRow :
-          diagnosticsPublicationRow;
-      },
-    },
-  });
-  now = nowAtStart + 1000;
-
-  const retainedReadiness = readinessService.buildNodeReadinessSyncCurrent(
-    joiningNodeId,
-    {readinessPlanningOwnerBuild: true},
-  );
-
-  t.equal(
-    retainedReadiness?.dimensions?.clusterMemberHealthy,
-    false,
-    'sync readiness should continue respecting stale membership evidence',
-  );
-  t.equal(
-    retainedReadiness?.dimensions?.controlPlaneRecoveryEligible,
-    false,
-    'the signaled newer planning epoch should close obsolete recovery grace',
-  );
-
-  t.end();
-});
-
 test('priority recovery keeps degraded repair-only publication recovery-eligible ' +
   'when transport and routed partition service evidence remain live',
 async (t) => {
@@ -1075,7 +957,7 @@ async (t) => {
       ),
     ],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -1145,7 +1027,7 @@ async (t) => {
     }],
     services: [createMessageGroupService('node-durable-rejoin')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -1196,7 +1078,7 @@ async (t) => {
     }],
     services: [createMessageGroupService('node-actually-down')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -1239,7 +1121,7 @@ test('continuous formation churn cannot repeatedly jump the fair owner queue',
       [COLUMN.STATUS]: NODE_STATE.JOINING,
     });
     const scheduled = [];
-    const readiness = new ControlPlaneReadinessService({
+    const readiness = createReadinessServiceForTest({
       nodeId: 'node-0',
       systemTableCache: cache,
       now: () => READINESS_CHURN_NOW_MS,
@@ -1281,7 +1163,7 @@ test('continuous formation churn cannot repeatedly jump the fair owner queue',
 test('readiness planning bounds queued option variants and their registry',
   async (t) => {
     const scheduled = [];
-    const readiness = new ControlPlaneReadinessService({
+    const readiness = createReadinessServiceForTest({
       nodeId: 'node-0',
       systemTableCache: createReadinessChurnCache(),
       now: () => READINESS_CHURN_NOW_MS,
@@ -1415,7 +1297,7 @@ test('retry sampling ignores numeric and named Array prototype pollution',
 test('positive readiness veto signatures distinguish delimiter-bearing ' +
   'metadata states', async (t) => {
   let metadataState = {currentMode: 'a:b', reasonCode: 'c'};
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: 'node-0',
     systemTableCache: createReadinessChurnCache(),
     now: () => READINESS_CHURN_NOW_MS,

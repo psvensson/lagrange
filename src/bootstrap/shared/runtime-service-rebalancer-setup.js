@@ -371,6 +371,8 @@ class RuntimeServiceRebalancerOwner {
       messageRouter: this.messageRouter,
       sqlQueryEngine: this.cdcIntegrationService?.sqlQueryEngine || null,
       rebalanceCoordinator: this.rebalanceCoordinator,
+      controlPlaneReadinessService:
+        this.rebalanceCoordinator.controlPlaneReadinessService,
     });
     rebalancer.initialize();
     rebalancer.setLeader(true);

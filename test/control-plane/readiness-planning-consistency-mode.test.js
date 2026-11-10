@@ -34,13 +34,13 @@ function planningService({asyncAnswer, armed = []}) {
       return {delayMs};
     },
     clearTimeoutFn: () => {},
-    getMembershipPublicationPlanningAnswerSync: () => ({source: 'available'}),
+    getPriorityRecoveryPlanningAnswerSync: () => ({source: 'available'}),
     getMembershipPublicationPlanningSnapshot: () => asyncAnswer,
     resolvePriorityRecoveryPlanningAnswer: (_nodeId, _at, answer) => answer,
   });
-  service.getMembershipPublicationPlanningSnapshotBestEffort =
+  service.getPriorityRecoveryPlanningSnapshotBestEffort =
     ControlPlaneReadinessService.prototype
-      .getMembershipPublicationPlanningSnapshotBestEffort.bind(service);
+      .getPriorityRecoveryPlanningSnapshotBestEffort.bind(service);
   return service;
 }
 
@@ -61,7 +61,7 @@ test('the available answer does not change with refresh latency, in any of four 
     for (const [name, asyncAnswer] of Object.entries(shapes)) {
       const armed = [];
       const service = planningService({asyncAnswer, armed});
-      const answer = await service.getMembershipPublicationPlanningSnapshotBestEffort(
+      const answer = await service.getPriorityRecoveryPlanningSnapshotBestEffort(
         NODE_ID, OBSERVED_AT);
       assert.deepEqual(answer, {source: 'available'},
         `refresh shape ${name} must not decide the available answer`);
@@ -73,7 +73,7 @@ test('the available answer does not change with refresh latency, in any of four 
 test('an unresolved refresh never delays the available answer', async () => {
   const held = heldPromise();
   const service = planningService({asyncAnswer: held.promise});
-  const answer = service.getMembershipPublicationPlanningSnapshotBestEffort(
+  const answer = service.getPriorityRecoveryPlanningSnapshotBestEffort(
     NODE_ID, OBSERVED_AT);
   assert.equal(await isPending(answer), false,
     'the available answer is ready without waiting on any refresh');
@@ -98,10 +98,6 @@ test('a priority control-plane safety read is authoritative and defers without i
         return {publicationStatus: 'OPEN'};
       },
       getPriorityRecoveryPlanningSnapshotBestEffort: async () => {
-        calls.push('available');
-        return {publicationStatus: 'PUBLISHED'};
-      },
-      getMembershipPublicationPlanningSnapshotBestEffort: async () => {
         calls.push('available');
         return {publicationStatus: 'PUBLISHED'};
       },

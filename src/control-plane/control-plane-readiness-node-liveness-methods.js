@@ -1,5 +1,10 @@
 import {COLUMN, STATE, TABLES} from '../constants/index.js';
 import {TRANSPORT_EVENT} from '../constants/transport.js';
+import {readWiredCollaborator} from './control-plane-readiness-collaborators.js';
+import {
+  CONTROL_PLANE_READINESS_COLLABORATOR as COLLABORATOR,
+  CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED as UNWIRED,
+} from './control-plane-readiness-constants.js';
 import {NodeLivenessSemanticProjectionOwner} from
   './node-liveness-semantic-projection-owner.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
@@ -28,8 +33,8 @@ const LIVENESS_SOURCE_TABLES = objectFreeze([
 const controlPlaneReadinessNodeLivenessMethods = {
   refreshNodeLivenessSourceSubscriptions() {
     unsubscribeNodeLivenessTransportSource(this);
-    const router = this.messageRouter;
-    if (!router || typeof router.on !== 'function') return;
+    const router = readWiredCollaborator(this, COLLABORATOR.MESSAGE_ROUTER);
+    if (router === UNWIRED) return;
     const listener = (event = {}) => {
       const nodeId = typeof event.nodeId === 'string' ? event.nodeId : '';
       if (nodeId) {
@@ -104,7 +109,9 @@ const controlPlaneReadinessNodeLivenessMethods = {
 function unsubscribeNodeLivenessTransportSource(service) {
   const router = service.nodeLivenessTransportSource;
   const listener = service.nodeLivenessTransportSourceListener;
-  if (router && listener && typeof router.off === 'function') {
+  // The source is the router this service subscribed to: a wired router,
+  // validated when it was wired.
+  if (router && listener) {
     for (let index = 0; index < NODE_LIVENESS_TRANSPORT_EVENTS.length;
       index += 1) {
       router.off(NODE_LIVENESS_TRANSPORT_EVENTS[index], listener);

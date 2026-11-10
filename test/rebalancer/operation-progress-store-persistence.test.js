@@ -67,6 +67,7 @@ import {
   createMockPolicyService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const TEST_NODE_ID = 'progress-store-node-local';
 const TEST_TARGET_NODE_ID = 'progress-store-node-target';
@@ -121,7 +122,7 @@ function createProgressStoreCoordinatorHarness({
       return {success: true, rows: []};
     },
   };
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: TEST_NODE_ID,
     systemTableCache: createMockCache(),
     cdcIntegrationService: createMockCdcService(),
@@ -133,7 +134,7 @@ function createProgressStoreCoordinatorHarness({
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
     nowFn: () => nowMs,
-  });
+  }));
   coordinator.initialize();
   return {coordinator};
 }

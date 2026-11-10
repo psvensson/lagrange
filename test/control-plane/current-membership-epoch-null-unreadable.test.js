@@ -29,9 +29,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {NUM} from '../../src/constants/index.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   readPublishedMembershipEpoch,
 } from '../../src/control-plane/published-membership-epoch-reading.js';
@@ -61,6 +59,7 @@ import {
   wireEpochDispatchProbe,
 } from '../rebalancer/epoch-fence-test-harness.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 const {EntityType} = UNIFIED_REBALANCER_SHARED;
 
 const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
@@ -87,6 +86,10 @@ const LINE_COMMENT_PATTERN = /\/\/[^\n]*/g;
 // Files that mention the current-epoch surface without decoding it: the
 // planning answer producers/consumers that carry the value as-is.
 const CURRENT_EPOCH_PASSTHROUGH = Object.freeze([
+  // The one readiness class: its delegating method names the surface and
+  // hands the call to the publication-planning-snapshot module (the reader
+  // consumer above), decoding nothing.
+  'src/control-plane/control-plane-readiness-service.js',
   'src/control-plane/recovery-protocol-snapshot.js',
   'src/control-plane/membership-publication-candidate-derivation.js',
   'src/control-plane/projection-readiness-evidence-source.js',
@@ -121,7 +124,7 @@ function buildPublicationRow(status, publicationEpoch, now) {
  * returns `publication` as the latest publication for every node.
  */
 function createReadinessOwner(publication, now) {
-  return new ControlPlaneReadinessService({
+  return createReadinessServiceForTest({
     nodeId: TEST_NODE_ID,
     systemTableCache: createCache(),
     membershipPublicationService: {
@@ -148,7 +151,7 @@ async (t) => {
     buildPublicationRow(PUBLICATION_STATUS_ESTABLISHING, EPOCH_ONE, now),
     now,
   );
-  const answer = owner.getMembershipPublicationPlanningAnswerSync(
+  const answer = owner.getPriorityRecoveryPlanningAnswerSync(
     TEST_NODE_ID,
     now,
   );

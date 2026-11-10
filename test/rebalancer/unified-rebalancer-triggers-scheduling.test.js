@@ -48,6 +48,7 @@ import {
   createPostgresWireEndpoint,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 // Initialize test environment
 // Create a mock system table cache
@@ -57,7 +58,7 @@ import {
 // Create mock rebalance coordinator
 // Create mock readiness service backed by the same cache
 function createMockReadinessService(mockCache) {
-  return {
+  return partialReadinessFake({
     getNodeReadinessSync: (nodeId) => {
       const nodeRow = mockCache.get('nodes', nodeId);
       if (!nodeRow) {
@@ -112,7 +113,7 @@ function createMockReadinessService(mockCache) {
       return createMockReadinessService(mockCache)
         .getNodeReadinessSync(nodeId);
     },
-  };
+  });
 }
 
 
@@ -1048,7 +1049,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         createPostgresWireEndpoint('node-1'),
         createPostgresWireEndpoint('node-2'),
       ];
-      const readinessService = {
+      const readinessService = partialReadinessFake({
         ...createMockReadinessService(createMockCache(
           nodes,
           [],
@@ -1058,7 +1059,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           nodeEndpoints,
           serviceEndpoints,
         )),
-        async getMembershipPublicationPlanningSnapshotBestEffort() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: ['node-1', 'node-2'],
@@ -1080,7 +1081,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
             'checkRebalance should use the canonical best-effort planning answer owner',
           );
         },
-      };
+      });
       const rebalancer = createTestRebalancer({
         entityId: 'control_plane_publications-p1',
         entityType: EntityType.PARTITION,

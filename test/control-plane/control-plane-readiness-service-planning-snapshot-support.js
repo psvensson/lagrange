@@ -12,13 +12,15 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
 } from '../../src/control-plane/control-plane-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
+import {
+  createReadinessServiceForTest,
+  readinessCollaboratorFake,
+} from '../helpers/readiness-service-fixture.js';
 const TEST_STARTUP_ADMISSION_STATE_BLOCKED = 'blocked';
 
 const TEST_STARTUP_ADMISSION_REASON_CLUSTER_INTEGRITY =
@@ -84,7 +86,7 @@ test('ControlPlaneReadinessService returns the AVAILABLE planning answer whateve
   // kept here is the surface-level invariant against this module's fixture.
   let refreshRequested = false;
   let timeoutArmed = false;
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'node-available',
     systemTableCache: createCache(),
     membershipPublicationService: {
@@ -108,7 +110,7 @@ test('ControlPlaneReadinessService returns the AVAILABLE planning answer whateve
     return {publishedPlanningEpoch: 22};
   };
   const snapshot =
-    await readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
+    await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
       'node-available', 1500);
   t.equal(snapshot?.publishedPlanningEpoch, 21,
     'the available answer is returned; a fresher async answer cannot replace it');
@@ -121,7 +123,7 @@ test('ControlPlaneReadinessService returns the AVAILABLE planning answer whateve
 
 test('ControlPlaneReadinessService exposes canonical priority-recovery planning answer sync surface',
   (t) => {
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'node-priority-sync-contract',
       systemTableCache: createCache(),
       membershipPublicationService: {
@@ -163,16 +165,16 @@ test('ControlPlaneReadinessService exposes canonical priority-recovery planning 
 test('ControlPlaneReadinessService enriches the local planning answer with startup admission evidence',
   (t) => {
     const nodeId = 'node-priority-local-admission';
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId,
       systemTableCache: createCache(),
       getLocalClusterIncarnationFence: () =>
         TEST_LOCAL_CLUSTER_INCARNATION_FENCE_BLOCKED,
+      // Readiness reads the cluster's latest publication row (the
+      // production coordinator's cluster read); the fixture derives the
+      // per-node read from it.
       membershipPublicationService: {
-        getLatestPublicationForNodeSync(targetNodeId) {
-          if (targetNodeId !== nodeId) {
-            return null;
-          }
+        getLatestClusterPublicationSync() {
           return {
             publicationEpoch: 35,
             status: 'PUBLISHED',
@@ -218,7 +220,7 @@ test('ControlPlaneReadinessService exposes the canonical AVAILABLE priority-reco
   // opportunistically just because the owner answer could be fetched.
   let ownerReadCalled = false;
   let timeoutArmed = false;
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'node-priority-best-effort-contract',
     systemTableCache: createCache(),
     membershipPublicationService: {
@@ -283,18 +285,19 @@ test('ControlPlaneReadinessService reuses the last active sync priority-recovery
         satisfied: false,
       },
     };
-    const createMembershipPublicationService = () => ({
-      getLatestPublicationForNodeSync(targetNodeId) {
-        if (targetNodeId !== nodeId) {
-          return null;
-        }
-        return publicationRow;
-      },
-      getLatestMembershipPublicationEpochStatusForNodeSync(targetNodeId) {
-        return targetNodeId === nodeId ? publicationRow : null;
-      },
-    });
-    const readinessService = new ControlPlaneReadinessService({
+    // Each wiring (construction and replacement) is validated: the fixture
+    // completes the fake. Readiness reads the cluster's latest publication
+    // row; the fixture derives the per-node read from it.
+    const createMembershipPublicationService = () =>
+      readinessCollaboratorFake('membershipPublicationService', {
+        getLatestClusterPublicationSync() {
+          return publicationRow;
+        },
+        getLatestMembershipPublicationEpochStatusForNodeSync(targetNodeId) {
+          return targetNodeId === nodeId ? publicationRow : null;
+        },
+      });
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'seed-node',
       systemTableCache: createCache(),
       membershipPublicationService: createMembershipPublicationService(),
@@ -415,30 +418,31 @@ test('ControlPlaneReadinessService retains a fresher authoritative priority-reco
       publishedActiveNodeIds: [TARGET_NODE_ID],
       priorityPartitionSummary: SETTLED_PRIORITY_PARTITION_SUMMARY,
     };
-    const createMembershipPublicationService = () => ({
-      getLatestPublicationForNodeSync(targetNodeId) {
-        if (targetNodeId !== TARGET_NODE_ID) {
-          return null;
-        }
-        return publicationRow;
-      },
-      getLatestMembershipPublicationEpochStatusForNodeSync(targetNodeId) {
-        return targetNodeId === TARGET_NODE_ID ? publicationRow : null;
-      },
-      async deriveClusterMembershipCandidate(options = {}) {
-        if (options.publisherNodeId !== TARGET_NODE_ID) {
-          return null;
-        }
-        return {
-          publicationEpoch: ACTIVE_PUBLICATION_EPOCH,
-          publicationStatus: ACK_PENDING_STATUS,
-          priorityPartitionSummary: ACTIVE_PRIORITY_PARTITION_SUMMARY,
-          priorityRecoveryReasonCodes: ACTIVE_REASON_CODES,
-          priorityRecoveryActive: true,
-        };
-      },
-    });
-    const readinessService = new ControlPlaneReadinessService({
+    // Each wiring (construction and replacement) is validated: the fixture
+    // completes the fake. Readiness reads the cluster's latest publication
+    // row; the fixture derives the per-node read from it.
+    const createMembershipPublicationService = () =>
+      readinessCollaboratorFake('membershipPublicationService', {
+        getLatestClusterPublicationSync() {
+          return publicationRow;
+        },
+        getLatestMembershipPublicationEpochStatusForNodeSync(targetNodeId) {
+          return targetNodeId === TARGET_NODE_ID ? publicationRow : null;
+        },
+        async deriveClusterMembershipCandidate(options = {}) {
+          if (options.publisherNodeId !== TARGET_NODE_ID) {
+            return null;
+          }
+          return {
+            publicationEpoch: ACTIVE_PUBLICATION_EPOCH,
+            publicationStatus: ACK_PENDING_STATUS,
+            priorityPartitionSummary: ACTIVE_PRIORITY_PARTITION_SUMMARY,
+            priorityRecoveryReasonCodes: ACTIVE_REASON_CODES,
+            priorityRecoveryActive: true,
+          };
+        },
+      });
+    const readinessService = createReadinessServiceForTest({
       nodeId: LOCAL_NODE_ID,
       systemTableCache: createCache(),
       membershipPublicationService: createMembershipPublicationService(),
@@ -547,7 +551,7 @@ test('ControlPlaneReadinessService retains a fresher authoritative priority-reco
 
 test('ControlPlaneReadinessService exposes a readiness-owned current published membership epoch',
   (t) => {
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'node-current-epoch',
       systemTableCache: createCache(),
       membershipPublicationService: {
@@ -572,7 +576,7 @@ test('ControlPlaneReadinessService exposes a readiness-owned current published m
       'published membership epoch should come from the readiness-owned planning surface',
     );
 
-    readinessService.getMembershipPublicationPlanningSnapshotSync = () => null;
+    readinessService.deriveMembershipPublicationPlanningSnapshotSync = () => null;
     readinessService.getMembershipPublicationDiagnosticsSync = () => ({
       publicationEpoch: 25,
       status: 'PUBLISHED',
@@ -591,7 +595,7 @@ test('ControlPlaneReadinessService exposes a readiness-owned current published m
 
 test('ControlPlaneReadinessService projects control-plane writable blockers through the canonical recovery projection',
   (t) => {
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'seed-node',
       systemTableCache: createCache(),
       now: () => 1500,

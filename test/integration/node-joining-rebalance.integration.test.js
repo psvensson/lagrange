@@ -43,6 +43,7 @@ import {
 import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../../src/control-plane/control-plane-readiness-constants.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 async function shutdownOrFail(t, promise, label) {
   try {
@@ -713,7 +714,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
       });
       endpointSvc.initialize();
 
-      const dispatchSvc = new ReplicaDispatchService({
+      const dispatchSvc = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
         nodeId: seedNodeId,
         messageRouter: bootstrapResult.messageRouter,
         cdcIntegrationService,
@@ -721,7 +722,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
         rebalanceCoordinator,
         sqlQueryEngine,
         controlPlaneSystemTableGateway,
-      });
+      }));
       dispatchSvc.initialize();
 
       // Track message group services on the lease service only. The

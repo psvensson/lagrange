@@ -1,7 +1,7 @@
 import t from 'tap';
 import {
-  ControlPlaneReadinessPublicationPlanningSnapshot,
-} from '../../src/control-plane/control-plane-readiness-publication-planning-snapshot.js';
+  ControlPlaneReadinessService,
+} from '../../src/control-plane/control-plane-readiness-service.js';
 import {
   MembershipPublicationCoordinatorReads,
 } from '../../src/control-plane/membership-publication-coordinator-reads.js';
@@ -19,7 +19,7 @@ import {
 // bump, and a genuine epoch/status advance still forces a rebuild.
 
 const resolveMemo =
-  ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+  ControlPlaneReadinessService.prototype
     .resolveMemoizedPriorityRecoveryPlanningProjectionSync;
 const probeSync =
   MembershipPublicationCoordinatorReads.prototype
@@ -61,24 +61,29 @@ function memoCtx(rows, {nodeId = 'node-b'} = {}) {
     priorityRecoveryPlanningProjectionMemoByNodeId: new Map(),
     membershipPublicationService: coordinatorService(rows),
     readPlanningProjectionSourceGeneration:
-      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+      ControlPlaneReadinessService.prototype
         .readPlanningProjectionSourceGeneration,
+    // This host states its collaborator state explicitly: no planning
+    // identity owner and no versioned derivation key, so the memo keys on
+    // the source revision (the state the tier prototype gave it).
+    readPlanningProjectionMemoIdentity: () => null,
+    readMembershipPlanningDerivationVersionKey: () => null,
     isReadinessPlanningMemoWithinStaleGrace:
-      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+      ControlPlaneReadinessService.prototype
         .isReadinessPlanningMemoWithinStaleGrace,
     readLatestMembershipPublicationEpochStatusProbe:
-      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+      ControlPlaneReadinessService.prototype
         .readLatestMembershipPublicationEpochStatusProbe,
     buildMembershipPublicationPlanningMemoKeyComponent:
-      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+      ControlPlaneReadinessService.prototype
         .buildMembershipPublicationPlanningMemoKeyComponent,
     readMembershipPublicationPlanningMemoVersionKey:
-      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+      ControlPlaneReadinessService.prototype
         .readMembershipPublicationPlanningMemoVersionKey,
     membershipPublicationPlanningMemoVersionKeyMatches:
-      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+      ControlPlaneReadinessService.prototype
         .membershipPublicationPlanningMemoVersionKeyMatches,
-    getMembershipPublicationPlanningSnapshotSync: (id) => ({read: id}),
+    deriveMembershipPublicationPlanningSnapshotSync: (id) => ({read: id}),
     buildTrackedPriorityRecoveryPlanningProjection: (snapshot) => {
       builds.push(snapshot?.read ?? null);
       // The projection stores the CLUSTER winner's epoch/status, regardless

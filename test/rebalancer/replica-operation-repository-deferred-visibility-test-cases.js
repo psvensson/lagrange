@@ -1,5 +1,8 @@
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  createReadinessServiceForTest,
+} from '../helpers/readiness-service-fixture.js';
 
 export function registerReplicaOperationRepositoryDeferredVisibilityTests({
   test,
@@ -185,7 +188,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           executeQuery: async () => ({success: true}),
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -279,7 +282,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           executeQuery: async () => ({success: true}),
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -406,7 +409,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           executeQuery: async () => ({success: true}),
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -575,7 +578,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           },
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PUBLISHED',
               priorityPartitionSummary: {
@@ -655,7 +658,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           },
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PUBLISHED',
               priorityPartitionSummary: {
@@ -966,7 +969,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           executeQuery: async () => ({success: true}),
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
+          getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1139,6 +1142,218 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
         observation?.operations?.map((entry) => entry.workflowStep),
         [WORKFLOW_STEP.ACTIVE],
         'the entity observation should project the newer owner-persisted workflow step',
+      );
+    },
+  );
+
+  test(
+    'real ControlPlaneReadinessService and ReplicaOperationRepository callers ' +
+      'defer owner reads during priority recovery and restore useful reading ' +
+      'when publication advances',
+    async (t) => {
+      const priorityPartitionId =
+        `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`;
+      let currentNowMs = 10_000;
+      let ownerReadShouldSucceed = false;
+      const staleCachedRow = makeRow({
+        operation_id: 'op-stale-cache',
+        type: OperationType.REPLACE,
+        partition_id: priorityPartitionId,
+        entity_id: priorityPartitionId,
+        workflow_step: WORKFLOW_STEP.ACTIVE,
+        status: 'active',
+        source_node_id: 'node-2',
+        target_node_id: TEST_NODE_ID,
+      });
+      const publishedAuthoritativeRow = makeRow({
+        operation_id: 'op-live-epoch-5',
+        type: OperationType.ADD,
+        partition_id: priorityPartitionId,
+        entity_id: priorityPartitionId,
+        workflow_step: WORKFLOW_STEP.CREATING,
+        status: TEST_CREATING_STATUS,
+        source_node_id: null,
+        target_node_id: TEST_NODE_ID,
+      });
+
+      let currentPublication = {
+        publicationEpoch: 4,
+        status: 'PENDING',
+        publicationStatus: 'PENDING',
+        activeNodeIds: [TEST_NODE_ID, 'node-2'],
+        joiningNodeIds: ['node-3'],
+        requiredAckNodeIds: [TEST_NODE_ID, 'node-2', 'node-3'],
+        acknowledgedNodeIds: [TEST_NODE_ID, 'node-2'],
+        pendingAckNodeIds: ['node-3'],
+        pendingPriorityPartitionIds: [priorityPartitionId],
+        priorityPartitionSummary: {
+          satisfied: false,
+          blockedPartitions: [
+            {
+              partitionId: priorityPartitionId,
+              spreadGap: 1,
+            },
+          ],
+        },
+      };
+
+      const sharedSystemTableCache = {
+        get: () => null,
+        getAll: (tableName) =>
+          tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ?
+            [staleCachedRow] :
+            [],
+        filter: (tableName, predicate) =>
+          tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ?
+            [staleCachedRow].filter(predicate) :
+            [],
+        getTableMutationVersion: (tableName) =>
+          !tableName ||
+          tableName === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS ?
+            currentPublication.publicationEpoch :
+            0,
+      };
+      const readinessService = createReadinessServiceForTest({
+        nodeId: TEST_NODE_ID,
+        clock: () => currentNowMs,
+        systemTableCache: sharedSystemTableCache,
+        membershipPublicationService: {
+          getCurrentPublicationSync: () => currentPublication,
+          getCurrentPublication: async () => currentPublication,
+          deriveClusterMembershipCandidateSync: () => currentPublication,
+          getLatestMembershipPublicationEpochStatusForNodeSync: () =>
+            currentPublication,
+        },
+      });
+
+      const repo = createTestRepository({
+        timeSource: {
+          now: () => currentNowMs,
+        },
+        controlPlaneReadinessService: readinessService,
+        controlPlaneSystemTableGateway: {
+          readRows: async () => {
+            if (!ownerReadShouldSucceed) {
+              return {
+                success: false,
+                error: 'Distributed operation failed due to participant failures',
+                errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+                retryAfterMs: 250,
+              };
+            }
+            return {
+              success: true,
+              rows: [publishedAuthoritativeRow],
+            };
+          },
+          executeQuery: async () => ({success: true}),
+        },
+        systemTableCache: sharedSystemTableCache,
+      });
+
+      // Phase 1: Priority recovery is pending at epoch 4 and authoritative owner
+      // read fails retryably. Real readiness service + repository caller must
+      // defer the owner read.
+      const deferredOperations = await repo.queryIncompleteOperations({
+        visibilityReadMode:
+          REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
+      });
+      const deferredOutcome = repo.getLastIncompleteOperationReadOutcome();
+
+      t.equal(
+        deferredOutcome?.completionState,
+        PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED,
+        'repository caller should record a deferred completion state while priority recovery is pending',
+      );
+      t.equal(
+        deferredOutcome?.reasonCode,
+        PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED,
+        'deferred visibility should carry the canonical deferred reason code from the real readiness service',
+      );
+      t.equal(
+        deferredOutcome?.source,
+        'priority_recovery_authoritative_operation_failure',
+        'deferred visibility should record the priority recovery authoritative failure source',
+      );
+      t.same(
+        deferredOperations.map((operation) => operation.operationId),
+        ['op-stale-cache'],
+        'deferred owner read during priority recovery should preserve cached operations under the deferred contract',
+      );
+
+      // Phase 2: Publication advances to epoch 5, priority recovery settles,
+      // and authoritative owner read succeeds. Useful reading must be restored.
+      currentNowMs += 20_000;
+      ownerReadShouldSucceed = true;
+      currentPublication = {
+        publicationEpoch: 5,
+        status: 'PUBLISHED',
+        publicationStatus: 'PUBLISHED',
+        activeNodeIds: [TEST_NODE_ID, 'node-2', 'node-3'],
+        joiningNodeIds: [],
+        requiredAckNodeIds: [TEST_NODE_ID, 'node-2', 'node-3'],
+        acknowledgedNodeIds: [TEST_NODE_ID, 'node-2', 'node-3'],
+        pendingAckNodeIds: [],
+        pendingPriorityPartitionIds: [],
+        priorityPartitionSummary: {
+          satisfied: true,
+          blockedPartitions: [],
+        },
+      };
+
+      const restoredPlanning =
+        readinessService.getPriorityRecoveryPlanningAnswerSync(
+          TEST_NODE_ID,
+          currentNowMs,
+        );
+      t.equal(
+        restoredPlanning?.publicationEpoch,
+        5,
+        'real readiness service should advance synchronous planning answer to epoch 5',
+      );
+      t.equal(
+        restoredPlanning?.priorityPartitionSummary?.satisfied,
+        true,
+        'real readiness service should report priority partition recovery satisfied after publication advances',
+      );
+
+      const restoredOperations = await repo.queryIncompleteOperations({
+        visibilityReadMode:
+          REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
+      });
+      const restoredOutcome = repo.getLastIncompleteOperationReadOutcome();
+      const restoredEntityObservation =
+        await repo.getOperationsByEntityAuthoritativeObservation(
+          TEST_ENTITY_TYPE,
+          priorityPartitionId,
+        );
+
+      t.equal(
+        restoredOutcome,
+        null,
+        'publication advancement and authoritative read recovery should clear the deferred read outcome',
+      );
+      t.same(
+        restoredOperations.map((operation) => operation.operationId),
+        ['op-live-epoch-5'],
+        'restored read should return the live authoritative operation row instead of stale cache',
+      );
+      t.equal(
+        restoredEntityObservation?.state,
+        INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT,
+        'entity authoritative observation should report present state after recovery settles',
+      );
+      t.equal(
+        restoredEntityObservation?.deferredOutcome,
+        null,
+        'entity authoritative observation should have no deferred outcome once reading is restored',
+      );
+      t.same(
+        restoredEntityObservation?.operations?.map(
+          (operation) => operation.operationId,
+        ),
+        ['op-live-epoch-5'],
+        'entity authoritative observation should return the live authoritative operation row',
       );
     },
   );

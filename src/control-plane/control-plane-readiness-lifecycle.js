@@ -6,7 +6,11 @@
  * once when the node runtime stops. Partition and rebalancer lifecycles only
  * consume the node-owned service and never call this on it.
  */
-const LOCAL_STR_FUNCTION = 'function';
+import {readWiredCollaborator} from './control-plane-readiness-collaborators.js';
+import {
+  CONTROL_PLANE_READINESS_COLLABORATOR as COLLABORATOR,
+  CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED as UNWIRED,
+} from './control-plane-readiness-constants.js';
 
 const controlPlaneReadinessLifecycleMethods = {
   /**
@@ -19,11 +23,9 @@ const controlPlaneReadinessLifecycleMethods = {
       return;
     }
     this.isShutDown = true;
-    if (
-      this.cacheChangeListener &&
-      typeof this.systemTableCache?.offCacheChange === LOCAL_STR_FUNCTION
-    ) {
-      this.systemTableCache.offCacheChange(this.cacheChangeListener);
+    const cache = readWiredCollaborator(this, COLLABORATOR.SYSTEM_TABLE_CACHE);
+    if (this.cacheChangeListener && cache !== UNWIRED) {
+      cache.offCacheChange(this.cacheChangeListener);
     }
     this.cacheChangeListener = null;
     this.detachCacheApplyChangeListener(this.systemTableCache);

@@ -4,6 +4,10 @@ import {registerMembershipPublicationCoordinatorTailFinalTests} from './membersh
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
   '../../src/control-plane/membership-publication-row-contract.js';
 
+import {
+  createReadinessServiceForTest,
+  readinessCollaboratorFake,
+} from '../helpers/readiness-service-fixture.js';
 export function registerMembershipPublicationCoordinatorTailMoreTests({
   test,
   acknowledgeMembershipPublication,
@@ -888,10 +892,17 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           return 'connected';
         },
       };
-      const readinessService = new ControlPlaneReadinessService({
+      // The readiness service's cache and router: the same partial fakes,
+      // completed once by the fixture, wired at construction and re-wired
+      // unchanged.
+      const readinessCache =
+        readinessCollaboratorFake('systemTableCache', systemTableCache);
+      const readinessRouter =
+        readinessCollaboratorFake('messageRouter', messageRouter);
+      const readinessService = createReadinessServiceForTest({
         nodeId: 'node-1',
-        systemTableCache,
-        messageRouter,
+        systemTableCache: readinessCache,
+        messageRouter: readinessRouter,
         now: () => 1000,
       });
       const coordinator = new MembershipPublicationCoordinator({
@@ -902,8 +913,8 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       });
       readinessService.syncOwnerDependencies({
         membershipPublicationService: coordinator,
-        messageRouter,
-        systemTableCache,
+        messageRouter: readinessRouter,
+        systemTableCache: readinessCache,
       });
 
       let readiness = readinessService.getNodeReadinessSync('node-1');

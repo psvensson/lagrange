@@ -1229,7 +1229,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         getRecoveryEpochHistoryByNodeId() {
           return {};
         },
-        async getMembershipPublicationPlanningSnapshotBestEffort() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return null;
         },
       },
@@ -1406,7 +1406,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         getRecoveryEpochHistoryByNodeId() {
           return {};
         },
-        async getMembershipPublicationPlanningSnapshotBestEffort() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return null;
         },
       },

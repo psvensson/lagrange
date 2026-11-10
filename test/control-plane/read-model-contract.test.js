@@ -12,6 +12,7 @@ import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {REBALANCE_COORDINATOR_EVENT} from
   '../../src/rebalancer/rebalancer-constants.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 // ── Suite-local fixture constants ──────────────────────────────────
 const FIXTURE_REPLICA_ID = 'partition-1-r1';
@@ -157,7 +158,7 @@ test('RebalanceCoordinator.getEntityInFlightReplicaIds fails closed when its ' +
   'authoritative owner is unavailable', async (t) => {
   let sqlQueryCalled = false;
 
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: FIXTURE_NODE_ID,
     systemTableCache: {
       get() {
@@ -187,7 +188,7 @@ test('RebalanceCoordinator.getEntityInFlightReplicaIds fails closed when its ' +
       },
     },
     enableTimeouts: false,
-  });
+  }));
   coordinator.initialize();
 
   try {
@@ -222,7 +223,7 @@ test('emitReplicaStatusDivergence emits FIELD_MISMATCH when cache ' +
   'and SQL differ', async (t) => {
   const emittedEvents = [];
 
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: FIXTURE_NODE_ID,
     systemTableCache: {
       get(_table, _key) {
@@ -251,7 +252,7 @@ test('emitReplicaStatusDivergence emits FIELD_MISMATCH when cache ' +
       },
     },
     enableTimeouts: false,
-  });
+  }));
   coordinator.initialize();
 
   coordinator.on(
@@ -289,7 +290,7 @@ test('emitReplicaStatusDivergence emits CACHE_MISSING when cache ' +
   'row is absent', async (t) => {
   const emittedEvents = [];
 
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: FIXTURE_NODE_ID,
     systemTableCache: {
       get() {
@@ -318,7 +319,7 @@ test('emitReplicaStatusDivergence emits CACHE_MISSING when cache ' +
       },
     },
     enableTimeouts: false,
-  });
+  }));
   coordinator.initialize();
 
   coordinator.on(
@@ -352,7 +353,7 @@ test('emitReplicaStatusDivergence emits AUTHORITATIVE_MISSING when ' +
   'SQL status is null', async (t) => {
   const emittedEvents = [];
 
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: FIXTURE_NODE_ID,
     systemTableCache: {
       get() {
@@ -381,7 +382,7 @@ test('emitReplicaStatusDivergence emits AUTHORITATIVE_MISSING when ' +
       },
     },
     enableTimeouts: false,
-  });
+  }));
   coordinator.initialize();
 
   coordinator.on(
@@ -415,7 +416,7 @@ test('emitReplicaStatusDivergence does not emit when cache and ' +
   'SQL agree', async (t) => {
   const emittedEvents = [];
 
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: FIXTURE_NODE_ID,
     systemTableCache: {
       get() {
@@ -444,7 +445,7 @@ test('emitReplicaStatusDivergence does not emit when cache and ' +
       },
     },
     enableTimeouts: false,
-  });
+  }));
   coordinator.initialize();
 
   coordinator.on(
@@ -473,7 +474,7 @@ test('emitReplicaStatusDivergence does not emit when replicaId ' +
   'is missing', async (t) => {
   const emittedEvents = [];
 
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: FIXTURE_NODE_ID,
     systemTableCache: {
       get() {
@@ -502,7 +503,7 @@ test('emitReplicaStatusDivergence does not emit when replicaId ' +
       },
     },
     enableTimeouts: false,
-  });
+  }));
   coordinator.initialize();
 
   coordinator.on(

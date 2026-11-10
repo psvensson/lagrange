@@ -18,6 +18,7 @@ import {
   REBALANCER_NODE_STATUS,
   REBALANCER_DEFAULT_POLICY,
 } from '../../src/rebalancer/rebalancer-constants.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 /**
  * All stabilization reset trigger constants.
@@ -92,7 +93,7 @@ function createMockDependencies() {
 function createTestRebalancer(overrides = {}) {
   const deps = createMockDependencies();
 
-  const rebalancer = new UnifiedRebalancer({
+  const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
     entityId: 'test-partition-p1',
     entityType: REBALANCER_ENTITY_TYPE.PARTITION,
     systemTableCache: overrides.systemTableCache || deps.mockCache,
@@ -102,7 +103,7 @@ function createTestRebalancer(overrides = {}) {
     messageRouter: overrides.messageRouter || deps.mockRouter,
     rebalanceCoordinator:
       overrides.rebalanceCoordinator || deps.mockCoordinator,
-  });
+  }));
 
   rebalancer.isLeader = true;
 

@@ -2,6 +2,7 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const MOCK_NODE_ID = 'node-local';
 
@@ -27,7 +28,7 @@ function createTestOperation(overrides = {}) {
 }
 
 function createMinimalCoordinator(overrides = {}) {
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: MOCK_NODE_ID,
     systemTableCache: {get() {
       return null;
@@ -50,7 +51,7 @@ function createMinimalCoordinator(overrides = {}) {
     },
     enableTimeouts: false,
     ...overrides,
-  });
+  }));
   coordinator.repository.confirmReplicaOperationPersistence = async () => {};
   return coordinator;
 }

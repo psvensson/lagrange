@@ -22,6 +22,7 @@ import {
   REBALANCER_MOVE_TYPE,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -48,7 +49,7 @@ function createMockCache() {
 }
 
 function createRebalancer(options = {}) {
-  return new UnifiedRebalancer({
+  return new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
     entityId: options.entityId || 'control_plane_publications-p1',
     entityType: EntityType.PARTITION,
     nodeId: options.nodeId || 'node-1',
@@ -82,7 +83,7 @@ function createRebalancer(options = {}) {
         checkReplace: async () => ({decision: 'allow'}),
       },
     },
-  });
+  }));
 }
 
 function captureInfoLogs(rebalancer) {

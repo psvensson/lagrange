@@ -544,7 +544,7 @@ function bindStartupAuthority({
   // best-effort surface stays for the AVAILABLE consumers in this scenario.
   readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead =
     async () => getPlanningAnswer();
-  readinessService.getMembershipPublicationPlanningSnapshotBestEffort =
+  readinessService.getPriorityRecoveryPlanningSnapshotBestEffort =
     async () => getPlanningAnswer();
 }
 

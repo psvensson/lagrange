@@ -31,13 +31,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  ControlPlaneReadinessPublicationPlanningSnapshot,
-} from
-  '../../src/control-plane/control-plane-readiness-publication-planning-snapshot.js';
-import {
-  ControlPlaneReadinessPublicationPlanningResolution,
-} from
-  '../../src/control-plane/control-plane-readiness-publication-planning-resolution.js';
+  ControlPlaneReadinessService,
+} from '../../src/control-plane/control-plane-readiness-service.js';
 import {
   MembershipPublicationCoordinatorReads,
 } from '../../src/control-plane/membership-publication-coordinator-reads.js';
@@ -51,8 +46,8 @@ import {
   rowsForState,
 } from './readiness-planning-formation-rig.js';
 
-const PlanningSnapshot = ControlPlaneReadinessPublicationPlanningSnapshot;
-const PlanningResolution = ControlPlaneReadinessPublicationPlanningResolution;
+const PlanningSnapshot = ControlPlaneReadinessService;
+const PlanningResolution = ControlPlaneReadinessService;
 const resolveProjectionMemo =
   PlanningSnapshot.prototype
     .resolveMemoizedPriorityRecoveryPlanningProjectionSync;
@@ -134,6 +129,11 @@ function sharedMemoMethods(Owner) {
   return {
     readPlanningProjectionSourceGeneration:
       Owner.prototype.readPlanningProjectionSourceGeneration,
+    // This host states its collaborator state explicitly: no planning
+    // identity owner and no versioned derivation key, so the memo keys on
+    // the source revision (the state the tier prototype gave it).
+    readPlanningProjectionMemoIdentity: () => null,
+    readMembershipPlanningDerivationVersionKey: () => null,
     isReadinessPlanningMemoWithinStaleGrace:
       Owner.prototype.isReadinessPlanningMemoWithinStaleGrace,
     readLatestMembershipPublicationEpochStatusProbe:
@@ -161,7 +161,7 @@ function projectionMemoCtx({nodeId = 'node-a', rows = []} = {}) {
     priorityRecoveryPlanningProjectionMemoByNodeId: new Map(),
     membershipPublicationService: coordinatorService(rows),
     ...sharedMemoMethods(PlanningSnapshot),
-    getMembershipPublicationPlanningSnapshotSync: (id) => ({read: id}),
+    deriveMembershipPublicationPlanningSnapshotSync: (id) => ({read: id}),
     buildTrackedPriorityRecoveryPlanningProjection: (snapshot) => {
       builds.push(snapshot?.read ?? null);
       return Object.freeze({

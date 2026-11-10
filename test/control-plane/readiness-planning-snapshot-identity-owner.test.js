@@ -42,8 +42,7 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
-import {ControlPlaneReadinessService} from
-  '../../src/control-plane/control-plane-readiness-service.js';
+
 import {
   getSharedSyncSectionRegistry,
 } from '../../src/diagnostics/event-loop-gap-watchdog.js';
@@ -61,6 +60,10 @@ import {
   rowsForState,
 } from './readiness-planning-formation-rig.js';
 
+import {
+  createReadinessServiceForTest,
+  readinessCollaboratorFakes,
+} from '../helpers/readiness-service-fixture.js';
 // Measured on this exact rig at the base commit (probe-derived identity, one
 // fresh canonical snapshot per producer call): 1724 heavy planning builds over
 // 5s of virtual time = 344.8/s.
@@ -128,7 +131,7 @@ const SHAPE_SPACE_DIVERGENT = 15235;
 const PRECONDITION_UNSOUND_SHAPES = 3405;
 
 function createService({clock, cache}) {
-  const readiness = new ControlPlaneReadinessService({
+  const readiness = createReadinessServiceForTest({
     nodeId: OWNER_NODE_ID,
     systemTableCache: cache,
     now: () => clock.value,
@@ -168,7 +171,7 @@ function createFixture() {
 
 // The canonical planning snapshot every producer re-normalises.
 function canonicalSnapshot(readiness, clock) {
-  return readiness.getMembershipPublicationPlanningSnapshotSync(
+  return readiness.deriveMembershipPublicationPlanningSnapshotSync(
     OWNER_NODE_ID,
     clock.value,
   );
@@ -413,9 +416,9 @@ test('identical-counter-cache-swap-drops-the-canonical-identity', () => {
     'the retained snapshot is canonical before the swap');
   assert.equal(builds.length, buildsBeforeSwap,
     'the pre-swap re-normalisation rebuilt nothing');
-  readiness.syncOwnerDependencies({
+  readiness.syncOwnerDependencies(readinessCollaboratorFakes({
     systemTableCache: createFormationShapedCache(T0),
-  });
+  }));
   const afterSwap = readiness.buildPriorityRecoveryPlanningProjection(
     retained, clock.value);
   assert.notEqual(afterSwap, retained,
@@ -615,7 +618,7 @@ function driveFixedPointAudit() {
 // A service with no cache content, used to drive raw planning-snapshot shapes
 // through the REAL normalizer.
 function createShapeSpaceService() {
-  return new ControlPlaneReadinessService({
+  return createReadinessServiceForTest({
     nodeId: OWNER_NODE_ID,
     systemTableCache: {
       get: () => null,

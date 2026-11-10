@@ -5,40 +5,53 @@ import {
 } from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_PUBLICATION_MODE,
+  CONTROL_PLANE_READINESS_ERROR_CODE,
   CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
 } from '../../src/control-plane/control-plane-constants.js';
-import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
+
 import {createAccountingService, createActiveNode, createCache, createMessageGroupService, createPublicationService} from './control-plane-readiness-service-planning-snapshot-support.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 test('ControlPlaneReadinessService fails closed without publication owner',
   async (t) => {
-    let statsCalls = 0;
     const cache = createCache({
       nodes: [createActiveNode('node-5')],
       services: [createMessageGroupService('node-5')],
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const storageAccountingService = createAccountingService({
+      'node-5': {
+        nodeId: 'node-5',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    });
+    // A publication owner without the publication-mode diagnostics member
+    // is a malformed collaborator, refused at wiring: readiness never
+    // synthesizes publication state from a getStats fallback.
+    t.throws(
+      () => createReadinessServiceForTest({
+        nodeId: 'node-5',
+        systemTableCache: cache,
+        storageAccountingService,
+        cdcGroupPropagationService: {
+          getStats() {
+            return {lastFallbackReason: 'should_not_be_used'};
+          },
+        },
+        now: () => 1500,
+      }),
+      {code: CONTROL_PLANE_READINESS_ERROR_CODE.COLLABORATOR_INVALID},
+      'a publication owner without getPublicationModeDiagnostics is refused',
+    );
+    // No publication owner wired at all: readiness fails closed to
+    // repair-only.
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'node-5',
       systemTableCache: cache,
-      storageAccountingService: createAccountingService({
-        'node-5': {
-          nodeId: 'node-5',
-          budgetBytes: 1000,
-          pressureState: 'normal',
-        },
-      }),
-      cdcGroupPropagationService: {
-        getStats() {
-          statsCalls += 1;
-          return {
-            lastFallbackReason: 'should_not_be_used',
-          };
-        },
-      },
+      storageAccountingService,
+      cdcGroupPropagationService: null,
       now: () => 1500,
     });
 
@@ -56,7 +69,6 @@ test('ControlPlaneReadinessService fails closed without publication owner',
         CONTROL_PLANE_READINESS_REASON.METADATA_PUBLICATION_REPAIR_ONLY,
       ),
     );
-    t.equal(statsCalls, 0, 'readiness should not synthesize publication via getStats fallback');
     t.end();
   });
 
@@ -67,7 +79,7 @@ async (t) => {
     nodes: [createActiveNode('node-5-warn')],
     services: [createMessageGroupService('node-5-warn')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'node-5-warn',
     systemTableCache: cache,
     storageAccountingService: createAccountingService({
@@ -112,7 +124,7 @@ test('ControlPlaneReadinessService strict mode throws without storage owner',
       nodes: [createActiveNode('node-strict-storage')],
       services: [createMessageGroupService('node-strict-storage')],
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'node-strict-storage',
       systemTableCache: cache,
       cdcGroupPropagationService: createPublicationService({
@@ -139,7 +151,7 @@ test('ControlPlaneReadinessService strict mode throws without publication owner'
       nodes: [createActiveNode('node-strict-publication')],
       services: [createMessageGroupService('node-strict-publication')],
     });
-    const readinessService = new ControlPlaneReadinessService({
+    const readinessService = createReadinessServiceForTest({
       nodeId: 'node-strict-publication',
       systemTableCache: cache,
       storageAccountingService: createAccountingService({
@@ -169,7 +181,7 @@ async (t) => {
     nodes: [createActiveNode('node-strat')],
     services: [createMessageGroupService('node-strat')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'node-strat',
     systemTableCache: cache,
     storageAccountingService: createAccountingService({
@@ -208,7 +220,7 @@ async (t) => {
     nodes: [overloadedNode],
     services: [createMessageGroupService('node-warm')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'node-warm',
     systemTableCache: cache,
     storageAccountingService: createAccountingService({
@@ -246,7 +258,7 @@ async (t) => {
     nodes: [createActiveNode('node-nocap')],
     services: [createMessageGroupService('node-nocap')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'node-nocap',
     systemTableCache: cache,
     cdcGroupPropagationService: createPublicationService({
@@ -283,7 +295,7 @@ async (t) => {
     }],
     services: [createMessageGroupService('node-unhealthy')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
@@ -330,7 +342,7 @@ async (t) => {
     nodes: [overloadedNode],
     services: [createMessageGroupService('node-sync')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'node-sync',
     systemTableCache: cache,
     cdcGroupPropagationService: createPublicationService({
@@ -359,7 +371,7 @@ async (t) => {
     nodes: [createActiveNode('node-sync-nocap')],
     services: [createMessageGroupService('node-sync-nocap')],
   });
-  const readinessService = new ControlPlaneReadinessService({
+  const readinessService = createReadinessServiceForTest({
     nodeId: 'node-sync-nocap',
     systemTableCache: cache,
     cdcGroupPropagationService: createPublicationService({

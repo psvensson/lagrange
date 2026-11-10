@@ -982,10 +982,10 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
               options?.decisionDimension === REMOVE_SAFETY_DECISION_DIMENSION,
           };
         },
-        async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
-          return this.getMembershipPublicationPlanningSnapshotSync(nodeId);
+        async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
+          return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
         },
-        getMembershipPublicationPlanningSnapshotSync(nodeId) {
+        getPriorityRecoveryPlanningAnswerSync(nodeId) {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: Object.freeze([

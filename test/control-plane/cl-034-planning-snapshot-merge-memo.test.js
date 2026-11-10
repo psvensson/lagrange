@@ -1,11 +1,9 @@
 import t from 'tap';
 import {
-  ControlPlaneReadinessPublicationPlanningResolution,
-} from '../../src/control-plane/control-plane-readiness-publication-planning-resolution.js';
-import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 
+import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 // CL-034: the residual readiness-build cost CL-033's projection memo did not cover.
 // getNodeReadinessSync -> resolveNodeMembershipPublicationPlanningAnswerSync calls
 // resolveMembershipPublicationPlanningSnapshot (the merge: a SECOND deep cluster
@@ -19,7 +17,7 @@ import {
 // These tests exercise the memo directly via the prototype method with a mock
 // `this`.
 const resolveMemo =
-  ControlPlaneReadinessPublicationPlanningResolution.prototype
+  ControlPlaneReadinessService.prototype
     .resolveMemoizedMembershipPublicationPlanningSnapshotSync;
 
 const T0 = Date.parse('2026-06-14T06:00:00.000Z');
@@ -43,22 +41,27 @@ function memoCtx({
     membershipPublicationPlanningSourceRevision: 0,
     membershipPublicationPlanningSnapshotMemoByNodeId: new Map(),
     readPlanningProjectionSourceGeneration:
-      ControlPlaneReadinessPublicationPlanningResolution.prototype
+      ControlPlaneReadinessService.prototype
         .readPlanningProjectionSourceGeneration,
+    // This host states its collaborator state explicitly: no planning
+    // identity owner and no versioned derivation key, so the memo keys on
+    // the source revision (the state the tier prototype gave it).
+    readPlanningProjectionMemoIdentity: () => null,
+    readMembershipPlanningDerivationVersionKey: () => null,
     isReadinessPlanningMemoWithinStaleGrace:
-      ControlPlaneReadinessPublicationPlanningResolution.prototype
+      ControlPlaneReadinessService.prototype
         .isReadinessPlanningMemoWithinStaleGrace,
     readLatestMembershipPublicationEpochStatusProbe:
-      ControlPlaneReadinessPublicationPlanningResolution.prototype
+      ControlPlaneReadinessService.prototype
         .readLatestMembershipPublicationEpochStatusProbe,
     buildMembershipPublicationPlanningMemoKeyComponent:
-      ControlPlaneReadinessPublicationPlanningResolution.prototype
+      ControlPlaneReadinessService.prototype
         .buildMembershipPublicationPlanningMemoKeyComponent,
     readMembershipPublicationPlanningMemoVersionKey:
-      ControlPlaneReadinessPublicationPlanningResolution.prototype
+      ControlPlaneReadinessService.prototype
         .readMembershipPublicationPlanningMemoVersionKey,
     membershipPublicationPlanningMemoVersionKeyMatches:
-      ControlPlaneReadinessPublicationPlanningResolution.prototype
+      ControlPlaneReadinessService.prototype
         .membershipPublicationPlanningMemoVersionKeyMatches,
     membershipPublicationService: {
       getLatestMembershipPublicationEpochStatusForNodeSync: () => pub,
@@ -166,7 +169,7 @@ t.test('authoritative owner answer is not merged again inside the same readiness
         return 0;
       },
     };
-    const readiness = new ControlPlaneReadinessService({
+    const readiness = createReadinessServiceForTest({
       nodeId: 'seed',
       now: () => T0,
       systemTableCache: cache,

@@ -13,6 +13,7 @@ import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function createSpyLogger() {
   const infoCalls = [];
@@ -36,7 +37,7 @@ function createMockSqlEngine() {
 }
 
 function createCoordinator(logger) {
-  const coordinator = new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: 'test-node-1',
     authoritativeVisibilityTimeoutMs: 0,
     authoritativeVisibilityRetryDelayMs: 0,
@@ -57,7 +58,7 @@ function createCoordinator(logger) {
     storageAccountingService: {
       estimateReplicaBytes: () => 1,
     },
-  });
+  }));
   coordinator.logger = logger;
   return coordinator;
 }

@@ -18,6 +18,7 @@ import {
   initializeConfig,
   seedAuthoritativeOperation,
 } from '../rebalancer/reservation-dispatch-gate-test-harness.js';
+import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const OWNER_NODE_ID = 'dispatch-projection-owner';
 const TARGET_NODE_ID = 'dispatch-projection-target';
@@ -52,10 +53,10 @@ function buildRuntimeServiceOperation(overrides = {}) {
 }
 
 function createProjectionService(coordinator) {
-  return new ReplicaDispatchService({
+  return new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
     nodeId: OWNER_NODE_ID,
     rebalanceCoordinator: coordinator,
-  });
+  }));
 }
 
 test('dispatch projection preserves the exact reservation identity through ' +
