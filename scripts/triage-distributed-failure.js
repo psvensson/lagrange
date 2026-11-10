@@ -22,7 +22,14 @@ import process from 'node:process';
 import {readdirSync, readFileSync, statSync, existsSync} from 'node:fs';
 import {join, basename, dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {classifyRunReport} from './rolling-restart-stat-gate-summary.js';
+import {
+  CLASS_UNJUDGEABLE,
+  classifyRunReport,
+} from './rolling-restart-stat-gate-summary.js';
+
+const CLASS_REFUSED = 'REFUSED';
+const EXIT_CODE_UNJUDGEABLE = 1;
+const EXIT_CODE_REFUSED = 2;
 
 const DEFAULT_REPORT_DIR = 'test-output/reports';
 const REPORT_SUFFIX = '.report.json';
@@ -98,6 +105,10 @@ const CLASS_GUIDANCE = {
     'a harness/transport defect, NOT a cluster verdict. Fix observability',
     'before believing anything else in this report.',
   ],
+  UNJUDGEABLE: [
+    'UNJUDGEABLE: the report is missing, malformed, unsupported, or contradictory.',
+    'This is not a cluster verdict and cannot produce a pass receipt.',
+  ],
 };
 
 function newestReport(reportDir) {
@@ -120,7 +131,9 @@ function playbackDirFor(reportPath) {
 // The triage summary is written per scenario: <playback>/<scenario>/
 // triage-summary.md. The scenario dir name comes from the report itself.
 function findTriageSummary(playback, report) {
-  const scenarioName = report?.scenarios?.[0]?.scenario;
+  const scenarioName = report?.scenarios?.[0]?.scenario ||
+    report?.standardSummary?.scenarios?.[0]?.scenario ||
+    report?.scenario;
   const candidate = scenarioName ?
     join(playback, scenarioName, 'triage-summary.md') :
     null;
@@ -169,6 +182,11 @@ function main() {
   if (guidance) {
     for (const line of guidance) {
       console.log(substitute(line));
+    }
+    if (rec.class === CLASS_UNJUDGEABLE) {
+      process.exitCode = EXIT_CODE_UNJUDGEABLE;
+    } else if (rec.class === CLASS_REFUSED) {
+      process.exitCode = EXIT_CODE_REFUSED;
     }
     return;
   }

@@ -1,0 +1,46 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "canonical-report-outcome-classification",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/rolling-restart-stat-gate-summary.test.js": "84571803772813fe8717bfceca8f92d7251352195c9e063d8cc764c1492936c3"
+  },
+  "generatedAt": "2026-11-10T07:23:50.755Z",
+  "receipts": [
+    {
+      "id": "retained-formation-failure-classified",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^retained-formation-failure-classified: .*$\" test/scripts/rolling-restart-stat-gate-summary.test.js",
+      "detail": "The retained failed formation report is classified as failure and never healthy or slow.",
+      "testFile": "test/scripts/rolling-restart-stat-gate-summary.test.js"
+    },
+    {
+      "id": "supported-success-classified",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^supported-success-classified: .*$\" test/scripts/rolling-restart-stat-gate-summary.test.js",
+      "detail": "Supported success report families are classified as CONVERGED without masking or regression.",
+      "testFile": "test/scripts/rolling-restart-stat-gate-summary.test.js"
+    },
+    {
+      "id": "unknown-missing-conflicting-evidence-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^unknown-missing-conflicting-evidence-refused: .*$\" test/scripts/rolling-restart-stat-gate-summary.test.js",
+      "detail": "Unknown, missing, malformed, or contradictory evidence reports are refused as UNJUDGEABLE.",
+      "testFile": "test/scripts/rolling-restart-stat-gate-summary.test.js"
+    },
+    {
+      "id": "public-triage-and-receipt-composition",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^public-triage-and-receipt-composition: .*$\" test/scripts/rolling-restart-stat-gate-summary.test.js",
+      "detail": "The public triage CLI and receipt composition refuse unjudgeable reports and report true failures.",
+      "testFile": "test/scripts/rolling-restart-stat-gate-summary.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/canonical-report-outcome-classification.js --check-verification",
+      "detail": "An approving subagent verification newer than the last attempt, read through the solve store owner.",
+      "testFile": null
+    }
+  ]
+}

@@ -18,6 +18,27 @@ const CLASS_CONVERGED = 'CONVERGED';
 const CLASS_TOPOLOGY_BLOCKED = 'TOPOLOGY_BLOCKED';
 const CLASS_STALLED = 'STALLED';
 const CLASS_SLOW = 'SLOW';
+const CLASS_UNJUDGEABLE = 'UNJUDGEABLE';
+
+const REASON_UNJUDGEABLE_EVIDENCE = 'unjudgeable_evidence';
+const REASON_INVALID_REPORT_SHAPE = 'invalid_report_shape';
+const REASON_UNSUPPORTED_OR_EMPTY = 'unsupported_or_empty_report';
+const REASON_MALFORMED_SCENARIO = 'malformed_scenario_entry';
+const REASON_UNOBSERVED_VERDICT = 'unobserved_verdict_fields';
+const REASON_CONTRADICTORY_BREACH = 'contradictory_pass_with_hard_breaches';
+const REASON_CONTRADICTORY_FORMATION_PASS = 'contradictory_formation_pass';
+const REASON_CONTRADICTORY_FORMATION_FAIL = 'contradictory_formation_fail';
+const REASON_UNKNOWN_FORMATION_VERDICT = 'unknown_formation_verdict';
+const REASON_REFUSED_TOPOLOGY = 'refused_insufficient_topology';
+const REASON_SCHEMA_ADMITTED = 'schema_admitted';
+const REASON_CRITICAL_SPREAD_OPEN = 'critical_system_spread_open';
+const REASON_SEED_LOG_UNAVAILABLE = 'seed_log_unavailable';
+const FORMATION_FAILURE_REASON = 'formation_failure';
+const GATE_STATE_STALLED = 'stalled';
+const CYCLES_NO_PROGRESS_THRESHOLD = 10;
+const VERDICT_PASS = 'PASS';
+const VERDICT_FAIL = 'FAIL';
+const VERDICT_UNKNOWN = 'UNKNOWN';
 
 function hasOwn(value, key) {
   return Object.prototype.hasOwnProperty.call(value || {}, key);
@@ -133,6 +154,105 @@ function acknowledgedWriteVisibilityOf(scenario) {
   };
 }
 
+function buildUnjudgeableResult(reason = REASON_UNJUDGEABLE_EVIDENCE) {
+  return {
+    passed: null,
+    missing: null,
+    hardBreaches: 0,
+    cyclesNoProgress: 0,
+    failedNoProgress: false,
+    gateState: '',
+    oracleBlind: false,
+    unexpectedNodeExit: false,
+    reason,
+    closureWitnessClass: null,
+    duration: null,
+    acknowledgedWriteVisibility: null,
+    class: CLASS_UNJUDGEABLE,
+  };
+}
+
+function isScenarioUnobserved(
+  scenario,
+  passed,
+  hardBreaches,
+  missing,
+  oracleBlindClassification,
+  activeGate,
+) {
+  return passed === null &&
+    missing === null &&
+    hardBreaches === 0 &&
+    asNumber(scenario?.invariantBreaches?.softCount, 0) === 0 &&
+    oracleBlindClassification === '' &&
+    activeGate.failedNoProgress !== true &&
+    asNumber(activeGate.coordinatorCyclesSinceProgress, 0) === 0 &&
+    !activeGate.state &&
+    scenarioOutcomeOf(scenario) !== SCENARIO_OUTCOME.REFUSED;
+}
+
+function resolveScenarioFailureClass(scenario, activeGate) {
+  if (isTopologyBlockedScenario(scenario)) {
+    return CLASS_TOPOLOGY_BLOCKED;
+  }
+  const softBreaches = asNumber(scenario?.invariantBreaches?.softCount, 0);
+  const cyclesNoProgress = asNumber(
+    activeGate.coordinatorCyclesSinceProgress,
+    0,
+  );
+  if (
+    softBreaches > 0 &&
+    activeGate.failedNoProgress !== true &&
+    cyclesNoProgress < CYCLES_NO_PROGRESS_THRESHOLD &&
+    activeGate.state !== GATE_STATE_STALLED
+  ) {
+    return CLASS_SLOW;
+  }
+  return CLASS_STALLED;
+}
+
+function resolveScenarioClassification(scenario, {
+  hardBreaches,
+  oracleBlindClassification,
+  passed,
+  missing,
+  activeGate,
+}) {
+  if (scenarioOutcomeOf(scenario) === SCENARIO_OUTCOME.REFUSED) {
+    return CLASS_REFUSED;
+  }
+  if (passed === true && hardBreaches > 0) {
+    return CLASS_UNJUDGEABLE;
+  }
+  if (hardBreaches > 0) {
+    return CLASS_CORRUPT;
+  }
+  if (oracleBlindClassification === 'unexpected_node_exit') {
+    return CLASS_NODE_EXIT;
+  }
+  if (oracleBlindClassification === 'oracle_blind') {
+    return CLASS_ORACLE_BLIND;
+  }
+  if (passed === false) {
+    return resolveScenarioFailureClass(scenario, activeGate);
+  }
+  if (missing === 0) {
+    return CLASS_CONVERGED;
+  }
+  const cyclesNoProgress = asNumber(
+    activeGate.coordinatorCyclesSinceProgress,
+    0,
+  );
+  if (
+    activeGate.failedNoProgress === true ||
+    cyclesNoProgress >= CYCLES_NO_PROGRESS_THRESHOLD ||
+    activeGate.state === GATE_STATE_STALLED
+  ) {
+    return CLASS_STALLED;
+  }
+  return CLASS_SLOW;
+}
+
 export function classifyStatGateScenario(scenario = {}) {
   const activeGate = scenario?.details?.diagnostics?.activeGate || {};
   const hardBreaches = asNumber(scenario?.invariantBreaches?.hardCount, 0);
@@ -149,28 +269,28 @@ export function classifyStatGateScenario(scenario = {}) {
   const oracleBlindClassification = classifyOracleBlind(scenario);
   const passed = normalizePassed(scenario);
 
-  let classification = CLASS_SLOW;
-  if (scenarioOutcomeOf(scenario) === SCENARIO_OUTCOME.REFUSED) {
-    classification = CLASS_REFUSED;
-  } else if (hardBreaches > 0) {
-    classification = CLASS_CORRUPT;
-  } else if (oracleBlindClassification === 'unexpected_node_exit') {
-    classification = CLASS_NODE_EXIT;
-  } else if (oracleBlindClassification === 'oracle_blind') {
-    classification = CLASS_ORACLE_BLIND;
-  } else if (passed === false) {
-    classification = isTopologyBlockedScenario(scenario) ?
-      CLASS_TOPOLOGY_BLOCKED :
-      CLASS_STALLED;
-  } else if (missing === 0) {
-    classification = CLASS_CONVERGED;
-  } else if (
-    failedNoProgress === true ||
-    cyclesNoProgress >= 10 ||
-    gateState === 'stalled'
-  ) {
-    classification = CLASS_STALLED;
+  if (isScenarioUnobserved(
+    scenario,
+    passed,
+    hardBreaches,
+    missing,
+    oracleBlindClassification,
+    activeGate,
+  )) {
+    return buildUnjudgeableResult(REASON_UNOBSERVED_VERDICT);
   }
+
+  const classification = resolveScenarioClassification(scenario, {
+    hardBreaches,
+    oracleBlindClassification,
+    passed,
+    missing,
+    activeGate,
+  });
+
+  const reason = classification === CLASS_UNJUDGEABLE ?
+    REASON_CONTRADICTORY_BREACH :
+    (scenario?.dominantReason || 'none');
 
   return {
     passed,
@@ -181,7 +301,7 @@ export function classifyStatGateScenario(scenario = {}) {
     gateState,
     oracleBlind: oracleBlindClassification === 'oracle_blind',
     unexpectedNodeExit: oracleBlindClassification === 'unexpected_node_exit',
-    reason: scenario?.dominantReason || 'none',
+    reason,
     closureWitnessClass: extractClosureWitnessClass(scenario),
     duration: asNumber(scenario?.duration, null),
     acknowledgedWriteVisibility: acknowledgedWriteVisibilityOf(scenario),
@@ -214,8 +334,140 @@ function extractClosureWitnessClass(scenario) {
     null;
 }
 
+function resolveFormationFailureClass(reason) {
+  if (reason === REASON_CRITICAL_SPREAD_OPEN) {
+    return CLASS_TOPOLOGY_BLOCKED;
+  }
+  if (reason === REASON_SEED_LOG_UNAVAILABLE) {
+    return CLASS_ORACLE_BLIND;
+  }
+  return CLASS_STALLED;
+}
+
+function buildFormationSuccessResult(reason, firstScenario) {
+  return {
+    passed: true,
+    missing: 0,
+    hardBreaches: 0,
+    cyclesNoProgress: 0,
+    failedNoProgress: false,
+    gateState: '',
+    oracleBlind: false,
+    unexpectedNodeExit: false,
+    reason: reason || REASON_SCHEMA_ADMITTED,
+    closureWitnessClass: extractClosureWitnessClass(firstScenario),
+    duration: asNumber(firstScenario?.duration, null),
+    acknowledgedWriteVisibility: acknowledgedWriteVisibilityOf(firstScenario),
+    class: CLASS_CONVERGED,
+  };
+}
+
+function buildFormationFailureResult(failureClass, reason, firstScenario) {
+  return {
+    passed: false,
+    missing: null,
+    hardBreaches: 0,
+    cyclesNoProgress: 0,
+    failedNoProgress: false,
+    gateState: '',
+    oracleBlind: failureClass === CLASS_ORACLE_BLIND,
+    unexpectedNodeExit: false,
+    reason,
+    closureWitnessClass: extractClosureWitnessClass(firstScenario),
+    duration: asNumber(firstScenario?.duration, null),
+    acknowledgedWriteVisibility: acknowledgedWriteVisibilityOf(firstScenario),
+    class: failureClass,
+  };
+}
+
+function buildRefusedResult(reason) {
+  return {
+    passed: false,
+    missing: null,
+    hardBreaches: 0,
+    cyclesNoProgress: 0,
+    failedNoProgress: false,
+    gateState: '',
+    oracleBlind: false,
+    unexpectedNodeExit: false,
+    reason,
+    closureWitnessClass: null,
+    duration: null,
+    acknowledgedWriteVisibility: null,
+    class: CLASS_REFUSED,
+  };
+}
+
+function classifyFormationReport(report) {
+  const formationVerdict = report.formationVerdict;
+  const verdict = formationVerdict?.verdict;
+  const reason = formationVerdict?.reason || FORMATION_FAILURE_REASON;
+  const firstScenario = report.standardSummary?.scenarios?.[0] ||
+    report.scenarios?.[0];
+  const scenarioPassed = firstScenario ? normalizePassed(firstScenario) : null;
+  const summaryFailed = asNumber(report.summary?.failed, null);
+  const summaryPassed = asNumber(report.summary?.passed, null);
+
+  if (verdict === VERDICT_PASS) {
+    if (summaryFailed !== null && summaryFailed > 0) {
+      return buildUnjudgeableResult(REASON_CONTRADICTORY_FORMATION_PASS);
+    }
+    if (scenarioPassed === false) {
+      return buildUnjudgeableResult(REASON_CONTRADICTORY_FORMATION_PASS);
+    }
+    return buildFormationSuccessResult(reason, firstScenario);
+  }
+
+  if (verdict === VERDICT_FAIL) {
+    if (summaryFailed === 0 && summaryPassed !== null && summaryPassed > 0) {
+      return buildUnjudgeableResult(REASON_CONTRADICTORY_FORMATION_FAIL);
+    }
+    if (scenarioPassed === true) {
+      return buildUnjudgeableResult(REASON_CONTRADICTORY_FORMATION_FAIL);
+    }
+    const failureClass = resolveFormationFailureClass(reason);
+    return buildFormationFailureResult(failureClass, reason, firstScenario);
+  }
+
+  if (verdict === VERDICT_UNKNOWN && reason === REASON_SEED_LOG_UNAVAILABLE) {
+    return buildFormationFailureResult(CLASS_ORACLE_BLIND, reason, null);
+  }
+
+  return buildUnjudgeableResult(REASON_UNKNOWN_FORMATION_VERDICT);
+}
+
 export function classifyRunReport(report = {}) {
-  return classifyStatGateScenario(report.scenarios?.[0] || {});
+  if (!report || typeof report !== 'object' || Array.isArray(report)) {
+    return buildUnjudgeableResult(REASON_INVALID_REPORT_SHAPE);
+  }
+
+  if (
+    report.outcome === SCENARIO_OUTCOME.REFUSED ||
+    (report.refusal && typeof report.refusal === 'object')
+  ) {
+    return buildRefusedResult(report.refusal?.reason || REASON_REFUSED_TOPOLOGY);
+  }
+
+  if (report.formationVerdict && typeof report.formationVerdict === 'object') {
+    return classifyFormationReport(report);
+  }
+
+  const scenarios = Array.isArray(report.scenarios) ?
+    report.scenarios :
+    (Array.isArray(report.standardSummary?.scenarios) ?
+      report.standardSummary.scenarios :
+      null);
+
+  if (!scenarios || scenarios.length === 0) {
+    return buildUnjudgeableResult(REASON_UNSUPPORTED_OR_EMPTY);
+  }
+
+  const firstScenario = scenarios[0];
+  if (!firstScenario || typeof firstScenario !== 'object') {
+    return buildUnjudgeableResult(REASON_MALFORMED_SCENARIO);
+  }
+
+  return classifyStatGateScenario(firstScenario);
 }
 
 // --- Gate-level Wilson verdict (docs/convergence-donewhen-metric.md §5/§7a) ---
@@ -435,9 +687,11 @@ export {
   CLASS_CORRUPT,
   CLASS_NODE_EXIT,
   CLASS_ORACLE_BLIND,
+  CLASS_REFUSED,
   CLASS_SLOW,
   CLASS_STALLED,
   CLASS_TOPOLOGY_BLOCKED,
+  CLASS_UNJUDGEABLE,
   GATE_VERDICT,
   runCli,
 };
