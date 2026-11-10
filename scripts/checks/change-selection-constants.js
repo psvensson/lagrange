@@ -268,7 +268,7 @@ export const FULL_CORPUS_TRIGGER_RULES = Object.freeze([
   // Placement hands the runner's files to lab machines, so the modules that
   // choose, send and run them execute the proof (test-placement). The load
   // headroom module's threshold decides which hosts the probe calls ready.
-  {id: 'test-placement', pattern: /^scripts\/(lab\/(probe|process|state)|checks\/wait-for-load-headroom)\.js$/u},
+  {id: 'test-placement', pattern: /^scripts\/(lab\/(probe|process|state|process-output|shell-transport|machine-lock|placement-contract|placement-artifact-custody|test-capability|worker-provisioning|fleet-discovery|placement-planning|placement-reporting|remote-shard-script|proof-source|controller-test-child)|checks\/wait-for-load-headroom)\.js$/u},
   // The scheduler that launches the proof and hands it its environment.
   {id: 'gate-scheduler', pattern: /^scripts\/(run-project-hardening-acceptance|checks\/acceptance-proof-manifest-(?:runner|constants))\.js$/u},
   {id: 'push-gate', pattern: /^\.githooks\//u,

@@ -3,24 +3,60 @@
   "id": "impact-contracts",
   "description": "Semantic contract edges for the impact proof-cone selector (developer-velocity epic V4a). Production paths declare the contracts they own; tests declare the contracts they exercise. Changing a contract-owning path selects every test claiming that contract. Unknown or undeclared contracts fail closed. This manifest is EXPLICIT and hand-curated; static dependency and coverage relationships are generated and live elsewhere. Every owner/test path must exist in the tree (directory prefix or file); dead edges are a contract defect.",
   "contracts": {
+    "lab-test-placement-delegation": {
+      "description": "scripts/lab/probe.js is the sole placement orchestration and delegate-interaction owner: selection, start/settlement sequencing, deadlines and outcomes remain there. machine-lock.js owns the one exclusion recipe and bounded hold resources; shell-transport.js owns SSH/shell argument translation; process-output.js owns output/completion mechanics; placement-contract.js owns shared outcome vocabulary; process.js owns bounded process/Git command adapters. test-capability.js owns capability/readiness observations and the self-contained dependency digest; worker-provisioning.js owns canary-derived setup assembly; fleet-discovery.js owns discovery/inventory observation; placement-planning.js owns deterministic placement calculations; placement-reporting.js owns diagnostics and runner-verdict interpretation. remote-shard-script.js assembles the exact remote shell; proof-source.js prepares exact candidates, bundles and planning checkouts; controller-test-child.js owns controller-child stdin and process mechanisms. Public probe exports preserve compatibility. Delegates do not choose an alternate placement policy.",
+      "owners": [
+        "scripts/lab/probe.js",
+        "scripts/lab/machine-lock.js",
+        "scripts/lab/shell-transport.js",
+        "scripts/lab/process-output.js",
+        "scripts/lab/test-capability.js",
+        "scripts/lab/worker-provisioning.js",
+        "scripts/lab/fleet-discovery.js",
+        "scripts/lab/placement-planning.js",
+        "scripts/lab/placement-reporting.js",
+        "scripts/lab/remote-shard-script.js",
+        "scripts/lab/proof-source.js",
+        "scripts/lab/controller-test-child.js",
+        "scripts/lab/placement-contract.js",
+        "scripts/lab/process.js"
+      ],
+      "tests": [
+        "test/scripts/test-placement.test.js",
+        "test/scripts/test-placement-artifacts.test.js",
+        "test/scripts/test-placement-lab-split.test.js",
+        "test/scripts/lab-fleet-discovery.test.js",
+        "test/scripts/lab-worker-provisioning.test.js",
+        "test/scripts/worker-canary-characterization.test.js",
+        "test/scripts/lab-test-base.test.js",
+        "test/scripts/placement-boundary-characterization.test.js",
+        "test/release/project-hardening-contracts.test.js"
+      ]
+    },
     "npm-package-stage-observation": {
-      "description": "scripts/release-npm-package.js alone owns packaging and installed-verification sequencing, command arguments, errors, assertions and cleanup precedence. Its optional observer delegates detached bounded record mechanics to npm-package-observation.js and bounded file retention to npm-package-diagnostic-sink.js; diagnostic constants describe this contract and grant no execution authority. The installed-package witness owns its opt-in sink and outer lifecycle. Observation failures cannot replace operation results or errors, add asynchronous turns to synchronous commands, or change deadlines.",
+      "description": "scripts/release-npm-package.js alone owns packaging and installed-verification sequencing, command arguments, errors, assertions and cleanup precedence. Its npm-package-metadata.js delegate contains unchanged pure manifest predicates and pack-output parsing; npm-release-contract.js is the one error class and outcome/manifest vocabulary. Its optional observer delegates detached bounded record mechanics to npm-package-observation.js and bounded file retention to npm-package-diagnostic-sink.js; diagnostic constants describe this contract and grant no execution authority. The installed-package witness owns its opt-in sink and outer lifecycle. Observation failures cannot replace operation results or errors, add asynchronous turns to synchronous commands, or change deadlines.",
       "owners": [
         "scripts/release-npm-package.js",
+        "scripts/npm-package-metadata.js",
+        "scripts/npm-release-contract.js",
         "scripts/npm-package-observation.js",
         "scripts/npm-package-diagnostic-sink.js",
         "scripts/npm-package-diagnostic-constants.js"
       ],
       "tests": [
+        "test/scripts/release-npm-package.test.js",
+        "test/scripts/npm-package-manifest-characterization.test.js",
+        "test/scripts/npm-package-validation-characterization.test.js",
         "test/scripts/npm-package-observation.test.js",
         "test/scripts/npm-package-observation-records.test.js",
         "test/integration/lagrange-server-npm-package.integration.test.js"
       ]
     },
     "placement-declared-artifact-custody": {
-      "description": "scripts/lab/probe.js is the sole placement-lifetime and test-artifact-to-controller interaction owner. Optional exact relative declarations reach its existing remote EXIT path after runner settlement and before worktree deletion. placement-artifact-custody.js is its delegated bounded collection, framing and retention mechanism, never a test-verdict owner. At most four regular non-symlink files, one MiB each and four MiB total, travel with per-file hashes and candidate/base/run/host-bound terminal custody into a fresh controller destination. Incomplete custody remains sideband and cannot change runner status; default placement has no collector.",
+      "description": "scripts/lab/probe.js is the sole placement-lifetime and test-artifact-to-controller interaction owner. Its remote-shard-script.js delegate assembles the existing shell. Optional exact relative declarations reach the remote EXIT path after runner settlement and before worktree deletion. placement-artifact-custody.js is its delegated bounded collection, framing and retention mechanism, never a test-verdict owner. At most four regular non-symlink files, one MiB each and four MiB total, travel with per-file hashes and candidate/base/run/host-bound terminal custody into a fresh controller destination. Incomplete custody remains sideband and cannot change runner status; default placement has no collector.",
       "owners": [
         "scripts/lab/probe.js",
+        "scripts/lab/remote-shard-script.js",
         "scripts/lab/placement-artifact-custody.js",
         "scripts/npm-package-diagnostic-sink.js",
         "scripts/npm-package-diagnostic-constants.js"
@@ -1935,7 +1971,8 @@
       "endpoints": [
         {
           "id": "packaging-sequence-and-cleanup",
-          "owners": ["scripts/release-npm-package.js"]
+          "owners": ["scripts/release-npm-package.js",
+            "scripts/npm-package-metadata.js", "scripts/npm-release-contract.js"]
         },
         {
           "id": "bounded-observation-mechanics",
@@ -1954,7 +1991,7 @@
       ]
     },
     "placement-declared-artifact-custody": {
-      "description": "scripts/lab/probe.js owns the entire declared-file collection interaction and its EXIT ordering, binding and outcome-preservation contract. The sink owns source file bytes and limits; placement-artifact-custody.js implements the placement owner's finite collector and controller receiver. Framing never enters the result ledger and cannot confer acceptance or trigger retries or controller fallback.",
+      "description": "scripts/lab/probe.js owns the entire declared-file collection interaction and its EXIT ordering, binding and outcome-preservation contract. The sink owns source file bytes and limits; remote-shard-script.js assembles the exact shell and placement-artifact-custody.js implements the placement owner's finite collector and controller receiver. Framing never enters the result ledger and cannot confer acceptance or trigger retries or controller fallback.",
       "endpoints": [
         {
           "id": "test-owned-artifact-files",
@@ -1967,6 +2004,7 @@
           "id": "placement-lifetime-and-delegated-custody",
           "owners": [
             "scripts/lab/probe.js",
+            "scripts/lab/remote-shard-script.js",
             "scripts/lab/placement-artifact-custody.js"
           ]
         }

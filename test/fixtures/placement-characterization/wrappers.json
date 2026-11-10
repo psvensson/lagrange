@@ -1,0 +1,30 @@
+[
+  {
+    "command": "sh",
+    "args": [
+      "-c",
+      "set -u\nstatus=0\nif command -v timeout >/dev/null 2>&1; then bound=\"timeout --foreground 300\"; else bound=; fi\n'sh' '-s' '--' '/unused' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' '' '1' 'default' '' '0' '' 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' '' '10' '\"project\":\"lagrange\",\"agent\":\"<DEFAULT_AGENT>\",\"controller\":\"<CONTROLLER>\",\"purpose\":\"shell characterization\",\"sha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"' '1' < '<ROOT>/test-output/placement/default-fixture.sh' || status=$?\nrm -f '<ROOT>/test-output/placement/default-fixture.sh'\nexit \"$status\";"
+    ],
+    "env": {},
+    "detached": true,
+    "stdio": [
+      "ignore",
+      "number",
+      "number"
+    ]
+  },
+  {
+    "command": "sh",
+    "args": [
+      "-c",
+      "set -u\nstatus=0\nif command -v timeout >/dev/null 2>&1; then bound=\"timeout --foreground 300\"; else bound=; fi\n'sh' '-s' '--' '/unused' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' '' '1' 'artifacts' '' '0' '' 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' '' '10' '\"project\":\"lagrange\",\"agent\":\"<DEFAULT_AGENT>\",\"controller\":\"<CONTROLLER>\",\"purpose\":\"shell characterization\",\"sha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"' '1' < '<ROOT>/test-output/placement/artifacts-fixture.sh' || status=$?\nrm -f '<ROOT>/test-output/placement/artifacts-fixture.sh'\nexit \"$status\";"
+    ],
+    "env": {},
+    "detached": true,
+    "stdio": [
+      "ignore",
+      "number",
+      "number"
+    ]
+  }
+]

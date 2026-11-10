@@ -571,16 +571,17 @@ test('runLabTest forwards declared custody and keeps artifacts out of result row
 });
 
 test('explicit artifact request refuses a controller share before starting work', async () => {
-  let released = false;
+  let released = 0;
   await assert.rejects(runLabTest({root: process.cwd(),
     plan: [{resourceClass: 'ordinary', files: [FIXTURE_FILE], jobs: 1}],
     commit: {sha: 'a'.repeat(40), release: () => {
-      released = true;
+      released++;
     }},
-    checkBase: 'b'.repeat(40), artifacts: ARTIFACTS}, {
+    checkBase: 'b'.repeat(40), artifacts: ARTIFACTS,
+    write: () => assert.fail('refusal must precede decision output')}, {
     discover: async () => ({machines: [{name: '(controller)', controller: true, speed: 1}]}),
     runRemote: () => assert.fail('no remote work may start'),
     runLocalChild: () => assert.fail('unsupported local custody may not be dropped'),
   }), /controller artifact custody is unsupported/u);
-  assert.equal(released, true);
+  assert.equal(released, 1);
 });

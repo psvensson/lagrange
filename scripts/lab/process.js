@@ -1,3 +1,6 @@
+import {spawnGit} from '../checks/git-invocation.js';
+import {gitProcessEnvironment} from '../checks/git-process-environment.js';
+import {TEXT_UTF8} from './process-output.js';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:net';
 
@@ -144,3 +147,21 @@ export async function waitForDockerPing(port, timeoutMs = DOCKER_PING_TIMEOUT_MS
     `Docker tunnel on port ${port} did not become ready: ${lastError || DOCKER_PING_TIMEOUT_TEXT}`,
   );
 }
+
+const PLACEMENT_GIT_HEAD = Object.freeze(['rev-parse', 'HEAD']);
+
+// Git here addresses the checkout it is given, never a repository pointer
+// inherited from a hook (the push gate runs this inside pre-push).
+// Git output this module reads whole (`git show <sha>:package-lock.json`,
+// status, rev-parse) is bounded by the git invocation owner: a lockfile past
+// spawnSync's 1 MiB default would otherwise leave every placed run with no
+// requirement, and exceeding the bound is a failure of its own.
+function gitAt(root, args) {
+  return spawnGit(args, {cwd: root, env: gitProcessEnvironment(), encoding: TEXT_UTF8});
+}
+
+function gitSucceeds(root, args) {
+  return gitAt(root, args).status === 0;
+}
+
+export {PLACEMENT_GIT_HEAD, gitAt, gitSucceeds};

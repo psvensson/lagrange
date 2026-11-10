@@ -1,27 +1,41 @@
 {
   "schema": "test-receipt/1",
-  "status": "pending",
+  "status": "pass",
   "sourceBase": "4260e562b8ae9fafdb51d504c3532dede9f75bbf",
   "receipts": [
     {
       "id": "stage-transparency",
       "passed": true,
-      "proof": "Slice A: package-slice-static-reviewed.log reports 29/29 targeted tests. Seven source hashes in package-slice-static-reviewed-source.sha256; independent bj0_package_review approval recorded in log.ndjson. Actual build/verify command sequence, arguments, environment, original errors/results and cleanup precedence exercised with isolated command seams. Historical installed-package timeout remains unclassified."
+      "proof": "f3e6c preserves all84 original declarations byte-for-byte across package entry/contract/metadata;14 public exports and one NpmReleaseError identity preserved.2 characterization+64regression+5boundary proofs pass; duplicate-class control rejects. f3e6d serialized fixture extraction preserves command/env/error/cleanup traces;4characterization+41regression pass. Original Slice A source/evidence remains historical and archived; current applicability is through exact extraction and independently reviewed composed source, not a claimed new physical run."
     },
     {
       "id": "bounded-snapshot-custody",
       "passed": true,
-      "proof": "Same Slice A source and proof: bounded trace/snapshot writes, optional missing lock, FIFO refusal, corrupt/truncated records and terminal descriptor closure negatives pass. This proves local observation custody only; placement transfer is pending. Raw evidence remains under test-output/bj0 pending immutable archive retention."
+      "proof": "f3e6a preserves validation order, error identity, bounds, snapshot getters/thenables and terminal handling;16characterization+27regression pass with2intended-red controls. Observation source SHA2830610ed677b09fd120fce18257b604a87151d6c0073fc05dbc7c1fe69de8e9. Existing sink/limits/record contracts remain unchanged in the final35file manifest. The original one-shot actual observation/custody archive remains bound to41c and is not retagged as final-source runtime evidence."
     },
     {
       "id": "placement-custody",
       "passed": true,
-      "proof": "custody-slice-group.log: 25/25 passing. custody-placement-isolated-regression.log: 38/38 unchanged default-path regressions passing. custody-order-mutant.json/log: collection after deletion fails the intended custody assertion; exact source restored. Source manifest custody-slice-group-source.sha256. Includes startup, early worker exit, resistant descendants, no inherited locks, blocked output, malformed/truncated relay and unchanged original status."
+      "proof": "f3e2-5 extract canonical placement delegates with unchanged shell bytes/public53exports, actual hermetic lock/FD/cleanup/worker/interruption proofs, self-selector witnesses and controls. f3e6b complete result/retained custody proofs4characterization+43regression and2controls preserve ordered duplicate WRITE reasons and live aliases. f3e7 final90/90regressions+5/5characterization,0skips;35live/snapshot files match finalmanifest46f1dea8e1683c8c939d2d8c1dd30f97ca8b01c6045cf23018203706a10a45d0. Golden local/no-bundle wrapper supplements separate bundle/lifecycle proofs."
     },
     {
       "id": "independent-review",
       "passed": true,
-      "proof": "Independent bj0_package_review and bj0_custody_review approvals bind the retained seven-file and five-file source manifests; see append-only log.ndjson. Approval is for one bounded diagnostic invocation. Overall receipt remains pending: normal landing/full corpus/exact-head gates have not run and historical timeout remains unclassified."
+      "proof": "Each f3e semantic slice has an independent approval in append-only log.ndjson. Final f3e_ratchet_actual_review verified35live/snapshot hashes,488mapped baseline functions with zero increases/unmapped, strict new helpers,size,audits23files,metadata,impactregistry,cycles and exactsource applicability of final lint/characterization. Final f3e_landing_gate_review found no composed-code blocker and retained required normal corpus/landing/exacthead gates. Independent f3e_landing_gate_review approved current receipt applicability; see append-only verification record and immutable archive. Status here covers the four sealed diagnostic-substrate obligations only; full-corpus, canonical solve land, exact committed-head CI/publication and native acceptance remain separate unresolved gates. No new discretionary one-shot diagnostic or historical-prefix replay."
     }
-  ]
+  ],
+  "sourceCandidate": {
+    "base": "41c73dc37d2cb5ddceed2ef8e48282064a114bae",
+    "javascriptManifest": "test-output/bj0/f3e-slice7/revised6/source.sha256",
+    "javascriptManifestSha256": "46f1dea8e1683c8c939d2d8c1dd30f97ca8b01c6045cf23018203706a10a45d0",
+    "scopedCandidateManifest": "test-output/bj0/f3e-landing/candidate-manifest.json",
+    "scopedCandidateManifestSha256": "820775f8e9d887a63b9e7675af9a51e4d06f6744297ca90d2899cca3cb9585a2",
+    "scope": "Pre-reconciliation42-file candidate snapshot based on41c; excludes unrelated fixture-owner log. Receipt adoption and append-only evidence/review entries follow this snapshot and do not change production/test/fixture/policy bytes."
+  },
+  "evidenceArchive": {
+    "sha256": "bc05f9e811076a04d97b9a3a36d27b0032d3825961f70b52286718401377c973",
+    "bytes": 2645325,
+    "asset": "npm-package-diagnostic-observation--f3e-static-reconciliation-20261108T165727Z.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/npm-package-diagnostic-observation--f3e-static-reconciliation-20261108T165727Z.tar.gz"
+  }
 }
