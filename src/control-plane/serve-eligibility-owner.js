@@ -1,4 +1,3 @@
-import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 // Per-node serve eligibility: one fact, one owner (quest
 // serve-eligibility-committed-epoch-read). The answer is derived from a
 // committed read of the nodes rows and the latest published
@@ -13,6 +12,7 @@ import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 // a role witness. A positive answer never outlives the node's committed ready
 // lease (CONTROL_PLANE_READY_LEASE), which bounds how long a deposed leader's
 // answer can grant.
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {TABLES} from '../constants/index.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {MEMBERSHIP_PUBLICATION_STATUS} from './membership-publication-row-contract.js';
