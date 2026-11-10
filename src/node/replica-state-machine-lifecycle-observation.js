@@ -288,22 +288,30 @@ function hasMismatchedOptionalToken(cachedValue, expectedValue) {
   return cachedToken !== expectedToken;
 }
 
+const INCARNATION_TOKEN_PAIRS = Object.freeze([
+  ['create_attempt_token', 'createAttemptToken'],
+  ['cleanup_token', 'cleanupToken'],
+  ['boot_id', 'bootId'],
+  ['endpoint_incarnation', 'endpointIncarnation'],
+]);
+
 function isConflictingCachedIncarnationTokens(cachedRow, replicaState) {
-  if (
-    hasMismatchedOptionalToken(
-      cachedRow?.create_attempt_token,
-      replicaState?.createAttemptToken,
-    ) ||
-    hasMismatchedOptionalToken(
-      cachedRow?.cleanup_token,
-      replicaState?.cleanupToken,
-    )
-  ) {
+  const hasTokenMismatch = INCARNATION_TOKEN_PAIRS.some(
+    ([cachedKey, stateKey]) =>
+      hasMismatchedOptionalToken(
+        cachedRow?.[cachedKey],
+        replicaState?.[stateKey],
+      ),
+  );
+  if (hasTokenMismatch) {
     return true;
   }
-  return Number.isFinite(cachedRow?.created_at) &&
-    Number.isFinite(replicaState?.createdAt) &&
-    cachedRow.created_at !== replicaState.createdAt;
+  const cachedCreatedAt = cachedRow?.created_at;
+  const stateCreatedAt = replicaState?.createdAt;
+  if (!Number.isFinite(cachedCreatedAt) || !Number.isFinite(stateCreatedAt)) {
+    return false;
+  }
+  return cachedCreatedAt !== stateCreatedAt;
 }
 
 const ROLE_PRESERVING_LIFECYCLE_STATES = new Set([
@@ -313,31 +321,50 @@ const ROLE_PRESERVING_LIFECYCLE_STATES = new Set([
   ReplicaStatus.ACTIVE,
 ]);
 
-function isConflictingCachedReplicaIdentity(cachedRow, replicaState, serviceId) {
-  if (
-    !cachedRow ||
+function isInvalidReplicaObservationObject(cachedRow, replicaState) {
+  return !cachedRow ||
     typeof cachedRow !== 'object' ||
     !replicaState ||
-    typeof replicaState !== 'object'
-  ) {
+    typeof replicaState !== 'object';
+}
+
+function hasInvalidCachedRoleStatus(cachedRow) {
+  return isNonEmptyString(cachedRow.status) &&
+    !ROLE_PRESERVING_LIFECYCLE_STATES.has(cachedRow.status.toLowerCase());
+}
+
+function resolveCachedReplicaId(cachedRow) {
+  if (isNonEmptyString(cachedRow.replica_id)) {
+    return cachedRow.replica_id;
+  }
+  if (isNonEmptyString(cachedRow.service_id)) {
+    return cachedRow.service_id;
+  }
+  return null;
+}
+
+function hasMismatchedLocationFields(cachedRow, replicaState) {
+  return hasConflictingNonEmptyField(cachedRow.node_id, replicaState?.nodeId) ||
+    hasConflictingNonEmptyField(
+      cachedRow.partition_id,
+      replicaState?.partitionId,
+    );
+}
+
+function isConflictingCachedReplicaIdentity(cachedRow, replicaState, serviceId) {
+  if (isInvalidReplicaObservationObject(cachedRow, replicaState)) {
     return true;
   }
-  if (
-    isNonEmptyString(cachedRow.status) &&
-    !ROLE_PRESERVING_LIFECYCLE_STATES.has(cachedRow.status.toLowerCase())
-  ) {
+  if (hasInvalidCachedRoleStatus(cachedRow)) {
     return true;
   }
   const replicaIdentity =
     replicaState?.replicaIdentity || replicaState?.replicaId || serviceId;
-  if (
-    hasConflictingNonEmptyField(cachedRow.replica_id, replicaIdentity) ||
-    hasConflictingNonEmptyField(cachedRow.node_id, replicaState?.nodeId) ||
-    hasConflictingNonEmptyField(
-      cachedRow.partition_id,
-      replicaState?.partitionId,
-    )
-  ) {
+  const cachedReplicaId = resolveCachedReplicaId(cachedRow);
+  if (!cachedReplicaId || cachedReplicaId !== replicaIdentity) {
+    return true;
+  }
+  if (hasMismatchedLocationFields(cachedRow, replicaState)) {
     return true;
   }
   return isConflictingCachedIncarnationTokens(cachedRow, replicaState);

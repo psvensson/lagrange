@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "c6be7977eb97c0ba79000deeb4032a7701b643671877219b94d66915a6137ba6"
+        "sha256": "064a8925c8df8551566e600ff65bf989644cd8ec6e5b45d12a377d624223b0e3"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3527902,
-        "sha256": "bd4ecee0ec811c491fbdcb5bd0a98f30e0b2eec5580b14677330c861cb0de76f"
+        "bytes": 3528960,
+        "sha256": "8b06a1e1b50de48394b708c5ff2af108d20fef2d0a3b88f35b495916d1d609bb"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "96b4395bb025cc34b1a0d319201bf2155d47bc195a898101d2dafe4509879090"
+        "sha256": "20a45f81bd31e900e8b05b3458d2831729c1d56ad692560b34a80a3c7ba2adc0"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "5ec0e7d48dee016ef0252eb8d4760eecd7f5c267fa6e43fe700168a0967a2f4c"
+        "sha256": "2a907e397c39a6793a9aaa48da4962e466b3711ef9d734b98c324a09788cfc1c"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "b7b73c763b0a347c5d4e87afed84fe9466a1297b3c4f95f652e1b56189f6763a"
+    "inputDigest": "41fd332ccb6b9969c8b0f757f51cd6b0bde81055c947a483798fab2a9ea22ab9"
   },
   "reconciliation": {
     "complexity": {
@@ -73,11 +73,11 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "c6be7977eb97c0ba79000deeb4032a7701b643671877219b94d66915a6137ba6"
+        "sha256": "064a8925c8df8551566e600ff65bf989644cd8ec6e5b45d12a377d624223b0e3"
       },
-      "declaredCount": 1706,
-      "observedCount": 1706,
-      "assignedCount": 1706
+      "declaredCount": 1705,
+      "observedCount": 1705,
+      "assignedCount": 1705
     },
     "cognitive": {
       "identity": {
@@ -117,13 +117,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "96b4395bb025cc34b1a0d319201bf2155d47bc195a898101d2dafe4509879090"
+          "sha256": "20a45f81bd31e900e8b05b3458d2831729c1d56ad692560b34a80a3c7ba2adc0"
         },
-        "cloneGroups": 40,
-        "duplicatedLines": 1229,
-        "sourceCloneTouches": 80,
-        "sourceDuplicatedLineTouches": 2458,
-        "nonzeroSourceCount": 56,
+        "cloneGroups": 41,
+        "duplicatedLines": 1253,
+        "sourceCloneTouches": 82,
+        "sourceDuplicatedLineTouches": 2506,
+        "nonzeroSourceCount": 57,
         "touchMultiplicity": 2
       },
       {
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "5ec0e7d48dee016ef0252eb8d4760eecd7f5c267fa6e43fe700168a0967a2f4c"
+          "sha256": "2a907e397c39a6793a9aaa48da4962e466b3711ef9d734b98c324a09788cfc1c"
         },
         "cloneGroups": 629,
         "duplicatedLines": 23501,
@@ -173,17 +173,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3527902,
-        "sha256": "bd4ecee0ec811c491fbdcb5bd0a98f30e0b2eec5580b14677330c861cb0de76f"
+        "bytes": 3528960,
+        "sha256": "8b06a1e1b50de48394b708c5ff2af108d20fef2d0a3b88f35b495916d1d609bb"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "0c67aad8bb62f1b67ffb48d4d24c30469fb7a51822885be36c4f523698b3c612",
-      "moduleCount": 6157,
-      "edgeCount": 34831,
+      "sourceDigest": "7c976efe0c19bec513611ceb8dfdd2a73fd4fcc303fb1f30b60fea29923e091b",
+      "moduleCount": 6159,
+      "edgeCount": 34842,
       "unresolvedCount": 47
     }
   },
@@ -191,12 +191,12 @@
     "sourceSignalCount": 2398,
     "assignedSignalCount": 2398,
     "uniqueAssignmentCount": 2398,
-    "digest": "1144134d0d9163952e6930137a31ddc71f81e010ff3ccdb55968ad570e1f1cb1"
+    "digest": "b0f656907c01874c1c7db5688a7e165e5e9890ae13acfbee8cbb0291d643d1d7"
   },
   "signalCounts": {
     "cognitive": 148,
-    "complexity": 1706,
-    "duplication": 463,
+    "complexity": 1705,
+    "duplication": 464,
     "fileSize": 42,
     "lintExclusion": 39
   },
@@ -944,18 +944,18 @@
       "ownerAreas": [
         "src/node"
       ],
-      "fileCount": 11,
-      "signalCount": 21,
-      "complexity": 20,
+      "fileCount": 10,
+      "signalCount": 20,
+      "complexity": 19,
       "cognitive": 1,
       "oversizedFiles": 0,
       "duplicatedLines": 0,
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 241,
-      "importOut": 117,
-      "score": 88,
+      "importIn": 224,
+      "importOut": 112,
+      "score": 84,
       "topPaths": [
         "src/node/runtime-service-handler.js",
         "src/node/runtime-service-bound-creation-route.js",
@@ -1371,7 +1371,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 219,
+      "importIn": 220,
       "importOut": 24,
       "score": 48.6,
       "topPaths": [
@@ -1480,7 +1480,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 270,
+      "importIn": 271,
       "importOut": 47,
       "score": 40,
       "topPaths": [
@@ -1653,6 +1653,34 @@
       ]
     },
     {
+      "key": "area:scripts/quest-evidence",
+      "owner": null,
+      "boundary": "scripts/quest-evidence",
+      "classification": "tool-owner-area",
+      "ownerAreas": [
+        "scripts/quest-evidence"
+      ],
+      "fileCount": 7,
+      "signalCount": 7,
+      "complexity": 0,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 288,
+      "cloneTouches": 12,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 0,
+      "importOut": 22,
+      "score": 28.8,
+      "topPaths": [
+        "scripts/quest-evidence/table-policy-outstanding-read-currency.js",
+        "scripts/quest-evidence/cache-replica-incarnation-coherence.js",
+        "scripts/quest-evidence/canonical-report-outcome-classification.js",
+        "scripts/quest-evidence/catalog-authority-and-visible-reconciliation.js",
+        "scripts/quest-evidence/formation-spread-progress-at-cause.js"
+      ]
+    },
+    {
       "key": "area:test/convergence",
       "owner": null,
       "boundary": "test/convergence",
@@ -1706,34 +1734,6 @@
         "src/debug-runtime/dap-server.js",
         "src/debug-runtime/debug-coordinator.js",
         "src/debug-runtime/debug-metadata-service.js"
-      ]
-    },
-    {
-      "key": "area:scripts/quest-evidence",
-      "owner": null,
-      "boundary": "scripts/quest-evidence",
-      "classification": "tool-owner-area",
-      "ownerAreas": [
-        "scripts/quest-evidence"
-      ],
-      "fileCount": 6,
-      "signalCount": 6,
-      "complexity": 0,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 240,
-      "cloneTouches": 10,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 0,
-      "importOut": 19,
-      "score": 24,
-      "topPaths": [
-        "scripts/quest-evidence/table-policy-outstanding-read-currency.js",
-        "scripts/quest-evidence/canonical-report-outcome-classification.js",
-        "scripts/quest-evidence/catalog-authority-and-visible-reconciliation.js",
-        "scripts/quest-evidence/formation-spread-progress-at-cause.js",
-        "scripts/quest-evidence/load-admission-ingress-identity.js"
       ]
     },
     {

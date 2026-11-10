@@ -1,0 +1,60 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "cache-replica-incarnation-coherence",
+  "status": "pass",
+  "testFileDigests": {
+    "test/cache/cache-replica-incarnation-coherence.test.js": "03dd75a77ae6fc1a144eb5526957f2fa09f98a023f08772f7b33a914c82a1835"
+  },
+  "generatedAt": "2026-11-10T13:00:25.658Z",
+  "receipts": [
+    {
+      "id": "predecessor-backfill-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^predecessor-backfill-refused: stale predecessor row cannot backfill role or metadata onto successor cached service row$\" test/cache/cache-replica-incarnation-coherence.test.js",
+      "detail": "Stale row from predecessor replica incarnation cannot backfill raft_role or metadata onto successor cached service row.",
+      "testFile": "test/cache/cache-replica-incarnation-coherence.test.js"
+    },
+    {
+      "id": "lifecycle-advance-incarnation-fenced",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^lifecycle-advance-incarnation-fenced: stale higher state_entered_at from predecessor cannot advance successor lifecycle$\" test/cache/cache-replica-incarnation-coherence.test.js",
+      "detail": "Stale higher state_entered_at from a predecessor cannot advance lifecycle status on a successor cached service row.",
+      "testFile": "test/cache/cache-replica-incarnation-coherence.test.js"
+    },
+    {
+      "id": "missing-identity-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^missing-identity-refused: incoming event missing positive matching replica incarnation identity cannot advance lifecycle or backfill incarnation-sensitive fields$\" test/cache/cache-replica-incarnation-coherence.test.js",
+      "detail": "Incoming event missing positive matching replica incarnation identity cannot advance lifecycle or backfill incarnation-sensitive fields.",
+      "testFile": "test/cache/cache-replica-incarnation-coherence.test.js"
+    },
+    {
+      "id": "same-incarnation-delayed-update",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^same-incarnation-delayed-update: legitimate same-incarnation delayed lifecycle advance and backfill succeeds while preserving row LWW$\" test/cache/cache-replica-incarnation-coherence.test.js",
+      "detail": "Legitimate same-incarnation delayed update advances lifecycle fields while preserving newer composite row-level versions.",
+      "testFile": "test/cache/cache-replica-incarnation-coherence.test.js"
+    },
+    {
+      "id": "create-cleanup-and-boot-identity-cases",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^create-cleanup-and-boot-identity-cases: create attempt mismatch, cleanup token conflict, and boot id mismatch refuse merge$\" test/cache/cache-replica-incarnation-coherence.test.js",
+      "detail": "Create attempt token mismatch, cleanup token conflict, and boot id mismatch refuse both lifecycle advance and stale row backfill.",
+      "testFile": "test/cache/cache-replica-incarnation-coherence.test.js"
+    },
+    {
+      "id": "cache-to-lifecycle-payload-composition",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^cache-to-lifecycle-payload-composition: cached row across replica state machine buildUpdateCdcData prevents role contamination and preserves same-incarnation role$\" test/cache/cache-replica-incarnation-coherence.test.js",
+      "detail": "Cached row across ReplicaStateMachine buildUpdateCdcData prevents role contamination and preserves same-incarnation voter role.",
+      "testFile": "test/cache/cache-replica-incarnation-coherence.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/cache-replica-incarnation-coherence.js --check-verification",
+      "detail": "An approving subagent verification newer than the last attempt, read through the solve store owner.",
+      "testFile": null
+    }
+  ]
+}

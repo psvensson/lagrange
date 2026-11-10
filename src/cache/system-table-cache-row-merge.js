@@ -9,7 +9,133 @@ import {
   SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES,
 } from './cache-constants.js';
 
+const LOCAL_ZERO = 0;
 const NO_ADVANCED_SERVICE_LIFECYCLE_FIELDS = Object.freeze([]);
+
+const INCARNATION_SENSITIVE_FIELD_NAMES = Object.freeze(new Set([
+  'raft_role',
+  'raftRole',
+  'status',
+  'state_entered_at',
+  'stateEnteredAt',
+  'previous_state',
+  'previousState',
+  'trigger_reason',
+  'triggerReason',
+  'error_message',
+  'errorMessage',
+  'create_attempt_token',
+  'createAttemptToken',
+  'cleanup_token',
+  'cleanupToken',
+  'created_at',
+  'createdAt',
+  'updated_at',
+  'updatedAt',
+  'boot_id',
+  'bootId',
+  'endpoint_incarnation',
+  'endpointIncarnation',
+]));
+
+function isIncarnationSensitiveField(fieldName) {
+  return INCARNATION_SENSITIVE_FIELD_NAMES.has(fieldName);
+}
+
+function extractStringToken(val) {
+  return typeof val === 'string' && val.length > LOCAL_ZERO ? val : null;
+}
+
+function extractPositiveNumber(val) {
+  const num = Number(val);
+  return Number.isFinite(num) && num > LOCAL_ZERO ? num : null;
+}
+
+const INCARNATION_PROP_NAMES = Object.freeze([
+  'replicaId',
+  'serviceId',
+  'operationId',
+  'createAttemptToken',
+  'cleanupToken',
+  'bootId',
+  'endpointIncarnation',
+  'createdAt',
+]);
+
+function hasAnyIncarnationIdentity(identity) {
+  return INCARNATION_PROP_NAMES.some((key) => identity[key] !== null);
+}
+
+function extractRowReplicaIncarnation(row) {
+  if (!row || typeof row !== 'object') {
+    return null;
+  }
+  const identity = {
+    replicaId: extractStringToken(row.replica_id),
+    serviceId: extractStringToken(row.service_id),
+    operationId: extractStringToken(row.operation_id),
+    createAttemptToken: extractStringToken(row.create_attempt_token),
+    cleanupToken: extractStringToken(row.cleanup_token),
+    bootId: extractStringToken(row.boot_id),
+    endpointIncarnation: extractStringToken(row.endpoint_incarnation),
+    createdAt: extractPositiveNumber(row.created_at),
+  };
+  identity.hasIdentity = hasAnyIncarnationIdentity(identity);
+  return identity;
+}
+
+const INCARNATION_IDENTITY_KEYS = Object.freeze([
+  'replicaId',
+  'serviceId',
+  'bootId',
+  'endpointIncarnation',
+  'createdAt',
+]);
+
+function hasConflictingIncarnationIdentity(existingIdentity, incomingIdentity) {
+  if (!existingIdentity || !incomingIdentity) {
+    return false;
+  }
+  return INCARNATION_IDENTITY_KEYS.some((key) => {
+    const a = existingIdentity[key];
+    const b = incomingIdentity[key];
+    return a !== null && b !== null && a !== b;
+  });
+}
+
+const POSITIVE_MATCH_KEYS = Object.freeze([
+  'replicaId',
+  'serviceId',
+  'cleanupToken',
+]);
+
+function hasMismatchedExistingKey(existingId, incomingId) {
+  return POSITIVE_MATCH_KEYS.some((key) => {
+    const existingVal = existingId?.[key];
+    const incomingVal = incomingId?.[key];
+    return existingVal !== null && incomingVal !== null && incomingVal !== existingVal;
+  });
+}
+
+function isAnonymousServiceIdentity(id) {
+  return id?.replicaId === null && id?.createAttemptToken === null;
+}
+
+function hasPositiveIncarnationMatch(tableName, existing, incoming) {
+  const existingId = extractRowReplicaIncarnation(existing);
+  const incomingId = extractRowReplicaIncarnation(incoming);
+
+  if (hasConflictingIncarnationIdentity(existingId, incomingId)) {
+    return false;
+  }
+  if (hasMismatchedExistingKey(existingId, incomingId)) {
+    return false;
+  }
+  if (tableName === TABLES.SERVICES && isAnonymousServiceIdentity(incomingId)) {
+    return isAnonymousServiceIdentity(existingId);
+  }
+  return true;
+}
 
 function deepClone(value) {
   return fastJsonClone(value);
@@ -35,17 +161,21 @@ function getRecordHlc(record) {
   return tryParseHLCTimestamp(record?.[COLUMN.UPDATED_AT_HLC]);
 }
 
-function isServiceLifecycleRegressionOnEqualTimestamp(existing, incoming) {
-  const existingStateEnteredAt = Number(existing?.state_entered_at);
-  const incomingStateEnteredAt = Number(incoming?.state_entered_at);
-  if (
-    Number.isFinite(existingStateEnteredAt) &&
-    Number.isFinite(incomingStateEnteredAt) &&
-    incomingStateEnteredAt !== existingStateEnteredAt
-  ) {
-    return incomingStateEnteredAt < existingStateEnteredAt;
+function extractStateEnteredAt(row) {
+  return extractPositiveNumber(row?.state_entered_at);
+}
+
+function isLifecycleTimestampRegressing(existingTs, incomingTs) {
+  if (existingTs === null || incomingTs === null) {
+    return false;
   }
-  return false;
+  return incomingTs < existingTs;
+}
+
+function isServiceLifecycleRegressionOnEqualTimestamp(existing, incoming) {
+  const existingTs = extractStateEnteredAt(existing);
+  const incomingTs = extractStateEnteredAt(incoming);
+  return isLifecycleTimestampRegressing(existingTs, incomingTs);
 }
 
 function isStaleForExistingRecord(tableName, existing, incoming) {
@@ -173,15 +303,33 @@ function shouldBackfillMissingField(field, existingValue, incomingValue) {
  * @param {Object} incoming
  * @return {{applied: boolean, record: Object, advancedFields: string[]}}
  */
+function hasValidStatusString(row) {
+  return typeof row?.status === 'string' && row.status.length > LOCAL_ZERO;
+}
+
+function isTimestampAdvancing(existingTs, incomingTs) {
+  if (incomingTs === null) {
+    return false;
+  }
+  if (existingTs === null) {
+    return true;
+  }
+  return incomingTs > existingTs;
+}
+
 function canAdvanceServiceLifecycle(tableName, existing, incoming) {
-  const existingStateEnteredAt = Number(existing?.state_entered_at);
-  const incomingStateEnteredAt = Number(incoming?.state_entered_at);
-  return tableName === TABLES.SERVICES &&
-    typeof incoming?.status === 'string' &&
-    incoming.status.length > 0 &&
-    Number.isFinite(incomingStateEnteredAt) &&
-    (!Number.isFinite(existingStateEnteredAt) ||
-      incomingStateEnteredAt > existingStateEnteredAt);
+  if (tableName !== TABLES.SERVICES) {
+    return false;
+  }
+  if (!hasPositiveIncarnationMatch(tableName, existing, incoming)) {
+    return false;
+  }
+  if (!hasValidStatusString(incoming)) {
+    return false;
+  }
+  const existingTs = extractStateEnteredAt(existing);
+  const incomingTs = extractStateEnteredAt(incoming);
+  return isTimestampAdvancing(existingTs, incomingTs);
 }
 
 function buildStaleServiceLifecycleAdvance(tableName, existing, incoming) {
@@ -206,10 +354,51 @@ function buildStaleServiceLifecycleAdvance(tableName, existing, incoming) {
     advancedFields.push(fieldName);
   }
   return {
-    applied: advancedFields.length > 0,
+    applied: advancedFields.length > LOCAL_ZERO,
     record,
     advancedFields,
   };
+}
+
+function handlePublicationStaleBackfill(table, key, existing, incoming) {
+  const mergedRecord = mergeControlPlanePublicationRows(existing, incoming);
+  if (JSON.stringify(mergedRecord) === JSON.stringify(existing)) {
+    return {
+      applied: false,
+      record: existing,
+      backfilledFields: NO_ADVANCED_SERVICE_LIFECYCLE_FIELDS,
+    };
+  }
+  table.set(key, mergedRecord);
+  return {
+    applied: true,
+    record: mergedRecord,
+    backfilledFields: Object.keys(incoming),
+  };
+}
+
+function hasMismatchedToken(a, b) {
+  return a !== null && b !== null && a !== b;
+}
+
+function hasConflictingCleanupToken(existingCleanup, incomingCleanup) {
+  return existingCleanup !== null && incomingCleanup !== existingCleanup;
+}
+
+function isConflictingStaleIncarnation(existingId, incomingId) {
+  if (hasConflictingIncarnationIdentity(existingId, incomingId)) {
+    return true;
+  }
+  if (hasMismatchedToken(
+    existingId?.createAttemptToken,
+    incomingId?.createAttemptToken,
+  )) {
+    return true;
+  }
+  return hasConflictingCleanupToken(
+    existingId?.cleanupToken,
+    incomingId?.cleanupToken,
+  );
 }
 
 function applyStaleRowBackfill(
@@ -220,21 +409,24 @@ function applyStaleRowBackfill(
   incoming,
 ) {
   if (shouldUsePublicationMerge(existing, incoming)) {
-    const mergedRecord = mergeControlPlanePublicationRows(existing, incoming);
-    if (JSON.stringify(mergedRecord) === JSON.stringify(existing)) {
-      return {
-        applied: false,
-        record: existing,
-        backfilledFields: [],
-      };
-    }
-    table.set(key, mergedRecord);
+    return handlePublicationStaleBackfill(table, key, existing, incoming);
+  }
+
+  const existingId = extractRowReplicaIncarnation(existing);
+  const incomingId = extractRowReplicaIncarnation(incoming);
+  if (isConflictingStaleIncarnation(existingId, incomingId)) {
     return {
-      applied: true,
-      record: mergedRecord,
-      backfilledFields: Object.keys(incoming),
+      applied: false,
+      record: existing,
+      backfilledFields: NO_ADVANCED_SERVICE_LIFECYCLE_FIELDS,
     };
   }
+
+  const positiveIncarnationMatch = hasPositiveIncarnationMatch(
+    tableName,
+    existing,
+    incoming,
+  );
 
   const lifecycleAdvance = buildStaleServiceLifecycleAdvance(
     tableName,
@@ -245,13 +437,16 @@ function applyStaleRowBackfill(
   const backfilledFields = [...lifecycleAdvance.advancedFields];
 
   for (const [field, incomingValue] of Object.entries(incoming)) {
+    if (!positiveIncarnationMatch && isIncarnationSensitiveField(field)) {
+      continue;
+    }
     if (shouldBackfillMissingField(field, merged[field], incomingValue)) {
       merged[field] = cloneFieldValue(incomingValue);
       backfilledFields.push(field);
     }
   }
 
-  if (backfilledFields.length === 0) {
+  if (backfilledFields.length === LOCAL_ZERO) {
     return {
       applied: false,
       record: existing,
@@ -267,17 +462,56 @@ function applyStaleRowBackfill(
   };
 }
 
+function hasMatchingTokens(existing, incoming) {
+  const existingAttempt = extractStringToken(existing?.create_attempt_token);
+  const incomingAttempt = extractStringToken(incoming?.create_attempt_token);
+  if (existingAttempt !== incomingAttempt) {
+    return false;
+  }
+  const existingCleanup = extractStringToken(existing?.cleanup_token);
+  const incomingCleanup = extractStringToken(incoming?.cleanup_token);
+  return existingCleanup === incomingCleanup;
+}
+
+function shouldPreserveExistingServiceLifecycle(tableName, existing, incoming) {
+  if (tableName !== TABLES.SERVICES) {
+    return false;
+  }
+  if (!hasPositiveIncarnationMatch(tableName, incoming, existing)) {
+    return false;
+  }
+  if (!hasMatchingTokens(existing, incoming)) {
+    return false;
+  }
+  const existingTs = extractStateEnteredAt(existing);
+  const incomingTs = extractStateEnteredAt(incoming);
+  return isLifecycleTimestampRegressing(existingTs, incomingTs);
+}
+
 function mergeRecords(tableName, existing, incoming) {
   if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
     return mergeControlPlanePublicationRows(incoming, existing);
   }
-  const merged = {...existing, ...deepClone(incoming)};
+  let merged;
   if (
     tableName === TABLES.SERVICES &&
-    canAdvanceServiceLifecycle(tableName, incoming, existing) &&
-    existing?.create_attempt_token === incoming?.create_attempt_token &&
-    existing?.cleanup_token === incoming?.cleanup_token
+    hasConflictingIncarnationIdentity(
+      extractRowReplicaIncarnation(existing),
+      extractRowReplicaIncarnation(incoming),
+    )
   ) {
+    const nonSensitiveExisting = {};
+    for (const [key, value] of Object.entries(existing)) {
+      if (!isIncarnationSensitiveField(key)) {
+        nonSensitiveExisting[key] = value;
+      }
+    }
+    merged = {...nonSensitiveExisting, ...deepClone(incoming)};
+  } else {
+    merged = {...existing, ...deepClone(incoming)};
+  }
+
+  if (shouldPreserveExistingServiceLifecycle(tableName, existing, incoming)) {
     for (const fieldName of SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES) {
       if (Object.prototype.hasOwnProperty.call(existing, fieldName)) {
         merged[fieldName] = cloneFieldValue(existing[fieldName]);

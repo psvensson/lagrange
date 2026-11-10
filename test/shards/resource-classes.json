@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2611,
+    "ordinary": 2612,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2637,
-  "digest": "fnv1a32-be32a361",
+  "censusSize": 2638,
+  "digest": "fnv1a32-e07fb5c3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -308,6 +308,7 @@
     "test/cache/cache-epoch-rejection.property.test.js": "ordinary",
     "test/cache/cache-hydration-completeness.property.test.js": "ordinary",
     "test/cache/cache-hydration-metrics.test.js": "ordinary",
+    "test/cache/cache-replica-incarnation-coherence.test.js": "ordinary",
     "test/cache/cache-state-filtering.property.test.js": "ordinary",
     "test/cache/cdc-cache-delete-resurrection.test.js": "ordinary",
     "test/cache/cdc-event-broadcast-completeness.property.test.js": "ordinary",
