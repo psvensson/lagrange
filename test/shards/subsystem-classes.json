@@ -8,7 +8,7 @@
     "cdc-metadata": 70,
     "cli-tooling": 99,
     "control-plane": 236,
-    "convergence-topology": 79,
+    "convergence-topology": 80,
     "distributed-harness": 214,
     "examples-e2e": 8,
     "pgwire-compat": 23,
@@ -25,8 +25,8 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2630,
-  "digest": "fnv1a32-bb142b35",
+  "censusSize": 2631,
+  "digest": "fnv1a32-b2f95b4c",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-4cc628dc",
   "classes": {
@@ -2494,6 +2494,7 @@
     "test/topology/cdc-group-propagation-service.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js": "convergence-topology",
+    "test/topology/cdc-recipient-domain-and-retained-debt.test.js": "convergence-topology",
     "test/topology/group-selection-service.test.js": "convergence-topology",
     "test/topology/latency-group-manager.test.js": "convergence-topology",
     "test/topology/latency-measurement-service.test.js": "convergence-topology",

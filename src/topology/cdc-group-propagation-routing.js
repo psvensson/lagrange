@@ -1,4 +1,4 @@
-import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../constants/index.js';
+import {COLUMN, NODE_STATE, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {LATENCY_GROUP_STATE} from './latency-topology-constants.js';
 import {
@@ -242,6 +242,7 @@ function collectActiveServiceRows(systemTableCache) {
 function collectKnownMessageGroupDomain(options = {}) {
   const knownGroupIds = new Set();
   const groupIdsByNodeId = new Map();
+  const groupIdsByLatencyGroupId = new Map();
   const recordNodeGroup = (nodeId, groupId) => {
     if (typeof groupId !== 'string' || groupId.length === 0) {
       return;
@@ -254,6 +255,16 @@ function collectKnownMessageGroupDomain(options = {}) {
       groupIdsByNodeId.get(nodeId).add(groupId);
     }
   };
+  const recordLatencyGroup = (latencyGroupId, groupId) => {
+    if (typeof latencyGroupId !== 'string' || latencyGroupId.length === 0 ||
+        typeof groupId !== 'string' || groupId.length === 0) {
+      return;
+    }
+    if (!groupIdsByLatencyGroupId.has(latencyGroupId)) {
+      groupIdsByLatencyGroupId.set(latencyGroupId, new Set());
+    }
+    groupIdsByLatencyGroupId.get(latencyGroupId).add(groupId);
+  };
   for (const row of collectActiveMessageGroups(options.systemTableCache)) {
     recordNodeGroup(row?.leader_node_id || null, row[COLUMN.GROUP_ID]);
   }
@@ -261,19 +272,60 @@ function collectKnownMessageGroupDomain(options = {}) {
     const groupId = resolveMessageGroupId(serviceRow, {
       messageGroupReplicaSuffix: options.messageGroupReplicaSuffix,
     });
-    recordNodeGroup(serviceRow?.[COLUMN.NODE_ID] || null, groupId);
+    const nodeId = serviceRow?.[COLUMN.NODE_ID] || null;
+    recordNodeGroup(nodeId, groupId);
+    if (nodeId && options.systemTableCache) {
+      const nodeRow = options.systemTableCache.get?.(TABLES.NODES, nodeId);
+      const latencyGroupId = nodeRow?.[COLUMN.LATENCY_GROUP_ID];
+      recordLatencyGroup(latencyGroupId, groupId);
+    }
   }
-  return {knownGroupIds, groupIdsByNodeId};
+  for (const row of collectActiveLatencyGroups(options.systemTableCache)) {
+    const latencyGroupId = row[COLUMN.GROUP_ID];
+    const coordNodeId =
+      row[COLUMN.COORDINATOR_NODE_ID] ||
+      row[COLUMN.REPRESENTATIVE_NODE_ID] ||
+      null;
+    if (coordNodeId && groupIdsByNodeId.has(coordNodeId)) {
+      for (const gid of groupIdsByNodeId.get(coordNodeId)) {
+        recordLatencyGroup(latencyGroupId, gid);
+      }
+    }
+  }
+  return {knownGroupIds, groupIdsByNodeId, groupIdsByLatencyGroupId};
 }
 
-function resolveLatencyGroupTargetCandidates(row, options, domain) {
-  const latencyGroupId = row[COLUMN.GROUP_ID];
+function resolveLatencyGroupRow(rowOrId, systemTableCache) {
+  if (rowOrId && typeof rowOrId === 'object') {
+    return rowOrId;
+  }
+  if (typeof rowOrId === 'string' && rowOrId.length > 0) {
+    const cached = systemTableCache?.get?.(TABLES.LATENCY_GROUPS, rowOrId);
+    if (cached) {
+      return cached;
+    }
+    return collectActiveLatencyGroups(systemTableCache).find(
+      (entry) => entry?.[COLUMN.GROUP_ID] === rowOrId,
+    ) || null;
+  }
+  return null;
+}
+
+function resolveLatencyGroupTargetCandidates(rowOrId, options, domain) {
+  if (!rowOrId) {
+    return [];
+  }
+  const row = resolveLatencyGroupRow(rowOrId, options?.systemTableCache);
+  const latencyGroupId = typeof rowOrId === 'string' ? rowOrId : row?.[COLUMN.GROUP_ID] || null;
+  if (!latencyGroupId) {
+    return [];
+  }
   if (domain.knownGroupIds.has(latencyGroupId)) {
     return [latencyGroupId];
   }
   const coordinatorNodeId =
-    row[COLUMN.COORDINATOR_NODE_ID] ||
-    row[COLUMN.REPRESENTATIVE_NODE_ID] ||
+    row?.[COLUMN.COORDINATOR_NODE_ID] ||
+    row?.[COLUMN.REPRESENTATIVE_NODE_ID] ||
     null;
   if (coordinatorNodeId && coordinatorNodeId === options.nodeId) {
     return [];
@@ -281,22 +333,32 @@ function resolveLatencyGroupTargetCandidates(row, options, domain) {
   const coordinatorHostedGroups =
     coordinatorNodeId ? domain.groupIdsByNodeId.get(coordinatorNodeId) : null;
   if (coordinatorHostedGroups && coordinatorHostedGroups.size > 0) {
-    return [...coordinatorHostedGroups];
+    return [...coordinatorHostedGroups].sort((left, right) => left.localeCompare(right));
   }
-  return [latencyGroupId];
+  const latencyHostedGroups =
+    domain.groupIdsByLatencyGroupId?.get?.(latencyGroupId);
+  if (latencyHostedGroups && latencyHostedGroups.size > 0) {
+    return [...latencyHostedGroups].sort((left, right) => left.localeCompare(right));
+  }
+  return [];
 }
 
-function collectCacheTargetGroupIds(options = {}, sourceGroupId = null) {
-  const groupIds = new Set();
+function resolveLatencyGroupRecipients(latencyGroupId, options = {}) {
   const domain = collectKnownMessageGroupDomain(options);
-  for (const groupId of domain.knownGroupIds) {
+  return resolveLatencyGroupTargetCandidates(latencyGroupId, options, domain);
+}
+
+function collectCacheTargetGroupIds(options = {}, sourceGroupId = null, domain = null) {
+  const groupIds = new Set();
+  const messageDomain = domain || collectKnownMessageGroupDomain(options);
+  for (const groupId of messageDomain.knownGroupIds) {
     addTargetGroupId(groupIds, groupId, sourceGroupId);
   }
   for (const row of collectActiveLatencyGroups(options.systemTableCache)) {
     for (const candidateGroupId of resolveLatencyGroupTargetCandidates(
       row,
       options,
-      domain,
+      messageDomain,
     )) {
       addTargetGroupId(groupIds, candidateGroupId, sourceGroupId);
     }
@@ -304,47 +366,93 @@ function collectCacheTargetGroupIds(options = {}, sourceGroupId = null) {
   return groupIds;
 }
 
+function resolveSourceLatencyGroupId(options = {}, sourceGroupId = null) {
+  const cache = options.systemTableCache;
+  if (!cache) {
+    return null;
+  }
+  if (typeof sourceGroupId === 'string' && sourceGroupId.length > 0) {
+    const directLatencyRow = cache.get?.(TABLES.LATENCY_GROUPS, sourceGroupId);
+    if (directLatencyRow) {
+      return sourceGroupId;
+    }
+    const mgRow = cache.get?.(TABLES.MESSAGE_GROUPS, sourceGroupId);
+    const leaderNodeId = mgRow?.leader_node_id;
+    if (leaderNodeId) {
+      const nodeRow = cache.get?.(TABLES.NODES, leaderNodeId);
+      if (nodeRow?.[COLUMN.LATENCY_GROUP_ID]) {
+        return nodeRow[COLUMN.LATENCY_GROUP_ID];
+      }
+    }
+    const services = cache.filter?.(
+      TABLES.SERVICES,
+      (s) => s?.[COLUMN.GROUP_ID] === sourceGroupId ||
+        s?.[COLUMN.SERVICE_ID]?.startsWith?.(sourceGroupId),
+    ) || [];
+    for (const service of services) {
+      const serviceNodeId = service?.[COLUMN.NODE_ID];
+      if (serviceNodeId) {
+        const nodeRow = cache.get?.(TABLES.NODES, serviceNodeId);
+        if (nodeRow?.[COLUMN.LATENCY_GROUP_ID]) {
+          return nodeRow[COLUMN.LATENCY_GROUP_ID];
+        }
+      }
+    }
+    return sourceGroupId;
+  }
+  if (options.nodeId) {
+    const localNode = cache.get?.(TABLES.NODES, options.nodeId);
+    if (localNode?.[COLUMN.LATENCY_GROUP_ID]) {
+      return localNode[COLUMN.LATENCY_GROUP_ID];
+    }
+  }
+  return null;
+}
+
 function readRawRoutingOrder(options = {}, sourceGroupId = null) {
-  if (typeof sourceGroupId !== 'string' || sourceGroupId.length === 0) {
+  const sourceLatencyGroupId = resolveSourceLatencyGroupId(options, sourceGroupId);
+  const targetSourceId = sourceLatencyGroupId ||
+    (typeof sourceGroupId === 'string' && sourceGroupId.length > 0 ? sourceGroupId : null);
+  if (!targetSourceId) {
     return [];
   }
-  const rawOrder = options.latencyTreeService?.getRoutingOrder?.(sourceGroupId);
+  const rawOrder = options.latencyTreeService?.getRoutingOrder?.(targetSourceId);
   return Array.isArray(rawOrder) ? rawOrder : [];
 }
 
-function collectRoutingOrderTargetGroupIds(options = {}, sourceGroupId = null) {
+function collectRoutingOrderTargetGroupIds(options = {}, sourceGroupId = null, domain = null) {
   const rawOrder = readRawRoutingOrder(options, sourceGroupId);
   const drainingIds = collectDrainingLatencyGroupIds(options.systemTableCache);
+  const messageDomain = domain || collectKnownMessageGroupDomain(options);
   const ordered = [];
   const seen = new Set();
-  for (const groupId of rawOrder) {
-    const canInclude =
-      isValidTargetGroupId(groupId, sourceGroupId) &&
-      !drainingIds.has(groupId) &&
-      !seen.has(groupId);
-    if (canInclude) {
-      seen.add(groupId);
-      ordered.push(groupId);
+  for (const rawGroupId of rawOrder) {
+    if (drainingIds.has(rawGroupId)) {
+      continue;
+    }
+    const candidates = resolveLatencyGroupTargetCandidates(
+      rawGroupId,
+      options,
+      messageDomain,
+    );
+    for (const targetGroupId of candidates) {
+      const canInclude =
+        isValidTargetGroupId(targetGroupId, sourceGroupId) &&
+        !seen.has(targetGroupId);
+      if (canInclude) {
+        seen.add(targetGroupId);
+        ordered.push(targetGroupId);
+      }
     }
   }
   return ordered;
 }
 
-function collectRequiredTargetGroupIds(options = {}, sourceGroupId = null) {
-  const groupIds = collectCacheTargetGroupIds(options, sourceGroupId);
-  for (const groupId of collectRoutingOrderTargetGroupIds(
-    options,
-    sourceGroupId,
-  )) {
-    groupIds.add(groupId);
-  }
-  return [...groupIds].sort((left, right) => left.localeCompare(right));
-}
-
-function collectOrderedGroupedTargetIds(options = {}, sourceGroupId = null) {
-  const ordered = collectRoutingOrderTargetGroupIds(options, sourceGroupId);
+function collectRequiredTargetGroupIds(options = {}, sourceGroupId = null, domain = null) {
+  const messageDomain = domain || collectKnownMessageGroupDomain(options);
+  const ordered = collectRoutingOrderTargetGroupIds(options, sourceGroupId, messageDomain);
   const seen = new Set(ordered);
-  const cacheGroupIds = [...collectCacheTargetGroupIds(options, sourceGroupId)]
+  const cacheGroupIds = [...collectCacheTargetGroupIds(options, sourceGroupId, messageDomain)]
     .sort((left, right) => left.localeCompare(right));
   for (const groupId of cacheGroupIds) {
     if (!seen.has(groupId)) {
@@ -353,6 +461,103 @@ function collectOrderedGroupedTargetIds(options = {}, sourceGroupId = null) {
     }
   }
   return ordered;
+}
+
+function collectOrderedGroupedTargetIds(options = {}, sourceGroupId = null, domain = null) {
+  const messageDomain = domain || collectKnownMessageGroupDomain(options);
+  const ordered = collectRoutingOrderTargetGroupIds(options, sourceGroupId, messageDomain);
+  const seen = new Set(ordered);
+  const cacheGroupIds = [...collectCacheTargetGroupIds(options, sourceGroupId, messageDomain)]
+    .sort((left, right) => left.localeCompare(right));
+  for (const groupId of cacheGroupIds) {
+    if (!seen.has(groupId)) {
+      seen.add(groupId);
+      ordered.push(groupId);
+    }
+  }
+  return ordered;
+}
+
+function isPreActivationLatencyGroup(rowOrId, systemTableCache, domain = null) {
+  if (!systemTableCache) {
+    return false;
+  }
+  const messageDomain = domain || collectKnownMessageGroupDomain({systemTableCache});
+  const row = resolveLatencyGroupRow(rowOrId, systemTableCache);
+  const groupId = typeof rowOrId === 'string' ? rowOrId : row?.[COLUMN.GROUP_ID] || null;
+  if (groupId && messageDomain.knownGroupIds.has(groupId)) {
+    return false;
+  }
+  const coordinatorNodeId =
+    row?.[COLUMN.COORDINATOR_NODE_ID] ||
+    row?.[COLUMN.REPRESENTATIVE_NODE_ID] ||
+    null;
+  if (coordinatorNodeId && messageDomain.groupIdsByNodeId.has(coordinatorNodeId)) {
+    return false;
+  }
+  if (coordinatorNodeId) {
+    const coordinatorNode = systemTableCache.get?.(TABLES.NODES, coordinatorNodeId);
+    if (coordinatorNode?.[COLUMN.STATUS] === NODE_STATE.JOINING) {
+      return true;
+    }
+  }
+  const serviceRows = systemTableCache.filter?.(
+    TABLES.SERVICES,
+    (serviceRow) =>
+      serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
+      ((groupId && serviceRow?.[COLUMN.GROUP_ID] === groupId) ||
+        (coordinatorNodeId && serviceRow?.[COLUMN.NODE_ID] === coordinatorNodeId)),
+  ) || [];
+  if (serviceRows.length === 0) {
+    return false;
+  }
+  return serviceRows.every(
+    (serviceRow) => serviceRow?.[COLUMN.STATUS] !== SERVICE_STATUS.ACTIVE,
+  );
+}
+
+function collectUnmappedLatencyGroupIds(options = {}, sourceGroupId = null, domain = null) {
+  const unmapped = new Set();
+  const messageDomain = domain || collectKnownMessageGroupDomain(options);
+  const localLatencyGroupId =
+    options.systemTableCache?.get?.(TABLES.NODES, options.nodeId)?.[
+      COLUMN.LATENCY_GROUP_ID
+    ] || null;
+  const sourceLatencyGroupId = resolveSourceLatencyGroupId(options, sourceGroupId);
+  const activeLatencyGroups = collectActiveLatencyGroups(options.systemTableCache);
+  const drainingIds = collectDrainingLatencyGroupIds(options.systemTableCache);
+  for (const row of activeLatencyGroups) {
+    const groupId = row?.[COLUMN.GROUP_ID];
+    if (!groupId || drainingIds.has(groupId)) {
+      continue;
+    }
+    if (
+      groupId === sourceGroupId ||
+      groupId === localLatencyGroupId ||
+      groupId === sourceLatencyGroupId
+    ) {
+      continue;
+    }
+    const coordinatorNodeId =
+      row[COLUMN.COORDINATOR_NODE_ID] ||
+      row[COLUMN.REPRESENTATIVE_NODE_ID] ||
+      null;
+    if (coordinatorNodeId && coordinatorNodeId === options.nodeId) {
+      continue;
+    }
+    if (isPreActivationLatencyGroup(row, options.systemTableCache, messageDomain)) {
+      continue;
+    }
+    const candidates = resolveLatencyGroupTargetCandidates(
+      row,
+      options,
+      messageDomain,
+    );
+    if (candidates.length === 0) {
+      unmapped.add(groupId);
+    }
+  }
+  return unmapped;
 }
 
 function indexServicesByGroupId(services, options = {}) {
@@ -379,11 +584,12 @@ function buildSafeTargets(options = {}) {
       COLUMN.LATENCY_GROUP_ID
     ] ||
     null;
+  const domain = collectKnownMessageGroupDomain(options);
   const services = resolveActiveMessageGroupServices({
     systemTableCache: options.systemTableCache,
   });
   const servicesByGroupId = indexServicesByGroupId(services, options);
-  const orderedGroupIds = collectRequiredTargetGroupIds(options, sourceGroupId);
+  const orderedGroupIds = collectRequiredTargetGroupIds(options, sourceGroupId, domain);
   const targets = [];
   for (const groupId of orderedGroupIds) {
     const groupServices = servicesByGroupId.get(groupId) || [];
@@ -399,12 +605,46 @@ function buildSafeTargets(options = {}) {
       ...observedServiceRoute(selectedService, options.systemTableCache),
     });
   }
+  const unmappedLatencyGroupIds = collectUnmappedLatencyGroupIds(
+    options,
+    sourceGroupId,
+    domain,
+  );
+  for (const unmappedId of unmappedLatencyGroupIds) {
+    targets.push(buildUnroutableTarget(unmappedId));
+  }
   return targets;
 }
 
-function resolveGroupedTargetEntry(groupId, groupById, routerDeliverable, options) {
-  const groupRow = groupById.get(groupId) || null;
-  const coordinatorNodeId = groupRow?.[COLUMN.COORDINATOR_NODE_ID] || null;
+function resolveGroupedTargetEntry(groupId, groupById, routerDeliverable, options, domain = null) {
+  let groupRow = groupById.get(groupId) || null;
+  if (!groupRow && domain && options.systemTableCache) {
+    for (const [latencyGroupId, mgSet] of domain.groupIdsByLatencyGroupId?.entries?.() || []) {
+      if (mgSet.has(groupId)) {
+        groupRow = groupById.get(latencyGroupId) || null;
+        if (groupRow) {
+          break;
+        }
+      }
+    }
+    if (!groupRow) {
+      const mgRow = options.systemTableCache.get?.(TABLES.MESSAGE_GROUPS, groupId);
+      const leaderNodeId = mgRow?.leader_node_id;
+      if (leaderNodeId) {
+        const nodeRow = options.systemTableCache.get?.(TABLES.NODES, leaderNodeId);
+        const latencyGroupId = nodeRow?.[COLUMN.LATENCY_GROUP_ID];
+        groupRow = latencyGroupId ? groupById.get(latencyGroupId) : null;
+      }
+    }
+  }
+  let coordinatorNodeId =
+    groupRow?.[COLUMN.COORDINATOR_NODE_ID] ||
+    groupRow?.[COLUMN.REPRESENTATIVE_NODE_ID] ||
+    null;
+  if (!coordinatorNodeId && options.systemTableCache) {
+    const mgRow = options.systemTableCache.get?.(TABLES.MESSAGE_GROUPS, groupId);
+    coordinatorNodeId = mgRow?.leader_node_id || null;
+  }
   if (!coordinatorNodeId) {
     return {
       fallbackCode: CDC_GROUP_PROPAGATION_REASON.MISSING_COORDINATOR_NODE,
@@ -448,7 +688,7 @@ function isMessageRouterDeliverable(messageRouter) {
   return Boolean(messageRouter && typeof messageRouter.deliver === 'function');
 }
 
-function resolveGroupedTargets(orderedTargetIds, activeGroups, options) {
+function resolveGroupedTargets(orderedTargetIds, activeGroups, options, domain = null) {
   const routerDeliverable = isMessageRouterDeliverable(options.messageRouter);
   const groupById = new Map(
     activeGroups.map((groupRow) => [groupRow[COLUMN.GROUP_ID], groupRow]),
@@ -462,6 +702,7 @@ function resolveGroupedTargets(orderedTargetIds, activeGroups, options) {
       groupById,
       routerDeliverable,
       options,
+      domain,
     );
     if (firstFallbackCode === null && resolved.fallbackCode !== null) {
       firstFallbackCode = resolved.fallbackCode;
@@ -473,14 +714,16 @@ function resolveGroupedTargets(orderedTargetIds, activeGroups, options) {
 
 function buildGroupedContext(options = {}, sourceGroupIdOverride = null) {
   const localNode = options.systemTableCache?.get?.(TABLES.NODES, options.nodeId);
-  const sourceGroupId = localNode?.[COLUMN.LATENCY_GROUP_ID] || null;
+  const localLatencyGroupId = localNode?.[COLUMN.LATENCY_GROUP_ID] || null;
+  const domain = collectKnownMessageGroupDomain(options);
   const orderedTargetIds = collectOrderedGroupedTargetIds(
     options,
-    sourceGroupIdOverride || sourceGroupId,
+    sourceGroupIdOverride || localLatencyGroupId,
+    domain,
   );
-  if (!sourceGroupId) {
+  if (!localLatencyGroupId) {
     return buildGroupedContextResult(
-      sourceGroupId,
+      null,
       buildUnroutableTargetsForOrder(orderedTargetIds),
       CDC_GROUP_PROPAGATION_REASON.MISSING_LOCAL_GROUP,
     );
@@ -489,21 +732,54 @@ function buildGroupedContext(options = {}, sourceGroupIdOverride = null) {
   const activeGroups = collectActiveLatencyGroups(options.systemTableCache);
   if (activeGroups.length === 0) {
     return buildGroupedContextResult(
-      sourceGroupId,
+      sourceGroupIdOverride || localLatencyGroupId,
       buildUnroutableTargetsForOrder(orderedTargetIds),
       CDC_GROUP_PROPAGATION_REASON.MISSING_ACTIVE_GROUPS,
     );
   }
 
+  const sourceLatencyGroupId = resolveSourceLatencyGroupId(
+    options,
+    sourceGroupIdOverride || localLatencyGroupId,
+  );
+  if (sourceLatencyGroupId && sourceLatencyGroupId !== localLatencyGroupId) {
+    return buildGroupedContextResult(
+      localLatencyGroupId,
+      buildUnroutableTargetsForOrder(orderedTargetIds),
+      CDC_GROUP_PROPAGATION_REASON.SOURCE_GROUP_MISMATCH,
+    );
+  }
+
+  const unmappedLatencyGroupIds = collectUnmappedLatencyGroupIds(
+    options,
+    sourceGroupIdOverride || localLatencyGroupId,
+    domain,
+  );
+  const allTargetIds = [...orderedTargetIds];
+  for (const unmappedId of unmappedLatencyGroupIds) {
+    if (!allTargetIds.includes(unmappedId)) {
+      allTargetIds.push(unmappedId);
+    }
+  }
+
   const {targets, firstFallbackCode} = resolveGroupedTargets(
-    orderedTargetIds,
+    allTargetIds,
     activeGroups,
     options,
+    domain,
   );
-  return buildGroupedContextResult(sourceGroupId, targets, firstFallbackCode);
+  return buildGroupedContextResult(
+    sourceGroupIdOverride || localLatencyGroupId,
+    targets,
+    firstFallbackCode,
+  );
 }
 
 export {
   buildGroupedContext,
   buildSafeTargets,
+  collectKnownMessageGroupDomain,
+  isPreActivationLatencyGroup,
+  resolveLatencyGroupRecipients,
+  resolveLatencyGroupTargetCandidates,
 };

@@ -1,0 +1,60 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "cdc-recipient-domain-and-retained-debt",
+  "status": "pass",
+  "testFileDigests": {
+    "test/topology/cdc-recipient-domain-and-retained-debt.test.js": "a6eab7353a0fe5d34af2edd65ae5ba3e27ecec70293465c375ec71f8bd38c9f5"
+  },
+  "generatedAt": "2026-11-10T09:17:56.834Z",
+  "receipts": [
+    {
+      "id": "real-latency-tree-recipient-mapping",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^real-latency-tree-recipient-mapping: .*$\" test/topology/cdc-recipient-domain-and-retained-debt.test.js",
+      "detail": "Latency ordering from real LatencyTreeService maps to actual message-group recipients without introducing latency-domain IDs.",
+      "testFile": "test/topology/cdc-recipient-domain-and-retained-debt.test.js"
+    },
+    {
+      "id": "both-propagation-modes",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^both-propagation-modes: .*$\" test/topology/cdc-recipient-domain-and-retained-debt.test.js",
+      "detail": "Both conservative fanout and grouped propagation successfully route to mapped message-group recipients using real LatencyTreeService.",
+      "testFile": "test/topology/cdc-recipient-domain-and-retained-debt.test.js"
+    },
+    {
+      "id": "missing-mapping-refusal-and-recovery",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^missing-mapping-refusal-and-recovery: .*$\" test/topology/cdc-recipient-domain-and-retained-debt.test.js",
+      "detail": "A known latency group without message-group mapping returns typed unavailable (deferRetry) while retaining source obligation; once mapped, retry succeeds.",
+      "testFile": "test/topology/cdc-recipient-domain-and-retained-debt.test.js"
+    },
+    {
+      "id": "captured-invalid-binding-recovery",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^captured-invalid-binding-recovery: .*$\" test/topology/cdc-recipient-domain-and-retained-debt.test.js",
+      "detail": "A previously captured invalid latency-domain binding recovers through owner-proven mapping transfer to the resolved recipient without fabricating ACKs.",
+      "testFile": "test/topology/cdc-recipient-domain-and-retained-debt.test.js"
+    },
+    {
+      "id": "exact-native-receipt-coverage",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^exact-native-receipt-coverage: .*$\" test/topology/cdc-recipient-domain-and-retained-debt.test.js",
+      "detail": "Propagation requires exact native committed receipts from all mapped message-group recipients to complete.",
+      "testFile": "test/topology/cdc-recipient-domain-and-retained-debt.test.js"
+    },
+    {
+      "id": "retained-source-obligation-progress",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^retained-source-obligation-progress: .*$\" test/topology/cdc-recipient-domain-and-retained-debt.test.js",
+      "detail": "Source delivery debt remains owned across retry until all mapped recipients acknowledge.",
+      "testFile": "test/topology/cdc-recipient-domain-and-retained-debt.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/cdc-recipient-domain-and-retained-debt.js --check-verification",
+      "detail": "An approving subagent verification newer than the last attempt, read through the solve store owner.",
+      "testFile": null
+    }
+  ]
+}

@@ -26,6 +26,6 @@ documentClass: generated
 - [latency-measurement-service.js](latency-measurement-service.js) - LatencyMeasurementService - single owner for RTT measurement and persistence. (importers: few)
 - [latency-topology-constants.js](latency-topology-constants.js) - Constants for latency-aware topology ownership and configuration. (importers: hub)
 - [latency-tree-constants.js](latency-tree-constants.js) - Constants for LatencyTreeService. (importers: few)
-- [latency-tree-service.js](latency-tree-service.js) - LatencyTreeService - single owner for in-memory latency topology ordering. (importers: few)
+- [latency-tree-service.js](latency-tree-service.js) - LatencyTreeService - single owner for in-memory latency topology ordering. (importers: many)
 - [topology-anti-entropy-constants.js](topology-anti-entropy-constants.js) - Constants for periodic durable topology truth reconciliation. (importers: few)
 - [topology-anti-entropy-reconciler.js](topology-anti-entropy-reconciler.js) - TopologyAntiEntropyReconciler scans durable topology truth and enqueues exact owner-key reconcile work. (importers: one)

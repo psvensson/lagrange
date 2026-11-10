@@ -4,6 +4,10 @@
 import {CDC_COMPLETION, CDC_COVERAGE_STATE, cdcCoverageState, completeCdcPropagation,
   emptyCdcCoverage, observeCdcCoverage, observeCdcDeliveryCoverage} from './cdc-delivery-outcome.js';
 import {captureDurablePropagationPlan} from '../topology/cdc-group-propagation-durable-plan.js';
+import {
+  isPreActivationLatencyGroup,
+  resolveLatencyGroupRecipients,
+} from '../topology/cdc-group-propagation-routing.js';
 
 const OBSERVED_ROUTE_LIFETIME_FIELDS = Object.freeze([
   'serviceId', 'replicaId', 'serviceCreatedAt', 'createAttemptToken', 'nodeBootIncarnation',
@@ -38,8 +42,59 @@ function hasRouteAddress(routeOrTarget) {
   return typeof routeOrTarget?.address === 'string' && routeOrTarget.address.length > 0;
 }
 
+function transferInvalidLatencyBindings(progress, targets) {
+  const systemTableCache = progress.cache;
+  if (!systemTableCache) {
+    return false;
+  }
+  const owner = progress.owner;
+  const options = {
+    systemTableCache,
+    nodeId: owner?.nodeId ?? null,
+    messageGroupReplicaSuffix: owner?.messageGroupReplicaSuffix ?? null,
+  };
+  let changed = false;
+  const retainedTargets = [];
+  for (const leaf of progress.targets) {
+    if (
+      !hasRouteAddress(leaf.route) &&
+      leaf.coverage.state === CDC_COVERAGE_STATE.UNCOVERED &&
+      !targets.some((t) => t.groupId === leaf.groupId) &&
+      isPreActivationLatencyGroup(leaf.groupId, systemTableCache)
+    ) {
+      changed = true;
+      continue;
+    }
+    const candidates = resolveLatencyGroupRecipients(leaf.groupId, options);
+    if (candidates.length === 0 || (candidates.length === 1 && candidates[0] === leaf.groupId)) {
+      retainedTargets.push(leaf);
+      continue;
+    }
+    changed = true;
+    for (const candidateGroupId of candidates) {
+      const existing =
+        retainedTargets.find((entry) => entry.groupId === candidateGroupId) ||
+        progress.targets.find((entry) => entry.groupId === candidateGroupId);
+      if (!existing) {
+        const matchingTarget = targets.find((t) => t.groupId === candidateGroupId);
+        retainedTargets.push({
+          groupId: candidateGroupId,
+          route: matchingTarget ?
+            observedRoute(matchingTarget) :
+            observedRoute({groupId: candidateGroupId, address: null}),
+          coverage: emptyCdcCoverage(),
+        });
+      }
+    }
+  }
+  if (changed) {
+    progress.targets = retainedTargets;
+  }
+  return changed;
+}
+
 function refreshCdcPropagationRoutes(progress, targets) {
-  let requirementsChanged = false;
+  let requirementsChanged = transferInvalidLatencyBindings(progress, targets);
   for (const target of targets) {
     const leaf = progress.targets.find((entry) => entry.groupId === target.groupId);
     if (!leaf) {

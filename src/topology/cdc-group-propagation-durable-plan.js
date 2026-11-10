@@ -22,6 +22,7 @@ function captureDurablePropagationPlan(owner, source) {
   const useGrouped = isGroupedMode && fallbackReason === null;
   const targets = isGroupedMode ? [...grouped.targets] :
     buildSafeTargets({sourceGroupId: source.groupId,
+      nodeId: owner.nodeId,
       latencyTreeService: owner.latencyTreeService,
       systemTableCache: owner.systemTableCache,
       messageGroupReplicaSuffix: owner.messageGroupReplicaSuffix ??
