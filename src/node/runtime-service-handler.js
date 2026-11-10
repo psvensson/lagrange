@@ -439,7 +439,8 @@ class RuntimeServiceHandler extends EventEmitter {
     const recoveredReplica = {
       replicaId,
       entityId,
-      status: row.status || ReplicaStatus.ACTIVE,
+      // services.status is NOT NULL on every cache row.
+      status: row.status,
       ...rowCreationHint(row),
     };
     if (publish) this.localReplicas.set(replicaId, recoveredReplica);

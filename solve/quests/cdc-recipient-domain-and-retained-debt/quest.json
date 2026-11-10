@@ -1,0 +1,67 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cdc-recipient-domain-and-retained-debt",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "The existing topology owner maps every routing input to actual message-group recipients before capturing CDC receipt obligations. Latency ordering cannot introduce a destination in another identity domain. Missing mapping returns typed unavailable while real source delivery debt remains owned, and previously captured invalid bindings recover through an owner-proven transition without fabricating acknowledgements or discarding valid obligations.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/cdc-recipient-domain-and-retained-debt/evidence/receipt.json",
+      "requiredReceipts": [
+        "real-latency-tree-recipient-mapping",
+        "both-propagation-modes",
+        "missing-mapping-refusal-and-recovery",
+        "captured-invalid-binding-recovery",
+        "exact-native-receipt-coverage",
+        "retained-source-obligation-progress",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "responsible-interaction",
+      "statement": "Q14; priority P1; Latency topology, message-group recipient mapping and CDC propagation progress interaction. Apply P0 composition reconciliation and Q1 contract discipline immediately; Q2 governs review. Planning only, not an assigned runtime writer or queued run."
+    },
+    {
+      "id": "all-input-sources",
+      "statement": "Trace LatencyTreeService.getRoutingOrder through cdc-group-propagation-routing.js and the durable plan into cdc-propagation-progress.js. Apply the one explicit domain mapping to cache rows and raw tree ordering before the union; remove return-the-latency-ID fallbacks. Ordering may order known recipients, not mint extra required receipt targets."
+    },
+    {
+      "id": "captured-debt",
+      "statement": "refreshCdcPropagationRoutes retains omitted target groups. Correcting future construction is insufficient: demonstrate owner-validated replacement/transfer of a previously invalid binding to the actual recipients while retaining the original source event and every genuine delivery obligation. Missing proof leaves debt unavailable; never silently delete a leaf or invent an ACK."
+    },
+    {
+      "id": "real-producer-witness",
+      "statement": "Compose the real LatencyTreeService with CDCGroupPropagationService using differing latency-group/message-group IDs, not an empty routingOrder double. Cover conservative fanout and grouped propagation, missing mapping then finite recovery, exact source/destination receipt coverage and retained progress across retry/restart where the existing owner claims it."
+    },
+    {
+      "id": "history-and-sequence",
+      "statement": "Apply Q1/Q2; Q8 consumes this repair only if the first-divergence trace establishes the dependency. Research 4512d84805d3dd024a3ede3dbe2dcc9175b32d01 (coordinator mapping), 248f6707e1af8682401d02842481d1afa6f36c48 (unroutable debt) and the CL-014 catch-up/targetability history. Mapping and retained-obligation recovery are one owned interaction, not two independent patches."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

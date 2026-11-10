@@ -1,3 +1,4 @@
+import {readLowerStateField, readUpperStateField} from '../utils/state-field-read.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
@@ -16,7 +17,6 @@ const {
   PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT,
   SERVICE_STATUS,
   SYSTEM_TABLE_NAME,
-  UNIFIED_REBALANCER_LITERAL,
   classifySystemPartition,
   getPartitionRowFromCache,
 } = UNIFIED_REBALANCER_SHARED;
@@ -180,7 +180,7 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
       this.systemTableCache,
       SYSTEM_TABLE_NAME.NODES,
     ).some((nodeRow) =>
-      String(nodeRow?.status || '').trim().toLowerCase() === 'failed');
+      readLowerStateField(nodeRow?.status) === 'failed');
   }
 
   /**
@@ -323,14 +323,9 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
       currentReplicas :
       []
     ).filter((replica) => {
-      const status = String(
-        replica?.status || SERVICE_STATUS.ACTIVE,
-      ).toLowerCase();
-      const raftRole = String(
-        replica?.raft_role ||
-          replica?.raftRole ||
-          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-      ).toLowerCase();
+      // services.status is NOT NULL: a row without one is not ACTIVE.
+      const status = readLowerStateField(replica?.status);
+      const raftRole = readLowerStateField(replica?.raft_role); // raw services cache rows
       return (
         status === SERVICE_STATUS.ACTIVE &&
         !isCatchupLearnerRaftRole(raftRole)
@@ -384,10 +379,8 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
     const isPublicationOwner = this.isControlPlanePublicationPriorityPartition();
     const latestPublicationRow = this.getLatestMembershipPublicationRow();
     const latestPublicationClosed =
-      String(
-        latestPublicationRow?.status ||
-          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-      ).toUpperCase() === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
+      readUpperStateField(latestPublicationRow?.status) ===
+        CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
     const boundedTrimOverflow =
       latestPublicationClosed &&
       this.hasControlPlanePublicationTrimOverflow();
@@ -481,13 +474,12 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
    */
   selectPublishedMembershipRow(latestPublicationRow, publishedPublicationRow) {
     const candidateRow =
-      String(latestPublicationRow?.status || '').toUpperCase() ===
+      readUpperStateField(latestPublicationRow?.status) ===
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
         latestPublicationRow :
         publishedPublicationRow;
-    return String(
-      candidateRow?.status || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).toUpperCase() === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
+    return readUpperStateField(candidateRow?.status) ===
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
       candidateRow :
       null;
   }

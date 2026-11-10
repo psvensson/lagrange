@@ -1,3 +1,4 @@
+import {readParticipantCurrentStatus} from '../workflow/workflow-constants.js';
 import {assertWorkflowRecordHeld} from './managed-workflow-ownership-core.js';
 import {
   abortChange,
@@ -53,7 +54,7 @@ function resolveMergeSourceParticipantStatus(workflow, partitionId) {
       buildMergeSourceParticipantKey(partitionId),
     ) :
     null;
-  return String(participant?.status || '');
+  return readParticipantCurrentStatus(participant);
 }
 
 /**

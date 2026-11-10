@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T06:33:39.122Z",
+  "generatedAt": "2026-11-09T17:56:57.266Z",
   "rawViolationCount": 38,
   "violations": [
     {
@@ -14,7 +14,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 606,
+      "line": 651,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "alias_exports",
@@ -50,7 +50,7 @@
     },
     {
       "filePath": "src/cli/views/services-view.js",
-      "line": 784,
+      "line": 789,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "alias_exports",
@@ -212,7 +212,7 @@
     },
     {
       "filePath": "src/partition/partition-participant-transaction-pause.js",
-      "line": 296,
+      "line": 297,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "alias_exports",

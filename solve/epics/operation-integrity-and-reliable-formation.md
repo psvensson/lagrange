@@ -7,13 +7,45 @@ graduatesTo: architecture/contracts/authority-and-recovery.md
 doneWhen:
   probe: test-receipt
   args:
-    file: solve/quests/fresh-formation-user-table-routability/evidence/receipt.json
+    file: solve/quests/canonical-authority-formation-acceptance/evidence/receipt.json
     requiredReceipts:
-      - reproducer-red-on-current-product
-      - first-divergence-repaired-at-cause
-      - scenario-green-three-consecutive
+      - contract-first-authoring-verified
+      - content-bound-review-and-interaction-proof-verified
+      - report-classification-verified
+      - management-authority-verified
+      - canonical-completion-observation-verified
+      - policy-currency-verified
+      - routing-freshness-verified
+      - formation-progress-verified
+      - natural-shutdown-verified
+      - lab-and-evidence-custody-verified
+      - repository-legacy-fallback-closure-verified
+      - original-formation-receipt-admitted
+      - frozen-composition-required-gates
+      - all-material-findings-discharged
+      - comparison-handoff-bound
+      - catalog-authority-and-visible-reconciliation-verified
+      - cdc-recipient-domain-and-retained-debt-verified
+      - cache-replica-incarnation-coherence-verified
+      - load-admission-ingress-identity-verified
       - independent-verification
 quests:
+  - catalog-authority-and-visible-reconciliation
+  - cdc-recipient-domain-and-retained-debt
+  - cache-replica-incarnation-coherence
+  - load-admission-ingress-identity
+  - contract-first-authoring-and-producer-fidelity
+  - content-bound-review-and-interaction-proof
+  - canonical-report-outcome-classification
+  - management-action-authority
+  - canonical-replica-completion-observation
+  - table-policy-outstanding-read-currency
+  - routing-overlay-complete-state-retirement
+  - formation-spread-progress-at-cause
+  - node-startup-natural-shutdown
+  - lab-census-benchmark-evidence-custody
+  - repository-legacy-fallback-closure
+  - canonical-authority-formation-acceptance
   - fresh-formation-user-table-routability
   - serve-eligibility-committed-epoch-read
   - fresh-create-release-authority-from-committed-operation
@@ -45,19 +77,265 @@ authorizes:
   - solve/epics
   - solve/quests
   - roadmap*
+  - package.json
+  - package-lock.json
+  - eslint.config.js
+  - tsconfig*
+  - data/fallback-census
+  - examples/service-data-affinity
 ---
 
-# Operation integrity and reliable formation
+# Canonical authority and reliable formation
 
-Enforce one coherent operation contract across Lagrange's existing authority,
-readiness, lifecycle, configuration, CDC propagation, and diagnostic owners so a
-fresh three-node cluster forms reliably through the public startup path, opens
-every serve lane under its committed authority contract, spreads all six
-priority control-plane partitions, settles replica operations to quiet, and
-completes `CREATE TABLE`, `SELECT COUNT(*)`, `INSERT`, and readback from every
-node within preregistered bounds.
+This continues `operation-integrity-and-reliable-formation`. A fresh cluster must
+complete the existing public formation and user-table journey through one
+canonical authority for each permission, completion, policy and routing decision.
+Recovery retains obligations and progresses; startup and shutdown own their
+resources. The authoring and proof workflow must catch invented contracts and
+invalid evidence before integration.
 
-## Milestone, integration owner, and baseline
+## Current integration summary (10 November 2026)
+
+- **Governing rules and source:** rule-set revision 5, inspected at
+  `947fbe658ebb2efe993900b672ded51d5610dbcb`. This is the retained implementation
+  candidate, not an accepted service baseline. The planning change is isolated
+  on `work/canonical-authority-epic-20261110`; the candidate worktree is preserved.
+- **Integration responsibility:** the current Codex session owns this planning
+  installation and its validation. Runtime writer assignments and outstanding
+  external jobs have not been reconfirmed. No runtime work, reviewer or lab job
+  is dispatched by this plan; the execution integration owner must claim the
+  role here and reconcile active writers before admitting work.
+- **Observed blockers:** the retained candidate's local five-process formation
+  failed with `node_ready_lease_incomplete`; four joining nodes did not complete
+  the required spread, shutdown needed forced stops, and coverage lost witnesses.
+  Q8 owns causal isolation, Q9 resource diagnosis and Q10 evidence custody.
+  Their exact causes remain unresolved. Q7's mixed-age routing counterexample
+  is a source hypothesis, not an executed failure.
+- **Service status:** the existing
+  [formation receipt](../quests/fresh-formation-user-table-routability/evidence/receipt.json)
+  still fails. It is unchanged. The broader aggregate probe has no receipt and
+  is explicitly unmeasured. Neither the plan nor earlier focused successes
+  establish service, release or comparative acceptance.
+- **Current unit:** P0 planning structure installed and validated. Q1-Q16 below
+  are open, unsealed proposals with append-only registration findings. No source attempt, seal,
+  pass receipt or implementation approval is created here.
+- **Next action:** the execution integration owner maps shared interactions and
+  active writers, then each admitted owner prepares its actual red measurement
+  and complete transition record before `start`. Apply Q1 discipline immediately;
+  Q3 can provide a small early repair while Q8/Q9 diagnosis and Q11 inventory
+  proceed. Preserve valid repairs and acquire missing proof instead of rewriting
+  correct code. Record refuted hypotheses as refuted. Prioritize the newly
+  identified Q13-Q15 authority/identity repairs; Q16 owns ingress admission.
+  Preserve Q6 policy currency when reconciling the divergent WIP.
+
+The dated E0-E9 material below is retained context, not another current summary.
+Original observations and accepted bounded repairs keep their original scope.
+Use the linked Quest logs and applicable evidence to determine current state.
+
+## P0 reconciliation and explicit completion amendment
+
+The user approved installation of the verified plan on 10 November. The sealed
+[formation Quest](../quests/fresh-formation-user-table-routability/quest.json)
+now names this epic, matching its pre-existing membership and receipt. Its
+statement, constraints, sealing SHA, `doneWhen`, required receipt IDs and failed
+receipt are preserved; the routing correction is appended to its log.
+
+This epic's earlier completion criterion consumed only that service receipt.
+It is explicitly replaced at the epic level by the broader
+[Q12 aggregate](../quests/canonical-authority-formation-acceptance/quest.json).
+This is an additional completion obligation, not a change to the sealed service
+criterion. Q12 consumes the original service receipt and adds Q1-Q11 and Q13-Q16,
+natural exit, evidence custody and frozen-composition proof. It may not duplicate the
+service predicate or infer a pass from Quest status, a review note or a plan.
+No aggregate receipt is fabricated; before sealing Q12, its existing proof owner
+must produce reproducible input validation and a genuine red measurement.
+
+Each new Quest declares its evidence location and concrete required receipt IDs.
+Absence currently means `measuring: false`, never pass. New work seals only after
+its actual probe measures red. Already sealed or terminal Quests retain their
+acceptance; a changed sealed premise requires explicit supersession.
+
+## Registered work and execution dependencies
+
+Each linked record owns its statement, boundary, constraints and acceptance.
+All rows apply P0 and Q1's contract-first discipline. Dependencies below govern
+admission and final acceptance; Solver does not implement a dependency scheduler.
+The semantic owner is named even when no execution agent has been assigned.
+
+| Work | Quest | Responsible interaction | Difficulty | Admission dependency |
+| --- | --- | --- | --- | --- |
+| Q1 | [Make contract-first authoring executable](../quests/contract-first-authoring-and-producer-fidelity/quest.json) | Quest workflow, fixture guidance and selected real producer/consumer | medium | P0 |
+| Q2 | [Bind review and interaction proof to the code](../quests/content-bound-review-and-interaction-proof/quest.json) | Solver/provenance and existing interaction-proof selection | medium | P0 |
+| Q3 | [Make report classification refuse unsupported evidence](../quests/canonical-report-outcome-classification/quest.json) | Report producer, classifier and public triage/receipt path | small to medium | P0 |
+| Q4 | [Consume management authority from the actual owner](../quests/management-action-authority/quest.json) | Consensus/partition authority and management consumers | high | Q1 |
+| Q5 | [Give replica completion one canonical observation](../quests/canonical-replica-completion-observation/quest.json) | Replica repository and completion/recovery consumers | high | Q1 |
+| Q6 | [Preserve policy currency for all outstanding reads](../quests/table-policy-outstanding-read-currency/quest.json) | Table-policy producer, outstanding reads and mutation consumer | medium to high | Q1 |
+| Q7 | [Retire routing protection only after the relevant state catches up](../quests/routing-overlay-complete-state-retirement/quest.json) | Query engine, cache/projection and query executor | medium to high | Q1 |
+| Q8 | [Restore formation progress without weakening safety](../quests/formation-spread-progress-at-cause/quest.json) | Planner, admission, membership and formation release; one writer | high | Q1, Q3 |
+| Q9 | [Make failed and successful startup terminate naturally](../quests/node-startup-natural-shutdown/quest.json) | Node lifecycle and retained resource owners | medium to high | Q1 |
+| Q10 | [Unify lab, census and benchmark evidence custody](../quests/lab-census-benchmark-evidence-custody/quest.json) | Canonical lab runner, census and benchmark proof producers | medium | Q3 |
+| Q11 | [Close legacy and fallback removal by semantic owner](../quests/repository-legacy-fallback-closure/quest.json) | Existing per-owner retirement Quests; integration owns global reconciliation | scope dependent; potentially large | P0 |
+| Q12 | [Prove the frozen composition and hand off to comparisons](../quests/canonical-authority-formation-acceptance/quest.json) | Integration and existing service/acceptance owners | integration | Q1-Q11, Q13-Q16 and original formation proof |
+| Q13 | [Catalog authority and visible reconciliation](../quests/catalog-authority-and-visible-reconciliation/quest.json) | Catalog read consumer, canonical read-authority gateway and cache reconciliation owner | high | P0/Q1; Q2 review; shared-owner coordination |
+| Q14 | [CDC recipient domain and retained debt](../quests/cdc-recipient-domain-and-retained-debt/quest.json) | Latency topology, message-group recipient mapping and CDC propagation progress interaction | high | P0/Q1; Q2 review; shared-owner coordination |
+| Q15 | [Cache replica incarnation coherence](../quests/cache-replica-incarnation-coherence/quest.json) | Shared system-table cache ingress/merge and replica lifecycle publication interaction | high | P0/Q1; Q2 review; shared-owner coordination |
+| Q16 | [Load admission ingress identity](../quests/load-admission-ingress-identity/quest.json) | Actual load ingress, discovery selection, table admission cache and query dispatch interaction | medium | P0/Q1; Q2 review; shared-owner coordination |
+
+```mermaid
+flowchart TD
+  P0[Reconciled baseline and owners] --> Q1[Authoring and producer fidelity]
+  P0 --> Q2[Review and paired-proof binding]
+  P0 --> Q3[Report classification]
+  P0 --> Q11[Legacy and fallback closure]
+  Q1 --> Q4[Management authority]
+  Q1 --> Q5[Completion observation]
+  Q1 --> Q6[Policy currency]
+  Q1 --> Q7[Routing freshness]
+  Q1 --> Q8[Formation progress]
+  Q1 --> Q9[Natural shutdown]
+  Q3 --> Q8
+  Q3 --> Q10[Lab and evidence custody]
+  Q1 --> Q12[Frozen composition acceptance]
+  Q2 --> Q12
+  Q3 --> Q12
+  Q4 --> Q12
+  Q5 --> Q12
+  Q6 --> Q12
+  Q7 --> Q12
+  Q8 --> Q12
+  Q9 --> Q12
+  Q10 --> Q12
+  Q11 --> Q12
+  Q1 --> Q13[Catalog authority and visibility]
+  Q1 --> Q14[CDC recipient identity and debt]
+  Q1 --> Q15[Cache incarnation coherence]
+  Q1 --> Q16[Actual ingress admission]
+  Q13 --> Q12
+  Q14 --> Q12
+  Q15 --> Q12
+  Q16 --> Q12
+  F[Existing three-node formation Quest] --> Q12
+  Q12 --> C[Existing comparison epic]
+```
+
+Diagnosis does not wait for every tool change. Q2/Q3 tooling and Q10 runner work
+can proceed independently of runtime investigation. Q4-Q7 get separate writers
+only after shared gateway/projection contracts are mapped. Q8 has one writer
+across the complete transition; Q9 must coordinate if it touches that lifecycle.
+Q13/Q15 share cache ingress and reconciliation and require one coordinated
+writer; Q16 admission also includes its cache and request-context binding.
+Count review, test and integration waits as WIP. Integrate one accepted
+interaction at a time and record discovered causal dependencies here.
+
+## Independent review reconciliation (10 November)
+
+The second review supplies four concrete product interactions that the first
+Q1-Q12 plan did not isolate adequately. Source inspection at `947fbe658` supports
+the mechanisms below; the local runtime files are unchanged by this planning
+branch. The report's behavioral witnesses remain verifier-reported: the linked
+Library text/ZIP returned login pages and were not retrieved, and this session
+ran no runtime reproduction. The reported seven green files/561 assertions are
+not promoted to current independent execution evidence.
+
+| Finding | Source-backed gap and disposition |
+| --- | --- |
+| Q13 catalog authority | The metadata consumer requests owner-local/owner-RPC empty confirmation without required leader authority, checks array-shaped rows rather than complete authoritative scope, and can classify raw fetch results as FOUND/applied while tombstones fence visibility. Repair the consumer and reconciliation contract together; retain genuine absence and stale-replay protection. |
+| Q14 CDC recipient identity | Cached latency groups are mapped, but raw tree order is unioned as required message-group targets. Progress retains omitted captured groups. Repair all input mapping and already captured invalid bindings as one obligation-preserving interaction, using the real tree in both propagation modes. |
+| Q15 incarnation coherence | Shared stale backfill can fill successor gaps from predecessor fields before the downstream identity guard sees the row. Fence merge/lifecycle advancement before provenance is lost and inspect the actual mutation payload. Durable corruption or quorum loss is not established. |
+| Q16 actual ingress | The first local endpoint from mixed PostgreSQL/admin discovery decides admission; the cache is keyed only by table. Preserve actual service/protocol/incarnation through selection, caching and query dispatch, rather than search for any ready endpoint. |
+| Comparison C1/C2 | Existing proof binding correctly rejects reformed deployments. The benchmark still needs a supported reset preserving the deployed cohort, and the TiDB runner still lacks required canonical case execution. Their implementation belongs to the existing comparison epic. |
+
+The local branch graph confirms that `947fbe658ebb2efe993900b672ded51d5610dbcb`
+and WIP `386644a2109bf2cc7847ee2b4a6002a7ad872e7f` diverge from
+`c8215e322cbd1347f50297b7cfa5b6c669fae52a`. The WIP's later timestamp is not
+integration precedence. The integrated active-read policy repair must survive
+composition; Q6 records its exact source blob and adverse response-order witness
+through `PriorityPublicationSafetyRows.getCriticalMinReplicaCount`, with ABA and
+eviction controls. Source divergence was checked; this session did not execute
+that witness or a destructive REMOVE.
+
+These defects are candidates for the service's causal investigation, not proof
+of the complete formation failure. Q8 must still trace the first divergence.
+The original quorum, completion, routing, shutdown, custody and global removal
+obligations remain open unless their own evidence discharges them. Additional
+repairs do not waive the unchanged physical three-consecutive-run service seal.
+
+## Reuse and scope boundaries
+
+- [committed-readiness-fixture-custody](../quests/committed-readiness-fixture-custody/quest.json)
+  retains its sealed readiness fixture proof; Q1 adds authoring/type-check
+  prevention, not another fixture owner.
+- [required-entity-operation-observation](../quests/required-entity-operation-observation/quest.json)
+  retains its required entity-read seal. Q5 covers canonical completion and
+  the remaining ordinary/per-operation callers excluded by that earlier repair.
+  Coordinate the existing
+  [system-table-row-decoders](../quests/system-table-row-decoders/quest.json)
+  and its caller Quests before changing their shared boundary.
+- [partition-placement-declared-target](../quests/partition-placement-declared-target/quest.json)
+  retains its placement/policy proof. Q6 first verifies the current active-read
+  repair and extends proof only where its actual currency contract requires it.
+- [fallback-branch-coverage-census](../quests/fallback-branch-coverage-census/quest.json)
+  and [comparative-benchmark-evidence-repair](../quests/comparative-benchmark-evidence-repair/quest.json)
+  remain completed claims at their recorded scope. Q10 verifies current custody,
+  execution, deployment binding and applicability; it does not reopen their seals.
+- [code-navigability-and-mistake-resistance](code-navigability-and-mistake-resistance.md),
+  [dead-fallback-retirement](../quests/dead-fallback-retirement/quest.json) and
+  [live-dual-path-classification](../quests/live-dual-path-classification/quest.json)
+  remain the existing bounded inventory/retirement owners. Q11 reconciles all
+  maintained executable paths and global closure, including classes and paths
+  beyond those limited probes. Register independent per-owner removal Quests
+  where needed, without duplicate writers; include them in Q12 before closure.
+- The original formation Quest alone owns the existing three-node user journey.
+  Q8 is a bounded causal repair, Q9 adds natural-exit proof, and Q12 consumes
+  their evidence. A local five-process diagnostic is not physical qualification.
+
+## Completion and comparison handoff
+
+The epic stays open until all required prevention and bounded repair work is
+independently verified against applicable inputs, the original three-node receipt
+passes its unchanged three-consecutive-run requirement on the frozen candidate,
+natural shutdown and final custody/gates pass, and Q11 reports zero unresolved
+legacy/fallback violations and zero unclassified candidate sites across its
+repository-wide inventory. Classification, routing a violation to another Quest,
+renaming a branch, a coverage gap or raising a ratchet does not close removal.
+Legitimate defaults and owned representation conversion require a semantic
+justification; they cannot conceal an alternate decision algorithm.
+
+Use current source/caller evidence and meaningful negative controls, with safety,
+progress after finite failures and bounded resources at the necessary deterministic,
+native and physical layers. No deadlines, safety floors or service predicates are
+weakened. Independent review returns all material findings for the interaction;
+repeated rejection triggers causal/design reassessment, not another speculative
+patch. Completed bounded repairs remain accepted within their measured scope
+when a later service gate fails; the epic remains open for the named blocker.
+
+The separate successor is
+[developer-journey-and-measured-comparisons](developer-journey-and-measured-comparisons.md),
+with its own public workload, five-node topology, actual deployment and semantic
+qualification. The superseded matrix is not an execution owner. Three-node
+formation, local diagnostics, comparative performance, publication and release
+remain different claims. This planning installation authorizes none of their
+unexecuted acceptance results.
+
+## Evidence and historical research
+
+The reassessment was captured from `947fbe658ebb2efe993900b672ded51d5610dbcb`.
+Q12's append-only log records the retained local assessment/manifest locations
+and hashes; no raw logs, copied source trees or fabricated run results are added
+here. Q8 and Q9 name the relevant historical failure families in their records.
+The existing service receipt and Quest log retain the original red acceptance.
+
+Primary-source comparisons inform the design, not proof of Lagrange behavior:
+[Raft membership](https://raft.github.io/raft.pdf) and
+[etcd learners](https://etcd.io/docs/v3.5/learning/design-learner/) motivate
+consuming the actual consensus configuration and transition evidence;
+[FoundationDB's simulator](https://www.foundationdb.org/files/fdb-paper.pdf)
+motivates faithful fault witnesses through production owners;
+[checkJs](https://www.typescriptlang.org/tsconfig/checkJs.html) supports a bounded
+concrete producer/consumer pilot. Configuration alone is not live quorum, a
+parallel model is not production proof, and typing does not prove temporal safety.
+
+## Historical milestone and integration baseline (4-6 November)
 
 - **Assigned version milestone:** `0.4.1` (`RM-0.2.9-published-operating-contract`
   in `docs/development/agpl-feature-map.md`), the immediate bounded correctness
@@ -87,7 +365,7 @@ node within preregistered bounds.
   `solve/quests/fresh-create-release-authority-from-committed-operation/quest.json`,
   and `solve/quests/replica-admission-from-committed-operation/quest.json`.
 
-## Reconciled integration status (6 November)
+### Recorded integration status (6 November)
 
 Resumed after the 14:44 UTC / 15:44 CET handover checkpoint on 6 November
 (`/home/peter/Downloads/lagrange-handover-20261106T144624Z/`). The H1 and H2
@@ -178,7 +456,7 @@ The takeover's temporary `adams-gamla` substitution and low-space warning are
 historical. No current-candidate E9 run, publication, main merge or comparative
 measurement has completed. Comparative measurements follow the main merge.
 
-## Current proof package (6 November)
+### Recorded proof package (6 November)
 
 Current integration status: the takeover history is composed and the three
 bounded prerequisite Quests have terminal land records. `51269c445` preserves
@@ -479,7 +757,10 @@ there, and the migration rollback is retained.
 4. **Observational purity:** diagnostics and readiness/snapshot observers
    observe progress without mutating product caches or causing convergence.
 
-## Work packages and baseline classification
+## Historical E0-E9 work package map (6 November)
+
+These statuses describe the earlier composition; the current summary and linked
+Quest evidence above govern continuation.
 
 | Work package | Invariant | Production owner | Retained obligation / trigger | Test and evidence | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -521,3 +802,23 @@ there, and the migration rollback is retained.
   within their existing owners to satisfy the scoped size rule. The physical
   host substitution above resolves a disk preflight refusal without deleting
   another run's data, lowering the requirement, or changing the scenario.
+
+- 2026-11-10: Installed the user-approved canonical-authority plan as Q1-Q12
+  unsealed Quest proposals at `947fbe658ebb2efe993900b672ded51d5610dbcb`, rule-set
+  revision 5. Corrected only the original formation Quest's epic routing and
+  appended its explanation. Explicitly replaced the epic-only completion probe
+  with Q12's broader aggregate; preserved the original service seal, failed
+  receipt, all completed repair claims and append-only logs. Added natural exit,
+  proof custody, prevention and repository-wide no-legacy/fallback closure as
+  completion obligations. Corrected the unsealed cleanup planning premise that
+  coverage proves code dead; existing retirement/classification work retains
+  its bounded owner. This is planning adoption, not implementation or acceptance.
+
+- 2026-11-10 independent-review amendment: added Q13-Q16 and their required
+  entries to the still-unsealed Q12 aggregate after inspecting actual owner
+  paths and history. Made policy repair preservation explicit in Q6; expanded
+  Q1/Q2 to preserve identity/scope through the full producer-to-decision path.
+  Routed cohort-preserving reset and missing TiDB execution to C1/C2 under the
+  existing comparison epic. No original service/comparison seal, receipt or
+  earlier log entry changed. Source confirmation and external reported
+  reproduction remain distinct; no new runtime tests or campaign ran here.

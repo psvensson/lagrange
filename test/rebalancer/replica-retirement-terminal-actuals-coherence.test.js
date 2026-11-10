@@ -53,7 +53,11 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {
+  buildMockPolicyAuthorityWitness,
+  createMockPolicyService,
+  createTestCoordinator,
+} from './test-helpers.js';
 
 const GUARD_ACTIVE_STATUS = 'active';
 const GUARD_MUTATION_DELETE = 'delete';
@@ -113,7 +117,12 @@ function installPhantomAbsentServiceRead(coordinator, replicaId) {
       params[0] === replicaId
     ) {
       fault.phantomReadCount += 1;
-      return {success: true, rows: []};
+      return {
+        success: true,
+        rows: [],
+        rowSetComplete: true,
+        readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
+      };
     }
     return originalRead(tableName, sql, params, options);
   };
@@ -215,9 +224,9 @@ test('REMOVE must not rest terminal REMOVED while the retired ' +
     nodeId: 'seed-node',
     enableTimeouts: false,
     messageRouter: buildInitiatedDeliveryRouter(deliveries),
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-    },
+    }),
     cacheData: {
       nodes: [
         buildReadyNodeRow('seed-node'),

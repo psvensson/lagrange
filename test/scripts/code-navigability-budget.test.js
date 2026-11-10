@@ -135,6 +135,10 @@ function arrayModule(name, params, count, element) {
     `${repeated(count, () => `    ${element},`)}\n  ];\n}\n`;
 }
 
+const CENSUS_LANES = Object.freeze([
+  'unit', 'packaging', 'integration', 'bootstrap', 'formation',
+]);
+
 // The census record of the nth occurrence of `slice` in `file`, whose text
 // is `text`: the hash is the detector's site identity, sha256(file\nslice).
 function censusSite(file, text, slice, occurrence, row, siteClass) {
@@ -148,7 +152,19 @@ function censusSite(file, text, slice, occurrence, row, siteClass) {
     hash: sha256(`${file}\n${slice}`), occurrence, class: siteClass,
     sidesExecuted: {primary: siteClass !== 'never' && siteClass !== 'fallback-only',
       fallback: siteClass === 'fallback-only' || siteClass === 'both'},
-    runs: ['corpus-1'],
+    runs: ['unit-1'],
+  };
+}
+
+function censusRun(lane) {
+  return {
+    id: `${lane}-1`,
+    lane,
+    host: 'fixture',
+    commit: '0'.repeat(40),
+    startedAt: '2026-11-08T00:00:00.000Z',
+    coverageDigest: '0'.repeat(64),
+    witnesses: {started: 1, complete: 1, lost: 0, external: 0},
   };
 }
 
@@ -156,8 +172,7 @@ function census(sites) {
   return {
     schema: CENSUS_SCHEMA, generatedAt: '2026-11-08T00:00:00.000Z',
     head: '0'.repeat(40),
-    runs: [{id: 'corpus-1', lane: 'corpus', host: 'fixture', commit: '0'.repeat(40),
-      startedAt: '2026-11-08T00:00:00.000Z', coverageDigest: '0'.repeat(64)}],
+    runs: CENSUS_LANES.map((lane) => censusRun(lane)),
     sites,
   };
 }
@@ -722,6 +737,94 @@ test('an inherited field never stands in for a census or classification field', 
   assert.equal(rows.get('fallback_sites_uncensused').value, 0);
   assert.equal(rows.get('fallback_sites_unclassified').value, 0);
   assert.equal(Object.hasOwn(inherited, 'row'), false, 'the pollution is restored');
+});
+
+test('measureNavigabilityBudgetWithFailures survives mutated intrinsics, prototype siteClass, ' +
+  'and hostile Array[Symbol.iterator]', () => {
+  const root = metFixture();
+  const text = fs.readFileSync(path.join(root, MET_FALLBACKS), UTF8);
+  const two = censusSite(MET_FALLBACKS, text, MET_TWO_SOURCE, 0,
+    'two_source_fallback_reads', 'primary-only');
+  const dual = censusSite(MET_FALLBACKS, text, MET_DUAL_PATH, 0, 'typeof_dual_paths', 'both');
+  const guarded = censusSite(MET_FALLBACKS, text, MET_CATCH, 0,
+    'catch_returns_default', 'primary-only');
+
+  // Prototype-key siteClass ('toString', 'constructor') and polluted EXPECTED_SIDES_BY_CLASS key:
+  writeJson(root, CENSUS_FILE, census([
+    {...two, class: 'toString'},
+    {...dual, class: 'constructor'},
+    {...guarded, class: 'polluted-class'},
+  ]));
+  const inherited = Object.getPrototypeOf({});
+  Object.defineProperty(inherited, 'polluted-class', {
+    value: [true, false],
+    configurable: true,
+    writable: true,
+    enumerable: true,
+  });
+  try {
+    const protoRows = byName(measure(root));
+    assert.equal(protoRows.get('fallback_sites_uncensused').value, 3);
+  } finally {
+    delete inherited['polluted-class'];
+  }
+
+  // Restore valid census and mutate Array.prototype[Symbol.iterator], Date.parse, JSON.parse,
+  // Array.isArray, Map.prototype.get, and Set.prototype.has:
+  writeJson(root, CENSUS_FILE, census([two, dual, guarded]));
+  const origArrayIterator = Array.prototype[Symbol.iterator];
+  const origDateParse = Date.parse;
+  const origJsonParse = JSON.parse;
+  const origArrayIsArray = Array.isArray;
+  const origMapGet = Map.prototype.get;
+  const origSetHas = Set.prototype.has;
+  const includesText = Function.call.bind(String.prototype.includes);
+  const splitText = Function.call.bind(String.prototype.split);
+  const isBudgetCaller = () => {
+    const callerFrame = splitText(new Error().stack, '\n')[3] || '';
+    return includesText(callerFrame, 'code-navigability-budget.js');
+  };
+  try {
+    Reflect.set(Array.prototype, Symbol.iterator, function guardedIterator() {
+      if (isBudgetCaller()) {
+        throw new Error('Unexpected Array[Symbol.iterator] in code-navigability-budget.js');
+      }
+      return Reflect.apply(origArrayIterator, this, []);
+    });
+    Date.parse = () => NaN;
+    JSON.parse = () => {
+      throw new Error('ambient JSON.parse must not be consulted');
+    };
+    Array.isArray = () => false;
+    Reflect.set(Map.prototype, 'get', function guardedMapGet(key) {
+      if (isBudgetCaller()) {
+        throw new Error('Unexpected Map.prototype.get in code-navigability-budget.js');
+      }
+      return Reflect.apply(origMapGet, this, [key]);
+    });
+    Reflect.set(Set.prototype, 'has', function guardedSetHas(key) {
+      if (isBudgetCaller()) {
+        throw new Error('Unexpected Set.prototype.has in code-navigability-budget.js');
+      }
+      return Reflect.apply(origSetHas, this, [key]);
+    });
+
+    const measured = measureNavigabilityBudgetWithFailures(root, {eslintRunner: noPromotion});
+    const picked = selectedRows(measured.rows, ['--rows',
+      'fallback_sites_uncensused,fallback_sites_unclassified,fallback_sites_uncensused']);
+    assert.equal(picked.length, 2);
+    assert.equal(picked[0].value, 0);
+    assert.equal(picked[0].met, true);
+    assert.equal(picked[1].value, 0);
+    assert.equal(picked[1].met, true);
+  } finally {
+    Reflect.set(Array.prototype, Symbol.iterator, origArrayIterator);
+    Date.parse = origDateParse;
+    JSON.parse = origJsonParse;
+    Array.isArray = origArrayIsArray;
+    Reflect.set(Map.prototype, 'get', origMapGet);
+    Reflect.set(Set.prototype, 'has', origSetHas);
+  }
 });
 
 // A probe command is split on whitespace and these names have no spaces, so

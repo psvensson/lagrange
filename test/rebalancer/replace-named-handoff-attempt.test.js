@@ -60,7 +60,10 @@ import {
 import {
   REPLICA_HANDLER_LEADER_HANDOFF_BRANCH,
 } from '../../src/node/replica-handler-leader-handoff-methods.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {
+  createMockPolicyService,
+  createTestCoordinator,
+} from './test-helpers.js';
 import {
   readReplaceOwnerDiagnostic,
   recordReplaceOwnerWait,
@@ -152,14 +155,18 @@ async function createHarness({stepDownResponse} = {}) {
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
     },
-    controlPlaneReadinessService: createPublishedPlanningReadinessService({
-      publicationStatus: 'PUBLISHED',
-      activeNodeIds: NODE_IDS,
-      membershipTargetNodeId: TARGET_NODE_ID,
+    readinessFixture: {
+      callbacks: createPublishedPlanningReadinessService({
+        publicationStatus: 'PUBLISHED',
+        activeNodeIds: NODE_IDS,
+        membershipTargetNodeId: TARGET_NODE_ID,
+      }),
+    },
+    tablePolicyService: createMockPolicyService({
+      getPolicyForPartition: () => ({
+        targetReplicaCount: 3, minReplicaCount: 3,
+      }),
     }),
-    tablePolicyService: {getPolicyForPartition: () => ({
-      targetReplicaCount: 3, minReplicaCount: 3,
-    })},
     cacheData: {
       nodes: NODE_IDS.map(readyNode),
       services: [

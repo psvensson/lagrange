@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readUpperStateField} from '../utils/state-field-read.js';
 import {createHash} from 'node:crypto';
 import {v4 as uuidv4} from 'uuid';
 import {
@@ -591,14 +592,22 @@ function deriveMembershipPublicationId(candidate = {}) {
   );
 }
 
+// A publication row is born OPEN unless the caller or the derived candidate
+// names its status: OPEN is the protocol's birth state, not a guess.
+const MEMBERSHIP_PUBLICATION_BIRTH_STATUS = MEMBERSHIP_PUBLICATION_STATUS.OPEN;
+
+function resolveBuiltPublicationStatus(options, candidate) {
+  const statedStatus =
+    readUpperStateField(options.status, candidate.publicationStatus);
+  return statedStatus === STATE_ABSENT ?
+    MEMBERSHIP_PUBLICATION_BIRTH_STATUS :
+    statedStatus;
+}
+
 function buildMembershipPublicationRow(options = {}) {
   const candidate = options.candidate || {};
   const nowMs = resolveNowMs(options.nowMs);
-  const status = String(
-    options.status ||
-      candidate.publicationStatus ||
-      MEMBERSHIP_PUBLICATION_STATUS.OPEN,
-  ).toUpperCase();
+  const status = resolveBuiltPublicationStatus(options, candidate);
   const transitionHistory = Array.isArray(options.transitionHistory) ?
     options.transitionHistory.slice() :
     [

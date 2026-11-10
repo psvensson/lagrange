@@ -98,10 +98,85 @@ test('Constants, reason codes, contracts, and validator helpers', async (t) => {
   t.equal(ownerValidateRequest, validateManagementV1OperationRequest);
 });
 
+function assertRollingUpgradeStepQuorumHalt(t, snap, p, idx, badQuorum) {
+  const haltSafetyOwner = new RollingUpgradeOwner(upgradePorts());
+  haltSafetyOwner.startUpgrade({
+    operationId: `op-safety-halt-${idx}`, parameters: p, clusterSnapshot: snap, nowMs: 100,
+  });
+  const safetyOpts = badQuorum === undefined ? {nowMs: 120} :
+    {nowMs: 120, quorumHealthy: badQuorum};
+  const safetyRes = haltSafetyOwner.checkTimeoutsAndSafety(safetyOpts);
+  t.equal(safetyRes.state, MANAGEMENT_OPERATION_STATE.FAILED);
+  t.equal(safetyRes.reasonCode, L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT);
+
+  const qOwner = new RollingUpgradeOwner(upgradePorts());
+  qOwner.startUpgrade({
+    operationId: `op-qs-${idx}`, parameters: p, clusterSnapshot: snap, nowMs: 100,
+  });
+  qOwner.recordNodeRestarted('node-1', {version: '0.5.0', nowMs: 110});
+  const catchUpOpts = badQuorum === undefined ? {nowMs: 120, underReplicatedPartitionCount: 0} :
+    {nowMs: 120, underReplicatedPartitionCount: 0, quorumHealthy: badQuorum};
+  const catchUpRes = qOwner.completeNodeCatchUp('node-1', catchUpOpts);
+  t.equal(catchUpRes.state, MANAGEMENT_OPERATION_STATE.FAILED);
+  t.equal(catchUpRes.reasonCode, L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT);
+
+  let nextDrains = 0;
+  const drainGateOwner = new RollingUpgradeOwner({
+    onDrainNodeLeadership: () => {
+      nextDrains += 1;
+    },
+    onTriggerNodeRestart: () => {},
+  });
+  drainGateOwner.startUpgrade({
+    operationId: `op-drain-gate-${idx}`, parameters: p, clusterSnapshot: snap, nowMs: 100,
+  });
+  drainGateOwner.recordNodeRestarted('node-1', {version: '0.5.0', nowMs: 110});
+  drainGateOwner.completeNodeCatchUp('node-1', {
+    nowMs: 120, quorumHealthy: true, underReplicatedPartitionCount: 0,
+  });
+  nextDrains = 0;
+  const drainRes = badQuorum === undefined ?
+    drainGateOwner.beginNextNodeDrain(130) :
+    drainGateOwner.beginNextNodeDrain(130, {quorumHealthy: badQuorum});
+  t.equal(drainRes.state, MANAGEMENT_OPERATION_STATE.FAILED);
+  t.equal(drainRes.reasonCode, L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT);
+  t.equal(nextDrains, 0, 'beginNextNodeDrain refuses to drain node-2 without explicit quorum');
+}
+
+function assertRollingUpgradeQuorumSafetyGates(t, snap, p) {
+  for (const [idx, missingQuorum] of [false, null, undefined, 1, 'true'].entries()) {
+    let effects = 0;
+    const rejOwner = new RollingUpgradeOwner({
+      onDrainNodeLeadership: () => {
+        effects += 1;
+      },
+      onSetNodeReadyz: () => {
+        effects += 1;
+      },
+      onTriggerNodeRestart: () => {
+        effects += 1;
+      },
+    });
+    const badSnap = missingQuorum === undefined ?
+      {nodeIds: snap.nodeIds, readyNodeIds: snap.readyNodeIds, underReplicatedPartitionCount: 0} :
+      {...snap, hasPartitionQuorum: missingQuorum};
+    const rej = rejOwner.startUpgrade({
+      operationId: `op-missing-quorum-${idx}`, parameters: p, clusterSnapshot: badSnap, nowMs: 100,
+    });
+    t.equal(rej.state, MANAGEMENT_OPERATION_STATE.REJECTED);
+    t.equal(rej.reasonCode, L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT);
+    t.equal(effects, 0, 'startUpgrade never drains or restarts nodes without explicit quorum');
+  }
+
+  for (const [idx, badQuorum] of [false, null, undefined, 'true'].entries()) {
+    assertRollingUpgradeStepQuorumHalt(t, snap, p, idx, badQuorum);
+  }
+}
+
 test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (t) => {
   const snap = {
     nodeIds: ['node-1', 'node-2'], readyNodeIds: ['node-1', 'node-2'],
-    underReplicatedPartitionCount: 0,
+    underReplicatedPartitionCount: 0, hasPartitionQuorum: true,
   };
   const dSha = 'sha256:05000000000000000000000000000000';
   const p = {targetVersion: '0.5.0', targetArtifactDigest: dSha};
@@ -122,6 +197,8 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
     })).evaluatePreflight(p, snap), L4_ROLLING_UPGRADE_REASON_CODE.ARTIFACT_DIGEST_MISMATCH],
     [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(p, {...snap, ready: false}),
       L4_ROLLING_UPGRADE_REASON_CODE.CLUSTER_NOT_READY],
+    [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(p, {...snap, ready: null}),
+      L4_ROLLING_UPGRADE_REASON_CODE.CLUSTER_NOT_READY],
     [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(p, undefined),
       L4_ROLLING_UPGRADE_REASON_CODE.CLUSTER_NOT_READY],
     [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(p, {...snap, nodeIds: []}),
@@ -129,6 +206,21 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
     [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(
       p, {nodeIds: snap.nodeIds, readyNodeIds: snap.readyNodeIds}),
     L4_ROLLING_UPGRADE_REASON_CODE.CLUSTER_NOT_READY],
+    [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(
+      p, {...snap, hasPartitionQuorum: false}),
+    L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT],
+    [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(
+      p, {...snap, hasPartitionQuorum: null}),
+    L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT],
+    [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(
+      p, {
+        nodeIds: snap.nodeIds, readyNodeIds: snap.readyNodeIds,
+        underReplicatedPartitionCount: 0,
+      }),
+    L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT],
+    [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(
+      p, {...snap, hasPartitionQuorum: 'true'}),
+    L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT],
     [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(
       p, {...snap, underReplicatedPartitionCount: 1}),
     L4_ROLLING_UPGRADE_REASON_CODE.UNDER_REPLICATED_PARTITIONS],
@@ -139,15 +231,12 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
     t.equal(fn().reasonCode, code);
   }
 
+  assertRollingUpgradeQuorumSafetyGates(t, snap, p);
+
   const toOwner = new RollingUpgradeOwner(upgradePorts({nodeUpgradeTimeoutMs: 50}));
   toOwner.startUpgrade({operationId: 'op-to-1', parameters: p, clusterSnapshot: snap, nowMs: 100});
-  t.equal(toOwner.checkTimeoutsAndSafety({nowMs: 200}).reasonCode,
+  t.equal(toOwner.checkTimeoutsAndSafety({nowMs: 200, quorumHealthy: true}).reasonCode,
     L4_ROLLING_UPGRADE_REASON_CODE.NODE_UPGRADE_TIMEOUT);
-
-  const qOwner = new RollingUpgradeOwner(upgradePorts());
-  qOwner.startUpgrade({operationId: 'op-qs-1', parameters: p, clusterSnapshot: snap, nowMs: 100});
-  t.equal(qOwner.completeNodeCatchUp('node-1', {quorumHealthy: false}).reasonCode,
-    L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT);
 
   const mOwner = new RollingUpgradeOwner(upgradePorts());
   mOwner.startUpgrade({operationId: 'op-mv-1', parameters: p, clusterSnapshot: snap, nowMs: 100});
@@ -164,7 +253,10 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
   const nodes = ['node-1', 'node-2', 'node-3'];
   uOwner.startUpgrade({
     operationId: 'op-roll-1', parameters: {targetVersion: '0.5.0', targetArtifactDigest: dSha},
-    clusterSnapshot: {nodeIds: nodes, readyNodeIds: nodes, underReplicatedPartitionCount: 0},
+    clusterSnapshot: {
+      nodeIds: nodes, readyNodeIds: nodes, underReplicatedPartitionCount: 0,
+      hasPartitionQuorum: true,
+    },
     nowMs: 1000,
   });
 
@@ -177,16 +269,18 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
   t.ok(uOwner.isVersionSkewActive() && !uOwner.isFeatureGateEnabled('0.5.0'));
 
   const lagRes = uOwner.completeNodeCatchUp('node-1', {
-    underReplicatedPartitionCount: 2, nowMs: 1150,
+    quorumHealthy: true, underReplicatedPartitionCount: 2, nowMs: 1150,
   });
   t.equal(lagRes.state, MANAGEMENT_OPERATION_STATE.IN_PROGRESS);
   t.equal(uOwner.getActiveNode().nodeId, 'node-1');
 
-  uOwner.completeNodeCatchUp('node-1', {underReplicatedPartitionCount: 0, nowMs: 1160});
+  uOwner.completeNodeCatchUp('node-1', {
+    quorumHealthy: true, underReplicatedPartitionCount: 0, nowMs: 1160,
+  });
   t.same(readyzCalls[1], {id: 'node-1', val: true});
   t.ok(uOwner.isVersionSkewActive() && !uOwner.isFeatureGateEnabled('0.5.0'));
 
-  uOwner.beginNextNodeDrain(1200);
+  uOwner.beginNextNodeDrain(1200, {quorumHealthy: true});
   t.equal(drained[1], 'node-2');
   t.same(readyzCalls[2], {id: 'node-2', val: false});
 
@@ -196,17 +290,38 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
     recovered.nodeVersions['node-2'] === '0.4.0' && recovered.hasActiveUpgrade());
 
   recovered.recordNodeRestarted('node-2', {version: '0.5.0', nowMs: 1300});
-  recovered.completeNodeCatchUp('node-2', {underReplicatedPartitionCount: 0, nowMs: 1350});
-  recovered.beginNextNodeDrain(1400);
+  recovered.completeNodeCatchUp('node-2', {
+    quorumHealthy: true, underReplicatedPartitionCount: 0, nowMs: 1350,
+  });
+  recovered.beginNextNodeDrain(1400, {quorumHealthy: true});
   recovered.recordNodeRestarted('node-3', {version: '0.5.0', nowMs: 1450});
   const finalStatus = recovered.completeNodeCatchUp('node-3', {
-    underReplicatedPartitionCount: 0, nowMs: 1500,
+    quorumHealthy: true, underReplicatedPartitionCount: 0, nowMs: 1500,
   });
 
   t.equal(finalStatus.state, MANAGEMENT_OPERATION_STATE.SUCCEEDED);
   t.ok(recovered.currentVersion === '0.5.0' && !recovered.isVersionSkewActive() &&
     recovered.isFeatureGateEnabled('0.5.0') && !recovered.getReleaseFacts().versionSkew);
 });
+
+async function assertStreamBackupRejectsMissingQuorum(t, validOwner) {
+  for (const missingQuorumSnap of [
+    null,
+    undefined,
+    {ready: true},
+    {ready: true, hasPartitionQuorum: null},
+    {ready: true, hasPartitionQuorum: false},
+  ]) {
+    await t.rejects(
+      () => validOwner.streamBackup(
+        {backupId: 'bkp-missing-quorum', destinationUri: 'memory://cluster-data/missing-q'},
+        missingQuorumSnap,
+        1000,
+      ),
+      /PARTITION_QUORUM_UNAVAILABLE/,
+    );
+  }
+}
 
 test('L3 Backup and Restore: 11 reason codes, cut, Rule 6 proof, restore', async (t) => {
   const bSnap = READY_BACKUP_SNAPSHOT;
@@ -284,6 +399,7 @@ test('L3 Backup and Restore: 11 reason codes, cut, Rule 6 proof, restore', async
   t.equal(partialRes.reasonCode, L3_BACKUP_RESTORE_REASON_CODE.BACKUP_VERIFICATION_FAILED);
 
   const validOwner = new BackupRestoreOwner(backupPorts());
+  await assertStreamBackupRejectsMissingQuorum(t, validOwner);
   const backupRes = await backup(validOwner,
     {backupId: 'bkp-cut-1', destinationUri: 'memory://cluster-data/backup-cut'},
     {operationId: 'op-valid-111111111111'});
@@ -411,6 +527,10 @@ test('ManagementV1Owner: facts, idempotency, conflicts, and decommission', async
       L6_DECOMMISSION_REASON_CODE.NODE_NOT_FOUND],
     [{getClusterSnapshot: snapshotPort({underReplicatedPartitionCount: 3})}, 'node-1',
       L6_DECOMMISSION_REASON_CODE.UNDER_REPLICATED_PARTITIONS],
+    [{getClusterSnapshot: snapshotPort({hasPartitionQuorum: undefined})}, 'node-1',
+      L6_DECOMMISSION_REASON_CODE.QUORUM_SAFETY_VIOLATION],
+    [{getClusterSnapshot: snapshotPort({hasPartitionQuorum: false})}, 'node-1',
+      L6_DECOMMISSION_REASON_CODE.QUORUM_SAFETY_VIOLATION],
     [{getClusterSnapshot: snapshotPort({nodeCount: 2, readyNodeCount: 2,
       nodeIds: ['node-1', 'node-2']})}, 'node-1',
     L6_DECOMMISSION_REASON_CODE.QUORUM_SAFETY_VIOLATION],

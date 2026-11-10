@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {deliveryTransportOf} from '../transport/transport-semantic-outcome.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import * as COORDINATOR_HANDOFF_RETRY
@@ -177,7 +178,7 @@ function withOwnerHandoffState(Base) {
       return this.deferTransitionRetry(operationId, error, {
         boundary:
           OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_OPERATION,
-        workflowStep: operation?.workflowStep || null,
+        workflowStep: readStateField(operation?.workflowStep),
         operationOwnershipFenceEpoch:
           options.operationOwnershipFenceEpoch,
         partitionId: options.partitionId || operation?.partitionId || null,
@@ -217,7 +218,7 @@ function withOwnerHandoffState(Base) {
             operation,
             options,
           ).logFields,
-          workflowStep: operation?.workflowStep || null,
+          workflowStep: readStateField(operation?.workflowStep),
           error: error?.message || error?.error || String(error),
           boundary:
             OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_REMOTE_HANDOFF,

@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 // The partition's log of its consensus group's hold on a contained
 // programming error. The port contains a throw its runtime did not type (a
 // listener's bug, a runtime defect) as the group's typed host failure of
@@ -66,7 +67,7 @@ function createConsensusHoldLog(service) {
       replicaId: service.replicaId,
       // The hold that ended: only a hold on an unexpected throw is named.
       phase: RUNTIME_PHASE.UNEXPECTED_THROW,
-      role: status?.role ?? null,
+      role: readStateField(status?.role),
       term: status?.term ?? null,
     });
   };

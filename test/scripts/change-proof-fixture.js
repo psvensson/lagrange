@@ -17,6 +17,13 @@ function createChangeProofFixture({
   workspaceInjectionEnvironment,
 }) {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'change-proof-'));
+  process.once('exit', () => {
+    try {
+      fs.rmSync(workspace, {recursive: true, force: true});
+    } catch (_error) {
+      return;
+    }
+  });
   const repo = path.join(workspace, 'repo');
   const sentinel = path.join(workspace, 'runner-invocation.json');
   const objectToJsonPollution = path.join(

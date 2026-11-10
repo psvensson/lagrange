@@ -1,3 +1,4 @@
+import {readStateField} from './utils/state-field-read.js';
 import {LIFECYCLE_REASON} from
   './bootstrap/lifecycle-controller-constants.js';
 import {createDynamicConfigStartupWiring} from
@@ -10,6 +11,7 @@ import {
 } from './logging/logs-persistence-startup.js';
 import {LogsTableService} from './logging/logs-table-service.js';
 import {submitLocalNodeDrainIntent} from './node/local-node-drain.js';
+import {NodeService} from './node/node-service.js';
 import {
   ENTRYPOINT_DEFAULT,
   ENTRYPOINT_LOG_MSG,
@@ -278,6 +280,7 @@ async function timeBoxBestEffortShutdownStep(logger, signal, step, timeoutMs, ru
 
 const LOCAL_STR_EMBEDDED = 'embedded';
 const LOCAL_STR_CLOSEAPPLICATIONDATABASES = 'closeApplicationDatabases';
+const SHUTDOWN_STEP_NODE_SERVICE = 'nodeService.shutdown';
 
 function createRuntimeShutdown(options) {
   let shutdownPromise = null;
@@ -306,7 +309,7 @@ function createRuntimeShutdown(options) {
       );
       options.logger.info(ENTRYPOINT_LOG_MSG.READINESS_DRAINING, {
         nodeId: options.nodeId,
-        phase: drainingSnapshot?.phase || null,
+        phase: readStateField(drainingSnapshot?.phase),
         reasons: drainingSnapshot?.reasons || [],
         drainDeadlineMs,
       });
@@ -355,6 +358,12 @@ function createRuntimeShutdown(options) {
             adminAPI: options.adminAPI,
             liveQueryWiring: options.liveQueryWiring,
           }),
+      );
+      await timeShutdownStep(
+        options.logger,
+        signal,
+        SHUTDOWN_STEP_NODE_SERVICE,
+        () => NodeService.getInstance().shutdown(),
       );
       options.logger.info(LOCAL_STR_SHUTDOWN_STEP, {
         signal,
@@ -489,7 +498,7 @@ function scheduleStartupLivenessPulse(options) {
         options.bootstrapAPI?.fastify?.server?.listening === true,
       bootstrapApiHasSqlQueryEngine: Boolean(options.bootstrapAPI?.sqlQueryEngine),
       bootstrapApiHasMessageRouter: Boolean(options.bootstrapAPI?.messageRouter),
-      startupPhase: options.startupOwner?.phase || null,
+      startupPhase: readStateField(options.startupOwner?.phase),
       pid: process.pid,
     });
     if (pulseCount >= 10) {

@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readLowerStateField} from '../utils/state-field-read.js';
 import {requirePolicyTargetReplicaCount} from '../policy/table-policy-resolution.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
@@ -67,10 +68,9 @@ function buildEntityTransitionSets(inventory, ReplicaStatus, WORKFLOW_STEP) {
     if (operation.addTransitional) {
       nodesWithEntityAddTransitional.add(operation.targetNodeId || null);
     }
-    const workflowStep = operation.workflowStep || null;
-    const state = workflowStep ?
-      String(workflowStep).toLowerCase() :
-      operation.status;
+    const workflowStep = operation.workflowStep;
+    const statedStep = readLowerStateField(workflowStep);
+    const state = statedStep === STATE_ABSENT ? operation.status : statedStep;
     if (state === ReplicaStatus.REMOVING ||
         workflowStep === WORKFLOW_STEP.STOPPING) {
       replicasInRemoving.add(

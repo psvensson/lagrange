@@ -358,10 +358,10 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
   }
 
   getHealthyReplicas(replicas) {
-    const activeReplicas = replicas.filter((replica) => {
-      const status = replica.status || ReplicaStatus.ACTIVE;
-      return status === ReplicaStatus.ACTIVE;
-    });
+    // services.status is NOT NULL: a row without one is not ACTIVE.
+    const activeReplicas = replicas.filter(
+      (replica) => replica.status === ReplicaStatus.ACTIVE,
+    );
 
     // Align critical-partition health semantics with coordinator safety checks:
     // consider only routable non-learner replicas on ready nodes as healthy.
@@ -405,10 +405,9 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
   // not membership-list retention), so it is still excluded and its replica is
   // re-placed. That is why the guard keys on processAlive, not published-active.
   getReadyNodeOccupiedReplicas(replicas) {
-    const activeReplicas = replicas.filter((replica) => {
-      const status = replica.status || ReplicaStatus.ACTIVE;
-      return status === ReplicaStatus.ACTIVE;
-    });
+    const activeReplicas = replicas.filter(
+      (replica) => replica.status === ReplicaStatus.ACTIVE,
+    );
     if (!this.isSystemPartitionEntity()) {
       return activeReplicas;
     }

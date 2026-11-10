@@ -23,8 +23,17 @@ import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligi
  * @return {Object} Mock system cache.
  */
 function createMockSystemCache(partitionIds) {
+  const tables = [{
+    table_id: 'test_table',
+    table_name: 'test_table',
+    primary_key: 'id',
+    partition_key: 'id',
+    partition_key_type: 'TEXT',
+  }];
+
   const partitions = partitionIds.map((id) => ({
     partition_id: id,
+    table_id: 'test_table',
     table_name: 'test_table',
     leader_node_id: 'node1',
     start_key: '',
@@ -41,24 +50,42 @@ function createMockSystemCache(partitionIds) {
     service_id: id,
   }));
 
+  const rowsForTable = (tableName) => {
+    if (tableName === TABLES.TABLES) {
+      return tables;
+    }
+    if (tableName === TABLES.PARTITIONS) {
+      return partitions;
+    }
+    if (tableName === TABLES.SERVICES) {
+      return services;
+    }
+    return [];
+  };
+
   return {
-    filter: function(tableName, predicate) {
+    get: function(tableName, key) {
+      if (tableName === TABLES.TABLES) {
+        return tables.find(
+          (row) => row.table_id === key || row.table_name === key,
+        ) || null;
+      }
       if (tableName === TABLES.PARTITIONS) {
-        return partitions.filter(predicate);
+        return partitions.find((row) => row.partition_id === key) || null;
       }
       if (tableName === TABLES.SERVICES) {
-        return services.filter(predicate);
+        return services.find((row) => row.service_id === key) || null;
       }
-      return [];
+      return null;
+    },
+    find: function(tableName, predicate) {
+      return rowsForTable(tableName).find(predicate) || null;
+    },
+    filter: function(tableName, predicate) {
+      return rowsForTable(tableName).filter(predicate);
     },
     getAll: function(tableName) {
-      if (tableName === TABLES.PARTITIONS) {
-        return partitions;
-      }
-      if (tableName === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
+      return rowsForTable(tableName);
     },
   };
 }

@@ -4,12 +4,20 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {TablePolicyService} from '../../src/policy/table-policy-service.js';
+import {
+  MAX_COMMITTED_POLICY_FENCES,
+  MAX_SUPERSEDED_POLICY_SNAPSHOTS,
+  TablePolicyService,
+} from '../../src/policy/table-policy-service.js';
+import {
+  readCommittedPolicyBase,
+} from '../../src/policy/table-policy-committed-base.js';
 import {NUM, STRING, TYPEOF} from '../../src/constants/index.js';
 import {
   POLICY_AUTHORITY_STATE,
   POLICY_ERROR_CODE,
   POLICY_ERROR_MSG,
+  POLICY_READ_REASON,
 } from '../../src/policy/policy-constants.js';
 import {CDC_TABLE_POLICY_REFUSAL} from '../../src/cache/cdc-table-policy.js';
 import {
@@ -750,24 +758,16 @@ test('TablePolicyService - getEffectiveStorageConstraints for table',
       },
     });
 
-    const service = new TablePolicyService({
-      sqlQueryEngine: mockEngine,
-    });
-    const constraints =
-      await service.getEffectiveStorageConstraints('table-1');
+    const service = new TablePolicyService({sqlQueryEngine: mockEngine});
+    const constraints = await service.getEffectiveStorageConstraints('table-1');
 
-    t.equal(
-      constraints[STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE],
-      5242880,
-      'Should return stored min free bytes');
-    t.equal(
-      constraints[STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT],
+    t.equal(constraints[STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE],
+      5242880, 'Should return stored min free bytes');
+    t.equal(constraints[STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT],
       STORAGE_PLACEMENT_DEFAULT.MAX_BUDGET_UTILIZATION_PERCENT,
       'Should return default max utilization');
-    t.equal(
-      constraints[STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM],
-      true,
-      'Should return stored emergency headroom');
+    t.equal(constraints[STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM],
+      true, 'Should return stored emergency headroom');
     t.end();
   });
 
@@ -775,16 +775,13 @@ test('TablePolicyService - getEffectiveMessageGroupStorageConstraints',
   async (t) => {
     const mockEngine = {
       executeQuery: async (sql, params) => {
-        if (sql.includes('FROM message_groups') &&
-            params?.[0] === 'mg-1') {
+        if (sql.includes('FROM message_groups') && params?.[0] === 'mg-1') {
           return {
             rows: [{
-              group_id: 'mg-1',
-              replica_count: 3,
+              group_id: 'mg-1', replica_count: 3,
               policy: JSON.stringify({
                 placementConstraints: {
-                  [STORAGE_PLACEMENT_CONSTRAINT
-                    .MAX_BUDGET_UTILIZATION_PERCENT]: 80,
+                  [STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT]: 80,
                 },
               }),
             }],
@@ -794,22 +791,16 @@ test('TablePolicyService - getEffectiveMessageGroupStorageConstraints',
       },
     };
 
-    const service = new TablePolicyService({
-      sqlQueryEngine: mockEngine,
-    });
+    const service = new TablePolicyService({sqlQueryEngine: mockEngine});
     const constraints =
       await service.getEffectiveMessageGroupStorageConstraints('mg-1');
 
-    t.equal(
-      constraints[STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT],
-      80,
-      'Should return stored max utilization');
-    t.equal(
-      constraints[STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE],
+    t.equal(constraints[STORAGE_PLACEMENT_CONSTRAINT.MAX_BUDGET_UTILIZATION_PERCENT],
+      80, 'Should return stored max utilization');
+    t.equal(constraints[STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE],
       STORAGE_PLACEMENT_DEFAULT.MIN_FREE_BYTES_PER_NODE,
       'Should return default min free bytes');
-    t.equal(
-      constraints[STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM],
+    t.equal(constraints[STORAGE_PLACEMENT_CONSTRAINT.RESERVE_EMERGENCY_HEADROOM],
       STORAGE_PLACEMENT_DEFAULT.RESERVE_EMERGENCY_HEADROOM,
       'Should return default emergency headroom');
     t.end();
@@ -820,26 +811,18 @@ test('TablePolicyService - message group policy uses same validation path as tab
     const service = new TablePolicyService();
 
     // Same invalid constraint should fail in both paths
-    const tableResult = service.validatePolicy({
+    const invalidConstraints = {
       placementConstraints: {
-        [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
-          -1,
+        [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]: -1,
       },
-    });
-    const mgResult = service.validateMessageGroupPolicy({
-      placementConstraints: {
-        [STORAGE_PLACEMENT_CONSTRAINT.MIN_FREE_BYTES_PER_NODE]:
-          -1,
-      },
-    });
+    };
+    const tableResult = service.validatePolicy(invalidConstraints);
+    const mgResult = service.validateMessageGroupPolicy(invalidConstraints);
 
     t.notOk(tableResult.valid, 'Table validation should fail');
     t.notOk(mgResult.valid, 'Message group validation should fail');
-    t.equal(
-      tableResult.errors[0],
-      mgResult.errors[0],
-      'Both should produce the same error message',
-    );
+    t.equal(tableResult.errors[0], mgResult.errors[0],
+      'Both should produce the same error message');
     t.end();
   });
 
@@ -879,108 +862,81 @@ test('TablePolicyService - message group policy cache works',
     t.end();
   });
 
-test('TablePolicyService - resolveMessageGroupPolicyFact distinguishes authoritative policy, authoritative absence, and stale/unavailable evidence',
-  async (t) => {
-    let row = {
-      group_id: 'mg-fact',
-      replica_count: 5,
-      policy: JSON.stringify({targetReplicaCount: 5}),
-    };
-    let readAvailable = true;
-    let witnessRole = 'leader';
-    let rowSetComplete = true;
-    const service = new TablePolicyService({
-      controlPlaneSystemTableGateway: {
-        readAuthoritativeRows: async () => {
-          if (!readAvailable) {
-            return {success: false, error: 'authority_unavailable'};
-          }
-          return {
-            success: true,
-            rowSetComplete,
-            rows: row ? [row] : [],
-            readAuthorityWitness: {
-              state: 'observed',
-              partitionId: 'message_groups-p1',
-              servingNodeId: 'node-1',
-              servingReplicaId: 'message_groups-p1-r1',
-              role: witnessRole,
-              leaderNodeId: 'node-1',
-              term: 1,
-              commitIndex: 1,
-              appliedIndex: 1,
-              observedAtMs: 1_000_000,
-            },
-          };
-        },
+test('TablePolicyService - resolveMessageGroupPolicyFact distinguishes ' +
+  'authoritative policy, authoritative absence, and stale/unavailable evidence',
+async (t) => {
+  let row = {
+    group_id: 'mg-fact', replica_count: 5,
+    policy: JSON.stringify({targetReplicaCount: 5}),
+  };
+  let readAvailable = true;
+  let witnessRole = 'leader';
+  let rowSetComplete = true;
+  const service = new TablePolicyService({
+    controlPlaneSystemTableGateway: {
+      readAuthoritativeRows: async () => {
+        if (!readAvailable) return {success: false, error: 'authority_unavailable'};
+        return {
+          success: true, rowSetComplete, rows: row ? [row] : [],
+          readAuthorityWitness: {
+            state: 'observed', partitionId: 'message_groups-p1',
+            servingNodeId: 'node-1', servingReplicaId: 'message_groups-p1-r1',
+            role: witnessRole, leaderNodeId: 'node-1', term: 1,
+            commitIndex: 1, appliedIndex: 1, observedAtMs: 1_000_000,
+          },
+        };
       },
-    });
-
-    const validDecision = await service.resolveMessageGroupPolicyFact(
-      'mg-fact',
-      {requireAuthoritative: true},
-    );
-    t.equal(validDecision.state, POLICY_AUTHORITY_STATE.AUTHORITATIVE_POLICY);
-    t.equal(validDecision.minReplicaCount, 5);
-    t.equal(validDecision.targetReplicaCount, 5);
-
-    witnessRole = 'follower';
-    const followerDecision = await service.resolveMessageGroupPolicyFact(
-      'mg-fact',
-      {requireAuthoritative: true},
-    );
-    t.equal(followerDecision.state, POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE);
-
-    witnessRole = 'leader';
-    rowSetComplete = false;
-    const incompleteDecision = await service.resolveMessageGroupPolicyFact(
-      'mg-fact',
-      {requireAuthoritative: true},
-    );
-    t.equal(incompleteDecision.state, POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE);
-
-    rowSetComplete = true;
-    readAvailable = false;
-    const staleDecision = await service.resolveMessageGroupPolicyFact(
-      'mg-fact',
-      {requireAuthoritative: true},
-    );
-    t.equal(staleDecision.state, POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE);
-    t.equal(staleDecision.minReplicaCount, null);
-
-    readAvailable = true;
-    row = null;
-    const absentDecision = await service.resolveMessageGroupPolicyFact(
-      'mg-fact',
-      {requireAuthoritative: true},
-    );
-    t.equal(absentDecision.state, POLICY_AUTHORITY_STATE.AUTHORITATIVE_ABSENCE);
-    t.equal(absentDecision.minReplicaCount, null);
-
-    const cacheOnlyService = new TablePolicyService({
-      systemTableCache: {
-        get: () => ({
-          group_id: 'mg-fact',
-          replica_count: 5,
-          policy: JSON.stringify({targetReplicaCount: 5}),
-        }),
-      },
-    });
-    const cacheOnlyDecision = await cacheOnlyService.resolveMessageGroupPolicyFact(
-      'mg-fact',
-      {requireAuthoritative: true},
-    );
-    t.equal(cacheOnlyDecision.state, POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE);
-    t.end();
+    },
   });
+
+  const validDecision = await service.resolveMessageGroupPolicyFact(
+    'mg-fact', {requireAuthoritative: true});
+  t.equal(validDecision.state, POLICY_AUTHORITY_STATE.AUTHORITATIVE_POLICY);
+  t.equal(validDecision.minReplicaCount, 5);
+  t.equal(validDecision.targetReplicaCount, 5);
+
+  witnessRole = 'follower';
+  const followerDecision = await service.resolveMessageGroupPolicyFact(
+    'mg-fact', {requireAuthoritative: true});
+  t.equal(followerDecision.state, POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE);
+
+  witnessRole = 'leader';
+  rowSetComplete = false;
+  const incompleteDecision = await service.resolveMessageGroupPolicyFact(
+    'mg-fact', {requireAuthoritative: true});
+  t.equal(incompleteDecision.state, POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE);
+
+  rowSetComplete = true;
+  readAvailable = false;
+  const staleDecision = await service.resolveMessageGroupPolicyFact(
+    'mg-fact', {requireAuthoritative: true});
+  t.equal(staleDecision.state, POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE);
+  t.equal(staleDecision.minReplicaCount, null);
+
+  readAvailable = true;
+  row = null;
+  const absentDecision = await service.resolveMessageGroupPolicyFact(
+    'mg-fact', {requireAuthoritative: true});
+  t.equal(absentDecision.state, POLICY_AUTHORITY_STATE.AUTHORITATIVE_ABSENCE);
+  t.equal(absentDecision.minReplicaCount, null);
+
+  const cacheOnlyService = new TablePolicyService({
+    systemTableCache: {
+      get: () => ({
+        group_id: 'mg-fact', replica_count: 5,
+        policy: JSON.stringify({targetReplicaCount: 5}),
+      }),
+    },
+  });
+  const cacheOnlyDecision = await cacheOnlyService.resolveMessageGroupPolicyFact(
+    'mg-fact', {requireAuthoritative: true});
+  t.equal(cacheOnlyDecision.state, POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE);
+  t.end();
+});
 
 test('TablePolicyService - updateTablePolicy enforces read-your-writes fence ' +
   'and refreshes cached policy when systemTableCache advances', async (t) => {
-  const tableRow = {
-    table_id: 'table-fence',
-    table_policies: '{}',
-    updated_at: 1000,
-  };
+  const tableRow = {table_id: 'table-fence', table_policies: '{}', updated_at: 1000};
   let capturedOptions = null;
   const service = new TablePolicyService({
     systemTableCache: {
@@ -993,11 +949,7 @@ test('TablePolicyService - updateTablePolicy enforces read-your-writes fence ' +
       submitMutation: async (_mutation, options) => {
         capturedOptions = options;
         // Simulate CDC cache update lagging behind durable commit completion.
-        return {
-          success: true,
-          outcome: 'applied',
-          partitionResult: {affectedRows: 1},
-        };
+        return {success: true, outcome: 'applied', partitionResult: {affectedRows: 1}};
       },
     },
   });
@@ -1042,6 +994,7 @@ test('TablePolicyService - updateTablePolicy enforces read-your-writes fence ' +
 function committedPolicyGateway(row) {
   const gateway = {
     row: {...row},
+    readOverrideRow: null,
     writes: [],
     committedReads: 0,
     projectionReads: 0,
@@ -1052,8 +1005,9 @@ function committedPolicyGateway(row) {
         return {success: false, error: 'authoritative_row_source_unavailable',
           retryAfterMs: 250};
       }
+      const sourceRow = gateway.readOverrideRow ?? gateway.row;
       return {success: true,
-        rows: params[0] === gateway.row.table_id ? [{...gateway.row}] : []};
+        rows: params[0] === sourceRow.table_id ? [{...sourceRow}] : []};
     },
     async executeRead() {
       gateway.projectionReads += 1;
@@ -1084,18 +1038,26 @@ function policyServiceOver(gateway) {
 }
 
 test('site 6: with the projection paused, consecutive policy updates keep ' +
-  'the committed policy as their base - one committed read, no projection ' +
-  'read, each write conditional on its base', async (t) => {
-  const gateway = committedPolicyGateway(
-    {table_id: 'table-site6', table_policies: null, updated_at: 1000});
+  'the committed policy as their base - reading the committed row each time, ' +
+  'no projection read, each write conditional on its base', async (t) => {
+  const initialRow = {
+    table_id: 'table-site6',
+    table_policies: null,
+    updated_at: 1000,
+  };
+  const gateway = committedPolicyGateway(initialRow);
   const service = policyServiceOver(gateway);
 
   await service.updateTablePolicy('table-site6', {splitTrafficThreshold: 5});
   const afterFirst = {...gateway.row};
+  // Simulate a lagging tables read on the second update so the fence supplies
+  // the committed base until the tables row catches up.
+  gateway.readOverrideRow = {...initialRow};
   await service.updateTablePolicy('table-site6', {mergeStorageThreshold: 1});
+  gateway.readOverrideRow = null;
 
-  t.equal(gateway.committedReads, 1,
-    'only the first update (unknown position) reads the committed row');
+  t.equal(gateway.committedReads, 2,
+    'every update reads the tables row before consulting the fence');
   t.equal(gateway.projectionReads, 0, 'no projection read');
   t.same(gateway.writes[0].whereClause,
     {table_id: 'table-site6', table_policies: null, updated_at: 1000},
@@ -1113,11 +1075,17 @@ test('site 6: with the projection paused, consecutive policy updates keep ' +
 test('site 6: a second writer between policy updates answers a typed ' +
   'conflict, loses no update, and the next update re-reads the committed row',
 async (t) => {
-  const gateway = committedPolicyGateway(
-    {table_id: 'table-site6', table_policies: null, updated_at: 1000});
+  const initialRow = {
+    table_id: 'table-site6',
+    table_policies: null,
+    updated_at: 1000,
+  };
+  const gateway = committedPolicyGateway(initialRow);
   const service = policyServiceOver(gateway);
   await service.updateTablePolicy('table-site6', {splitTrafficThreshold: 5});
-  // Another writer of the shared TABLES row (another node's policy update).
+  // Another writer of the shared TABLES row (another node's policy update)
+  // commits while this node's base read has not yet observed the other write.
+  gateway.readOverrideRow = {...initialRow};
   gateway.row.table_policies = JSON.stringify({splitTrafficThreshold: 7});
   gateway.row.updated_at += 1;
   const otherWriter = {...gateway.row};
@@ -1128,7 +1096,10 @@ async (t) => {
     'the conditional write answers a typed conflict');
   t.same(gateway.row, otherWriter,
     'the other writer\'s committed policy is not overwritten');
+  t.equal(service.committedPolicyFences.has('table-site6'), false,
+    'conflict retires the stale fence');
 
+  gateway.readOverrideRow = null;
   const readsBefore = gateway.committedReads;
   await service.updateTablePolicy('table-site6', {mergeStorageThreshold: 1});
   t.equal(gateway.committedReads, readsBefore + 1,
@@ -1158,17 +1129,9 @@ test('site 6: an unavailable committed read refuses the update typed and ' +
 test('strict policy fact resolution rejects in-flight stale reads across ' +
   'single and multi-write policy updates without pairing cached policy ' +
   'with a stale witness', async (t) => {
-  let row = {
-    table_id: 'table-fenced',
-    table_policies: JSON.stringify({
-      minReplicaCount: 3,
-    }),
-    updated_at: 100,
-  };
+  let row = {table_id: 'table-fenced', table_policies: JSON.stringify({minReplicaCount: 3}), updated_at: 100};
   let releaseHeldRead = null;
-  const heldReadGate = new Promise((resolve) => {
-    releaseHeldRead = resolve;
-  });
+  const heldReadGate = new Promise((r) => (releaseHeldRead = r));
   let holdNextRead = false;
   const gateway = {
     async readAuthoritativeRows() {
@@ -1177,86 +1140,353 @@ test('strict policy fact resolution rejects in-flight stale reads across ' +
         holdNextRead = false;
         await heldReadGate;
       }
-      return {
-        success: true,
-        source: 'owner_rpc_lane',
-        rowSetComplete: true,
-        rows: [captured],
-        readAuthorityWitness: {
-          state: 'observed',
-          role: 'leader',
-          partitionId: 'tables-p1',
-          servingNodeId: 'n1',
-          servingReplicaId: 'tables-p1-r1',
-          term: 1,
-          commitIndex: captured.updated_at,
-          appliedIndex: captured.updated_at,
-          observedAtMs: 1700000000000,
-        },
-      };
+      return buildWitnessedTableRead(captured, captured.updated_at);
     },
     async submitMutation(mutation) {
-      row = {
-        ...row,
-        table_policies: mutation.data.table_policies,
-        updated_at: mutation.data.updated_at,
-      };
-      return {
-        success: true,
-        outcome: 'applied',
-        partitionResult: {affectedRows: 1},
-      };
+      row = {...row, ...mutation.data};
+      return {success: true, outcome: 'applied', partitionResult: {affectedRows: 1}};
     },
   };
   const service = policyServiceOver(gateway);
 
   // Warm committed base at 3, then hold an authoritative read at 3 while
   // two updates (3 -> 5 -> 7) commit.
-  await service.resolveTablePolicyFact('table-fenced', {
-    requireAuthoritative: true,
-  });
+  await service.resolveTablePolicyFact('table-fenced', {requireAuthoritative: true});
   holdNextRead = true;
-  const inFlightStaleRead = service.resolveTablePolicyFact('table-fenced', {
-    requireAuthoritative: true,
-  });
+  const inFlightStaleRead = service.resolveTablePolicyFact('table-fenced', {requireAuthoritative: true});
   await Promise.resolve();
-  await service.updateTablePolicy('table-fenced', {
-    minReplicaCount: 5,
-  });
-  await service.updateTablePolicy('table-fenced', {
-    minReplicaCount: 7,
-  });
+  await service.updateTablePolicy('table-fenced', {minReplicaCount: 5});
+  await service.updateTablePolicy('table-fenced', {minReplicaCount: 7});
   releaseHeldRead();
 
   const staleFact = await inFlightStaleRead;
-  t.equal(
-    staleFact.state,
-    'unavailable_or_stale',
-    'in-flight pre-update read must be rejected after 3 -> 5 -> 7 commits',
-  );
-  t.equal(
-    staleFact.readAuthorityWitness,
-    null,
-    'rejected stale policy read must not retain a witness',
-  );
-  t.equal(
-    service.committedPolicyFences.has('table-fenced'),
-    true,
-    'stale read must not delete the active committed policy fence',
-  );
+  t.equal(staleFact.state, 'unavailable_or_stale', 'in-flight pre-update read must be rejected after 3 -> 5 -> 7 commits');
+  t.equal(staleFact.readAuthorityWitness, null, 'rejected stale policy read must not retain a witness');
+  t.equal(service.committedPolicyFences.has('table-fenced'), true, 'stale read must not delete the active committed policy fence');
 
   // A subsequent fresh read observing the committed 7 snapshot succeeds and
   // clears the fence.
-  const freshFact = await service.resolveTablePolicyFact('table-fenced', {
-    requireAuthoritative: true,
-  });
+  const freshFact = await service.resolveTablePolicyFact('table-fenced', {requireAuthoritative: true});
   t.equal(freshFact.state, 'authoritative_policy');
   t.equal(freshFact.minReplicaCount, 7);
   t.equal(freshFact.readAuthorityWitness?.commitIndex, row.updated_at);
-  t.equal(
-    service.committedPolicyFences.has('table-fenced'),
-    false,
-    'fence clears once authoritative read catches up to latest commit',
-  );
+  t.equal(service.committedPolicyFences.has('table-fenced'), false, 'fence clears once authoritative read catches up to latest commit');
   t.end();
+});
+
+test('readCommittedPolicyBase reads the tables row first and retires ' +
+  'committedPolicyFences once the tables row catches up to the fenced version',
+async (t) => {
+  const initialRow = {
+    table_id: 'table-retire', table_policies: JSON.stringify({splitTrafficThreshold: 3, version: 1}),
+    updated_at: 1000, version: 1,
+  };
+  const gateway = committedPolicyGateway(initialRow);
+  const service = policyServiceOver(gateway);
+
+  await service.updateTablePolicy('table-retire', {splitTrafficThreshold: 5});
+  const fenced = service.committedPolicyFences.get('table-retire');
+  t.ok(fenced, 'updateTablePolicy records a committed policy fence');
+  t.equal(service.supersededSnapshots.has('table-retire'), true, 'updateTablePolicy records superseded snapshots');
+
+  // While the tables read still returns the lagging v1 row, readCommittedPolicyBase
+  // reads the tables row first, preserves the fence, and returns the fenced policy.
+  gateway.readOverrideRow = {...initialRow};
+  const readsBeforeLag = gateway.committedReads;
+  const baseWhileLagging = await readCommittedPolicyBase(service, 'table-retire');
+  t.equal(gateway.committedReads, readsBeforeLag + 1, 'readCommittedPolicyBase reads the tables row instead of short-circuiting');
+  t.equal(baseWhileLagging.table_policies, fenced.table_policies, 'fenced policy is returned while the tables row lags behind the fence');
+  t.equal(service.committedPolicyFences.has('table-retire'), true, 'fence remains active while the tables row lags');
+
+  // Once the tables row catches up to the fenced version/timestamp,
+  // readCommittedPolicyBase retires the fence and returns the committed row.
+  gateway.readOverrideRow = null;
+  const readsBeforeCatchup = gateway.committedReads;
+  const baseAfterCatchup = await readCommittedPolicyBase(service, 'table-retire');
+  t.equal(gateway.committedReads, readsBeforeCatchup + 1, 'readCommittedPolicyBase reads the caught-up tables row');
+  t.equal(baseAfterCatchup.table_policies, gateway.row.table_policies, 'committed policy from tables row is returned once caught up');
+  t.equal(service.committedPolicyFences.has('table-retire'), false, 'committedPolicyFences entry is retired once tables row catches up');
+  t.equal(service.supersededSnapshots.has('table-retire'), false, 'supersededSnapshots entry is retired alongside the fence');
+  t.end();
+});
+
+test('applyCommittedPolicyFence, deleteTablePolicy, and clearCache retire ' +
+  'and clean up committedPolicyFences and supersededSnapshots', async (t) => {
+  const gateway = committedPolicyGateway({
+    table_id: 'table-cleanup-1', table_policies: JSON.stringify({splitTrafficThreshold: 3}),
+    updated_at: 1000, version: 1,
+  });
+  const service = policyServiceOver(gateway);
+
+  await service.updateTablePolicy('table-cleanup-1', {splitTrafficThreshold: 5});
+  const fence1 = service.committedPolicyFences.get('table-cleanup-1');
+  t.ok(fence1, 'fence recorded for table-cleanup-1');
+
+  // applyCommittedPolicyFence retires the fence when the row version/timestamp catches up
+  const caughtUpRow = {
+    table_id: 'table-cleanup-1', table_policies: fence1.table_policies,
+    updated_at: fence1.updated_at, version: fence1.version,
+  };
+  const applied = service.applyCommittedPolicyFence('table-cleanup-1', caughtUpRow);
+  t.equal(applied, caughtUpRow, 'caught-up row is returned unchanged');
+  t.equal(service.committedPolicyFences.has('table-cleanup-1'), false, 'applyCommittedPolicyFence retires fence at caught-up version');
+  t.equal(service.supersededSnapshots.has('table-cleanup-1'), false, 'applyCommittedPolicyFence retires supersededSnapshots at caught-up version');
+
+  // deleteTablePolicy removes fence, supersededSnapshots, and cache entries for that table
+  await service.updateTablePolicy('table-cleanup-1', {splitTrafficThreshold: 9});
+  t.equal(service.committedPolicyFences.has('table-cleanup-1'), true);
+  t.equal(service.supersededSnapshots.has('table-cleanup-1'), true);
+  await service.deleteTablePolicy('table-cleanup-1');
+  t.equal(service.committedPolicyFences.has('table-cleanup-1'), false, 'deleteTablePolicy deletes committedPolicyFences entry');
+  t.equal(service.supersededSnapshots.has('table-cleanup-1'), false, 'deleteTablePolicy deletes supersededSnapshots entry');
+
+  // clearCache clears all fences and supersededSnapshots
+  await service.updateTablePolicy('table-cleanup-1', {splitTrafficThreshold: 11});
+  t.equal(service.committedPolicyFences.size, 1);
+  t.equal(service.supersededSnapshots.size, 1);
+  service.clearCache();
+  t.equal(service.committedPolicyFences.size, 0, 'clearCache clears committedPolicyFences');
+  t.equal(service.committedPolicyFences.size + service.supersededSnapshots.size, 0, 'clearCache clears supersededSnapshots');
+  t.end();
+});
+
+test('committedPolicyFences and supersededSnapshots enforce bounded capacity', async (t) => {
+  const service = new TablePolicyService();
+  const totalTables = MAX_COMMITTED_POLICY_FENCES + 16;
+  const totalSnapshotsPerTable = MAX_SUPERSEDED_POLICY_SNAPSHOTS + 10;
+  for (let i = 0; i < totalTables; i += 1) {
+    const snapshots = Array.from({length: totalSnapshotsPerTable}, (_v, s) => ({
+      table_policies: JSON.stringify({splitTrafficThreshold: s}), updated_at: 1000 + s, version: s + 1,
+    }));
+    service.recordCommittedPolicyFence(`table-bound-${i}`, {
+      table_policies: JSON.stringify({splitTrafficThreshold: i}), updated_at: 5000 + i, version: totalSnapshotsPerTable + 1,
+    }, snapshots);
+  }
+  t.equal(service.committedPolicyFences.size, MAX_COMMITTED_POLICY_FENCES, 'committedPolicyFences is bounded to MAX_COMMITTED_POLICY_FENCES');
+  t.equal(service.supersededSnapshots.size, MAX_SUPERSEDED_POLICY_SNAPSHOTS, 'supersededSnapshots map is bounded to MAX_SUPERSEDED_POLICY_SNAPSHOTS');
+  t.equal(service.committedPolicyFences.has('table-bound-0'), false, 'oldest committedPolicyFences entry is evicted when full');
+  const newestTableId = `table-bound-${totalTables - 1}`;
+  t.equal(service.committedPolicyFences.has(newestTableId), true, 'newest committedPolicyFences entry is retained');
+  const retainedSnapshots = service.supersededSnapshots.get(newestTableId);
+  t.equal(retainedSnapshots.length, MAX_SUPERSEDED_POLICY_SNAPSHOTS, 'per-table supersededSnapshots list is bounded to MAX_SUPERSEDED_POLICY_SNAPSHOTS');
+  t.equal(retainedSnapshots[0].updated_at, 1000 + (totalSnapshotsPerTable - MAX_SUPERSEDED_POLICY_SNAPSHOTS), 'oldest per-table superseded snapshots are evicted first');
+  t.end();
+});
+
+function buildWitnessedTableRead(row, appliedIndex) {
+  return {
+    success: true, source: 'owner_rpc_lane', rowSetComplete: true, rows: [{...row}],
+    readAuthorityWitness: {
+      state: 'observed', role: 'leader', partitionId: 'tables-p1',
+      servingNodeId: 'n1', servingReplicaId: 'tables-p1-r1', term: 1,
+      commitIndex: appliedIndex, appliedIndex, observedAtMs: 1700000000000 + appliedIndex,
+    },
+  };
+}
+
+test('adversarial policy currency: fresh read, cache catch-up, and capacity ' +
+  'eviction never allow delayed reads to regress policy or pair stale witnesses',
+async (t) => {
+  // 1. Fresh read completes and retires fence before stale in-flight read resolves.
+  const rows1 = new Map([['t-order1', {
+    table_id: 't-order1', table_policies: JSON.stringify({minReplicaCount: 3}),
+    updated_at: 100, version: 1,
+  }]]);
+  let releaseStale1 = null;
+  const staleGate1 = new Promise((r) => (releaseStale1 = r));
+  let holdNext1 = true;
+  let witnessSeq1 = 10;
+  const service1 = policyServiceOver({
+    async readAuthoritativeRows(_t, _sql, [id]) {
+      const snap = {...rows1.get(id)};
+      const idx = witnessSeq1++;
+      if (holdNext1) {
+        holdNext1 = false;
+        await staleGate1;
+      }
+      return buildWitnessedTableRead(snap, idx);
+    },
+    async submitMutation(m) {
+      rows1.set('t-order1', {...rows1.get('t-order1'), ...m.data, version: 2});
+      return {success: true, outcome: 'applied', partitionResult: {affectedRows: 1}};
+    },
+  });
+  const rStale1 = service1.resolveTablePolicyFact('t-order1', {requireAuthoritative: true});
+  await Promise.resolve();
+  await service1.updateTablePolicy('t-order1', {minReplicaCount: 5});
+  const rFresh1 = await service1.resolveTablePolicyFact('t-order1', {requireAuthoritative: true});
+  t.equal(rFresh1.state, 'authoritative_policy');
+  t.equal(rFresh1.minReplicaCount, 5);
+  t.equal(service1.committedPolicyFences.has('t-order1'), false);
+  releaseStale1();
+  const staleOut1 = await rStale1;
+  t.equal(staleOut1.state, 'unavailable_or_stale');
+  t.equal(staleOut1.reason, POLICY_READ_REASON.STALE_EVIDENCE);
+  t.equal(staleOut1.readAuthorityWitness, null);
+  t.equal(service1.policyCache.get('t-order1')?.policy?.minReplicaCount, 5);
+  const rAfter1 = await service1.resolveTablePolicyFact('t-order1', {requireAuthoritative: true});
+  t.equal(rAfter1.state, 'authoritative_policy');
+  t.equal(rAfter1.minReplicaCount, 5);
+  t.equal(rAfter1.readAuthorityWitness?.appliedIndex, witnessSeq1 - 1);
+
+  // 2. Cache catch-up retires fence before stale in-flight read resolves.
+  let cachedRow2 = {
+    table_id: 't-order2', table_policies: JSON.stringify({minReplicaCount: 3}),
+    updated_at: 100, version: 1,
+  };
+  let dbRow2 = {...cachedRow2};
+  let releaseStale2 = null;
+  const staleGate2 = new Promise((r) => (releaseStale2 = r));
+  let holdNext2 = true;
+  const service2 = new TablePolicyService({
+    now: () => 5000,
+    systemTableCache: {filter: (_t, pred) => [cachedRow2].filter(pred)},
+    cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: {
+      executeRead: async ({readFromCache}) => ({rows: readFromCache()}),
+      async readAuthoritativeRows() {
+        const snap = {...dbRow2};
+        if (holdNext2) {
+          holdNext2 = false;
+          await staleGate2;
+        }
+        return buildWitnessedTableRead(snap, snap.updated_at);
+      },
+      async submitMutation(m) {
+        dbRow2 = {...dbRow2, ...m.data, version: 2};
+        return {success: true, outcome: 'applied', partitionResult: {affectedRows: 1}};
+      },
+    },
+  });
+  const rStale2 = service2.resolveTablePolicyFact('t-order2', {requireAuthoritative: true});
+  await Promise.resolve();
+  await service2.updateTablePolicy('t-order2', {minReplicaCount: 5});
+  cachedRow2 = {...dbRow2};
+  const caughtUpPolicy = await service2.getTablePolicy('t-order2');
+  t.equal(caughtUpPolicy.minReplicaCount, 5);
+  t.equal(service2.committedPolicyFences.has('t-order2'), false);
+  releaseStale2();
+  const staleOut2 = await rStale2;
+  t.equal(staleOut2.state, 'unavailable_or_stale');
+  t.equal(staleOut2.reason, POLICY_READ_REASON.STALE_EVIDENCE);
+  cachedRow2 = {
+    table_id: 't-order2', table_policies: JSON.stringify({minReplicaCount: 3}),
+    updated_at: 100, version: 1,
+  };
+  await t.rejects(service2.getTablePolicy('t-order2'), {reason: POLICY_READ_REASON.STALE_EVIDENCE});
+  t.equal(service2.policyCache.get('t-order2')?.policy?.minReplicaCount, 5);
+
+  // 3. Capacity eviction while R_stale is in-flight refuses R_stale; fresh read succeeds.
+  const rows3 = new Map([0, 1, 2].map((i) => [`table-${i}`, {
+    table_id: `table-${i}`, table_policies: JSON.stringify({minReplicaCount: 3}),
+    updated_at: 100 + i, version: 1,
+  }]));
+  let releaseStale3 = null;
+  const staleGate3 = new Promise((r) => (releaseStale3 = r));
+  let holdTable0 = true;
+  const service3 = new TablePolicyService({
+    maxCommittedPolicyFences: 2,
+    systemTableCache: {filter: () => [], getAll: () => []},
+    cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: {
+      async readAuthoritativeRows(_t, _sql, [id]) {
+        const snap = {...rows3.get(id)};
+        if (id === 'table-0' && holdTable0) {
+          holdTable0 = false;
+          await staleGate3;
+        }
+        return buildWitnessedTableRead(snap, snap.updated_at);
+      },
+      async submitMutation(m) {
+        const id = m.whereClause.table_id;
+        rows3.set(id, {...rows3.get(id), ...m.data, version: 2});
+        return {success: true, outcome: 'applied', partitionResult: {affectedRows: 1}};
+      },
+    },
+  });
+  const rStale3 = service3.resolveTablePolicyFact('table-0', {requireAuthoritative: true});
+  await Promise.resolve();
+  await service3.updateTablePolicy('table-0', {minReplicaCount: 5});
+  await service3.updateTablePolicy('table-1', {minReplicaCount: 5});
+  await service3.updateTablePolicy('table-2', {minReplicaCount: 5});
+  t.equal(service3.committedPolicyFences.has('table-0'), false);
+  releaseStale3();
+  const staleOut3 = await rStale3;
+  t.equal(staleOut3.state, 'unavailable_or_stale');
+  t.equal(staleOut3.reason, POLICY_READ_REASON.STALE_EVIDENCE);
+  t.equal(staleOut3.readAuthorityWitness, null);
+  const freshAfterEviction = await service3.resolveTablePolicyFact('table-0', {
+    requireAuthoritative: true,
+  });
+  t.equal(freshAfterEviction.state, 'authoritative_policy');
+  t.equal(freshAfterEviction.minReplicaCount, 5);
+  t.equal(freshAfterEviction.readAuthorityWitness?.appliedIndex, rows3.get('table-0').updated_at);
+  t.end();
+});
+
+test('in-flight read invalidated by commit never retires committedPolicyFences ' +
+  'even when row satisfies fence predicate after snapshot rollover or ABA commit',
+async (t) => {
+  let dbRow = {table_id: 't-fence-keep', table_policies: JSON.stringify({minReplicaCount: 3}), updated_at: null};
+  let readOverride = null;
+  let releaseHeld = null;
+  let holdNext = true;
+  const heldGate = new Promise((r) => (releaseHeld = r));
+  let nowTick = 1000;
+  const service = new TablePolicyService({
+    now: () => (nowTick += 1),
+    maxSupersededPolicySnapshots: 2,
+    systemTableCache: {filter: () => [], getAll: () => []},
+    cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: {
+      async readAuthoritativeRows() {
+        const snap = {...(readOverride || dbRow)};
+        if (holdNext) {
+          holdNext = false;
+          await heldGate;
+        }
+        return buildWitnessedTableRead(snap, snap.updated_at || 1);
+      },
+      async submitMutation(m) {
+        dbRow = {...dbRow, ...m.data};
+        return {success: true, outcome: 'applied', partitionResult: {affectedRows: 1}};
+      },
+    },
+  });
+  const inFlight = service.resolveTablePolicyFact('t-fence-keep', {requireAuthoritative: true});
+  await Promise.resolve();
+  // Commit 3 -> 5 -> 7 -> 9 so {3, null} rolls off supersededSnapshots (max 2):
+  // S0 ({3, null}) would otherwise satisfy isSupersededByCommittedPolicyFence === false.
+  await service.updateTablePolicy('t-fence-keep', {minReplicaCount: 5});
+  const laggingAfterFirstCommit = {...dbRow};
+  await service.updateTablePolicy('t-fence-keep', {minReplicaCount: 7});
+  await service.updateTablePolicy('t-fence-keep', {minReplicaCount: 9, maxReplicaCount: 11});
+  const activeFence = service.committedPolicyFences.get('t-fence-keep');
+  t.equal(service.isSupersededByCommittedPolicyFence(activeFence, {
+    table_id: 't-fence-keep', table_policies: JSON.stringify({minReplicaCount: 3}), updated_at: null,
+  }, 't-fence-keep'), false, 'rolled-off S0 without finite version/updated_at is not caught by fence alone');
+  releaseHeld();
+  const rejectedInFlight = await inFlight;
+  t.equal(rejectedInFlight.state, 'unavailable_or_stale');
+  t.equal(rejectedInFlight.reason, POLICY_READ_REASON.STALE_EVIDENCE);
+  t.equal(service.committedPolicyFences.has('t-fence-keep'), true,
+    'invalidated in-flight read must not retire committedPolicyFences');
+  // Subsequent lagging read and readCommittedPolicyBase remain protected by the intact fence.
+  readOverride = laggingAfterFirstCommit;
+  const subsequentStale = await service.resolveTablePolicyFact('t-fence-keep', {requireAuthoritative: true});
+  t.equal(subsequentStale.state, 'unavailable_or_stale');
+  t.equal((await readCommittedPolicyBase(service, 't-fence-keep')).table_policies, activeFence.table_policies);
+  t.equal(service.committedPolicyFences.has('t-fence-keep'), true);
+  // Genuinely post-commit authoritative read succeeds and retires the fence.
+  readOverride = null;
+  const freshPostCommit = await service.resolveTablePolicyFact('t-fence-keep', {requireAuthoritative: true});
+  t.equal(freshPostCommit.state, 'authoritative_policy');
+  t.equal(freshPostCommit.minReplicaCount, 9);
+  t.equal(service.committedPolicyFences.has('t-fence-keep'), false);
+  // ABA commit invalidation: row matching fence content still rejects and preserves fence.
+  service.recordCommittedPolicyFence('t-aba', {table_policies: '{"minReplicaCount":9}', updated_at: 2000});
+  t.equal(service.isStaleAgainstCommittedPolicyFence('t-aba',
+    {table_id: 't-aba', table_policies: '{"minReplicaCount":9}', updated_at: 2000},
+    null, {tableId: 't-aba', invalidatedByCommit: true, currencyEvicted: false}), true);
+  t.equal(service.committedPolicyFences.has('t-aba'), true);
 });

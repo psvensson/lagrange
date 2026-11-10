@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {
   COLUMN,
   SERVICE_STATUS,
@@ -116,7 +117,7 @@ const findCanonicalLeaderService = (
   }
 
   const explicitLeaderServices = leaderNodeServices.filter((service) =>
-    String(service?.[COLUMN.RAFT_ROLE] || '').toLowerCase() === RAFT_ROLE.LEADER,
+    readLowerStateField(service?.[COLUMN.RAFT_ROLE]) === RAFT_ROLE.LEADER,
   );
   if (explicitLeaderServices.length === 1) {
     return explicitLeaderServices[0];

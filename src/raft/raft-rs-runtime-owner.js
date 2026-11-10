@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from './raft-committed-membership-constants.js';
 import {instantiateRaftRsCore, verifyRaftRsBinding} from './raft-rs-binding-owner.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
@@ -235,8 +236,8 @@ function durableProgressOf(group) {
 // attempted at once; a record no failure renewed for a whole window is
 // cleared.
 function failurePersists(group, now) {
-  return group.recovery !== null &&
-    now - group.recovery.heldAt < recoveryRetryWindowMsOf(group.timing);
+  return group.recovery !== null && (group.reconstructing === true ||
+    now - group.recovery.heldAt < recoveryRetryWindowMsOf(group.timing));
 }
 
 // A fresh record's first reconstruction is due at once.
@@ -612,7 +613,8 @@ function runtimeRecoveryOutcome(group) {
   return outcome(HOST_FAILURE, {
     reason: recovery?.failure?.reason ??
       RUNTIME_REASON.REPLACEMENT_IN_PROGRESS,
-    phase: recovery?.failure?.phase ?? RUNTIME_PHASE.RUNTIME_REPLACEMENT,
+    // No recorded failure: the replacement in progress is the phase.
+    phase: recovery?.failure ? recovery.failure.phase : RUNTIME_PHASE.RUNTIME_REPLACEMENT,
     failure: recovery?.failure ?? null,
     retryAfterMs: recovery === null ? 0 :
       Math.max(0, recovery.retryNotBefore - recovery.clock.now()),
@@ -889,7 +891,7 @@ function recoveryOutcome(group, reason, retryAfterMs = retryAfterMsOf(group)) {
     durableProgress: {state: DURABLE_PROGRESS_OBSERVATION.NOT_READ}};
   return outcome(HOST_FAILURE, {
     reason,
-    phase: recovery.failure?.phase ?? null,
+    phase: readStateField(recovery.failure?.phase),
     failure: recovery.failure,
     retryAfterMs,
     attempts: recovery.attempts,
@@ -945,20 +947,19 @@ function settleReconstruction(group, attemptedAt, result) {
 // typed deferral and nothing enters the core; while a user session holds the
 // connection nothing enters the core either, and the answer names the session
 // with the store's admission poll as the time to retry on.
-function reconstructGroup(group) {
-  if (insideRetryWindow(group)) {
-    return settledTurn(
-      recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED));
+function finishReconstructionTurn(group, turn) {
+  if (turn.settled) {
+    group.reconstructing = false;
+    return turn;
   }
-  if (!persistenceAdmitted(group)) {
-    return settledTurn(
-      recoveryOutcome(group, RUNTIME_REASON.USER_TRANSACTION_OPEN,
-        PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS));
-  }
-  // The failure held the group until this attempt began.
-  const attemptedAt = group.timers.now();
-  group.recovery = {...group.recovery, heldAt: attemptedAt,
-    retryNotBefore: attemptedAt, attempts: group.recovery.attempts + 1};
+  return pendingTurn(turn.pending.catch(
+    (error) => containUnexpectedThrow(group, error),
+  ).finally(() => {
+    group.reconstructing = false;
+  }));
+}
+
+function runReconstruction(group, attemptedAt) {
   const freed = group.handle === null ? null : invokeCore(group, 'free');
   if (freed !== null && !freed.ok && freed.result.outcome === CORE_FATAL) {
     return settledTurn(freed.result);
@@ -978,6 +979,33 @@ function reconstructGroup(group) {
       hostFailure(RUNTIME_PHASE.GENERATION_CHANGED,
         RUNTIME_REASON.GENERATION_CHANGED, true) :
       settleReconstruction(group, attemptedAt, result)));
+}
+
+function reconstructGroup(group) {
+  if (insideRetryWindow(group)) {
+    return settledTurn(
+      recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED));
+  }
+  if (!persistenceAdmitted(group)) {
+    return settledTurn(
+      recoveryOutcome(group, RUNTIME_REASON.USER_TRANSACTION_OPEN,
+        PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS));
+  }
+  // The failure held the group until this attempt began.
+  const attemptedAt = group.timers.now();
+  group.reconstructing = true;
+  group.recovery = {...group.recovery, heldAt: attemptedAt,
+    retryNotBefore: attemptedAt, attempts: group.recovery.attempts + 1};
+  try {
+    return finishReconstructionTurn(group,
+      runReconstruction(group, attemptedAt));
+  } catch (error) {
+    try {
+      return settledTurn(containUnexpectedThrow(group, error));
+    } finally {
+      group.reconstructing = false;
+    }
+  }
 }
 
 // A usable group whose record no failure renewed for a whole window forgets
@@ -2231,6 +2259,7 @@ function createRuntimeDispatcher(request) {
     pendingRuntimeResume: null,
     runtimeResumeTimer: null,
     recovery: null,
+    reconstructing: false,
     entered: 0,
     tail: null,
     queuedProposals: [],

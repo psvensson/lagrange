@@ -320,16 +320,25 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         // Follow a routed write's retry decision: true when the candidate
         // loop stops for this attempt (retry here, or defer the partition),
         // false when it widens to the next recovery candidate.
-        const followRetryDecision = (decision) => {
+        const widenWriteCandidate = (candidateAddress = address) => {
+          clearPinnedCandidateAddress(
+            this,
+            executionOptions,
+            partitionId,
+            candidateAddress,
+          );
+          candidateState.queueLeaderRecoveryCandidates(
+            candidateIndex,
+            serviceInfo?.nodeId || null,
+          );
+        };
+        const followRetryDecision = (decision, candidateAddress = address) => {
           if (decision.state ===
             CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY) {
             candidateState.requestDeferredPartitionRetry();
             return true;
           }
-          candidateState.queueLeaderRecoveryCandidates(
-            candidateIndex,
-            serviceInfo?.nodeId || null,
-          );
+          widenWriteCandidate(candidateAddress);
           return false;
         };
         if (candidateState.shouldSkipCandidateDelivery(serviceInfo, address)) {
@@ -490,20 +499,27 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               response.leaderAddress,
             );
             if (
-              redirectRetryDecision.state ===
-              CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY
+              redirectRetryDecision.state !==
+              CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.NONE
             ) {
-              candidateState.requestDeferredPartitionRetry();
-              break;
+              if (
+                followRetryDecision(
+                  redirectRetryDecision,
+                  response.leaderAddress,
+                )
+              ) {
+                break;
+              }
+              continue;
             }
             if (
-              redirectRetryDecision.state ===
-              CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.WIDEN_TO_RECOVERY_CANDIDATE
+              !forRead &&
+              this.isLeaderUnavailable(
+                redirectFailureMessage,
+                redirectResponse?.errorCode,
+              )
             ) {
-              candidateState.queueLeaderRecoveryCandidates(
-                candidateIndex,
-                serviceInfo?.nodeId || null,
-              );
+              widenWriteCandidate(response.leaderAddress);
             }
             continue;
           }
@@ -582,16 +598,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               serviceInfo?.nodeId,
               address,
             );
-            clearPinnedCandidateAddress(
-              this,
-              executionOptions,
-              partitionId,
-              address,
-            );
-            candidateState.queueLeaderRecoveryCandidates(
-              candidateIndex,
-              serviceInfo?.nodeId || null,
-            );
+            widenWriteCandidate(address);
             continue;
           }
 
@@ -695,16 +702,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               serviceInfo?.nodeId,
               address,
             );
-            clearPinnedCandidateAddress(
-              this,
-              executionOptions,
-              partitionId,
-              address,
-            );
-            candidateState.queueLeaderRecoveryCandidates(
-              candidateIndex,
-              serviceInfo?.nodeId || null,
-            );
+            widenWriteCandidate(address);
             continue;
           }
 

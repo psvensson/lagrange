@@ -103,8 +103,11 @@ const RATCHET_TARGETS = [
     // 2026-11-06: tightened 39/1236 -> 38/1207 on the checker's hint after
     // control snapshots delegated their duplicate diagnostic helpers.
     // The remaining pressure/timeout clone tightens the measured bound again.
-    baselineCloneGroupCount: 37,
-    baselineDuplicatedLineCount: 1187,
+    // State-read named defaults (42/1330 on its branch) merged at the lower 37/1187;
+    // 37/1187 -> 35/1109 on the checker's hint after the admin control snapshot
+    // imported the one latest-membership-publication-row resolver.
+    baselineCloneGroupCount: 35,
+    baselineDuplicatedLineCount: 1109,
     strictEligible: true,
   },
   {
@@ -287,8 +290,9 @@ const RATCHET_TARGETS = [
     // 2026-11-08: tightened 629/23695 -> 629/23689 on the checker hint.
     // Alignment with PR #201 (code-navigability stream): the lower of the two
     // one-way baselines, then tightened 23689 -> 23629 -> 23624 on the hint.
-    baselineCloneGroupCount: 629,
-    baselineDuplicatedLineCount: 23624,
+    // 2026-11-09 (candidate-integration): tightened 629/23624 -> 624/23388 -> 623/23344 -> 623/23339 on the checker hint.
+    baselineCloneGroupCount: 623,
+    baselineDuplicatedLineCount: 23339,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

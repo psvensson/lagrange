@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {parse} from 'yaml';
-import {flushCoverageBeforeKill} from '../test-helpers/census-pre-kill-flush.js';
+import {flushCoverageBeforeKill} from '../../scripts/checks/census-pre-kill-flush.js';
 
 import {
   LOCAL_CORPUS_OWED, localCorpusPlan, publishExactHead, reconcileLocalCorpus,

@@ -91,6 +91,7 @@ function checkDecommissionPreflight(owner, snap, id) {
   if (!owner.decommissionSupported) return c.DECOMMISSION_CAPABILITY_UNSUPPORTED;
   if (snap === NULL_SNAPSHOT || snap.ready !== true) return c.CLUSTER_NOT_READY;
   if (owner.hasActiveOperation()) return c.CONCURRENT_OPERATION_ACTIVE;
+  if (snap.hasPartitionQuorum !== true) return c.QUORUM_SAFETY_VIOLATION;
   if (snap.underReplicatedPartitionCount > 0) return c.UNDER_REPLICATED_PARTITIONS;
   if (!snap.nodeIds.includes(id)) return c.NODE_NOT_FOUND;
   const unsafe = snap.nodeCount <= MIN_QUORUM_SAFE_NODE_COUNT ||
@@ -107,7 +108,9 @@ function applyUpdatedOperationStatus(record, updated) {
 }
 
 function sendErrorReply(reply, error, defaultStatus = HTTP_STATUS.BAD_REQUEST) {
-  const status = error.statusCode || error.status || defaultStatus;
+  // ManagementV1ValidationError (management-v1-request-validator.js) carries
+  // statusCode; any other error answers the handler's declared status.
+  const status = error.statusCode ?? defaultStatus;
   const payload = {
     error: error.message,
     code: error.code || MANAGEMENT_ERROR_CODE.OPERATION_VALUE_INVALID,
@@ -196,8 +199,7 @@ function buildClusterSection(owner, incLin) {
   return lin && incLin ? {identity, identityState, restoredFrom: lin} : {identity, identityState};
 }
 
-function buildFacts(owner, incLin) {
-  const snap = owner.getClusterSnapshot();
+function buildFacts(owner, snap, incLin) {
   const baseFacts = {
     cluster: buildClusterSection(owner, incLin),
     release: buildReleaseSection(
@@ -217,6 +219,27 @@ function buildFacts(owner, incLin) {
   return owner.supportEnvelope ?
     {...baseFacts, supportEnvelope: owner.supportEnvelope} :
     baseFacts;
+}
+
+function overlayRuntimeSnapshot(owner, runtime) {
+  if (!isRuntimeClusterSnapshot(runtime)) return NULL_SNAPSHOT;
+  return {
+    ...runtime,
+    clusterId: owner.getClusterId(),
+    ready: runtime.ready === true && !isBackupFencingReadiness(owner.backupRestoreOwner),
+    hasPartitionQuorum: runtime.hasPartitionQuorum === true,
+    capacityState: owner.getCapacityFacts().state,
+    hasActiveOperation: runtime.hasActiveOperation === true || owner.hasActiveOperation(),
+    readyNodeCount: Math.max(0,
+      runtime.readyNodeCount - resolveDrainingCount(owner.rollingUpgradeOwner)),
+    versionSkew: owner.isVersionSkewActive(),
+  };
+}
+
+function resolveFactsClusterSnapshot(owner, resolvedSnapshot) {
+  return resolvedSnapshot === undefined ?
+    owner.getClusterSnapshot() :
+    resolvedSnapshot;
 }
 
 function isExistingConflict(ex, input) {
@@ -306,24 +329,22 @@ class ManagementV1Owner {
   }
 
   /**
-   * The runtime cluster snapshot for admission, or null when the runtime port
-   * is absent or reports incomplete facts. Owner-held facts are overlaid.
+   * The runtime cluster snapshot for synchronous port callers, or null when the
+   * runtime port is absent, asynchronous, or reports incomplete facts.
    * @return {Object|null}
    */
   getClusterSnapshot() {
-    const runtime = readSnapshotPort(this.options.getClusterSnapshot);
-    if (!isRuntimeClusterSnapshot(runtime)) return NULL_SNAPSHOT;
-    return {
-      ...runtime,
-      clusterId: this.getClusterId(),
-      ready: runtime.ready === true && !isBackupFencingReadiness(this.backupRestoreOwner),
-      hasPartitionQuorum: runtime.hasPartitionQuorum === true,
-      capacityState: this.getCapacityFacts().state,
-      hasActiveOperation: runtime.hasActiveOperation === true || this.hasActiveOperation(),
-      readyNodeCount: Math.max(0,
-        runtime.readyNodeCount - resolveDrainingCount(this.rollingUpgradeOwner)),
-      versionSkew: this.isVersionSkewActive(),
-    };
+    return overlayRuntimeSnapshot(this, readSnapshotPort(this.options.getClusterSnapshot));
+  }
+
+  /**
+   * Resolve the runtime cluster snapshot across synchronous or asynchronous
+   * canonical authority ports. Missing or incomplete evidence resolves to null.
+   * @return {Promise<Object|null>}
+   */
+  async resolveClusterSnapshot() {
+    const runtime = await readSnapshotPort(this.options.getClusterSnapshot);
+    return overlayRuntimeSnapshot(this, runtime);
   }
 
   _refreshActiveOperation(record) {
@@ -351,8 +372,8 @@ class ManagementV1Owner {
     return res;
   }
 
-  _preflightDecommission(nodeId, nowMs) {
-    const ref = checkDecommissionPreflight(this, this.getClusterSnapshot(), nodeId);
+  _preflightDecommission(nodeId, nowMs, clusterSnapshot = this.getClusterSnapshot()) {
+    const ref = checkDecommissionPreflight(this, clusterSnapshot, nodeId);
     const rej = ref !== PREFLIGHT_PASSED;
     return {
       state: rej ? MANAGEMENT_OPERATION_STATE.REJECTED : MANAGEMENT_OPERATION_STATE.ACCEPTED,
@@ -365,9 +386,10 @@ class ManagementV1Owner {
     const isNoop = input.kind === MANAGEMENT_OPERATION_KIND.NOOP;
     const pfx = isNoop ? c.NOOP_OPERATION_ID_PREFIX : c.OPERATION_ID_PREFIX;
     const opId = `${pfx}${input.operationId}`;
+    const clusterSnapshot = await this.resolveClusterSnapshot();
     const args = {
       operationId: input.operationId, lagrangeOperationId: opId, parameters: input.parameters,
-      clusterSnapshot: this.getClusterSnapshot(), nowMs,
+      clusterSnapshot, nowMs,
     };
     let res;
     if (isNoop) {
@@ -380,7 +402,7 @@ class ManagementV1Owner {
     } else if (input.kind === MANAGEMENT_OPERATION_KIND.CREATE_BACKUP) {
       res = await this.backupRestoreOwner.createBackup(args);
     } else {
-      res = this._preflightDecommission(input.parameters.lagrangeNodeId, nowMs);
+      res = this._preflightDecommission(input.parameters.lagrangeNodeId, nowMs, clusterSnapshot);
     }
     return {
       state: res.state, reasonCode: res.reasonCode ?? NULL_REASON_CODE,
@@ -445,11 +467,11 @@ class ManagementV1Owner {
     return c;
   }
 
-  getClusterFacts(opts = {}) {
+  getClusterFacts(opts = {}, resolvedSnapshot) {
     const nowMs = opts.nowMs ?? Date.now();
     const incLin = Boolean(opts.includeRestoredFromInFacts || this.includeRestoredFromInFacts);
     const missing = Array.isArray(opts.missingSections) ? opts.missingSections : EMPTY_STRING_ARRAY;
-    const all = buildFacts(this, incLin);
+    const all = buildFacts(this, resolveFactsClusterSnapshot(this, resolvedSnapshot), incLin);
     const facts = {};
     for (const [k, sec] of Object.entries(all)) {
       if (!missing.includes(k)) facts[k] = sec;
@@ -465,8 +487,13 @@ class ManagementV1Owner {
     };
   }
 
+  async readClusterFacts(opts = {}) {
+    const snap = await this.resolveClusterSnapshot();
+    return this.getClusterFacts(opts, snap);
+  }
+
   async handleGetFactsRequest(_q, r) {
-    return runHandler(r, () => this.getClusterFacts(), HTTP_STATUS_INTERNAL_ERROR);
+    return runHandler(r, () => this.readClusterFacts(), HTTP_STATUS_INTERNAL_ERROR);
   }
 
   async handlePostOperationRequest(q, r) {

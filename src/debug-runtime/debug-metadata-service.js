@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 /**
  * Debug metadata store: the owner of the debug_* system tables. It writes
  * them only through the control-plane gateway's UPSERT mutation and reads
@@ -102,6 +103,17 @@ const ORDER_BY_UPDATED_DESC = `${SQL.ORDER_BY} ${DSF.UPDATED_AT} DESC`;
 const ORDER_BY_CREATED_ASC = `${SQL.ORDER_BY} ${DBF.CREATED_AT} ASC`;
 const ORDER_BY_CAPTURED_DESC = `${SQL.ORDER_BY} ${DPF.CAPTURED_AT} DESC`;
 
+// A debug session is born ACTIVE unless its creator states a status: the
+// birth state debug_sessions.status declares (NOT NULL DEFAULT 'active').
+const DEBUG_SESSION_BIRTH_STATUS = DEBUG_SESSION_STATUS.ACTIVE;
+
+function resolveCreatedSessionStatus(request) {
+  const requestedStatus = readStateField(request.status);
+  return requestedStatus === STATE_ABSENT ?
+    DEBUG_SESSION_BIRTH_STATUS :
+    requestedStatus;
+}
+
 /**
  * Gateway-owned debug metadata store.
  */
@@ -151,7 +163,7 @@ class DebugMetadataStore {
       [DSF.STAGE_ID]: toNullableInteger(request.stageId),
       [DSF.NODE_ID]: request.nodeId || null,
       [DSF.ENDPOINT]: request.endpoint || null,
-      [DSF.STATUS]: request.status || DEBUG_SESSION_STATUS.ACTIVE,
+      [DSF.STATUS]: resolveCreatedSessionStatus(request),
       [DSF.CREATED_AT]: now,
       [DSF.UPDATED_AT]: now,
     };
@@ -186,6 +198,7 @@ class DebugMetadataStore {
       );
     }
 
+    const requestedStatus = readStateField(request.status);
     const row = {
       ...existing,
       [DSF.SERVICE_NAME]: request.serviceName || existing[DSF.SERVICE_NAME],
@@ -201,7 +214,10 @@ class DebugMetadataStore {
       [DSF.ENDPOINT]: request.endpoint !== undefined ?
         request.endpoint :
         existing[DSF.ENDPOINT],
-      [DSF.STATUS]: request.status || existing[DSF.STATUS],
+      // An update without a status keeps the session's (NOT NULL) status.
+      [DSF.STATUS]: requestedStatus === STATE_ABSENT ?
+        existing[DSF.STATUS] :
+        requestedStatus,
       [DSF.UPDATED_AT]: this.now(),
     };
 

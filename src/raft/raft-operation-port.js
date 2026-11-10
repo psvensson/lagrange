@@ -170,8 +170,7 @@ function assertRaftOperationSucceeded(result) {
       typeof result.outcome === 'string' &&
       result.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
     const error = new Error(
-      `Raft operation ${result.outcome}: ${result.reason || result.phase ||
-        'refused'}`);
+      `Raft operation ${result.outcome}: reason ${result.reason}, phase ${result.phase}`);
     error.raftResult = result;
     throw error;
   }

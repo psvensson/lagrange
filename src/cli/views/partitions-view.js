@@ -7,7 +7,12 @@
  * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9
  */
 
-import {BaseView, ROW_STATUS} from '../core/base-view.js';
+import {
+  BaseView,
+  DISPLAY_STATE,
+  ROW_STATUS,
+  displayState,
+} from '../core/base-view.js';
 
 const LOCAL_STR_PARTITIONS = 'partitions';
 const LOCAL_STR_PARTITION_ID = 'partition_id';
@@ -28,7 +33,6 @@ const LOCAL_STR_STATUS = 'status';
 const LOCAL_STR_STATUS_2 = 'Status';
 const LOCAL_STR_N_A = 'N/A';
 const LOCAL_STR_NO_LEADER = 'No Leader';
-const LOCAL_STR_UNKNOWN = 'unknown';
 const LOCAL_STR_0_B = '0 B';
 const LOCAL_STR_FAILED = 'failed';
 const LOCAL_STR_ERROR = 'error';
@@ -112,7 +116,7 @@ export class PartitionsView extends BaseView {
       this.formatReplicaCount(partition.replica_count),
       partition.leader_node_id || LOCAL_STR_NO_LEADER,
       this.formatSize(partition.size_bytes),
-      partition.status || LOCAL_STR_UNKNOWN,
+      displayState(partition.status, DISPLAY_STATE.UNKNOWN),
     ];
   }
 
@@ -333,7 +337,7 @@ export class PartitionsView extends BaseView {
           {label: 'Table ID', value: partition.table_id || 'N/A'},
           {label: 'Table Name', value: partition.table_name || 'N/A'},
           {label: 'Key Range', value: this.formatKeyRange(partition)},
-          {label: 'Status', value: partition.status || 'unknown'},
+          {label: 'Status', value: displayState(partition.status, DISPLAY_STATE.UNKNOWN)},
         ],
       },
       {
@@ -375,7 +379,10 @@ export class PartitionsView extends BaseView {
           label: LOCAL_STR_LAST_LOG_INDEX,
           value: String(partition.raft_last_log_index ?? 0),
         },
-        {label: LOCAL_STR_ROLE, value: partition.raft_role || LOCAL_STR_N_A},
+        {
+          label: LOCAL_STR_ROLE,
+          value: displayState(partition.raft_role, DISPLAY_STATE.NOT_APPLICABLE),
+        },
       ],
     });
 
@@ -384,7 +391,8 @@ export class PartitionsView extends BaseView {
     if (partition.replicas && Array.isArray(partition.replicas)) {
       const replicaFields = partition.replicas.map((replica, index) => ({
         label: `Replica ${index + 1}`,
-        value: `${replica.node_id || 'N/A'} - ${replica.status || 'unknown'}` +
+        value: `${replica.node_id || 'N/A'} - ` +
+          displayState(replica.status, DISPLAY_STATE.UNKNOWN) +
           (replica.lag !== undefined ? ` (lag: ${replica.lag})` : ''),
       }));
 

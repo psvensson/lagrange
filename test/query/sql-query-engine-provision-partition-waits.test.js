@@ -1358,3 +1358,86 @@ test('SQLQueryEngine & RuntimeServiceDefinitionResolution - authoritative SQL ab
   );
 });
 
+test('SQLQueryEngine - waitForPartitionLeaderService awaits partition routing repair when leader node is initially SERVE_ELIGIBLE denied', async (t) => {
+  const {CONTROL_PLANE_READINESS_DIMENSION} = await import(
+    '../../src/control-plane/control-plane-readiness-constants.js'
+  );
+  const {
+    SERVE_ELIGIBILITY_DECISION,
+    SERVE_ELIGIBILITY_STATE,
+  } = await import(
+    '../../src/control-plane/serve-eligibility-owner.js'
+  );
+  const partitionId = 'tbl-leader-wait-repair-p1';
+  const remoteNodeId = 'node-b';
+  let serveEligibilityRefreshed = false;
+  let readServeEligibilityCount = 0;
+
+  const cachedServices = [{
+    service_id: `${partitionId}-r1`,
+    replica_id: `${partitionId}-r1`,
+    partition_id: partitionId,
+    service_type: 'partition',
+    status: 'active',
+    raft_role: 'leader',
+    node_id: remoteNodeId,
+    address: '127.0.0.1:9102',
+  }];
+
+  const engine = new SQLQueryEngine({
+    nodeId: 'node-a',
+    systemCache: {
+      onCacheChange() {},
+      offCacheChange() {},
+      has: () => false,
+      get: (table, id) =>
+        table === TABLES.PARTITIONS && id === partitionId ?
+          {
+            partition_id: partitionId,
+            table_id: 'tbl-leader-wait-repair',
+            table_name: 'user_orders',
+            leader_node_id: remoteNodeId,
+          } :
+          null,
+      filter: (table, predicate) =>
+        table === TABLES.SERVICES ? cachedServices.filter(predicate) : [],
+      getAll: (table) => (table === TABLES.SERVICES ? [...cachedServices] : []),
+    },
+    messageRouter: createMockMessageRouter(),
+    controlPlaneReadinessService: {
+      answerServeEligibility(nodeId) {
+        if (nodeId !== remoteNodeId) {
+          return null;
+        }
+        return serveEligibilityRefreshed ?
+          {
+            state: SERVE_ELIGIBILITY_STATE.READY,
+            decision: SERVE_ELIGIBILITY_DECISION.ELIGIBLE,
+            epoch: 2,
+            reasons: [],
+          } :
+          {
+            state: SERVE_ELIGIBILITY_STATE.UNAVAILABLE,
+            reason: 'unavailable_stale',
+            epoch: 1,
+          };
+      },
+      async readServeEligibility() {
+        readServeEligibilityCount += 1;
+        serveEligibilityRefreshed = true;
+        return {epoch: 2};
+      },
+    },
+  });
+
+  await engine.waitForPartitionLeaderService(partitionId, null, {
+    routingReadinessDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+  });
+
+  t.equal(
+    readServeEligibilityCount,
+    1,
+    'waitForPartitionLeaderService should repair SERVE_ELIGIBLE routing via readServeEligibility without waiting for poll timeout',
+  );
+});
+

@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 // RuntimeServiceHandler's bound-creation routes (design
 // ACTIVATION-DISCOVERY-DESIGN-20261017, Revision 3 governs: RV3.2 deferral
 // carrier, RV3.3 result tables, RV3.5 re-entry guard; Revision 2: RV2.1 REMOVE,
@@ -508,10 +509,27 @@ function decideRetirement(result) {
     [PERMANENT_RETIREMENT_REFUSALS.has(result?.outcome), DECISION.FAILED],
     [true, DECISION.HELD],
   ].find(([matches]) => matches)[1];
-  const errorCode = kind === DECISION.FAILED ? result.outcome :
-    result?.completion?.outcome ?? result?.projection?.outcome ??
-      result?.status ?? result?.outcome ?? OUTCOME.UNKNOWN;
+  const errorCode = kind === DECISION.FAILED ? result.outcome : heldRetirementCode(result);
   return {kind, result, ...(kind === DECISION.COMPLETED ? {journalComplete: true} : {errorCode})};
+}
+
+// A held retirement's code names the most specific stage that answered, in
+// this order: the journal completion, the runtime projection, the
+// retirement's own status (retireConsensusCreation), its outcome. A
+// retirement no stage answered is the named UNKNOWN.
+const HELD_RETIREMENT_STAGES = Object.freeze([
+  (result) => result?.completion?.outcome,
+  (result) => result?.projection?.outcome,
+  (result) => readStateField(result?.status),
+  (result) => result?.outcome,
+]);
+
+function heldRetirementCode(result) {
+  for (const stage of HELD_RETIREMENT_STAGES) {
+    const code = stage(result);
+    if (code !== undefined && code !== null) return code;
+  }
+  return OUTCOME.UNKNOWN;
 }
 
 function terminalOrTable(answer, table) {

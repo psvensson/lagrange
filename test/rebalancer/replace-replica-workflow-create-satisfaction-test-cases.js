@@ -46,6 +46,12 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
         },
         clearTimeoutFn() {},
         cacheData: {
+          nodes: ['seed-node', 'node-2'].map((nodeId) => ({
+            node_id: nodeId,
+            status: 'active',
+            connection_state: 'ready',
+            ready_lease_expires_at: Date.now() + 60_000,
+          })),
           services: [
             {
               service_id: 'nodes-p1-r1',
@@ -198,6 +204,14 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
         nodeId: 'seed-node',
         enableTimeouts: false,
         messageRouter,
+        cacheData: {
+          nodes: ['seed-node', 'node-2'].map((nodeId) => ({
+            node_id: nodeId,
+            status: 'active',
+            connection_state: 'ready',
+            ready_lease_expires_at: Date.now() + 60_000,
+          })),
+        },
       });
 
       try {

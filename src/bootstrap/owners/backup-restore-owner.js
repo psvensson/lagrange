@@ -114,7 +114,7 @@ const PREFLIGHT_RULES = Object.freeze([
   [(o, s) => s?.hasActiveOperation || o.hasActiveOperation(), L3_CODE.CONCURRENT_OPERATION_ACTIVE],
   [(_o, _s, p) => isInvalidDestinationUri(p?.destinationUri), L3_CODE.DESTINATION_URI_INVALID],
   [(_o, s) => s?.ready !== true, L3_CODE.CLUSTER_NOT_READY],
-  [(_o, s) => s.hasPartitionQuorum !== true, L3_CODE.PARTITION_QUORUM_UNAVAILABLE],
+  [(_o, s) => s?.hasPartitionQuorum !== true, L3_CODE.PARTITION_QUORUM_UNAVAILABLE],
   [(o, _s, p) => o.isBackupIdConflicting(p?.backupId, p?.destinationUri),
     L3_CODE.BACKUP_ID_CONFLICT],
 ]);
@@ -269,7 +269,7 @@ class BackupRestoreOwner {
   }
 
   async streamBackup(params, snap, nowMs) {
-    if (snap.hasPartitionQuorum === false) {
+    if (snap?.hasPartitionQuorum !== true) {
       throw Object.assign(new Error(L3_CODE.PARTITION_QUORUM_UNAVAILABLE),
         {code: L3_CODE.PARTITION_QUORUM_UNAVAILABLE});
     }

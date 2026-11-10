@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
   classifySystemPartition,
@@ -270,7 +271,8 @@ function createRoleMutationHelper(owner) {
     buildExpectedCacheFields: (role) => ({raft_role: role}),
     prepareFlush: ({pendingValue, flushingValue} = {}) => {
       const targetRole = flushingValue ?? pendingValue;
-      const liveRole = owner.role || null;
+      // Born FOLLOWER (partition-service-core-base); unstated -> STATE_ABSENT.
+      const liveRole = readStateField(owner.role);
       const staleRoleFlush = isStaleRoleFlushForLiveRole(targetRole, liveRole);
       return {
         skip: staleRoleFlush,
@@ -290,7 +292,7 @@ function createRoleMutationHelper(owner) {
         TABLES.SERVICES,
         owner.replicaId,
       );
-      return cached?.raft_role || null;
+      return readStateField(cached?.raft_role);
     },
     isWriteReady: () => owner.isServicesLeaderAvailable(),
     systemTableCache: owner.systemTableCache,

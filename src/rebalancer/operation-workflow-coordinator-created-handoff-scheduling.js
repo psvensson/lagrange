@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {
   EXECUTOR_OUTCOME_FIELD,
   EXECUTOR_OUTCOME_TYPE,
@@ -101,7 +102,7 @@ function reportCoordinatorHandoffRetrySpent(owner, operation, logFields) {
     lastObserved: {
       ...observed,
       type: snapshot.type ?? null,
-      status: snapshot.status ?? null,
+      status: snapshot.status,
     },
     scope: {nodeId: owner.nodeId ?? null, partitionId, operationId},
   });
@@ -142,12 +143,12 @@ function reportCoordinatorHandoffStepTimeoutStop(owner, operation, decision) {
     boundMs: bound.boundMs,
     startedAtMs: bound.startedAtMs,
     lastObserved: () => ({
-      workflowStep: decision?.workflowStep ?? null,
+      workflowStep: readStateField(decision?.workflowStep),
       stepTimedOut: decision?.stepTimedOut === true,
       operationBudgetActive: decision?.operationBudgetActive === true,
       operationBudgetDeadlineMs: decision?.operationBudgetDeadlineMs ?? null,
       type: snapshot.type ?? null,
-      status: snapshot.status ?? null,
+      status: snapshot.status,
       outcome: COORDINATOR_HANDOFF_RETRY_CLEARED_OUTCOME,
     }),
     scope: () => ({
@@ -215,7 +216,7 @@ function buildCoordinatorCreatedDispatchRow(operation) {
     source_node_id: operation?.sourceNodeId,
     target_node_id: operation?.targetNodeId,
     status: operation?.status,
-    workflow_step: operation?.workflowStep || null,
+    workflow_step: readStateField(operation?.workflowStep),
     created_at: operation?.createdAt,
     updated_at: operation?.updatedAt,
     completed_at: operation?.completedAt,
@@ -300,10 +301,12 @@ function resolveExecutorOutcomeRemoteOwnerHandoffMode(
 function buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
   owner,
   operation,
-  now = Date.now(),
+  now = owner.resolveTimeoutCheckNowMs(),
   options = {},
 ) {
-  const workflowStep = operation?.workflowStep || WORKFLOW_STEP.PENDING;
+  // A decoded operation always carries its step; with no operation there is
+  // no step (STATE_ABSENT) and nothing has timed out.
+  const workflowStep = readStateField(operation?.workflowStep);
   const targetOutcomeHandoff =
     options.handoffMode ===
       COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME;
@@ -322,15 +325,19 @@ function buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
         Number.isFinite(operation?.updatedAtMs) ?
           operation.updatedAtMs :
           null;
+  // The dispatch-pending re-entry snapshot can carry no observed step
+  // (STATE_ABSENT). Its budget decision is taken as for a not-yet-dispatched
+  // (PENDING) operation: a step nobody observed never ends the budget grace.
+  const budgetStep = workflowStep === STATE_ABSENT ? WORKFLOW_STEP.PENDING : workflowStep;
   const usesOperationBudget =
     owner.shouldUseOperationBudgetTransitionRetryGrace(
       {
         partitionId: operation?.partitionId || null,
-        workflowStep,
+        workflowStep: budgetStep,
         updatedAt: operation?.updatedAt ?? operation?.updatedAtMs,
         createdAt: operation?.createdAt ?? operation?.createdAtMs,
       },
-      workflowStep,
+      budgetStep,
     );
   const operationBudgetDeadlineMs =
     Number.isFinite(operationStartedAtMs) ?
@@ -401,7 +408,7 @@ function resolveSnapshotHandoffRetryStop(
   const handoffTimeoutDecision =
     owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
       operationSnapshot,
-      Date.now(),
+      owner.resolveTimeoutCheckNowMs(),
       options,
     );
   if (handoffTimeoutDecision.shouldStop) {
@@ -452,8 +459,7 @@ function buildSnapshotHandoffRetryLogFields(
       operationSnapshot,
       options,
     ).logFields,
-    workflowStep:
-      stopDecision.workflowStep || operationSnapshot?.workflowStep || null,
+    workflowStep: operationSnapshot ? operationSnapshot.workflowStep : null,
     degenerateSnapshot: stopDecision.degenerateSnapshot === true,
     operationBudgetDeadlineMs:
       stopDecision.operationBudgetDeadlineMs || null,
@@ -516,7 +522,7 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
   ) {
     return false;
   }
-  const desiredDeadlineMs = Date.now() + delayMs;
+  const desiredDeadlineMs = owner.resolveTimeoutCheckNowMs() + delayMs;
   const existingDeadlineMs =
     owner.createdOperationHandoffRetryDeadlineMsByOperationId?.get(operationId);
   const replaceExisting =
@@ -570,7 +576,7 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
         const handoffTimeoutDecision =
           owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
             currentOperation,
-            Date.now(),
+            owner.resolveTimeoutCheckNowMs(),
             options,
           );
         if (handoffTimeoutDecision.shouldStop) {
@@ -612,7 +618,7 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
   );
   owner.createdOperationHandoffRetryDeadlineMsByOperationId.set(
     operationId,
-    Date.now() + delayMs,
+    desiredDeadlineMs,
   );
   owner.createdOperationHandoffRetryModeByOperationId.set(
     operationId,

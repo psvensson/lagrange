@@ -459,12 +459,13 @@ class PartitionSplitMergeManagerCoreMethods {
    * @return {boolean} True if partition should be split.
    */
   evaluateSplitCriteria(partitionId, metrics, policy = {}) {
-    // B1 (scale-safety): priority control-plane partitions (e.g.
-    // control_plane_publications, which holds the cluster_membership row) must
-    // never split — their single-owner / single-Raft-leader semantics are the
-    // basis for owner-driven membership being a single source of truth. A split
-    // would create a second "owner" for a fragment and break that invariant.
-    if (classifySystemPartition({partitionId}).priorityControlPlane) {
+    // B1 (scale-safety): system-table partitions (INITIAL_PARTITION_IDS /
+    // CRITICAL_SYSTEM_PARTITION_IDS, including priority control-plane and
+    // logs-p1) must remain single canonical -p1 partitions on automatic
+    // evaluation so single-partition local authoritative observation and
+    // unrouted local system-table leader writes preserve their single-partition
+    // invariant.
+    if (classifySystemPartition({partitionId}).systemTable) {
       return false;
     }
     const storageThreshold =
@@ -546,6 +547,12 @@ class PartitionSplitMergeManagerCoreMethods {
    */
   evaluateMergeCriteria(leftPartitionId, rightPartitionId, leftMetrics, rightMetrics,
     policy = {}) {
+    if (
+      classifySystemPartition({partitionId: leftPartitionId}).systemTable ||
+      classifySystemPartition({partitionId: rightPartitionId}).systemTable
+    ) {
+      return false;
+    }
     const {storageThreshold, trafficThreshold} =
       resolveEffectiveMergeThresholds(policy, this);
 

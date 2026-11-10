@@ -1,0 +1,39 @@
+{
+  "schema": "solve-relocation-verification/1",
+  "bundles": [
+    {
+      "bundle": "managed-partition-merge-live-validation--raft-cutover-stop-2026-10-25-7532b3ca6-2026-11-09.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/managed-partition-merge-live-validation--raft-cutover-stop-2026-10-25-7532b3ca6-2026-11-09.tar.gz",
+      "bundleSha256": "366e5342340ac1c971099aeb333f2f64d5aae0839c76bd7749028061f417c836",
+      "sourceCommit": "7532b3ca6333ec063ae0c9db04a160ddc6f65038",
+      "shard": "relocation-inventory/managed-partition-merge-live-validation--raft-cutover-stop-2026-10-25-7532b3ca6-2026-11-09.json",
+      "shardSha256": "9ab19e6ba17fab1c739ef985953f4202d0910a7728df557839267b5dbc79cca2",
+      "verifiedAt": "2026-11-09T20:21:46.262Z",
+      "downloadedSha256": "366e5342340ac1c971099aeb333f2f64d5aae0839c76bd7749028061f417c836",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 27,
+      "results": "111111111111111111111111111",
+      "mismatches": [],
+      "verified": true
+    },
+    {
+      "bundle": "managed-partition-merge-live-validation--merge-live-validation-changes-7532b3ca6-2026-11-09.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/managed-partition-merge-live-validation--merge-live-validation-changes-7532b3ca6-2026-11-09.tar.gz",
+      "bundleSha256": "9556775ad357382bc42223c1732e2ba85d300bcc4188c7355d37198b9863bd8f",
+      "sourceCommit": "7532b3ca6333ec063ae0c9db04a160ddc6f65038",
+      "shard": "relocation-inventory/managed-partition-merge-live-validation--merge-live-validation-changes-7532b3ca6-2026-11-09.json",
+      "shardSha256": "6c4931df751ed8f0cb9c2ff31cc2a468afc07f2af079361bcdb3e01cf1f0b36f",
+      "verifiedAt": "2026-11-09T20:21:53.395Z",
+      "downloadedSha256": "9556775ad357382bc42223c1732e2ba85d300bcc4188c7355d37198b9863bd8f",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 17,
+      "results": "11111111111111111",
+      "mismatches": [],
+      "verified": true
+    }
+  ]
+}

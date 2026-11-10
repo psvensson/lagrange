@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Replica admission from the committed replica operation (quest
  * replica-admission-from-committed-operation; R2 request owner shape,
@@ -49,8 +50,11 @@ import {OperationType} from '../rebalancer/replica-status.js';
 import {deliveryAnswerOf, deliveryTransportOf,
   isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
+import {COMMITTED_MEMBERSHIP_ANSWER_KIND} from
+  '../raft/raft-committed-membership-constants.js';
 import {
   admitPartitionRaftPeer,
+  readPartitionCommittedMembership,
   reservePartitionRaftPeerIdentity,
 } from './partition-service-raft-membership-administration.js';
 
@@ -303,7 +307,7 @@ async function admitFromCommittedOperation(service, request) {
   const refusal = operationRefusal(read.row, service, replicaIdentity);
   return settleAnswer(service, replicaIdentity, refusal !== null ?
     answer(REPLICA_ADMISSION_OUTCOME.OPERATION_NOT_ADMITTING, {
-      reason: refusal, workflowStep: read.row?.workflow_step ?? null}) :
+      reason: refusal, workflowStep: readStateField(read.row?.workflow_step)}) :
     admissionAnswer(service, replicaIdentity, read.row));
 }
 
@@ -336,17 +340,16 @@ const UNCOMMITTED_ADMISSION_OUTCOMES = Object.freeze(new Set([
   REPLICA_ADMISSION_OUTCOME.PROPOSED,
 ]));
 
-function isOwnCommittedVoter(service) {
-  const status = service.readOwnRaftStatus?.() ?? null;
-  const peerId = status?.peerId;
-  if (peerId === undefined || peerId === null) {
+async function isOwnCommittedVoter(service) {
+  const membership = await readPartitionCommittedMembership(service);
+  if (
+    membership === null ||
+    membership.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED
+  ) {
     return false;
   }
-  const voters = Array.isArray(status?.confState?.voters) ?
-    status.confState.voters :
-    [];
-  return voters.some(
-    (voterPeerId) => String(voterPeerId) === String(peerId),
+  return [...membership.voters, ...membership.votersOutgoing].some(
+    (peerId) => membership.identities[peerId] === service.replicaId,
   );
 }
 
@@ -514,7 +517,7 @@ async function driveReplicaAdmission(service) {
     return request;
   }
   if (UNCOMMITTED_ADMISSION_OUTCOMES.has(request.lastOutcome) &&
-      isOwnCommittedVoter(service)) {
+      await isOwnCommittedVoter(service)) {
     request.lastOutcome = REPLICA_ADMISSION_OUTCOME.ALREADY_MEMBER;
     request.state = REPLICA_ADMISSION_REQUEST_STATE.ADMITTED;
     return request;

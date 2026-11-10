@@ -63,9 +63,13 @@ vocabulary) and, as the arbiter no syntax rule can be, which fallback
 branches ever execute under the corpus and a formation. This epic makes each
 shape measurable once, stops its growth with a one-way ratchet, promotes the
 near-zero shapes to ESLint, retires the backlog in two pilot owners whose
-cost was measured in that session, and retires every fallback branch the
-coverage census proves dead. It is done when the budget below reports no
-unmet row; the ratchets outlive the epic as ordinary static gates.
+cost was measured in that session, and investigates coverage candidates through their canonical owners before
+retiring genuine alternate semantics. Coverage does not prove code dead. Its
+budget remains a bounded tooling criterion; repository-wide legacy/fallback
+closure belongs to [Q11](../quests/repository-legacy-fallback-closure/quest.json)
+in [canonical authority and reliable formation](operation-integrity-and-reliable-formation.md).
+The ratchets outlive this epic as ordinary static gates; a green budget alone
+does not establish global removal.
 
 ## Budget
 
@@ -133,17 +137,17 @@ They are recorded, not in scope (R17); the readiness chain is the pilot.
   with named constructor collaborators validated once; duck-typing at their
   call sites is deleted in the same change. Behaviour is unchanged; the
   formation ADD continuation owner remains the formation work's repair.
-- **Coverage decides what is dead.** `NODE_V8_COVERAGE` on the corpus and one
-  formation scenario, merged and joined to the detector sites by file and
-  range, yields `data/fallback-census/census.json`: one record per site with
-  its content hash, its class (`never`, `primary-only`, `fallback-only`,
-  `both`, `unloaded`) and the runs that produced it. `never` and
-  `fallback-only` are deletions under the no-legacy rule; only `both` needs
-  judgment, recorded per site with a reason and voided when the hash changes.
-  A file no run loaded is `unloaded`, never `never`: an incomplete census
-  fails the site, it does not acquit it, so an `unloaded`, unknown or
-  duplicated record leaves the site uncensused. Site identity is (row, file,
-  hash, occurrence) with occurrence numbered within the row.
+- **Coverage locates candidates.** The existing census binds sites to source
+  hashes and contributing runs. Its classes describe observed execution only.
+  Every deletion needs source/caller reachability and a semantic owner
+  disposition, including exports, dynamic entrypoints and fixtures. No execution
+  is not proof of dead code; a legitimately dormant recovery path must remain
+  reachable through the canonical implementation. Genuine legacy/fallback
+  semantics are removed with complete caller migration and refusal/recovery
+  proof. Legitimate defaults and owned representation conversion need a verified
+  guarantee, not a renamed exception. Unloaded, unknown, duplicate or stale
+  records do not acquit a site. Q11 also covers other execution classes and
+  maintained executable paths beyond this bounded detector.
 - **Rows read the tree.** Every row is computable from a checkout, the census
   included because it is committed with the hashes that bind it; no row reads
   a live run, so the probe measures and never acts (R27).
@@ -163,8 +167,10 @@ They are recorded, not in scope (R17); the readiness chain is the pilot.
    `system-table-decoded-reads-*` quests in parallel, one directory group
    each, `-partition` after `partition-service-constructor-injection`.
 6. `fallback-branch-coverage-census` after step 2, then
-   `dead-fallback-retirement` and `live-dual-path-classification` in parallel,
-   owner by owner (readiness, partition, raft first).
+   `dead-fallback-retirement` and `live-dual-path-classification`, owner by owner
+   (readiness, partition, raft first). Independent investigation may overlap;
+   one writer owns each changing interaction. Reconcile their dispositions
+   with Q11 before any global closure claim.
 7. `source-directory-file-cap` last: moving files conflicts with every
    concurrent source edit, so it waits for the other source quests.
 
@@ -330,3 +336,21 @@ They are recorded, not in scope (R17); the readiness chain is the pilot.
   src/rebalancer/priority-recovery-operation-context-state.js:94-98 and the pre-existing `typeof x.status === 'string' ?
   x.status.toUpperCase() : null` form (21 sites) are the next state_read_defaults detector and ESLint extension; fresh-seed-activation
   stalled once in 9 local candidate runs vs 0/9 at HEAD under concurrent load (unattributed; include in the next repeat batch).
+- 2026-11-08 (lead ruling, state-read-named-defaults): an explicit shape
+  dispatch that ends in a named state (a reader choosing `publicationStatus`
+  versus `status`, or `workflowStep` versus `workflow_step`, by the shape the
+  record declares) is not a silent default and may stay; it is still two
+  shapes for one fact (R08), so collapsing them into one decoded row belongs to
+  `system-table-row-decoders`, recorded there as the quest's starting findings.
+  The ESLint promotion of `state_read_defaults` lands with the last deletion
+  and is proven by a parity test against the detector over every shape and
+  chain position (the predecessor's head-only selector is the pinned
+  counterexample).
+
+- 2026-11-10: Reconciled this bounded plan with the user-approved
+  canonical-authority epic. Coverage is investigation evidence, not proof of
+  semantic redundancy. Amended the unsealed retirement/classification proposals
+  explicitly; retirement now requires source/caller/removal/recovery receipts,
+  while classification retains its limited probe. Existing budget baselines,
+  epic probe and completed census claims are unchanged. Q11 owns repository-wide
+  closure and does not accept routed debt as removal.

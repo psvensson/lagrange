@@ -1,7 +1,9 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {
   PARTICIPANT_ACK_FIELD,
   PARTICIPANT_ACK_RESULT,
   WORKFLOW_ERROR_MSG,
+  readParticipantCurrentStatus,
 } from './workflow-constants.js';
 
 /**
@@ -36,8 +38,8 @@ class WorkflowParticipantAckMethods {
     if (!participantKey) {
       throw new Error(WORKFLOW_ERROR_MSG.PARTICIPANT_KEY_REQUIRED);
     }
-    const ackStatus = ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '';
-    if (!ackStatus) {
+    const ackStatus = readStateField(ack?.[PARTICIPANT_ACK_FIELD.STATUS]);
+    if (ackStatus === STATE_ABSENT) {
       throw new Error(WORKFLOW_ERROR_MSG.ACK_STATUS_REQUIRED);
     }
 
@@ -208,7 +210,7 @@ class WorkflowParticipantAckMethods {
     if (typeof this.isParticipantTransitionAllowed !== 'function' ||
         this.isParticipantTransitionAllowed(
           participantKey,
-          participant.status || null,
+          readParticipantCurrentStatus(participant),
           ackStatus,
         )) {
       return null;
@@ -217,14 +219,14 @@ class WorkflowParticipantAckMethods {
       result: PARTICIPANT_ACK_RESULT.INVALID_TRANSITION,
       participantKey,
       reason: WORKFLOW_ERROR_MSG.PARTICIPANT_INVALID_TRANSITION,
-      currentStatus: participant.status || null,
+      currentStatus: readParticipantCurrentStatus(participant),
       receivedStatus: ackStatus,
     };
     this.emitAckRejectionDiagnostic(workflowId, participantKey, {
       rejectionResult: PARTICIPANT_ACK_RESULT.INVALID_TRANSITION,
       reason: WORKFLOW_ERROR_MSG.PARTICIPANT_INVALID_TRANSITION,
       receivedStatus: ackStatus,
-      currentStatus: participant.status || null,
+      currentStatus: readParticipantCurrentStatus(participant),
     });
     return invalidResult;
   }

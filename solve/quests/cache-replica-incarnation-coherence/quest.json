@@ -1,0 +1,67 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cache-replica-incarnation-coherence",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "A cached service row and every lifecycle mutation payload preserve one compatible replica incarnation. Stale backfill and lifecycle advancement cannot combine predecessor role or lifecycle fields with successor identity. Missing identity is not proof of compatibility; legitimate same-incarnation delayed information remains usable through the canonical merge and publication owners.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/cache-replica-incarnation-coherence/evidence/receipt.json",
+      "requiredReceipts": [
+        "predecessor-backfill-refused",
+        "lifecycle-advance-incarnation-fenced",
+        "missing-identity-refused",
+        "same-incarnation-delayed-update",
+        "create-cleanup-and-boot-identity-cases",
+        "cache-to-lifecycle-payload-composition",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "responsible-interaction",
+      "statement": "Q15; priority P1; Shared system-table cache ingress/merge and replica lifecycle publication interaction. Apply P0 composition reconciliation and Q1 contract discipline immediately; Q2 governs review. Planning only, not an assigned runtime writer or queued run."
+    },
+    {
+      "id": "fence-before-provenance-loss",
+      "statement": "Put compatibility at the shared system-table-cache-row-merge.js ingress before generic missing-field backfill or stale lifecycle advancement. Trace all ingress paths, including partial events, rather than repairing only resolvePreservedReplicaRaftRole after the mixed row already presents successor identity. Keep downstream guards."
+    },
+    {
+      "id": "identity-contract",
+      "statement": "Use the existing producer-owned replica ID, create attempt, cleanup identity and applicable boot/lifecycle generation contract. A missing partial-event identity cannot authorize filling an incarnation-sensitive gap. Preserve legitimate delayed same-incarnation information; timestamps alone cannot establish incarnation compatibility."
+    },
+    {
+      "id": "complete-witness",
+      "statement": "Inspect the stored cache row and buildUpdateCdcData lifecycle payload through actual production owners. Include old/new replica IDs and attempts, conflicting cleanup identities, absent fields, delayed lifecycle advancement and a same-incarnation positive control. The reported evidence stops at an invalid payload; durable mutation and quorum loss were not observed."
+    },
+    {
+      "id": "authority-and-coordination",
+      "statement": "Coordinate the shared merge/reconciliation boundary with Q13 under one writer. Research 95bb4690fe2bdfbea94aed55128b917673bedb83, the replica-lifecycle durable-generation history at 1aea11baf and 3fb92dcf9. Audit role preservation against the canonical role authority; an identity guard does not itself legitimize a cached fallback as a second decision algorithm."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

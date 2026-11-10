@@ -1086,6 +1086,10 @@ test('L3: the claimed FAILED target of a create that failed after admission ' +
         nodeId: TARGET_NODE,
         replicaId: TARGET_ID,
       });
+      unclaimedFailedRow.service_id = replaceOp.replicaId;
+      unclaimedFailedRow.replica_id = replaceOp.replicaId;
+      unclaimedFailedRow.address = `${TARGET_NODE}/partition/${replaceOp.replicaId}`;
+      cache.upsert(SYSTEM_TABLE_NAME.SERVICES, replaceOp.replicaId, unclaimedFailedRow);
       await installCreateAdmissionAttempt(coordinator, replaceOp);
       await owner.updateStep(replaceOp, WORKFLOW_STEP.CREATING);
 
@@ -1152,7 +1156,7 @@ test('L3: the claimed FAILED target of a create that failed after admission ' +
         cleanup_token: buildFailedCreateCleanupToken('op-claimed'),
       };
       authoritativeRow = claimedRow;
-      cache.upsert(SYSTEM_TABLE_NAME.SERVICES, TARGET_ID, claimedRow);
+      cache.upsert(SYSTEM_TABLE_NAME.SERVICES, replaceOp.replicaId, claimedRow);
       t.equal(
         await owner.getReconciledReplicaStatus(
           replaceOp.replicaId,
@@ -1210,6 +1214,9 @@ test('L3: the claimed FAILED target of a create that failed after admission ' +
         nodeId: TARGET_NODE,
         replicaId: TARGET_ID,
       });
+      delayedFailedRow.service_id = replaceOp.replicaId;
+      delayedFailedRow.replica_id = replaceOp.replicaId;
+      delayedFailedRow.address = `${TARGET_NODE}/partition/${replaceOp.replicaId}`;
       await installCreateAdmissionAttempt(coordinator, replaceOp);
       await owner.updateStep(replaceOp, WORKFLOW_STEP.CREATING);
       await owner.failOperation(replaceOp, 'Step timeout exhausted');
@@ -1225,7 +1232,7 @@ test('L3: the claimed FAILED target of a create that failed after admission ' +
       );
 
       authoritativeAvailable = true;
-      cache.upsert(SYSTEM_TABLE_NAME.SERVICES, TARGET_ID, delayedFailedRow);
+      cache.upsert(SYSTEM_TABLE_NAME.SERVICES, replaceOp.replicaId, delayedFailedRow);
       await rebalancer.refreshFailedCreateTargetCleanupDecisions();
       t.same(
         [...rebalancer.getTerminalFailedReplaceTargetReplicaIds()],

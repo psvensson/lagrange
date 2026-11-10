@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
@@ -31,14 +32,15 @@ function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+// serviceRows are systemTableCache services rows (SQL-column keyed, the one
+// spelling raft_role). An absent status or role is STATE_ABSENT, which is no
+// transitional status, not ACTIVE and no voter role.
 function normalizeServiceStatus(serviceRow) {
-  return normalizeString(serviceRow?.status).toLowerCase();
+  return readLowerStateField(serviceRow?.status);
 }
 
 function normalizeServiceRaftRole(serviceRow) {
-  return normalizeString(
-    serviceRow?.raft_role ?? serviceRow?.raftRole,
-  ).toLowerCase();
+  return readLowerStateField(serviceRow?.raft_role);
 }
 
 function isVoterReadyActiveTargetServiceRow(serviceRow) {

@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readLowerStateField} from '../utils/state-field-read.js';
 import {
   SERVICE_LIFECYCLE_STATE,
   SERVICE_STATUS,
@@ -126,17 +127,11 @@ function hasPrioritySummaryRefreshClearedGap(latestPublicationRow, candidate) {
   ) && !hasPriorityRecoverySpreadGap(candidate?.priorityPartitionSummary);
 }
 
-// A row without a string status reads as the named empty status, which
-// matches no in-progress status.
-function normalizeLowercaseStatus(row) {
-  const status = row?.status;
-  return typeof status === 'string' ? status.toLowerCase() :
-    MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY;
-}
-
+// A row without a stated status is STATE_ABSENT, which is no in-progress
+// status.
 function isInProgressServiceStatus(status) {
   return (
-    status.length > 0 &&
+    status !== STATE_ABSENT &&
     status !== SERVICE_STATUS.ACTIVE &&
     status !== SERVICE_STATUS.STOPPED &&
     status !== SERVICE_LIFECYCLE_STATE.FAILED
@@ -145,7 +140,7 @@ function isInProgressServiceStatus(status) {
 
 function hasInProgressServiceRows(serviceRows) {
   return serviceRows.some((row) =>
-    isInProgressServiceStatus(normalizeLowercaseStatus(row)),
+    isInProgressServiceStatus(readLowerStateField(row?.status)),
   );
 }
 
@@ -251,7 +246,7 @@ function resolveDeferredPropagatedCatchupCooldownMs(
 function reportOwnerMembershipReconcileSpent(coordinator, startedAtMs, observed) {
   reportWaitBoundSpent(coordinator.logger, {
     ...OWNER_MEMBERSHIP_RECONCILE_WAIT,
-    elapsedMs: Date.now() - startedAtMs,
+    startedAtMs,
     subject: coordinator.nodeId ?? null,
     lastObserved: observed,
     scope: {nodeId: coordinator.nodeId ?? null},

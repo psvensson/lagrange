@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Owner contract:
  * Owner: the workflow owner's completion of a whole-group retirement step
@@ -453,7 +454,7 @@ class GroupRetirementRedrive {
 // or the partitions row's canonical leader publication.
 function announcesLeader(tableName, row) {
   if (tableName === SERVICES_TABLE) {
-    return String(row?.raft_role || '') === RAFT_ROLE.LEADER;
+    return readStateField(row?.raft_role) === RAFT_ROLE.LEADER;
   }
   return tableName === PARTITIONS_TABLE &&
     String(row?.leader_node_id || '').length > 0;

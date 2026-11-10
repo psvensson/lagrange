@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from './control-plane-readiness-constants.js';
@@ -117,9 +118,7 @@ export function buildReadinessTransitionState(context = {}, nowValue = Date.now(
           publication.reasonCode :
           null,
       membershipPublicationStatus:
-        typeof context.membershipPublication?.status === 'string' ?
-          context.membershipPublication.status :
-          null,
+        readStateField(context.membershipPublication?.status),
       priorityControlPlaneRecoveryActive:
         projectionReadinessContract.priorityRecovery.active === true,
       priorityControlPlaneRecoveryReasonCodes:

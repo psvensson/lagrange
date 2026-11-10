@@ -186,10 +186,10 @@ function matchesStoredNodeLiveness(snapshot, current) {
 function shouldUseStoredLivenessRow(snapshot, storedRow, currentRow) {
   if (!currentRow) return false;
   const evidence = snapshot.nodeEvidence || {};
-  const currentStatus = currentRow[COLUMN.STATUS] ?? currentRow.status ?? null;
+  const currentStatus = currentRow[COLUMN.STATUS];
   const currentConnection = currentRow[COLUMN.CONNECTION_STATE] ??
     currentRow.connection_state ?? null;
-  if (currentStatus !== (evidence.status ?? null) ||
+  if (currentStatus !== evidence.status ||
       currentConnection !== (evidence.rowConnectionState ?? null)) {
     return false;
   }

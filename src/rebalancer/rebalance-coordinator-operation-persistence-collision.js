@@ -62,7 +62,7 @@ class RebalanceCoordinatorOperationPersistenceCollision {
       throw new Error(
         `${TERMINAL_INTENT_COLLISION_ERROR_PREFIX} ` +
           `${context.move.operationIntentId}: ` +
-          `${existing.status || existing.workflowStep}`,
+          `${existing.status}`,
       );
     }
     if (context.replaceIntentIdentity) {

@@ -1,3 +1,4 @@
+import {readUpperStateField} from '../utils/state-field-read.js';
 /**
  * Control snapshot building for the admin WebSocket API.
  *
@@ -248,12 +249,11 @@ function hasDurablePublishedMembershipObservation(
   ) {
     return true;
   }
-  const publicationStatus = String(
-    publicationDiagnostics.status ||
-      publicationDiagnostics.publicationStatus ||
-      publicationDiagnostics.publicationObservation?.status ||
-      ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
-  ).toUpperCase();
+  // The publication diagnostics owner (resolvePublicationConvergence-
+  // Diagnostics) sets publicationStatus whenever a publication is observed;
+  // diagnostics with none are STATE_ABSENT, never PUBLISHED.
+  const publicationStatus =
+    readUpperStateField(publicationDiagnostics?.publicationStatus);
   return publicationStatus === ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED;
 }
 function selectDurablePublishedMembershipObservation(
@@ -277,12 +277,10 @@ function buildControlSnapshotPublicationOwnerTruthEvidence(
       prioritySpreadSatisfied: false,
     };
   }
-  const publicationStatus = String(
-    publicationConvergence.publicationStatus ||
-      publicationConvergence.status ||
-      publicationConvergence.publicationObservation?.status ||
-      ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
-  ).toUpperCase();
+  // The convergence owners set publicationStatus whenever a publication is
+  // observed; none is STATE_ABSENT, never PUBLISHED.
+  const publicationStatus =
+    readUpperStateField(publicationConvergence.publicationStatus);
   const priorityPartitionSummary =
     publicationConvergence.priorityPartitionSummary &&
     typeof publicationConvergence.priorityPartitionSummary === 'object' ?

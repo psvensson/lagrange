@@ -11,6 +11,8 @@ const LOCAL_STR_DESC = 'desc';
 const LOCAL_STR_VIEW_SHOW = 'view:show';
 const LOCAL_STR_VIEW_HIDE = 'view:hide';
 const LOCAL_STR_VIEW_REFRESH = 'view:refresh';
+const LOCAL_STR_UNKNOWN = 'unknown';
+const LOCAL_STR_N_A = 'N/A';
 
 /**
  * BaseView - Base class for all CLI views with common functionality
@@ -39,6 +41,25 @@ export const STATUS_COLORS = {
   error: LOCAL_STR_RED,
   changed: LOCAL_STR_CYAN,
 };
+
+/**
+ * The display states a view shows for a state field a record does not carry:
+ * the one owner of "unknown" and "N/A" as displayed state names.
+ */
+export const DISPLAY_STATE = Object.freeze({
+  UNKNOWN: LOCAL_STR_UNKNOWN,
+  NOT_APPLICABLE: LOCAL_STR_N_A,
+});
+
+/**
+ * Display a record's state field, naming an absent one explicitly.
+ * @param {*} value - The state field as the record carries it.
+ * @param {string} [absentState] - The DISPLAY_STATE shown when it is absent.
+ * @return {string}
+ */
+export function displayState(value, absentState = DISPLAY_STATE.UNKNOWN) {
+  return typeof value === 'string' && value.length > 0 ? value : absentState;
+}
 
 /**
  * BaseView class providing common view functionality

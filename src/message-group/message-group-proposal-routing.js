@@ -97,7 +97,7 @@ function isRoutingMiss(service, answer) {
  */
 function proposalRefusalError(service, answer) {
   const error = new Error(`${MESSAGE_GROUP_CDC_ERROR_MSG.PROPOSE_REFUSED}: ` +
-    `${answer?.reason || answer?.phase || answer?.outcome}`);
+    `${answer?.outcome} (reason ${answer?.reason}, phase ${answer?.phase})`);
   error.consensus = answer ?? null;
   error.reason = answer?.reason ?? null;
   if (Number.isFinite(answer?.retryAfterMs) && answer.retryAfterMs > 0) {

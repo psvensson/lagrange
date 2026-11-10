@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../../utils/state-field-read.js';
 import {
   COLUMN,
   TABLES,
@@ -116,7 +117,7 @@ const bootstrapTopologySnapshotOwnerLeaderIdentityMethods = {
     }
 
     const leaderServices = services.filter((service) =>
-      String(service?.raft_role || '').toLowerCase() ===
+      readLowerStateField(service?.raft_role) ===
         String(RAFT_ROLE.LEADER).toLowerCase(),
     );
     if (leaderServices.length === 1) {

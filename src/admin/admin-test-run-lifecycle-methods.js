@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Live-run lifecycle methods for AdminTestRunService.
  */
@@ -328,7 +329,9 @@ const adminTestRunLifecycleMethods = Object.freeze({
    */
   buildProgressPayload(input) {
     return {
-      phase: input?.phase || RUN_PROGRESS_PHASE.STARTING,
+      // Every caller reports a phase (startRun STARTING, updates merged over
+      // the previous progress, mergeRunRecord).
+      phase: input.phase,
       message: input?.message || EMPTY_STRING,
       percent: Math.max(
         0,
@@ -348,7 +351,8 @@ const adminTestRunLifecycleMethods = Object.freeze({
   updateRunProgress(run, progressUpdate) {
     const previous = run.progress || {};
     const next = this.buildProgressPayload({
-      phase: progressUpdate?.phase || previous.phase,
+      // An update without a phase keeps the run's current phase.
+      phase: readStateField(progressUpdate?.phase, previous.phase),
       message: progressUpdate?.message || previous.message,
       percent: progressUpdate?.percent ?? previous.percent ?? 0,
     });

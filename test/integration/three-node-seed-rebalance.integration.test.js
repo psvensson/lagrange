@@ -244,7 +244,6 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
         wsPort: seedWsPort,
         config: {
           ...TEST_CONFIG.bootstrap,
-          leadershipWaitTimeoutMs: 2000,
         },
       });
 

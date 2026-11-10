@@ -95,6 +95,13 @@ test('pgwire bootstrap integration', async (t) => {
         serviceLifecycleManager: {isRunning: () => true},
         systemTableCache: {get: () => ({})},
         heartbeatService: {isRunning: () => true},
+        controlPlaneSystemTableGateway: {
+          readAuthoritativeRows: async () => ({
+            success: true,
+            rows: [],
+            rowSetComplete: true,
+          }),
+        },
       });
       const result = gate.checkControlPlaneReady();
       t.equal(result.ready, true);

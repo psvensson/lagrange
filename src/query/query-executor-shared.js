@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 /**
  * Query Executor - Executes queries across partitions in parallel.
  * Implements parallel query execution and result aggregation.
@@ -168,6 +169,14 @@ const QUERY_EXECUTOR_ROUTING_OPTION_FIELD = Object.freeze({
   FOR_READ: 'forRead',
   READ_AUTHORITY: 'readAuthority',
 });
+// A state field in the witness fingerprint: the first present spelling, or
+// the empty text that names an absent state in the fingerprint.
+// The fingerprint's text for a state: the state, or the fingerprint's own
+// marker for a service that states none.
+function signatureStateText(state) {
+  return state === STATE_ABSENT ? QUERY_EXECUTOR_LITERAL.STRING_VALUE : state;
+}
+
 function buildPartitionServiceWitnessFingerprint(service) {
   if (!service || typeof service !== QUERY_EXECUTOR_LITERAL.STRING_OBJECT) {
     return null;
@@ -195,12 +204,8 @@ function buildPartitionServiceWitnessFingerprint(service) {
     String(
       service.node_id || service.nodeId || QUERY_EXECUTOR_LITERAL.STRING_VALUE,
     ),
-    String(
-      service.raft_role ||
-        service.raftRole ||
-        QUERY_EXECUTOR_LITERAL.STRING_VALUE,
-    ),
-    String(service.status || QUERY_EXECUTOR_LITERAL.STRING_VALUE),
+    signatureStateText(readStateField(service.raft_role, service.raftRole)),
+    signatureStateText(readStateField(service.status)),
     Number.isFinite(updatedAt) ?
       String(Math.floor(updatedAt)) :
       QUERY_EXECUTOR_LITERAL.STRING_VALUE,

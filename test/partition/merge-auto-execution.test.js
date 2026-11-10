@@ -16,6 +16,7 @@ import {
   PARTITION_TRANSITION_STATE,
   SPLIT_MERGE_REASON,
 } from '../../src/partition/partition-constants.js';
+import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -56,6 +57,13 @@ function buildManager(options = {}) {
     ]),
     getPartitionMetrics: options.getPartitionMetrics ||
       (() => ({sizeBytes: 64, queriesPerMinute: 0})),
+    tablePolicyService: options.tablePolicyService ?? {
+      getPolicyForPartition: async () => ({
+        ...DEFAULT_TABLE_POLICY,
+        targetReplicaCount: 3,
+        minReplicaCount: 2,
+      }),
+    },
     executeMergeCandidate: Object.hasOwn(options, 'executeMergeCandidate') ?
       options.executeMergeCandidate :
       (async (candidate) => {

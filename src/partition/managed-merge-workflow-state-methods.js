@@ -1,3 +1,4 @@
+import {readParticipantCurrentStatus} from '../workflow/workflow-constants.js';
 import {randomUUID} from 'node:crypto';
 
 import {
@@ -384,7 +385,7 @@ class ManagedMergeWorkflowStateMethods {
       const participant = workflow.participants.get(
         buildMergeSourceParticipantKey(partitionId),
       );
-      return statusSet.has(String(participant?.status || ''));
+      return statusSet.has(readParticipantCurrentStatus(participant));
     });
   }
 

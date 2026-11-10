@@ -30,7 +30,7 @@ documentClass: generated
 - [admin-control-snapshot-leadership-summary.js](admin-control-snapshot-leadership-summary.js) - Control snapshot building for the admin WebSocket API. (importers: one)
 - [admin-control-snapshot-local-build-base.js](admin-control-snapshot-local-build-base.js) - Control snapshot building for the admin WebSocket API. (importers: one)
 - [admin-control-snapshot-local-diagnostics-methods.js](admin-control-snapshot-local-diagnostics-methods.js) - Build node-local CDC diagnostics payload. (importers: one)
-- [admin-control-snapshot-membership-publication-reconcile.js](admin-control-snapshot-membership-publication-reconcile.js) - Control snapshot building for the admin WebSocket API. (importers: one)
+- [admin-control-snapshot-membership-publication-reconcile.js](admin-control-snapshot-membership-publication-reconcile.js) - Control snapshot building for the admin WebSocket API. (importers: few)
 - [admin-control-snapshot-node-view-projection.js](admin-control-snapshot-node-view-projection.js) - Control snapshot building for the admin WebSocket API. (importers: few)
 - [admin-control-snapshot-publication-convergence-diagnostics.js](admin-control-snapshot-publication-convergence-diagnostics.js) - No leading comment; first export: createAdminControlSnapshotPublicationConvergenceDiagnosticsMethods. (importers: one)
 - [admin-control-snapshot-publication-handoff.js](admin-control-snapshot-publication-handoff.js) - Publication handoff refresh and deferral helpers for admin control snapshots. (importers: few)

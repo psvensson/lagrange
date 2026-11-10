@@ -1,0 +1,64 @@
+{
+  "schema": "solve-quest/2",
+  "id": "management-action-authority",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Consume management authority from the actual owner. stale metadata, changed configuration, wrong incarnation, expired or missing evidence and a minority cannot grant an action beyond the owner contract's stated bounds. The supported action succeeds from valid real evidence. Exercise actual producer/transport/consumer composition and the required native consensus path; a hand-set role and stubbed term do not certify quorum.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/management-action-authority/evidence/receipt.json",
+      "requiredReceipts": [
+        "operation-authority-contract",
+        "invalid-authority-refused",
+        "mutation-time-identity-and-freshness",
+        "real-native-producer-consumer-action",
+        "refusal-recovery-and-cleanup",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "owner-and-sequence",
+      "statement": "Owner: existing consensus/partition authority and its management consumers. Difficulty: high. Dependency: P0 and the Q1 boundary discipline; Q2 governs landing. Admission dependencies: Q1 (contract-first-authoring-and-producer-fidelity). P0 reconciliation is recorded in the epic. Dependencies are coordination instructions, not an implemented Solver scheduler; diagnosis need not wait for every tooling change."
+    },
+    {
+      "id": "owned-work-1",
+      "statement": "Replace management permission derived from desired RF, SERVICES rows and local role status with the operation-specific contract supplied by the existing authoritative owner. Keep desired placement and diagnostic topology health separate from permission. Preserve configuration identity, incarnation and the stated freshness bound through every hop, and revalidate at the point required for the action."
+    },
+    {
+      "id": "owned-work-2",
+      "statement": "Read the actual public consensus boundary before specifying new fields. If an essential capability is absent, repair that boundary in the same bounded design rather than exposing runtime internals or fabricating evidence. Preserve the documented bounded-read limitations; current configuration alone is not a live-quorum witness."
+    },
+    {
+      "id": "existing-owners-and-evidence",
+      "statement": "Begin with src/bootstrap/owners/partition-quorum-authority.js, the real PartitionService.getStatus and consensus operation port. Research operation-ledger-quorum-authoritative-release and membership/admission history. Desired RF and service rows never become a second permission algorithm."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity",
+    "admission-gating",
+    "formation-circularity"
+  ]
+}

@@ -5,7 +5,11 @@
  * Drill-down opens the replicas view filtered to the selected logical service.
  */
 
-import {BaseView, ROW_STATUS} from '../core/base-view.js';
+import {
+  BaseView,
+  ROW_STATUS,
+  displayState,
+} from '../core/base-view.js';
 
 const LOCAL_STR_SERVICES = 'services';
 const LOCAL_STR_SERVICE_NAME = 'service_name';
@@ -86,7 +90,7 @@ class LogicalServicesView extends BaseView {
       String(logicalService.replica_count_observed ?? 0),
       String(logicalService.healthy_replica_count ?? 0),
       logicalService.nodes_summary || LOCAL_STR_N_A,
-      logicalService.status || LOGICAL_SERVICE_STATE.UNKNOWN,
+      displayState(logicalService.status, LOGICAL_SERVICE_STATE.UNKNOWN),
     ];
   }
 
@@ -103,7 +107,7 @@ class LogicalServicesView extends BaseView {
    * @return {string}
    */
   getRowStatus(logicalService) {
-    const status = logicalService.status || LOGICAL_SERVICE_STATE.UNKNOWN;
+    const status = displayState(logicalService.status, LOGICAL_SERVICE_STATE.UNKNOWN);
     if (status === LOGICAL_SERVICE_STATE.DEGRADED) {
       return ROW_STATUS.ERROR;
     }
@@ -201,7 +205,10 @@ class LogicalServicesView extends BaseView {
           {label: 'Healthy Replicas', value: String(logicalService.healthy_replica_count ?? 0)},
           {label: 'Nodes', value: logicalService.nodes_summary || 'N/A'},
           {label: 'Node Count', value: String(logicalService.node_count ?? nodes.length)},
-          {label: 'Status', value: logicalService.status || LOGICAL_SERVICE_STATE.UNKNOWN},
+          {
+            label: 'Status',
+            value: displayState(logicalService.status, LOGICAL_SERVICE_STATE.UNKNOWN),
+          },
         ],
       },
     ];

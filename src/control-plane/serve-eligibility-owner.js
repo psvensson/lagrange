@@ -12,6 +12,7 @@
 // a role witness. A positive answer never outlives the node's committed ready
 // lease (CONTROL_PLANE_READY_LEASE), which bounds how long a deposed leader's
 // answer can grant.
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {TABLES} from '../constants/index.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {MEMBERSHIP_PUBLICATION_STATUS} from './membership-publication-row-contract.js';
@@ -528,8 +529,11 @@ class ServeEligibilityOwner {
   notePublicationSourceChange(row) {
     const pub = normalizeControlPlanePublicationRow(row);
     if (!isMembershipPublication(pub)) return;
-    const isPublished = !pub.status ||
-      pub.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
+    // A membership publication row without a stated status is counted as
+    // published (the PR's decision, now explicit on STATE_ABSENT).
+    const publicationStatus = readStateField(pub.status);
+    const isPublished = publicationStatus === STATE_ABSENT ||
+      publicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
     if (isPublished) this.recordObservedPublicationEpoch(pub.publicationEpoch);
     if (shouldSupersedeOnPublicationChange(this.record, pub, isPublished)) {
       this.markSuperseded();

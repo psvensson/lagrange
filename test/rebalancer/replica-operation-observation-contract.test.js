@@ -187,6 +187,14 @@ test(
         state: TEST_OBSERVED_STATE,
         source: TEST_AUTHORITATIVE_SOURCE,
         lifecycleStatus: ReplicaStatus.ACTIVE,
+        observedTargetIdentity: {
+          replicaId: TEST_REPLICA_ID,
+          serviceId: TEST_REPLICA_ID,
+          partitionId: TEST_PARTITION_ID,
+          nodeId: TEST_NODE_ID,
+          serviceType: TEST_PARTITION_SERVICE_TYPE,
+          status: ReplicaStatus.SYNCING,
+        },
         lifecyclePrecondition: {},
         previousState: null,
       },
@@ -229,6 +237,14 @@ test(
         state: TEST_OBSERVED_STATE,
         source: TEST_AUTHORITATIVE_SOURCE,
         lifecycleStatus: ReplicaStatus.SYNCING,
+        observedTargetIdentity: {
+          replicaId: TEST_REPLICA_ID,
+          serviceId: TEST_REPLICA_ID,
+          partitionId: TEST_PARTITION_ID,
+          nodeId: TEST_NODE_ID,
+          serviceType: TEST_PARTITION_SERVICE_TYPE,
+          status: ReplicaStatus.SYNCING,
+        },
         lifecyclePrecondition: {},
         previousState: null,
       },
@@ -295,6 +311,14 @@ test(
         state: TEST_OBSERVED_STATE,
         source: TEST_AUTHORITATIVE_SOURCE,
         lifecycleStatus: ReplicaStatus.ACTIVE,
+        observedTargetIdentity: {
+          replicaId: TEST_PARTITION_NODE_FALLBACK_REPLICA_ID,
+          serviceId: TEST_PARTITION_NODE_FALLBACK_REPLICA_ID,
+          partitionId: TEST_PARTITION_ID,
+          nodeId: TEST_NODE_ID,
+          serviceType: TEST_PARTITION_SERVICE_TYPE,
+          status: ReplicaStatus.ACTIVE,
+        },
         lifecyclePrecondition: {},
         previousState: null,
       },
@@ -355,5 +379,117 @@ test(
       'exact-target cache status should stay absent when fallback is disabled',
     );
     t.end();
+  },
+);
+
+test(
+  'ReplicaOperationRepository exact-target observation rejects mismatched replica, ' +
+    'null or mismatched partition, and wrong node even when state_entered_at is null',
+  async (t) => {
+    const baseRow = {
+      service_id: TEST_REPLICA_ID,
+      replica_id: TEST_REPLICA_ID,
+      partition_id: TEST_PARTITION_ID,
+      node_id: TEST_NODE_ID,
+      service_type: TEST_PARTITION_SERVICE_TYPE,
+      status: ReplicaStatus.ACTIVE,
+      raft_role: RAFT_ROLE.FOLLOWER,
+      address: TEST_REPLICA_ADDRESS,
+      created_at: 1000,
+      state_entered_at: null,
+    };
+    const invalidRows = [
+      {
+        label: 'different replica_id with null state_entered_at',
+        row: {
+          ...baseRow,
+          service_id: 'other-replica-r99',
+          replica_id: 'other-replica-r99',
+        },
+      },
+      {
+        label: 'conflicting replica_id vs service_id',
+        row: {...baseRow, replica_id: 'other-replica-r99'},
+      },
+      {
+        label: 'null partition_id when partitionId is required',
+        row: {...baseRow, partition_id: null},
+      },
+      {
+        label: 'mismatched partition_id',
+        row: {...baseRow, partition_id: 'other-partition-99'},
+      },
+      {
+        label: 'mismatched node_id',
+        row: {...baseRow, node_id: 'other-node-99'},
+      },
+    ];
+
+    for (const {label, row} of invalidRows) {
+      const repository = createRepository({
+        systemTableCache: {
+          get: () => row,
+          getAll: () => [row],
+        },
+        controlPlaneSystemTableGateway: {
+          async readAuthoritativeRows() {
+            return {success: true, rows: [row]};
+          },
+        },
+      });
+      const observation = await repository.getActualReplicaObservation(
+        TEST_REPLICA_ID,
+        TEST_PARTITION_ID,
+        TEST_NODE_ID,
+        {allowPartitionNodeFallback: false, allowCacheFallback: false},
+      );
+      t.same(
+        observation,
+        {state: 'unavailable', source: 'unavailable'},
+        `authoritative exact-target observation rejects ${label}`,
+      );
+      t.equal(
+        repository.getObservedReplicaStatusFromCache(
+          TEST_REPLICA_ID,
+          TEST_PARTITION_ID,
+          TEST_NODE_ID,
+          {allowPartitionNodeFallback: false},
+        ),
+        null,
+        `cache exact-target observation rejects ${label}`,
+      );
+    }
+
+    const exactNullStateEnteredRepository = createRepository({
+      controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows() {
+          return {success: true, rows: [baseRow]};
+        },
+      },
+    });
+    const exactObservation =
+      await exactNullStateEnteredRepository.getActualReplicaObservation(
+        TEST_REPLICA_ID,
+        TEST_PARTITION_ID,
+        TEST_NODE_ID,
+        {allowPartitionNodeFallback: false, allowCacheFallback: false},
+      );
+    t.same(
+      exactObservation.observedTargetIdentity,
+      {
+        replicaId: TEST_REPLICA_ID,
+        serviceId: TEST_REPLICA_ID,
+        partitionId: TEST_PARTITION_ID,
+        nodeId: TEST_NODE_ID,
+        serviceType: TEST_PARTITION_SERVICE_TYPE,
+        status: ReplicaStatus.ACTIVE,
+      },
+      'observedTargetIdentity stays populated when state_entered_at is null',
+    );
+    t.same(
+      exactObservation.lifecyclePrecondition,
+      {},
+      'lifecyclePrecondition stays empty when state_entered_at is null',
+    );
   },
 );

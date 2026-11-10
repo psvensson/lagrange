@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {readWiredCollaborator} from './control-plane-readiness-collaborators.js';
 import {
@@ -169,7 +170,7 @@ function resolveProvisioningTrustGrace(service, context) {
 
 function isActiveTrustRow(row, nodeId) {
   return row?.[COLUMN.NODE_ID] === nodeId &&
-    String(row?.status || '').toLowerCase() === TRUST_ROW_STATUS_ACTIVE;
+    readLowerStateField(row?.status) === TRUST_ROW_STATUS_ACTIVE;
 }
 
 function buildProvisioningNodeTrustState(service, nodeId, context, options) {

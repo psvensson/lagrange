@@ -49,6 +49,74 @@ const VALUE_OR_PROMISE_SELECTORS = Object.freeze([
     '[right.name="Promise"]',
 ].map((selector) => Object.freeze({selector, message: VALUE_OR_PROMISE_MESSAGE})));
 
+// navigability-rule:state_read_defaults (epic code-navigability-and-mistake-
+// resistance, row state_read_defaults; R07). A read of a state field
+// (status, role, raft_role/raftRole, workflow_step/workflowStep, phase, step,
+// plainly, by string or template key, or by a constants member named STATUS,
+// ROLE, RAFT_ROLE, WORKFLOW_STEP, PHASE or STEP, optionally chained) that has
+// a term after it in a flattened `||` or `??` chain makes a value appear when
+// the fact is absent; so does a conditional that answers a state read on a
+// test reading a state field (`typeof r.status === 'string' ? r.status : d`),
+// the reader's decision written inline. The selectors below report exactly
+// the sites scripts/checks/code-navigability-detectors.js counts for that
+// row: a term followed by another (`T || d`), the right term of a chain that
+// continues (`a || T || d`), the right term of an explicitly parenthesised
+// right-nested chain that continues (`(x || (a || T)) || d`, nested up to
+// STATE_READ_DEFAULT_RIGHT_NESTING levels; the detector has no bound, and a
+// deeper nesting is outside the promoted rule), and each state-read branch
+// of such a conditional. test/scripts/state-read-named-defaults.test.js pins
+// report-for-site parity on every shape the detector's fixture counts.
+const STATE_FIELD_PATTERN =
+  '/^(status|role|raft_role|raftRole|workflow_step|workflowStep|phase|step)$/';
+const STATE_CONSTANT_PATTERN =
+  '/^(STATUS|ROLE|RAFT_ROLE|WORKFLOW_STEP|PHASE|STEP)$/';
+const STATE_READ = ':matches(' + [
+  `MemberExpression[computed=false][property.name=${STATE_FIELD_PATTERN}]`,
+  'MemberExpression[computed=true][property.type="Literal"]' +
+    `[property.value=${STATE_FIELD_PATTERN}]`,
+  'MemberExpression[computed=true][property.type="TemplateLiteral"]' +
+    `[property.expressions.length=0][property.quasis.0.value.cooked=${STATE_FIELD_PATTERN}]`,
+  'MemberExpression[computed=true][property.type="MemberExpression"]' +
+    `[property.computed=false][property.property.name=${STATE_CONSTANT_PATTERN}]`,
+].join(', ') + ')';
+const STATE_READ_DEFAULT_MESSAGE =
+  'navigability-rule:state_read_defaults: a state read carries a || or ?? ' +
+  'default, or a conditional decides on it inline (R07). Read the field its ' +
+  'schema column or decoder guarantees, or ' +
+  'read an optional one with readStateField (src/utils/state-field-read.js) ' +
+  'and decide on STATE_ABSENT explicitly.';
+const FALLBACK_OPERATORS = ['||', '??'];
+// How many explicitly parenthesised right-nested chains may sit between a
+// state read and the `.left` of the chain that continues past it.
+const STATE_READ_DEFAULT_RIGHT_NESTING = 6;
+// The term positions, as the field path from the term up to the chain node
+// that proves a term follows it; the operator is the same at every level:
+// the term is the left of a chain, or the right of a chain that is the right
+// of zero or more chains, the last of which is the left of a chain.
+function stateReadDefaultPositions(op) {
+  const chain = `LogicalExpression[operator="${op}"]`;
+  const positions = [`${chain} > TERM.left`];
+  for (let nesting = 0; nesting <= STATE_READ_DEFAULT_RIGHT_NESTING; nesting += 1) {
+    const rights = Array.from({length: nesting},
+      () => `LogicalExpression.right[operator="${op}"]`);
+    positions.push([chain, `LogicalExpression.left[operator="${op}"]`, ...rights,
+      'TERM.right'].join(' > '));
+  }
+  return positions;
+}
+// A conditional whose test is, or contains, a state read.
+const STATE_TEST_CONDITIONAL =
+  `ConditionalExpression:has(> .test:matches(${STATE_READ}, :has(${STATE_READ})))`;
+const STATE_READ_TERNARY_POSITIONS = ['consequent', 'alternate'].map((branch) =>
+  `${STATE_TEST_CONDITIONAL} > TERM.${branch}`);
+const STATE_READ_DEFAULT_RESTRICTIONS = [
+  ...FALLBACK_OPERATORS.flatMap(stateReadDefaultPositions),
+  ...STATE_READ_TERNARY_POSITIONS,
+].flatMap((position) => [
+  position.replace('TERM', STATE_READ),
+  position.replace('TERM', 'ChainExpression') + ` > ${STATE_READ}`,
+]).map((selector) => ({selector, message: STATE_READ_DEFAULT_MESSAGE}));
+
 export default [
   js.configs.recommended,
   {
@@ -139,9 +207,15 @@ export default [
     },
   },
   {
+    // One no-restricted-syntax entry list for src: flat config replaces a
+    // rule's setting per matching object, so every promoted navigability
+    // pattern joins this list rather than a second object.
     files: ['src/**/*.js'],
     rules: {
-      'no-restricted-syntax': ['error', ...VALUE_OR_PROMISE_SELECTORS],
+      'no-restricted-syntax': ['error',
+        ...VALUE_OR_PROMISE_SELECTORS,
+        ...STATE_READ_DEFAULT_RESTRICTIONS,
+      ],
     },
   },
   {

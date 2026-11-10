@@ -1,3 +1,5 @@
+import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {readStateField} from '../utils/state-field-read.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
@@ -179,7 +181,7 @@ function isDispatchRetryableWorkflowStep(owner, operation) {
   if (!operation) {
     return false;
   }
-  const workflowStep = operation.workflowStep || operation.workflow_step;
+  const workflowStep = readOperationRecordWorkflowStep(operation);
   if (owner.repository.isReplaceRemoveDispatchPhase(operation)) {
     return REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS.has(workflowStep);
   }
@@ -328,7 +330,7 @@ function logDeferredRetryRearmDropped(owner, operation, retryKind) {
     {
       operationId: operation?.operationId || null,
       partitionId: operation?.partitionId || null,
-      workflowStep: operation?.workflowStep || null,
+      workflowStep: readStateField(operation?.workflowStep),
       retryKind,
     },
   );
@@ -343,7 +345,7 @@ function reportDeferredRetryRearmBudgetSpent(owner, operation, retryKind) {
     startedAtMs: resolveOperationStartedAtMs(operation),
     lastObserved: {
       retryKind,
-      workflowStep: operation?.workflowStep || null,
+      workflowStep: readStateField(operation?.workflowStep),
       type: operation?.type || null,
       initialized: owner.isInitialized === true,
     },
@@ -472,7 +474,7 @@ function deferDispatchRetry(owner, operation, errorLike) {
             boundary: DISPATCH_RETRY_BOUNDARY,
             cause:
               OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_OPERATION_DISPATCH,
-            workflowStep: currentOperation.workflowStep || null,
+            workflowStep: currentOperation.workflowStep,
             partitionId: currentOperation.partitionId || null,
             runInlineWhenOwnerLaneHeld: true,
           },
@@ -527,7 +529,7 @@ function handleDeferredDispatchRetryFailure(owner, operation, error) {
     owner.deferTransitionRetry(operation?.operationId || null, error, {
       boundary: OPERATION_WORKFLOW_OWNER_LITERAL.DISPATCH_RETRY,
       partitionId: operation?.partitionId || null,
-      workflowStep: operation?.workflowStep || null,
+      workflowStep: readStateField(operation?.workflowStep),
       updatedAt: operation?.updatedAt,
       createdAt: operation?.createdAt,
     })
@@ -539,7 +541,7 @@ function handleDeferredDispatchRetryFailure(owner, operation, error) {
     {
       operationId: operation?.operationId || null,
       partitionId: operation?.partitionId || null,
-      workflowStep: operation?.workflowStep || null,
+      workflowStep: readStateField(operation?.workflowStep),
       error: error?.message || error?.error || String(error),
     },
   );
@@ -586,7 +588,9 @@ async function runDeferredSafetyRetryInLane(
     retryOperation,
     {
       boundary,
-      workflowStep: retryOperation.workflowStep || null,
+      // retryOperation is the repository's decoded operation or, when that
+      // one is no longer safety-retryable, the caller's in-memory operation.
+      workflowStep: readStateField(retryOperation.workflowStep),
       partitionId: retryOperation.partitionId || null,
       runInlineWhenOwnerLaneHeld: true,
     },
@@ -620,7 +624,7 @@ function handleDeferredSafetyRetryFailure(owner, operation, retryError, context)
     owner.deferTransitionRetry(operationId, retryError, {
       boundary: context.boundary,
       partitionId: operation?.partitionId || null,
-      workflowStep: operation?.workflowStep || null,
+      workflowStep: readStateField(operation?.workflowStep),
       updatedAt: operation?.updatedAt,
       createdAt: operation?.createdAt,
       operationSnapshot: operation,
@@ -633,7 +637,7 @@ function handleDeferredSafetyRetryFailure(owner, operation, retryError, context)
     {
       operationId,
       partitionId: operation?.partitionId || null,
-      workflowStep: operation?.workflowStep || null,
+      workflowStep: readStateField(operation?.workflowStep),
       deferReason: context.deferReason ?? null,
       error:
         retryError?.message || retryError?.error || String(retryError),

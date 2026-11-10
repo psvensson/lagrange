@@ -1,0 +1,63 @@
+{
+  "schema": "solve-quest/2",
+  "id": "tidb-canonical-semantic-case-completion",
+  "epic": "developer-journey-and-measured-comparisons",
+  "statement": "Every required canonical TiDB Scenario A proof case is implemented and actually executed against the product through the existing native client and evidence owner. Missing, skipped or ineligible cases remain not-executed/incomplete with no proof credit until valid execution evidence exists; all proof IDs bind to the actual deployment and required durability/failure semantics.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/tidb-canonical-semantic-case-completion/evidence/receipt.json",
+      "requiredReceipts": [
+        "canonical-case-inventory",
+        "all-required-cases-executed",
+        "native-product-results-and-independent-effects",
+        "durability-restart-evidence",
+        "missing-skipped-cases-not-credited",
+        "deployment-bound-claim-admission",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "responsible-interaction",
+      "statement": "C2; priority comparison blocker; Existing canonical Scenario A contracts, native TiDB client, semantic-gate adapter and evidence admission. Apply P0 composition reconciliation and Q1 contract discipline immediately; Q2 governs review. Planning only, not an assigned runtime writer or queued run."
+    },
+    {
+      "id": "preserve-truthful-incompleteness",
+      "statement": "The current runner executes only visibility, payment, failure-atomicity and durability; other canonical cases explicitly remain not-executed. Derive the required set from the existing OLTP_SCENARIO_A_PROOF_CASES contract. Complete missing native-client executors and evidence rather than award unexecuted proof IDs or reduce the contract."
+    },
+    {
+      "id": "composition",
+      "statement": "Exercise the real TiDB adapter, canonical semantic cases and claim-admission owner. Keep skipped/ineligible durability unproved and retain independent response/effect checks. A mocked stage positive or Lagrange/PostgreSQL success is not TiDB acceptance."
+    },
+    {
+      "id": "sequence",
+      "statement": "This is P4 work under developer-journey-and-measured-comparisons. Coordinate C1/C2 shared gate and receipt code under one writer; independent investigation may overlap. Final required comparisons retain original physical topology, source, workload, completeness and claim-admission requirements; missing cases keep the existing comparison acceptance open."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

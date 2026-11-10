@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {ReplicaStatus} from './replica-status.js';
 
 const FAILED_CREATE_CLEANUP_TOKEN_PREFIX = 'failed-create:';
@@ -6,10 +7,6 @@ const NEVER_OPENED_FAILED_CREATE_SOURCES = Object.freeze(new Set([
   ReplicaStatus.PENDING,
   ReplicaStatus.CREATING,
 ]));
-
-function normalizeLowercaseStatus(value) {
-  return typeof value === 'string' ? value.trim().toLowerCase() : null;
-}
 
 function buildFailedCreateCleanupToken(operationId) {
   return typeof operationId === 'string' && operationId.length > 0 ?
@@ -40,15 +37,17 @@ function isUnclaimedPreRuntimeFailedCreateRow(row) {
   if (!row || typeof row !== 'object') {
     return false;
   }
-  if (normalizeLowercaseStatus(row.status) !== ReplicaStatus.FAILED) {
+  if (readLowerStateField(row.status) !== ReplicaStatus.FAILED) {
     return false;
   }
   if (row.cleanup_token !== null && row.cleanup_token !== undefined) {
     return false;
   }
+  // The raw row's previous_state, else a decoded record's previousState
+  // (spelling pair routed to system-table-row-decoders); STATE_ABSENT is no
+  // never-opened source.
   const previousState =
-    normalizeLowercaseStatus(row.previous_state) ||
-    normalizeLowercaseStatus(row.previousState);
+    readLowerStateField(row.previous_state, row.previousState);
   return NEVER_OPENED_FAILED_CREATE_SOURCES.has(previousState);
 }
 

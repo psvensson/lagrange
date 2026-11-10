@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
   OPERATION_OWNER_RESUME_ACTION,
@@ -12,7 +13,6 @@ const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REBALANCE_COORDINATOR_LOG_MSG,
   TRANSITION_RETRY_DELAY_MS,
-  WORKFLOW_STEP,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -52,11 +52,16 @@ function shouldRetainTransitionRetryWhileUninitialized(
     operationId,
     retryContext,
   );
-  const workflowStep =
-    retryContext.workflowStep || operation?.workflowStep || WORKFLOW_STEP.PENDING;
+  if (!operation) {
+    return false;
+  }
+  // The deferral's recorded step, else the operation's own (NOT NULL) step.
+  const recordedStep = readStateField(retryContext.workflowStep);
+  const workflowStep = recordedStep === STATE_ABSENT ?
+    operation.workflowStep :
+    recordedStep;
   const now = Date.now();
   if (
-    !operation ||
     owner.isDispatchRetryableWorkflowStep(operation) !== true ||
     owner.hasActiveTransitionRetryGrace(operationId, now) !== true ||
     owner.shouldUseOperationBudgetTransitionRetryGrace(
@@ -130,7 +135,7 @@ async function resumeDeferredTransitionOperation(owner, operationId) {
       operation,
       {
         boundary: OPERATION_WORKFLOW_OWNER_LITERAL.TRANSITION_RETRY_RESUME,
-        workflowStep: operation.workflowStep || null,
+        workflowStep: operation.workflowStep,
         partitionId: operation.partitionId || null,
         runInlineWhenOwnerLaneHeld: true,
       },
@@ -194,7 +199,7 @@ function deferTransitionRetry(
       operationId,
       boundary: retryContext.boundary || null,
       partitionId: retryContext.partitionId || null,
-      workflowStep: retryContext.workflowStep || null,
+      workflowStep: retryContext.workflowStep,
       delayMs,
       errorMessage,
     },
@@ -246,7 +251,7 @@ function handleDeferredTransitionRetryFailure(
       operationId,
       boundary: retryContext.boundary || null,
       partitionId: retryContext.partitionId || null,
-      workflowStep: retryContext.workflowStep || null,
+      workflowStep: retryContext.workflowStep,
       error: error?.message || error?.error || String(error),
     },
   );

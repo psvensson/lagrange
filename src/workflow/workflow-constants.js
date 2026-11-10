@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Canonical field names for durable workflow step transitions.
  *
@@ -84,6 +85,25 @@ const PARTICIPANT_ACK_FIELD = Object.freeze({
   ATTEMPT: 'attempt',
 });
 
+/**
+ * The current status of a participant no acknowledgement has reached: the
+ * one named absent state (null), shared with the partition owner's canonical
+ * participants.
+ *
+ * @type {null}
+ */
+const PARTICIPANT_STATUS_NOT_YET_ACKNOWLEDGED = null;
+
+/**
+ * Read a participant's current status, naming an absent one explicitly. A
+ * participant the record does not hold has received no acknowledgement.
+ * @param {Object|null} participant - Participant record.
+ * @return {string|null}
+ */
+function readParticipantCurrentStatus(participant) {
+  return readStateField(participant?.status);
+}
+
 const WORKFLOW_ERROR_MSG = Object.freeze({
   WORKFLOW_ID_REQUIRED: 'Workflow ID is required',
   OWNER_KEY_REQUIRED: 'Workflow owner key is required',
@@ -162,5 +182,7 @@ export {
   PROTOTYPE_CONSTRUCTOR_METHOD,
   PARTICIPANT_ACK_FIELD,
   ACK_REJECTION_DIAGNOSTIC_FIELD,
+  PARTICIPANT_STATUS_NOT_YET_ACKNOWLEDGED,
   buildTransitionIdempotencyKey,
+  readParticipantCurrentStatus,
 };

@@ -324,6 +324,9 @@ function trackSiblingSetup(setupClass, resultKey, restorers) {
 function stubControlPlaneSetup(restorers) {
   const original = ControlPlaneSetup.create;
   ControlPlaneSetup.create = async () => ({
+    controlPlaneSystemTableGateway: {
+      readAuthoritativeRows: async () => ({ok: true, rows: []}),
+    },
     heartbeatService: {setNodeStateReporter() {}, start() {}, stop() {}},
     serviceLifecycleCommandOwner: null,
     // Endpoint writes never run here; the runtime handler only needs the

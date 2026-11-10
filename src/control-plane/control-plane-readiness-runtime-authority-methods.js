@@ -1,3 +1,4 @@
+import {readPublicationRecordStatus} from './system-row-normalizers.js';
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 
 const {
@@ -300,7 +301,7 @@ const controlPlaneReadinessRuntimeAuthorityMethods = {
       null,
       publicationStatus:
       membershipPublicationPlanningSnapshot?.publicationStatus ||
-      context.membershipPublication?.status ||
+      readPublicationRecordStatus(context.membershipPublication) ||
       null,
       recoveryEligible,
       repairEligible,

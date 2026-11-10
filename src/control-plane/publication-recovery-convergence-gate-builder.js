@@ -182,7 +182,6 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
     publicationStatus:
       rawPublicationConvergenceGate?.publicationStatus ??
       publicationConvergence?.publicationStatus ??
-      publicationConvergence?.status ??
       priorityRecoveryObservation?.publicationStatus ??
       activeGatePublicationStatus,
     pendingAckNodeIds: resolvePublicationRecoveryPendingAckNodeIds({
@@ -228,7 +227,6 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
   const publicationStatus =
     rawPublicationConvergenceGate?.publicationStatus ??
     publicationConvergence?.publicationStatus ??
-    publicationConvergence?.status ??
     priorityRecoveryObservation?.publicationStatus ??
     activeGatePublicationStatus ??
     null;

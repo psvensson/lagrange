@@ -317,9 +317,6 @@ const QUERY_LOG_MSG = Object.freeze({
   TABLE_PARTITION_PROVISION_START: 'Provisioning initial table partition replica',
   TABLE_PARTITION_PROVISION_SUCCESS: 'Initial table partition provisioning completed',
   TABLE_PARTITION_PROVISION_FAILED: 'Initial table partition provisioning failed',
-  TABLE_PARTITION_TRANSIENT_HOLD_WAIT:
-    'Whole-cluster transient provisioning hold; waiting it out under the ' +
-    'provisioning budget instead of failing the create',
   TABLE_PARTITION_TARGET_NODE_REJECTED:
     'Provisioning target node rejected during operation planning',
   TABLE_PARTITION_PROVISION_INSUFFICIENT_TARGETS:

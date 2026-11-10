@@ -8,7 +8,12 @@
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 8.1, 8.2, 8.3
  */
 
-import {BaseView, ROW_STATUS} from '../core/base-view.js';
+import {
+  BaseView,
+  DISPLAY_STATE,
+  ROW_STATUS,
+  displayState,
+} from '../core/base-view.js';
 
 const LOCAL_STR_PARTITION = 'partition';
 const LOCAL_STR_MESSAGE_GROUP = 'message_group';
@@ -284,7 +289,7 @@ class ReplicasView extends BaseView {
    * @return {string} Formatted status with role and time-in-state
    */
   formatStatus(service) {
-    const status = service.status || 'unknown';
+    const status = displayState(service.status, DISPLAY_STATE.UNKNOWN);
     const role = service.role;
 
     let result = status;
@@ -537,8 +542,8 @@ class ReplicasView extends BaseView {
 
     // Add replica state section - always show for services
     const replicaStateFields = [
-      {label: 'Current State', value: service.status || 'unknown'},
-      {label: 'Role', value: service.role || 'N/A'},
+      {label: 'Current State', value: displayState(service.status, DISPLAY_STATE.UNKNOWN)},
+      {label: 'Role', value: displayState(service.role, DISPLAY_STATE.NOT_APPLICABLE)},
     ];
 
     // Add time-in-state for transitional states

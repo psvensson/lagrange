@@ -406,6 +406,7 @@ test('the quiescent cadence pass drives the cure (red-on-revert)', async (t) => 
     increaseCurrentInterval: () => {},
     isControlPlanePriorityPartition: () => false,
     periodicCheckIntervalMs: 60_000,
+    usesPriorityRebalanceCadence: () => false,
   });
   await stub.advanceCheckCadence(false);
   await stub.advanceCheckCadence(false);
@@ -425,6 +426,7 @@ test('an open actionable gap holds the quiescent cadence flat; a ' +
     },
     isControlPlanePriorityPartition: () => false,
     periodicCheckIntervalMs: 60_000,
+    usesPriorityRebalanceCadence: () => false,
   });
   await openGap.advanceCheckCadence(false);
   t.equal(openGap.currentInterval, 60_000,
@@ -447,6 +449,7 @@ test('an open actionable gap holds the quiescent cadence flat; a ' +
     },
     isControlPlanePriorityPartition: () => false,
     periodicCheckIntervalMs: 60_000,
+    usesPriorityRebalanceCadence: () => false,
   });
   await satisfied.advanceCheckCadence(false);
   t.equal(satisfiedBackoffCalls, 1,

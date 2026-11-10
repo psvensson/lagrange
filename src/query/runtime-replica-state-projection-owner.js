@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {EventEmitter} from 'node:events';
 import {
   getControlPlaneErrorCode,
@@ -44,7 +45,7 @@ function buildProjectionFailureEvent(serviceId, context, error) {
       RUNTIME_REPLICA_STATE_PROJECTION_EVENT.FAILED,
     payload: {
       serviceId,
-      status: context?.stateRow?.status || null,
+      status: readStateField(context?.stateRow?.status),
       causeId: context?.causeId || null,
       retryable,
       retryAfterMs: retryable ?
@@ -99,7 +100,7 @@ class RuntimeReplicaStateProjectionOwner extends EventEmitter {
         retained: false,
         state: RUNTIME_REPLICA_STATE_PROJECTION_STATE.STOPPED,
         serviceId,
-        status: stateRow?.status || null,
+        status: readStateField(stateRow?.status),
       });
     }
     this.reconcileQueue.enqueue(
@@ -111,7 +112,7 @@ class RuntimeReplicaStateProjectionOwner extends EventEmitter {
       retained: true,
       state: RUNTIME_REPLICA_STATE_PROJECTION_STATE.RETAINED,
       serviceId,
-      status: stateRow?.status || null,
+      status: readStateField(stateRow?.status),
       causeId: projectionContext.causeId,
     });
     this.emit(
@@ -135,7 +136,7 @@ class RuntimeReplicaStateProjectionOwner extends EventEmitter {
       }
       this.emit(RUNTIME_REPLICA_STATE_PROJECTION_EVENT.APPLIED, {
         serviceId,
-        status: stateRow.status || null,
+        status: readStateField(stateRow.status),
         causeId: context?.causeId || null,
       });
     } catch (error) {

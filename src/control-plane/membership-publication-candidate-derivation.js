@@ -1,3 +1,4 @@
+import {readUpperStateField} from '../utils/state-field-read.js';
 import {
   buildActiveMembershipSnapshot,
   buildReadinessByNodeId,
@@ -61,6 +62,13 @@ import {
 const MEMBERSHIP_PUBLICATION_STATUS = CONTROL_PLANE_PUBLICATION_STATUS;
 const AUTHORITATIVE_MEMBERSHIP_CHANGED_REASON = 'authoritative_membership_changed';
 
+function resolveNowMs(value) {
+  const candidate = Number(value);
+  return Number.isFinite(candidate) && candidate >= 0 ?
+    Math.trunc(candidate) :
+    Date.now();
+}
+
 function buildPublicationMetadataRefreshRow(options = {}, helperFns = {}) {
   const publicationRow = options.publicationRow;
   if (!publicationRow || typeof publicationRow !== 'object') {
@@ -91,7 +99,7 @@ function buildPublicationMetadataRefreshRow(options = {}, helperFns = {}) {
     priorityPartitionSummary,
     membership_lifecycle_summary: membershipLifecycleSummary,
     membershipLifecycleSummary,
-    updated_at: helperFns.normalizePositiveInteger(options.nowMs, Date.now()),
+    updated_at: resolveNowMs(options.nowMs),
     transition_history: Array.isArray(publicationRow.transition_history) ?
       publicationRow.transition_history :
       normalizedPublication.transitionHistory,
@@ -106,7 +114,8 @@ function shouldAllowRecoveryEligibleProjection(options = {}, helperFns = {}) {
     options.latestPublishedPublicationRow,
   );
   const latestVisiblePublicationRow = latestPublicationRow || latestPublishedPublicationRow;
-  const latestPublicationStatus = String(latestVisiblePublicationRow?.status || '').toUpperCase();
+  const latestPublicationStatus =
+    readUpperStateField(latestVisiblePublicationRow?.status);
   if (
     !latestVisiblePublicationRow ||
     latestPublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.ABANDONED ||
@@ -176,7 +185,8 @@ function shouldPreferAuthoritativeMembershipState(options = {}, helperFns = {}) 
     if (!row || typeof row !== 'object') {
       return false;
     }
-    const publicationStatus = String(row.status || '').toUpperCase();
+    // control_plane_publications.status is NOT NULL; the decoder keeps it.
+    const publicationStatus = String(row.status).toUpperCase();
     if (publicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED) {
       return (
         hasPriorityRecoverySpreadGap(row.priorityPartitionSummary) ||
@@ -205,9 +215,10 @@ function resolveCandidatePublicationStatus(options = {}) {
   if (options.changed === true) {
     return MEMBERSHIP_PUBLICATION_STATUS.OPEN;
   }
-  return String(
-    options.latestPublicationRow?.status || MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
-  ).toUpperCase();
+  // An unchanged candidate restates the latest row's status: a candidate
+  // with no latest row is always changed (OPEN above), and
+  // control_plane_publications.status is NOT NULL.
+  return String(options.latestPublicationRow.status).toUpperCase();
 }
 
 function resolveCandidatePublicationLifecycleState(publicationStatus) {
@@ -257,7 +268,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   const latestPublishedPublicationRow = helperFns.normalizeLatestPublicationRow(
     planningSnapshot.latestPublishedPublicationRow,
   );
-  const latestPublicationStatus = String(latestPublicationRow?.status || '').toUpperCase();
+  const latestPublicationStatus = readUpperStateField(latestPublicationRow?.status);
   const carryForwardLatestPublicationBaseline =
     latestPublicationRow &&
     latestPublicationStatus !== MEMBERSHIP_PUBLICATION_STATUS.ABANDONED &&

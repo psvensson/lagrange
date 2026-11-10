@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readLowerStateField, readStateField, readUpperStateField} from '../utils/state-field-read.js';
 import {WORKFLOW_STEP} from '../constants/index.js';
 import {OBSERVED_PROGRESS_REPLACE_SOURCE_WORKFLOW_STEPS} from '../rebalancer/replica-operation-step-policy.js';
 import {
@@ -148,9 +149,7 @@ function resolvePriorityRecoveryWorkflowProgressPhaseId(operationContext) {
   if (!operationContext || typeof operationContext !== 'object') {
     return PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.NONE;
   }
-  const workflowStep = String(
-    operationContext?.workflowStep || '',
-  ).toUpperCase();
+  const workflowStep = readUpperStateField(operationContext?.workflowStep);
   const directPhase =
     PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE_BY_STEP.get(workflowStep);
   if (directPhase) {
@@ -220,8 +219,8 @@ function resolvePriorityRecoveryWorkflowStepTimeoutMs(
     typeof options.stepTimeoutMsByWorkflowStep === 'object' ?
       options.stepTimeoutMsByWorkflowStep :
       null;
-  const workflowStep = String(operationContext?.workflowStep || '').trim();
-  if (workflowStep.length === 0) {
+  const workflowStep = readStateField(operationContext?.workflowStep);
+  if (workflowStep === STATE_ABSENT) {
     return null;
   }
   return normalizePriorityRecoveryInteger(
@@ -567,9 +566,7 @@ function resolvePriorityRecoveryInFlightActuationState(
 function resolvePriorityRecoveryDispatchedActuationState(
   latestOperationContext,
 ) {
-  const workflowStep = String(
-    latestOperationContext?.workflowStep || LOCAL_STR_EMPTY,
-  ).toUpperCase();
+  const workflowStep = readUpperStateField(latestOperationContext?.workflowStep);
   return PRIORITY_RECOVERY_DISPATCHED_WORKFLOW_STEPS.has(workflowStep) ?
     PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS :
     PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED;
@@ -589,9 +586,7 @@ function resolvePriorityRecoveryFollowupActuationState(options = {}) {
 }
 
 function resolvePriorityRecoveryTerminalActuationState(latestOperationContext) {
-  const status = String(
-    latestOperationContext?.status || LOCAL_STR_EMPTY,
-  ).toLowerCase();
+  const status = readLowerStateField(latestOperationContext?.status);
   return status === ReplicaStatus.FAILED ?
     PRIORITY_RECOVERY_ACTUATION_STATE.TERMINAL_FAILED :
     PRIORITY_RECOVERY_ACTUATION_STATE.TERMINAL_COMPLETED;

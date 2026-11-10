@@ -1,8 +1,8 @@
+import {STATE_ABSENT, readLowerStateField, readStateField, readUpperStateField} from '../utils/state-field-read.js';
 import {NUM, TIME_MS, WORKFLOW_STEP} from '../constants/index.js';
 import {resolveOperationCurrentStepEntry} from './operation-step-age.js';
-import {
-  classifySystemPartition,
-} from '../bootstrap/system-partition-classification.js';
+import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {
   OperationType,
   REPLICA_OPERATION_SEMANTIC_PHASE,
@@ -13,12 +13,8 @@ import {
 } from './replica-status.js';
 import {REBALANCER_DEFAULT} from './rebalancer-constants.js';
 import {isPartitionReplaceOwnerPhase} from './replica-operation-step-policy.js';
-import {
-  hasObservedCompletedReplicaOperation,
-} from './replica-operation-observed-completion.js';
-import {
-  memoizedParseStepsHistoryString,
-} from './steps-history-parse-memo.js';
+import {hasObservedCompletedReplicaOperation} from './replica-operation-observed-completion.js';
+import {memoizedParseStepsHistoryString} from './steps-history-parse-memo.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
@@ -36,10 +32,8 @@ const LOCAL_STR_SOURCE_REPLICA_ID = 'source_replica_id';
 const LOCAL_STR_SOURCEREPLICAID = 'sourceReplicaId';
 const LOCAL_STR_TARGET_NODE_ID = 'target_node_id';
 const LOCAL_STR_TARGETNODEID = 'targetNodeId';
-const LOCAL_STR_CREATE_ADMISSION_ATTEMPT_TOKEN =
-  'create_admission_attempt_token';
-const LOCAL_STR_CREATEADMISSIONATTEMPTTOKEN =
-  'createAdmissionAttemptToken';
+const LOCAL_STR_CREATE_ADMISSION_ATTEMPT_TOKEN = 'create_admission_attempt_token';
+const LOCAL_STR_CREATEADMISSIONATTEMPTTOKEN = 'createAdmissionAttemptToken';
 const LOCAL_STR_STEP = 'step';
 const LOCAL_STR_TIMESTAMP = 'timestamp';
 const LOCAL_STR_TIMESTAMPMS = 'timestampMs';
@@ -48,6 +42,18 @@ const UNKNOWN_STATUS = 'unknown';
 const UNKNOWN_ENTITY_TYPE = 'unknown';
 const UNKNOWN_PARTITION_GROUP_ID = 'unknown';
 const UNKNOWN_WORKFLOW_STEP = 'UNKNOWN';
+
+// The display key of a normalised record's status and workflow step: the
+// normaliser answers '' for a record that states none, shown as the named
+// UNKNOWN key.
+function readDisplayStatus(record) {
+  const status = readStateField(record.status);
+  return status === STATE_ABSENT ? UNKNOWN_STATUS : status;
+}
+function readDisplayWorkflowStep(record) {
+  const workflowStep = readStateField(record.workflowStep);
+  return workflowStep === STATE_ABSENT ? UNKNOWN_WORKFLOW_STEP : workflowStep;
+}
 const REPLICA_OPERATION_STATUS_FAILED = 'failed';
 const REPLICA_OPERATION_STATUS_ACTIVE = 'active';
 const REPLICA_OPERATION_STATUS_REMOVED = 'removed';
@@ -199,8 +205,8 @@ function inferOperationTypeFromStepsHistory(
     [];
   const timelineSteps = new Set(
     normalizedStepsHistory.map((entry) =>
-      String(entry?.step || '').toUpperCase(),
-    ).filter((step) => step.length > 0),
+      readUpperStateField(entry?.step),
+    ).filter((step) => step !== null),
   );
   let sourceReplicaId = null;
   for (const entry of normalizedStepsHistory) {
@@ -437,7 +443,7 @@ function isReplicaOperationTerminalSuccess(record) {
 }
 
 function isReplicaOperationExplicitlyExcludedFromInFlight(record) {
-  const normalizedStatus = String(record?.status || '').toLowerCase();
+  const normalizedStatus = readLowerStateField(record?.status);
   if (REPLICA_OPERATION_IN_FLIGHT_EXCLUDED_STATUSES.has(normalizedStatus)) {
     return true;
   }
@@ -458,14 +464,13 @@ function resolveRecordOwnerNodeId(record) {
   const sourceNodeId = String(record?.sourceNodeId || record?.source_node_id || '');
   const targetNodeId = String(record?.targetNodeId || record?.target_node_id || '');
   const type = record?.type;
-  const step = record?.workflowStep || record?.workflow_step;
   const status = record?.status;
   const partitionId = String(record?.partitionId || record?.partitionGroupId || record?.partition_id || '');
 
   const semanticPhase = record?.semanticPhase ||
     resolveReplicaOperationSemanticPhase(
       type || null,
-      step || null,
+      readOperationRecordWorkflowStep(record),
       status || null,
     );
 
@@ -624,7 +629,7 @@ function normalizeTimelineEventEntry(event, operationId, nowMs) {
   if (!event || typeof event !== LOCAL_STR_OBJECT) {
     return null;
   }
-  const step = String(event.step || '').toUpperCase();
+  const step = readUpperStateField(event.step);
   const timestampMs = normalizeEpochMillis(
     event.timestamp ?? event.timestampMs,
   );
@@ -683,7 +688,7 @@ function buildReplicaOperationTimeline(record, options = {}) {
       step: record.workflowStep,
       timestampMs: record.updatedAt,
       ageMs: Number.isFinite(record.ageMs) ? record.ageMs : null,
-      status: record.status || UNKNOWN_STATUS,
+      status: readDisplayStatus(record),
       inFlight: isReplicaOperationInFlight(record, options),
       staleTimeout: isReplicaOperationStale(record, options),
       timeoutMs: resolveStepTimeoutMs(record.workflowStep, {
@@ -729,7 +734,7 @@ function summarizeReplicaOperationLiveness(rows = [], options = {}) {
       continue;
     }
     visibleRows.push(record);
-    const statusKey = record.status || UNKNOWN_STATUS;
+    const statusKey = readDisplayStatus(record);
     statusHistogram[statusKey] = (statusHistogram[statusKey] || 0) + 1;
     const semanticPhaseKey =
       record.semanticPhase || REPLICA_OPERATION_SEMANTIC_PHASE.UNKNOWN;
@@ -753,7 +758,7 @@ function summarizeReplicaOperationLiveness(rows = [], options = {}) {
     inFlightOperationIds.push(record.operationId);
     partitionGroupInFlight[record.partitionGroupId] =
       (partitionGroupInFlight[record.partitionGroupId] || 0) + 1;
-    const stepKey = record.workflowStep || UNKNOWN_WORKFLOW_STEP;
+    const stepKey = readDisplayWorkflowStep(record);
     stepHistogram[stepKey] = (stepHistogram[stepKey] || 0) + 1;
 
     if (Number.isFinite(record.ageMs)) {

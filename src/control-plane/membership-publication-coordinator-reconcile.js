@@ -1,3 +1,4 @@
+import {readUpperStateField} from '../utils/state-field-read.js';
 import {
   TABLES,
 } from '../constants/index.js';
@@ -7,7 +8,6 @@ import {
 } from './control-plane-error-classification.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {
-  MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_STATUS,
   MEMBERSHIP_PUBLICATION_READ_SOURCE,
   MEMBERSHIP_PUBLICATION_WORKFLOW_STEP,
@@ -247,7 +247,7 @@ class MembershipPublicationCoordinatorReconcile extends
             (await this.getLatestPublicationRow(convergenceOptions));
           const latestPublishedPublicationRow =
             convergenceOptions.latestPublishedPublicationRow ||
-            (String(latestPublicationRow?.status || '').toUpperCase() ===
+            (readUpperStateField(latestPublicationRow?.status) ===
             MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
               latestPublicationRow :
               await this.getLatestPublishedPublicationRow(convergenceOptions));
@@ -326,9 +326,8 @@ class MembershipPublicationCoordinatorReconcile extends
             return {
               candidate,
               publicationRow:
-                String(
-                  latestPublicationRow.status || MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY,
-                ).toUpperCase() === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ||
+                String(latestPublicationRow.status).toUpperCase() ===
+                  MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ||
                 !latestPublishedPublicationRow ?
                   latestPublicationRow :
                   latestPublishedPublicationRow,
