@@ -35,9 +35,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
       refreshAuthoritativeCacheRow: async () => true,
         },
         controlPlaneReadinessService: {
-          async getPriorityRecoveryPlanningSnapshotBestEffort() {
-            return this.getPriorityRecoveryPlanningAnswerSync();
-          },
           getPriorityRecoveryPlanningAnswerSync() {
             return {
               publicationStatus: 'PENDING',
@@ -852,9 +849,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
                 [TEST_SERVE_ELIGIBLE_DIMENSION]: true,
               },
             };
-          },
-          async getPriorityRecoveryPlanningSnapshotBestEffort() {
-            return this.getPriorityRecoveryPlanningAnswerSync();
           },
           getPriorityRecoveryPlanningAnswerSync() {
             return publishedPriorityRecoverySnapshot;

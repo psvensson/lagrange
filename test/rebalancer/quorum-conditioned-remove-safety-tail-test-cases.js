@@ -62,9 +62,6 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
             return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
-          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
-            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
-          },
           getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publishedActiveNodeIdsPresent: true,
@@ -206,9 +203,6 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
             };
           },
           async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
-            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
-          },
-          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
           getPriorityRecoveryPlanningAnswerSync(nodeId) {
@@ -393,9 +387,6 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
             };
           },
           async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
-            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
-          },
-          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
           getPriorityRecoveryPlanningAnswerSync(nodeId) {
@@ -605,9 +596,6 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
             return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
-          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
-            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
-          },
           getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
@@ -810,7 +798,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               priorityPartitionSummary: TEST_STALE_PRIORITY_PARTITION_SUMMARY,
             };
           },
-          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_ACK_PENDING,
               publishedActiveNodeIdsPresent: true,

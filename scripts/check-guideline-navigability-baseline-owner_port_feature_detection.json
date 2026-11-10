@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T06:33:39.100Z",
-  "rawViolationCount": 2041,
+  "generatedAt": "2026-11-09T14:08:28.071Z",
+  "rawViolationCount": 2039,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -6359,7 +6359,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 26,
+      "line": 29,
       "column": 4,
       "functionName": "resolvePlanningLivenessContext",
       "kind": "owner_port_feature_detection",
@@ -6368,7 +6368,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 32,
+      "line": 35,
       "column": 4,
       "functionName": "resolvePlanningLivenessContext",
       "kind": "owner_port_feature_detection",
@@ -6377,7 +6377,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 38,
+      "line": 41,
       "column": 5,
       "functionName": "resolvePlanningLivenessContext",
       "kind": "owner_port_feature_detection",
@@ -6386,17 +6386,8 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 123,
+      "line": 126,
       "column": 10,
-      "functionName": "readPublicationPlanningSnapshot",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 151,
-      "column": 12,
       "functionName": "readPublicationPlanningSnapshot",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
@@ -11831,7 +11822,7 @@
     },
     {
       "filePath": "src/query/query-executor-base.js",
-      "line": 50,
+      "line": 68,
       "column": 17,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -14882,7 +14873,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 207,
+      "line": 206,
       "column": 6,
       "functionName": "getCachedCriticalPartitionRow",
       "kind": "owner_port_feature_detection",
@@ -14891,7 +14882,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 339,
+      "line": 338,
       "column": 6,
       "functionName": "isNodeReadyForRouting",
       "kind": "owner_port_feature_detection",
@@ -14900,7 +14891,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 396,
+      "line": 395,
       "column": 18,
       "functionName": "resolvePriorityRecoveryPlanningReadContext",
       "kind": "owner_port_feature_detection",
@@ -14936,16 +14927,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-planning-read.js",
-      "line": 41,
-      "column": 4,
-      "functionName": "hasAvailablePriorityRecoveryPlanningProvider",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/priority-recovery-planning-read.js",
-      "line": 54,
+      "line": 49,
       "column": 4,
       "functionName": "hasAuthoritativeRemoveSafetyPlanningProvider",
       "kind": "owner_port_feature_detection",

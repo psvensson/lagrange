@@ -18,6 +18,9 @@ import {
   shouldPreferAuthoritativeMembershipState,
 } from './membership-publication-planning-evidence.js';
 import {MembershipPublicationCoordinatorReads} from './membership-publication-coordinator-reads.js';
+import {
+  readPriorityRecoveryPlanningAnswerSync,
+} from './priority-recovery-planning-answer-origin.js';
 
 function resolvePlanningLivenessContext(coordinator, options, nodeRows) {
   const recoveryEpochsByNodeId =
@@ -140,22 +143,19 @@ class MembershipPublicationCoordinatorPlanning extends
     // priority partitions unspread; a candidate built on it told readiness
     // that priority recovery was inactive, and under degraded publication
     // the source quorum lost its transport-backed recovery grace and its
-    // routability. The AVAILABLE surface is synchronous now, so nothing here
-    // depends on which answer arrived first. The nested case keeps its
+    // routability. The AVAILABLE answer is the readiness service's one
+    // synchronous planning answer, so nothing here depends on which answer
+    // arrived first; no readiness service answers null. The nested case keeps its
     // existing recursion-breaking contract and derives no planning evidence
     // at all, which is what deferNestedPriorityRecoveryPlanning already means.
     const priorityRecoveryPlanningSnapshot =
       options.deferNestedPriorityRecoveryPlanning === true ?
         null :
-        this.controlPlaneReadinessService &&
-            typeof this.controlPlaneReadinessService
-              .getPriorityRecoveryPlanningSnapshotBestEffort === 'function' ?
-          await this.controlPlaneReadinessService
-            .getPriorityRecoveryPlanningSnapshotBestEffort(
-              options.publisherNodeId || this.nodeId,
-              normalizePositiveInteger(options.nowMs, this.now()),
-            ) :
-          null;
+        readPriorityRecoveryPlanningAnswerSync(
+          this.controlPlaneReadinessService,
+          options.publisherNodeId || this.nodeId,
+          normalizePositiveInteger(options.nowMs, this.now()),
+        );
     return buildMembershipPublicationEvidenceSnapshot({
       ...options,
       latestPublicationRow,

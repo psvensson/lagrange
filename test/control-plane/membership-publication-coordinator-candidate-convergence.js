@@ -46,7 +46,10 @@ import {
   buildMembershipPublicationTrimServiceRow,
 } from './membership-publication-coordinator-candidate-fixtures.js';
 
-import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {
+  createReadinessServiceForTest,
+  partialReadinessFake,
+} from '../helpers/readiness-service-fixture.js';
 test('deriveMembershipPublicationCandidate keeps the latest in-flight publication membership as a convergence floor',
   async (t) => {
     const candidate = deriveMembershipPublicationCandidate({
@@ -667,7 +670,7 @@ test(MEMBERSHIP_PUBLICATION_RECONCILE_TEST_NAME, async (t) => {
         persistedRows.push(row);
       },
     },
-    controlPlaneReadinessService: {
+    controlPlaneReadinessService: partialReadinessFake({
       async getAllNodeReadiness() {
         const readinessEntries =
           MEMBERSHIP_PUBLICATION_RECONCILE_ACTIVE_GATE_NODE_IDS.map(
@@ -686,7 +689,7 @@ test(MEMBERSHIP_PUBLICATION_RECONCILE_TEST_NAME, async (t) => {
           return MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS;
         },
       },
-    },
+    }),
     systemTableCache: {
       getAll(tableName) {
         if (tableName === TABLES.NODES) {

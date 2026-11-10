@@ -305,9 +305,6 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
           reasons: [],
         };
       },
-      getPriorityRecoveryPlanningSnapshotBestEffort() {
-        return priorityRecoveryPlanningSnapshot;
-      },
       getPriorityRecoveryPlanningAnswerSync() {
         return priorityRecoveryPlanningSnapshot;
       },
@@ -553,9 +550,6 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
           },
           reasons: [],
         };
-      },
-      getPriorityRecoveryPlanningSnapshotBestEffort() {
-        return priorityRecoveryPlanningSnapshot;
       },
       getPriorityRecoveryPlanningAnswerSync() {
         return priorityRecoveryPlanningSnapshot;

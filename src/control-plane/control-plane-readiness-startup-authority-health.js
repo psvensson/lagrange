@@ -250,7 +250,7 @@ async function getStartupAuthoritySnapshot(
 ) {
   return service.resolveStartupAuthoritySnapshotFromPlanningRead(
     (readNodeId, readObservedAt) =>
-      service.getPriorityRecoveryPlanningSnapshotBestEffort(
+      service.getPriorityRecoveryPlanningAnswerSync(
         readNodeId,
         readObservedAt,
       ),

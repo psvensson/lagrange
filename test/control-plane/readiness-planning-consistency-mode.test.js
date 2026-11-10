@@ -18,13 +18,17 @@ import {test} from 'node:test';
 import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
-import {heldPromise, isPending} from '../helpers/promise-settlement.js';
+import {
+  readAvailablePriorityRecoveryPlanningSnapshot,
+} from '../../src/rebalancer/priority-recovery-planning-read.js';
+import {heldPromise} from '../helpers/promise-settlement.js';
 
 const NODE_ID = 'node-a';
 const OBSERVED_AT = 1000;
 
 // A readiness service stub whose two evidence sources deliberately disagree,
-// so which one a caller consumed is observable in the answer itself.
+// so which one a caller consumed is observable in the answer itself. The
+// AVAILABLE read is the read-policy owner's, over the one planning answer.
 function planningService({asyncAnswer, armed = []}) {
   const service = Object.create(
     Object.getPrototypeOf(ControlPlaneReadinessService.prototype));
@@ -38,10 +42,15 @@ function planningService({asyncAnswer, armed = []}) {
     getMembershipPublicationPlanningSnapshot: () => asyncAnswer,
     resolvePriorityRecoveryPlanningAnswer: (_nodeId, _at, answer) => answer,
   });
-  service.getPriorityRecoveryPlanningSnapshotBestEffort =
-    ControlPlaneReadinessService.prototype
-      .getPriorityRecoveryPlanningSnapshotBestEffort.bind(service);
   return service;
+}
+
+function readAvailable(service) {
+  return readAvailablePriorityRecoveryPlanningSnapshot({
+    readinessService: service,
+    publicationNodeId: NODE_ID,
+    observedAt: OBSERVED_AT,
+  });
 }
 
 test('the available answer does not change with refresh latency, in any of four shapes',
@@ -61,8 +70,7 @@ test('the available answer does not change with refresh latency, in any of four 
     for (const [name, asyncAnswer] of Object.entries(shapes)) {
       const armed = [];
       const service = planningService({asyncAnswer, armed});
-      const answer = await service.getPriorityRecoveryPlanningSnapshotBestEffort(
-        NODE_ID, OBSERVED_AT);
+      const answer = readAvailable(service);
       assert.deepEqual(answer, {source: 'available'},
         `refresh shape ${name} must not decide the available answer`);
       assert.deepEqual(armed, [],
@@ -73,11 +81,10 @@ test('the available answer does not change with refresh latency, in any of four 
 test('an unresolved refresh never delays the available answer', async () => {
   const held = heldPromise();
   const service = planningService({asyncAnswer: held.promise});
-  const answer = service.getPriorityRecoveryPlanningSnapshotBestEffort(
-    NODE_ID, OBSERVED_AT);
-  assert.equal(await isPending(answer), false,
-    'the available answer is ready without waiting on any refresh');
-  assert.deepEqual(await answer, {source: 'available'});
+  const answer = readAvailable(service);
+  assert.equal(typeof answer?.then, 'undefined',
+    'the available answer is settled, never a pending read');
+  assert.deepEqual(answer, {source: 'available'});
   held.release({source: 'refresh'});
 });
 
@@ -97,7 +104,7 @@ test('a priority control-plane safety read is authoritative and defers without i
         calls.push('authoritative');
         return {publicationStatus: 'OPEN'};
       },
-      getPriorityRecoveryPlanningSnapshotBestEffort: async () => {
+      getPriorityRecoveryPlanningAnswerSync: () => {
         calls.push('available');
         return {publicationStatus: 'PUBLISHED'};
       },

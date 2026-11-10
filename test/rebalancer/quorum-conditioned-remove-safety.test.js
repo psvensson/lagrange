@@ -995,9 +995,6 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
         async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
           return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
         },
-        async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
-          return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
-        },
         getPriorityRecoveryPlanningAnswerSync(nodeId) {
           return {
             publishedActiveNodeIdsPresent: true,

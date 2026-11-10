@@ -395,9 +395,6 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
-        async getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return planningSnapshot;
-        },
         membershipPublicationService: {
           getLatestClusterPublicationSync() {
             return {
@@ -588,9 +585,6 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
       const readinessService = {
         ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
-          return planningSnapshot;
-        },
-        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
         membershipPublicationService: {
@@ -969,9 +963,6 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
       const readinessService = {
         ...createMockControlPlaneReadinessService({systemTableCache: cache}),
         getPriorityRecoveryPlanningAnswerSync() {
-          return planningSnapshot;
-        },
-        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
         membershipPublicationService: {

@@ -561,10 +561,6 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
             planningSnapshotCalls += 1;
             return planningSnapshot;
           },
-          getPriorityRecoveryPlanningSnapshotBestEffort() {
-            planningSnapshotCalls += 1;
-            return planningSnapshot;
-          },
         },
         tablePolicyService: {
           async getPolicyForPartition() {

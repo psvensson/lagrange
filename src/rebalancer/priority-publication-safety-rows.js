@@ -25,7 +25,6 @@ import {INITIAL_PARTITION_IDS} from
 
 import {
   hasAuthoritativeRemoveSafetyPlanningProvider,
-  hasAvailablePriorityRecoveryPlanningProvider as hasAvailablePlanningProvider,
   readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety as
   readAuthoritativeRemoveSafetyPlanningSnapshot,
   readAvailablePriorityRecoveryPlanningSnapshot as readAvailablePlanningSnapshot,
@@ -407,10 +406,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
    */
   async readAvailablePriorityRecoveryPlanningSnapshot(operation) {
     const read = this.resolvePriorityRecoveryPlanningReadContext(operation);
-    if (!read || !hasAvailablePlanningProvider(read.readinessService)) {
-      return null;
-    }
-    return readAvailablePlanningSnapshot(read);
+    return read ? readAvailablePlanningSnapshot(read) : null;
   }
 
   /**

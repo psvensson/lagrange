@@ -1,20 +1,26 @@
 {
   "schema": "test-receipt/1",
   "quest": "priority-recovery-owner-read-snapshot-await",
-  "status": "fail",
-  "generatedAt": "2026-11-08T20:04:34.000Z",
+  "status": "pass",
+  "testFileDigests": {
+    "test/rebalancer/priority-recovery-owner-read-settled-snapshot.test.js": "36cd1e935144a7b088b833611605d9ad8f0f01425e1167d7c6b51ff56dffea53",
+    "test/rebalancer/priority-recovery-planning-best-effort-alias-collapsed.test.js": "f7176893fc4dc4b63d04fb2cf0b3ad9944a3441285879bf2f62c535ef5bcdc40"
+  },
+  "generatedAt": "2026-11-09T17:14:31.791Z",
   "receipts": [
     {
       "id": "owner-read-deferral-reads-a-settled-snapshot",
-      "passed": false,
-      "command": null,
-      "detail": "not yet witnessed: resolvePriorityRecoveryPlanningSnapshotForOwnerRead hands its callers a Promise where a settled planning snapshot is required, so owner-read deferral never reads as active"
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/priority-recovery-owner-read-settled-snapshot.test.js",
+      "detail": "With the real readiness service, the repository owner read answers the settled planning answer; the sync pressure helper and the three async owner reads defer while it says priority recovery is active (ESTABLISHING) and not when it is PUBLISHED.",
+      "testFile": "test/rebalancer/priority-recovery-owner-read-settled-snapshot.test.js"
     },
     {
       "id": "best-effort-alias-family-collapsed",
-      "passed": false,
-      "command": null,
-      "detail": "not yet witnessed: the getPriorityRecoveryPlanningSnapshotBestEffort alias family still exists beside the one planning answer"
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/priority-recovery-planning-best-effort-alias-collapsed.test.js",
+      "detail": "No planning BestEffort alias is defined or called under src/, and the readiness service carries only the one planning answer.",
+      "testFile": "test/rebalancer/priority-recovery-planning-best-effort-alias-collapsed.test.js"
     }
   ]
 }

@@ -463,9 +463,6 @@ class ControlPlaneReadinessService {
   getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt) {
     return snapshot.getPriorityRecoveryPlanningAnswerSync(this, nodeId, observedAt);
   }
-  getPriorityRecoveryPlanningSnapshotBestEffort(nodeId, observedAt) {
-    return snapshot.getPriorityRecoveryPlanningSnapshotBestEffort(this, nodeId, observedAt);
-  }
   getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId, observedAt) {
     return snapshot.getPriorityRecoveryPlanningAnswerForOwnerRead(this, nodeId, observedAt);
   }

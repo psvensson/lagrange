@@ -501,7 +501,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
             },
           };
         },
-        async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
+        getPriorityRecoveryPlanningAnswerSync(nodeId) {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: Object.freeze(['node-a', 'node-local']),
@@ -625,9 +625,9 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
               },
             };
           },
-          getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
+          getPriorityRecoveryPlanningAnswerSync(nodeId) {
             canonicalCalls.push(nodeId);
-            return Promise.resolve({
+            return {
               publishedActiveNodeIdsPresent: true,
               publishedActiveNodeIds: Object.freeze([
                 'node-a',
@@ -642,7 +642,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
                 requiredDistinctNodeCount: 2,
                 missingPartitionIds: ['sql_write_operations-p1'],
               }),
-            });
+            };
           },
         },
         messageRouter: {
@@ -743,7 +743,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
             },
           };
         },
-        async getPriorityRecoveryPlanningSnapshotBestEffort() {
+        getPriorityRecoveryPlanningAnswerSync() {
           return {
             publishedActiveNodeIdsPresent: true,
             publishedActiveNodeIds: Object.freeze(['node-a', 'node-b']),

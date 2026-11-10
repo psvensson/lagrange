@@ -67,9 +67,6 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
             return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
-          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
-            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
-          },
           getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
@@ -257,9 +254,6 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
             };
           },
           async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
-            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
-          },
-          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
           getPriorityRecoveryPlanningAnswerSync(nodeId) {
@@ -477,9 +471,6 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
             return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
-          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
-            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
-          },
           getPriorityRecoveryPlanningAnswerSync(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
@@ -670,9 +661,6 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
             };
           },
           async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
-            return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
-          },
-          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
           },
           getPriorityRecoveryPlanningAnswerSync(nodeId) {

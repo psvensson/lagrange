@@ -6,6 +6,7 @@ import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
 
 import {
   createReadinessServiceForTest,
+  partialReadinessFake,
   readinessCollaboratorFake,
 } from '../helpers/readiness-service-fixture.js';
 export function registerMembershipPublicationCoordinatorTailMoreTests({
@@ -746,7 +747,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
             return [];
           },
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: partialReadinessFake({
           getAllNodeReadinessSync() {
             return [{
               nodeId: 'node-1',
@@ -768,7 +769,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
               },
             }];
           },
-        },
+        }),
         now: () => 1000,
       });
       const candidate = coordinator.deriveClusterMembershipCandidateSync({
@@ -1136,7 +1137,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
             persistedRows.push(row);
           },
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: partialReadinessFake({
           async getAllNodeReadiness(options = {}) {
             readinessRefreshModes.push(options.allowAuthoritativeRefresh === true);
             if (options.allowAuthoritativeRefresh === true) {
@@ -1166,7 +1167,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           getRecoveryEpochHistoryByNodeId() {
             return {};
           },
-        },
+        }),
         systemTableCache: {
           getAll(tableName) {
             if (tableName === 'nodes') {

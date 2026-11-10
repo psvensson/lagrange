@@ -224,9 +224,6 @@ export async function registerPriorityRecoveryFollowUpTestCases(t, context) {
       );
       const readinessService = {
         ...createMockControlPlaneReadinessService({systemTableCache: cache}),
-        getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return planningSnapshot;
-        },
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
@@ -492,9 +489,6 @@ export async function registerPriorityRecoveryFollowUpTestCases(t, context) {
       );
       const readinessService = {
         ...createMockControlPlaneReadinessService({systemTableCache: cache}),
-        getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return planningSnapshot;
-        },
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
@@ -700,9 +694,6 @@ export async function registerPriorityRecoveryFollowUpTestCases(t, context) {
       );
       const readinessService = {
         ...createMockControlPlaneReadinessService({systemTableCache: cache}),
-        getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return planningSnapshot;
-        },
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },

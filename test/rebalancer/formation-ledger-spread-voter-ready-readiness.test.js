@@ -188,9 +188,6 @@ function createColdFormationReadinessService({denialReasonCodesByNodeId, nodeRow
       async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
         return buildPlanningSnapshot(nodeId);
       },
-      async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
-        return buildPlanningSnapshot(nodeId);
-      },
       getPriorityRecoveryPlanningAnswerSync(nodeId) {
         return buildPlanningSnapshot(nodeId);
       },

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T06:33:39.120Z",
-  "rawViolationCount": 604,
+  "generatedAt": "2026-11-09T14:08:29.238Z",
+  "rawViolationCount": 603,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -2201,7 +2201,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 25,
+      "line": 28,
       "column": 5,
       "functionName": "resolvePlanningLivenessContext",
       "kind": "typeof_dual_paths",
@@ -2210,7 +2210,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 31,
+      "line": 34,
       "column": 4,
       "functionName": "resolvePlanningLivenessContext",
       "kind": "typeof_dual_paths",
@@ -2219,7 +2219,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 38,
+      "line": 41,
       "column": 5,
       "functionName": "resolvePlanningLivenessContext",
       "kind": "typeof_dual_paths",
@@ -2228,17 +2228,8 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 122,
+      "line": 125,
       "column": 6,
-      "functionName": "readPublicationPlanningSnapshot",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/membership-publication-coordinator-planning.js",
-      "line": 150,
-      "column": 8,
       "functionName": "readPublicationPlanningSnapshot",
       "kind": "typeof_dual_paths",
       "reason": "typeof dual path; keep one path and delete the other",
@@ -3713,7 +3704,7 @@
     },
     {
       "filePath": "src/query/query-executor-base.js",
-      "line": 50,
+      "line": 68,
       "column": 17,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -4469,7 +4460,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 396,
+      "line": 395,
       "column": 18,
       "functionName": "resolvePriorityRecoveryPlanningReadContext",
       "kind": "typeof_dual_paths",
@@ -4478,7 +4469,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-planning-read.js",
-      "line": 144,
+      "line": 137,
       "column": 9,
       "functionName": "resolveRemoveSafetyPlanningSnapshotReader",
       "kind": "typeof_dual_paths",

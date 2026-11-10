@@ -50,6 +50,7 @@ import {
   createMockControlPlaneSystemTableGateway,
   withFixtureReplaceWitness,
 } from './test-helpers.js';
+import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
 const TEST_NODE_ID = 'node-local';
 const TEST_OPERATION_ID = 'op-outcome-1';
@@ -262,11 +263,11 @@ function createTestCoordinator(options = {}) {
         return {allowed: true, decision: 'allow'};
       },
     },
-    controlPlaneReadinessService: {
+    controlPlaneReadinessService: partialReadinessFake({
       getNodeReadinessSync() {
         return null;
       },
-    },
+    }),
     operationWorkflowCoordinator: workflowCoordinator,
     executorOutcomeEmitter: emitter,
     setTimeoutFn,

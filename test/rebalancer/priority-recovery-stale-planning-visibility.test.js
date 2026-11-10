@@ -278,7 +278,6 @@ function planningReadinessFixture(planningSnapshot) {
   return {
     defaultRepairEligible: true,
     callbacks: {
-      getPriorityRecoveryPlanningSnapshotBestEffort: async () => planningSnapshot,
       getPriorityRecoveryPlanningAnswerSync: () => planningSnapshot,
     },
   };

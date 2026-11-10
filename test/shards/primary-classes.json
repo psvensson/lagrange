@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2270,
+    "unit": 2272,
     "integration": 124,
     "bootstrap": 221,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2622,
-  "digest": "fnv1a32-109ca90b",
+  "censusSize": 2624,
+  "digest": "fnv1a32-632e3a18",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1949,6 +1949,8 @@
     "test/rebalancer/priority-publication-per-leg-evidence-census.test.js": "unit",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js": "unit",
     "test/rebalancer/priority-recovery-follow-up-count-aware-add-gate.test.js": "unit",
+    "test/rebalancer/priority-recovery-owner-read-settled-snapshot.test.js": "unit",
+    "test/rebalancer/priority-recovery-planning-best-effort-alias-collapsed.test.js": "unit",
     "test/rebalancer/priority-recovery-planning-gate-diagnostic.test.js": "unit",
     "test/rebalancer/priority-recovery-reserved-slot-authoritative-admission.test.js": "unit",
     "test/rebalancer/priority-recovery-stale-planning-visibility.test.js": "unit",

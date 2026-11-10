@@ -481,12 +481,11 @@ export function buildRemotePriorityDispatchPendingTimeoutPlanningSnapshot() {
 }
 
 export function createRemotePriorityVisibilityCoordinator() {
-  const controlPlaneReadinessService = {
-    ...createMockControlPlaneReadinessService({defaultRepairEligible: true}),
-    async getPriorityRecoveryPlanningSnapshotBestEffort() {
-      return buildRemotePriorityVisibilityPlanningSnapshot();
-    },
-  };
+  const controlPlaneReadinessService = createMockControlPlaneReadinessService({
+    defaultRepairEligible: true,
+    membershipPublicationPlanningSnapshot:
+      buildRemotePriorityVisibilityPlanningSnapshot,
+  });
   return new RebalanceCoordinator({
     nodeId: REMOTE_PRIORITY_VISIBILITY_OBSERVER_NODE_ID,
     systemTableCache: {

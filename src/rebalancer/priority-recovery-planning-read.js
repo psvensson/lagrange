@@ -3,9 +3,11 @@
 // Two contracts live here, and they are not interchangeable:
 //
 //   AVAILABLE                  - narration, progress, follow-up and ordinary
-//                                planning. It never escalates to the owner
-//                                read, and answers null only when AVAILABLE
-//                                evidence genuinely is unavailable.
+//                                planning: the readiness service's one
+//                                planning answer, read through the canonical
+//                                reader. It never escalates to the owner
+//                                read, and answers null only when no
+//                                readiness service is installed.
 //   AUTHORITATIVE_REMOVE_SAFETY - the only contract permitted to decide that
 //                                a priority-control-plane REMOVE is SAFE. It
 //                                reads the owner surface and nothing else; an
@@ -23,23 +25,16 @@
 // one by passing the wrong argument. Each family keeps its own partition
 // classification and clock; only the read policy is owned here.
 
+import {
+  readPriorityRecoveryPlanningAnswerSync,
+} from '../control-plane/priority-recovery-planning-answer-origin.js';
+
 /**
  * @param {*} snapshot
  * @return {Object|null}
  */
 function normalizePlanningSnapshot(snapshot) {
   return snapshot && typeof snapshot === 'object' ? snapshot : null;
-}
-
-/**
- * Whether a readiness service can answer the AVAILABLE contract at all.
- * @param {Object} readinessService
- * @return {boolean}
- */
-function hasAvailablePriorityRecoveryPlanningProvider(readinessService) {
-  return Boolean(readinessService) &&
-    typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
-      'function';
 }
 
 /**
@@ -56,26 +51,24 @@ function hasAuthoritativeRemoveSafetyPlanningProvider(readinessService) {
 }
 
 /**
- * AVAILABLE planning evidence for one priority-control-plane partition.
+ * AVAILABLE planning evidence for one priority-control-plane partition: the
+ * readiness service's one planning answer, settled. A family without a
+ * readiness service has no AVAILABLE evidence (null).
  * @param {Object} read
- * @param {Object} read.readinessService
+ * @param {Object|null} read.readinessService
  * @param {string} read.publicationNodeId
  * @param {number} read.observedAt
- * @return {Promise<Object|null>}
+ * @return {Object|null}
  */
-async function readAvailablePriorityRecoveryPlanningSnapshot({
+function readAvailablePriorityRecoveryPlanningSnapshot({
   readinessService,
   publicationNodeId,
   observedAt,
 }) {
-  if (!hasAvailablePriorityRecoveryPlanningProvider(readinessService)) {
-    return null;
-  }
-  return normalizePlanningSnapshot(
-    await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
-      publicationNodeId,
-      observedAt,
-    ),
+  return readPriorityRecoveryPlanningAnswerSync(
+    readinessService,
+    publicationNodeId,
+    observedAt,
   );
 }
 
@@ -150,7 +143,6 @@ export {
   createRemoveSafetyPlanningSnapshotReader,
   resolveRemoveSafetyPlanningSnapshotReader,
   hasAuthoritativeRemoveSafetyPlanningProvider,
-  hasAvailablePriorityRecoveryPlanningProvider,
   readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety,
   readAvailablePriorityRecoveryPlanningSnapshot,
 };

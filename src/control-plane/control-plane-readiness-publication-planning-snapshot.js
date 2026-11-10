@@ -428,6 +428,16 @@ function resolveMemoizedPriorityRecoveryPlanningProjectionSync(service, nodeId, 
   return projection;
 }
 
+// The one planning answer: AVAILABLE planning evidence at the decision
+// boundary, settled when it returns. Consistency mode is chosen by the
+// caller's contract, never by response latency: a caller that needs the
+// stronger evidence asks for the owner-read surface below and owns that wait.
+// (Its async BestEffort alias, which returned this answer one microtask
+// later, was deleted by quest
+// priority-recovery-owner-read-snapshot-await; every consumer reads this
+// answer, through readPriorityRecoveryPlanningAnswerSync where it is not the
+// service itself.)
+//
 // The origin is composed PER CALL and stated at every return: the call
 // begins by forgetting what any earlier answer observed, so the early
 // return below - which never reaches the retention layer - can only ever
@@ -471,26 +481,6 @@ function getPriorityRecoveryPlanningAnswerSync(service, nodeId, observedAt) {
     originNodeId,
     resolvedPlanningSnapshot,
   );
-}
-
-/**
- * AVAILABLE planning evidence for this invocation: the canonical
- * synchronous planning answer at the decision boundary.
- *
- * This method used to race the synchronous answer against an asynchronous
- * refresh with a 1000 ms deadline and return whichever arrived first, which
- * meant identical logical state could produce different planning answers
- * purely because one machine ran the Promise chain faster. Consistency mode
- * is now chosen by the caller's contract, never by response latency: a
- * caller that requires the stronger evidence asks for the authoritative
- * owner-read surface explicitly and accepts that wait as part of its own
- * contract.
- * @param {string} nodeId
- * @param {number} observedAt
- * @return {Promise<Object|null>} the available planning answer
- */
-async function getPriorityRecoveryPlanningSnapshotBestEffort(service, nodeId, observedAt) {
-  return service.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt);
 }
 
 /**
@@ -687,7 +677,6 @@ export {
   readPlanningProjectionSourceGeneration,
   resolveMemoizedPriorityRecoveryPlanningProjectionSync,
   getPriorityRecoveryPlanningAnswerSync,
-  getPriorityRecoveryPlanningSnapshotBestEffort,
   getPriorityRecoveryPlanningAnswerForOwnerRead,
   getPriorityRecoveryPlanningAnswerForOwnerReadSync,
   getCurrentPublishedMembershipEpochSync,
