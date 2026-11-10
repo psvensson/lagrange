@@ -541,7 +541,13 @@ function journey(log) {
       const fresh = await beforeCase({caseId});
       if (fresh) {
         log.push(['fresh', caseId, fresh.binding.endpoint]);
-        bindings.push(fresh.binding);
+        if (!arraySome(
+          bindings,
+          (b) => b.containerId === fresh.binding.containerId &&
+            b.endpoint === fresh.binding.endpoint,
+        )) {
+          bindings.push(fresh.binding);
+        }
       }
       if (caseId === 'durability') log.push(['restart', (await restartProduct({})).containerId]);
     }
@@ -587,8 +593,8 @@ function admitRunPairWithGate({targetId, subkind, gate, endpointContainerId = nu
   });
 }
 
-test('Lagrange: fresh formation per case, restart of the endpoint container only, ' +
-  'final formation before measurement does not overwrite proof bindings', async () => {
+test('Lagrange: cohort preserved per case and before measurement, restart of the endpoint container only, ' +
+  'single binding preserved across the journey', async () => {
   const ledger = createContainerLedger();
   const {sshRun, calls} = createScriptedSsh([
     ...dockerRules(ledger),
@@ -612,27 +618,26 @@ test('Lagrange: fresh formation per case, restart of the endpoint container only
   });
   assert.deepEqual(log.slice(0, 3), [
     ['binding', '10.0.0.1:5433', 'camp'],
-    ['fresh', 'delivery', '10.0.0.1:5434'],
-    ['fresh', 'durability', '10.0.0.1:5435'],
+    ['fresh', 'delivery', '10.0.0.1:5433'],
+    ['fresh', 'durability', '10.0.0.1:5433'],
   ]);
   const restarts = arrayFilter(calls, (call) => /docker restart/u.test(call.command));
   assert.equal(restarts.length, 1);
   assert.match(restarts[0].command, new RegExp(`docker restart -t 1 ${log[3][1]}$`, 'u'));
   assert.deepEqual(arrayMap(result.events, (event) => event.kind), [
-    're-formation',
-    're-formation',
+    'dataset-reset',
+    'dataset-reset',
     'product-restart',
-    're-formation',
+    'dataset-reset',
   ]);
   assert.equal(result.events[3].caseId, 'before-measurement');
-  assert.equal(result.deployment.endpoint.port, 5436);
+  assert.equal(result.deployment.endpoint.port, 5433);
   assert.equal(result.gate.status, 'passed');
-  assert.equal(result.gate.binding, null,
-    'multi-deployment proofs must not forge a single post-reformation binding');
+  assert.notEqual(result.gate.binding, null,
+    'cohort-preserving proofs must produce a valid single deployment binding');
+  assert.equal(result.gate.binding.endpoint, '10.0.0.1:5433');
   assert.deepEqual(arrayMap(result.gate.bindings, (b) => b.endpoint), [
     '10.0.0.1:5433',
-    '10.0.0.1:5434',
-    '10.0.0.1:5435',
   ]);
 });
 
@@ -710,8 +715,8 @@ test('Item 5: proofs from deployment A cannot authorize measurements on deployme
   });
   assert.equal(reformed.gate.binding.containerId, deploymentA.endpoint.containerId,
     'gate retains deployment A containerId where the proof actually ran');
-  assert.equal(reformed.deployment.endpoint.containerId, deploymentB.endpoint.containerId,
-    'measurement receives re-formed deployment B');
+  assert.equal(reformed.deployment.endpoint.containerId, deploymentA.endpoint.containerId,
+    'measurement receives cohort-preserved deployment A');
 
   // Feed deployment B measurement + deployment A gate into the real admission contract:
   const probeRun = buildFixtureRun({campaignId: 'camp-bind', targetId: 'lagrange',

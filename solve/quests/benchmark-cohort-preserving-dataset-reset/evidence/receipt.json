@@ -1,0 +1,60 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "benchmark-cohort-preserving-dataset-reset",
+  "status": "pass",
+  "testFileDigests": {
+    "test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js": "1c88f95521cb6de4ff1e268512384e115f971cc55a09954e371bcad415285f08"
+  },
+  "generatedAt": "2026-11-10T15:26:01.889Z",
+  "receipts": [
+    {
+      "id": "supported-reset-capability",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^supported-reset-capability:.*$\" test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js",
+      "detail": "Lagrange SQL engine supports TRUNCATE TABLE across partitions with PostgreSQL-compatible command tag TRUNCATE TABLE without dropping the table.",
+      "testFile": "test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js"
+    },
+    {
+      "id": "repeatable-clean-dataset-without-reformation",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^repeatable-clean-dataset-without-reformation:.*$\" test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js",
+      "detail": "Semantic gate stage executes dataset reset repeatedly on the same deployment without cluster re-formation or container redeployment.",
+      "testFile": "test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js"
+    },
+    {
+      "id": "durability-restart-retained",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^durability-restart-retained:.*$\" test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js",
+      "detail": "Durability restart preserves container identity, host endpoint, and volume continuity while observing incarnation advancement.",
+      "testFile": "test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js"
+    },
+    {
+      "id": "same-cohort-journey-to-valid-observed",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^same-cohort-journey-to-valid-observed:.*$\" test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js",
+      "detail": "Complete Lagrange journey on the same deployed cohort preserves gate binding and is admitted as valid-observed by benchmark-claim-admission.",
+      "testFile": "test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js"
+    },
+    {
+      "id": "cross-deployment-rejection",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^cross-deployment-rejection:.*$\" test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js",
+      "detail": "Claims where semantic gate proofs and measurement ran on different deployments remain strictly rejected with SEMANTIC_GATE_UNBOUND.",
+      "testFile": "test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js"
+    },
+    {
+      "id": "actual-product-reset-and-state-evidence",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^actual-product-reset-and-state-evidence:.*$\" test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js",
+      "detail": "Actual product execution verifies rows are removed across scenario tables and adapter reset restores clean initial dataset counts.",
+      "testFile": "test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/benchmark-cohort-preserving-dataset-reset.js --check-verification",
+      "detail": "Independent verification approval recorded in quest log.",
+      "testFile": null
+    }
+  ]
+}

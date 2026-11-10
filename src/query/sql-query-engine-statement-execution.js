@@ -74,6 +74,7 @@ const PRESSURE_WRITE_AST_TYPES = new Set([
   QUERY_AST_TYPE.INSERT,
   QUERY_AST_TYPE.UPDATE,
   QUERY_AST_TYPE.DELETE,
+  QUERY_AST_TYPE.TRUNCATE,
   QUERY_AST_TYPE.CREATE_TABLE,
   QUERY_AST_TYPE.ALTER_TABLE,
   QUERY_AST_TYPE.CREATE_INDEX,
@@ -95,6 +96,37 @@ function resolveLoggedRowCount(result, statementType) {
   return Array.isArray(result?.rows) ? result.rows.length : null;
 }
 
+function isWriteSplitEvaluationEligible(
+  manager,
+  tableName,
+  isSystem,
+  writeResult,
+) {
+  if (!manager?.requestEvaluation) {
+    return false;
+  }
+  if (!tableName || isSystem) {
+    return false;
+  }
+  return writeResult?.success === true;
+}
+
+function resolveLastRequestedAtMs(lastEvaluationState) {
+  if (typeof lastEvaluationState === 'number') {
+    return lastEvaluationState;
+  }
+  return Number(lastEvaluationState?.requestedAtMs || 0);
+}
+
+function isWriteMutationAstType(type) {
+  return (
+    type === QUERY_AST_TYPE.INSERT ||
+    type === QUERY_AST_TYPE.UPDATE ||
+    type === QUERY_AST_TYPE.DELETE ||
+    type === QUERY_AST_TYPE.TRUNCATE
+  );
+}
+
 class SQLQueryEngineStatementExecution extends
   SQLQueryEngineServiceLifecycleExecution {
   /**
@@ -114,11 +146,12 @@ class SQLQueryEngineStatementExecution extends
   requestManagedSplitEvaluationForWrite(tableName, writePlan, writeResult) {
     const manager = this.partitionSplitMergeManager;
     if (
-      !manager ||
-      typeof manager.requestEvaluation !== LOCAL_STR_FUNCTION ||
-      !tableName ||
-      this.isSystemTable(tableName) ||
-      writeResult?.success !== true
+      !isWriteSplitEvaluationEligible(
+        manager,
+        tableName,
+        this.isSystemTable(tableName),
+        writeResult,
+      )
     ) {
       return;
     }
@@ -126,10 +159,7 @@ class SQLQueryEngineStatementExecution extends
     const nowMs = Date.now();
     const lastEvaluationState =
       this.lastWriteSplitEvaluationByTable.get(tableName) || null;
-    const lastRequestedAtMs =
-      typeof lastEvaluationState === 'number' ?
-        lastEvaluationState :
-        Number(lastEvaluationState?.requestedAtMs || 0);
+    const lastRequestedAtMs = resolveLastRequestedAtMs(lastEvaluationState);
     if (
       nowMs - lastRequestedAtMs <
       WRITE_ACTIVITY_SPLIT_EVALUATION_MIN_INTERVAL_MS
@@ -187,6 +217,32 @@ class SQLQueryEngineStatementExecution extends
       localPartitionIds.push(partitionId);
     }
     return localPartitionIds;
+  }
+
+  /**
+   * Execute write mutation statement (INSERT, UPDATE, DELETE, TRUNCATE).
+   * @param {Object} ast - Parsed AST.
+   * @param {Array} params - Query parameters.
+   * @param {string} sessionId - Session ID.
+   * @param {Object} options - Execution options.
+   * @return {Promise<Object>} Execution result.
+   * @private
+   */
+  async executeWriteMutationStatement(ast, params, sessionId, options) {
+    switch (ast.type) {
+    case QUERY_AST_TYPE.INSERT:
+      return this.executeInsert(ast, params, sessionId, options);
+    case QUERY_AST_TYPE.UPDATE:
+      return this.executeUpdate(ast, params, sessionId, options);
+    case QUERY_AST_TYPE.DELETE:
+      return this.executeDelete(ast, params, sessionId, options);
+    case QUERY_AST_TYPE.TRUNCATE:
+      return this.executeTruncate(ast, params, sessionId, options);
+    default:
+      throw new Error(
+        `${QUERY_ERROR_MSG.UNSUPPORTED_STATEMENT_PREFIX}${ast.type}`,
+      );
+    }
   }
 
   /**
@@ -299,65 +355,62 @@ class SQLQueryEngineStatementExecution extends
 
       // Route based on statement type
       let result;
-      switch (ast.type) {
-      case QUERY_AST_TYPE.SELECT:
-        result = await this.executeSelect(
+      if (isWriteMutationAstType(ast.type)) {
+        result = await this.executeWriteMutationStatement(
           ast,
           params,
           sessionId,
           options,
-          sql,
         );
-        break;
+      } else {
+        switch (ast.type) {
+        case QUERY_AST_TYPE.SELECT:
+          result = await this.executeSelect(
+            ast,
+            params,
+            sessionId,
+            options,
+            sql,
+          );
+          break;
 
-      case QUERY_AST_TYPE.INSERT:
-        result = await this.executeInsert(ast, params, sessionId, options);
-        break;
+        case QUERY_AST_TYPE.CREATE_TABLE:
+          result = await this.executeCreateTable(ast, sessionId, options);
+          break;
 
-      case QUERY_AST_TYPE.UPDATE:
-        result = await this.executeUpdate(ast, params, sessionId, options);
-        break;
+        case QUERY_AST_TYPE.ALTER_TABLE:
+          result = await this.executeAlterTable(ast, sessionId);
+          break;
 
-      case QUERY_AST_TYPE.DELETE:
-        result = await this.executeDelete(ast, params, sessionId, options);
-        break;
+        case QUERY_AST_TYPE.CREATE_INDEX:
+          result = await this.executeCreateIndex(ast, sessionId, options);
+          break;
 
-      case QUERY_AST_TYPE.CREATE_TABLE:
-        result = await this.executeCreateTable(ast, sessionId, options);
-        break;
+        case QUERY_AST_TYPE.DROP_INDEX:
+          result = await this.executeDropIndex(ast, sessionId, options);
+          break;
 
-      case QUERY_AST_TYPE.ALTER_TABLE:
-        result = await this.executeAlterTable(ast, sessionId);
-        break;
+        case QUERY_AST_TYPE.BEGIN_TRANSACTION:
+          return withExecutedStatementType(
+            await this.handleAdmittedBegin(sessionId, options),
+            ast.type,
+          );
 
-      case QUERY_AST_TYPE.CREATE_INDEX:
-        result = await this.executeCreateIndex(ast, sessionId, options);
-        break;
+        case QUERY_AST_TYPE.COMMIT:
+        case QUERY_AST_TYPE.ROLLBACK:
+          return withExecutedStatementType(withSessionTransactionState(
+            ast.type === QUERY_AST_TYPE.COMMIT ?
+              await this.handleCommit(sessionId, options) :
+              await this.handleRollback(sessionId, options),
+            this.transactionCoordinator,
+            sessionId,
+          ), ast.type);
 
-      case QUERY_AST_TYPE.DROP_INDEX:
-        result = await this.executeDropIndex(ast, sessionId, options);
-        break;
-
-      case QUERY_AST_TYPE.BEGIN_TRANSACTION:
-        return withExecutedStatementType(
-          await this.handleAdmittedBegin(sessionId, options),
-          ast.type,
-        );
-
-      case QUERY_AST_TYPE.COMMIT:
-      case QUERY_AST_TYPE.ROLLBACK:
-        return withExecutedStatementType(withSessionTransactionState(
-          ast.type === QUERY_AST_TYPE.COMMIT ?
-            await this.handleCommit(sessionId, options) :
-            await this.handleRollback(sessionId, options),
-          this.transactionCoordinator,
-          sessionId,
-        ), ast.type);
-
-      default:
-        throw new Error(
-          `${QUERY_ERROR_MSG.UNSUPPORTED_STATEMENT_PREFIX}${ast.type}`,
-        );
+        default:
+          throw new Error(
+            `${QUERY_ERROR_MSG.UNSUPPORTED_STATEMENT_PREFIX}${ast.type}`,
+          );
+        }
       }
 
       const queryEndMs = Date.now();

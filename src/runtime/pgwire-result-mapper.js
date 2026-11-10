@@ -74,6 +74,7 @@ const COMMAND_TAG_BY_STATEMENT_TYPE = new Map([
     `UPDATE ${requireAffectedRowCount(result, LOCAL_STR_UPDATE)}`],
   [AST_TYPE.DELETE, (result) =>
     `DELETE ${requireAffectedRowCount(result, LOCAL_STR_DELETE)}`],
+  [AST_TYPE.TRUNCATE, fixedTag('TRUNCATE TABLE')],
   [AST_TYPE.CREATE_TABLE, fixedTag('CREATE TABLE')],
   [AST_TYPE.ALTER_TABLE, fixedTag('ALTER TABLE')],
   [AST_TYPE.BEGIN_TRANSACTION, fixedTag('BEGIN')],

@@ -72,6 +72,7 @@ const EXTERNAL_TYPE = Object.freeze({
   CREATE: 'create',
   ALTER: 'alter',
   DROP: 'drop',
+  TRUNCATE: 'truncate',
 });
 
 const INSERT_MODE = Object.freeze({
@@ -501,6 +502,8 @@ class SQLParser {
       return this.convertAlter(ast);
     case EXTERNAL_TYPE.DROP:
       return this.convertDrop(ast);
+    case EXTERNAL_TYPE.TRUNCATE:
+      return this.convertTruncate(ast);
     default:
       throw new Error(
         QUERY_ERROR_MSG.UNSUPPORTED_STATEMENT_PREFIX + ast.type,
@@ -599,6 +602,15 @@ class SQLParser {
       table: tableName,
       where: ast.where ? this.convertExpression(ast.where) : null,
       returning: this.convertReturning(ast.returning),
+    };
+  }
+
+  convertTruncate(ast) {
+    const tables = ast.name.map((entry) => entry.table);
+    return {
+      type: AST_TYPE.TRUNCATE,
+      tables,
+      table: tables[0],
     };
   }
 

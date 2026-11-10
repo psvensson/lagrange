@@ -756,6 +756,20 @@ async function createLagrangeOltpAdapter(options = {}) {
         stateCounts: await queryStateCounts(workerClients[ZERO]),
       });
     },
+    async resetDataset() {
+      if (closed) throw new Error('Lagrange OLTP adapter is closed');
+      const client = await openClient(createClient, resolvedClientOptions);
+      try {
+        for (const table of DROP_TABLES) {
+          if (await tableExists(client, table)) {
+            await client.query(`TRUNCATE TABLE ${table}`);
+          }
+        }
+        await loadDataset(client, dataset);
+      } finally {
+        await client.end();
+      }
+    },
     async close(closeOptions = {}) {
       if (closed) return Object.freeze({tableDrops: null});
       closed = true;

@@ -357,6 +357,42 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
   }
 
   /**
+   * Execute a TRUNCATE statement across all partitions of the targeted tables.
+   * @param {Object} ast - Parsed TRUNCATE AST.
+   * @param {Array} params - Query parameters.
+   * @param {string} sessionId - Session ID.
+   * @param {Object} [queryOptions={}] - Query execution options.
+   * @return {Promise<Object>} Truncate result.
+   * @private
+   */
+  async executeTruncate(ast, params, sessionId, queryOptions = {}) {
+    const tables = ast.tables;
+    const results = [];
+    for (let index = 0; index < tables.length; index += 1) {
+      const tableName = tables[index];
+      const deleteAst = {
+        type: QUERY_AST_TYPE.DELETE,
+        table: tableName,
+        where: null,
+      };
+      const res = await this.executePartitionRoutedWrite(
+        deleteAst,
+        params,
+        sessionId,
+        queryOptions,
+        QUERY_AST_TYPE.DELETE,
+      );
+      results.push(res);
+    }
+    return {
+      success: true,
+      operation: QUERY_OPERATION.TRUNCATE,
+      tables,
+      results,
+    };
+  }
+
+  /**
    * Execute an UPDATE or a DELETE: plan the partitions it reaches, run its
    * owned write statement and answer it.
    * @param {Object} ast - Parsed statement AST.

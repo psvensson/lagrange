@@ -951,7 +951,7 @@ function indexProductsByContainer(products) {
  *   and run
  * @return {Function} ({run, manifest, deployment}) => {gate, deployment, events}
  */
-function createSemanticGateStage({journey, tidbJourney = null, redeploy, sshRun, opts,
+function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun, opts,
   evidenceDirOf, loadGeneratorHost = null, createMysqlConnection = null, now = dateNow}) {
   return async ({run, manifest, deployment}) => {
     const evidenceDir = evidenceDirOf(run);
@@ -970,31 +970,30 @@ function createSemanticGateStage({journey, tidbJourney = null, redeploy, sshRun,
       };
     }
     const events = [];
-    let current = deployment;
+    const current = deployment;
     let casesStarted = 0;
-    const reform = async (caseId) => {
-      current = await redeploy(run);
+    const reset = async (caseId) => {
+      if (run.resetDataset) {
+        await run.resetDataset({
+          caseId,
+          connection: connectionOf(current),
+          binding: bindingOf(manifest, current),
+        });
+      } else if (run.adapter && typeof run.adapter.resetDataset === 'function') {
+        await run.adapter.resetDataset({caseId});
+      }
       arrayPush(events, {
-        kind: EVENT.RE_FORMATION,
+        kind: EVENT.DATASET_RESET,
         at: at(),
         caseId,
-        endpoint: current.endpoint,
-        containerIds: arrayMap(current.roles, (role) => role.containerId),
+        method: run.system === SYSTEM.LAGRANGE ?
+          'adapter truncate-and-reload' : 'adapter drop-and-reload',
       });
     };
     const beforeCase = async ({caseId}) => {
       casesStarted += 1;
       if (casesStarted === 1) return null;
-      if (run.system === SYSTEM.LAGRANGE) {
-        await reform(caseId);
-      } else {
-        arrayPush(events, {
-          kind: EVENT.DATASET_RESET,
-          at: at(),
-          caseId,
-          method: 'adapter drop-and-reload',
-        });
-      }
+      await reset(caseId);
       return {connection: connectionOf(current), binding: bindingOf(manifest, current)};
     };
     const restartProduct = async (request = {}) => {
@@ -1072,7 +1071,7 @@ function createSemanticGateStage({journey, tidbJourney = null, redeploy, sshRun,
     } else {
       gate = await journey(gateArgs);
     }
-    if (run.system === SYSTEM.LAGRANGE) await reform(BEFORE_MEASUREMENT);
+    if (run.system === SYSTEM.LAGRANGE) await reset(BEFORE_MEASUREMENT);
     return {gate, deployment: current, events};
   };
 }
