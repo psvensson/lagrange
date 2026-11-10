@@ -46,6 +46,30 @@ restart/lost-answer behavior and every remaining obligation's owner. Use
 existing owners first. Distinguish boundary-only tests from reachable
 production failures. A green primitive does not certify a complete operation.
 
+### Contract-first transition record checklist
+
+Before any behavior-changing attempt, record the complete transition in the
+quest log or transition note:
+
+1. **Producer and consumer symbols**: Name the exact canonical endpoints,
+   functions, and exported types crossing the seam.
+2. **Owner-defined shape**: Define concrete types and schemas owned by the
+   producer; no untyped facades, hand-written duplicate shapes, or phantom
+   fields.
+3. **Identity and generation**: Trace subject/domain, authority, incarnation,
+   epoch, term, or generation through every hop.
+4. **Ordering**: Specify event sequences, causal position, and monotonic
+   watermarks.
+5. **Absent versus unavailable**: State explicit typed unavailability when
+   authority is absent or uninitialized; zero silent fallback reads or default
+   guesses.
+6. **Durable commit**: Name the exact monotonic persistence point where the
+   transition becomes authoritative.
+7. **Retained obligations**: Account for in-flight operations, uncommitted
+   leases, cold holds, and pending mutations.
+8. **Canonical wake and cleanup**: State the event-driven progression, resource
+   disposal, deregistration, and cancellation paths.
+
 This is an application of existing rules, not a new fixed subsystem count or
 permission to rewrite sealed acceptance. The current bounded cutover work is
 routed through the existing epic's [contract-first plan](../../../solve/epics/raft-rs-full-cutover/contract-first-2026-10-08.md);

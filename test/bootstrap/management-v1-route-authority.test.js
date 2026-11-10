@@ -29,6 +29,9 @@ import {
 import {RollingUpgradeOwner} from '../../src/bootstrap/owners/rolling-upgrade-owner.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {
+  buildLocalPartitionService,
+} from './management-v1-local-service-fixture.js';
+import {
   applyReplicaDemotion,
   applyReplicaLeadership,
 } from '../../src/raft/replica-leadership-state.js';
@@ -418,85 +421,6 @@ function buildVoterServiceRowsForPartition(partitionId, replicaIdNodes = NODE_ID
     // while partitions.leader_node_id owns partition leader identity.
     raft_role: 'follower',
   }));
-}
-
-const DEFAULT_LOCAL_SERVICE_OPTIONS = Object.freeze({
-  role: 'leader',
-  term: 3,
-  initialized: true,
-  isShutdown: false,
-  state: 'NORMAL',
-  keyRange: Object.freeze({start: null, end: null}),
-  sizeBytes: 0,
-  replicaCount: NODE_IDS.length,
-  cdcSubscribers: 0,
-  getRows: () => [],
-  queryResultOverrides: () => ({}),
-});
-
-function resolveLocalServiceStubConfig(partitionId, overrides) {
-  const base = {
-    ...DEFAULT_LOCAL_SERVICE_OPTIONS,
-    nodeId: NODE_IDS[0],
-    tableId: partitionId,
-    tableName: partitionId,
-    ...overrides,
-  };
-  const replicaId = base.replicaId ?? `${partitionId}-${base.nodeId}`;
-  const isLeader = Object.hasOwn(overrides, 'isLeader') ?
-    overrides.isLeader :
-    base.role === 'leader';
-  const leaderId = Object.hasOwn(overrides, 'leaderId') ?
-    overrides.leaderId :
-    (isLeader ? replicaId : null);
-  const statusInitialized = Object.hasOwn(overrides, 'statusInitialized') ?
-    overrides.statusInitialized :
-    base.initialized;
-  return {...base, replicaId, isLeader, leaderId, statusInitialized};
-}
-
-function buildLocalPartitionService(partitionId, overrides = {}) {
-  const cfg = resolveLocalServiceStubConfig(partitionId, overrides);
-  return {
-    partitionId,
-    tableId: cfg.tableId,
-    tableName: cfg.tableName,
-    replicaId: cfg.replicaId,
-    nodeId: cfg.nodeId,
-    initialized: cfg.initialized,
-    isShutdown: cfg.isShutdown,
-    role: cfg.role,
-    isLeader: cfg.isLeader,
-    leaderId: cfg.leaderId,
-    getRole: () => cfg.role,
-    isLeaderReplica: () => cfg.isLeader,
-    getStatus: () => ({
-      partitionId,
-      tableId: cfg.tableId,
-      tableName: cfg.tableName,
-      replicaId: cfg.replicaId,
-      nodeId: cfg.nodeId,
-      role: cfg.role,
-      isLeader: cfg.isLeader,
-      leaderId: cfg.leaderId,
-      term: cfg.term,
-      state: cfg.state,
-      keyRange: cfg.keyRange,
-      sizeBytes: cfg.sizeBytes,
-      replicaCount: cfg.replicaCount,
-      cdcSubscribers: cfg.cdcSubscribers,
-      initialized: cfg.statusInitialized,
-    }),
-    buildRemoteReadAuthorityWitness: () =>
-      (cfg.role === 'leader' ? buildLeaderWitness(partitionId, cfg.nodeId) : null),
-    executeLocalQuery: () => ({
-      success: true,
-      rows: cfg.getRows(),
-      rowSetComplete: true,
-      readAuthorityWitness: buildLeaderWitness(partitionId, cfg.nodeId),
-      ...cfg.queryResultOverrides(),
-    }),
-  };
 }
 
 function buildOwnerRpcSqlEngine(partitionServicesMap) {

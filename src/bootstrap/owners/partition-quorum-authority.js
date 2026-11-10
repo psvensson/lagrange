@@ -63,6 +63,9 @@ import {
   resolveDesiredReplicationFactor,
 } from '../replication-target-authority.js';
 import {INITIAL_PARTITION_IDS} from '../system-table-schemas-constants.js';
+import {
+  isPartitionLocalServiceStatusRecord,
+} from '../../partition/partition-local-service-status-contract.js';
 
 const objectAssign = Object.assign;
 const objectCreate = Object.create;
@@ -143,14 +146,6 @@ function isCallable(value) {
 
 function isObjectRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isPlainStatusRecord(value) {
-  if (!isObjectRecord(value)) {
-    return false;
-  }
-  const proto = objectGetPrototypeOf(value);
-  return proto === objectPrototype || proto === null;
 }
 
 function readOwnDataField(record, key) {
@@ -458,6 +453,10 @@ function hasCanonicalGetStatusPort(localService) {
   return isCallable(localService[SERVICE_FIELD.GET_STATUS]);
 }
 
+/**
+ * @param {any} localService
+ * @return {import('../../partition/partition-local-service-status-contract.js').PartitionLocalServiceStatusRecord | {unavailable: true}}
+ */
 function readCanonicalLocalServiceStatus(localService) {
   if (
     !isObjectRecord(localService) ||
@@ -468,8 +467,11 @@ function readCanonicalLocalServiceStatus(localService) {
     return LOCAL_STATUS_UNAVAILABLE;
   }
   try {
+    /** @type {import('../../partition/partition-local-service-status-contract.js').PartitionLocalServiceStatusRecord} */
     const status = localService.getStatus();
-    return isPlainStatusRecord(status) ? status : LOCAL_STATUS_UNAVAILABLE;
+    return isPartitionLocalServiceStatusRecord(status) ?
+      status :
+      LOCAL_STATUS_UNAVAILABLE;
   } catch {
     return LOCAL_STATUS_UNAVAILABLE;
   }

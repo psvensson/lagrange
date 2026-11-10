@@ -79,6 +79,7 @@ documentClass: generated
 - [partition-legacy-consensus-state-constants.js](partition-legacy-consensus-state-constants.js) - Vocabulary of the legacy partition consensus-state detector (partition-legacy-consensus-state.js). (importers: few)
 - [partition-legacy-consensus-state.js](partition-legacy-consensus-state.js) - Legacy partition consensus-state detector. (importers: few)
 - [partition-local-mutation-admission.js](partition-local-mutation-admission.js) - Direct local mutation has no replicated outcome. (importers: one)
+- [partition-local-service-status-contract.js](partition-local-service-status-contract.js) - Canonical producer contract and runtime conformance validator for PartitionLocalServiceStatusRecord. (importers: few)
 - [partition-locking-read-reservation.js](partition-locking-read-reservation.js) - Participant write-intent reservation and fail-fast lock conflict handling for PostgreSQL SELECT ... (importers: many)
 - [partition-mirror-replay-cursor.js](partition-mirror-replay-cursor.js) - Durable split/merge mirror replay cursor: the snapshot barrier index (every Raft log entry up to and including it is... (importers: many)
 - [partition-participant-release-contract.js](partition-participant-release-contract.js) - Canonical release identity and census validation. (importers: many)

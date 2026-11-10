@@ -23,20 +23,27 @@ the feature journey does not become every repair's acceptance.
    timeout-before-engagement, and missing-method failures are non-proofs.
    Preserve output naming the assertion and failure mechanism; exit status
    alone is insufficient.
-2. **Stub honesty at the binding seam.** The stub of the seam under test
-   must reproduce the live behavior the bug depends on (rejection at
-   CREATE time vs probe time; `{code}` objects vs strings; transport ACK
-   with noHandler). Prefer contract-suite-backed stubs
-   (test/contract/); if none exists for the seam, state what the stub
-   simplifies and why it cannot mask the mechanism.
+2. **Stub honesty at the binding seam.** Substitutes consume owner-defined
+   shapes and undergo producer conformance; they do not reproduce decision
+   logic. Build owner-shaped values through the owner's exported builder,
+   canonical contract validator, or the one owner-provided fixture; never
+   hand-write a duplicate shape. A fake of a port, router, or adapter fakes
+   only the transport or boundary seam documented for substitution, never the
+   owner's decisions. Decisions stay with the real owner composed into the test.
+   Prefer contract-suite-backed stubs (test/contract/); if none exists for the
+   seam, state what the stub simplifies and why it cannot mask the mechanism.
 3. **Time fidelity.** What does the fixture compress (poll intervals,
    budgets, hold windows)? For each compressed constant, argue the
    ORDERING of expiries is preserved (window < hold < budget), not just
    the values.
-4. **Field fidelity.** Ops/rows built by hand: do they carry the fields
-   the code under test branches on (createdAt for budget bounds, workflow
-   steps, status enums)? A missing timestamp can flip a bounded loop into
-   a degenerate-stop path.
+4. **Field fidelity and producer conformance.** Test doubles and hand-built
+   records must undergo producer conformance against the owner-defined
+   contract. Ops/rows must carry the exact canonical fields the code under test
+   branches on (status enums, term, sequence, identifiers); phantom members,
+   invented booleans, or missing timestamps must be rejected before
+   integration. A missing timestamp can flip a bounded loop into a
+   degenerate-stop path; a phantom flag can fake authority that live production
+   refuses.
 5. **Vacuous assertions.** For each assertion, name the fixture state that
    could make it pass trivially (single-replica role flips are ignored by
    design; empty services tables admit everything) and show it is excluded.

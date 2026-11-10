@@ -77,12 +77,20 @@ test, model, or immutable run artifact).
    - Bind the control to source/change fingerprints and keep expected-negative
      samples out of the positive certification population.
 
-9. **No local escape hatch**
+9. **No legacy, fallback, or local escape hatch**
    - Search touched callers for direct raw reads, alternate retry loops, force
-     flags, fallback success, or duplicated decision predicates that bypass the
-     registered pair.
-   - Any surviving exception must be explicit in the interaction contract,
-     bounded, and covered by the paired witness.
+     flags, fallback success, cache fallbacks for authoritative decisions,
+     silent catch defaults, permissive defaults, or duplicated decision
+     predicates that bypass the registered pair.
+   - No legacy, compatibility, alias reader, silent fallback, or alternate
+     authority implementation may survive in the caller closure.
+   - No exception wording may authorize legacy or fallback paths. Legitimate
+     representation conversion occurs at exactly one owned boundary and cannot
+     make an alternate semantic decision. Every semantic decision has one
+     canonical owner path and surfaces explicit typed unavailability when
+     authority is absent. Ensure the contract-first transition record checklist
+     ([`solver-quests.md`](../../steering/workflow-guidelines/solver-quests.md#contract-first-transition-record-checklist))
+     is satisfied before changing owner boundaries.
 
 10. **Contract + registry + proof stay aligned**
     - The changed paths are covered by the named impact contract.

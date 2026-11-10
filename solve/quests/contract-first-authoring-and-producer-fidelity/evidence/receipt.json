@@ -1,0 +1,53 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "contract-first-authoring-and-producer-fidelity",
+  "status": "pass",
+  "testFileDigests": {
+    "test/bootstrap/contract-first-authoring-fidelity.test.js": "419ea4fcc3365046bd6cef4ee3d033f554706856431d1986b3ec4d0af90fb810"
+  },
+  "generatedAt": "2026-11-10T07:46:39.800Z",
+  "receipts": [
+    {
+      "id": "real-producer-contract-typecheck",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^real producer and consumer pass contract-first typecheck with zero diagnostics$\" test/bootstrap/contract-first-authoring-fidelity.test.js",
+      "detail": "Producer and consumer pass TypeScript checkJs typecheck with zero diagnostics.",
+      "testFile": "test/bootstrap/contract-first-authoring-fidelity.test.js"
+    },
+    {
+      "id": "phantom-member-rejected",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^phantom members are rejected by static typecheck and runtime conformance$\" test/bootstrap/contract-first-authoring-fidelity.test.js",
+      "detail": "Deliberately invented phantom members are rejected before integration statically and at runtime.",
+      "testFile": "test/bootstrap/contract-first-authoring-fidelity.test.js"
+    },
+    {
+      "id": "fixture-producer-conformance",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^shared fixture doubles conform to producer contract and reject drift$\" test/bootstrap/contract-first-authoring-fidelity.test.js",
+      "detail": "Shared fixture doubles conform to the owner-defined status contract and reject silent drift.",
+      "testFile": "test/bootstrap/contract-first-authoring-fidelity.test.js"
+    },
+    {
+      "id": "real-interaction-refusal-recovery-cleanup",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^real partition service interaction proves refusal, recovery and cleanup$\" test/bootstrap/contract-first-authoring-fidelity.test.js",
+      "detail": "Real PartitionService and quorum authority demonstrate refusal, recovery, and clean resource cleanup.",
+      "testFile": "test/bootstrap/contract-first-authoring-fidelity.test.js"
+    },
+    {
+      "id": "steering-owner-alignment",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^steering and verification templates align with zero legacy fallback$\" test/bootstrap/contract-first-authoring-fidelity.test.js",
+      "detail": "Harness fidelity and owner interaction templates align with fixtures.md and zero-fallback discipline.",
+      "testFile": "test/bootstrap/contract-first-authoring-fidelity.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/contract-first-authoring-and-producer-fidelity.js --check-verification",
+      "detail": "An approving subagent verification newer than the last attempt, read through the solve store owner.",
+      "testFile": null
+    }
+  ]
+}

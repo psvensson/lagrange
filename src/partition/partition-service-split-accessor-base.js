@@ -1,6 +1,11 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceCdcStreamBase} from './partition-service-cdc-stream-base.js';
 import {
+  createPartitionLocalServiceStatusRecord,
+  assertPartitionLocalServiceStatusConformance,
+  isPartitionLocalServiceStatusRecord,
+} from './partition-local-service-status-contract.js';
+import {
   partitionSizeRetryOptions,
 } from './partition-service-write-path-helpers.js';
 import {
@@ -617,10 +622,10 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
   }
   /**
    * Get service status.
-   * @return {Object} Service status.
+   * @return {import('./partition-local-service-status-contract.js').PartitionLocalServiceStatusRecord} Service status.
    */
   getStatus() {
-    return {
+    return createPartitionLocalServiceStatusRecord({
       partitionId: this.partitionId,
       tableId: this.tableId,
       tableName: this.tableName,
@@ -636,7 +641,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       replicaCount: this.replicaIds.length,
       cdcSubscribers: this.cdcSubscribers.size,
       initialized: this.initialized,
-    };
+    });
   }
   /**
    * Set the system table cache for the rebalancer.
@@ -786,4 +791,9 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     this.maybeInitializeRebalancer();
   }
 }
-export {PartitionServiceSplitAccessorBase};
+export {
+  PartitionServiceSplitAccessorBase,
+  assertPartitionLocalServiceStatusConformance,
+  createPartitionLocalServiceStatusRecord,
+  isPartitionLocalServiceStatusRecord,
+};

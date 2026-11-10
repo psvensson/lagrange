@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 120,
     "architecture-governance": 21,
-    "bootstrap-membership": 342,
+    "bootstrap-membership": 343,
     "cdc-metadata": 70,
     "cli-tooling": 99,
     "control-plane": 236,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2628,
-  "digest": "fnv1a32-61d874cb",
+  "censusSize": 2629,
+  "digest": "fnv1a32-0e393093",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c842025a",
+  "observationDigest": "fnv1a32-5db16e08",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -164,6 +164,7 @@
     "test/bootstrap/cluster-mesh-connectivity.property.test.js": "bootstrap-membership",
     "test/bootstrap/cold-node-authority-reacquisition-pressure.test.js": "bootstrap-membership",
     "test/bootstrap/connect-websocket-phase.test.js": "bootstrap-membership",
+    "test/bootstrap/contract-first-authoring-fidelity.test.js": "bootstrap-membership",
     "test/bootstrap/control-plane-rollout-controls.test.js": "bootstrap-membership",
     "test/bootstrap/control-plane-write-health-owner.test.js": "bootstrap-membership",
     "test/bootstrap/create-message-group-phase.test.js": "bootstrap-membership",
@@ -3167,6 +3168,15 @@
         "src/node/replica-state-machine.js",
         "test/test-helpers/boot-incarnation-fixture.js",
         "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/bootstrap/contract-first-authoring-fidelity.test.js": {
+      "files": [
+        "docs/development/verification-templates/harness-fidelity.md",
+        "docs/development/verification-templates/owner-interaction.md",
+        "docs/steering/workflow-guidelines/solver-quests.md",
+        "src/bootstrap/owners/partition-quorum-authority.js",
+        "src/partition/partition-local-service-status-contract.js"
       ]
     },
     "test/bootstrap/critical-placement-trace-classifier.test.js": {
