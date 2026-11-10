@@ -15,6 +15,8 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationReason,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 // Deterministic red-on-revert suite for the user-table leader-placement
 // cure (quest user-table-leader-placement-spread): leaders concentrated
@@ -186,14 +188,14 @@ function serviceRows() {
   const rows = [];
   for (const partitionId of [P1, P2]) {
     for (const [index, nodeId] of [NODE_1, NODE_2, NODE_3].entries()) {
-      rows.push({
+      rows.push(servicesRow({
         node_id: nodeId,
         partition_id: partitionId,
         raft_role: nodeId === NODE_1 ? 'leader' : 'follower',
         service_id: `${partitionId}-r${index + 1}`,
         service_type: 'partition',
         status: 'active',
-      });
+      }));
     }
   }
   return rows;
@@ -205,8 +207,8 @@ function buildStubRebalancer(state) {
     deliveries,
     entityId: P2,
     entityType: 'partition',
-    getCurrentReplicas: () =>
-      state.serviceRows.filter((row) => row.partition_id === P2),
+    getCurrentReplicas: () => projectReplicasFromServicesRows(
+      state.serviceRows.filter((row) => row.partition_id === P2)),
     isLeader: true,
     isShuttingDown: false,
     isStabilized: () => state.stabilized,
@@ -225,6 +227,7 @@ function buildStubRebalancer(state) {
     nodeId: NODE_1,
     replicaId: `${P2}-r1`,
     systemTableCache: {
+      getAll: (tableName) => (tableName === 'services' ? state.serviceRows : []),
       filter: (tableName, predicate) => {
         const rows = tableName === 'partitions' ?
           state.partitionRows :

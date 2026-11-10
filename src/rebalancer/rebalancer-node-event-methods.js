@@ -213,8 +213,7 @@ const REBALANCER_NODE_EVENT_METHODS = {
       return false;
     }
 
-    // Filter out replicas without node_id (defensive check)
-    return replicas.some((r) => r && r.node_id === nodeId);
+    return replicas.some((replica) => replica.nodeId === nodeId);
   },
 };
 

@@ -19,6 +19,7 @@ import {
   makeAffinityWorld,
   runPlacementSim,
 } from './placement-affinity-sim.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 // ---------------------------------------------------------------------------
 // REAL-KERNEL fidelity harness for the service↔data affinity placement line
@@ -59,8 +60,13 @@ function node(nodeId, cpu, latencyGroupId) {
   };
 }
 
+// The planner's replica type (getCurrentReplicas): a projected replica of a
+// stored services row.
 function replica(replicaId, nodeId) {
-  return {replica_id: replicaId, node_id: nodeId, status: ReplicaStatus.ACTIVE};
+  return projectedReplica({
+    service_id: replicaId, replica_id: replicaId, node_id: nodeId,
+    status: ReplicaStatus.ACTIVE,
+  });
 }
 
 // Two replicas sit on loaded G1 nodes (the entity's dominant group). Fresh

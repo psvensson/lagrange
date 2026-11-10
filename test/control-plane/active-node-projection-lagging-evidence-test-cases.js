@@ -7,9 +7,11 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {nodesRow, servicesRow} from
+  '../test-helpers/system-table-row-fixture.js';
 
 // A registered, ready NODES row at the fixture incarnation.
-const readyNodeRow = (nodeId) => ({node_id: nodeId,
+const readyNodeRow = (nodeId) => nodesRow({node_id: nodeId,
   boot_incarnation: FIXTURE_ENDPOINT_INCARNATION, status: 'active',
   connection_state: 'ready', ready_lease_expires_at: 2000});
 
@@ -30,18 +32,18 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
           readyNodeRow('node-1'),
         ],
         serviceRows: [
-          {
+          servicesRow({
             service_id: 'svc-1',
             service_type: 'message_group',
             node_id: 'node-1',
             status: 'active',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'svc-2',
             service_type: 'message_group',
             node_id: 'node-2',
             status: 'active',
-          },
+          }),
         ],
         nodeEndpointRows: [
           {
@@ -98,20 +100,20 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
           readyNodeRow('node-3'),
         ],
         serviceRows: [
-          {
+          servicesRow({
             service_id: 'svc-node-1',
             service_type: 'message_group',
             node_id: 'node-1',
             status: 'active',
             address: 'node-1/message-group/svc-node-1',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'svc-node-2',
             service_type: 'message_group',
             node_id: 'node-2',
             status: 'active',
             address: 'node-2/message-group/svc-node-2',
-          },
+          }),
         ],
         nodeEndpointRows: [
           {
@@ -156,38 +158,38 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
     async (t) => {
       const activeNodeIds = resolveCanonicalActiveNodeIds({
         nodeRows: [
-          {
+          nodesRow({
             node_id: 'node-1',
             boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 2000,
             last_heartbeat: 995,
-          },
-          {
+          }),
+          nodesRow({
             node_id: 'node-2',
             boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             status: 'stopped',
             connection_state: 'ready',
             ready_lease_expires_at: 950,
             last_heartbeat: 995,
-          },
+          }),
         ],
         serviceRows: [
-          {
+          servicesRow({
             service_id: 'svc-node-1',
             service_type: 'message_group',
             node_id: 'node-1',
             status: 'active',
             address: 'node-1/message-group/svc-node-1',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'svc-node-2',
             service_type: 'message_group',
             node_id: 'node-2',
             status: 'active',
             address: 'node-2/message-group/svc-node-2',
-          },
+          }),
         ],
         nodeEndpointRows: [
           {
@@ -220,38 +222,38 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
     async (t) => {
       const activeNodeIds = resolveCanonicalActiveNodeIds({
         nodeRows: [
-          {
+          nodesRow({
             node_id: 'node-1',
             boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 71000,
             last_heartbeat: 70995,
-          },
-          {
+          }),
+          nodesRow({
             node_id: 'node-2',
             boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             status: 'stopped',
             connection_state: 'ready',
             ready_lease_expires_at: 1000,
             last_heartbeat: 1000,
-          },
+          }),
         ],
         serviceRows: [
-          {
+          servicesRow({
             service_id: 'svc-node-1',
             service_type: 'message_group',
             node_id: 'node-1',
             status: 'active',
             address: 'node-1/message-group/svc-node-1',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'svc-node-2',
             service_type: 'message_group',
             node_id: 'node-2',
             status: 'active',
             address: 'node-2/message-group/svc-node-2',
-          },
+          }),
         ],
         nodeEndpointRows: [
           {
@@ -284,38 +286,38 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
     async (t) => {
       const activeNodeIds = resolveCanonicalActiveNodeIds({
         nodeRows: [
-          {
+          nodesRow({
             node_id: 'node-1',
             boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 71000,
             last_heartbeat: 70995,
-          },
-          {
+          }),
+          nodesRow({
             node_id: 'node-2',
             boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             status: 'stopped',
             connection_state: 'ready',
             ready_lease_expires_at: 1000,
             last_heartbeat: 1000,
-          },
+          }),
         ],
         serviceRows: [
-          {
+          servicesRow({
             service_id: 'svc-node-1',
             service_type: 'message_group',
             node_id: 'node-1',
             status: 'active',
             address: 'node-1/message-group/svc-node-1',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'svc-node-2',
             service_type: 'message_group',
             node_id: 'node-2',
             status: 'active',
             address: 'node-2/message-group/svc-node-2',
-          },
+          }),
         ],
         nodeEndpointRows: [
           {

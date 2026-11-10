@@ -3,9 +3,7 @@ import {
   COLUMN,
   TABLES,
 } from '../constants/index.js';
-import {
-  normalizeNodeRow,
-} from '../control-plane/system-row-normalizers.js';
+import {decodeNodesRowView} from '../control-plane/nodes-row-decoder.js';
 import {NODE_STATE} from '../constants/node-state.js';
 import {CONNECTION_STATE} from '../constants/transport.js';
 
@@ -73,21 +71,21 @@ function createJoinReadinessMeshConnectivityMethods(options = {}) {
 
   return {
     /**
-     * Resolve one node id from a mesh-connectivity row shape.
-     * @param {Object|null} row
+     * Resolve one node id from a stored nodes row.
+     * @param {Object} row the stored nodes row
      * @return {string}
      */
     resolveMeshConnectivityNodeId(row) {
-      return normalizeNodeRow(row).nodeId;
+      return decodeNodesRowView(row).nodeId;
     },
 
     /**
-     * Resolve one node status from a mesh-connectivity row shape.
-     * @param {Object|null} row
+     * Resolve one node status from a stored nodes row.
+     * @param {Object} row the stored nodes row
      * @return {string}
      */
     resolveMeshConnectivityNodeStatus(row) {
-      return normalizeNodeRow(row).status;
+      return decodeNodesRowView(row).status;
     },
 
     /**

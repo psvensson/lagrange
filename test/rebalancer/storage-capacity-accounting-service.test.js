@@ -24,6 +24,7 @@ import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   StorageCapacityAccountingService,
 } from '../../src/rebalancer/storage-capacity-accounting-service.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 function initializeConfig(overrides = {}) {
   ConfigurationManager.resetInstance();
@@ -39,11 +40,13 @@ function initializeConfig(overrides = {}) {
   });
 }
 
+// Inserts the complete stored row: the overrides plus every other column as
+// the SQL table would store it (declared DEFAULT, else NULL).
 function insertRow(cache, tableName, row) {
   cache.applySystemTableChange(
     tableName,
     CDC_OPERATION.INSERT,
-    row,
+    systemTableRow(tableName, row),
   );
 }
 

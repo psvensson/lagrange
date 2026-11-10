@@ -51,6 +51,7 @@ import {
   createTestCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_TABLE_ID = SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS;
@@ -109,8 +110,9 @@ function createNodeRow(nodeId) {
   };
 }
 
+// A production-shaped stored services row (the cache decodes every row).
 function createReplicaRow(replicaId, nodeId, raftRole) {
-  return {
+  return servicesRow({
     service_id: replicaId,
     service_type: TEST_PARTITION_SERVICE_TYPE,
     node_id: nodeId,
@@ -119,7 +121,7 @@ function createReplicaRow(replicaId, nodeId, raftRole) {
     address: TEST_ADDRESS_PREFIX + replicaId,
     raft_role: raftRole,
     status: ReplicaStatus.ACTIVE,
-  };
+  });
 }
 
 // The planner checks `result.decision === 'allow'` while coordinator-side

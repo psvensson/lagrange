@@ -22,8 +22,8 @@ import {
 } from '../control-plane/control-plane-readiness-constants.js';
 import {
   normalizeNodeEndpointRow,
-  normalizeNodeRow,
 } from '../control-plane/system-row-normalizers.js';
+import {decodeNodesRowView} from '../control-plane/nodes-row-decoder.js';
 import {
   getLocalQueryTransportReadiness,
   isLocalQueryTransportReady,
@@ -545,7 +545,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
   getCacheActiveNodeIds(nodeRows) {
     const activeNodeIds = [];
     for (const row of Array.isArray(nodeRows) ? nodeRows : []) {
-      const normalizedRow = normalizeNodeRow(row);
+      const normalizedRow = decodeNodesRowView(row);
       const {nodeId, status} = normalizedRow;
       if (nodeId.length === 0) {
         continue;
@@ -563,7 +563,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
     }
     const activeNodeIds = [];
     for (const row of nodeRows) {
-      const normalizedRow = normalizeNodeRow(row);
+      const normalizedRow = decodeNodesRowView(row);
       const {nodeId} = normalizedRow;
       if (nodeId.length === 0) {
         continue;

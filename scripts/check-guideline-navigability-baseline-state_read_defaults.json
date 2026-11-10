@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-08T12:15:36.617Z",
-  "rawViolationCount": 413,
+  "generatedAt": "2026-11-08T22:59:28.877Z",
+  "rawViolationCount": 402,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -32,7 +32,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-local-build-base.js",
-      "line": 201,
+      "line": 202,
       "column": 4,
       "functionName": "hasDurablePublishedMembershipObservation",
       "kind": "state_read_defaults",
@@ -41,7 +41,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-local-build-base.js",
-      "line": 203,
+      "line": 204,
       "column": 6,
       "functionName": "hasDurablePublishedMembershipObservation",
       "kind": "state_read_defaults",
@@ -401,7 +401,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
-      "line": 696,
+      "line": 673,
       "column": 13,
       "functionName": "logBootstrapJoinReadinessProjection",
       "kind": "state_read_defaults",
@@ -410,7 +410,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
-      "line": 699,
+      "line": 676,
       "column": 29,
       "functionName": "logBootstrapJoinReadinessProjection",
       "kind": "state_read_defaults",
@@ -419,7 +419,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
-      "line": 707,
+      "line": 684,
       "column": 35,
       "functionName": "logBootstrapJoinReadinessProjection",
       "kind": "state_read_defaults",
@@ -797,8 +797,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 551,
-      "column": 8,
+      "line": 549,
+      "column": 6,
       "functionName": "isPriorityControlPlaneRecoveryActive",
       "kind": "state_read_defaults",
       "reason": "default on a status, role or step read; decide on a named state instead",
@@ -806,8 +806,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 686,
-      "column": 13,
+      "line": 661,
+      "column": 11,
       "functionName": "isControlPlanePublished",
       "kind": "state_read_defaults",
       "reason": "default on a status, role or step read; decide on a named state instead",
@@ -815,7 +815,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-node-liveness-methods.js",
-      "line": 182,
+      "line": 189,
       "column": 24,
       "functionName": "shouldUseStoredLivenessRow",
       "kind": "state_read_defaults",
@@ -824,7 +824,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-node-liveness-methods.js",
-      "line": 182,
+      "line": 189,
       "column": 53,
       "functionName": "shouldUseStoredLivenessRow",
       "kind": "state_read_defaults",
@@ -833,7 +833,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-node-liveness-methods.js",
-      "line": 185,
+      "line": 192,
       "column": 25,
       "functionName": "shouldUseStoredLivenessRow",
       "kind": "state_read_defaults",
@@ -842,8 +842,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
-      "line": 169,
-      "column": 11,
+      "line": 144,
+      "column": 9,
       "functionName": "getLifecycleState",
       "kind": "state_read_defaults",
       "reason": "default on a status, role or step read; decide on a named state instead",
@@ -851,7 +851,25 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
-      "line": 209,
+      "line": 182,
+      "column": 13,
+      "functionName": "<anonymous>",
+      "kind": "state_read_defaults",
+      "reason": "default on a status, role or step read; decide on a named state instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
+      "line": 222,
+      "column": 13,
+      "functionName": "<anonymous>",
+      "kind": "state_read_defaults",
+      "reason": "default on a status, role or step read; decide on a named state instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
+      "line": 271,
       "column": 15,
       "functionName": "<anonymous>",
       "kind": "state_read_defaults",
@@ -860,26 +878,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
-      "line": 249,
-      "column": 15,
-      "functionName": "<anonymous>",
-      "kind": "state_read_defaults",
-      "reason": "default on a status, role or step read; decide on a named state instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
-      "line": 298,
-      "column": 17,
-      "functionName": "<anonymous>",
-      "kind": "state_read_defaults",
-      "reason": "default on a status, role or step read; decide on a named state instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
-      "line": 309,
-      "column": 15,
+      "line": 282,
+      "column": 13,
       "functionName": "<anonymous>",
       "kind": "state_read_defaults",
       "reason": "default on a status, role or step read; decide on a named state instead",
@@ -887,8 +887,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
-      "line": 434,
-      "column": 6,
+      "line": 439,
+      "column": 4,
       "functionName": "shouldUseProvidedReadyGateForMembershipPublicationPlanningMerge",
       "kind": "state_read_defaults",
       "reason": "default on a status, role or step read; decide on a named state instead",
@@ -896,8 +896,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
-      "line": 438,
-      "column": 6,
+      "line": 443,
+      "column": 4,
       "functionName": "shouldUseProvidedReadyGateForMembershipPublicationPlanningMerge",
       "kind": "state_read_defaults",
       "reason": "default on a status, role or step read; decide on a named state instead",
@@ -905,8 +905,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 346,
-      "column": 12,
+      "line": 348,
+      "column": 10,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "state_read_defaults",
       "reason": "default on a status, role or step read; decide on a named state instead",
@@ -914,17 +914,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 349,
-      "column": 12,
-      "functionName": "resolveMembershipPublicationPlanningSnapshot",
-      "kind": "state_read_defaults",
-      "reason": "default on a status, role or step read; decide on a named state instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 353,
-      "column": 12,
+      "line": 351,
+      "column": 10,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "state_read_defaults",
       "reason": "default on a status, role or step read; decide on a named state instead",
@@ -933,7 +924,16 @@
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
       "line": 355,
-      "column": 12,
+      "column": 10,
+      "functionName": "resolveMembershipPublicationPlanningSnapshot",
+      "kind": "state_read_defaults",
+      "reason": "default on a status, role or step read; decide on a named state instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+      "line": 357,
+      "column": 10,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "state_read_defaults",
       "reason": "default on a status, role or step read; decide on a named state instead",
@@ -941,8 +941,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 289,
-      "column": 27,
+      "line": 287,
+      "column": 25,
       "functionName": "readLatestMembershipPublicationEpochStatusProbe",
       "kind": "state_read_defaults",
       "reason": "default on a status, role or step read; decide on a named state instead",
@@ -950,8 +950,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 307,
-      "column": 7,
+      "line": 305,
+      "column": 5,
       "functionName": "buildMembershipPublicationPlanningMemoKeyComponent",
       "kind": "state_read_defaults",
       "reason": "default on a status, role or step read; decide on a named state instead",
@@ -968,7 +968,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-service-node-methods.js",
-      "line": 168,
+      "line": 172,
       "column": 11,
       "functionName": "isActiveTrustRow",
       "kind": "state_read_defaults",
@@ -977,8 +977,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
-      "line": 590,
-      "column": 9,
+      "line": 576,
+      "column": 7,
       "functionName": "buildPriorityControlPlaneRecoveryProjection",
       "kind": "state_read_defaults",
       "reason": "default on a status, role or step read; decide on a named state instead",
@@ -986,8 +986,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-startup-authority-health.js",
-      "line": 605,
-      "column": 26,
+      "line": 591,
+      "column": 24,
       "functionName": "shouldPreferLocalSelfNodeEvidence",
       "kind": "state_read_defaults",
       "reason": "default on a status, role or step read; decide on a named state instead",
@@ -1013,7 +1013,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 109,
+      "line": 110,
       "column": 41,
       "functionName": "shouldAllowRecoveryEligibleProjection",
       "kind": "state_read_defaults",
@@ -1022,7 +1022,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 179,
+      "line": 180,
       "column": 37,
       "functionName": "<anonymous>",
       "kind": "state_read_defaults",
@@ -1031,7 +1031,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 209,
+      "line": 210,
       "column": 4,
       "functionName": "resolveCandidatePublicationStatus",
       "kind": "state_read_defaults",
@@ -1040,7 +1040,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-candidate-derivation.js",
-      "line": 260,
+      "line": 261,
       "column": 41,
       "functionName": "deriveMembershipPublicationCandidate",
       "kind": "state_read_defaults",
@@ -1103,7 +1103,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-priority-partition-summary.js",
-      "line": 416,
+      "line": 401,
       "column": 21,
       "functionName": "resolvePrioritySpreadReplicaExclusionReason",
       "kind": "state_read_defaults",
@@ -1418,7 +1418,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-global-projection.js",
-      "line": 212,
+      "line": 220,
       "column": 12,
       "functionName": "buildPriorityOperationSemanticRecord",
       "kind": "state_read_defaults",
@@ -1580,7 +1580,7 @@
     },
     {
       "filePath": "src/message-group/message-group-proposal-routing.js",
-      "line": 99,
+      "line": 100,
       "column": 25,
       "functionName": "proposalRefusalError",
       "kind": "state_read_defaults",
@@ -1823,7 +1823,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-recovery.js",
-      "line": 64,
+      "line": 65,
       "column": 12,
       "functionName": "removalAuthority",
       "kind": "state_read_defaults",
@@ -2102,7 +2102,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 243,
+      "line": 203,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "state_read_defaults",
@@ -2111,7 +2111,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 276,
+      "line": 236,
       "column": 11,
       "functionName": "getReplicaServiceStatusForPromotion",
       "kind": "state_read_defaults",
@@ -2120,7 +2120,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 576,
+      "line": 536,
       "column": 16,
       "functionName": "<anonymous>",
       "kind": "state_read_defaults",
@@ -2381,7 +2381,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 608,
+      "line": 615,
       "column": 11,
       "functionName": "runtimeRecoveryOutcome",
       "kind": "state_read_defaults",
@@ -2390,7 +2390,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 884,
+      "line": 892,
       "column": 11,
       "functionName": "recoveryOutcome",
       "kind": "state_read_defaults",
@@ -2416,26 +2416,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/move-planner-move-calculation-methods.js",
-      "line": 220,
-      "column": 21,
-      "functionName": "<anonymous>",
-      "kind": "state_read_defaults",
-      "reason": "default on a status, role or step read; decide on a named state instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/move-planner-move-calculation-methods.js",
-      "line": 303,
-      "column": 21,
-      "functionName": "calculateMoves",
-      "kind": "state_read_defaults",
-      "reason": "default on a status, role or step read; decide on a named state instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 68,
+      "line": 71,
       "column": 25,
       "functionName": "buildEntityTransitionSets",
       "kind": "state_read_defaults",
@@ -2785,24 +2767,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/operation-workflow-owner-ports.js",
-      "line": 217,
-      "column": 4,
-      "functionName": "getOperationWorkflowOwnerPortWorkflowStep",
-      "kind": "state_read_defaults",
-      "reason": "default on a status, role or step read; decide on a named state instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-owner-ports.js",
-      "line": 225,
-      "column": 4,
-      "functionName": "getOperationWorkflowOwnerPortStatus",
-      "kind": "state_read_defaults",
-      "reason": "default on a status, role or step read; decide on a named state instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/operation-workflow-owner-shared.js",
       "line": 448,
       "column": 23,
@@ -3119,25 +3083,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-visibility-decision.js",
-      "line": 186,
-      "column": 4,
-      "functionName": "buildPriorityRecoveryVisibilityRebalanceDecision",
-      "kind": "state_read_defaults",
-      "reason": "default on a status, role or step read; decide on a named state instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/priority-recovery-visibility-decision.js",
-      "line": 198,
-      "column": 4,
-      "functionName": "buildPriorityRecoveryVisibilityRebalanceDecision",
-      "kind": "state_read_defaults",
-      "reason": "default on a status, role or step read; decide on a named state instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/priority-recovery-visibility-decision.js",
-      "line": 208,
+      "line": 187,
       "column": 4,
       "functionName": "buildPriorityRecoveryVisibilityRebalanceDecision",
       "kind": "state_read_defaults",
@@ -3146,7 +3092,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-surplus-remove-placement-fence.js",
-      "line": 49,
+      "line": 50,
       "column": 9,
       "functionName": "completePartitionReplicaRow",
       "kind": "state_read_defaults",
@@ -3407,7 +3353,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
-      "line": 253,
+      "line": 229,
       "column": 8,
       "functionName": "resolveOperationOwnerNodeId",
       "kind": "state_read_defaults",
@@ -3416,7 +3362,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
-      "line": 253,
+      "line": 229,
       "column": 35,
       "functionName": "resolveOperationOwnerNodeId",
       "kind": "state_read_defaults",
@@ -3425,7 +3371,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
-      "line": 254,
+      "line": 230,
       "column": 8,
       "functionName": "resolveOperationOwnerNodeId",
       "kind": "state_read_defaults",
@@ -3434,7 +3380,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-visibility-methods.js",
-      "line": 439,
+      "line": 416,
       "column": 46,
       "functionName": "isPriorityRecoveryOwnerReadActive",
       "kind": "state_read_defaults",
@@ -3452,7 +3398,7 @@
     },
     {
       "filePath": "src/rebalancer/storage-admission-service.js",
-      "line": 581,
+      "line": 569,
       "column": 14,
       "functionName": "summarizeNodeReadinessRow",
       "kind": "state_read_defaults",
@@ -3479,27 +3425,9 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 144,
+      "line": 146,
       "column": 6,
       "functionName": "buildAvailableNodeMembershipConstraintEvidence",
-      "kind": "state_read_defaults",
-      "reason": "default on a status, role or step read; decide on a named state instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-budget-planning.js",
-      "line": 362,
-      "column": 21,
-      "functionName": "<anonymous>",
-      "kind": "state_read_defaults",
-      "reason": "default on a status, role or step read; decide on a named state instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-budget-planning.js",
-      "line": 409,
-      "column": 21,
-      "functionName": "<anonymous>",
       "kind": "state_read_defaults",
       "reason": "default on a status, role or step read; decide on a named state instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -3515,34 +3443,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 324,
-      "column": 8,
-      "functionName": "<anonymous>",
-      "kind": "state_read_defaults",
-      "reason": "default on a status, role or step read; decide on a named state instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 327,
-      "column": 8,
-      "functionName": "<anonymous>",
-      "kind": "state_read_defaults",
-      "reason": "default on a status, role or step read; decide on a named state instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 328,
-      "column": 10,
-      "functionName": "<anonymous>",
-      "kind": "state_read_defaults",
-      "reason": "default on a status, role or step read; decide on a named state instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 385,
+      "line": 375,
       "column": 8,
       "functionName": "shouldRequireFullControlPlanePublicationEndpointVisibility",
       "kind": "state_read_defaults",
@@ -3551,7 +3452,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 481,
+      "line": 471,
       "column": 13,
       "functionName": "selectPublishedMembershipRow",
       "kind": "state_read_defaults",
@@ -3560,7 +3461,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 486,
+      "line": 476,
       "column": 6,
       "functionName": "selectPublishedMembershipRow",
       "kind": "state_read_defaults",
@@ -3587,7 +3488,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 481,
+      "line": 463,
       "column": 6,
       "functionName": "isTrackedInFlightOperation",
       "kind": "state_read_defaults",
@@ -3596,7 +3497,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 481,
+      "line": 463,
       "column": 33,
       "functionName": "isTrackedInFlightOperation",
       "kind": "state_read_defaults",
@@ -3605,7 +3506,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 727,
+      "line": 690,
       "column": 6,
       "functionName": "getNormalizedOperationWorkflowStep",
       "kind": "state_read_defaults",
@@ -3614,7 +3515,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 728,
+      "line": 691,
       "column": 8,
       "functionName": "getNormalizedOperationWorkflowStep",
       "kind": "state_read_defaults",
@@ -3623,7 +3524,7 @@
     },
     {
       "filePath": "src/rebalancer/user-table-leader-placement-cure.js",
-      "line": 376,
+      "line": 364,
       "column": 20,
       "functionName": "buildHandoffResponseLogContext",
       "kind": "state_read_defaults",

@@ -28,10 +28,22 @@ import {
   REBALANCER_MOVE_TYPE,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 // A priority control-plane partition (the run4 victim class), so the
 // cleanup-only-while-pending bypass does NOT gate ADDs for it.
 const PRIORITY_PARTITION_ID = 'sql_transaction_participants-p1';
+
+// An ACTIVE replica of the priority partition as getCurrentReplicas returns it.
+function active(replicaId, nodeId) {
+  return projectedReplica({
+    service_id: replicaId,
+    replica_id: replicaId,
+    partition_id: PRIORITY_PARTITION_ID,
+    node_id: nodeId,
+    status: ReplicaStatus.ACTIVE,
+  });
+}
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -79,9 +91,9 @@ test('MovePlanner spread-vs-count reconciliation', async (t) => {
     async (t) => {
       // 3 active, concentrated on 2 nodes (spread unsatisfied), target 3.
       const currentReplicas = [
-        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r3', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
+        active('r1', 'node-1'),
+        active('r2', 'node-1'),
+        active('r3', 'node-2'),
       ];
       const planner = new MovePlanner({
         entityId: PRIORITY_PARTITION_ID,
@@ -112,9 +124,9 @@ test('MovePlanner spread-vs-count reconciliation', async (t) => {
     'emits one serial spread ADD when no drain is pending',
     async (t) => {
       const currentReplicas = [
-        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r3', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
+        active('r1', 'node-1'),
+        active('r2', 'node-1'),
+        active('r3', 'node-2'),
       ];
       const planner = new MovePlanner({
         entityId: PRIORITY_PARTITION_ID,
@@ -147,8 +159,8 @@ test('MovePlanner spread-vs-count reconciliation', async (t) => {
     'still emits a legitimate ADD when genuinely under target',
     async (t) => {
       const currentReplicas = [
-        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
+        active('r1', 'node-1'),
+        active('r2', 'node-2'),
       ];
       const planner = new MovePlanner({
         entityId: PRIORITY_PARTITION_ID,
@@ -177,9 +189,9 @@ test('MovePlanner spread-vs-count reconciliation', async (t) => {
     'a pending source move does not leak an ordinary count-growth ADD',
     async (t) => {
       const currentReplicas = [
-        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r3', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+        active('r1', 'node-1'),
+        active('r2', 'node-1'),
+        active('r3', 'node-1'),
       ];
       const planner = new MovePlanner({
         entityId: PRIORITY_PARTITION_ID,

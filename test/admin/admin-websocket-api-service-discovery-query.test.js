@@ -18,6 +18,12 @@ import {
   waitForBackgroundRepairToSettle,
   waitForMessage,
 } from './admin-websocket-api-test-support.js';
+import {
+  nodesRow,
+  replicaOperationsRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 import {AdminWebSocketAPI, MessageType} from
   '../../src/admin/admin-websocket-api.js';
 import {
@@ -47,16 +53,14 @@ test(
     const writableCache = createAuthoritativeRepairCache('node-local');
     const now = Date.now();
     writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-      id: 'node-local',
       node_id: 'node-local',
-      address: 'localhost:8080',
       node_address: 'localhost:8080',
       status: 'active',
       connection_state: 'ready',
       last_heartbeat: now,
       ready_lease_expires_at: now + 10000,
     });
-    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       service_id: 'peer-service-r1',
       service_type: 'partition',
       node_id: 'node-peer',
@@ -65,23 +69,25 @@ test(
       raft_role: 'leader',
       status: 'active',
       address: 'node-peer/partition/peer-table-p1-r1',
-    });
-    writableCache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-      endpoint_id: 'endpoint-node-local',
-      node_id: 'node-local',
-      transport_type: 'ws',
-      address: 'ws://node-local:8082',
-      status: 'active',
-    });
-    writableCache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-      endpoint_id: 'endpoint-node-peer',
-      node_id: 'node-peer',
-      transport_type: 'ws',
-      address: 'ws://node-peer:8082',
-      status: 'active',
-    });
+    }));
+    writableCache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+        endpoint_id: 'endpoint-node-local',
+        node_id: 'node-local',
+        transport_type: 'ws',
+        address: 'ws://node-local:8082',
+        status: 'active',
+      }));
+    writableCache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+        endpoint_id: 'endpoint-node-peer',
+        node_id: 'node-peer',
+        transport_type: 'ws',
+        address: 'ws://node-peer:8082',
+        status: 'active',
+      }));
 
     const failingGateway = {
       executeReadCalls: [],
@@ -159,16 +165,14 @@ test(
     const nowMs = 1740589945123;
     const authoritativeNodeRows = [
       ...writableCache.getAll(TABLES.NODES),
-      {
-        id: 'node-peer',
+      nodesRow({
         node_id: 'node-peer',
-        address: 'localhost:8081',
         node_address: 'localhost:8081',
         status: 'active',
         connection_state: 'ready',
         last_heartbeat: nowMs - 1000,
         ready_lease_expires_at: nowMs + 15000,
-      },
+      }),
     ];
     const repairEngine = createSystemTableRepairQueryEngine({
       [TABLES.NODES]: authoritativeNodeRows,
@@ -231,15 +235,17 @@ test(
   async (t) => {
     let nowMs = 1740589945123;
     const writableCache = createPopulatedCache();
-    writableCache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
-      operation_id: 'op-stale-create',
-      partition_id: 'partition-user-1',
-      entity_id: 'partition-user-1',
-      status: 'creating',
-      workflow_step: 'CREATING',
-      created_at: nowMs - 180000,
-      updated_at: nowMs - 180000,
-    });
+    writableCache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT',
+      replicaOperationsRow({
+        operation_id: 'op-stale-create',
+        partition_id: 'partition-user-1',
+        entity_type: 'partition',
+        entity_id: 'partition-user-1',
+        status: 'creating',
+        workflow_step: 'CREATING',
+        created_at: nowMs - 180000,
+        updated_at: nowMs - 180000,
+      }));
 
     const repairEngine = createSystemTableRepairQueryEngine({
       [TABLES.NODES]: writableCache.getAll(TABLES.NODES),
@@ -309,9 +315,7 @@ test(
     const staleHeartbeatMs = nowMs - 45000;
     const writableCache = createAuthoritativeRepairCache('node-local');
     writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-      id: 'node-local',
       node_id: 'node-local',
-      address: 'localhost:8080',
       node_address: 'localhost:8080',
       status: 'active',
       connection_state: 'ready',
@@ -379,48 +383,39 @@ test(
     const rightPartitionId = 'partition-benchmark-events-right';
 
     const writableCache = createAuthoritativeRepairCache(nodeId);
-    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-      id: tableId,
-      table_id: tableId,
-      name: 'benchmark_events',
-      table_name: 'benchmark_events',
-      active_partition_version: 2,
-      partition_count: 2,
-      partition_transition_state: 'split_cutover_active',
-      partition_transition_metadata: JSON.stringify({
-        workflowId: 'split-table-benchmark-events-v2',
-        sourcePartitionId,
-        targetPartitionVersion: 2,
-        targetPartitionIds: [leftPartitionId, rightPartitionId],
-      }),
-    });
-    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      id: sourcePartitionId,
-      partition_id: sourcePartitionId,
-      table_id: tableId,
-      table_name: 'benchmark_events',
-      partition_version: 1,
-      state: 'NORMAL',
-    });
+    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT',
+      systemTableRow(TABLES.TABLES, {
+        table_id: tableId,
+        table_name: 'benchmark_events',
+        active_partition_version: 2,
+        partition_count: 2,
+        partition_transition_state: 'split_cutover_active',
+        partition_transition_metadata: JSON.stringify({
+          workflowId: 'split-table-benchmark-events-v2',
+          sourcePartitionId,
+          targetPartitionVersion: 2,
+          targetPartitionIds: [leftPartitionId, rightPartitionId],
+        }),
+      }));
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: sourcePartitionId,
+        table_id: tableId,
+        table_name: 'benchmark_events',
+        partition_version: 1,
+        state: 'NORMAL',
+      }));
 
     const authoritativePartitions = [
       ...writableCache.getAll(TABLES.PARTITIONS),
-      {
-        id: leftPartitionId,
-        partition_id: leftPartitionId,
-        table_id: tableId,
-        table_name: 'benchmark_events',
-        partition_version: 2,
-        state: 'NORMAL',
-      },
-      {
-        id: rightPartitionId,
-        partition_id: rightPartitionId,
-        table_id: tableId,
-        table_name: 'benchmark_events',
-        partition_version: 2,
-        state: 'NORMAL',
-      },
+      ...[leftPartitionId, rightPartitionId].map((partitionId) =>
+        systemTableRow(TABLES.PARTITIONS, {
+          partition_id: partitionId,
+          table_id: tableId,
+          table_name: 'benchmark_events',
+          partition_version: 2,
+          state: 'NORMAL',
+        })),
     ];
 
     let executeRequestCalls = 0;
@@ -620,7 +615,6 @@ test(
     seedRoutedTableDiscoveryRows(writableCache);
 
     writableCache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
-      id: 'service-benchmark-events-node-1',
       service_id: 'service-benchmark-events-node-1',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
@@ -644,8 +638,7 @@ test(
       [TABLES.SERVICE_ENDPOINTS]: writableCache.getAll(TABLES.SERVICE_ENDPOINTS),
       [TABLES.REPLICA_OPERATIONS]: writableCache.getAll(TABLES.REPLICA_OPERATIONS),
       [TABLES.SERVICES]: [
-        {
-          id: 'service-1',
+        servicesRow({
           service_id: 'service-1',
           node_id: 'node-1',
           service_type: 'partition',
@@ -653,9 +646,8 @@ test(
           status: 'active',
           raft_role: 'leader',
           address: 'localhost:7000',
-        },
-        {
-          id: 'service-benchmark-events-node-1',
+        }),
+        servicesRow({
           service_id: 'service-benchmark-events-node-1',
           service_type: 'partition',
           partition_id: 'partition-benchmark-events-1',
@@ -663,7 +655,7 @@ test(
           status: 'active',
           raft_role: 'leader',
           address: '10.0.0.1:7001',
-        },
+        }),
       ],
     });
     const api = new AdminWebSocketAPI({
@@ -724,26 +716,25 @@ test(
   'AdminWebSocketAPI - service discovery builder stays local unless repair is explicit',
   async (t) => {
     const writableCache = createPopulatedCache();
-    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-      id: 'node-2',
-      address: 'localhost:8081',
+      node_id: 'node-2',
+      node_address: 'localhost:8081',
       status: 'active',
-    });
-    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-      id: 'table-benchmark-events',
-      table_id: 'table-benchmark-events',
-      name: 'benchmark_events',
-      table_name: 'benchmark_events',
-    });
-    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      id: 'partition-benchmark-events-1',
-      partition_id: 'partition-benchmark-events-1',
-      table_id: 'table-benchmark-events',
-      table_name: 'benchmark_events',
-      keyStart: null,
-      keyEnd: null,
-    });
+    }));
+    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT',
+      systemTableRow(TABLES.TABLES, {
+        table_id: 'table-benchmark-events',
+        table_name: 'benchmark_events',
+      }));
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: 'partition-benchmark-events-1',
+        table_id: 'table-benchmark-events',
+        table_name: 'benchmark_events',
+        partition_key_start: null,
+        partition_key_end: null,
+      }));
 
     const authoritativeCache = createPopulatedCache();
     seedRoutedTableDiscoveryRows(authoritativeCache);
@@ -795,35 +786,34 @@ test(
     'when scoped cache is incomplete',
   async (t) => {
     const writableCache = createPopulatedCache();
-    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-      id: 'node-2',
-      address: 'localhost:8081',
+      node_id: 'node-2',
+      node_address: 'localhost:8081',
       status: 'active',
-    });
-    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-      id: 'table-benchmark-events',
-      table_id: 'table-benchmark-events',
-      name: 'benchmark_events',
-      table_name: 'benchmark_events',
-    });
-    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      id: 'partition-benchmark-events-1',
-      partition_id: 'partition-benchmark-events-1',
-      table_id: 'table-benchmark-events',
-      table_name: 'benchmark_events',
-      keyStart: null,
-      keyEnd: null,
-    });
-    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-      id: 'service-benchmark-events-node-1',
+    }));
+    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT',
+      systemTableRow(TABLES.TABLES, {
+        table_id: 'table-benchmark-events',
+        table_name: 'benchmark_events',
+      }));
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: 'partition-benchmark-events-1',
+        table_id: 'table-benchmark-events',
+        table_name: 'benchmark_events',
+        partition_key_start: null,
+        partition_key_end: null,
+      }));
+    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
+      service_id: 'service-benchmark-events-node-1',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-1',
       status: 'active',
       raft_role: 'leader',
       address: '10.0.0.1:7001',
-    });
+    }));
     writableCache.lastAppliedAtMsByTableName.set(
       TABLES.SERVICE_ENDPOINTS,
       Date.now(),
@@ -890,35 +880,34 @@ test(
   'AdminWebSocketAPI - table-scoped discovery repairs empty fresh cache from authoritative system tables',
   async (t) => {
     const writableCache = createPopulatedCache();
-    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-      id: 'node-2',
-      address: 'localhost:8081',
+      node_id: 'node-2',
+      node_address: 'localhost:8081',
       status: 'active',
-    });
-    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-      id: 'table-benchmark-events',
-      table_id: 'table-benchmark-events',
-      name: 'benchmark_events',
-      table_name: 'benchmark_events',
-    });
-    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      id: 'partition-benchmark-events-1',
-      partition_id: 'partition-benchmark-events-1',
-      table_id: 'table-benchmark-events',
-      table_name: 'benchmark_events',
-      keyStart: null,
-      keyEnd: null,
-    });
-    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-      id: 'service-benchmark-events-node-1',
+    }));
+    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT',
+      systemTableRow(TABLES.TABLES, {
+        table_id: 'table-benchmark-events',
+        table_name: 'benchmark_events',
+      }));
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: 'partition-benchmark-events-1',
+        table_id: 'table-benchmark-events',
+        table_name: 'benchmark_events',
+        partition_key_start: null,
+        partition_key_end: null,
+      }));
+    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
+      service_id: 'service-benchmark-events-node-1',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-1',
       status: 'active',
       raft_role: 'leader',
       address: '10.0.0.1:7001',
-    });
+    }));
     writableCache.lastAppliedAtMsByTableName.set(
       TABLES.SERVICE_ENDPOINTS,
       Date.now(),
@@ -1002,35 +991,34 @@ test(
     'gateway authoritative reads before routed SQL',
   async (t) => {
     const writableCache = createPopulatedCache();
-    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-      id: 'node-2',
-      address: 'localhost:8081',
+      node_id: 'node-2',
+      node_address: 'localhost:8081',
       status: 'active',
-    });
-    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-      id: 'table-benchmark-events',
-      table_id: 'table-benchmark-events',
-      name: 'benchmark_events',
-      table_name: 'benchmark_events',
-    });
-    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      id: 'partition-benchmark-events-1',
-      partition_id: 'partition-benchmark-events-1',
-      table_id: 'table-benchmark-events',
-      table_name: 'benchmark_events',
-      keyStart: null,
-      keyEnd: null,
-    });
-    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-      id: 'service-benchmark-events-node-1',
+    }));
+    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT',
+      systemTableRow(TABLES.TABLES, {
+        table_id: 'table-benchmark-events',
+        table_name: 'benchmark_events',
+      }));
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: 'partition-benchmark-events-1',
+        table_id: 'table-benchmark-events',
+        table_name: 'benchmark_events',
+        partition_key_start: null,
+        partition_key_end: null,
+      }));
+    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
+      service_id: 'service-benchmark-events-node-1',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-1',
       status: 'active',
       raft_role: 'leader',
       address: '10.0.0.1:7001',
-    });
+    }));
     writableCache.lastAppliedAtMsByTableName.set(
       TABLES.SERVICE_ENDPOINTS,
       Date.now(),

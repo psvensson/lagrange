@@ -1,5 +1,6 @@
 import {registerMembershipPublicationCoordinatorTailAckForNodeTests} from './membership-publication-coordinator-tail-ack-for-node-test-cases.js';
 import {registerMembershipPublicationCoordinatorTailMoreTests} from './membership-publication-coordinator-tail-more-test-cases.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 export function registerMembershipPublicationCoordinatorTailTests({
   test,
@@ -25,18 +26,18 @@ export function registerMembershipPublicationCoordinatorTailTests({
           published_active_node_ids: ['node-1', 'node-2'],
         },
         nodeRows: [
-          {
+          nodesRow({
             node_id: 'node-1',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 5000,
-          },
-          {
+          }),
+          nodesRow({
             node_id: 'node-2',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 5000,
-          },
+          }),
         ],
         readinessEntries: [
           {nodeId: 'node-1', dimensions: {clusterMemberHealthy: true}},
@@ -59,8 +60,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
           },
         ],
         serviceRows: [
-          {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
-          {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
+          servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
+          servicesRow({service_id: 'svc-2', node_id: 'node-2', status: 'active'}),
         ],
         nowMs: 1000,
       });
@@ -89,24 +90,24 @@ export function registerMembershipPublicationCoordinatorTailTests({
           acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
         },
         nodeRows: [
-          {
+          nodesRow({
             node_id: 'node-1',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 5000,
-          },
-          {
+          }),
+          nodesRow({
             node_id: 'node-2',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 5000,
-          },
-          {
+          }),
+          nodesRow({
             node_id: 'node-3',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 5000,
-          },
+          }),
         ],
         readinessEntries: [
           {
@@ -164,7 +165,7 @@ export function registerMembershipPublicationCoordinatorTailTests({
           },
         ],
         serviceRows: [
-          {
+          servicesRow({
             service_id: 'cp-publications-r1',
             node_id: 'node-1',
             partition_id: 'control_plane_publications-p1',
@@ -172,8 +173,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'leader',
             address: 'node-1/partition/control_plane_publications-p1-r1',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'cp-publications-r2',
             node_id: 'node-2',
             partition_id: 'control_plane_publications-p1',
@@ -181,8 +182,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-2/partition/control_plane_publications-p1-r2',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'cp-publications-r3',
             node_id: 'node-3',
             partition_id: 'control_plane_publications-p1',
@@ -190,8 +191,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-3/partition/control_plane_publications-p1-r3',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'replica-ops-r1',
             node_id: 'node-1',
             partition_id: 'replica_operations-p1',
@@ -199,8 +200,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'leader',
             address: 'node-1/partition/replica_operations-p1-r1',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'replica-ops-r2',
             node_id: 'node-1',
             partition_id: 'replica_operations-p1',
@@ -208,8 +209,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-1/partition/replica_operations-p1-r2',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'replica-ops-r3',
             node_id: 'node-1',
             partition_id: 'replica_operations-p1',
@@ -217,7 +218,7 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-1/partition/replica_operations-p1-r3',
-          },
+          }),
         ],
         nowMs: 1000,
       });
@@ -255,24 +256,24 @@ export function registerMembershipPublicationCoordinatorTailTests({
           acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
         },
         nodeRows: [
-          {
+          nodesRow({
             node_id: 'node-1',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 5000,
-          },
-          {
+          }),
+          nodesRow({
             node_id: 'node-2',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 5000,
-          },
-          {
+          }),
+          nodesRow({
             node_id: 'node-3',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 5000,
-          },
+          }),
         ],
         readinessEntries: [
           {
@@ -351,7 +352,7 @@ export function registerMembershipPublicationCoordinatorTailTests({
           },
         ],
         serviceRows: [
-          {
+          servicesRow({
             service_id: 'cp-left-r1',
             node_id: 'node-1',
             partition_id: 'control_plane_publications_p_a_left',
@@ -359,8 +360,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'leader',
             address: 'node-1/partition/control_plane_publications_p_a_left-r1',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'cp-left-r2',
             node_id: 'node-2',
             partition_id: 'control_plane_publications_p_a_left',
@@ -368,8 +369,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-2/partition/control_plane_publications_p_a_left-r2',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'cp-left-r3',
             node_id: 'node-3',
             partition_id: 'control_plane_publications_p_a_left',
@@ -377,8 +378,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-3/partition/control_plane_publications_p_a_left-r3',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'cp-right-r1',
             node_id: 'node-1',
             partition_id: 'control_plane_publications_p_b_right',
@@ -386,8 +387,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'leader',
             address: 'node-1/partition/control_plane_publications_p_b_right-r1',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'cp-right-r2',
             node_id: 'node-2',
             partition_id: 'control_plane_publications_p_b_right',
@@ -395,8 +396,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-2/partition/control_plane_publications_p_b_right-r2',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'cp-right-r3',
             node_id: 'node-3',
             partition_id: 'control_plane_publications_p_b_right',
@@ -404,8 +405,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-3/partition/control_plane_publications_p_b_right-r3',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'replica-ops-r1',
             node_id: 'node-1',
             partition_id: 'replica_operations-p1',
@@ -413,8 +414,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'leader',
             address: 'node-1/partition/replica_operations-p1-r1',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'replica-ops-r2',
             node_id: 'node-2',
             partition_id: 'replica_operations-p1',
@@ -422,8 +423,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-2/partition/replica_operations-p1-r2',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'replica-ops-r3',
             node_id: 'node-3',
             partition_id: 'replica_operations-p1',
@@ -431,8 +432,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-3/partition/replica_operations-p1-r3',
-          },
-          ...['node-1', 'node-2', 'node-3'].map((nodeId, index) => ({
+          }),
+          ...['node-1', 'node-2', 'node-3'].map((nodeId, index) => servicesRow({
             service_id: `schema-ops-r${index + 1}`,
             node_id: nodeId,
             partition_id: 'schema_operations-p1',
@@ -441,7 +442,7 @@ export function registerMembershipPublicationCoordinatorTailTests({
             raft_role: index === 0 ? 'leader' : 'follower',
             address: `${nodeId}/partition/schema_operations-p1-r${index + 1}`,
           })),
-          {
+          servicesRow({
             service_id: 'sql-tx-r1',
             node_id: 'node-1',
             partition_id: 'sql_transactions-p1',
@@ -449,8 +450,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'leader',
             address: 'node-1/partition/sql_transactions-p1-r1',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'sql-tx-r2',
             node_id: 'node-2',
             partition_id: 'sql_transactions-p1',
@@ -458,8 +459,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-2/partition/sql_transactions-p1-r2',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'sql-tx-r3',
             node_id: 'node-3',
             partition_id: 'sql_transactions-p1',
@@ -467,8 +468,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-3/partition/sql_transactions-p1-r3',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'sql-part-r1',
             node_id: 'node-1',
             partition_id: 'sql_transaction_participants-p1',
@@ -476,8 +477,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'leader',
             address: 'node-1/partition/sql_transaction_participants-p1-r1',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'sql-part-r2',
             node_id: 'node-2',
             partition_id: 'sql_transaction_participants-p1',
@@ -485,8 +486,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-2/partition/sql_transaction_participants-p1-r2',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'sql-part-r3',
             node_id: 'node-3',
             partition_id: 'sql_transaction_participants-p1',
@@ -494,8 +495,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-3/partition/sql_transaction_participants-p1-r3',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'sql-write-r1',
             node_id: 'node-1',
             partition_id: 'sql_write_operations-p1',
@@ -503,8 +504,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'leader',
             address: 'node-1/partition/sql_write_operations-p1-r1',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'sql-write-r2',
             node_id: 'node-2',
             partition_id: 'sql_write_operations-p1',
@@ -512,8 +513,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-2/partition/sql_write_operations-p1-r2',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'sql-write-r3',
             node_id: 'node-3',
             partition_id: 'sql_write_operations-p1',
@@ -521,7 +522,7 @@ export function registerMembershipPublicationCoordinatorTailTests({
             status: 'active',
             raft_role: 'follower',
             address: 'node-3/partition/sql_write_operations-p1-r3',
-          },
+          }),
         ],
         nowMs: 1000,
       });
@@ -823,12 +824,12 @@ export function registerMembershipPublicationCoordinatorTailTests({
           acknowledged_node_ids: ['node-1', 'node-2', 'node-3', 'node-4'],
         },
         nodeRows: [
-          {
+          nodesRow({
             node_id: 'node-1',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 5000,
-          },
+          }),
         ],
         readinessEntries: [
           {
@@ -852,7 +853,7 @@ export function registerMembershipPublicationCoordinatorTailTests({
           },
         ],
         serviceRows: [
-          {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
+          servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
         ],
         nowMs: 1000,
       });

@@ -1,5 +1,6 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {MOVE_REASON} from './rebalancer-constants.js';
+import {projectReplicasFromServicesRows} from './projected-replica.js';
 import {
   getConcurrentAddBudgetLimit,
   getLatestMembershipPublicationRow,
@@ -242,7 +243,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
       capturedAtMs,
       committedRowsObservation: {
         state: 'present',
-        rows: serviceRows,
+        rows: projectReplicasFromServicesRows(serviceRows),
         observedAtMs: capturedAtMs,
       },
       inFlightOperationObservation: {

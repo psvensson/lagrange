@@ -34,6 +34,7 @@ import {
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const LOCAL_NODE = 'node-new-leader';
 const STALE_LEADER = 'node-old-leader';
@@ -230,12 +231,13 @@ function buildElectionReplica({term = 11, withTermResolver = true} = {}) {
   cache.applySystemTableChange(
     SYSTEM_TABLE_NAME.PARTITIONS,
     'INSERT',
-    {
+    systemTableRow(SYSTEM_TABLE_NAME.PARTITIONS, {
       partition_id: PARTITION_ID,
+      table_id: 'replica_operations',
       leader_node_id: STALE_LEADER,
       created_at: 1_000,
       updated_at: 2_000,
-    },
+    }),
     {causeId: 'cdc:durable-partition-row'},
   );
   const replica = Object.assign(

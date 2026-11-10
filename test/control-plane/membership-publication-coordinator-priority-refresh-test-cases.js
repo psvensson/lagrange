@@ -2,6 +2,7 @@ import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const PRIORITY_REFRESH_NODE_IDS = Object.freeze([
   'node-1',
@@ -49,8 +50,6 @@ const PRIORITY_REFRESH_STALE_SERVICE_NODE_IDS = Object.freeze([
 ]);
 const PRIORITY_REFRESH_STILL_BLOCKED_PARTITION_ID =
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTIONS];
-const PRIORITY_REFRESH_STALE_READ_SOURCE = 'authoritative';
-const PRIORITY_REFRESH_FRESH_READ_SOURCE = 'cache';
 
 export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
   test,
@@ -59,7 +58,7 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
 }) {
   test('reconcileClusterMembership refreshes stale priority spread to satisfied when terminal service rows are visible',
     async (t) => {
-      const nodeRows = PRIORITY_REFRESH_NODE_IDS.map((nodeId) => ({
+      const nodeRows = PRIORITY_REFRESH_NODE_IDS.map((nodeId) => nodesRow({
         node_id: nodeId,
         status: PRIORITY_REFRESH_STATUS_ACTIVE,
         connection_state: PRIORITY_REFRESH_CONNECTION_READY,
@@ -79,7 +78,7 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
         replica_count: PRIORITY_REFRESH_REPLICA_COUNT,
       }));
       const serviceRows = PRIORITY_REFRESH_PARTITION_IDS.flatMap((partitionId) =>
-        PRIORITY_REFRESH_NODE_IDS.map((nodeId) => ({
+        PRIORITY_REFRESH_NODE_IDS.map((nodeId) => servicesRow({
           service_id: `${partitionId}-${nodeId}`,
           node_id: nodeId,
           partition_id: partitionId,
@@ -194,12 +193,11 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
 
   test('reconcileClusterMembership merges stale authoritative and fresher projected planning evidence',
     async (t) => {
-      const nodeRows = PRIORITY_REFRESH_NODE_IDS.map((nodeId) => ({
+      const nodeRows = PRIORITY_REFRESH_NODE_IDS.map((nodeId) => nodesRow({
         node_id: nodeId,
         status: PRIORITY_REFRESH_STATUS_ACTIVE,
         connection_state: PRIORITY_REFRESH_CONNECTION_READY,
         ready_lease_expires_at: PRIORITY_REFRESH_READY_LEASE_EXPIRES_AT_MS,
-        updated_at: PRIORITY_REFRESH_NOW_MS,
       }));
       const nodeEndpointRows = PRIORITY_REFRESH_NODE_IDS.map((nodeId) => ({
         endpoint_id: `${nodeId}-ws`,
@@ -217,7 +215,7 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
         updated_at: PRIORITY_REFRESH_NOW_MS,
       }));
       const staleServiceRows = PRIORITY_REFRESH_PARTITION_IDS.flatMap((partitionId) =>
-        PRIORITY_REFRESH_STALE_SERVICE_NODE_IDS.map((nodeId) => ({
+        PRIORITY_REFRESH_STALE_SERVICE_NODE_IDS.map((nodeId) => servicesRow({
           service_id: `${partitionId}-${nodeId}`,
           node_id: nodeId,
           partition_id: partitionId,
@@ -226,7 +224,6 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
           raft_role: PRIORITY_REFRESH_RAFT_ROLE_FOLLOWER,
           address: `${nodeId}/partition/${partitionId}`,
           updated_at: PRIORITY_REFRESH_OLD_TIMESTAMP_MS,
-          read_source: PRIORITY_REFRESH_STALE_READ_SOURCE,
         })),
       );
       const projectedServiceRows = PRIORITY_REFRESH_PARTITION_IDS.flatMap((partitionId) => {
@@ -234,7 +231,7 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
           partitionId === PRIORITY_REFRESH_STILL_BLOCKED_PARTITION_ID ?
             PRIORITY_REFRESH_STALE_SERVICE_NODE_IDS :
             PRIORITY_REFRESH_NODE_IDS;
-        return nodeIds.map((nodeId) => ({
+        return nodeIds.map((nodeId) => servicesRow({
           service_id: `${partitionId}-${nodeId}`,
           node_id: nodeId,
           partition_id: partitionId,
@@ -243,7 +240,6 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
           raft_role: PRIORITY_REFRESH_RAFT_ROLE_FOLLOWER,
           address: `${nodeId}/partition/${partitionId}`,
           updated_at: PRIORITY_REFRESH_NOW_MS,
-          read_source: PRIORITY_REFRESH_FRESH_READ_SOURCE,
         }));
       });
       let durableRow = {
@@ -352,12 +348,11 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
 
   test('reconcileClusterMembership prefers fresher same-key projected planning rows',
     async (t) => {
-      const nodeRows = PRIORITY_REFRESH_NODE_IDS.map((nodeId) => ({
+      const nodeRows = PRIORITY_REFRESH_NODE_IDS.map((nodeId) => nodesRow({
         node_id: nodeId,
         status: PRIORITY_REFRESH_STATUS_ACTIVE,
         connection_state: PRIORITY_REFRESH_CONNECTION_READY,
         ready_lease_expires_at: PRIORITY_REFRESH_READY_LEASE_EXPIRES_AT_MS,
-        updated_at: PRIORITY_REFRESH_NOW_MS,
       }));
       const nodeEndpointRows = PRIORITY_REFRESH_NODE_IDS.map((nodeId) => ({
         endpoint_id: `${nodeId}-ws`,
@@ -375,7 +370,7 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
         updated_at: PRIORITY_REFRESH_NOW_MS,
       }));
       const authoritativeServiceRows = PRIORITY_REFRESH_PARTITION_IDS.flatMap((partitionId) =>
-        PRIORITY_REFRESH_NODE_IDS.map((nodeId) => ({
+        PRIORITY_REFRESH_NODE_IDS.map((nodeId) => servicesRow({
           service_id: `${partitionId}-${nodeId}`,
           node_id: nodeId,
           partition_id: partitionId,
@@ -387,11 +382,10 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
           raft_role: PRIORITY_REFRESH_RAFT_ROLE_FOLLOWER,
           address: `${nodeId}/partition/${partitionId}`,
           updated_at: PRIORITY_REFRESH_OLD_TIMESTAMP_MS,
-          read_source: PRIORITY_REFRESH_STALE_READ_SOURCE,
         })),
       );
       const projectedServiceRows = PRIORITY_REFRESH_PARTITION_IDS.flatMap((partitionId) =>
-        PRIORITY_REFRESH_NODE_IDS.map((nodeId) => ({
+        PRIORITY_REFRESH_NODE_IDS.map((nodeId) => servicesRow({
           service_id: `${partitionId}-${nodeId}`,
           node_id: nodeId,
           partition_id: partitionId,
@@ -400,7 +394,6 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
           raft_role: PRIORITY_REFRESH_RAFT_ROLE_FOLLOWER,
           address: `${nodeId}/partition/${partitionId}`,
           updated_at: PRIORITY_REFRESH_NOW_MS,
-          read_source: PRIORITY_REFRESH_FRESH_READ_SOURCE,
         })),
       );
       let durableRow = {

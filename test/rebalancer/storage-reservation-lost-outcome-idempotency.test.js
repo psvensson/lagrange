@@ -39,6 +39,8 @@ import {
   createMockPolicyService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
+import {buildInsertedReplicaOperationRow} from './timeout-test-coordinator.js';
 
 const UNIQUE_RESERVATION_ERROR =
   'UNIQUE constraint failed: storage_reservations.reservation_id';
@@ -56,47 +58,6 @@ function initializeConfig() {
         STORAGE_CAPACITY_DEFAULT.RESERVATION_TTL_MS,
     },
   });
-}
-
-function buildOperationRow(params) {
-  const [
-    operationId,
-    type,
-    partitionId,
-    replicaId,
-    targetClaimKey,
-    sourceNodeId,
-    targetNodeId,
-    status,
-    workflowStep,
-    createdAt,
-    updatedAt,
-    completedAt,
-    errorMessage,
-    stepsHistory,
-    entityType,
-    entityId,
-    membershipPublicationEpoch,
-  ] = params;
-  return {
-    operation_id: operationId,
-    type,
-    partition_id: partitionId,
-    replica_id: replicaId,
-    target_claim_key: targetClaimKey,
-    source_node_id: sourceNodeId,
-    target_node_id: targetNodeId,
-    status,
-    workflow_step: workflowStep,
-    created_at: createdAt,
-    updated_at: updatedAt,
-    completed_at: completedAt,
-    error_message: errorMessage,
-    steps_history: stepsHistory,
-    entity_type: entityType,
-    entity_id: entityId,
-    membership_publication_epoch: membershipPublicationEpoch,
-  };
 }
 
 function buildReservationRow(params) {
@@ -205,7 +166,7 @@ function createLostOutcomeSqlEngine(options = {}) {
     },
     async executeQuery(sql, params, queryOptions = {}) {
       if (sql.includes('INSERT INTO replica_operations')) {
-        const row = buildOperationRow(params);
+        const row = buildInsertedReplicaOperationRow(sql, params);
         operations.set(row.operation_id, row);
         return {success: true, changes: 1};
       }
@@ -272,25 +233,25 @@ function buildOperation(overrides = {}) {
 }
 
 function seedOperation(sqlEngine, operation) {
-  sqlEngine.operations.set(operation.operationId, buildOperationRow([
-    operation.operationId,
-    operation.type,
-    operation.partitionId,
-    operation.replicaId,
-    operation.targetClaimKey,
-    operation.sourceNodeId,
-    operation.targetNodeId,
-    operation.status,
-    operation.workflowStep,
-    operation.createdAt,
-    operation.updatedAt,
-    operation.completedAt,
-    operation.errorMessage,
-    JSON.stringify(operation.stepsHistory),
-    operation.entityType,
-    operation.entityId,
-    operation.membershipPublicationEpoch,
-  ]));
+  sqlEngine.operations.set(operation.operationId, replicaOperationsRow({
+    operation_id: operation.operationId,
+    type: operation.type,
+    partition_id: operation.partitionId,
+    replica_id: operation.replicaId,
+    target_claim_key: operation.targetClaimKey,
+    source_node_id: operation.sourceNodeId,
+    target_node_id: operation.targetNodeId,
+    status: operation.status,
+    workflow_step: operation.workflowStep,
+    created_at: operation.createdAt,
+    updated_at: operation.updatedAt,
+    completed_at: operation.completedAt,
+    error_message: operation.errorMessage,
+    steps_history: JSON.stringify(operation.stepsHistory),
+    entity_type: operation.entityType,
+    entity_id: operation.entityId,
+    membership_publication_epoch: operation.membershipPublicationEpoch ?? null,
+  }));
 }
 
 function seedReservation(sqlEngine, operation, overrides = {}) {

@@ -3,6 +3,7 @@ import {
   readinessCollaboratorFake,
   withNodeReadinessService,
 } from '../helpers/readiness-service-fixture.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionTests({
   test,
   RebalanceCoordinator,
@@ -106,7 +107,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
             if (tableName !== 'replica_operations') {
               return [];
             }
-            return [{
+            return [replicaOperationsRow({
               operation_id: 'op-non-priority',
               type: 'REPLACE',
               partition_id: 'users-p1',
@@ -122,7 +123,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
               completed_at: null,
               error_message: null,
               steps_history: '[]',
-            }];
+            })];
           },
         },
         cdcIntegrationService: {

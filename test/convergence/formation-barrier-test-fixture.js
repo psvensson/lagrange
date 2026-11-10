@@ -16,6 +16,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {MovePlanner} from '../../src/rebalancer/move-planner.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
 import {
   REBALANCER_ENTITY_TYPE,
 } from '../../src/rebalancer/rebalancer-constants.js';
@@ -32,6 +33,11 @@ import {
 import {
   STARTUP_JOIN_MODE,
 } from '../../src/bootstrap/rejoin-hints-constants.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 const LEDGER_PARTITION_ID = 'replica_operations-p1';
 const SEED_NODE_ID = 'seed-node';
@@ -72,26 +78,26 @@ function buildFormationCache(options = {}) {
     [SEED_NODE_ID, 'ready'],
     ...joinerNodeIds.map((joinerNodeId) => [joinerNodeId, 'connected']),
   ]) {
-    applyRow(cache, 'nodes', {
+    applyRow(cache, 'nodes', nodesRow({
       node_id: nodeId,
       status: ReplicaStatus.ACTIVE,
       connection_state: connectionState,
       last_heartbeat: now,
       ready_lease_expires_at:
         nodeId === SEED_NODE_ID ? now + 60000 : null,
-    });
+    }));
   }
-  applyRow(cache, 'partitions', {
+  applyRow(cache, 'partitions', systemTableRow('partitions', {
     partition_id: LEDGER_PARTITION_ID,
     table_id: 'replica_operations',
     replica_count: 3,
-  });
+  }));
   for (const [index, raftRole] of [
     [1, 'leader'],
     [2, 'follower'],
     [3, 'follower'],
   ]) {
-    applyRow(cache, 'services', {
+    applyRow(cache, 'services', servicesRow({
       service_id: `${LEDGER_PARTITION_ID}-r${index}`,
       replica_id: `${LEDGER_PARTITION_ID}-r${index}`,
       partition_id: LEDGER_PARTITION_ID,
@@ -99,7 +105,7 @@ function buildFormationCache(options = {}) {
       service_type: REBALANCER_ENTITY_TYPE.PARTITION,
       status: ReplicaStatus.ACTIVE,
       raft_role: raftRole,
-    });
+    }));
   }
   return cache;
 }
@@ -124,15 +130,17 @@ function buildOwnerDerivedStartupAuthoritySnapshot(options = {}) {
       },
     },
     nodeRows: [
-      {
+      nodesRow({
         node_id: SEED_NODE_ID,
+        node_address: `ws://${SEED_NODE_ID}`,
         status: ReplicaStatus.ACTIVE,
         connection_state: 'ready',
         last_heartbeat: now,
         ready_lease_expires_at: now + 60000,
-      },
-      ...joinerNodeIds.map((joinerNodeId) => ({
+      }),
+      ...joinerNodeIds.map((joinerNodeId) => nodesRow({
         node_id: joinerNodeId,
+        node_address: `ws://${joinerNodeId}`,
         status: ReplicaStatus.ACTIVE,
         connection_state: 'connected',
         last_heartbeat: now,
@@ -213,11 +221,17 @@ function currentLedgerReplicas(cache) {
   );
 }
 
+// The ledger partition's projected replicas: what the rebalancer's
+// getCurrentReplicas hands the planner for the same stored rows.
+function currentLedgerProjectedReplicas(cache) {
+  return projectReplicasFromServicesRows(currentLedgerReplicas(cache));
+}
+
 function buildRealLedgerPlanner(cache, trackedOperations) {
   const provider = {
     systemTableCache: cache,
     getAvailableNodes: () => cache.getAll('nodes'),
-    getCurrentReplicas: () => currentLedgerReplicas(cache),
+    getCurrentReplicas: () => currentLedgerProjectedReplicas(cache),
     getHealthyReplicas: (replicas) =>
       replicas.filter((replica) => replica.status === ReplicaStatus.ACTIVE),
     getInFlightOperations: () =>
@@ -252,6 +266,7 @@ export {
   buildFormationCache,
   buildOwnerDerivedStartupAuthoritySnapshot,
   buildRealLedgerPlanner,
+  currentLedgerProjectedReplicas,
   currentLedgerReplicas,
   initializeEnvironment,
   resetEnvironment,

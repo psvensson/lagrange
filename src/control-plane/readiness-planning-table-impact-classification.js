@@ -24,12 +24,18 @@ import {
 import {
   DIRECT_GLOBAL_PROJECTION_FIELD,
   buildDirectGlobalProjection,
+  buildPlanningServiceRecord,
   isPriorityPartitionFromProjection,
   projectedListIncludes,
 } from './readiness-planning-global-projection.js';
 import {
+  decodeServicesRow,
+  decodeServicesRowColumnView,
+  decodeServicesRows,
+} from './services-row-decoder.js';
+import {ROW_ABSENT} from './system-table-row-decoding.js';
+import {
   normalizeNodeEndpointRow,
-  normalizeServiceRow,
 } from './system-row-normalizers.js';
 import {
   copyDenseOwnDataRecordArray,
@@ -145,12 +151,13 @@ function readNormalizedEndpointNodeId(record) {
   }
 }
 
-function readNormalizedServiceNodeId(record) {
-  try {
-    return normalizeServiceRow(record).nodeId || '';
-  } catch {
-    return '';
-  }
+// The node of one services row of a change; null for the side the change
+// lacks (no previous row on INSERT, no current row on DELETE); '' for a row
+// that never observed its node (the normaliser readers' reading), which
+// appendUniqueNodeId skips as it skipped the normaliser's ''. A refusal to
+// decode the row propagates.
+function readServiceRecordNodeId(record) {
+  return record ? decodeServicesRowColumnView(record, COLUMN.NODE_ID) : null;
 }
 
 function serviceFallbackMembershipUnchanged(
@@ -160,10 +167,11 @@ function serviceFallbackMembershipUnchanged(
   projection,
 ) {
   const nodeIds = [];
-  appendUniqueNodeId(nodeIds, readNormalizedServiceNodeId(previousRecord));
-  appendUniqueNodeId(nodeIds, readNormalizedServiceNodeId(currentRecord));
+  appendUniqueNodeId(nodeIds, readServiceRecordNodeId(previousRecord));
+  appendUniqueNodeId(nodeIds, readServiceRecordNodeId(currentRecord));
   if (nodeIds.length === 0) return false;
-  const serviceRows = readRowsFromShadow(sourceRowsByTable, TABLES.SERVICES);
+  const services = decodeServicesRows(
+    readRowsFromShadow(sourceRowsByTable, TABLES.SERVICES));
   for (let index = 0; index < nodeIds.length; index += 1) {
     const nodeId = nodeIds[index];
     if (projectedListIncludes(
@@ -178,7 +186,7 @@ function serviceFallbackMembershipUnchanged(
       nodeId,
       (candidate) => candidate,
     );
-    if (previousPresent !== hasCanonicalActiveService(nodeId, serviceRows)) {
+    if (previousPresent !== hasCanonicalActiveService(nodeId, services)) {
       return false;
     }
   }
@@ -198,7 +206,7 @@ function canReuseOrdinaryTopologyProjection(
     const record = records[index];
     if (!record) continue;
     const partitionId = tableName === TABLES.SERVICES ?
-      normalizeServiceRow(record).partitionId :
+      readServiceRecordPartitionId(record) :
       record?.[COLUMN.PARTITION_ID] ?? record?.partitionId;
     if (isPriorityPartitionFromProjection(
       partitionId,
@@ -262,9 +270,16 @@ function localSemanticRecord(tableName, record) {
       normalizeNodeEndpointRow(record) : null;
   }
   if (tableName === TABLES.SERVICES) {
-    return normalizeServiceRow(record);
+    return buildPlanningServiceRecord(decodeServicesRow(record));
   }
   return null;
+}
+
+// The partition of one services row, '' when the row has none (what
+// isPriorityPartitionFromProjection reads as "no partition").
+function readServiceRecordPartitionId(record) {
+  const partitionId = decodeServicesRowColumnView(record, COLUMN.PARTITION_ID);
+  return partitionId === ROW_ABSENT ? '' : partitionId;
 }
 
 function classifyShadowTableImpact(
@@ -290,11 +305,11 @@ function classifyShadowTableImpact(
   } else if (tableName === TABLES.SERVICES) {
     appendUniqueNodeId(
       affectedNodeIds,
-      readNormalizedServiceNodeId(previousRecord),
+      readServiceRecordNodeId(previousRecord),
     );
     appendUniqueNodeId(
       affectedNodeIds,
-      readNormalizedServiceNodeId(currentRecord),
+      readServiceRecordNodeId(currentRecord),
     );
   }
   const localChanged = !isDeepStrictEqual(

@@ -590,7 +590,9 @@ test('ControlPlaneReadinessService records recovery participation ' +
     },
     transportState: {
       connected: true,
-      rowState: null,
+      // The node row's stored connection_state (NOT NULL; the complete
+      // fixture row stores 'connected').
+      rowState: STATE.CONNECTED,
       routerState: 'connected',
     },
     authoritativeRepair: {

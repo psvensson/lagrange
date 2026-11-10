@@ -9,6 +9,7 @@ import {
   CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
 } from '../../src/control-plane/control-plane-snapshot-owner.js';
 import {TABLES} from '../../src/constants/index.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const NOW_MS = 100_000;
 const NODE_STATUS_ACTIVE = 'active';
@@ -16,15 +17,18 @@ const NODE_STATUS_STOPPED = 'stopped';
 const CONNECTION_STATE_READY = 'ready';
 const CONNECTION_STATE_DISCONNECTED = 'disconnected';
 
-function buildNodeRow(nodeId, overrides = {}) {
-  return {
+// A stored nodes row; `updated_at_hlc` is the cache's local CDC provenance,
+// not a stored column.
+function buildNodeRow(nodeId, {updated_at_hlc: updatedAtHlc, ...overrides} = {}) {
+  const row = nodesRow({
     node_id: nodeId,
     status: NODE_STATUS_ACTIVE,
     connection_state: CONNECTION_STATE_READY,
     last_heartbeat: NOW_MS - 12_000,
     ready_lease_expires_at: NOW_MS + 3_000,
     ...overrides,
-  };
+  });
+  return updatedAtHlc === undefined ? row : {...row, updated_at_hlc: updatedAtHlc};
 }
 
 function buildSystemTableCache(nodeRows, cdcObservations = {}) {
@@ -196,7 +200,7 @@ test('snapshot owner keeps expired or missing lease evidence stale',
       buildNodeRow('stopped', {
         status: NODE_STATUS_STOPPED,
         connection_state: CONNECTION_STATE_DISCONNECTED,
-        last_heartbeat: null,
+        last_heartbeat: 0,
         ready_lease_expires_at: null,
       }),
     ]);

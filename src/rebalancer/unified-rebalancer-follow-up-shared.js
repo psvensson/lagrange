@@ -33,7 +33,6 @@ const {
   buildControlPlaneWorkloadProfile,
   buildPriorityRecoveryPartitionAssessment,
   EntityType,
-  normalizeServiceRow,
   resolvePriorityRecoveryActiveNodeCohort,
 } = UNIFIED_REBALANCER_SHARED;
 
@@ -363,7 +362,6 @@ const UNIFIED_REBALANCER_FOLLOW_UP_SHARED = Object.freeze({
   UNIFIED_REBALANCER_SHARED,
   buildControlPlaneWorkloadProfile,
   buildPriorityRecoveryPartitionAssessment,
-  normalizeServiceRow,
   resolvePriorityRecoveryActiveNodeCohort,
 });
 

@@ -27,11 +27,14 @@ import {
   detectReexportOnlyModules,
   detectRowFieldAliasReads,
   detectStateReadDefaults,
+  detectSystemTableRawColumnReads,
   detectTwoSourceFallbackReads,
   detectTypeofDualPaths,
   detectValueOrPromiseThenChecks,
   parseNavigabilitySource,
+  SYSTEM_TABLE_COLUMNS,
 } from '../../scripts/checks/code-navigability-detectors.js';
+import {SYSTEM_TABLE_SCHEMAS} from '../../src/bootstrap/system-table-schemas-constants.js';
 
 const UTF8 = 'utf8';
 const SAMPLE_FILE = 'src/sample.js';
@@ -624,4 +627,102 @@ test('the per-pattern entry point numbers identical sites as the full scan does'
   assert.equal(scanned[0].hash, scanned[1].hash, 'the two sites are identical slices');
   assert.deepEqual(alone.map(identity), scanned.map(identity),
     'both entry points give occurrences 0 and 1 to the same sites');
+});
+
+// system_table_raw_column_reads_outside_decoder: an own column of services,
+// nodes or replica_operations counts wherever it is read; a shared column
+// counts only on an object whose scope also reads an own column of that
+// table; writes, SQL text and object-literal keys never count.
+test('system_table_raw_column_reads_outside_decoder counts reads, never writes', () => {
+  const row = 'system_table_raw_column_reads_outside_decoder';
+  const source = [
+    'export function f(row, other, COLUMN) {',
+    '  const role = row.raft_role;',
+    '  const node = row.node_id;',
+    '  const step = row[COLUMN.WORKFLOW_STEP];',
+    '  const quoted = row[\'connection_state\'];',
+    '  const unattributed = other.status;',
+    '  const optional = row?.last_heartbeat;',
+    '  row.raft_role = \'leader\';',
+    '  delete row.node_address;',
+    '  other.workflow_step += 1;',
+    '  const built = {raft_role: role, [COLUMN.NODE_ADDRESS]: node};',
+    '  const sql = \'UPDATE services SET raft_role = ? WHERE node_id = ?\';',
+    '  const called = other.type();',
+    '  return [step, quoted, unattributed, optional, built, sql, called];',
+    '}',
+    'export function g(row) {',
+    '  return row.node_id;',
+    '}',
+    'export function h(input) {',
+    '  const {source_node_id: source, status} = input;',
+    '  return [source, status, (inner) => inner.status];',
+    '}',
+  ].join('\n');
+  const sites = sitesOf(detectSystemTableRawColumnReads, source);
+  assert.deepEqual(sites.map((site) => site.detail), [
+    'services:raft_role',
+    'services+nodes:node_id',
+    'replica_operations:workflow_step',
+    'nodes:connection_state',
+    'nodes:last_heartbeat',
+    'replica_operations:source_node_id',
+    'replica_operations:status',
+  ], 'own columns count outright; node_id on row counts for both evidenced ' +
+    'tables; other.status, g\'s lone node_id and the nested inner.status have ' +
+    'no own-column evidence in their scope; writes, keys, SQL text and a ' +
+    'callee never count');
+  for (const site of sites) assertSiteShape(site, row, source);
+});
+
+// Verifier finding F-d: a `COLUMN.X` naming no column of the three tables,
+// read on an object that also carries an own-column read, once crashed the
+// attribution (TypeError); it is not a column read at all.
+test('a COLUMN constant of another table beside an own-column read is not a site', () => {
+  const source = 'export function f(row, COLUMN) {\n' +
+    '  return [row.raft_role, row[COLUMN.TABLE_NAME], row[COLUMN.NOT_A_COLUMN]];\n}\n';
+  assert.deepEqual(sitesOf(detectSystemTableRawColumnReads, source)
+    .map((site) => site.detail), ['services:raft_role']);
+});
+
+test('a table\'s decoder module is the one place its raw columns are not sites', () => {
+  const source = 'export function d(row) {\n  return [row.raft_role, row.status, ' +
+    'row.last_heartbeat];\n}\n';
+  const inServicesDecoder = sitesOf(detectSystemTableRawColumnReads, source,
+    'src/control-plane/services-row-decoder.js');
+  assert.deepEqual(inServicesDecoder.map((site) => site.detail),
+    ['services+nodes:status', 'nodes:last_heartbeat'],
+    'the services decoder reads services columns; a nodes column there still counts, ' +
+    'and so does a shared column evidenced for nodes too');
+  const inReplicaDecoder = sitesOf(detectSystemTableRawColumnReads,
+    'export function d(row) {\n  return [row.workflow_step, row.status];\n}\n',
+    'src/rebalancer/replica-operations-row-decoder.js');
+  assert.deepEqual(inReplicaDecoder, []);
+  const elsewhere = sitesOf(detectSystemTableRawColumnReads, source, 'src/services-reader.js');
+  assert.deepEqual(elsewhere.map((site) => site.detail),
+    ['services:raft_role', 'services+nodes:status', 'nodes:last_heartbeat']);
+});
+
+test('the system-table column lists are the stored schemas', () => {
+  const owners = new Map();
+  for (const schema of SYSTEM_TABLE_SCHEMAS) {
+    for (const column of schema.columns) {
+      if (!owners.has(column.name)) owners.set(column.name, []);
+      owners.get(column.name).push(schema.tableName);
+    }
+  }
+  for (const [table, {own, shared}] of Object.entries(SYSTEM_TABLE_COLUMNS)) {
+    const schema = SYSTEM_TABLE_SCHEMAS.find((candidate) => candidate.tableName === table);
+    assert.ok(schema, `${table} is a system table`);
+    assert.deepEqual([...own, ...shared].sort(),
+      schema.columns.map((column) => column.name).sort(),
+      `${table}: own + shared are exactly the stored columns`);
+    for (const column of own) {
+      assert.deepEqual(owners.get(column), [table], `${table}.${column} is stored by no other table`);
+    }
+    for (const column of shared) {
+      assert.ok(owners.get(column).length > 1 || column === 'type',
+        `${table}.${column} is shared (or the generic word type)`);
+    }
+  }
 });

@@ -19,6 +19,7 @@ import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
 } from '../../src/control-plane/publication-active-gate-handoff-contract.js';
 import {MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_CONNECTION_STATE_CONNECTED, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_NOW_MS, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLICATION_EPOCH, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHER_NODE_ID, MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_STATUS_ACK_PENDING, MEMBERSHIP_PUBLICATION_TRIM_CONNECTION_STATE_READY, MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED, buildMembershipPublicationAckDeferralNodeRow, buildMembershipPublicationTrimEndpointRow, buildMembershipPublicationTrimServiceRow} from './membership-publication-coordinator-candidate-fixtures.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const PUBLICATION_CONVERGENCE_STALE_PUBLISHED_EPOCH = 29;
 const PUBLICATION_CONVERGENCE_REPAIR_NOW_MS = 1000;
@@ -90,18 +91,18 @@ test('deriveMembershipPublicationCandidate promotes recovery-eligible joiners wh
         acknowledged_node_ids: ['node-1'],
       },
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
+        }),
       ],
       readinessEntries: [
         {
@@ -144,8 +145,8 @@ test('deriveMembershipPublicationCandidate promotes recovery-eligible joiners wh
         },
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
-        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
+        servicesRow({service_id: 'svc-2', node_id: 'node-2', status: 'active'}),
       ],
       nowMs: 1000,
     });
@@ -327,18 +328,18 @@ test('deriveMembershipPublicationCandidate reopens a stale published membership 
         acknowledged_node_ids: ['node-1'],
       },
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
+        }),
       ],
       readinessEntries: [
         {
@@ -381,8 +382,8 @@ test('deriveMembershipPublicationCandidate reopens a stale published membership 
         },
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
-        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
+        servicesRow({service_id: 'svc-2', node_id: 'node-2', status: 'active'}),
       ],
       nowMs: 1000,
     });
@@ -462,13 +463,13 @@ test('deriveMembershipPublicationCandidate reopens count-only ACK complete publi
         ],
       },
       nodeRows: [
-        {
+        nodesRow({
           node_id: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
           status: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
           connection_state: PUBLICATION_CONVERGENCE_REPAIR_READY_CONNECTION,
           ready_lease_expires_at:
             PUBLICATION_CONVERGENCE_REPAIR_READY_LEASE_EXPIRES_AT,
-        },
+        }),
       ],
       readinessEntries: [
         {
@@ -506,11 +507,11 @@ test('deriveMembershipPublicationCandidate reopens count-only ACK complete publi
         },
       ],
       serviceRows: [
-        {
+        servicesRow({
           service_id: PUBLICATION_CONVERGENCE_REPAIR_SERVICE_ID,
           node_id: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
           status: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
-        },
+        }),
       ],
       nowMs: PUBLICATION_CONVERGENCE_REPAIR_NOW_MS,
     });
@@ -590,13 +591,13 @@ test('deriveMembershipPublicationCandidate reopens count-only ACK complete publi
         ],
       },
       nodeRows: [
-        {
+        nodesRow({
           node_id: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
           status: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
           connection_state: PUBLICATION_CONVERGENCE_REPAIR_READY_CONNECTION,
           ready_lease_expires_at:
             PUBLICATION_CONVERGENCE_REPAIR_READY_LEASE_EXPIRES_AT,
-        },
+        }),
       ],
       readinessEntries: [
         {
@@ -628,11 +629,11 @@ test('deriveMembershipPublicationCandidate reopens count-only ACK complete publi
         },
       ],
       serviceRows: [
-        {
+        servicesRow({
           service_id: PUBLICATION_CONVERGENCE_REPAIR_SERVICE_ID,
           node_id: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
           status: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
-        },
+        }),
       ],
       nowMs: PUBLICATION_CONVERGENCE_REPAIR_NOW_MS,
     });
@@ -694,13 +695,13 @@ test('deriveMembershipPublicationCandidate reopens count-only ACK complete publi
         ],
       },
       nodeRows: [
-        {
+        nodesRow({
           node_id: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
           status: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
           connection_state: PUBLICATION_CONVERGENCE_REPAIR_READY_CONNECTION,
           ready_lease_expires_at:
             PUBLICATION_CONVERGENCE_REPAIR_READY_LEASE_EXPIRES_AT,
-        },
+        }),
       ],
       readinessEntries: [
         {
@@ -743,11 +744,11 @@ test('deriveMembershipPublicationCandidate reopens count-only ACK complete publi
         },
       ],
       serviceRows: [
-        {
+        servicesRow({
           service_id: PUBLICATION_CONVERGENCE_REPAIR_SERVICE_ID,
           node_id: PUBLICATION_CONVERGENCE_REPAIR_PUBLISHED_NODE_ID,
           status: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
-        },
+        }),
       ],
       nowMs: PUBLICATION_CONVERGENCE_REPAIR_NOW_MS,
     });

@@ -18,6 +18,7 @@ import {
 } from '../../src/rebalancer/replica-create-admission-token.js';
 import {SYSTEM_TABLE_NAME as SYSTEM_TABLE_NAMES} from
   '../../src/bootstrap/system-table-schemas-constants.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 function withOperationAdmission(cache, request) {
   const row = cache.get(
@@ -316,18 +317,18 @@ export async function registerReplicaHandlerCreateTopologyTests({
       seedReplicaOperation(cache, 'op-1', {partitionId, replicaId: 'replica-1'});
 
       const now = Date.now();
-      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', nodesRow({
         node_id: 'dead-node',
         status: SERVICE_STATUS.ACTIVE,
         last_heartbeat: now - 1000,
         ready_lease_expires_at: now - 1,
-      });
-      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+      }));
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', nodesRow({
         node_id: 'live-node',
         status: SERVICE_STATUS.ACTIVE,
         last_heartbeat: now,
         ready_lease_expires_at: now + 60_000,
-      });
+      }));
       cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
         service_id: 'replica-3',
         service_type: 'partition',
@@ -433,21 +434,21 @@ export async function registerReplicaHandlerCreateTopologyTests({
 
       const now = Date.now();
       for (const nodeId of ['dead-node', 'live-node']) {
-        cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+        cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', nodesRow({
           node_id: nodeId,
           status: SERVICE_STATUS.ACTIVE,
           last_heartbeat: now,
           ready_lease_expires_at: now + 60_000,
-        });
+        }));
       }
       const ownerIncarnation = 701;
-      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', nodesRow({
         node_id: 'test-node',
         status: SERVICE_STATUS.ACTIVE,
         last_heartbeat: now,
         ready_lease_expires_at: now + 60_000,
         boot_incarnation: ownerIncarnation,
-      });
+      }));
       cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
         service_id: 'replica_operations-p1-r3',
         service_type: 'partition',
@@ -570,12 +571,12 @@ export async function registerReplicaHandlerCreateTopologyTests({
       seedReplicaOperation(cache, 'op-1');
 
       const now = Date.now();
-      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', nodesRow({
         node_id: 'leader-node',
         status: SERVICE_STATUS.ACTIVE,
         last_heartbeat: now,
         ready_lease_expires_at: now + 60_000,
-      });
+      }));
 
       const mockCDC = createMockCDCService(cache);
       let capturedOptions = null;
@@ -747,13 +748,13 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'node-learner/partition/replica-4',
       ];
       const ownerIncarnation = 801;
-      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', nodesRow({
         node_id: 'node-learner',
         status: SERVICE_STATUS.ACTIVE,
         last_heartbeat: Date.now(),
         ready_lease_expires_at: Date.now() + 60_000,
         boot_incarnation: ownerIncarnation,
-      });
+      }));
       let capturedOptions = null;
 
       const handler = new ReplicaHandler({
@@ -937,13 +938,13 @@ export async function registerReplicaHandlerCreateTopologyTests({
         updated_at: createdAt + 5000,
       });
       const ownerIncarnation = 802;
-      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', nodesRow({
         node_id: 'node-learner',
         status: SERVICE_STATUS.ACTIVE,
         last_heartbeat: Date.now(),
         ready_lease_expires_at: Date.now() + 60_000,
         boot_incarnation: ownerIncarnation,
-      });
+      }));
       let capturedOptions = null;
 
       const handler = new ReplicaHandler({

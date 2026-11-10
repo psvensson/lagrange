@@ -13,6 +13,11 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {performance} from 'node:perf_hooks';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 /**
  * Initialize test environment with configuration and logging.
@@ -56,27 +61,26 @@ function createTypicalBootstrapResponse() {
   // Add nodes
   for (let i = 0; i < nodeCount; i++) {
     const nodeId = `node-${i}`;
-    snapshots.nodes.push({
+    snapshots.nodes.push(nodesRow({
       node_id: nodeId,
       node_address: `http://localhost:${8080 + i}`,
       status: SERVICE_STATUS.ACTIVE,
       created_at: Date.now(),
-      updated_at: Date.now(),
-    });
+    }));
   }
 
   // Add system tables metadata and partitions
   for (const tableName of systemTables) {
-    snapshots.tables.push({
+    snapshots.tables.push(systemTableRow(TABLES.TABLES, {
       table_id: tableName,
       table_name: tableName,
-      schema: JSON.stringify({columns: []}),
+      schema_definition: JSON.stringify({columns: []}),
       created_at: Date.now(),
-    });
+    }));
 
     // Add partition for this table
     const partitionId = `${tableName}-partition-0`;
-    snapshots.partitions.push({
+    snapshots.partitions.push(systemTableRow(TABLES.PARTITIONS, {
       partition_id: partitionId,
       table_id: tableName,
       table_name: tableName,
@@ -84,13 +88,13 @@ function createTypicalBootstrapResponse() {
       partition_key_end: null,
       replica_count: replicasPerPartition,
       created_at: Date.now(),
-    });
+    }));
 
     // Add replicas for this partition
     for (let r = 0; r < replicasPerPartition; r++) {
       const replicaId = `${partitionId}-r${r}`;
       const nodeId = `node-${r % nodeCount}`;
-      snapshots.services.push({
+      snapshots.services.push(servicesRow({
         service_id: replicaId,
         service_type: SERVICE_TYPE.PARTITION,
         partition_id: partitionId,
@@ -99,16 +103,16 @@ function createTypicalBootstrapResponse() {
         raft_role: r === 0 ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
         status: SERVICE_STATUS.ACTIVE,
         created_at: Date.now(),
-      });
+      }));
     }
   }
 
   // Add message groups
-  snapshots.message_groups.push({
+  snapshots.message_groups.push(systemTableRow(TABLES.MESSAGE_GROUPS, {
     group_id: 'initial-message-group',
     replica_count: replicasPerPartition,
     created_at: Date.now(),
-  });
+  }));
 
   return {
     success: true,
@@ -143,26 +147,25 @@ function createLargeBootstrapResponse() {
   // Add nodes
   for (let i = 0; i < nodeCount; i++) {
     const nodeId = `node-${i}`;
-    snapshots.nodes.push({
+    snapshots.nodes.push(nodesRow({
       node_id: nodeId,
       node_address: `http://localhost:${8080 + i}`,
       status: SERVICE_STATUS.ACTIVE,
       created_at: Date.now(),
-      updated_at: Date.now(),
-    });
+    }));
   }
 
   // Add system tables metadata and partitions
   for (const tableName of systemTables) {
-    snapshots.tables.push({
+    snapshots.tables.push(systemTableRow(TABLES.TABLES, {
       table_id: tableName,
       table_name: tableName,
-      schema: JSON.stringify({columns: []}),
+      schema_definition: JSON.stringify({columns: []}),
       created_at: Date.now(),
-    });
+    }));
 
     const partitionId = `${tableName}-partition-0`;
-    snapshots.partitions.push({
+    snapshots.partitions.push(systemTableRow(TABLES.PARTITIONS, {
       partition_id: partitionId,
       table_id: tableName,
       table_name: tableName,
@@ -170,12 +173,12 @@ function createLargeBootstrapResponse() {
       partition_key_end: null,
       replica_count: replicasPerPartition,
       created_at: Date.now(),
-    });
+    }));
 
     for (let r = 0; r < replicasPerPartition; r++) {
       const replicaId = `${partitionId}-r${r}`;
       const nodeId = `node-${r % nodeCount}`;
-      snapshots.services.push({
+      snapshots.services.push(servicesRow({
         service_id: replicaId,
         service_type: SERVICE_TYPE.PARTITION,
         partition_id: partitionId,
@@ -184,15 +187,15 @@ function createLargeBootstrapResponse() {
         raft_role: r === 0 ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
         status: SERVICE_STATUS.ACTIVE,
         created_at: Date.now(),
-      });
+      }));
     }
   }
 
-  snapshots.message_groups.push({
+  snapshots.message_groups.push(systemTableRow(TABLES.MESSAGE_GROUPS, {
     group_id: 'initial-message-group',
     replica_count: replicasPerPartition,
     created_at: Date.now(),
-  });
+  }));
 
   return {
     success: true,

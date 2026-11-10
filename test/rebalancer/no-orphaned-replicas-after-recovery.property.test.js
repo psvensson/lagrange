@@ -26,6 +26,13 @@ import {
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {sqlInsertedSystemTableRow} from '../test-helpers/system-table-row-fixture.js';
+import {
+  replicaOperationsRow,
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
+import {buildInsertedReplicaOperationRow} from './timeout-test-coordinator.js';
 
 /**
  * Create a mock operation row for the system table cache.
@@ -35,7 +42,7 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
 function createOperationRow(params) {
   const now = Date.now();
   const partitionId = params.partitionId || 'test-partition';
-  return {
+  return replicaOperationsRow({
     operation_id: params.operationId || `op-${Math.random().toString(36).slice(2)}`,
     type: params.type || OperationType.ADD,
     partition_id: partitionId,
@@ -52,7 +59,23 @@ function createOperationRow(params) {
     error_message: params.errorMessage || null,
     steps_history: params.stepsHistory ||
       JSON.stringify([{step: 'PENDING', timestamp: now}]),
-  };
+  });
+}
+
+/**
+ * The stored services row of a partition replica; an ACTIVE partition
+ * replica is a voter (raft_role follower), as the replica handler stores it.
+ * @param {Object} params - Replica identity and status.
+ * @return {Object} Services row.
+ */
+function createServiceRow({replicaId, partitionId, nodeId, status}) {
+  return servicesRow({
+    service_id: replicaId,
+    partition_id: partitionId,
+    node_id: nodeId,
+    status,
+    raft_role: status === ReplicaStatus.ACTIVE ? RAFT_ROLE.FOLLOWER : null,
+  });
 }
 
 /**
@@ -91,28 +114,8 @@ function createRecoveryTestCoordinator(options = {}) {
     executeQuery: async (sql, params) => {
       // Handle INSERT operations
       if (sql.includes('INSERT INTO replica_operations')) {
-        const [
-          operationId, type, partitionId, replicaId, targetClaimKey,
-          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-          updatedAt, completedAt, errorMessage, stepsHistory,
-        ] = params;
-
-        trackedOperations.set(operationId, {
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          target_claim_key: targetClaimKey,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-        });
+        const row = buildInsertedReplicaOperationRow(sql, params);
+        trackedOperations.set(row.operation_id, row);
         return {success: true};
       }
 
@@ -219,10 +222,7 @@ function createRecoveryTestCoordinator(options = {}) {
       }
 
       if (mutation.operation === 'insert') {
-        const row = {
-          ...mutation.row,
-          operation_id: mutation.row?.operation_id ?? mutation.row?.operationId,
-        };
+        const row = sqlInsertedSystemTableRow('replica_operations', mutation.row);
         trackedOperations.set(row.operation_id, row);
         return {success: true, partitionResult: {affectedRows: 1}};
       }
@@ -339,12 +339,12 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
           });
 
           // Create service entry if replica exists
-          const services = params.actualReplicaStatus ? [{
-            service_id: params.replicaId,
-            partition_id: params.partitionId,
-            node_id: params.targetNodeId,
+          const services = params.actualReplicaStatus ? [createServiceRow({
+            replicaId: params.replicaId,
+            partitionId: params.partitionId,
+            nodeId: params.targetNodeId,
             status: params.actualReplicaStatus,
-          }] : [];
+          })] : [];
 
           const {coordinator, trackedOperations} = createRecoveryTestCoordinator({
             operations: [opRow],
@@ -462,12 +462,12 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
     ];
 
     // Syncing replica is actually active
-    const services = [{
-      service_id: 'replica-syncing',
-      partition_id: 'test-partition',
-      node_id: 'target-node',
+    const services = [createServiceRow({
+      replicaId: 'replica-syncing',
+      partitionId: 'test-partition',
+      nodeId: 'target-node',
       status: ReplicaStatus.ACTIVE,
-    }];
+    })];
 
     const {coordinator, trackedOperations} =
       createRecoveryTestCoordinator({operations, services});

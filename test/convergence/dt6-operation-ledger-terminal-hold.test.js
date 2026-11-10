@@ -3,6 +3,7 @@ import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {WORKFLOW_STEP_TO_STATUS} from '../../src/rebalancer/replica-operation-progress.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
 
 // Quest movielens-operation-ledger-terminal-hold — deterministic reproduction
@@ -41,7 +42,9 @@ function buildReplace(partitionId) {
 function moveDurableRowToSending(row) {
   const history = JSON.parse(row.steps_history);
   history.push({step: WORKFLOW_STEP.SENDING, timestamp: START_MS});
-  row.status = 'sending';
+  // The stored status production writes for the SENDING step
+  // (WORKFLOW_STEP_TO_STATUS: SENDING -> pending).
+  row.status = WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.SENDING];
   row.workflow_step = WORKFLOW_STEP.SENDING;
   row.updated_at = START_MS;
   row.steps_history = JSON.stringify(history);

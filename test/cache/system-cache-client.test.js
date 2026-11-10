@@ -13,24 +13,20 @@ import {
 } from '../../src/cache/system-cache-client.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {nodesRow} from
+  '../test-helpers/system-table-row-fixture.js';
 
 function seedNodes(cache) {
-  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
-    node_id: 'node-1',
-    status: 'active',
-  });
-  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-2',
-    node_id: 'node-2',
-    status: 'inactive',
-  });
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT,
+    nodesRow({node_id: 'node-1', status: 'active'}));
+  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT,
+    nodesRow({node_id: 'node-2', status: 'inactive'}));
 }
 
 function createMockProxy(recordsByTable = {}) {
   return {
     async get(tableName, key) {
-      return (recordsByTable[tableName] || []).find((row) => row.id === key);
+      return (recordsByTable[tableName] || []).find((row) => row.node_id === key);
     },
     async find(tableName, predicate) {
       return (recordsByTable[tableName] || []).find(predicate);
@@ -42,7 +38,7 @@ function createMockProxy(recordsByTable = {}) {
       return [...(recordsByTable[tableName] || [])];
     },
     async has(tableName, key) {
-      return (recordsByTable[tableName] || []).some((row) => row.id === key);
+      return (recordsByTable[tableName] || []).some((row) => row.node_id === key);
     },
   };
 }
@@ -71,11 +67,11 @@ test('SystemCacheClient - direct and proxy parity for read APIs', async (t) => {
 
   const directGet = directClient.get('nodes', 'node-1');
   const proxyGet = await proxyClient.get('nodes', 'node-1');
-  t.equal(directGet.id, proxyGet.id, 'get() should return equivalent row');
+  t.equal(directGet.node_id, proxyGet.node_id, 'get() should return equivalent row');
 
   const directFind = directClient.find('nodes', (row) => row.status === 'active');
   const proxyFind = await proxyClient.find('nodes', (row) => row.status === 'active');
-  t.equal(directFind.id, proxyFind.id, 'find() should return equivalent row');
+  t.equal(directFind.node_id, proxyFind.node_id, 'find() should return equivalent row');
 
   const directFilter = directClient.filter('nodes', (row) => row.status === 'active');
   const proxyFilter = await proxyClient.filter('nodes', (row) => row.status === 'active');
@@ -124,11 +120,8 @@ test('SystemCacheClient - listener behavior is explicit per backing', async (t) 
     }
   };
   directClient.onCacheChange(listener);
-  writableCache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-3',
-    node_id: 'node-3',
-    status: 'active',
-  });
+  writableCache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT,
+    nodesRow({node_id: 'node-3', status: 'active'}));
   await new Promise((resolve) => setImmediate(resolve));
   directClient.offCacheChange(listener);
   t.equal(directObserved, true, 'direct client should surface cache-change events');

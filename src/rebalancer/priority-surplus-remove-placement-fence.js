@@ -1,3 +1,4 @@
+import {projectReplicasFromServicesRows} from './projected-replica.js';
 import {buildReplicaInventorySnapshot} from './replica-inventory.js';
 
 const PRIORITY_SURPLUS_REMOVE_FENCE_SOURCE = 'owner_rpc_lane';
@@ -138,7 +139,7 @@ function evaluatePrioritySurplusRemovePlacementFence(options = {}) {
       Date.now(),
     committedRowsObservation: {
       state: 'present',
-      rows: observation.rows,
+      rows: projectReplicasFromServicesRows(observation.rows),
       revision: observation.snapshotVersion ?? null,
       observedAtMs: observation.observedAtMs ?? null,
     },

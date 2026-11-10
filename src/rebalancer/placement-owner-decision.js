@@ -1,3 +1,4 @@
+import {hasReplicaNode} from './projected-replica.js';
 import {
   PLACEMENT_OWNER,
   PLACEMENT_OWNER_DATA_AFFINITY_SCORE,
@@ -481,7 +482,7 @@ function isDataAffinityPlacementSuboptimal(
   readyNodes = [],
 ) {
   const incumbentNodeIds = new Set(
-    healthyReplicas.map((replica) => replica?.node_id).filter(Boolean),
+    healthyReplicas.filter(hasReplicaNode).map((replica) => replica.nodeId),
   );
   const readyNodeIds = new Set(
     readyNodes.map((node) => node?.node_id).filter(Boolean),

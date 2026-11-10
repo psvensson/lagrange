@@ -20,6 +20,7 @@ import {ServiceThreadManager} from '../../src/threading/service-thread-manager.j
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
@@ -224,15 +225,15 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         const readyLeaseExpiresAt = Date.now() + 10000;
 
         // Register seed node in the cache
-        systemTableCache.applySystemTableChange('nodes', 'INSERT', {
-          id: seedNodeId,
+        systemTableCache.applySystemTableChange('nodes', 'INSERT', nodesRow({
           node_id: seedNodeId,
+          node_address: `ws://${seedNodeId}`,
           status: 'active',
           cpu_usage_percent: 20,
           memory_usage_percent: 30,
           connection_state: 'ready',
           ready_lease_expires_at: readyLeaseExpiresAt,
-        });
+        }));
 
         // ========================================
         // PHASE 2: Create message group on seed node
@@ -344,44 +345,41 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         t.ok(resources.seedPartition.isLeader, 'partition should become leader');
 
         // Register partition services in cache
-        systemTableCache.applySystemTableChange('services', 'INSERT', {
-          id: `${partitionId}-r1`,
+        systemTableCache.applySystemTableChange('services', 'INSERT', servicesRow({
           service_id: `${partitionId}-r1`,
           service_type: 'partition',
           node_id: seedNodeId,
           partition_id: partitionId,
           status: 'active',
-        });
-        systemTableCache.applySystemTableChange('services', 'INSERT', {
-          id: `${partitionId}-r2`,
+        }));
+        systemTableCache.applySystemTableChange('services', 'INSERT', servicesRow({
           service_id: `${partitionId}-r2`,
           service_type: 'partition',
           node_id: seedNodeId,
           partition_id: partitionId,
           status: 'active',
-        });
-        systemTableCache.applySystemTableChange('services', 'INSERT', {
-          id: `${partitionId}-r3`,
+        }));
+        systemTableCache.applySystemTableChange('services', 'INSERT', servicesRow({
           service_id: `${partitionId}-r3`,
           service_type: 'partition',
           node_id: seedNodeId,
           partition_id: partitionId,
           status: 'active',
-        });
+        }));
 
         // ========================================
         // PHASE 5: Second node joins the cluster
         // ========================================
 
-        systemTableCache.applySystemTableChange('nodes', 'INSERT', {
-          id: secondNodeId,
+        systemTableCache.applySystemTableChange('nodes', 'INSERT', nodesRow({
           node_id: secondNodeId,
+          node_address: `ws://${secondNodeId}`,
           status: 'active',
           cpu_usage_percent: 15,
           memory_usage_percent: 25,
           connection_state: 'ready',
           ready_lease_expires_at: readyLeaseExpiresAt,
-        });
+        }));
 
         // ========================================
         // PHASE 6: Trigger rebalancing
@@ -557,40 +555,37 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
     try {
       const cache = new SystemTableCache();
       const readyLeaseExpiresAt = Date.now() + 10000;
-      cache.applySystemTableChange('nodes', 'INSERT', {
-        id: nodeId,
+      cache.applySystemTableChange('nodes', 'INSERT', nodesRow({
         node_id: nodeId,
+        node_address: `ws://${nodeId}`,
         status: 'active',
         cpu_usage_percent: 20,
         memory_usage_percent: 30,
         connection_state: 'ready',
         ready_lease_expires_at: readyLeaseExpiresAt,
-      });
+      }));
 
-      cache.applySystemTableChange('services', 'INSERT', {
-        id: 'partition-1-r1',
+      cache.applySystemTableChange('services', 'INSERT', servicesRow({
         service_id: 'partition-1-r1',
         service_type: 'partition',
         node_id: nodeId,
         partition_id: 'partition-1',
         status: 'active',
-      });
-      cache.applySystemTableChange('services', 'INSERT', {
-        id: 'partition-1-r2',
+      }));
+      cache.applySystemTableChange('services', 'INSERT', servicesRow({
         service_id: 'partition-1-r2',
         service_type: 'partition',
         node_id: nodeId,
         partition_id: 'partition-1',
         status: 'active',
-      });
-      cache.applySystemTableChange('services', 'INSERT', {
-        id: 'partition-1-r3',
+      }));
+      cache.applySystemTableChange('services', 'INSERT', servicesRow({
         service_id: 'partition-1-r3',
         service_type: 'partition',
         node_id: nodeId,
         partition_id: 'partition-1',
         status: 'active',
-      });
+      }));
 
       rebalancer = new UnifiedRebalancer({
         entityId: 'partition-1',
@@ -622,15 +617,15 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
       t.equal(result.moves.length, 0, 'should have no moves with single node');
       t.equal(events.length, 0, 'should have no events with single node');
 
-      cache.applySystemTableChange('nodes', 'INSERT', {
-        id: 'second-node',
+      cache.applySystemTableChange('nodes', 'INSERT', nodesRow({
         node_id: 'second-node',
+        node_address: 'ws://second-node',
         status: 'active',
         cpu_usage_percent: 15,
         memory_usage_percent: 25,
         connection_state: 'ready',
         ready_lease_expires_at: readyLeaseExpiresAt,
-      });
+      }));
 
       const result2 = await rebalancer.rebalance('node_join');
 

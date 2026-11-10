@@ -1,4 +1,5 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
   registerCase,
   dependencies,
@@ -70,7 +71,7 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
     const nowMs = TEST_CAPTURED_AT_MS;
     const originalDateNow = Date.now;
     Date.now = () => nowMs;
-    const operationRow = {
+    const operationRow = replicaOperationsRow({
       operation_id: TEST_OPERATION_ID,
       type: TEST_OPERATION_TYPE_REPLACE,
       partition_id: TEST_PARTITION_ID,
@@ -86,7 +87,7 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
       steps_history: JSON.stringify(TEST_EMPTY_LIST),
       entity_type: TEST_ENTITY_TYPE_PARTITION,
       entity_id: TEST_PARTITION_ID,
-    };
+    });
 
     const sqlQueryEngine = {
       async executeQuery(sql, params = []) {
@@ -258,7 +259,7 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
   registerCase(TEST_LOCAL_OWNER_REMOTE_HANDOFF_GUARD_TEST_NAME, async (t) => {
     const deferredTimers = [];
     const nowMs = Date.now();
-    const operationRow = {
+    const operationRow = replicaOperationsRow({
       operation_id: TEST_OPERATION_ID,
       type: TEST_OPERATION_TYPE_REPLACE,
       partition_id: TEST_LOCAL_OWNER_PARTITION_ID,
@@ -277,7 +278,7 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
       }]),
       entity_type: TEST_ENTITY_TYPE_PARTITION,
       entity_id: TEST_LOCAL_OWNER_PARTITION_ID,
-    };
+    });
 
     const coordinator = createCoordinator({
       nodeId: TEST_TARGET_NODE_ID,
@@ -393,7 +394,7 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
     const deliveries = [];
     const deferredTimers = [];
     const nowMs = Date.now();
-    const operationRow = {
+    const operationRow = replicaOperationsRow({
       operation_id: TEST_OPERATION_ID,
       type: TEST_OPERATION_TYPE_REPLACE,
       partition_id: TEST_PARTITION_ID,
@@ -412,7 +413,7 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
       }]),
       entity_type: TEST_ENTITY_TYPE_PARTITION,
       entity_id: TEST_PARTITION_ID,
-    };
+    });
 
     const coordinator = createCoordinator({
       nodeId: TEST_SOURCE_NODE_ID,

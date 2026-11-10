@@ -1,4 +1,5 @@
 import {registerReplicaHandlerTailMoreTests} from './replica-handler-tail-more-test-cases.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 export async function registerReplicaHandlerTailTests({
   t,
@@ -119,20 +120,22 @@ export async function registerReplicaHandlerTailTests({
       );
 
       const delayedMetadataSeedTimer = setTimeout(() => {
-        cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
-          table_id: tableId,
-          table_name: tableName,
-          schema_definition: JSON.stringify({
-            columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
-          }),
-        });
-        cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
-          partition_id: partitionId,
-          table_id: tableId,
-          partition_key_start: null,
-          partition_key_end: null,
-          leader_node_id: 'leader-node',
-        });
+        cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT',
+          systemTableRow(SYSTEM_TABLE_NAME.TABLES, {
+            table_id: tableId,
+            table_name: tableName,
+            schema_definition: JSON.stringify({
+              columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
+            }),
+          }));
+        cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT',
+          systemTableRow(SYSTEM_TABLE_NAME.PARTITIONS, {
+            partition_id: partitionId,
+            table_id: tableId,
+            partition_key_start: null,
+            partition_key_end: null,
+            leader_node_id: 'leader-node',
+          }));
       }, 50);
       t.teardown(() => clearTimeout(delayedMetadataSeedTimer));
 

@@ -4,6 +4,7 @@ import {
   deriveMembershipPublicationCandidate,
 } from '../../src/control-plane/membership-publication-coordinator.js';
 import {buildMembershipPublicationTargetSnapshot} from '../../src/control-plane/membership-publication-target-selection.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 // The steady-trim that drops a durably non-serving node from PUBLISHED membership is
 // gated on the GLOBAL priorityRecoverySpreadGapPending flag (plus the
@@ -76,12 +77,12 @@ function buildPendingPriorityPartitionSummary() {
 }
 
 function buildNodeRow(nodeId) {
-  return {
+  return nodesRow({
     node_id: nodeId,
     status: 'active',
     connection_state: 'ready',
     ready_lease_expires_at: READY_LEASE_EXPIRES_AT,
-  };
+  });
 }
 
 function buildReadinessEntry(nodeId) {
@@ -102,11 +103,11 @@ function buildEndpointRow(nodeId) {
 }
 
 function buildServiceRow(nodeId) {
-  return {
+  return servicesRow({
     service_id: `svc-${nodeId}`,
     node_id: nodeId,
     status: 'active',
-  };
+  });
 }
 
 function buildStalePublicationRow(priorityPartitionSummary) {
@@ -226,7 +227,7 @@ const PRIORITY_TABLE_IDS = Object.freeze([
 
 function buildSpreadPriorityServiceRows() {
   return PRIORITY_TABLE_IDS.flatMap((tableId) =>
-    RETAINED_NODE_IDS.map((nodeId, index) => ({
+    RETAINED_NODE_IDS.map((nodeId, index) => servicesRow({
       service_id: `${tableId}-r${index + 1}`,
       node_id: nodeId,
       partition_id: `${tableId}-p1`,

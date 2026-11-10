@@ -9,6 +9,7 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const JOIN_READINESS_BLOCKED_ACTION_NONE = 'none';
 const JOIN_READINESS_BLOCKED_ACTION_REPAIR_TOPOLOGY_VISIBILITY =
@@ -314,13 +315,13 @@ test(
       getAll(tableName) {
         switch (tableName) {
         case 'nodes':
-          return [{
+          return [nodesRow({
             node_id: 'seed-node',
             status: 'active',
-          }, {
+          }), nodesRow({
             node_id: 'target-node',
             status: 'active',
-          }];
+          })];
         case 'services':
           return [{
             service_id: 'mg-1-r2',
@@ -375,13 +376,13 @@ test(
       getAll(tableName) {
         switch (tableName) {
         case 'nodes':
-          return [{
+          return [nodesRow({
             node_id: 'seed-node',
             status: 'active',
-          }, {
+          }), nodesRow({
             node_id: 'target-node',
             status: 'active',
-          }];
+          })];
         case 'services':
           return [{
             service_id: 'mg-1-r2',
@@ -439,13 +440,13 @@ test(
       getAll(tableName) {
         switch (tableName) {
         case 'nodes':
-          return [{
+          return [nodesRow({
             node_id: 'seed-node',
             status: 'active',
-          }, {
+          }), nodesRow({
             node_id: 'target-node',
             status: 'active',
-          }];
+          })];
         case 'partitions':
           return [{
             partition_id: 'services-p1',
@@ -531,13 +532,13 @@ test(
       getAll(tableName) {
         switch (tableName) {
         case 'nodes':
-          return [{
+          return [nodesRow({
             node_id: 'seed-node',
             status: 'active',
-          }, {
+          }), nodesRow({
             node_id: 'target-node',
             status: 'active',
-          }];
+          })];
         case 'partitions':
           return [{
             partition_id: 'sql_transactions-p1',
@@ -604,16 +605,16 @@ test(
       getAll(tableName) {
         switch (tableName) {
         case 'nodes':
-          return [{
+          return [nodesRow({
             node_id: 'joining-node-readiness-evaluator',
             status: 'joining',
-          }, {
+          }), nodesRow({
             node_id: 'seed-node',
             status: 'active',
-          }, {
+          }), nodesRow({
             node_id: 'target-node',
             status: 'active',
-          }];
+          })];
         case 'partitions':
           return [{
             partition_id: 'replica_operations-p1',
@@ -711,16 +712,16 @@ test(
       getAll(tableName) {
         switch (tableName) {
         case JOIN_READINESS_TEST_TABLE.NODES:
-          return [{
+          return [nodesRow({
             node_id: JOIN_READINESS_TEST_NODE_ID,
             status: JOIN_READINESS_TEST_NODE_STATUS.JOINING,
-          }, {
+          }), nodesRow({
             node_id: JOIN_READINESS_TEST_SEED_NODE_ID,
             status: JOIN_READINESS_TEST_NODE_STATUS.ACTIVE,
-          }, {
+          }), nodesRow({
             node_id: JOIN_READINESS_TEST_TARGET_NODE_ID,
             status: JOIN_READINESS_TEST_NODE_STATUS.ACTIVE,
-          }];
+          })];
         case JOIN_READINESS_TEST_TABLE.PARTITIONS:
           return [{
             partition_id: JOIN_READINESS_TEST_PRIORITY_PARTITION_ID,

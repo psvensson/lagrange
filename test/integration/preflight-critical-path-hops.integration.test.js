@@ -348,7 +348,6 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
         ...seedNodeRow,
         [COLUMN.NODE_ID]: syntheticNodeId,
         [COLUMN.CPU_USAGE_PERCENT]: nextCpu,
-        [COLUMN.UPDATED_AT]: Date.now(),
         [COLUMN.UPDATED_AT_HLC]: forwardedTimestamp,
       };
       const beforeSyntheticMutation =

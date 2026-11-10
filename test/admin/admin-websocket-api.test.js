@@ -174,7 +174,7 @@ test('AdminWebSocketAPI - cache dump on connection', async (t) => {
   t.ok(Array.isArray(message.data.inter_group_latencies),
     'should include inter_group_latencies in cache dump');
   t.equal(message.data.nodes.length, 1, 'should have 1 node');
-  t.equal(message.data.nodes[0].id, 'node-1', 'should have correct node');
+  t.equal(message.data.nodes[0].node_id, 'node-1', 'should have correct node');
 
   ws.close();
   await api.shutdown();

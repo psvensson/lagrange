@@ -8,6 +8,7 @@ import {
   createReadinessServiceForTest,
   readinessCollaboratorFake,
 } from '../helpers/readiness-service-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 export function registerMembershipPublicationCoordinatorTailMoreTests({
   test,
   acknowledgeMembershipPublication,
@@ -161,17 +162,17 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         systemTableCache: {
           getAll(tableName) {
             if (tableName === 'nodes') {
-              return [{
+              return [nodesRow({
                 node_id: 'node-1',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 5000,
-              }, {
+              }), nodesRow({
                 node_id: 'node-2',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 5000,
-              }];
+              })];
             }
             if (tableName === 'node_endpoints') {
               return [{
@@ -189,15 +190,15 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
               }];
             }
             if (tableName === 'services') {
-              return [{
+              return [servicesRow({
                 service_id: 'svc-1',
                 node_id: 'node-1',
                 status: 'active',
-              }, {
+              }), servicesRow({
                 service_id: 'svc-2',
                 node_id: 'node-2',
                 status: 'active',
-              }];
+              })];
             }
             if (tableName === 'control_plane_publications') {
               return [latestPublicationRow];
@@ -240,7 +241,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       ];
       const serviceRows = priorityTableIds.flatMap((tableId, index) => {
         const partitionId = `${tableId}-p1`;
-        return [{
+        return [servicesRow({
           service_id: `${tableId}-leader-${index}`,
           node_id: 'node-1',
           partition_id: partitionId,
@@ -248,7 +249,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           status: 'active',
           raft_role: 'leader',
           address: `node-1/partition/${partitionId}-r1`,
-        }, {
+        }), servicesRow({
           service_id: `${tableId}-learner-${index}`,
           node_id: 'node-2',
           partition_id: partitionId,
@@ -256,7 +257,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           status: 'active',
           raft_role: 'learner',
           address: `node-2/partition/${partitionId}-r2`,
-        }];
+        })];
       });
       const candidate = deriveMembershipPublicationCandidate({
         publisherNodeId: 'seed-node',
@@ -268,18 +269,18 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           acknowledged_node_ids: ['node-1'],
         },
         nodeRows: [
-          {
+          nodesRow({
             node_id: 'node-1',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 5000,
-          },
-          {
+          }),
+          nodesRow({
             node_id: 'node-2',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 5000,
-          },
+          }),
         ],
         readinessEntries: [
           {
@@ -366,7 +367,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       const stalePriorityPartitionId = 'control_plane_publications-p1';
       const serviceRows = priorityTableIds.flatMap((tableId, index) => {
         const partitionId = `${tableId}-p1`;
-        return [{
+        return [servicesRow({
           service_id: `${tableId}-leader-${index}`,
           node_id: 'node-1',
           partition_id: partitionId,
@@ -374,7 +375,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           status: 'active',
           raft_role: 'leader',
           address: `node-1/partition/${partitionId}-r1`,
-        }, {
+        }), servicesRow({
           // Superseded fixture (voters-only census, 2026-10-04): the
           // fresher holder is a follower; a learner row no longer counts.
           service_id: `${tableId}-follower-${index}`,
@@ -384,7 +385,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           status: 'active',
           raft_role: 'follower',
           address: `node-2/partition/${partitionId}-r2`,
-        }];
+        })];
       });
       const candidate = deriveMembershipPublicationCandidate({
         publisherNodeId: 'seed-node',
@@ -409,18 +410,18 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           },
         },
         nodeRows: [
-          {
+          nodesRow({
             node_id: 'node-1',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 5000,
-          },
-          {
+          }),
+          nodesRow({
             node_id: 'node-2',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 5000,
-          },
+          }),
         ],
         readinessEntries: [
           {
@@ -499,7 +500,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
   };
   const buildLatchServiceRows = (holdersFor) =>
     latchPriorityTableIds.flatMap((tableId) =>
-      holdersFor(tableId).map(([nodeId, status], index) => ({
+      holdersFor(tableId).map(([nodeId, status], index) => servicesRow({
         service_id: `${tableId}-r${index + 1}`,
         node_id: nodeId,
         partition_id: `${tableId}-p1`,
@@ -519,7 +520,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         acknowledged_node_ids: latchNodeIds,
         priority_partition_summary: latchSatisfiedSummary,
       },
-      nodeRows: latchNodeIds.map((nodeId) => ({
+      nodeRows: latchNodeIds.map((nodeId) => nodesRow({
         node_id: nodeId,
         status: 'active',
         connection_state: 'ready',
@@ -636,7 +637,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           priority_partition_summary: synthesizedLegacySummary,
         },
         priorityPartitionSummary: synthesizedLegacySummary,
-        nodeRows: latchNodeIds.map((nodeId) => ({
+        nodeRows: latchNodeIds.map((nodeId) => nodesRow({
           node_id: nodeId,
           status: 'active',
           connection_state: 'ready',
@@ -688,7 +689,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       ];
       const serviceRows = priorityTableIds.flatMap((tableId, index) => {
         const partitionId = `${tableId}-p1`;
-        return [{
+        return [servicesRow({
           service_id: `${tableId}-leader-${index}`,
           node_id: 'node-1',
           partition_id: partitionId,
@@ -696,7 +697,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           status: 'active',
           raft_role: 'leader',
           address: `node-1/partition/${partitionId}-r1`,
-        }, {
+        }), servicesRow({
           service_id: `${tableId}-learner-${index}`,
           node_id: 'node-2',
           partition_id: partitionId,
@@ -704,24 +705,24 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           status: 'active',
           raft_role: 'learner',
           address: `node-2/partition/${partitionId}-r2`,
-        }];
+        })];
       });
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: 'node-1',
         systemTableCache: {
           getAll(tableName) {
             if (tableName === 'nodes') {
-              return [{
+              return [nodesRow({
                 node_id: 'node-1',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 5000,
-              }, {
+              }), nodesRow({
                 node_id: 'node-2',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 5000,
-              }];
+              })];
             }
             if (tableName === 'node_endpoints') {
               return [{
@@ -817,7 +818,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       ];
       const serviceRows = priorityTableIds.flatMap((tableId, index) => {
         const partitionId = `${tableId}-p1`;
-        return [{
+        return [servicesRow({
           service_id: `${tableId}-leader-${index}`,
           node_id: 'node-1',
           partition_id: partitionId,
@@ -825,7 +826,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           status: 'active',
           raft_role: 'leader',
           address: `node-1/partition/${partitionId}-r1`,
-        }, {
+        }), servicesRow({
           service_id: `${tableId}-learner-${index}`,
           node_id: 'node-2',
           partition_id: partitionId,
@@ -833,7 +834,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           status: 'active',
           raft_role: 'learner',
           address: `node-2/partition/${partitionId}-r2`,
-        }];
+        })];
       });
       const partitionRows = priorityTableIds.map((tableId) => ({
         partition_id: `${tableId}-p1`,
@@ -850,19 +851,19 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           required_ack_node_ids: ['node-1', 'node-2'],
           acknowledged_node_ids: ['node-1'],
         }],
-        nodes: [{
+        nodes: [nodesRow({
           node_id: 'node-1',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
           last_heartbeat: 900,
-        }, {
+        }), nodesRow({
           node_id: 'node-2',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
           last_heartbeat: 900,
-        }],
+        })],
         node_endpoints: [{
           endpoint_id: 'node-1-ws',
           node_id: 'node-1',
@@ -972,22 +973,22 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         systemTableCache: {
           getAll(tableName) {
             if (tableName === 'nodes') {
-              return [{
+              return [nodesRow({
                 node_id: 'node-1',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 5000,
-              }, {
+              }), nodesRow({
                 node_id: 'node-2',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 5000,
-              }, {
+              }), nodesRow({
                 node_id: 'node-3',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 5000,
-              }];
+              })];
             }
             if (tableName === 'node_endpoints') {
               return [{
@@ -1011,7 +1012,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
               }];
             }
             if (tableName === 'services') {
-              return [{
+              return [servicesRow({
                 service_id: 'cp-publications-r1',
                 node_id: 'node-1',
                 partition_id: 'control_plane_publications-p1',
@@ -1019,7 +1020,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
                 status: 'active',
                 raft_role: 'leader',
                 address: 'node-1/partition/control_plane_publications-p1-r1',
-              }, {
+              }), servicesRow({
                 service_id: 'cp-publications-r2',
                 node_id: 'node-2',
                 partition_id: 'control_plane_publications-p1',
@@ -1027,7 +1028,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
                 status: 'active',
                 raft_role: 'follower',
                 address: 'node-2/partition/control_plane_publications-p1-r2',
-              }, {
+              }), servicesRow({
                 service_id: 'cp-publications-r3',
                 node_id: 'node-3',
                 partition_id: 'control_plane_publications-p1',
@@ -1035,7 +1036,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
                 status: 'active',
                 raft_role: 'follower',
                 address: 'node-3/partition/control_plane_publications-p1-r3',
-              }, {
+              }), servicesRow({
                 service_id: 'replica-ops-r1',
                 node_id: 'node-1',
                 partition_id: 'replica_operations-p1',
@@ -1043,7 +1044,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
                 status: 'active',
                 raft_role: 'leader',
                 address: 'node-1/partition/replica_operations-p1-r1',
-              }, {
+              }), servicesRow({
                 service_id: 'replica-ops-r2',
                 node_id: 'node-1',
                 partition_id: 'replica_operations-p1',
@@ -1051,7 +1052,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
                 status: 'active',
                 raft_role: 'follower',
                 address: 'node-1/partition/replica_operations-p1-r2',
-              }, {
+              }), servicesRow({
                 service_id: 'replica-ops-r3',
                 node_id: 'node-1',
                 partition_id: 'replica_operations-p1',
@@ -1059,7 +1060,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
                 status: 'active',
                 raft_role: 'follower',
                 address: 'node-1/partition/replica_operations-p1-r3',
-              }];
+              })];
             }
             if (tableName === 'control_plane_publications') {
               return [latestPublicationRow];
@@ -1165,22 +1166,22 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         systemTableCache: {
           getAll(tableName) {
             if (tableName === 'nodes') {
-              return [{
+              return [nodesRow({
                 node_id: 'node-1',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 5000,
-              }, {
+              }), nodesRow({
                 node_id: 'node-2',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 5000,
-              }, {
+              }), nodesRow({
                 node_id: 'node-3',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 5000,
-              }];
+              })];
             }
             if (tableName === 'node_endpoints') {
               return [{
@@ -1204,19 +1205,19 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
               }];
             }
             if (tableName === 'services') {
-              return [{
+              return [servicesRow({
                 service_id: 'svc-1',
                 node_id: 'node-1',
                 status: 'active',
-              }, {
+              }), servicesRow({
                 service_id: 'svc-2',
                 node_id: 'node-2',
                 status: 'active',
-              }, {
+              }), servicesRow({
                 service_id: 'svc-3',
                 node_id: 'node-3',
                 status: 'active',
-              }];
+              })];
             }
             if (tableName === 'control_plane_publications') {
               return [latestPublicationRow];

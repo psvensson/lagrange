@@ -11,6 +11,10 @@ import {ConfigurationManager} from
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
+  nodesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
+import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 
@@ -19,28 +23,30 @@ LoggingService.getInstance().initialize({level: 'error'});
 
 const NODE_ID = 'node-local';
 const NOW_MS = 1740589945123;
-const OPEN_PUBLICATION_ROW = Object.freeze({
-  publication_id: 'publication-8',
-  publication_kind: 'cluster_membership',
-  publication_epoch: 8,
-  status: 'OPEN',
-  published_active_node_ids: [NODE_ID, 'node-2'],
-  required_ack_node_ids: [NODE_ID, 'node-2'],
-  acknowledged_node_ids: [NODE_ID],
-});
+const OPEN_PUBLICATION_ROW = Object.freeze(
+  systemTableRow(TABLES.CONTROL_PLANE_PUBLICATIONS, {
+    publication_id: 'publication-8',
+    publication_kind: 'cluster_membership',
+    publication_epoch: 8,
+    publisher_node_id: NODE_ID,
+    status: 'OPEN',
+    published_active_node_ids: [NODE_ID, 'node-2'],
+    required_ack_node_ids: [NODE_ID, 'node-2'],
+    acknowledged_node_ids: [NODE_ID],
+    transition_history: [],
+  }),
+);
 
 function createOpenMembershipCache() {
   const cache = new SystemTableCache();
-  cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
-    id: NODE_ID,
+  cache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
     node_id: NODE_ID,
-    address: 'localhost:8080',
     node_address: 'localhost:8080',
     status: 'active',
     connection_state: 'ready',
     last_heartbeat: NOW_MS,
     ready_lease_expires_at: NOW_MS + 15000,
-  });
+  }));
   cache.applySystemTableChange(
     TABLES.CONTROL_PLANE_PUBLICATIONS,
     'INSERT',

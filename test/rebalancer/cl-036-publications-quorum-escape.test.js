@@ -10,6 +10,7 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {withRegisteredIncarnations} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 // CL-036: control_plane_publications-p1 spread recovery wedged under rolling
 // restart because the critical-topology settling gate counted any
@@ -43,11 +44,11 @@ function initEnv() {
 }
 
 function nodeRow(nodeId, leaseOffsetMs) {
-  return {
+  return nodesRow({
     node_id: nodeId,
     status: 'active',
     ready_lease_expires_at: Date.now() + leaseOffsetMs,
-  };
+  });
 }
 
 // Quorum (2 of 3) is ready; NODE_C is an ACTIVE-but-recovery-pending node —

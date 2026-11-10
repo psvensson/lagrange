@@ -47,6 +47,7 @@ import {
   createMockPolicyService,
   createMockReadinessService,
   initializeTestEnvironment,
+  projectTestReplicas,
 } from './unified-rebalancer-test-support.js';
 import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
@@ -133,9 +134,9 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
       nodeId: 'node-1',
     });
 
-    const currentReplicas = [
+    const currentReplicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-    ];
+    ]);
 
     const targetState = {
       targetReplicaCount: 3,
@@ -217,9 +218,9 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
         ],
       });
 
-      const currentReplicas = [
+      const currentReplicas = projectTestReplicas([
         {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-      ];
+      ]);
 
       const targetState = {
         targetReplicaCount: 3,
@@ -244,11 +245,11 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
         nodeId: 'node-1',
       });
 
-      const currentReplicas = [
+      const currentReplicas = projectTestReplicas([
         {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
         {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.SYNCING},
         {replica_id: 'r3', node_id: 'node-1', status: ReplicaStatus.SYNCING},
-      ];
+      ]);
 
       const targetState = {
         targetReplicaCount: 3,
@@ -273,11 +274,11 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
         nodeId: 'node-1',
       });
 
-      const currentReplicas = [
+      const currentReplicas = projectTestReplicas([
         {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.SYNCING},
         {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.SYNCING},
         {replica_id: 'r3', node_id: 'node-1', status: ReplicaStatus.SYNCING},
-      ];
+      ]);
 
       const targetState = {
         targetReplicaCount: 3,
@@ -304,11 +305,11 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
       nodeId: 'node-1',
     });
 
-    const currentReplicas = [
+    const currentReplicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.FAILED},
       {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.ACTIVE},
-    ];
+    ]);
 
     const targetState = {
       targetReplicaCount: 3,
@@ -332,11 +333,11 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
       nodeId: 'node-1',
     });
 
-    const currentReplicas = [
+    const currentReplicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r3', node_id: 'node-4', status: ReplicaStatus.ACTIVE},
-    ];
+    ]);
 
     const targetState = {
       targetReplicaCount: 3,
@@ -367,11 +368,11 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
       nodeId: 'node-1',
     });
 
-    const currentReplicas = [
+    const currentReplicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r3', node_id: 'node-4', status: ReplicaStatus.ACTIVE},
-    ];
+    ]);
 
     const targetState = {
       targetReplicaCount: 3,
@@ -422,10 +423,10 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
       nodeId: 'node-1',
     });
 
-    const currentReplicas = [
+    const currentReplicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
-    ];
+    ]);
 
     const targetState = {
       targetReplicaCount: 3,
@@ -456,11 +457,11 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
 
       // All replicas are present and active, but intentionally lack routability
       // metadata to simulate transient bootstrap/service-row lag.
-      const currentReplicas = [
+      const currentReplicas = projectTestReplicas([
         {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
         {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
         {replica_id: 'r3', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-      ];
+      ]);
 
       const targetState = {
         targetReplicaCount: 3,
@@ -491,11 +492,11 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
     });
 
     // node-1 has 2 replicas, node-2 has 1, node-3 needs 1
-    const currentReplicas = [
+    const currentReplicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r3', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
-    ];
+    ]);
 
     const targetState = {
       targetReplicaCount: 3,
@@ -529,12 +530,12 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
       nodeId: 'node-1',
     });
 
-    const currentReplicas = [
+    const currentReplicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r4', node_id: 'node-4', status: ReplicaStatus.ACTIVE},
-    ];
+    ]);
 
     const targetState = {
       targetReplicaCount: 3,
@@ -676,10 +677,10 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
       ],
     });
 
-    const replicas = [
+    const replicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.FAILED},
-    ];
+    ]);
 
     const policy = {minReplicaCount: 3};
 
@@ -698,10 +699,10 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
         ],
       });
 
-      const replicas = [
+      const replicas = projectTestReplicas([
         {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
         {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
-      ];
+      ]);
 
       const policy = {
         minReplicaCount: 3,
@@ -727,12 +728,12 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
       nodeId: 'node-1',
     });
 
-    const replicas = [
+    const replicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r4', node_id: 'node-4', status: ReplicaStatus.ACTIVE},
-    ];
+    ]);
 
     const policy = {replicaCount: 3};
 
@@ -752,11 +753,11 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
       ],
     });
 
-    const replicas = [
+    const replicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r3', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
-    ];
+    ]);
 
     const policy = {
       replicaCount: 3,
@@ -778,11 +779,11 @@ test('UnifiedRebalancer - State Evaluation', async (t) => {
       ],
     });
 
-    const replicas = [
+    const replicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r3', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
-    ];
+    ]);
 
     const policy = {
       replicaCount: 3,

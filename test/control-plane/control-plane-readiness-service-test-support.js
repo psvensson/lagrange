@@ -10,6 +10,7 @@ import {
 import {
   installControlPlaneReadinessSnapshotStoreMethods,
 } from '../../src/control-plane/control-plane-readiness-snapshot-store.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 export function buildNodeLivenessTestEvidence(
   nodeIdOrRow,
@@ -197,7 +198,7 @@ export function createPublicationService(snapshot) {
 }
 
 export function createActiveNode(nodeId) {
-  return {
+  return nodesRow({
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.READY_LEASE_EXPIRES_AT]: 2000,
@@ -206,17 +207,17 @@ export function createActiveNode(nodeId) {
     [COLUMN.MEMORY_USAGE_PERCENT]: 20,
     [COLUMN.DISK_USAGE_PERCENT]: 30,
     [COLUMN.STORAGE_BUDGET_BYTES]: 1000,
-  };
+  });
 }
 
 export function createMessageGroupService(nodeId) {
-  return {
+  return servicesRow({
     [COLUMN.SERVICE_ID]: `mg-${nodeId}`,
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${nodeId}/message-group/mg-${nodeId}`,
-  };
+  });
 }
 
 export function createPartitionService(nodeId, serviceId = `part-${nodeId}`) {

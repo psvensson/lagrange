@@ -31,10 +31,12 @@ import {
   buildFormationBarrierOwner,
   buildFormationCache,
   buildRealLedgerPlanner,
+  currentLedgerProjectedReplicas,
   currentLedgerReplicas,
   initializeEnvironment,
   resetEnvironment,
 } from './formation-barrier-test-fixture.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 // Quest formation-barrier-spread-release-oscillation — deterministic
 // reproduction of the abfix red-run wedge (live 3-node docker joins,
@@ -304,7 +306,7 @@ function buildScenario(options = {}) {
       step === WORKFLOW_STEP.ACTIVE &&
       (isReplace || operation.type === OperationType.ADD)
     ) {
-      applyRow(cache, 'services', {
+      applyRow(cache, 'services', servicesRow({
         service_id: operation.replicaId,
         replica_id: operation.replicaId,
         partition_id: LEDGER_PARTITION_ID,
@@ -312,7 +314,7 @@ function buildScenario(options = {}) {
         service_type: REBALANCER_ENTITY_TYPE.PARTITION,
         status: ReplicaStatus.ACTIVE,
         raft_role: 'follower',
-      });
+      }));
     }
     if (step === WORKFLOW_STEP.STOPPING) {
       const removingReplicaId = isReplace ?
@@ -366,7 +368,7 @@ function buildScenario(options = {}) {
   };
 
   const planAndCreateNextMove = async () => {
-    const replicas = currentLedgerReplicas(cache);
+    const replicas = currentLedgerProjectedReplicas(cache);
     const targetState = await planner.calculateTargetState(replicas, {
       targetReplicaCount: 3,
       placementConstraints: {

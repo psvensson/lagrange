@@ -16,6 +16,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   createMockCache,
   createMockControlPlaneSystemTableGateway,
@@ -23,13 +24,17 @@ import {
   createMockMessageRouter,
 } from './test-helpers.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {
+  replicaOperationsRow,
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 function buildCoordinator({operationRow, serviceRow}) {
   const trackedOperations = new Map();
-  trackedOperations.set(operationRow.operation_id, {...operationRow});
+  trackedOperations.set(operationRow.operation_id, replicaOperationsRow(operationRow));
   const trackedServices = new Map();
   if (serviceRow) {
-    trackedServices.set(serviceRow.service_id, {...serviceRow});
+    trackedServices.set(serviceRow.service_id, servicesRow(serviceRow));
   }
   const cdcService = {
     insertSystemTableRow: async () => ({success: true}),
@@ -140,6 +145,7 @@ test('orphan-reconcile re-drives an orphaned completed SYNCING op to ACTIVE', as
     partition_id: 'latency_groups-p1',
     node_id: 'test-node-1',
     status: ReplicaStatus.ACTIVE, // replica creation genuinely completed
+    raft_role: RAFT_ROLE.FOLLOWER, // an ACTIVE partition replica is a voter
   };
   const {coordinator, getOp} = buildCoordinator({operationRow, serviceRow});
   coordinator.initialize();
@@ -224,6 +230,7 @@ test('orphan-reconcile retires a SYNCING op whose replica diverged to FAILED und
     node_id: 'test-node-1',
     // First read (the gate) sees ACTIVE; the under-lock re-read sees FAILED.
     status: () => (++statusReads <= 1 ? ReplicaStatus.ACTIVE : ReplicaStatus.FAILED),
+    raft_role: RAFT_ROLE.FOLLOWER,
   };
   const {coordinator, getOp} = buildCoordinator({operationRow, serviceRow});
   coordinator.initialize();
@@ -257,7 +264,7 @@ test('gate: reconciler ACTS on an op whose replica reached actionable truth (ACT
     },
     serviceRow: {
       service_id: 'g1r', replica_id: 'g1r', partition_id: 'latency_groups-p1',
-      node_id: 'test-node-1', status: ReplicaStatus.ACTIVE,
+      node_id: 'test-node-1', status: ReplicaStatus.ACTIVE, raft_role: RAFT_ROLE.FOLLOWER,
     },
   });
   coordinator.initialize();

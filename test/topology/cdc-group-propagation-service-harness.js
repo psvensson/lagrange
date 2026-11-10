@@ -61,6 +61,9 @@ export function createTopologyCache({
       }
       return null;
     },
+    getShared(tableName, key) {
+      return this.get(tableName, key);
+    },
     getAll(tableName) {
       if (tableName === TABLES.LATENCY_GROUPS) {
         return groupRows.map((row) => ({...row}));

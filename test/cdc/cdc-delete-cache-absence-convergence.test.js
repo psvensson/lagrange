@@ -21,6 +21,7 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   createLocalSystemTablePartitionServices,
 } from './cdc-integration-service-test-support.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 import {cacheRecordChangedDuringAuthoritativeAbsenceRead} from
   '../../src/cdc/cdc-integration-service-cache-visibility-authority.js';
 
@@ -516,11 +517,11 @@ test(
   async (t) => {
     const serviceId = 'services-p1-delayed-first-delivery';
     const cache = new SystemTableCache();
-    const delayedRow = {
+    const delayedRow = servicesRow({
       service_id: serviceId,
       status: 'active',
       updated_at: 100,
-    };
+    });
     const service = createLeaderAbsenceReadService(cache);
 
     const result = await service.repairCacheVisibilityHole(

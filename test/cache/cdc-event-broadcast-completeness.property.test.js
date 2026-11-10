@@ -17,6 +17,9 @@ import {
 } from '../../src/cache/system-table-cache.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {getSystemCachePrimaryKeyField} from
+  '../../src/cache/system-cache-key-descriptor.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -33,7 +36,29 @@ afterEach(() => {
 });
 
 /**
- * Generate a random CDC event with valid data.
+ * The complete stored row of a system table for a generated key.
+ * @param {string} tableName - System table.
+ * @param {string} key - Primary key value.
+ * @return {Object} The stored row.
+ */
+function storedRow(tableName, key) {
+  return systemTableRow(tableName, {
+    [getSystemCachePrimaryKeyField(tableName)]: key,
+  });
+}
+
+/**
+ * The primary key value of a row of a system table.
+ * @param {string} tableName - System table.
+ * @param {Object} row - Stored row.
+ * @return {string} The key.
+ */
+function rowKey(tableName, row) {
+  return row[getSystemCachePrimaryKeyField(tableName)];
+}
+
+/**
+ * Generate a random CDC event carrying the complete stored row of its table.
  */
 const cdcEventArbitrary = fc.record({
   tableName: fc.constantFrom(...SYSTEM_TABLES),
@@ -42,13 +67,12 @@ const cdcEventArbitrary = fc.record({
     CDC_OPERATIONS.UPDATE,
     CDC_OPERATIONS.DELETE,
   ),
-  data: fc.record({
-    id: fc.uuid(),
-    name: fc.string({minLength: 1, maxLength: 50}),
-    status: fc.constantFrom('active', 'inactive', 'pending'),
-    value: fc.integer({min: 0, max: 1000}),
-  }),
-});
+  key: fc.uuid(),
+}).map(({tableName, operation, key}) => ({
+  tableName,
+  operation,
+  data: storedRow(tableName, key),
+}));
 
 /**
  * Generate a sequence of CDC events.
@@ -88,7 +112,7 @@ test('Property 4: All listeners receive CDC events with correct data', async (t)
         for (const event of events) {
           // For UPDATE/DELETE, ensure the record exists first
           if (event.operation !== CDC_OPERATIONS.INSERT) {
-            if (!cache.has(event.tableName, event.data.id)) {
+            if (!cache.has(event.tableName, rowKey(event.tableName, event.data))) {
               cache.applySystemTableChange(
                 event.tableName,
                 CDC_OPERATIONS.INSERT,
@@ -120,7 +144,7 @@ test('Property 4: All listeners receive CDC events with correct data', async (t)
 
             if (e1.tableName !== e2.tableName ||
                 e1.operation !== e2.operation ||
-                e1.record.id !== e2.record.id) {
+                JSON.stringify(e1.record) !== JSON.stringify(e2.record)) {
               return false;
             }
           }
@@ -253,13 +277,8 @@ test('Property 4: Notification record matches applied change', async (t) => {
     fc.asyncProperty(
       fc.record({
         tableName: fc.constantFrom(...SYSTEM_TABLES),
-        data: fc.record({
-          id: fc.uuid(),
-          name: fc.string({minLength: 1, maxLength: 50}),
-          status: fc.constantFrom('active', 'inactive'),
-          value: fc.integer({min: 0, max: 1000}),
-        }),
-      }),
+        key: fc.uuid(),
+      }).map(({tableName, key}) => ({tableName, data: storedRow(tableName, key)})),
       async ({tableName, data}) => {
         const cache = new SystemTableCache();
         let receivedRecord = null;
@@ -272,17 +291,12 @@ test('Property 4: Notification record matches applied change', async (t) => {
 
         await new Promise((resolve) => setImmediate(resolve));
 
-        // Verify the received record matches the input data
+        // Verify the received record is the complete inserted row
         if (!receivedRecord) {
           return false;
         }
 
-        return (
-          receivedRecord.id === data.id &&
-          receivedRecord.name === data.name &&
-          receivedRecord.status === data.status &&
-          receivedRecord.value === data.value
-        );
+        return JSON.stringify(receivedRecord) === JSON.stringify(data);
       },
     ),
     {numRuns: 10},

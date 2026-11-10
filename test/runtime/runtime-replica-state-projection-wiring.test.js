@@ -35,6 +35,7 @@ import {
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -60,7 +61,7 @@ function runtimeServiceIdentityRows() {
   return [
     ...INCLUDED_RUNTIME_SERVICE_IDS,
     ...EXCLUDED_RUNTIME_SERVICE_IDS,
-  ].map((serviceId, index) => ({
+  ].map((serviceId, index) => servicesRow({
     service_id: serviceId,
     service_type: 'runtime_service',
     node_id: `node-${index + 1}`,
@@ -227,7 +228,8 @@ test('the rebalancer currentReplicas view uses exact canonical runtime IDs',
     const cache = {
       filter: (table, predicate) => projectedRows.filter(predicate),
       get: () => null,
-      getAll: () => [],
+      // The services table holds the identity rows; every other table is empty.
+      getAll: (table) => table === TABLES.SERVICES ? projectedRows : [],
     };
     const rebalancer = new UnifiedRebalancer(withNodeReadinessService('UnifiedRebalancer', {
       entityId: RUNTIME_ENTITY_ID,
@@ -241,7 +243,7 @@ test('the rebalancer currentReplicas view uses exact canonical runtime IDs',
     }));
     const replicas = rebalancer.getCurrentReplicas();
     t.same(
-      replicas.map((row) => row.service_id),
+      replicas.map((replica) => replica.serviceId),
       INCLUDED_RUNTIME_SERVICE_IDS,
       'bare and positive-decimal replica ids belong; overlapping prefixes ' +
         'and malformed ordinals do not',

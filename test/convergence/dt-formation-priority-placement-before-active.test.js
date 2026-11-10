@@ -52,10 +52,12 @@ import {
   buildFormationCache,
   buildOwnerDerivedStartupAuthoritySnapshot,
   buildRealLedgerPlanner,
+  currentLedgerProjectedReplicas,
   currentLedgerReplicas,
   initializeEnvironment,
   resetEnvironment,
 } from './formation-barrier-test-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 function deferred() {
   let resolve;
@@ -111,7 +113,7 @@ async function executeLedgerFormationTick({
     executionState.pendingOperation = null;
     return;
   }
-  const replicas = currentLedgerReplicas(cache);
+  const replicas = currentLedgerProjectedReplicas(cache);
   const targetState = await planner.calculateTargetState(replicas, {
     targetReplicaCount: 3,
     placementConstraints: {
@@ -151,7 +153,7 @@ async function executeLedgerFormationTick({
     witness.commitRemoval();
   } else if (move.type === REBALANCER_MOVE_TYPE.ADD) {
     const targetReplicaId = operation.replicaId;
-    applyRow(cache, 'services', {
+    applyRow(cache, 'services', servicesRow({
       service_id: targetReplicaId,
       replica_id: targetReplicaId,
       partition_id: LEDGER_PARTITION_ID,
@@ -159,7 +161,7 @@ async function executeLedgerFormationTick({
       service_type: REBALANCER_ENTITY_TYPE.PARTITION,
       status: ReplicaStatus.ACTIVE,
       raft_role: 'follower',
-    });
+    }));
   } else if (move.type === REBALANCER_MOVE_TYPE.REMOVE) {
     cache.applySystemTableChange('services', 'DELETE', {
       service_id: sourceReplicaId,
@@ -292,27 +294,30 @@ t.test(
           },
         },
         nodeRows: [
-          {
+          nodesRow({
             node_id: SEED_NODE_ID,
+            node_address: `ws://${SEED_NODE_ID}`,
             status: ReplicaStatus.ACTIVE,
             connection_state: 'ready',
             last_heartbeat: now,
             ready_lease_expires_at: now + 60000,
-          },
-          {
+          }),
+          nodesRow({
             node_id: JOINER_1_NODE_ID,
+            node_address: `ws://${JOINER_1_NODE_ID}`,
             status: ReplicaStatus.ACTIVE,
             connection_state: 'connected',
             last_heartbeat: lastHeartbeatAt,
             ready_lease_expires_at: null,
-          },
-          {
+          }),
+          nodesRow({
             node_id: JOINER_4_NODE_ID,
+            node_address: `ws://${JOINER_4_NODE_ID}`,
             status: ReplicaStatus.ACTIVE,
             connection_state: 'connected',
             last_heartbeat: now,
             ready_lease_expires_at: null,
-          },
+          }),
         ],
         readinessEntries: [],
         connectedNodeIds: [SEED_NODE_ID, JOINER_4_NODE_ID],

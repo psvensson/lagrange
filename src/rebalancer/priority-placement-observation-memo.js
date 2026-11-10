@@ -4,11 +4,11 @@ import {buildCurrentPriorityPlacementObservation} from
   '../control-plane/current-priority-placement-observation.js';
 import {readMembershipPlanningDerivationVersionKey} from
   '../control-plane/membership-planning-version-key.js';
+import {projectReplicasFromServicesRows} from './projected-replica.js';
 
 const {
   TABLES,
   UNIFIED_REBALANCER_LITERAL,
-  normalizeServiceRow,
 } = UNIFIED_REBALANCER_SHARED;
 
 // The current-priority-placement observation makes several full canonical
@@ -144,22 +144,22 @@ function buildCurrentPriorityPlacementFromRebalancerCache({
     systemTableCache,
     TABLES.PARTITIONS,
   );
-  const cachedServiceRows = readAllSharedRows(
-    systemTableCache,
-    TABLES.SERVICES,
+  // The census reads projected replicas: every cached services row decoded
+  // and projected, with this entity's own projected replicas (its terminal
+  // create targets included) replacing its rows.
+  const cachedReplicas = projectReplicasFromServicesRows(
+    readAllSharedRows(systemTableCache, TABLES.SERVICES),
   );
   const serviceRows =
     normalizedCurrentPartitionId.length > 0 &&
     Array.isArray(currentPartitionServiceRows) ?
       [
-        ...cachedServiceRows.filter(
-          (serviceRow) =>
-            normalizeServiceRow(serviceRow).partitionId !==
-              normalizedCurrentPartitionId,
+        ...cachedReplicas.filter(
+          (replica) => replica.partitionId !== normalizedCurrentPartitionId,
         ),
         ...currentPartitionServiceRows,
       ] :
-      cachedServiceRows;
+      cachedReplicas;
   // No per-learner readiness read: the census counts voter-role rows only
   // (owner decision 2026-10-04), so a learner's promotability never changes
   // the placement answer.

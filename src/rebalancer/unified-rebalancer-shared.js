@@ -117,10 +117,8 @@ import {
 } from '../constants/index.js';
 import {ENDPOINT_SYNC_HEALTH} from '../runtime/endpoint-sync-constants.js';
 import {
-  normalizeNodeRow,
   normalizeNodeEndpointRow,
   normalizeServiceEndpointRow,
-  normalizeServiceRow,
 } from '../control-plane/system-row-normalizers.js';
 import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
@@ -359,10 +357,8 @@ export const UNIFIED_REBALANCER_SHARED = {
   isTerminalSuccessfulCreateOperation,
   isValidWorkflowStep,
   normalizeNodeEndpointRow,
-  normalizeNodeRow,
   normalizeReplicaOperationRecord,
   normalizeServiceEndpointRow,
-  normalizeServiceRow,
   resolvePriorityRecoveryActiveNodeCohort,
   ownerNowMs,
   resolveReplicaOperationSemanticPhase,

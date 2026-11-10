@@ -44,6 +44,7 @@ import {
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
+import {NODES_ROW_STATUS} from '../../src/control-plane/nodes-row-decoder.js';
 
 // Initialize test environment
 // Create a mock system table cache
@@ -190,7 +191,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         nodeId: 'node-1',
         nodes: [
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
-          {node_id: 'node-2', status: 'warming'},
+          // A joining member: the stored transitional status.
+          {node_id: 'node-2', status: NODES_ROW_STATUS.JOINING},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
         ],
       });

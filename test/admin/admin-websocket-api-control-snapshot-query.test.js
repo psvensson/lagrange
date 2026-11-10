@@ -14,6 +14,12 @@ import {
   getAuthoritativeRepairReadTables,
   waitForMessage,
 } from './admin-websocket-api-test-support.js';
+import {
+  nodesRow,
+  replicaOperationsRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 import {AdminWebSocketAPI, MessageType} from
   '../../src/admin/admin-websocket-api.js';
 import {
@@ -111,9 +117,7 @@ test(
     const staleHeartbeatMs = nowMs - 45000;
     const writableCache = createAuthoritativeRepairCache('node-local');
     writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-      id: 'node-local',
       node_id: 'node-local',
-      address: 'localhost:8080',
       node_address: 'localhost:8080',
       status: 'active',
       connection_state: 'ready',
@@ -186,7 +190,7 @@ test(
     'local under shared metadata coverage gaps',
   async (t) => {
     const writableCache = createPopulatedCache();
-    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       [COLUMN.SERVICE_ID]: TEST_LOCAL_SYSTEM_OBSERVATION_GAP_SERVICE_ID,
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.NODE_ID]: TEST_LOCAL_SYSTEM_OBSERVATION_GAP_NODE_ID,
@@ -194,7 +198,7 @@ test(
       [COLUMN.REPLICA_ID]: TEST_LOCAL_SYSTEM_OBSERVATION_GAP_REPLICA_ID,
       [COLUMN.STATUS]: TEST_LOCAL_SYSTEM_OBSERVATION_ACTIVE_STATUS,
       [COLUMN.ADDRESS]: TEST_LOCAL_SYSTEM_OBSERVATION_GAP_ADDRESS,
-    });
+    }));
 
     const repairEngine = createSystemTableRepairQueryEngine({
       [TABLES.SERVICES]: writableCache.getAll(TABLES.SERVICES),
@@ -247,15 +251,18 @@ test(
   async (t) => {
     const nowMs = 1740589945123;
     const writableCache = createAuthoritativeRepairCache('node-local');
-    writableCache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'INSERT', {
-      publication_id: 'publication-8',
-      publication_kind: 'cluster_membership',
-      publication_epoch: 8,
-      status: 'OPEN',
-      published_active_node_ids: ['node-local', 'node-2'],
-      required_ack_node_ids: ['node-local', 'node-2'],
-      acknowledged_node_ids: ['node-local'],
-    });
+    writableCache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'INSERT',
+      systemTableRow(TABLES.CONTROL_PLANE_PUBLICATIONS, {
+        publication_id: 'publication-8',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 8,
+        publisher_node_id: 'node-local',
+        status: 'OPEN',
+        published_active_node_ids: ['node-local', 'node-2'],
+        required_ack_node_ids: ['node-local', 'node-2'],
+        acknowledged_node_ids: ['node-local'],
+        transition_history: [],
+      }));
 
     const publishedReadOptions = [];
     const api = new AdminWebSocketAPI({
@@ -385,9 +392,7 @@ test(
     const staleHeartbeatMs = nowMs - 45000;
     const writableCache = createAuthoritativeRepairCache('node-local');
     writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-      id: 'node-local',
       node_id: 'node-local',
-      address: 'localhost:8080',
       node_address: 'localhost:8080',
       status: 'active',
       connection_state: 'ready',
@@ -502,9 +507,7 @@ test(
     const staleHeartbeatMs = nowMs - 45000;
     const writableCache = createAuthoritativeRepairCache('node-local');
     writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-      id: 'node-local',
       node_id: 'node-local',
-      address: 'localhost:8080',
       node_address: 'localhost:8080',
       status: 'active',
       connection_state: 'ready',
@@ -565,48 +568,39 @@ test(
     const rightPartitionId = 'partition-benchmark-events-right';
 
     const writableCache = createPopulatedCache();
-    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-      id: tableId,
-      table_id: tableId,
-      name: 'benchmark_events',
-      table_name: 'benchmark_events',
-      active_partition_version: 2,
-      partition_count: 2,
-      partition_transition_state: 'split_cutover_active',
-      partition_transition_metadata: JSON.stringify({
-        workflowId: 'split-table-benchmark-events-v2',
-        sourcePartitionId,
-        targetPartitionVersion: 2,
-        targetPartitionIds: [leftPartitionId, rightPartitionId],
-      }),
-    });
-    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      id: sourcePartitionId,
-      partition_id: sourcePartitionId,
-      table_id: tableId,
-      table_name: 'benchmark_events',
-      partition_version: 1,
-      state: 'NORMAL',
-    });
+    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT',
+      systemTableRow(TABLES.TABLES, {
+        table_id: tableId,
+        table_name: 'benchmark_events',
+        active_partition_version: 2,
+        partition_count: 2,
+        partition_transition_state: 'split_cutover_active',
+        partition_transition_metadata: JSON.stringify({
+          workflowId: 'split-table-benchmark-events-v2',
+          sourcePartitionId,
+          targetPartitionVersion: 2,
+          targetPartitionIds: [leftPartitionId, rightPartitionId],
+        }),
+      }));
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: sourcePartitionId,
+        table_id: tableId,
+        table_name: 'benchmark_events',
+        partition_version: 1,
+        state: 'NORMAL',
+      }));
 
     const authoritativePartitions = [
       ...writableCache.getAll(TABLES.PARTITIONS),
-      {
-        id: leftPartitionId,
-        partition_id: leftPartitionId,
-        table_id: tableId,
-        table_name: 'benchmark_events',
-        partition_version: 2,
-        state: 'NORMAL',
-      },
-      {
-        id: rightPartitionId,
-        partition_id: rightPartitionId,
-        table_id: tableId,
-        table_name: 'benchmark_events',
-        partition_version: 2,
-        state: 'NORMAL',
-      },
+      ...[leftPartitionId, rightPartitionId].map((partitionId) =>
+        systemTableRow(TABLES.PARTITIONS, {
+          partition_id: partitionId,
+          table_id: tableId,
+          table_name: 'benchmark_events',
+          partition_version: 2,
+          state: 'NORMAL',
+        })),
     ];
 
     const repairEngine = createSystemTableRepairQueryEngine({
@@ -665,31 +659,30 @@ test(
     const leftPartitionId = 'partition-benchmark-events-left';
     const rightPartitionId = 'partition-benchmark-events-right';
     const writableCache = createAuthoritativeRepairCache(nodeId);
-    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-      id: tableId,
-      table_id: tableId,
-      name: 'benchmark_events',
-      table_name: 'benchmark_events',
-      active_partition_version: 1,
-      partition_count: 1,
-      partition_transition_state: 'split_backfilling',
-      partition_transition_metadata: JSON.stringify({
-        workflowId: 'split-table-benchmark-events-v2',
-        sourcePartitionId,
-        targetPartitionVersion: 2,
-        targetPartitionIds: [leftPartitionId, rightPartitionId],
-      }),
-    });
-    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      id: sourcePartitionId,
-      partition_id: sourcePartitionId,
-      table_id: tableId,
-      table_name: 'benchmark_events',
-      partition_version: 1,
-      state: 'NORMAL',
-      leader_node_id: nodeId,
-    });
-    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT',
+      systemTableRow(TABLES.TABLES, {
+        table_id: tableId,
+        table_name: 'benchmark_events',
+        active_partition_version: 1,
+        partition_count: 1,
+        partition_transition_state: 'split_backfilling',
+        partition_transition_metadata: JSON.stringify({
+          workflowId: 'split-table-benchmark-events-v2',
+          sourcePartitionId,
+          targetPartitionVersion: 2,
+          targetPartitionIds: [leftPartitionId, rightPartitionId],
+        }),
+      }));
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: sourcePartitionId,
+        table_id: tableId,
+        table_name: 'benchmark_events',
+        partition_version: 1,
+        state: 'NORMAL',
+        leader_node_id: nodeId,
+      }));
+    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       service_id: `${sourcePartitionId}-r1`,
       service_type: 'partition',
       node_id: nodeId,
@@ -698,25 +691,18 @@ test(
       raft_role: 'leader',
       status: 'active',
       address: `${nodeId}/partition/${sourcePartitionId}-r1`,
-    });
-    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      id: leftPartitionId,
-      partition_id: leftPartitionId,
-      table_id: tableId,
-      table_name: 'benchmark_events',
-      partition_version: 2,
-      state: 'NORMAL',
-      leader_node_id: null,
-    });
-    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      id: rightPartitionId,
-      partition_id: rightPartitionId,
-      table_id: tableId,
-      table_name: 'benchmark_events',
-      partition_version: 2,
-      state: 'NORMAL',
-      leader_node_id: null,
-    });
+    }));
+    for (const childPartitionId of [leftPartitionId, rightPartitionId]) {
+      writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+        systemTableRow(TABLES.PARTITIONS, {
+          partition_id: childPartitionId,
+          table_id: tableId,
+          table_name: 'benchmark_events',
+          partition_version: 2,
+          state: 'NORMAL',
+          leader_node_id: null,
+        }));
+    }
     const api = new AdminWebSocketAPI({
       nodeId,
       systemTableCache: writableCache,
@@ -778,18 +764,20 @@ test(
   async (t) => {
     const nowMs = 1740589945123;
     const writableCache = createAuthoritativeRepairCache('node-local');
-    writableCache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
-      operation_id: 'op-stale-replace',
-      partition_id: `${TABLES.NODES}-p1`,
-      entity_id: `${TABLES.NODES}-p1`,
-      source_node_id: 'node-local',
-      target_node_id: 'node-peer',
-      type: 'REPLACE',
-      status: 'creating',
-      workflow_step: 'CREATING',
-      created_at: nowMs - 180000,
-      updated_at: nowMs - 180000,
-    });
+    writableCache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT',
+      replicaOperationsRow({
+        operation_id: 'op-stale-replace',
+        partition_id: `${TABLES.NODES}-p1`,
+        entity_type: 'partition',
+        entity_id: `${TABLES.NODES}-p1`,
+        source_node_id: 'node-local',
+        target_node_id: 'node-peer',
+        type: 'REPLACE',
+        status: 'creating',
+        workflow_step: 'CREATING',
+        created_at: nowMs - 180000,
+        updated_at: nowMs - 180000,
+      }));
 
     const repairEngine = createSystemTableRepairQueryEngine({
       [TABLES.NODES]: writableCache.getAll(TABLES.NODES),
@@ -839,27 +827,27 @@ test(
     const writableCache = createAuthoritativeRepairCache('node-local');
 
     writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-      id: 'node-local',
       node_id: 'node-local',
-      address: 'localhost:8080',
       node_address: 'localhost:8080',
       status: 'active',
       connection_state: 'ready',
       last_heartbeat: nowMs - 1000,
       ready_lease_expires_at: nowMs + 15000,
     });
-    writableCache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
-      operation_id: 'op-stale-local',
-      partition_id: `${TABLES.NODES}-p1`,
-      entity_type: 'partition',
-      entity_id: `${TABLES.NODES}-p1`,
-      operation_type: 'ADD',
-      status: 'creating',
-      target_node_id: 'node-peer',
-      workflow_step: 'CREATING',
-      created_at: nowMs - 180000,
-      updated_at: nowMs - 180000,
-    });
+    writableCache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT',
+      replicaOperationsRow({
+        operation_id: 'op-stale-local',
+        partition_id: `${TABLES.NODES}-p1`,
+        entity_type: 'partition',
+        entity_id: `${TABLES.NODES}-p1`,
+        type: 'ADD',
+        status: 'creating',
+        source_node_id: 'node-local',
+        target_node_id: 'node-peer',
+        workflow_step: 'CREATING',
+        created_at: nowMs - 180000,
+        updated_at: nowMs - 180000,
+      }));
 
     const failingReplicaOpEngine = {
       executeRequestCalls: [],
@@ -921,37 +909,35 @@ test(
     const writableCache = createAuthoritativeRepairCache('node-local');
 
     writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-      id: 'node-local',
       node_id: 'node-local',
-      address: 'localhost:8080',
       node_address: 'localhost:8080',
       status: 'active',
       connection_state: 'ready',
       last_heartbeat: nowMs - 1000,
       ready_lease_expires_at: nowMs + 15000,
     });
-    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
-      id: 'node-peer',
+    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       node_id: 'node-peer',
-      address: 'localhost:8081',
       node_address: 'localhost:8081',
       status: 'active',
       connection_state: 'ready',
       last_heartbeat: nowMs - 60000,
       ready_lease_expires_at: nowMs - 1000,
-    });
-    writableCache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
-      operation_id: 'op-stale-local',
-      partition_id: `${TABLES.NODES}-p1`,
-      entity_type: 'partition',
-      entity_id: `${TABLES.NODES}-p1`,
-      operation_type: 'ADD',
-      status: 'creating',
-      target_node_id: 'node-peer',
-      workflow_step: 'CREATING',
-      created_at: nowMs - 180000,
-      updated_at: nowMs - 180000,
-    });
+    }));
+    writableCache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT',
+      replicaOperationsRow({
+        operation_id: 'op-stale-local',
+        partition_id: `${TABLES.NODES}-p1`,
+        entity_type: 'partition',
+        entity_id: `${TABLES.NODES}-p1`,
+        type: 'ADD',
+        status: 'creating',
+        source_node_id: 'node-local',
+        target_node_id: 'node-peer',
+        workflow_step: 'CREATING',
+        created_at: nowMs - 180000,
+        updated_at: nowMs - 180000,
+      }));
 
     const repairEngine = createSystemTableRepairQueryEngine({
       [TABLES.NODES]: writableCache.getAll(TABLES.NODES),
@@ -1020,25 +1006,21 @@ test(
     const writableCache = createAuthoritativeRepairCache('node-local');
 
     writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-      id: 'node-local',
       node_id: 'node-local',
-      address: 'localhost:8080',
       node_address: 'localhost:8080',
       status: 'active',
       connection_state: 'ready',
       last_heartbeat: staleHeartbeatMs,
       ready_lease_expires_at: staleHeartbeatMs + 15000,
     });
-    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
-      id: 'node-peer',
+    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       node_id: 'node-peer',
-      address: 'localhost:8081',
       node_address: 'localhost:8081',
       status: 'active',
       connection_state: 'ready',
       last_heartbeat: staleHeartbeatMs,
       ready_lease_expires_at: staleHeartbeatMs + 15000,
-    });
+    }));
 
     const authoritativeNodes = [
       {
@@ -1110,16 +1092,14 @@ test(
     const writableCache = createAuthoritativeRepairCache('node-local');
     const now = Date.now();
     writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-      id: 'node-local',
       node_id: 'node-local',
-      address: 'localhost:8080',
       node_address: 'localhost:8080',
       status: 'active',
       connection_state: 'ready',
       last_heartbeat: now,
       ready_lease_expires_at: now + 10000,
     });
-    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       service_id: 'peer-service-r1',
       service_type: 'partition',
       node_id: 'node-peer',
@@ -1128,34 +1108,34 @@ test(
       raft_role: 'leader',
       status: 'active',
       address: 'node-peer/partition/peer-table-p1-r1',
-    });
-    writableCache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-      endpoint_id: 'endpoint-node-local',
-      node_id: 'node-local',
-      transport_type: 'ws',
-      address: 'ws://node-local:8082',
-      status: 'active',
-    });
-    writableCache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-      endpoint_id: 'endpoint-node-peer',
-      node_id: 'node-peer',
-      transport_type: 'ws',
-      address: 'ws://node-peer:8082',
-      status: 'active',
-    });
+    }));
+    writableCache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        endpoint_id: 'endpoint-node-local',
+        node_id: 'node-local',
+        transport_type: 'ws',
+        address: 'ws://node-local:8082',
+        status: 'active',
+      }));
+    writableCache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        endpoint_id: 'endpoint-node-peer',
+        node_id: 'node-peer',
+        transport_type: 'ws',
+        address: 'ws://node-peer:8082',
+        status: 'active',
+      }));
 
     const authoritativeNodes = [
       ...writableCache.getAll(TABLES.NODES),
-      {
-        id: 'node-peer',
+      nodesRow({
         node_id: 'node-peer',
-        address: 'localhost:8081',
         node_address: 'localhost:8081',
         status: 'active',
         connection_state: 'ready',
         last_heartbeat: now,
         ready_lease_expires_at: now + 10000,
-      },
+      }),
     ];
     const repairEngine = createSystemTableRepairQueryEngine({
       [TABLES.NODES]: authoritativeNodes,

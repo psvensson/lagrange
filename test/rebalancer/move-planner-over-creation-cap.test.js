@@ -28,6 +28,7 @@ import {MovePlanner} from '../../src/rebalancer/move-planner.js';
 import {MOVE_REASON, REBALANCER_ENTITY_TYPE, REBALANCER_MOVE_TYPE} from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-inventory.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 const PRIORITY_PARTITION_ID = 'sql_transaction_participants-p1';
 
@@ -63,24 +64,28 @@ function createMoveStateProvider({
 }
 
 function active(replicaId, nodeId) {
-  return {
+  return projectedReplica({
+    service_id: replicaId,
     replica_id: replicaId,
+    partition_id: PRIORITY_PARTITION_ID,
     node_id: nodeId,
     status: ReplicaStatus.ACTIVE,
     raft_role: 'follower',
-  };
+  });
 }
 
 // A voter that has just been promoted (raft_role=follower) but whose status
 // column still lags at creating — the read-disagreement row. status===ACTIVE
 // counting MISSES it; the authoritative raft-voter count SEES it.
 function promotedVoterStatusLagging(replicaId, nodeId) {
-  return {
+  return projectedReplica({
+    service_id: replicaId,
     replica_id: replicaId,
+    partition_id: PRIORITY_PARTITION_ID,
     node_id: nodeId,
     status: ReplicaStatus.CREATING,
     raft_role: 'follower',
-  };
+  });
 }
 
 function plannerFor(provider, replicaInventoryBuilder) {

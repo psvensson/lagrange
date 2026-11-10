@@ -12,6 +12,7 @@
 // the adoption tests — while every other mechanism stays in place.
 
 import {test} from '../../src/test-helpers/tap.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
@@ -53,7 +54,7 @@ const TEST_RETRY_DELAY_MS = 1;
 const TEST_VISIBILITY_TIMEOUT_MS = 0;
 
 function makeRow(overrides = {}) {
-  return {
+  return replicaOperationsRow({
     operation_id: TEST_OPERATION_ID,
     type: OperationType.ADD,
     partition_id: TEST_PARTITION_ID,
@@ -72,7 +73,7 @@ function makeRow(overrides = {}) {
     entity_type: SERVICE_TYPE.PARTITION,
     entity_id: TEST_PARTITION_ID,
     ...overrides,
-  };
+  });
 }
 
 function makeLosingProjection(repository, overrides = {}) {
@@ -494,7 +495,7 @@ const DUEL_PARTITION_ID = 'replica_operations-p1';
 const DUEL_REPLICA_ID = 'replica_operations-p1-r5';
 
 function buildDuelOperationRow(overrides = {}) {
-  return {
+  return replicaOperationsRow({
     operation_id: DUEL_OPERATION_ID,
     type: OperationType.REPLACE,
     partition_id: DUEL_PARTITION_ID,
@@ -511,7 +512,7 @@ function buildDuelOperationRow(overrides = {}) {
     entity_type: SERVICE_TYPE.PARTITION,
     entity_id: DUEL_PARTITION_ID,
     ...overrides,
-  };
+  });
 }
 
 function buildDuelProjection(repository, overrides = {}) {

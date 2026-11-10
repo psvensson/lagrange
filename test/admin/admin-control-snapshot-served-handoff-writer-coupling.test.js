@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {AdminControlSnapshot} from '../../src/admin/admin-control-snapshot.js';
 import {TABLES} from '../../src/constants/index.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 // CL-022 writer-coupling guard: the sibling guard
 // (admin-control-snapshot-served-handoff-coverage.test.js) hand-builds the
@@ -22,14 +23,14 @@ const NOW_MS = 1_700_000_000_000;
 const READY_LEASE_TTL_MS = 15_000;
 
 function buildNodeRow(nodeId) {
-  return {
+  return nodesRow({
     node_id: nodeId,
     node_address: nodeId + ':8080',
     status: 'active',
     connection_state: 'ready',
     last_heartbeat: NOW_MS,
     ready_lease_expires_at: NOW_MS + READY_LEASE_TTL_MS,
-  };
+  });
 }
 
 function buildSystemTableCacheStub() {

@@ -6,18 +6,20 @@ import {
   effectiveReplicaCountAfterOperations,
   occupiesNode,
 } from '../../src/rebalancer/replica-inventory.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION_ID = 'sql_write_operations-p1';
 
+// The projected replica of a production-shaped partition services row.
 function service(replicaId, nodeId, options = {}) {
-  return {
+  return projectedReplica({
     replica_id: replicaId,
     service_id: replicaId,
     partition_id: PARTITION_ID,
     node_id: nodeId,
     status: options.status || 'active',
-    raft_role: options.raftRole || '',
-  };
+    raft_role: options.raftRole ?? null,
+  });
 }
 
 function productionReplace(options = {}) {
@@ -364,8 +366,10 @@ test('canonical replica inventory', async (t) => {
   await t.test('snapshot and nested DTOs are deeply immutable', (t) => {
     const rows = [service('r1', 'n1', {raftRole: 'follower'})];
     const snapshot = build({rows});
-    rows[0].node_id = 'mutated-input';
-    t.equal(snapshot.replicas[0].nodeId, 'n1', 'input rows were cloned');
+    t.throws(() => {
+      rows[0].nodeId = 'mutated-input';
+    }, 'a projected replica is frozen');
+    t.equal(snapshot.replicas[0].nodeId, 'n1', 'the inventory reads the input');
     t.equal(Object.isFrozen(snapshot), true);
     t.equal(Object.isFrozen(snapshot.replicas), true);
     t.equal(Object.isFrozen(snapshot.replicas[0]), true);

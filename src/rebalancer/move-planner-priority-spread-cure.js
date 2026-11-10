@@ -44,11 +44,7 @@ function mintSpreadCureTransitionAuthorization(evidence, options, nodeId) {
 }
 
 function countDistinctReplicaNodes(replicas) {
-  return new Set(
-    replicas
-      .map((replica) => replica?.node_id)
-      .filter(Boolean),
-  ).size;
+  return new Set(replicas.map((replica) => replica.nodeId)).size;
 }
 
 function evaluatePriorityStandaloneRemoveSafety(options = {}) {
@@ -60,8 +56,7 @@ function evaluatePriorityStandaloneRemoveSafety(options = {}) {
     };
   }
   const remainingActiveReplicas = options.activePlacementReplicas.filter(
-    (candidate) =>
-      (candidate?.replica_id || candidate?.service_id) !== options.replicaId,
+    (candidate) => candidate.replicaId !== options.replicaId,
   );
   const spread = options.analyzePrioritySpread(
     remainingActiveReplicas,
@@ -160,9 +155,7 @@ function applyOverTargetCapAddRetention(options = {}) {
       cure: resolvePlacementCure(cureCondition),
       cureEvidence,
       hostingNodeIds: new Set(
-        activePlacementReplicas
-          .map((replica) => replica?.node_id)
-          .filter(Boolean),
+        activePlacementReplicas.map((replica) => replica.nodeId),
       ),
       spreadGapSize: requiredDistinctNodeCount - activeDistinctNodeCount,
       resolvePartitionRow: options.resolvePartitionRow,

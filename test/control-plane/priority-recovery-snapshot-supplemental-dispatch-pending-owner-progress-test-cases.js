@@ -4,6 +4,7 @@ import {
   OPERATION_WORKFLOW_OWNER,
   OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
 } from '../../src/rebalancer/operation-workflow-owner-constants.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const PRIORITY_RECOVERY_OPERATION_OWNER_TEST_STATE =
   'priority_recovery_snapshot_owner_outcome';
@@ -719,14 +720,14 @@ export function registerPriorityRecoverySnapshotSupplementalDispatchPendingOwner
               updated_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
             },
           ],
-          serviceRows: [{
+          serviceRows: [servicesRow({
             partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
             node_id: PRIORITY_RECOVERY_NODE_ID_B,
             replica_id: PRIORITY_RECOVERY_REPLICA_ID_TARGET_SERVICE_PROGRESS,
             status: PRIORITY_RECOVERY_STATUS_ACTIVE,
             raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
             updated_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
-          }],
+          })],
         });
 
       const decisionSnapshots = buildOpenDispatchBesideFailedSibling(

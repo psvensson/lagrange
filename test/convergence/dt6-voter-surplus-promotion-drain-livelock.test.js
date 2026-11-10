@@ -25,6 +25,7 @@ import {
 } from '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 // Quest formation-voter-surplus-promotion-deferral-livelock (P1) — deterministic
 // reproduction of the affinity-demo run-21 voter-surplus wedge on
@@ -142,8 +143,11 @@ function learnerReplicaId(generation) {
   return `${PARTITION_ID}-r${generation}`;
 }
 
+// A complete stored services row (the surplus REMOVE placement fence decodes
+// the authoritative owner-lane rows): the omitted columns at their stored
+// defaults.
 function buildServiceRow({replicaId, nodeId, raftRole}) {
-  return {
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     partition_id: PARTITION_ID,
@@ -151,7 +155,7 @@ function buildServiceRow({replicaId, nodeId, raftRole}) {
     service_type: SERVICE_TYPE.PARTITION,
     status: SERVICE_STATUS.ACTIVE,
     raft_role: raftRole,
-  };
+  });
 }
 
 // The run-21 membership: 5 active voters (r5/r6 the duplicate-emergency-ADD surplus

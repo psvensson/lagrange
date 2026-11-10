@@ -46,6 +46,7 @@ import {
   createDurableTables,
   registeredNodeRow,
 } from '../test-helpers/endpoint-incarnation-fixture.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const NODE_ID = 'anchor-node';
 const GROUP_ID = 'anchor-group';
@@ -64,7 +65,7 @@ function readyNode(incarnation) {
 }
 
 function nodeEndpoint(incarnation) {
-  return {
+  return systemTableRow(TABLES.NODE_ENDPOINTS, {
     endpoint_id: NODE_ENDPOINT_ID,
     node_id: NODE_ID,
     transport_type: TRANSPORT_TYPE.WEBSOCKET,
@@ -72,7 +73,7 @@ function nodeEndpoint(incarnation) {
     priority: 0,
     status: ENDPOINT_STATUS.ACTIVE,
     boot_incarnation: incarnation,
-  };
+  });
 }
 
 // The durable replica lifecycle row of one generation (same logical ids).

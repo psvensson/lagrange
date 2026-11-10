@@ -29,6 +29,7 @@ import {
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
 import {installReplaceWitnesses, recordModelledRemovalIntent} from '../rebalancer/replace-witness-fixture.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
+import {nodesRow, servicesRow, systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   initializeEnvironment,
   resetEnvironment,
@@ -262,20 +263,20 @@ function addressOf(nodeId) {
   return `${nodeId}:${NODE_ADDRESS_PORT}`;
 }
 
+// Production-shaped stored rows (the partition's table is its partitions row's).
 function buildServiceRow({tableId, index, nodeId, raftRole}) {
   const partitionId = partitionIdOf(tableId);
   const replicaId = replicaIdOf(partitionId, index);
-  return {
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     partition_id: partitionId,
-    table_id: tableId,
     node_id: nodeId,
     service_type: REBALANCER_ENTITY_TYPE.PARTITION,
     status: SERVICE_STATUS_ACTIVE,
     raft_role: raftRole,
     address: addressOf(nodeId),
-  };
+  });
 }
 
 // The run's formation shape: every priority partition has three replicas on
@@ -311,7 +312,7 @@ function buildFormationServiceRows(ledgerThirdReplicaNodeId = SEED_NODE_ID) {
 }
 
 function buildPartitionRows() {
-  return PRIORITY_TABLE_IDS.map((tableId) => ({
+  return PRIORITY_TABLE_IDS.map((tableId) => systemTableRow(SYSTEM_TABLE_NAME.PARTITIONS, {
     partition_id: partitionIdOf(tableId),
     table_id: tableId,
     replica_count: TARGET_REPLICA_COUNT,
@@ -319,13 +320,14 @@ function buildPartitionRows() {
 }
 
 function buildNodeRow(nodeId, nowMs, ready) {
-  return {
+  return nodesRow({
     node_id: nodeId,
+    node_address: addressOf(nodeId),
     status: NODE_STATUS_ACTIVE,
     connection_state: ready ? CONNECTION_STATE_READY : CONNECTION_STATE_CONNECTED,
     last_heartbeat: nowMs,
     ready_lease_expires_at: ready ? nowMs + READY_LEASE_MS : null,
-  };
+  });
 }
 
 function buildInitialPublicationRow() {

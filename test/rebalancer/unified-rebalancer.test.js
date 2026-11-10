@@ -66,6 +66,7 @@ import {
 import {
   createMockReadinessService,
 } from './unified-rebalancer-test-support.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {
   registerUnifiedRebalancerPriorityFollowupCreationTests,
@@ -209,13 +210,15 @@ function createMockCache(
   serviceEndpoints = [],
 ) {
   const now = Date.now();
-  const normalizedNodes = nodes.map((node) => ({
+  // The cache holds complete stored rows (as the system-table cache does).
+  const normalizedNodes = nodes.map((node) => nodesRow({
     connection_state: Object.hasOwn(node, 'connection_state') ?
       node.connection_state : 'ready',
     ready_lease_expires_at: Object.hasOwn(node, 'ready_lease_expires_at') ?
       node.ready_lease_expires_at : now + 10000,
     ...node,
   }));
+  services = services.map((row) => servicesRow(row));
   const cache = {
     nodes: new Map(normalizedNodes.map((node) => [node.node_id, node])),
     services: new Map(services.map((s) => [s.service_id, s])),

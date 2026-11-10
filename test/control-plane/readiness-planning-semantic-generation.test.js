@@ -22,6 +22,7 @@ import {
 } from '../../src/control-plane/readiness-planning-version-contract.js';
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const NODE_A = 'node-a';
 const NODE_B = 'node-b';
@@ -90,9 +91,12 @@ function createFixture(initialRows = {}) {
   return {apply, cache, revisions, rowsByTable, tracker};
 }
 
+// Production-shaped stored rows: the planning projection decodes the cached
+// nodes and services rows (complete stored rows in the system-table cache).
 function nodeRow(nodeId) {
-  return {
+  return nodesRow({
     [COLUMN.NODE_ID]: nodeId,
+    [COLUMN.NODE_ADDRESS]: `ws://${nodeId}`,
     [COLUMN.BOOT_INCARNATION]: FIXTURE_ENDPOINT_INCARNATION,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.CONNECTION_STATE]: 'ready',
@@ -101,18 +105,18 @@ function nodeRow(nodeId) {
     [COLUMN.CPU_USAGE_PERCENT]: 10,
     [COLUMN.MEMORY_USAGE_PERCENT]: 20,
     [COLUMN.DISK_USAGE_PERCENT]: 30,
-  };
+  });
 }
 
 function serviceRow(serviceId, nodeId, partitionId = USER_PARTITION_ID) {
-  return {
+  return servicesRow({
     [COLUMN.ADDRESS]: `ws://${nodeId}/${serviceId}`,
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.PARTITION_ID]: partitionId,
     [COLUMN.SERVICE_ID]: serviceId,
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-  };
+  });
 }
 
 function endpointRow(endpointId, nodeId, status = ENDPOINT_STATUS.ACTIVE) {
@@ -485,14 +489,14 @@ test('priority service projection normalizes only selected rows once', (t) => {
     NODE_A,
     PRIORITY_PARTITION_ID,
   );
-  Object.defineProperty(ordinaryService, 'nodeId', {
+  Object.defineProperty(ordinaryService, COLUMN.NODE_ID, {
     enumerable: true,
     get: () => {
       ordinaryNormalizerProbeReads += 1;
       return NODE_B;
     },
   });
-  Object.defineProperty(priorityService, 'nodeId', {
+  Object.defineProperty(priorityService, COLUMN.NODE_ID, {
     enumerable: true,
     get: () => {
       priorityNormalizerProbeReads += 1;
@@ -548,7 +552,7 @@ test('priority service changes rebuild only the changed semantic row', (t) => {
       NODE_A,
       PRIORITY_PARTITION_ID,
     );
-    Object.defineProperty(row, 'nodeId', {
+    Object.defineProperty(row, COLUMN.NODE_ID, {
       enumerable: true,
       get: () => {
         normalizerProbeReads += 1;
@@ -572,7 +576,7 @@ test('priority service changes rebuild only the changed semantic row', (t) => {
     ...previousRecord,
     [COLUMN.ADDRESS]: 'ws://node-a/priority-service-64-v2',
   };
-  Object.defineProperty(currentRecord, 'nodeId', {
+  Object.defineProperty(currentRecord, COLUMN.NODE_ID, {
     enumerable: true,
     get: () => {
       normalizerProbeReads += 1;

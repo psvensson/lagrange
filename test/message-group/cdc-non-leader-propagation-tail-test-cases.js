@@ -26,6 +26,11 @@ import {
   createControllableMessageGroupService,
   seedConsensusPeersFromPeerAddresses,
 } from './message-group-service-test-support.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 let testPortCounter = 27200;
 const NON_SYSTEM_CDC_TABLE = 'runtime_forward_events';
@@ -85,21 +90,23 @@ export function registerCdcNonLeaderPropagationTailTests({
         consensus.role = RaftRole.FOLLOWER;
 
         const now = Date.now();
-        mg.systemTableCache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
+        mg.systemTableCache.applySystemTableChange(
+          TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, systemTableRow(TABLES.MESSAGE_GROUPS, {
           group_id: 'mg-strict-stale-ready',
           leader_node_id: 'node-leader',
-        });
-        mg.systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+        }));
+        mg.systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, nodesRow({
           node_id: 'node-leader',
           connection_state: STATE.READY,
           ready_lease_expires_at: now - 1,
-        });
-        mg.systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+        }));
+        mg.systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, nodesRow({
           node_id: 'node-relay',
           connection_state: STATE.READY,
           ready_lease_expires_at: now + 60000,
-        });
-        mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+        }));
+        mg.systemTableCache.applySystemTableChange(
+          TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
           service_id: 'mg-strict-stale-ready-r2',
           service_type: SERVICE_TYPE.MESSAGE_GROUP,
           group_id: 'mg-strict-stale-ready',
@@ -109,8 +116,9 @@ export function registerCdcNonLeaderPropagationTailTests({
           raft_role: 'leader',
           address: 'node-leader/message-group/mg-strict-stale-ready-r2',
           updated_at: now + 2,
-        });
-        mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+        }));
+        mg.systemTableCache.applySystemTableChange(
+          TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
           service_id: 'mg-strict-stale-ready-r3',
           service_type: SERVICE_TYPE.MESSAGE_GROUP,
           group_id: 'mg-strict-stale-ready',
@@ -120,7 +128,7 @@ export function registerCdcNonLeaderPropagationTailTests({
           raft_role: 'follower',
           address: 'node-relay/message-group/mg-strict-stale-ready-r3',
           updated_at: now + 1,
-        });
+        }));
 
         const originalGetConnectionState = router.getConnectionState.bind(router);
         router.getConnectionState = (targetNodeId) => {
@@ -438,18 +446,18 @@ export function registerCdcNonLeaderPropagationTailTests({
               if (tableName === TABLES.MESSAGE_GROUPS) {
                 return {
                   success: true,
-                  rows: [{
+                  rows: [systemTableRow(TABLES.MESSAGE_GROUPS, {
                     group_id: groupId,
                     leader_node_id: 'fresh-node',
                     updated_at: nowMs + 20,
-                  }],
+                  })],
                 };
               }
               if (tableName === TABLES.SERVICES) {
                 return {
                   success: true,
                   rows: [
-                    {
+                    servicesRow({
                       service_id: staleReplicaId,
                       group_id: groupId,
                       node_id: 'stale-node',
@@ -458,8 +466,8 @@ export function registerCdcNonLeaderPropagationTailTests({
                       address: staleAddress,
                       raft_role: 'follower',
                       updated_at: nowMs + 21,
-                    },
-                    {
+                    }),
+                    servicesRow({
                       service_id: freshReplicaId,
                       group_id: groupId,
                       node_id: 'fresh-node',
@@ -468,7 +476,7 @@ export function registerCdcNonLeaderPropagationTailTests({
                       address: freshAddress,
                       raft_role: 'leader',
                       updated_at: nowMs + 22,
-                    },
+                    }),
                   ],
                 };
               }
@@ -476,20 +484,20 @@ export function registerCdcNonLeaderPropagationTailTests({
                 return {
                   success: true,
                   rows: [
-                    {
+                    nodesRow({
                       node_id: 'stale-node',
                       status: SERVICE_STATUS.ACTIVE,
                       connection_state: 'ready',
                       last_heartbeat: nowMs,
                       ready_lease_expires_at: nowMs + 60000,
-                    },
-                    {
+                    }),
+                    nodesRow({
                       node_id: 'fresh-node',
                       status: SERVICE_STATUS.ACTIVE,
                       connection_state: 'ready',
                       last_heartbeat: nowMs + 1,
                       ready_lease_expires_at: nowMs + 60000,
-                    },
+                    }),
                   ],
                 };
               }
@@ -519,19 +527,20 @@ export function registerCdcNonLeaderPropagationTailTests({
         consensus.role = RaftRole.FOLLOWER;
 
         const cache = NodeService.getInstance().getSystemTableCache();
-        cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
+        cache.applySystemTableChange(
+          TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, systemTableRow(TABLES.MESSAGE_GROUPS, {
           group_id: groupId,
           leader_node_id: 'stale-node',
           updated_at: nowMs,
-        });
-        cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+        }));
+        cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, nodesRow({
           node_id: 'stale-node',
           status: SERVICE_STATUS.ACTIVE,
           connection_state: 'ready',
           last_heartbeat: nowMs,
           ready_lease_expires_at: nowMs + 60000,
-        });
-        cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+        }));
+        cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
           service_id: staleReplicaId,
           group_id: groupId,
           node_id: 'stale-node',
@@ -540,7 +549,7 @@ export function registerCdcNonLeaderPropagationTailTests({
           address: staleAddress,
           raft_role: 'leader',
           updated_at: nowMs,
-        });
+        }));
 
         const attempts = [];
         router.deliver = async (address) => {

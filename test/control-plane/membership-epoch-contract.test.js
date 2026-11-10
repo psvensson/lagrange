@@ -12,6 +12,7 @@ import {
   buildMembershipPublicationEvidenceSnapshot,
   deriveMembershipPublicationCandidate,
 } from '../../src/control-plane/membership-publication-planning-evidence.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const TEST_NODE_STATUS_ACTIVE = 'active';
@@ -54,12 +55,12 @@ function buildSingleNodePlanningOptions() {
     latestPublicationRow: latestPublishedPublicationRow,
     latestPublishedPublicationRow,
     nodeRows: [
-      {
+      nodesRow({
         node_id: TEST_NODE_ONE_ID,
         status: TEST_NODE_STATUS_ACTIVE,
         connection_state: TEST_NODE_CONNECTION_READY,
         ready_lease_expires_at: TEST_READY_LEASE_EXPIRES_AT,
-      },
+      }),
     ],
     readinessEntries: [
       {

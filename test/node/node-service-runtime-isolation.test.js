@@ -16,6 +16,7 @@ import {test} from 'node:test';
 
 import {NodeService} from '../../src/node/node-service.js';
 import {TABLES} from '../../src/constants/index.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const CDC_UPSERT = 'UPSERT';
 const A_NODE_ID = 'node-A';
@@ -91,7 +92,7 @@ test('A1d-0. mutating one runtime is not observable in the other', () => {
   const {a, b} = runtimePair();
   // Node-local cache, through the ordinary owner API.
   a.getSystemTableCache().applySystemTableChange(TABLES.NODES, CDC_UPSERT,
-    {node_id: 'only-in-a', status: 'active'});
+    nodesRow({node_id: 'only-in-a', status: 'active'}));
   assert.equal(a.getSystemTableCache().has(TABLES.NODES, 'only-in-a'), true);
   assert.equal(b.getSystemTableCache().has(TABLES.NODES, 'only-in-a'), false,
     'a cache mutation in A is not visible in B');
@@ -181,7 +182,7 @@ test('A1 closure: five node runtimes coexist with no state crossing', () => {
   // One mutation per node-local category, all on node-0.
   const [seed, ...joiners] = runtimes;
   seed.getSystemTableCache().applySystemTableChange(TABLES.NODES, CDC_UPSERT,
-    {node_id: 'seed-only', status: 'active'});
+    nodesRow({node_id: 'seed-only', status: 'active'}));
   seed.services.set('seed-service', {id: 'seed-service'});
   seed.messageGroupServices.set('seed-group', {id: 'seed-group'});
   seed.threadManager.pool = {threads: [{}], completed: 7};

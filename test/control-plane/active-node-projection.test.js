@@ -26,32 +26,34 @@ import {
 } from './active-node-projection-membership-publication-test-cases.js';
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {nodesRow, servicesRow} from
+  '../test-helpers/system-table-row-fixture.js';
 
 test('active-node projection requires readiness health and canonical websocket endpoints when available',
   async (t) => {
     const activeNodeIds = resolveCanonicalActiveNodeIds({
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-3',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
+        }),
       ],
       nodeEndpointRows: [
         {
@@ -102,32 +104,37 @@ test('active-node projection requires readiness health and canonical websocket e
   });
 test('active-node projection falls back to ready-lease evidence when readiness owner is unavailable',
   async (t) => {
+    // A stored nodes row always carries last_heartbeat (NOT NULL): the
+    // expired node's heartbeat is older than the derivation grace too.
     const activeNodeIds = resolveCanonicalActiveNodeIds({
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
-          ready_lease_expires_at: 2000,
-        },
-        {
+          ready_lease_expires_at: 200000,
+          last_heartbeat: 99000,
+        }),
+        nodesRow({
           node_id: 'node-2',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'connected',
-          ready_lease_expires_at: 2000,
-        },
-        {
+          ready_lease_expires_at: 200000,
+          last_heartbeat: 99000,
+        }),
+        nodesRow({
           node_id: 'node-3',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
-          ready_lease_expires_at: 900,
-        },
+          ready_lease_expires_at: 90000,
+          last_heartbeat: 1000,
+        }),
       ],
       nodeEndpointRows: [],
-      nowMs: 1000,
+      nowMs: 100000,
     });
 
     t.same(
@@ -141,15 +148,15 @@ test('CL-001 variant C: strict-mode projection retains an already-published tran
     const projectionOptions = {
       // cluster_member_healthy_only (strict) mode: no recovery-eligible projection.
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 200000,
           last_heartbeat: 99000,
-        },
-        {
+        }),
+        nodesRow({
           // trough: clusterMemberHealthy false, but transport-alive + heartbeat
           // within the 60s grace + already published => RETAIN.
           node_id: 'node-2',
@@ -157,8 +164,8 @@ test('CL-001 variant C: strict-mode projection retains an already-published tran
           connection_state: 'ready',
           ready_lease_expires_at: 90000,
           last_heartbeat: 70000,
-        },
-        {
+        }),
+        nodesRow({
           // same trough evidence but NOT in the published baseline (new node)
           // => strict-mode promotion guard must keep it OUT.
           node_id: 'node-3',
@@ -166,8 +173,8 @@ test('CL-001 variant C: strict-mode projection retains an already-published tran
           connection_state: 'ready',
           ready_lease_expires_at: 90000,
           last_heartbeat: 70000,
-        },
-        {
+        }),
+        nodesRow({
           // published + transport-connected but heartbeat > 60s stale and lease
           // expired => genuinely stale, must still trim (no masking).
           node_id: 'node-4',
@@ -175,7 +182,7 @@ test('CL-001 variant C: strict-mode projection retains an already-published tran
           connection_state: 'ready',
           ready_lease_expires_at: 30000,
           last_heartbeat: 30000,
-        },
+        }),
       ],
       connectedNodeIds: ['node-1', 'node-2', 'node-3', 'node-4'],
       readinessEntries: [
@@ -270,14 +277,14 @@ test('published-baseline retention normalizes one publication census per ' +
     updated_at: 100,
   });
   const projection = resolveActiveNodeViews({
-    nodeRows: nodeIds.map((nodeId) => Object.freeze({
+    nodeRows: nodeIds.map((nodeId) => Object.freeze(nodesRow({
       node_id: nodeId,
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       status: 'active',
       connection_state: 'ready',
       ready_lease_expires_at: 90000,
       last_heartbeat: 70000,
-    })),
+    }))),
     connectedNodeIds: Object.freeze([...nodeIds]),
     readinessEntries: nodeIds.map((nodeId) => Object.freeze({
       nodeId,
@@ -306,15 +313,15 @@ test('CL-001 variant C re-admission: a node trimmed in the LATEST published epoc
   async (t) => {
     const projectionOptions = {
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 200000,
           last_heartbeat: 99000,
-        },
-        {
+        }),
+        nodesRow({
           // variant-C node: trimmed in epoch 27 but published in epoch 26; its
           // heartbeat has recovered (within the 60s grace) and it is transport-
           // connected => the non-ratcheting union baseline must re-admit it.
@@ -323,8 +330,8 @@ test('CL-001 variant C re-admission: a node trimmed in the LATEST published epoc
           connection_state: 'ready',
           ready_lease_expires_at: 90000,
           last_heartbeat: 70000,
-        },
-        {
+        }),
+        nodesRow({
           // identical liveness but NEVER published (a new node) => the strict-mode
           // promotion guard must still keep it OUT.
           node_id: 'node-9',
@@ -332,7 +339,7 @@ test('CL-001 variant C re-admission: a node trimmed in the LATEST published epoc
           connection_state: 'ready',
           ready_lease_expires_at: 90000,
           last_heartbeat: 70000,
-        },
+        }),
       ],
       connectedNodeIds: ['node-1', 'node-2', 'node-9'],
       readinessEntries: [
@@ -402,24 +409,24 @@ test('active-node projection can include recovery-eligible nodes during publicat
   async (t) => {
     const commonProjectionOptions = {
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
+        }),
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
-        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
+        servicesRow({service_id: 'svc-2', node_id: 'node-2', status: 'active'}),
       ],
       nodeEndpointRows: [
         {
@@ -523,24 +530,24 @@ test('active-node projection consumes projection readiness lane outcome',
     });
     const commonProjectionOptions = {
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
+        }),
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
-        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
+        servicesRow({service_id: 'svc-2', node_id: 'node-2', status: 'active'}),
       ],
       nodeEndpointRows: [
         {
@@ -589,16 +596,16 @@ test('active-node projection can use runtime authority when dimensions lag',
   async (t) => {
     const projection = resolveActiveNodeViews({
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
+        }),
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
       ],
       nodeEndpointRows: [
         {
@@ -644,23 +651,23 @@ test('active-node projection can retain recovery-eligible nodes when endpoint an
   async (t) => {
     const projectionOptions = {
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
+        }),
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
       ],
       nodeEndpointRows: [
         {
@@ -721,20 +728,20 @@ test('active-node projection can fail open on fresh liveness when recovery proje
   async (t) => {
     const projectionOptions = {
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 3000,
-        },
+        }),
       ],
       serviceRows: [
-        {
+        servicesRow({
           service_id: 'svc-1',
           node_id: 'node-1',
           status: 'active',
-        },
+        }),
       ],
       nodeEndpointRows: [
         {
@@ -788,16 +795,16 @@ test('active-node projection can retain connected healthy nodes when discovery r
   async (t) => {
     const activeNodeViews = resolveActiveNodeViews({
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
+        }),
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
       ],
       nodeEndpointRows: [
         {
@@ -843,16 +850,16 @@ test('active-node projection can retain the responsive local node when self rows
   async (t) => {
     const activeNodeViews = resolveActiveNodeViews({
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
+        }),
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
       ],
       nodeEndpointRows: [
         {
@@ -887,13 +894,13 @@ test('active-node projection can require published membership and suppress deriv
   async (t) => {
     const activeNodeIds = resolveCanonicalActiveNodeIds({
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
+        }),
       ],
       nodeEndpointRows: [
         {
@@ -927,24 +934,24 @@ test('active-node projection separates authoritative membership from projected s
   async (t) => {
     const activeNodeViews = resolveActiveNodeViews({
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
+        }),
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
-        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
+        servicesRow({service_id: 'svc-2', node_id: 'node-2', status: 'active'}),
       ],
       nodeEndpointRows: [
         {
@@ -1015,16 +1022,16 @@ test('active-node projection reports broad-suspicion membership freeze against t
   async (t) => {
     const activeNodeViews = resolveActiveNodeViews({
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
+        }),
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
       ],
       nodeEndpointRows: [
         {
@@ -1184,44 +1191,44 @@ test('active-node projection reads no published membership when only the latest 
   async (t) => {
     const activeNodeViews = resolveActiveNodeViews({
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-3',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
-        },
+        }),
       ],
       serviceRows: [
-        {
+        servicesRow({
           service_id: 'svc-1',
           node_id: 'node-1',
           status: 'active',
-        },
-        {
+        }),
+        servicesRow({
           service_id: 'svc-2',
           node_id: 'node-2',
           status: 'active',
-        },
-        {
+        }),
+        servicesRow({
           service_id: 'svc-3',
           node_id: 'node-3',
           status: 'active',
-        },
+        }),
       ],
       nodeEndpointRows: [
         {
@@ -1334,8 +1341,10 @@ test('active-node projection ignores newer non-membership publications in strict
       'strict mode should preserve the membership publication active-node set',
     );
   });
-test('buildReadinessByNodeId normalizes node identifiers from readiness entries',
+test('buildReadinessByNodeId indexes readiness entries by their own nodeId field',
   async (t) => {
+    // A readiness entry is the readiness service's record, not a nodes row:
+    // only its nodeId field keys it; a stored-row spelling is not an entry.
     const readinessByNodeId = buildReadinessByNodeId({
       readinessEntries: [
         {nodeId: 'node-1', dimensions: {healthy: true}},
@@ -1346,8 +1355,8 @@ test('buildReadinessByNodeId normalizes node identifiers from readiness entries'
 
     t.same(
       Object.keys(readinessByNodeId).sort(),
-      ['node-1', 'node-2'],
-      'readiness map should index both camelCase and snake_case node identifiers',
+      ['node-1'],
+      'readiness map should index entries by nodeId and skip entries without one',
     );
   });
 

@@ -93,7 +93,8 @@ function createWiredService({nodeId, nodeAddress, executedQueries}) {
   // succeeds.
   service.nodeStorageBudgetService = {
     resolveBudgetRow: (nodeRow) => ({
-      budgetRow: nodeRow,
+      budgetRow: {...nodeRow, storage_budget_bytes: null, storage_budget_source: null,
+        storage_budget_updated_at: nodeRow.created_at},
       resolution: {
         isValid: true,
         budgetBytes: 0,
@@ -195,7 +196,8 @@ test('Property 11: Node Registration Creates Endpoint',
               service.cdcIntegrationService = mockCDCService;
               service.nodeStorageBudgetService = {
                 resolveBudgetRow: (nodeRow) => ({
-                  budgetRow: nodeRow,
+                  budgetRow: {...nodeRow, storage_budget_bytes: null, storage_budget_source: null,
+                    storage_budget_updated_at: nodeRow.created_at},
                   resolution: {
                     isValid: true,
                     budgetBytes: 0,

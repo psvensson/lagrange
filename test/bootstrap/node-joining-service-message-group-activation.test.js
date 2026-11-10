@@ -59,9 +59,10 @@ import {createLifecycleCdcService, createLifecycleServiceRow} from
 import {URL} from 'url';
 import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
-import {publishRegisteredEndpoint} from
+import {FIXTURE_ENDPOINT_INCARNATION, publishRegisteredEndpoint} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {servicesRow, systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 import {createIdentityTransport} from
   '../test-helpers/replica-handler-identity-fixture.js';
 
@@ -313,6 +314,7 @@ test('NodeJoiningService - registerNodeInCluster seeds local discovery-critical 
             ...nodeRow,
             [COLUMN.STORAGE_BUDGET_BYTES]: 1024,
             [COLUMN.STORAGE_BUDGET_SOURCE]: 'test',
+            [COLUMN.STORAGE_BUDGET_UPDATED_AT]: nodeRow[COLUMN.CREATED_AT],
           },
           resolution: {
             isValid: true,
@@ -384,7 +386,7 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
       const cache = new SystemTableCache();
       // The node registered at its boot incarnation and published its
       // endpoint at that same incarnation.
-      publishRegisteredEndpoint(cache, {
+      publishRegisteredEndpoint(cache, systemTableRow(TABLES.SERVICE_ENDPOINTS, {
         endpoint_id: 'postgres-wire-endpoint-join-activation-node',
         service_id: META_SERVICE_ID.POSTGRES_WIRE,
         node_id: 'join-activation-node',
@@ -392,7 +394,10 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
         address: 'join-activation-node',
         port: 5432,
         metadata: '{}',
-      }, TABLES.SERVICE_ENDPOINTS);
+        // The complete row states its incarnation (the stored DEFAULT is 0);
+        // the node registers at this same incarnation.
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+      }), TABLES.SERVICE_ENDPOINTS);
       NodeService.getInstance = () => ({
         getSystemTableCache() {
           return cache;
@@ -466,8 +471,7 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
 
   // Add 3 replicas on the same node (seed-node-1) with leader role and addresses
   // This satisfies the leader readiness check
-  systemTableCache.applySystemTableChange('services', 'INSERT', {
-    id: 'mg-1-r1',
+  systemTableCache.applySystemTableChange('services', 'INSERT', servicesRow({
     service_id: 'mg-1-r1',
     replica_id: 'mg-1-r1',
     group_id: 'mg-1',
@@ -476,9 +480,8 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
     address: 'seed-node-1/message-group/mg-1-r1',
     raft_role: 'leader',
     status: 'active',
-  });
-  systemTableCache.applySystemTableChange('services', 'INSERT', {
-    id: 'mg-1-r2',
+  }));
+  systemTableCache.applySystemTableChange('services', 'INSERT', servicesRow({
     service_id: 'mg-1-r2',
     replica_id: 'mg-1-r2',
     group_id: 'mg-1',
@@ -487,9 +490,8 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
     address: 'seed-node-1/message-group/mg-1-r2',
     raft_role: 'follower',
     status: 'active',
-  });
-  systemTableCache.applySystemTableChange('services', 'INSERT', {
-    id: 'mg-1-r3',
+  }));
+  systemTableCache.applySystemTableChange('services', 'INSERT', servicesRow({
     service_id: 'mg-1-r3',
     replica_id: 'mg-1-r3',
     group_id: 'mg-1',
@@ -498,7 +500,7 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
     address: 'seed-node-1/message-group/mg-1-r3',
     raft_role: 'follower',
     status: 'active',
-  });
+  }));
 
   // Start a seed node API with the system table cache
   const seedApi = new BootstrapAPI({
@@ -727,15 +729,16 @@ test('NodeJoiningService - emits events', async (t) => {
     // Mock phases that require system tables (not available in this unit test)
     service.phaseQuerySystemState = async function() {
       NodeService.getInstance().getSystemTableCache()
-        .applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-          endpoint_id: `postgres-wire-endpoint-${this.nodeId}`,
-          service_id: META_SERVICE_ID.POSTGRES_WIRE,
-          node_id: this.nodeId,
-          protocol: 'tcp',
-          address: this.nodeId,
-          port: 5432,
-          metadata: '{}',
-        });
+        .applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT',
+          systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+            endpoint_id: `postgres-wire-endpoint-${this.nodeId}`,
+            service_id: META_SERVICE_ID.POSTGRES_WIRE,
+            node_id: this.nodeId,
+            protocol: 'tcp',
+            address: this.nodeId,
+            port: 5432,
+            metadata: '{}',
+          }));
     };
     service.initializeReplicaHandler = function() {};
     service.createCdcIntegrationService = function() {

@@ -23,15 +23,16 @@ const PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD = Object.freeze({
   STATUS: 'status',
 });
 
+// A replica_operations visibility event carries the stored row (the cache
+// change record: the INSERT's columns or the UPDATE's full row readback),
+// so its fields are read in their stored spelling only. A partial change
+// record has no projection to decode through; the stored-shape read stays
+// at this one consumer.
 const PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD = Object.freeze({
-  ENTITY_ID: 'entityId',
-  ENTITY_ID_SNAKE: 'entity_id',
-  PARTITION_ID: 'partitionId',
-  PARTITION_ID_SNAKE: 'partition_id',
+  PARTITION_ID: 'partition_id',
   STATUS: 'status',
   TYPE: 'type',
-  WORKFLOW_STEP: 'workflowStep',
-  WORKFLOW_STEP_SNAKE: 'workflow_step',
+  WORKFLOW_STEP: 'workflow_step',
 });
 
 const PRIORITY_RECOVERY_VISIBILITY_SERVICE_TYPE = Object.freeze({
@@ -188,26 +189,18 @@ function buildPriorityRecoveryVisibilityRebalanceDecision(
     (value) => value.toLowerCase(),
   );
   const operationPartitionId = toVisibilityString(
-    visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.PARTITION_ID] ||
-      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.PARTITION_ID_SNAKE] ||
-      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.ENTITY_ID] ||
-      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.ENTITY_ID_SNAKE] ||
-      UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.PARTITION_ID],
   );
   const operationStatus = toVisibilityString(
-    visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.STATUS] ||
-      UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.STATUS],
     (value) => value.toLowerCase(),
   );
   const operationType = toVisibilityString(
-    visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.TYPE] ||
-      UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.TYPE],
     (value) => value.toUpperCase(),
   );
   const operationWorkflowStep = toVisibilityString(
-    visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.WORKFLOW_STEP] ||
-      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.WORKFLOW_STEP_SNAKE] ||
-      UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.WORKFLOW_STEP],
     (value) => value.toUpperCase(),
   );
 

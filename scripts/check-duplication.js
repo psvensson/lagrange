@@ -261,8 +261,10 @@ const RATCHET_TARGETS = [
     // checker's hint.
     // readiness-service-constructor-injection: 24346 -> 24336 -> 24292 (round 2, clones 649 -> 648) -> 24272 (B1 repair).
     // Merged stream: the lower of the two one-way baselines, then tightened 24272 -> 24259 on the hint.
-    baselineCloneGroupCount: 648,
-    baselineDuplicatedLineCount: 24259,
+    // system-table-row-decoders round 2 (fixtures via the one row builder): 648 -> 639 clones,
+    // 24259 -> 23859 lines, on the hint.
+    baselineCloneGroupCount: 639,
+    baselineDuplicatedLineCount: 23859,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

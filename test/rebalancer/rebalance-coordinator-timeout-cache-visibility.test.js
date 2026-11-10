@@ -25,6 +25,13 @@ import {
   registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests,
 } from './rebalance-coordinator-timeout-cache-visibility-read-state-test-cases.js';
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests} from './rebalance-coordinator-timeout-cache-visibility-tail-test-cases.js';
+import {replicaOperationsRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
+
+// The positional status-transition UPDATE (status first); the owner-lease
+// touch (`SET lease_expires_at = ?`) carries no transition payload.
+function isTransitionUpdate(sql) {
+  return /^UPDATE replica_operations SET\s+status = \?/u.test(String(sql));
+}
 
 const PRIORITY_RECOVERY_DEFERRED_COMPLETION_STATE =
   'operation_visibility_deferred';
@@ -38,7 +45,7 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - 70000;
     const waitForCacheUpdateCalls = [];
-    const timedOutOperationRow = {
+    const timedOutOperationRow = replicaOperationsRow({
       operation_id: 'op-stopping-timeout',
       type: 'REMOVE',
       partition_id: 'partition-1',
@@ -47,7 +54,7 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
       replica_id: 'partition-1-r1',
       source_node_id: 'node-1',
       target_node_id: 'node-2',
-      status: 'stopping',
+      status: 'removing',
       workflow_step: 'STOPPING',
       created_at: staleUpdatedAtMs - 5000,
       updated_at: staleUpdatedAtMs,
@@ -58,7 +65,7 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
         {step: 'SENDING', timestamp: staleUpdatedAtMs - 900},
         {step: 'STOPPING', timestamp: staleUpdatedAtMs - 800},
       ]),
-    };
+    });
 
     const sqlQueryEngine = {
       async executeQuery(sql, params) {
@@ -68,7 +75,7 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
             rows: [{...timedOutOperationRow}],
           };
         }
-        if (sql.startsWith('UPDATE replica_operations SET')) {
+        if (isTransitionUpdate(sql)) {
           timedOutOperationRow.status = params[0];
           timedOutOperationRow.workflow_step = params[1];
           timedOutOperationRow.updated_at = params[2];
@@ -140,7 +147,7 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - 70000;
     const authoritativeReadCalls = [];
-    const timedOutOperationRow = {
+    const timedOutOperationRow = replicaOperationsRow({
       operation_id: 'op-owner-rpc-fallback-timeout',
       type: 'REMOVE',
       partition_id: 'partition-1',
@@ -149,7 +156,7 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
       replica_id: 'partition-1-r1',
       source_node_id: 'node-1',
       target_node_id: 'node-2',
-      status: 'stopping',
+      status: 'removing',
       workflow_step: 'STOPPING',
       created_at: staleUpdatedAtMs - 5000,
       updated_at: staleUpdatedAtMs,
@@ -160,7 +167,7 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
         {step: 'SENDING', timestamp: staleUpdatedAtMs - 900},
         {step: 'STOPPING', timestamp: staleUpdatedAtMs - 800},
       ]),
-    };
+    });
 
     const cdcIntegrationService = {
       refreshAuthoritativeCacheRow: async () => true,
@@ -218,7 +225,7 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
         );
       },
       async executeQuery(sql, params = []) {
-        if (String(sql).startsWith('UPDATE replica_operations SET')) {
+        if (isTransitionUpdate(sql)) {
           timedOutOperationRow.status = params[0];
           timedOutOperationRow.workflow_step = params[1];
           timedOutOperationRow.updated_at = params[2];
@@ -298,7 +305,7 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
   'local cache already exposes in-flight work', async (t) => {
   const nowMs = Date.now();
   const staleUpdatedAtMs = nowMs - 70000;
-  const cacheVisibleOperationRow = {
+  const cacheVisibleOperationRow = replicaOperationsRow({
     operation_id: 'op-cache-visible-syncing',
     type: 'ADD',
     partition_id: 'partition-cache-visible',
@@ -314,8 +321,8 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
     steps_history: '[]',
     entity_type: 'partition',
     entity_id: 'partition-cache-visible',
-  };
-  const authoritativeOnlyOperationRow = {
+  });
+  const authoritativeOnlyOperationRow = replicaOperationsRow({
     operation_id: 'op-authoritative-only-syncing',
     type: 'ADD',
     partition_id: 'partition-authoritative-only',
@@ -331,13 +338,13 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
     steps_history: '[]',
     entity_type: 'partition',
     entity_id: 'partition-authoritative-only',
-  };
+  });
   const operationRows = new Map([
     [cacheVisibleOperationRow.operation_id, cacheVisibleOperationRow],
     [authoritativeOnlyOperationRow.operation_id, authoritativeOnlyOperationRow],
   ]);
   const serviceRowsByReplicaId = new Map([
-    [cacheVisibleOperationRow.replica_id, {
+    [cacheVisibleOperationRow.replica_id, servicesRow({
       service_id: cacheVisibleOperationRow.replica_id,
       replica_id: cacheVisibleOperationRow.replica_id,
       partition_id: cacheVisibleOperationRow.partition_id,
@@ -345,8 +352,8 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
       service_type: 'partition',
       status: 'active',
       raft_role: 'follower',
-    }],
-    [authoritativeOnlyOperationRow.replica_id, {
+    })],
+    [authoritativeOnlyOperationRow.replica_id, servicesRow({
       service_id: authoritativeOnlyOperationRow.replica_id,
       replica_id: authoritativeOnlyOperationRow.replica_id,
       partition_id: authoritativeOnlyOperationRow.partition_id,
@@ -354,7 +361,7 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
       service_type: 'partition',
       status: 'active',
       raft_role: 'follower',
-    }],
+    })],
   ]);
   const authoritativeReplicaOperationReads = [];
 
@@ -481,7 +488,7 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
   async (t) => {
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - 70000;
-    const prioritySyncingOperationRow = {
+    const prioritySyncingOperationRow = replicaOperationsRow({
       operation_id: 'op-priority-syncing-timeout',
       type: 'REPLACE',
       partition_id: 'sql_write_operations-p1',
@@ -502,7 +509,7 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
         {step: 'CREATING', timestamp: staleUpdatedAtMs - 1000},
         {step: 'SYNCING', timestamp: staleUpdatedAtMs - 900},
       ]),
-    };
+    });
 
     const sqlQueryEngine = {
       async executeQuery(sql, params) {
@@ -583,7 +590,7 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - 70000;
     let updateCalls = 0;
-    const operationRow = {
+    const operationRow = replicaOperationsRow({
       operation_id: 'op-deferred-transition-retry-timeout',
       type: 'ADD',
       partition_id: 'replica_operations-p1',
@@ -601,7 +608,7 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
       steps_history: JSON.stringify([
         {step: 'PENDING', timestamp: staleUpdatedAtMs - 1000},
       ]),
-    };
+    });
 
     const coordinator = createCoordinator({
       nodeId: 'node-local',
@@ -702,7 +709,7 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
       TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS -
       PRIORITY_PENDING_EXHAUSTED_OPERATION_BUDGET_OVERRUN_MS;
     const staleUpdatedAtMs = nowMs - 65000;
-    const operationRow = {
+    const operationRow = replicaOperationsRow({
       operation_id: 'op-stale-priority-pending',
       type: 'REPLACE',
       partition_id: 'control_plane_publications-p1',
@@ -720,7 +727,7 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
       steps_history: JSON.stringify([
         {step: 'PENDING', timestamp: staleUpdatedAtMs - 1000},
       ]),
-    };
+    });
     let dispatchDeliveries = 0;
 
     const sqlQueryEngine = {
@@ -873,7 +880,7 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
 
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - TEST_STEP_STALE_MS;
-    const operationRow = {
+    const operationRow = replicaOperationsRow({
       operation_id: TEST_OPERATION_ID,
       type: TEST_OPERATION_TYPE_REPLACE,
       partition_id: TEST_PARTITION_ID,
@@ -893,8 +900,8 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
       }]),
       entity_type: TEST_ENTITY_TYPE_PARTITION,
       entity_id: TEST_PARTITION_ID,
-    };
-    const targetServiceRow = {
+    });
+    const targetServiceRow = servicesRow({
       service_id: TEST_REPLICA_ID,
       replica_id: TEST_REPLICA_ID,
       partition_id: TEST_PARTITION_ID,
@@ -907,8 +914,8 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
         TEST_ENTITY_TYPE_PARTITION,
         TEST_REPLICA_ID,
       ].join(TEST_ADDRESS_SEPARATOR),
-    };
-    const sourceServiceRow = {
+    });
+    const sourceServiceRow = servicesRow({
       service_id: TEST_SOURCE_REPLICA_ID,
       replica_id: TEST_SOURCE_REPLICA_ID,
       partition_id: TEST_PARTITION_ID,
@@ -921,7 +928,7 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
         TEST_ENTITY_TYPE_PARTITION,
         TEST_SOURCE_REPLICA_ID,
       ].join(TEST_ADDRESS_SEPARATOR),
-    };
+    });
     const serviceRows = [sourceServiceRow, targetServiceRow];
     const authoritativeServiceReadResults = [];
     const serviceCacheReadKeys = [];

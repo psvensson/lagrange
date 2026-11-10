@@ -22,6 +22,23 @@ import {
   LOG_RESUMING_JOIN_ADMISSION_PROGRESS,
   LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP,
 } from './node-registration-owner-constants.js';
+import {defineNodesProjection} from '../../control-plane/nodes-row-decoder.js';
+import {seedProjectionRow} from '../../control-plane/system-table-row-decoding.js';
+
+// The joiner's own nodes row seeded into its cache right after the
+// registration write (quest system-table-row-decoders, seed projections):
+// the registration row, its storage budget, and the joiner's connection,
+// heartbeat and explicitly cleared ready lease. The latency-assignment
+// columns are not observed here; the row's later CDC delivery supplies them.
+const JOINER_REGISTRATION_SEED_PROJECTION = defineNodesProjection(
+  'joiner_registration_seed', [
+    COLUMN.NODE_ID, COLUMN.NODE_ADDRESS, COLUMN.CPU_CORES, COLUMN.MEMORY_MB,
+    COLUMN.DISK_GB, COLUMN.CPU_USAGE_PERCENT, COLUMN.MEMORY_USAGE_PERCENT,
+    COLUMN.DISK_USAGE_PERCENT, COLUMN.STATUS, COLUMN.CONNECTION_STATE,
+    COLUMN.CAPABILITIES, COLUMN.LAST_HEARTBEAT, COLUMN.BOOT_INCARNATION,
+    COLUMN.CREATED_AT, COLUMN.STORAGE_BUDGET_BYTES, COLUMN.STORAGE_BUDGET_SOURCE,
+    COLUMN.STORAGE_BUDGET_UPDATED_AT, COLUMN.READY_LEASE_EXPIRES_AT,
+  ]);
 
 // The error code a registration failure surfaces: the direct `code` when
 // present, else the alternate `errorCode` carrier, else nothing.
@@ -151,12 +168,13 @@ class NodeRegistrationOwner {
           };
         }
 
-        this.seedJoinTimeCacheRow(TABLES.NODES, {
-          ...budgetRow,
-          [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-          [COLUMN.LAST_HEARTBEAT]: now,
-          [COLUMN.READY_LEASE_EXPIRES_AT]: null,
-        });
+        this.seedJoinTimeCacheRow(TABLES.NODES,
+          seedProjectionRow(JOINER_REGISTRATION_SEED_PROJECTION, {
+            ...budgetRow,
+            [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+            [COLUMN.LAST_HEARTBEAT]: now,
+            [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+          }));
 
         logger.info(LOCAL_STR_1PE7K, {
           nodeId: this.nodeId,

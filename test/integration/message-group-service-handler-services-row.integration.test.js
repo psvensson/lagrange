@@ -18,6 +18,7 @@ import {registerMessageGroupTransportHandler} from
   '../../src/bootstrap/shared/message-group-transport-handler.js';
 import {TEST_BOOT_INCARNATION} from
   '../test-helpers/boot-incarnation-fixture.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 function flushImmediate() {
   return new Promise((resolve) => setImmediate(resolve));
@@ -34,10 +35,14 @@ function seedReplicaOperation(
   cache.applySystemTableChange(
     SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
     'INSERT',
-    {
+    // A complete stored row (the cache refuses an insert its table could not
+    // hold); a message-group REPLACE names the group as its canonical entity.
+    replicaOperationsRow({
       operation_id: operationId,
       type: 'REPLACE',
       partition_id: groupId,
+      entity_type: 'message_group',
+      entity_id: groupId,
       replica_id: replicaId,
       source_node_id: nodeId,
       target_node_id: nodeId,
@@ -46,7 +51,7 @@ function seedReplicaOperation(
       created_at: now,
       updated_at: now,
       steps_history: '[]',
-    },
+    }),
   );
 }
 

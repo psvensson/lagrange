@@ -26,6 +26,7 @@ import {
   establishJoinReplicaLifecycleOwner,
   initializeTestEnvironment,
 } from './node-joining-service-test-support.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const NODE_ID = 'durable-rejoin-owner-handoff-node';
 const NODE_ADDRESS = 'ws://localhost:9197';
@@ -35,14 +36,14 @@ const JOIN_SESSION_ID = 'durable-rejoin-owner-handoff-session';
 function publishMembershipState(calls, state) {
   const cache = NodeService.getInstance().getSystemTableCache();
   const previous = cache.get(TABLES.NODES, NODE_ID);
-  const row = {
-    ...previous,
+  const transition = {
     [COLUMN.NODE_ID]: NODE_ID,
     [COLUMN.NODE_ADDRESS]: NODE_ADDRESS,
     [COLUMN.STATUS]: state.status,
     [COLUMN.CONNECTION_STATE]: state.connectionState,
-    [COLUMN.UPDATED_AT]: Date.now(),
   };
+  // The first publication registers the row; later ones merge onto it.
+  const row = previous ? {...previous, ...transition} : nodesRow(transition);
   cache.applySystemTableChange(TABLES.NODES, 'UPSERT', row);
   calls.membershipTransitions.push({
     status: row[COLUMN.STATUS],

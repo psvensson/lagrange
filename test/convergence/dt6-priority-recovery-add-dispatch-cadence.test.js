@@ -14,7 +14,10 @@ import {
 import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
-import {isTerminalStep} from '../../src/rebalancer/replica-operation-progress.js';
+import {
+  WORKFLOW_STEP_TO_STATUS,
+  isTerminalStep,
+} from '../../src/rebalancer/replica-operation-progress.js';
 import {
   deriveMembershipPublicationCandidate,
 } from '../../src/control-plane/membership-publication-coordinator.js';
@@ -29,6 +32,11 @@ import {
 import {withFixtureCommittedMembership} from
   '../rebalancer/committed-membership-fixture.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 import {
   initializeEnvironment,
   resetEnvironment,
@@ -229,17 +237,18 @@ function addressOf(nodeId) {
 function buildServiceRow({tableId, index, nodeId, raftRole}) {
   const partitionId = partitionIdOf(tableId);
   const replicaId = replicaIdOf(partitionId, index);
-  return {
+  // Production-shaped stored row (services has no table_id: the partition's
+  // table is its partitions row's).
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     partition_id: partitionId,
-    table_id: tableId,
     node_id: nodeId,
     service_type: REBALANCER_ENTITY_TYPE.PARTITION,
     status: SERVICE_STATUS_ACTIVE,
     raft_role: raftRole,
     address: addressOf(nodeId),
-  };
+  });
 }
 
 // The run's formation shape: every priority partition has its three replicas
@@ -274,7 +283,7 @@ function buildFormationServiceRows() {
 }
 
 function buildPartitionRows() {
-  return PRIORITY_TABLE_IDS.map((tableId) => ({
+  return PRIORITY_TABLE_IDS.map((tableId) => systemTableRow(SYSTEM_TABLE_NAME.PARTITIONS, {
     partition_id: partitionIdOf(tableId),
     table_id: tableId,
     replica_count: TARGET_REPLICA_COUNT,
@@ -283,15 +292,17 @@ function buildPartitionRows() {
 
 function buildNodeRows(nowMs) {
   return [
-    {
+    nodesRow({
       node_id: SEED_NODE_ID,
+      node_address: addressOf(SEED_NODE_ID),
       status: NODE_STATUS_ACTIVE,
       connection_state: CONNECTION_STATE_READY,
       last_heartbeat: nowMs,
       ready_lease_expires_at: nowMs + SEED_READY_LEASE_MS,
-    },
-    ...JOINING_NODE_IDS.map((nodeId) => ({
+    }),
+    ...JOINING_NODE_IDS.map((nodeId) => nodesRow({
       node_id: nodeId,
+      node_address: addressOf(nodeId),
       status: NODE_STATUS_ACTIVE,
       connection_state: CONNECTION_STATE_CONNECTED,
       last_heartbeat: nowMs,
@@ -752,7 +763,9 @@ async function runFormationCadenceScenario() {
     anchorMs = timeSource.now();
     const selfMoveRow = trackedOperations.get(selfMove.operationId);
     selfMoveRow.workflow_step = WORKFLOW_STEP.STOPPING;
-    selfMoveRow.status = WORKFLOW_STEP.STOPPING.toLowerCase();
+    // The stored status of the STOPPING step, as the transition persistence
+    // writes it (WORKFLOW_STEP_TO_STATUS: STOPPING -> removing).
+    selfMoveRow.status = WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.STOPPING];
     recordModelledRemovalIntent(selfMoveRow,
       replaceWitnesses.witnessFor(selfMove.operationId));
     refreshStartupAuthority();

@@ -18,6 +18,8 @@ import {
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {nodesRow, servicesRow, systemTableRow} from
+  '../test-helpers/system-table-row-fixture.js';
 const TEST_CONNECTION_STATE_READY = 'ready';
 const TEST_LAST_HEARTBEAT = 1000;
 const TEST_READY_LEASE_EXPIRES_AT = 2000;
@@ -37,32 +39,33 @@ const TEST_AUTHORITATIVE_REPAIR_LANE = Object.freeze({
 });
 
 function createNodeRow(nodeId) {
-  return {
+  return nodesRow({
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.CONNECTION_STATE]: TEST_CONNECTION_STATE_READY,
     [COLUMN.LAST_HEARTBEAT]: TEST_LAST_HEARTBEAT,
     [COLUMN.READY_LEASE_EXPIRES_AT]: TEST_READY_LEASE_EXPIRES_AT,
-  };
+  });
 }
 
 function createServiceRow(nodeId, serviceId) {
-  return {
+  return servicesRow({
     [COLUMN.SERVICE_ID]: serviceId,
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.PARTITION_ID]: `${serviceId}-partition`,
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${nodeId}/partition/${serviceId}`,
-  };
+  });
 }
 
 function createPartitionRow(partitionId, leaderNodeId = TEST_SEED_NODE_ID) {
-  return {
+  return systemTableRow(TABLES.PARTITIONS, {
     [COLUMN.PARTITION_ID]: partitionId,
-    [COLUMN.TABLE_NAME]: TABLES.SQL_TRANSACTIONS,
+    [COLUMN.TABLE_ID]: TABLES.SQL_TRANSACTIONS,
+    table_name: TABLES.SQL_TRANSACTIONS,
     [COLUMN.LEADER_NODE_ID]: leaderNodeId,
-  };
+  });
 }
 
 function createCacheWithNodeEvidence(nodeId) {

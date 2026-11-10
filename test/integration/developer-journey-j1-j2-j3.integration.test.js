@@ -103,6 +103,7 @@ import {
 import {
   RequestCellHttpAdapter,
 } from '../../src/service/request-cell-http-adapter.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TENANT_ID = 'default';
 const USER = 'developer';
@@ -531,12 +532,16 @@ describe('developer-journey-j1-j2-j3.integration', () => {
     systemTableCache.applySystemTableChange(
       TABLES.SERVICES,
       CDC_OPERATION.UPSERT,
-      {
+      // A complete stored services row (the cache refuses an insert its
+      // table could not hold).
+      servicesRow({
         node_id: NODE_ONE,
         service_id: `${serviceId}-r1`,
         service_type: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
         status: ReplicaStatus.ACTIVE,
-      },
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      }),
     );
 
     activeHandlers.set(binding.bindingVersionId, handlers);

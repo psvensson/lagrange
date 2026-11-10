@@ -19,6 +19,7 @@ import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
 
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../../src/control-plane/timeout-budget.js';
 import {OperationWorkflowOwner} from '../../src/rebalancer/operation-workflow-owner.js';
 import {
@@ -146,7 +147,9 @@ function createHandoffOwner() {
  */
 async function persistOperationNearBudgetEnd(hosts, repository, nowMs) {
   const budgetMs = TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
-  const row = {
+  // A stored row: source_node_id is NOT NULL, and the remote owner holds
+  // both ends so the repository resolves it as the operation's owner.
+  const row = replicaOperationsRow({
     operation_id: OPERATION_ID,
     partition_id: PARTITION_ID,
     entity_type: 'partition',
@@ -154,12 +157,12 @@ async function persistOperationNearBudgetEnd(hosts, repository, nowMs) {
     type: OPERATION_TYPE_ADD,
     status: 'pending',
     workflow_step: WORKFLOW_STEP_PENDING,
-    source_node_id: null,
+    source_node_id: REMOTE_OWNER_NODE_ID,
     target_node_id: REMOTE_OWNER_NODE_ID,
     replica_id: `${PARTITION_ID}-r2`,
     created_at: nowMs - budgetMs + BUDGET_REMAINING_MS,
     updated_at: nowMs - STEP_AGE_MS,
-  };
+  });
   const written = await hosts.cdcIntegrationService.insertSystemTableRow(
     REPLICA_OPERATIONS_TABLE, row);
   assert.equal(written.success, true, 'the operation row is written on the real path');

@@ -40,6 +40,7 @@ import {getSchemaByTableName} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 
@@ -498,9 +499,9 @@ async function withGroupSurface({partitionId, table, tempPrefix}, body) {
       deliver.call(network, address, envelope, ...rest);
   };
   try {
-    const tableRow = {table_id: table, table_name: table,
-      primaryKey: keyOf(table),
-      active_partition_version: ACTIVE_PARTITION_VERSION};
+    const tableRow = systemTableRow(TABLES.TABLES, {table_id: table, table_name: table,
+      partition_key: keyOf(table),
+      active_partition_version: ACTIVE_PARTITION_VERSION});
     // Each replica validates the engine's epoch fence against its own
     // tables row.
     for (const service of services) {

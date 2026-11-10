@@ -18,6 +18,7 @@ import {
 import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -39,15 +40,14 @@ afterEach(() => {
 const ALL_NODE_STATES = Object.values(NodeState);
 
 /**
- * Generate a node record with a specific state.
+ * Generate a complete nodes row with a specific state.
  */
 const nodeRecordArbitrary = fc.record({
   node_id: fc.uuid(),
   connection_state: fc.constantFrom(...ALL_NODE_STATES),
   ready_lease_expires_at: fc.integer({min: 0, max: 2_000_000_000_000}),
-  address: fc.webUrl(),
-  lastStateChange: fc.date().map((d) => d.toISOString()),
-});
+  node_address: fc.webUrl(),
+}).map((node) => nodesRow(node));
 
 /**
  * Generate a list of node records with various states.
@@ -219,15 +219,16 @@ test('Property 10: State filtering reflects node state updates', async (t) => {
         // Track current state of each node
         const nodeStates = new Map();
 
-        // Insert all nodes initially as 'joining'
+        // Insert all nodes initially as 'joining'; nodes rows are versioned
+        // by their heartbeat watermark, so each later update advances it.
         for (const nodeId of nodeIds) {
-          const node = {
+          const node = nodesRow({
             node_id: nodeId,
             connection_state: 'joining',
             ready_lease_expires_at: now - 1000,
-            address: 'ws://localhost:3000',
-            updated_at: now,
-          };
+            node_address: 'ws://localhost:3000',
+            last_heartbeat: now,
+          });
           cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, node);
           nodeStates.set(nodeId, {
             state: 'joining',
@@ -245,7 +246,7 @@ test('Property 10: State filtering reflects node state updates', async (t) => {
             node_id: nodeId,
             connection_state: update.newState,
             ready_lease_expires_at: leaseExpiry,
-            updated_at: now + updateIndex + 1,
+            last_heartbeat: now + updateIndex + 1,
           };
           cache.applySystemTableChange('nodes', CDC_OPERATIONS.UPDATE, updateData);
           nodeStates.set(nodeId, {
@@ -300,8 +301,8 @@ test('Property 10: Cache with only non-ready nodes returns empty array', async (
           node_id: fc.uuid(),
           connection_state: fc.constantFrom(...nonReadyStates),
           ready_lease_expires_at: fc.integer({min: 0, max: 2_000_000_000_000}),
-          address: fc.webUrl(),
-        }),
+          node_address: fc.webUrl(),
+        }).map((node) => nodesRow(node)),
         {minLength: 1, maxLength: 10},
       ),
       (nodes) => {

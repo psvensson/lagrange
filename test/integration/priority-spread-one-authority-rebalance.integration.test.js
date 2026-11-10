@@ -42,6 +42,7 @@ import {
   QUORUM_PROJECTION_SCOPE,
   projectQuorumAfterRemoval,
 } from '../../src/rebalancer/operation-workflow-remove-safety-evaluator.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION = 'schema_operations-p1';
 const OTHER_TABLES = Object.freeze([
@@ -68,7 +69,7 @@ function createClock(startMs) {
 }
 
 function replicaRow(index, nodeId, status, role) {
-  return {
+  return servicesRow({
     service_id: `${PARTITION}-r${index}`,
     replica_id: `${PARTITION}-r${index}`,
     partition_id: PARTITION,
@@ -77,12 +78,12 @@ function replicaRow(index, nodeId, status, role) {
     raft_role: role,
     node_id: nodeId,
     address: `${nodeId}:${index}`,
-  };
+  });
 }
 
 function otherPriorityRows(nodeIds) {
   return OTHER_TABLES.flatMap((tableId) =>
-    nodeIds.slice(0, 3).map((nodeId, index) => ({
+    nodeIds.slice(0, 3).map((nodeId, index) => servicesRow({
       service_id: `${tableId}-p1-r${index + 1}`,
       partition_id: `${tableId}-p1`,
       service_type: 'partition',
@@ -124,7 +125,7 @@ function deriveJoinerSummary(world, clock) {
     publisherNodeId: 'node-c',
     latestPublicationRow: publishedRow,
     latestPublishedPublicationRow: publishedRow,
-    nodeRows: world.nodes.map((nodeId) => ({
+    nodeRows: world.nodes.map((nodeId) => nodesRow({
       node_id: nodeId,
       status: 'active',
       connection_state: 'ready',

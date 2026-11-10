@@ -17,6 +17,7 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createTestRebalancer} from './test-helpers.js';
+import {projectedReplica, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 // Transitional workflow steps for REMOVE operations (used in replica_operations table)
 const REMOVE_TRANSITIONAL_STEPS = ['pending', 'sending', 'stopping'];
@@ -71,13 +72,13 @@ test('Property 4: No Duplicate REMOVE Moves for Removing Replicas', async (t) =>
             cacheData: {
               nodes: [{node_id: nodeId, status: 'active'}],
               services: [
-                {
+                servicesRow({
                   service_id: replicaId,
                   partition_id: partitionId,
                   node_id: nodeId,
                   service_type: 'partition',
                   status: ReplicaStatus.ACTIVE,
-                },
+                }),
               ],
               partitions: [{partition_id: partitionId, table_id: 'table-1'}],
               replicaOperations,
@@ -89,12 +90,12 @@ test('Property 4: No Duplicate REMOVE Moves for Removing Replicas', async (t) =>
 
           // Calculate moves - target state wants no replicas
           const currentReplicas = [
-            {
+            projectedReplica({
               service_id: replicaId,
               replica_id: replicaId,
               node_id: nodeId,
               status: ReplicaStatus.ACTIVE,
-            },
+            }),
           ];
           const targetState = {
             targetReplicaCount: 0,
@@ -186,13 +187,13 @@ test('Property 4: No Duplicate REMOVE Moves for Removing Replicas', async (t) =>
             cacheData: {
               nodes: [{node_id: nodeId, status: 'active'}],
               services: [
-                {
+                servicesRow({
                   service_id: activeReplicaId,
                   partition_id: partitionId,
                   node_id: nodeId,
                   service_type: 'partition',
                   status: ReplicaStatus.ACTIVE,
-                },
+                }),
               ],
               partitions: [{partition_id: partitionId, table_id: 'table-1'}],
               replicaOperations: [], // No in-flight operations
@@ -204,12 +205,12 @@ test('Property 4: No Duplicate REMOVE Moves for Removing Replicas', async (t) =>
 
           // Calculate moves - target state wants no replicas
           const currentReplicas = [
-            {
+            projectedReplica({
               service_id: activeReplicaId,
               replica_id: activeReplicaId,
               node_id: nodeId,
               status: ReplicaStatus.ACTIVE,
-            },
+            }),
           ];
           const targetState = {
             targetReplicaCount: 0,
@@ -266,13 +267,13 @@ test('Property 4: No Duplicate REMOVE Moves for Removing Replicas', async (t) =>
             cacheData: {
               nodes: [{node_id: nodeId, status: 'active'}],
               services: [
-                {
+                servicesRow({
                   service_id: replicaId,
                   partition_id: partitionId,
                   node_id: nodeId,
                   service_type: 'partition',
                   status: ReplicaStatus.ACTIVE,
-                },
+                }),
               ],
               partitions: [{partition_id: partitionId, table_id: 'table-1'}],
               replicaOperations,

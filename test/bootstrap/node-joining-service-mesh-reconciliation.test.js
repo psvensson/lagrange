@@ -58,6 +58,7 @@ import {EventEmitter} from 'events';
 import {
   FIXTURE_ENDPOINT_INCARNATION,
 } from '../test-helpers/endpoint-incarnation-fixture.js';
+import {nodesRow, systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const NODES_ROUTING_PARTITION_ID = 'nodes-p1';
 const REMOTE_CANONICAL_LEADER_NODE_ID = 'seed-node-1';
@@ -632,12 +633,12 @@ test('NodeJoiningService - reconnects disconnected cluster peers during mesh con
     service.bootstrapResponse = {
       systemTableSnapshots: {
         nodes: [
-          {node_id: 'joining-node-3', node_address: 'localhost:9092',
-            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION},
-          {node_id: 'peer-disconnected', node_address: 'localhost:8081',
-            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION},
-          {node_id: 'peer-connected', node_address: 'localhost:8082',
-            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION},
+          nodesRow({node_id: 'joining-node-3', node_address: 'localhost:9092',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION}),
+          nodesRow({node_id: 'peer-disconnected', node_address: 'localhost:8081',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION}),
+          nodesRow({node_id: 'peer-connected', node_address: 'localhost:8082',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION}),
         ],
         node_endpoints: [
           {
@@ -703,10 +704,10 @@ test('NodeJoiningService - prefers authoritative cache nodes during mesh connect
     service.bootstrapResponse = {
       systemTableSnapshots: {
         nodes: [
-          {node_id: 'joining-node-4', node_address: 'localhost:9093',
-            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION},
-          {node_id: 'seed-node', node_address: 'localhost:8080',
-            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION},
+          nodesRow({node_id: 'joining-node-4', node_address: 'localhost:9093',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION}),
+          nodesRow({node_id: 'seed-node', node_address: 'localhost:8080',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION}),
         ],
       },
     };
@@ -714,28 +715,28 @@ test('NodeJoiningService - prefers authoritative cache nodes during mesh connect
     const nodeService = NodeService.getInstance();
     const systemTableCache = nodeService.getSystemTableCache();
     service.systemTableCache = systemTableCache;
-    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'joining-node-4',
       node_address: 'localhost:9093',
       status: 'active',
-    });
-    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+    }));
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'seed-node',
       node_address: 'localhost:8080',
       status: 'active',
-    });
-    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+    }));
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'late-peer',
       node_address: 'localhost:8084',
       status: 'active',
-    });
+    }));
     systemTableCache.applySystemTableChange(
       TABLES.NODE_ENDPOINTS,
       CDC_OPERATION.INSERT,
-      {
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
         boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         endpoint_id: 'ep-late-peer-ws',
         node_id: 'late-peer',
@@ -743,7 +744,7 @@ test('NodeJoiningService - prefers authoritative cache nodes during mesh connect
         address: 'ws://late-peer:8086',
         priority: 0,
         status: ENDPOINT_STATUS.ACTIVE,
-      },
+      }),
     );
 
     const connectCalls = [];
@@ -785,23 +786,23 @@ test('NodeJoiningService - mesh connect includes non-terminal peers once canonic
     const nodeService = NodeService.getInstance();
     const systemTableCache = nodeService.getSystemTableCache();
     service.systemTableCache = systemTableCache;
-    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'joining-node-4b',
       node_address: 'localhost:9098',
       status: 'active',
-    });
-    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+    }));
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'peer-joining',
       node_address: 'localhost:8088',
       status: 'joining',
       connection_state: 'connected',
-    });
+    }));
     systemTableCache.applySystemTableChange(
       TABLES.NODE_ENDPOINTS,
       CDC_OPERATION.INSERT,
-      {
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
         boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         endpoint_id: 'ep-peer-joining-ws',
         node_id: 'peer-joining',
@@ -809,7 +810,7 @@ test('NodeJoiningService - mesh connect includes non-terminal peers once canonic
         address: 'ws://peer-joining:8088',
         priority: 0,
         status: ENDPOINT_STATUS.ACTIVE,
-      },
+      }),
     );
 
     const connectCalls = [];
@@ -848,10 +849,10 @@ test('NodeJoiningService - ready state update triggers mesh reconciliation witho
     service.bootstrapResponse = {
       systemTableSnapshots: {
         nodes: [
-          {node_id: 'joining-node-5', node_address: 'localhost:9094',
-            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION},
-          {node_id: 'seed-node', node_address: 'localhost:8080',
-            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION},
+          nodesRow({node_id: 'joining-node-5', node_address: 'localhost:9094',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION}),
+          nodesRow({node_id: 'seed-node', node_address: 'localhost:8080',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION}),
         ],
       },
     };
@@ -859,28 +860,28 @@ test('NodeJoiningService - ready state update triggers mesh reconciliation witho
     const nodeService = NodeService.getInstance();
     const systemTableCache = nodeService.getSystemTableCache();
     service.systemTableCache = systemTableCache;
-    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'joining-node-5',
       node_address: 'localhost:9094',
       status: 'active',
-    });
-    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+    }));
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'seed-node',
       node_address: 'localhost:8080',
       status: 'active',
-    });
-    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+    }));
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'late-peer',
       node_address: 'localhost:8085',
       status: 'active',
-    });
+    }));
     systemTableCache.applySystemTableChange(
       TABLES.NODE_ENDPOINTS,
       CDC_OPERATION.INSERT,
-      {
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
         boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         endpoint_id: 'ep-late-peer-ready-ws',
         node_id: 'late-peer',
@@ -888,7 +889,7 @@ test('NodeJoiningService - ready state update triggers mesh reconciliation witho
         address: 'ws://late-peer:8087',
         priority: 0,
         status: ENDPOINT_STATUS.ACTIVE,
-      },
+      }),
     );
 
     const callOrder = [];
@@ -1022,7 +1023,8 @@ test('NodeJoiningService - steady ready heartbeats skip redundant mesh reconcili
         status: 'active',
       },
     ]) {
-      systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, row);
+      systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT,
+        nodesRow(row));
     }
 
     const callOrder = [];
@@ -1091,7 +1093,8 @@ test('NodeJoiningService - steady ready heartbeats ignore stopped peers in mesh 
         status: 'stopped',
       },
     ]) {
-      systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, row);
+      systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT,
+        nodesRow(row));
     }
 
     const callOrder = [];
@@ -1167,7 +1170,8 @@ test('NodeJoiningService - shouldReconnectClusterMesh ignores peers already conn
           status: 'active',
         },
       ]) {
-        systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, row);
+        systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT,
+          nodesRow(row));
       }
 
       service.messageRouter = {

@@ -1,4 +1,5 @@
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -14,7 +15,7 @@ import {
  * @return {Object}
  */
 function buildRuntimeReplicaOperationRow(identity, overrides = {}) {
-  return {
+  return replicaOperationsRow({
     operation_id: identity.operationId,
     type: OperationType.ADD,
     partition_id: identity.serviceId,
@@ -31,7 +32,7 @@ function buildRuntimeReplicaOperationRow(identity, overrides = {}) {
     error_message: null,
     steps_history: '[]',
     ...overrides,
-  };
+  });
 }
 
 /**

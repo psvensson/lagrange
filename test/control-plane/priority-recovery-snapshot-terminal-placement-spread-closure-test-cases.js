@@ -1,6 +1,7 @@
 import {
   resolvePrioritySpreadPending,
 } from '../../src/control-plane/publication-recovery-priority-spread.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTests(context) {
   const {
@@ -135,12 +136,12 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
             }],
           },
         },
-        serviceRows: [{
+        serviceRows: [servicesRow({
           partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
           status: PRIORITY_RECOVERY_STATUS_ACTIVE,
           raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
           node_id: PRIORITY_RECOVERY_NODE_ID_B,
-        }],
+        })],
       });
 
       const excludedTargetSnapshot = decisionSnapshots.snapshots.find((entry) =>
@@ -544,13 +545,13 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
             ],
           },
         },
-        serviceRows: [{
+        serviceRows: [servicesRow({
           partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
           status: 'active',
           raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
           node_id: PRIORITY_RECOVERY_NODE_ID_C,
           replica_id: 'replica_operations-p1-r5',
-        }],
+        })],
       });
 
       t.same(
@@ -685,13 +686,13 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
             ],
           },
         },
-        serviceRows: [{
+        serviceRows: [servicesRow({
           partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
           status: PRIORITY_RECOVERY_STATUS_ACTIVE,
           raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
           node_id: PRIORITY_RECOVERY_NODE_ID_C,
           replica_id: PRIORITY_RECOVERY_SQL_TRANSACTIONS_REPLACEMENT_REPLICA_ID,
-        }],
+        })],
       });
 
       // SUPERSEDED (owner decision 2026-10-04). Before: a completed REPLACE
@@ -835,7 +836,7 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
             }],
           },
         },
-        serviceRows: [{
+        serviceRows: [servicesRow({
           partition_id:
           PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
           status: PRIORITY_RECOVERY_STATUS_ACTIVE,
@@ -843,7 +844,7 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
           node_id: PRIORITY_RECOVERY_NODE_ID_C,
           replica_id:
           PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_REPLACEMENT_REPLICA_ID,
-        }],
+        })],
       });
 
       t.same(

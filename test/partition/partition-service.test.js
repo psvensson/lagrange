@@ -66,6 +66,10 @@ import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-
 import {buildPartitionWriteEntry} from '../../src/partition/partition-write-kernel.js';
 import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_PARTITION_ID = 'partition-1';
 const TEST_OWNER_NODE_ID = 'node-owner';
@@ -626,7 +630,7 @@ test(
     systemTableCache.applySystemTableChange(
       TABLES.SERVICES,
       CDCOperation.UPSERT,
-      {
+      servicesRow({
         service_id: newLeaderReplicaId,
         service_type: SERVICE_TYPE.PARTITION,
         node_id: 'node-4-relocated',
@@ -635,7 +639,7 @@ test(
         status: ReplicaStatus.ACTIVE,
         address: canonicalLeaderAddress,
         updated_at: Date.now(),
-      },
+      }),
     );
 
     t.equal(
@@ -670,12 +674,13 @@ test(
 test('PartitionService - leader mutation helper guards owner writes with observed row state',
   async (t) => {
     const systemTableCache = new SystemTableCache();
-    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-      [COLUMN.PARTITION_ID]: 'guarded-partition-1',
-      [COLUMN.TABLE_ID]: 'guarded_table',
-      [COLUMN.LEADER_NODE_ID]: 'node-1',
-      [COLUMN.UPDATED_AT]: 77,
-    });
+    systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+        [COLUMN.PARTITION_ID]: 'guarded-partition-1',
+        [COLUMN.TABLE_ID]: 'guarded_table',
+        [COLUMN.LEADER_NODE_ID]: 'node-1',
+        [COLUMN.UPDATED_AT]: 77,
+      }));
 
     let capturedWhereClause = null;
     const partition = new PartitionService(withFoundingStamp({

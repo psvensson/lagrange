@@ -21,6 +21,7 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {createLifecycleStateStore} from
   '../test-helpers/lifecycle-state-store.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 /**
  * Create a mock CDC integration service.
@@ -86,19 +87,21 @@ function createSeededCache(options = {}) {
     columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
   };
 
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
-    table_id: tableId,
-    table_name: tableName,
-    schema_definition: JSON.stringify(schema),
-  });
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.TABLES, {
+      table_id: tableId,
+      table_name: tableName,
+      schema_definition: JSON.stringify(schema),
+    }));
 
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
-    partition_id: partitionId,
-    table_id: tableId,
-    partition_key_start: null,
-    partition_key_end: null,
-    leader_node_id: leaderNodeId,
-  });
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.PARTITIONS, {
+      partition_id: partitionId,
+      table_id: tableId,
+      partition_key_start: null,
+      partition_key_end: null,
+      leader_node_id: leaderNodeId,
+    }));
 
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
     service_id: leaderReplicaId,

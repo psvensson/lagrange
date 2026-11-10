@@ -71,8 +71,9 @@ const ALL_FILTERED = 'all_services_filtered_by_readiness';
 // Tightened after semantic planning currency replaced the raw table-version
 // floor. The shared rig is deterministic, so these exact counts make any
 // future amplification visible instead of preserving the superseded pre-Q2
-// write-driven baseline.
-const SEALED_RIG_HEAVY_BUILDS = 585;
+// write-driven baseline. 540 (was 585) once the rig's cache notifies the
+// stored row as SystemTableCache does, not the partial change row.
+const SEALED_RIG_HEAVY_BUILDS = 540;
 // The number of serve admissions this audit OBSERVES on this drive, sealed so
 // a read path that stops reaching the decision through
 // canReuseCompletedSnapshot cannot quietly shrink the audit's coverage while

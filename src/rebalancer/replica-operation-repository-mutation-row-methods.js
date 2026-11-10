@@ -29,6 +29,15 @@ function assignReplicaOperationRepositoryMutationRowMethods(
       );
     }
 
+    /**
+     * Encode the runtime operation as one complete stored replica_operations
+     * row: every stored column is present (SQL NULL for an absent nullable
+     * value), so the row round-trips through decodeReplicaOperationsRow
+     * (rowToOperation) from the cache seed and the owner-persisted
+     * observation exactly as a row read from the table would.
+     * @param {object} operation
+     * @return {object} the stored-shape row
+     */
     buildReplicaOperationRow(operation) {
       const {entityType, entityId} =
         assertCanonicalRebalancerEntityIdentity(operation);
@@ -36,23 +45,14 @@ function assignReplicaOperationRepositoryMutationRowMethods(
         operation_id: operation.operationId,
         type: operation.type,
         partition_id: operation.partitionId,
-        replica_id: operation.replicaId,
-        target_claim_key: operation.targetClaimKey || null,
-        source_node_id: operation.sourceNodeId,
-        target_node_id: operation.targetNodeId,
-        status: operation.status,
-        workflow_step: operation.workflowStep,
-        created_at: operation.createdAt,
-        updated_at: operation.updatedAt,
-        completed_at: operation.completedAt,
-        lease_expires_at:
-          this.resolveOperationOwnerLeasePersistExpiry(operation),
-        error_message: operation.errorMessage,
-        steps_history: JSON.stringify(operation.stepsHistory),
         entity_type: entityType,
         entity_id: entityId,
         membership_publication_epoch:
-          operation.membershipPublicationEpoch,
+          nullableOperationValue(operation.membershipPublicationEpoch),
+        message_group_membership_owner_claim:
+          nullableOperationValue(operation.messageGroupMembershipOwnerClaim),
+        message_group_membership_permit:
+          nullableOperationValue(operation.messageGroupMembershipPermit),
         source_replica_id: nullableOperationValue(operation.sourceReplicaId),
         message_group_membership_lane_key:
           nullableOperationValue(operation.messageGroupMembershipLaneKey),
@@ -87,6 +87,19 @@ function assignReplicaOperationRepositoryMutationRowMethods(
           nullableOperationValue(operation.createAdmissionWorkflowUpdatedAt),
         create_admission_owner_incarnation:
           nullableOperationValue(operation.createAdmissionOwnerIncarnation),
+        replica_id: nullableOperationValue(operation.replicaId),
+        target_claim_key: operation.targetClaimKey || null,
+        source_node_id: operation.sourceNodeId,
+        target_node_id: operation.targetNodeId,
+        status: operation.status,
+        workflow_step: operation.workflowStep,
+        created_at: operation.createdAt,
+        updated_at: operation.updatedAt,
+        completed_at: nullableOperationValue(operation.completedAt),
+        lease_expires_at:
+          this.resolveOperationOwnerLeasePersistExpiry(operation),
+        error_message: nullableOperationValue(operation.errorMessage),
+        steps_history: JSON.stringify(operation.stepsHistory),
       };
     }
 

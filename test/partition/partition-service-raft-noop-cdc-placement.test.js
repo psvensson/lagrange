@@ -29,6 +29,11 @@ import {
 import {
   waitForAffinityDemoSchemaAdmission,
 } from '../../examples/service-data-affinity/affinity-demo-preload-gate.js';
+import {
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
 
 const TEST_NOW_MS = 10_000;
 const TEST_NODE_IDS = Object.freeze(['node-a', 'node-b', 'node-c']);
@@ -57,16 +62,17 @@ function buildPriorityPlacementCache() {
   const cache = new SystemTableCache();
   for (const tableId of TEST_PRIORITY_TABLE_IDS) {
     const partitionId = INITIAL_PARTITION_IDS[tableId];
-    cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPSERT, {
-      partition_id: partitionId,
-      table_id: tableId,
-      table_name: tableId,
-      leader_node_id: TEST_NODE_IDS[0],
-      state: 'NORMAL',
-    });
+    cache.applySystemTableChange(
+      TABLES.PARTITIONS, CDC_OPERATION.UPSERT, systemTableRow(TABLES.PARTITIONS, {
+        partition_id: partitionId,
+        table_id: tableId,
+        table_name: tableId,
+        leader_node_id: TEST_NODE_IDS[0],
+        state: 'NORMAL',
+      }));
     for (const [index, nodeId] of TEST_NODE_IDS.entries()) {
       const replicaId = `${partitionId}-r${index + 1}`;
-      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
         service_id: replicaId,
         service_type: 'partition',
         partition_id: partitionId,
@@ -77,7 +83,7 @@ function buildPriorityPlacementCache() {
         address: `${nodeId}/partition/${replicaId}`,
         created_at: TEST_NOW_MS,
         updated_at: TEST_NOW_MS,
-      });
+      }));
     }
   }
   return cache;
@@ -87,7 +93,7 @@ function buildPlacementObservation(cache) {
   return buildCurrentPriorityPlacementObservation({
     capturedAt: TEST_NOW_MS,
     partitionRows: cache.getAll(TABLES.PARTITIONS),
-    serviceRows: cache.getAll(TABLES.SERVICES),
+    serviceRows: projectReplicasFromServicesRows(cache.getAll(TABLES.SERVICES)),
     readinessByNodeId: {},
     activeNodeViews: {
       locallyEligibleNodeIds: [...TEST_NODE_IDS],

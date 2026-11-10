@@ -36,6 +36,7 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_NODE_ID = 'reconcile-node-1';
 const TEST_OPERATION_ID = 'op-inflight-add';
@@ -213,7 +214,7 @@ function seedActiveReservation(store) {
 }
 
 function seedInFlightAddOperation(store) {
-  store.authorityOperations.set(TEST_OPERATION_ID, {
+  store.authorityOperations.set(TEST_OPERATION_ID, replicaOperationsRow({
     operation_id: TEST_OPERATION_ID,
     type: OperationType.ADD,
     partition_id: TEST_PARTITION_ID,
@@ -223,7 +224,7 @@ function seedInFlightAddOperation(store) {
     status: 'syncing',
     workflow_step: WORKFLOW_STEP.SYNCING,
     completed_at: null,
-  });
+  }));
 }
 
 test('reconcileReservations - a lagging local miss is disproven by the ' +

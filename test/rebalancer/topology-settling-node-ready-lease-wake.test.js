@@ -44,26 +44,27 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const SEED_NODE_ID = 'node-seed';
 const JOINER_NODE_ID = 'node-joiner';
 const PARTITION_K = 'control_plane_publications-p1';
 const PARTITION_K1 = 'replica_operations-p1';
 const LIVE_LEASE_EXPIRES_AT_MS = 1_900_000_000_000;
-const NODE_ROW_ACTIVE_NOT_READY = Object.freeze({
+const NODE_ROW_ACTIVE_NOT_READY = Object.freeze(nodesRow({
   node_id: JOINER_NODE_ID,
   boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
   status: 'active',
   connection_state: 'connected',
   ready_lease_expires_at: 0,
-});
-const NODE_ROW_ACTIVE_READY = Object.freeze({
+}));
+const NODE_ROW_ACTIVE_READY = Object.freeze(nodesRow({
   node_id: JOINER_NODE_ID,
   boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
   status: 'active',
   connection_state: 'ready',
   ready_lease_expires_at: LIVE_LEASE_EXPIRES_AT_MS,
-});
+}));
 const JOINER_NODE_ENDPOINT_ROW = Object.freeze({
   node_id: JOINER_NODE_ID,
   boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
@@ -92,13 +93,13 @@ function initializeTestEnvironment() {
 function createSharedCache() {
   const tables = {
     nodes: new Map([
-      [SEED_NODE_ID, {
+      [SEED_NODE_ID, nodesRow({
         node_id: SEED_NODE_ID,
         boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: LIVE_LEASE_EXPIRES_AT_MS,
-      }],
+      })],
       [JOINER_NODE_ID, {...NODE_ROW_ACTIVE_NOT_READY}],
     ]),
     partitions: new Map([

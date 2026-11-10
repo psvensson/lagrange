@@ -51,6 +51,8 @@ import {createReplicaLifecycleStateMachineFixture} from
   '../test-helpers/lifecycle-state-store.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
+import {nodesRow, replicaOperationsRow, systemTableRow} from
+  '../test-helpers/system-table-row-fixture.js';
 
 // Lifecycle scenarios: every create carries the committed-membership stamp
 // its scenario's creator would have produced (owner decision O1).
@@ -239,19 +241,21 @@ function createSeededCache(options = {}) {
     columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
   };
 
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
-    table_id: tableId,
-    table_name: tableName,
-    schema_definition: JSON.stringify(schema),
-  });
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.TABLES, {
+      table_id: tableId,
+      table_name: tableName,
+      schema_definition: JSON.stringify(schema),
+    }));
 
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
-    partition_id: partitionId,
-    table_id: tableId,
-    partition_key_start: null,
-    partition_key_end: null,
-    leader_node_id: leaderNodeId,
-  });
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.PARTITIONS, {
+      partition_id: partitionId,
+      table_id: tableId,
+      partition_key_start: null,
+      partition_key_end: null,
+      leader_node_id: leaderNodeId,
+    }));
 
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
     service_id: leaderReplicaId,
@@ -285,19 +289,21 @@ function createMetadataOnlyCache(options = {}) {
     columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
   };
 
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
-    table_id: tableId,
-    table_name: tableName,
-    schema_definition: JSON.stringify(schema),
-  });
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.TABLES, {
+      table_id: tableId,
+      table_name: tableName,
+      schema_definition: JSON.stringify(schema),
+    }));
 
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
-    partition_id: partitionId,
-    table_id: tableId,
-    partition_key_start: null,
-    partition_key_end: null,
-    leader_node_id: null,
-  });
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.PARTITIONS, {
+      partition_id: partitionId,
+      table_id: tableId,
+      partition_key_start: null,
+      partition_key_end: null,
+      leader_node_id: null,
+    }));
 
   return cache;
 }
@@ -336,20 +342,25 @@ function createServiceOnlyCache(options = {}) {
  */
 function seedReplicaOperation(cache, operationId, overrides = {}) {
   const now = Date.now();
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, 'INSERT', {
-    operation_id: operationId,
-    type: overrides.type || 'ADD',
-    partition_id: overrides.partitionId || 'partition-1',
-    replica_id: overrides.replicaId || 'replica-1',
-    source_node_id: overrides.sourceNodeId || 'seed-node',
-    target_node_id: overrides.targetNodeId || 'test-node',
-    status: ReplicaStatus.PENDING,
-    workflow_step: 'PENDING',
-    created_at: now,
-    updated_at: now,
-    steps_history: '[]',
-    ...overrides,
-  });
+  const {partitionId, replicaId, sourceNodeId, targetNodeId, ...columns} = overrides;
+  const operationPartitionId = partitionId || 'partition-1';
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, 'INSERT',
+    replicaOperationsRow({
+      operation_id: operationId,
+      type: 'ADD',
+      partition_id: operationPartitionId,
+      entity_type: 'partition',
+      entity_id: operationPartitionId,
+      replica_id: replicaId || 'replica-1',
+      source_node_id: sourceNodeId || 'seed-node',
+      target_node_id: targetNodeId || 'test-node',
+      status: ReplicaStatus.PENDING,
+      workflow_step: 'PENDING',
+      created_at: now,
+      updated_at: now,
+      steps_history: '[]',
+      ...columns,
+    }));
 }
 
 function applyGatewayMutationToCache(cache, mutation) {
@@ -547,13 +558,13 @@ test('ReplicaHandler', async (t) => {
   t.test('handleMessage routes to correct handler', async (t) => {
     const cache = createSeededCache();
     const ownerIncarnation = 101;
-    cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', nodesRow({
       node_id: 'test-node',
       status: SERVICE_STATUS.ACTIVE,
       last_heartbeat: Date.now(),
       ready_lease_expires_at: Date.now() + 60_000,
       boot_incarnation: ownerIncarnation,
-    });
+    }));
     seedReplicaOperation(cache, 'op-1', {
       entity_type: 'partition',
       entity_id: 'partition-1',

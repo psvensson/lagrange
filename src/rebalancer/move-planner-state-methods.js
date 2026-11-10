@@ -1,5 +1,24 @@
+import {
+  decodeServicesRow,
+  defineServicesNotObservedReading,
+} from '../control-plane/services-row-decoder.js';
+import {
+  ROW_ABSENT,
+  readDecodedRow,
+} from '../control-plane/system-table-row-decoding.js';
+import {hasReplicaNode, projectReplicaFromServicesRow} from './projected-replica.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const EMPTY_REPLICA_LIST = Object.freeze([]);
+const LOCAL_ACCESS_REPLICAS_READER = 'getNodesWithoutLocalReplica';
+// getNodesWithoutLocalReplica compared the stored service_type and status
+// as stored (case-sensitive, a missing key undefined): it reads the decoded
+// values, never the normaliser readers' lower-cased view, and a column the
+// row never observed reads absent.
+const LOCAL_ACCESS_SERVICE_READING = defineServicesNotObservedReading(
+  LOCAL_ACCESS_REPLICAS_READER,
+  {serviceType: ROW_ABSENT, status: ROW_ABSENT},
+);
 const PLANNER_INVENTORY_OBSERVATION_STATE = Object.freeze({
   PRESENT: 'present',
   EMPTY: 'empty',
@@ -224,9 +243,7 @@ function createMovePlannerStateMethods(deps = {}) {
      * @return {boolean}
      */
     hasMultipleReplicasOnSameNode(replicas) {
-      const nodeIds = replicas
-        .filter((replica) => replica && replica.node_id)
-        .map((replica) => replica.node_id);
+      const nodeIds = replicas.filter(hasReplicaNode).map((replica) => replica.nodeId);
       if (nodeIds.length === 0) {
         return false;
       }
@@ -245,19 +262,19 @@ function createMovePlannerStateMethods(deps = {}) {
       if (
         this.entityType === EntityType.MESSAGE_GROUP &&
         cache &&
-        typeof cache.filter === MOVE_PLANNER_LITERAL.FUNCTION
+        typeof cache.getAll === MOVE_PLANNER_LITERAL.FUNCTION
       ) {
-        localAccessReplicas = cache.filter(SYSTEM_TABLE_NAME.SERVICES, (service) =>
-          service?.service_type === EntityType.MESSAGE_GROUP &&
-            service?.status === ReplicaStatus.ACTIVE &&
-            typeof service?.node_id === MOVE_PLANNER_LITERAL.STRING &&
-            service.node_id.length > 0,
-        );
+        // Every ACTIVE message-group replica on a node, whichever group it
+        // serves.
+        localAccessReplicas = cache.getAll(SYSTEM_TABLE_NAME.SERVICES)
+          .map((row) => decodeServicesRow(row)).filter((decodedRow) => {
+            const service = readDecodedRow(LOCAL_ACCESS_SERVICE_READING, decodedRow);
+            return service.serviceType === EntityType.MESSAGE_GROUP &&
+              service.status === ReplicaStatus.ACTIVE;
+          }).map(projectReplicaFromServicesRow).filter(hasReplicaNode);
       }
       const nodesWithReplicas = new Set(
-        localAccessReplicas
-          .filter((replica) => replica && replica.node_id)
-          .map((replica) => replica.node_id),
+        localAccessReplicas.map((replica) => replica.nodeId),
       );
       return allNodes
         .map((node) => node?.node_id || null)
@@ -580,8 +597,8 @@ function createMovePlannerStateMethods(deps = {}) {
       const healthyReplicas = this.getHealthyReplicas(replicas);
       const distinctNodeIds = new Set(
         healthyReplicas
-          .filter((replica) => replica && replica.node_id)
-          .map((replica) => replica.node_id),
+          .filter(hasReplicaNode)
+          .map((replica) => replica.nodeId),
       );
       const requiresSpread =
         this.isControlPlanePriorityPartition() &&
@@ -678,8 +695,8 @@ function createMovePlannerStateMethods(deps = {}) {
       if (this.hasSpreadableReplicaConcentration(replicas, policy, readyNodes)) {
         const distinctNodeCount = new Set(
           healthyReplicas
-            .filter((replica) => replica && replica.node_id)
-            .map((replica) => replica.node_id),
+            .filter(hasReplicaNode)
+            .map((replica) => replica.nodeId),
         ).size;
         return MOVE_PLANNER_LITERAL.CONTROL_PLANE_REPLICAS_NOT_SPREAD +
           `${distinctNodeCount}/${readyNodes.length}`;
@@ -716,8 +733,7 @@ function createMovePlannerStateMethods(deps = {}) {
       ) {
         const usedNodeIds = new Set(
           healthyReplicas
-            .filter((replica) => replica && replica.node_id)
-            .map((replica) => replica.node_id),
+            .map((replica) => replica.nodeId),
         );
         const unusedNodes = readyNodes.filter(
           (node) => node && node.node_id && !usedNodeIds.has(node.node_id),
@@ -768,8 +784,7 @@ function createMovePlannerStateMethods(deps = {}) {
       };
       const usedNodeIds = new Set(
         healthyReplicas
-          .filter((replica) => replica && replica.node_id)
-          .map((replica) => replica.node_id),
+          .map((replica) => replica.nodeId),
       );
       const spreadAcrossNodesBlocked =
         policy.placementConstraints?.spreadAcrossNodes &&

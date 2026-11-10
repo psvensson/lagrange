@@ -113,17 +113,19 @@ function normalizeRaftRole(value) {
     PLACEMENT_OWNER_EMPTY_STRING;
 }
 
+// The current replicas are projected replicas (projected-replica.js): the
+// planner's getCurrentReplicas type, read by its named fields.
 function normalizeCurrentReplicas(currentReplicas) {
   if (!Array.isArray(currentReplicas)) {
     return [];
   }
   return currentReplicas
     .map((replica) => {
-      const nodeId = normalizeNodeId(replica?.[COLUMN.NODE_ID]);
+      const nodeId = normalizeNodeId(replica.nodeId);
       return Object.freeze({
         replica,
         nodeId,
-        raftRole: normalizeRaftRole(replica?.[COLUMN.RAFT_ROLE]),
+        raftRole: normalizeRaftRole(replica.raftRole),
         valid: nodeId.length > 0,
       });
     });

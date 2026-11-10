@@ -15,6 +15,7 @@ import {
   FIXTURE_ENDPOINT_INCARNATION,
   registeredNodeRow,
 } from '../test-helpers/endpoint-incarnation-fixture.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_NOW_MS = 1234;
 const TEST_JOINING_NODE_ID = 'joining-node';
@@ -87,10 +88,16 @@ test('JoinReadinessEvaluator prefers readiness-owned active cohort over nodes.st
       if (tableName !== 'nodes') {
         return [];
       }
+      // Stored nodes rows; nodes.status never stores 'starting', so the
+      // joining node is 'recovering' (a stored non-active status).
       return [
-        {node_id: 'seed-node', status: 'joining'},
-        {node_id: 'joining-node', status: 'starting'},
-        {node_id: 'other-node', status: 'active'},
+        nodesRow({node_id: 'seed-node', node_address: 'ws://seed-node', status: 'joining'}),
+        nodesRow({
+          node_id: 'joining-node',
+          node_address: 'ws://joining-node',
+          status: 'recovering',
+        }),
+        nodesRow({node_id: 'other-node', node_address: 'ws://other-node', status: 'active'}),
       ];
     },
   });

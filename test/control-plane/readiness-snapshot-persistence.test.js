@@ -68,6 +68,7 @@ import {
 import {DISPATCH_EVENT} from
   '../../src/control-plane/replica-dispatch-service-constants.js';
 import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_NODE_ID = 'node-test-1';
 const TEST_BUDGET_BYTES = 1000000;
@@ -299,10 +300,10 @@ test('admission result includes readinessSnapshots per candidate node',
     });
     accounting.initialize({systemTableCache: cache});
 
-    insertRow(cache, TABLES.NODES, {
+    insertRow(cache, TABLES.NODES, nodesRow({
       [COLUMN.NODE_ID]: TEST_NODE_ID,
       [COLUMN.STORAGE_BUDGET_BYTES]: TEST_BUDGET_BYTES,
-    });
+    }));
 
     const readiness = createReadiness(TEST_NODE_ID);
     const readinessService = createReadinessService({

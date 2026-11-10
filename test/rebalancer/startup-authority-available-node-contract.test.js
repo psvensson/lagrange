@@ -28,6 +28,7 @@ import {
   createReadinessServiceForTest,
   readinessCollaboratorFake,
 } from '../helpers/readiness-service-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 const NOW_MS = 1000;
 const READY_LEASE_EXPIRES_AT_MS = 5000;
 
@@ -171,13 +172,14 @@ test('UnifiedRebalancer uses readiness-owned startup cohort for startup-sensitiv
 
 test('UnifiedRebalancer admits remote startup-authority targets for priority control-plane provisioning', async (t) => {
   initEnv();
-  const seedNode = {
+  const seedNode = nodesRow({
     node_id: 'seed-node',
+    node_address: 'seed-node:8080',
     status: NODE_STATE.ACTIVE,
     connection_state: STATE.READY,
     ready_lease_expires_at: READY_LEASE_EXPIRES_AT_MS,
     last_heartbeat: NOW_MS,
-  };
+  });
   const registrationRow = buildNodeRegistrationRow({
     nodeId: 'node-2',
     nodeAddress: 'node-2:8080',
@@ -185,12 +187,12 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
     bootIncarnation: 1,
     now: NOW_MS,
   });
-  const joiningReadyNode = {
+  const joiningReadyNode = nodesRow({
     ...registrationRow,
     connection_state: STATE.READY,
     ready_lease_expires_at: READY_LEASE_EXPIRES_AT_MS,
-  };
-  const disconnectedJoiner = {
+  });
+  const disconnectedJoiner = nodesRow({
     ...buildNodeRegistrationRow({
       nodeId: 'node-3',
       nodeAddress: 'node-3:8080',
@@ -199,27 +201,27 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
       now: NOW_MS,
     }),
     connection_state: STATE.DISCONNECTED,
-  };
+  });
   const nodeRows = [
     seedNode,
     joiningReadyNode,
     disconnectedJoiner,
   ];
   const serviceRows = [
-    {
+    servicesRow({
       service_id: 'seed-partition-service',
       node_id: 'seed-node',
       service_type: SERVICE_TYPE.PARTITION,
       status: SERVICE_STATUS.ACTIVE,
       address: 'seed-node/partition/control-plane-publications-p1',
-    },
-    {
+    }),
+    servicesRow({
       service_id: 'node-2-partition-service',
       node_id: 'node-2',
       service_type: SERVICE_TYPE.PARTITION,
       status: SERVICE_STATUS.ACTIVE,
       address: 'node-2/partition/control-plane-publications-p1',
-    },
+    }),
   ];
   const nodeEndpointRows = [
     {

@@ -45,6 +45,7 @@ import {
   createReadinessServiceForTest,
   withNodeReadinessService,
 } from '../helpers/readiness-service-fixture.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 function initializeConfig(overrides = {}) {
   ConfigurationManager.resetInstance();
@@ -67,11 +68,13 @@ function initializeConfig(overrides = {}) {
   });
 }
 
+// Inserts the complete stored row: the overrides plus every other column as
+// the SQL table would store it (declared DEFAULT, else NULL).
 function insertRow(cache, tableName, row) {
   cache.applySystemTableChange(
     tableName,
     CDC_OPERATION.INSERT,
-    row,
+    systemTableRow(tableName, row),
   );
 }
 
@@ -159,6 +162,11 @@ function createReadinessService(readinessByNodeId, onCall = null) {
   };
 }
 
+// A ready cluster member holds a live ready lease: the readiness owner's
+// cluster-membership projection reads a complete nodes row with status but no
+// live lease (and a non-ready connection) as an unhealthy member.
+const READY_LEASE_MS = 60_000;
+
 function setupWithNode(nodeId, budgetBytes) {
   const cache = new SystemTableCache();
   const accounting = new StorageCapacityAccountingService({
@@ -166,9 +174,13 @@ function setupWithNode(nodeId, budgetBytes) {
   });
   accounting.initialize({systemTableCache: cache});
 
+  const now = Date.now();
   insertRow(cache, TABLES.NODES, {
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.STORAGE_BUDGET_BYTES]: budgetBytes,
+    [COLUMN.CONNECTION_STATE]: STATE.READY,
+    [COLUMN.LAST_HEARTBEAT]: now,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: now + READY_LEASE_MS,
   });
 
   const admission = createServices(cache, accounting);

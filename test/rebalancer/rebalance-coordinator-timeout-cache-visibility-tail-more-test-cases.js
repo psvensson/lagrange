@@ -1,5 +1,6 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests} from './rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js';
+import {replicaOperationsRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
 
@@ -228,7 +229,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
     async (t) => {
       let sqlQueryCalls = 0;
       const cacheRows = [
-        {
+        replicaOperationsRow({
           operation_id: 'op-cache-dedupe-1',
           type: 'ADD',
           partition_id: 'partition-1',
@@ -244,7 +245,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
           steps_history: '[]',
           entity_type: 'partition',
           entity_id: 'partition-1',
-        },
+        }),
       ];
       const coordinator = createCoordinator({
         nodeId: 'node-1',
@@ -434,7 +435,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
             return {
               success: true,
               rows: [
-                {
+                replicaOperationsRow({
                   operation_id: 'owner-op-1',
                   type: 'ADD',
                   partition_id: 'partition-owner',
@@ -450,7 +451,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
                   steps_history: '[]',
                   entity_type: 'partition',
                   entity_id: 'partition-owner',
-                },
+                }),
               ],
               affectedRows: 0,
             };
@@ -484,14 +485,15 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
     async (t) => {
       const nowMs = Date.now();
       const staleUpdatedAtMs = nowMs - 70000;
-      const observedServiceRow = {
+      const observedServiceRow = servicesRow({
         service_id: 'partition-1-r2',
         replica_id: 'partition-1-r2',
         partition_id: 'partition-1',
         node_id: 'node-2',
         status: 'active',
-      };
-      const operationRow = {
+        raft_role: 'follower',
+      });
+      const operationRow = replicaOperationsRow({
         operation_id: 'op-cache-visible-active',
         type: 'ADD',
         partition_id: 'partition-1',
@@ -511,7 +513,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         ]),
         entity_type: 'partition',
         entity_id: 'partition-1',
-      };
+      });
       const gatewayCalls = [];
 
       const sqlQueryEngine = {
@@ -687,7 +689,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
 
       const nowMs = Date.now();
       const staleUpdatedAtMs = nowMs - TEST_STALE_OPERATION_AGE_MS;
-      const observedServiceRow = {
+      const observedServiceRow = servicesRow({
         service_id: TEST_TARGET_REPLICA_ID,
         replica_id: TEST_TARGET_REPLICA_ID,
         partition_id: TEST_PARTITION_ID,
@@ -696,8 +698,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         status: ReplicaStatus.ACTIVE,
         raft_role: TEST_RAFT_ROLE,
         address: TEST_SERVICE_ADDRESS,
-      };
-      const sourceServiceRow = {
+      });
+      const sourceServiceRow = servicesRow({
         service_id: TEST_SOURCE_REPLICA_ID,
         replica_id: TEST_SOURCE_REPLICA_ID,
         partition_id: TEST_PARTITION_ID,
@@ -706,8 +708,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         status: ReplicaStatus.ACTIVE,
         raft_role: TEST_RAFT_ROLE,
         address: TEST_SOURCE_SERVICE_ADDRESS,
-      };
-      const peerServiceRowOne = {
+      });
+      const peerServiceRowOne = servicesRow({
         service_id: TEST_PEER_REPLICA_ID_ONE,
         replica_id: TEST_PEER_REPLICA_ID_ONE,
         partition_id: TEST_PARTITION_ID,
@@ -716,8 +718,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         status: ReplicaStatus.ACTIVE,
         raft_role: TEST_RAFT_ROLE,
         address: TEST_PEER_SERVICE_ADDRESS_ONE,
-      };
-      const peerServiceRowTwo = {
+      });
+      const peerServiceRowTwo = servicesRow({
         service_id: TEST_PEER_REPLICA_ID_TWO,
         replica_id: TEST_PEER_REPLICA_ID_TWO,
         partition_id: TEST_PARTITION_ID,
@@ -726,7 +728,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         status: ReplicaStatus.ACTIVE,
         raft_role: TEST_RAFT_ROLE,
         address: TEST_PEER_SERVICE_ADDRESS_TWO,
-      };
+      });
       const observedServiceRows = [
         observedServiceRow,
         sourceServiceRow,
@@ -753,7 +755,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
           missingPartitionIds: Object.freeze([]),
         }),
       });
-      const operationRow = {
+      const operationRow = replicaOperationsRow({
         operation_id: TEST_OPERATION_ID,
         type: TEST_OPERATION_TYPE,
         partition_id: TEST_PARTITION_ID,
@@ -783,7 +785,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         ]),
         entity_type: TEST_ENTITY_TYPE,
         entity_id: TEST_PARTITION_ID,
-      };
+      });
       const gatewayCalls = [];
 
       const sqlQueryEngine = {
@@ -932,7 +934,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
     async (t) => {
       const nowMs = Date.now();
       const staleUpdatedAtMs = nowMs - 70000;
-      const observedServiceRow = {
+      const observedServiceRow = servicesRow({
         service_id: 'partition-1-r2',
         replica_id: 'partition-1-r2',
         partition_id: 'partition-1',
@@ -940,8 +942,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         status: 'active',
         raft_role: 'follower',
         service_type: 'partition',
-      };
-      const operationRow = {
+      });
+      const operationRow = replicaOperationsRow({
         operation_id: 'op-cache-visible-sending-active',
         type: 'ADD',
         partition_id: 'partition-1',
@@ -960,7 +962,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         ]),
         entity_type: 'partition',
         entity_id: 'partition-1',
-      };
+      });
       const gatewayCalls = [];
 
       const sqlQueryEngine = {

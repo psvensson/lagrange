@@ -24,6 +24,8 @@ import {
 import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 // GP-5 (golden-capability-gold-plating): the cold-boot spread convergence
 // end-state — "priority partitions reach 3 distinct nodes from a cold 3-node
@@ -65,7 +67,7 @@ function buildColdBootRows() {
   for (const tableId of PRIORITY_TABLE_IDS_SORTED) {
     const partitionId = partitionIdFor(tableId);
     for (const index of [1, 2]) {
-      serviceRows.push({
+      serviceRows.push(servicesRow({
         service_id: `${partitionId}-r${index}`,
         replica_id: `${partitionId}-r${index}`,
         partition_id: partitionId,
@@ -74,16 +76,18 @@ function buildColdBootRows() {
         status: ReplicaStatus.ACTIVE,
         raft_role: index === 1 ? 'leader' : 'follower',
         address: `${SEED_NODE_ID}:${ADDRESS_PORT}`,
-      });
+      }));
     }
   }
   return {partitionRows, serviceRows};
 }
 
+// The census and the planner read projected replicas of the stored rows, as
+// their production producers hand them.
 function deriveCensus({partitionRows, serviceRows}) {
   return buildDerivedPriorityPartitionSummary({
     partitionRows,
-    serviceRows,
+    serviceRows: projectReplicasFromServicesRows(serviceRows),
     locallyEligibleNodeIds: [...NODE_IDS],
   });
 }
@@ -93,7 +97,7 @@ function buildColdBootPlanner({serviceRows, partitionId}) {
     systemTableCache: null,
     getAvailableNodes: () =>
       NODE_IDS.map((nodeId) => ({node_id: nodeId, status: ReplicaStatus.ACTIVE})),
-    getCurrentReplicas: () => serviceRows,
+    getCurrentReplicas: () => projectReplicasFromServicesRows(serviceRows),
     getHealthyReplicas: (replicas) =>
       replicas.filter((replica) => replica.status === ReplicaStatus.ACTIVE),
     getInFlightOperations: () => [],
@@ -121,7 +125,7 @@ function mintReplicaId(serviceRows, partitionId) {
 
 function applyPlannerAdd(serviceRows, move, partitionId, raftRole) {
   const replicaId = move.replicaId || mintReplicaId(serviceRows, partitionId);
-  serviceRows.push({
+  serviceRows.push(servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     partition_id: partitionId,
@@ -130,7 +134,7 @@ function applyPlannerAdd(serviceRows, move, partitionId, raftRole) {
     status: ReplicaStatus.ACTIVE,
     raft_role: raftRole,
     address: `${move.nodeId}:${ADDRESS_PORT}`,
-  });
+  }));
 }
 
 function applyPlannerRemove(serviceRows, move) {
@@ -187,9 +191,9 @@ t.test(
         partitionId,
       });
       for (let cycle = 0; cycle < MAX_PLAN_CYCLES; cycle += 1) {
-        const replicas = rows.serviceRows.filter(
+        const replicas = projectReplicasFromServicesRows(rows.serviceRows.filter(
           (row) => row.partition_id === partitionId,
-        );
+        ));
         const targetState = await planner.calculateTargetState(replicas, {
           targetReplicaCount: TARGET_REPLICA_COUNT,
           placementConstraints: {spreadAcrossNodes: true},

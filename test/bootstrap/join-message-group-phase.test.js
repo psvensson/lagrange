@@ -14,6 +14,7 @@ import {
 import {NodeService} from '../../src/node/node-service.js';
 import {initializeTestEnvironment} from
   './node-joining-service-test-support.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 test('JoinMessageGroupRuntimeOwner has no join-existing phase and refuses ' +
   'to start a replica another node owns', async (t) => {
@@ -38,7 +39,7 @@ test('JoinMessageGroupRuntimeOwner has no join-existing phase and refuses ' +
   const nodeService = NodeService.getInstance();
   nodeService.initialize({nodeId: 'joining-node-1'});
   nodeService.getSystemTableCache().applySystemTableChange('services',
-    'INSERT', {
+    'INSERT', servicesRow({
       service_id: 'mg-1-r2',
       service_type: 'message_group',
       node_id: 'seed-node-1',
@@ -46,7 +47,7 @@ test('JoinMessageGroupRuntimeOwner has no join-existing phase and refuses ' +
       replica_id: 'mg-1-r2',
       status: 'active',
       address: 'seed-node-1/message-group/mg-1-r2',
-    });
+    }));
   t.throws(() => owner.assertReplicaStartupOwnership('mg-1-r2'),
     /replica_owner_conflict/i,
     'a MOVE_REPLICA assignment authorizes no takeover');

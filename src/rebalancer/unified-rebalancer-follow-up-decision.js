@@ -23,10 +23,8 @@ const {
   PRIORITY_RECOVERY_FOLLOW_UP_REQUIREMENT_SEMANTIC_STATES,
   PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
   ReplicaStatus,
-  SYSTEM_TABLE_NAME,
   UNIFIED_REBALANCER_LITERAL,
   buildPriorityRecoveryPartitionAssessment,
-  normalizeServiceRow,
   resolvePriorityRecoveryActiveNodeCohort,
 } = SHARED;
 
@@ -698,20 +696,14 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
     if (
       normalizedPartitionId.length === 0 ||
       !this.systemTableCache ||
-      typeof this.systemTableCache.filter !== 'function'
+      typeof this.systemTableCache.getAll !== 'function'
     ) {
       return [];
     }
     return this.filterReplicasRetiredByTerminalOperations(
-      this.systemTableCache.filter(
-        SYSTEM_TABLE_NAME.SERVICES,
-        (service) => {
-          const normalizedService = normalizeServiceRow(service);
-          return (
-            normalizedService.partitionId === normalizedPartitionId &&
-            normalizedService.serviceType === EntityType.PARTITION
-          );
-        },
+      this.readProjectedReplicas((service) =>
+        service.partitionId === normalizedPartitionId &&
+        service.serviceType === EntityType.PARTITION,
       ),
     );
   }

@@ -21,6 +21,7 @@ import {
   createReadinessSnapshotStoreTestStub,
   projectNodeLivenessForTest,
 } from './control-plane-readiness-service-test-support.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const NODE_ID = 'node-1';
 const BASE_NOW_MS = 1_760_000_000_000;
@@ -76,12 +77,12 @@ function buildStoredSnapshot({lastHeartbeat, readyLeaseExpiresAt}) {
 }
 
 function applyServicesChange(cache, serviceId) {
-  cache.applySystemTableChange('services', 'INSERT', {
+  cache.applySystemTableChange('services', 'INSERT', servicesRow({
     service_id: serviceId,
     node_id: NODE_ID,
     status: 'active',
     updated_at: Date.now(),
-  });
+  }));
 }
 
 function nodeRowAt(heartbeat, lease) {

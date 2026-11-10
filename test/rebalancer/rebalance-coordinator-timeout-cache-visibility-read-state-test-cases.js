@@ -10,6 +10,7 @@ import {
   buildTransactionCoordinator,
   createCoordinator,
 } from './rebalance-coordinator-timeout-cache-visibility-fixture.js';
+import {replicaOperationsRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
 const INCOMPLETE_OPERATION_OWNER_QUERY_SQL_FRAGMENT =
@@ -20,7 +21,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
     async (t) => {
       const nowMs = Date.now();
       const staleUpdatedAtMs = nowMs - 130000;
-      const nonPrioritySyncingOperationRow = {
+      const nonPrioritySyncingOperationRow = replicaOperationsRow({
         operation_id: 'op-non-priority-syncing',
         type: 'REPLACE',
         partition_id: 'tables-p1',
@@ -41,7 +42,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
           {step: 'CREATING', timestamp: staleUpdatedAtMs - 1000},
           {step: 'SYNCING', timestamp: staleUpdatedAtMs - 900},
         ]),
-      };
+      });
 
       const sqlQueryEngine = {
         async executeQuery(sql, params) {
@@ -120,7 +121,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
   test('checkTimeouts resolves operation state from authoritative owner rows ' +
     'before reconciling stale cache entries', async (t) => {
     const deliveries = [];
-    const staleCacheRow = {
+    const staleCacheRow = replicaOperationsRow({
       operation_id: 'op-stale-cache',
       type: 'REPLACE',
       partition_id: 'control_plane_publications-p1',
@@ -141,7 +142,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         {step: 'CREATING', timestamp: Date.now() - 5500},
         {step: 'SYNCING', timestamp: Date.now() - 5000},
       ]),
-    };
+    });
     const authoritativeTerminalRow = {
       ...staleCacheRow,
       status: 'removed',
@@ -297,13 +298,14 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
       'when authoritative reads fail',
     async (t) => {
       const gatewayCalls = [];
-      const observedServiceRow = {
+      const observedServiceRow = servicesRow({
         service_id: 'partition-1-r2',
         replica_id: 'partition-1-r2',
         partition_id: 'partition-1',
         node_id: 'node-2',
         status: 'active',
-      };
+        raft_role: 'follower',
+      });
       const coordinator = createCoordinator({
         nodeId: 'node-1',
         transactionCoordinator: buildTransactionCoordinator(),
@@ -408,13 +410,13 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         systemTableCache: {
           get() {
             cacheReadCounts.get += 1;
-            return {
+            return servicesRow({
               service_id: 'partition-1-r2',
               replica_id: 'partition-1-r2',
               partition_id: 'partition-1',
               node_id: 'node-2',
               status: 'active',
-            };
+            });
           },
           getAll() {
             cacheReadCounts.getAll += 1;
@@ -510,7 +512,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
     'getActualReplicaStatus keeps active learner partition replicas in syncing ' +
       'until promotion',
     async (t) => {
-      const authoritativeLearnerRow = {
+      const authoritativeLearnerRow = servicesRow({
         service_id: 'nodes-p1-r4',
         replica_id: 'nodes-p1-r4',
         partition_id: 'nodes-p1',
@@ -519,7 +521,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         status: 'active',
         raft_role: 'learner',
         address: 'node-2/partition/nodes-p1-r4',
-      };
+      });
       const coordinator = createCoordinator({
         nodeId: 'node-1',
         transactionCoordinator: buildTransactionCoordinator(),

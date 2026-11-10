@@ -3,6 +3,7 @@ import {v4 as uuidv4} from 'uuid';
 import {
   TABLES,
 } from '../constants/index.js';
+import {SYSTEM_TABLE_CACHE_SEED_PROJECTION_FIELD} from '../cache/cache-constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from './control-plane-system-table-gateway.js';
 import {buildControlPlaneReadAuthority} from
   './control-plane-system-table-gateway-read-contracts.js';
@@ -107,11 +108,18 @@ function resolvePlanningEvidenceRowVersion(row = {}) {
   return Math.max(...versions);
 }
 
+// The row's stored fields: the cache's seed-projection marker of a partial
+// row (SYSTEM_TABLE_CACHE_SEED_PROJECTION_FIELD) says which columns it
+// observed and is no field of the row, so a marked partial row ranks by the
+// columns it carries, as the unmarked partial row did.
 function countPlanningEvidenceRowFields(row = {}) {
   if (!row || typeof row !== 'object') {
     return 0;
   }
-  return Object.keys(row).length;
+  const fieldCount = Object.keys(row).length;
+  return Object.hasOwn(row, SYSTEM_TABLE_CACHE_SEED_PROJECTION_FIELD) ?
+    fieldCount - 1 :
+    fieldCount;
 }
 
 function comparePlanningEvidenceRows(leftRow = {}, rightRow = {}) {

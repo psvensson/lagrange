@@ -34,6 +34,10 @@ import {LoggingService} from '../../../src/logging/logging-service.js';
 import {NodeService} from '../../../src/node/node-service.js';
 import {SystemTableCache} from '../../../src/cache/system-table-cache.js';
 import {
+  nodesRow,
+  servicesRow as buildServicesRow,
+} from '../../test-helpers/system-table-row-fixture.js';
+import {
   ENTITY_TYPE,
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -115,14 +119,14 @@ function statusOf(service) {
 }
 
 function servicesRow(replicaId) {
-  return {
+  return buildServicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     group_id: GROUP_ID,
     service_type: SERVICE_TYPE.MESSAGE_GROUP,
     node_id: NODE_ID,
     status: SERVICE_STATUS.ACTIVE,
-  };
+  });
 }
 
 // The durable record of one replica file, read on the test's own connection.
@@ -343,19 +347,20 @@ test('message group proposal commits and applies through raft-rs', async () => {
   try {
     const services = await openFounders(host);
     const leader = await electedLeader(services);
-    const row = {id: 'mg-rs-node', address: '10.0.0.7:7000', status: 'active'};
+    const row = nodesRow(
+      {node_id: 'mg-rs-node', node_address: '10.0.0.7:7000', status: 'active'});
     await leader.applyCDCEvent(TABLES.NODES, 'INSERT', row);
     for (const service of services) {
       assert.equal(await waitFor(() =>
-        service.getWritableCache().get(TABLES.NODES, row.id)?.address ===
-          row.address), true,
+        service.getWritableCache().get(TABLES.NODES, row.node_id)?.node_address ===
+          row.node_address), true,
       `${service.replicaId}'s cache applied the committed CDC command`);
     }
     for (const replicaId of FOUNDERS) {
       const committed = durableRecordOf(host.dbFileOf(replicaId)).committed;
       assert.ok(committed.some((entry) => entry.command?.type === 'CDC' &&
         entry.command.tableName === TABLES.NODES &&
-        entry.command.data?.id === row.id),
+        entry.command.data?.node_id === row.node_id),
       `${replicaId}'s durable log holds the decoded CDC command`);
     }
   } finally {

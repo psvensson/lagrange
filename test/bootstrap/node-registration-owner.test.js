@@ -29,6 +29,7 @@ import {
 } from '../../src/bootstrap/rejoin-hints-constants.js';
 import {NODE_REGISTRATION_OUTCOME} from
   '../../src/control-plane/owners/node-registration-incarnation-write.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_NODE_ID = 'test-node-registration-owner';
 const TEST_NODE_ADDRESS = 'joiner-host:8080';
@@ -1175,11 +1176,13 @@ test(
     const cache = new SystemTableCache();
     const endpointId = `ep-${TEST_NODE_ID}-wasm`;
     const initialRow = {
-      [COLUMN.ENDPOINT_ID]: endpointId,
-      [COLUMN.NODE_ID]: TEST_NODE_ID,
-      [COLUMN.BOOT_INCARNATION]: TEST_BOOT_INCARNATION,
-      [COLUMN.CREATED_AT]: TEST_NOW_MS,
-      [COLUMN.UPDATED_AT]: TEST_NOW_MS,
+      ...systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+        [COLUMN.ENDPOINT_ID]: endpointId,
+        [COLUMN.NODE_ID]: TEST_NODE_ID,
+        [COLUMN.BOOT_INCARNATION]: TEST_BOOT_INCARNATION,
+        [COLUMN.CREATED_AT]: TEST_NOW_MS,
+        [COLUMN.UPDATED_AT]: TEST_NOW_MS,
+      }),
       [COLUMN.UPDATED_AT_HLC]: new HLCTimestamp(
         TEST_NOW_MS,
         1,

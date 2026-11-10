@@ -49,6 +49,17 @@ import {
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
+
+// Projected replicas of `partition-1` (what getCurrentReplicas returns).
+function partitionReplicas(rows) {
+  return projectReplicasFromServicesRows(rows.map(({replicaId, nodeId, status}) =>
+    servicesRow({
+      service_id: replicaId, replica_id: replicaId, partition_id: 'partition-1',
+      node_id: nodeId, ...(status === undefined ? {} : {status}),
+    })));
+}
 
 // Initialize test environment
 // Create a mock system table cache
@@ -496,6 +507,34 @@ test('UnifiedRebalancer - Policy Management', async (t) => {
       );
     },
   );
+
+  // Before the decoders this reader compared the stored service_type raw
+  // (case-sensitive; quest system-table-row-decoders round 4b): an
+  // upper-case 'MESSAGE_GROUP' row is no local message-group replica here,
+  // although the normaliser readers lower-case it.
+  await t.test(
+    'message-group local access compares the stored service_type as stored',
+    async (t) => {
+      const services = [1, 2, 3, 4].map((index) => ({
+        service_id: `mg-${index}-r0`,
+        group_id: index <= 2 ? 'mg-1' : `mg-self-hosted-${index}`,
+        node_id: `node-${index}`,
+        service_type: index === 4 ? SERVICE_TYPE.MESSAGE_GROUP.toUpperCase() :
+          SERVICE_TYPE.MESSAGE_GROUP,
+        status: ReplicaStatus.ACTIVE,
+      }));
+      const rebalancer = createTestRebalancer({
+        entityId: 'mg-1',
+        entityType: EntityType.MESSAGE_GROUP,
+        nodeId: 'node-1',
+        nodes: [1, 2, 3, 4].map((index) =>
+          ({node_id: `node-${index}`, status: NodeStatus.ACTIVE})),
+        services,
+      });
+      t.same(rebalancer.getNodesWithoutLocalReplica(rebalancer.getCurrentReplicas()),
+        ['node-4'], 'the upper-case row does not satisfy local access, as before');
+    },
+  );
 });
 
 test('UnifiedRebalancer - Node Management', async (t) => {
@@ -775,11 +814,11 @@ test('UnifiedRebalancer - Replica State', async (t) => {
   initializeTestEnvironment();
 
   await t.test('gets healthy replicas only', async (t) => {
-    const replicas = [
-      {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-      {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.FAILED},
-      {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.ACTIVE},
-    ];
+    const replicas = partitionReplicas([
+      {replicaId: 'r1', nodeId: 'node-1', status: ReplicaStatus.ACTIVE},
+      {replicaId: 'r2', nodeId: 'node-2', status: ReplicaStatus.FAILED},
+      {replicaId: 'r3', nodeId: 'node-3', status: ReplicaStatus.ACTIVE},
+    ]);
 
     const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
@@ -790,8 +829,8 @@ test('UnifiedRebalancer - Replica State', async (t) => {
     const healthy = rebalancer.getHealthyReplicas(replicas);
 
     t.equal(healthy.length, 2);
-    t.ok(healthy.some((r) => r.replica_id === 'r1'));
-    t.ok(healthy.some((r) => r.replica_id === 'r3'));
+    t.ok(healthy.some((r) => r.replicaId === 'r1'));
+    t.ok(healthy.some((r) => r.replicaId === 'r3'));
   });
 
   await t.test('detects multiple replicas on same node', async (t) => {
@@ -801,17 +840,17 @@ test('UnifiedRebalancer - Replica State', async (t) => {
       nodeId: 'node-1',
     });
 
-    const duplicates = [
-      {replica_id: 'r1', node_id: 'node-1'},
-      {replica_id: 'r2', node_id: 'node-1'},
-      {replica_id: 'r3', node_id: 'node-2'},
-    ];
+    const duplicates = partitionReplicas([
+      {replicaId: 'r1', nodeId: 'node-1'},
+      {replicaId: 'r2', nodeId: 'node-1'},
+      {replicaId: 'r3', nodeId: 'node-2'},
+    ]);
 
-    const noDuplicates = [
-      {replica_id: 'r1', node_id: 'node-1'},
-      {replica_id: 'r2', node_id: 'node-2'},
-      {replica_id: 'r3', node_id: 'node-3'},
-    ];
+    const noDuplicates = partitionReplicas([
+      {replicaId: 'r1', nodeId: 'node-1'},
+      {replicaId: 'r2', nodeId: 'node-2'},
+      {replicaId: 'r3', nodeId: 'node-3'},
+    ]);
 
     t.equal(rebalancer.hasMultipleReplicasOnSameNode(duplicates), true);
     t.equal(rebalancer.hasMultipleReplicasOnSameNode(noDuplicates), false);

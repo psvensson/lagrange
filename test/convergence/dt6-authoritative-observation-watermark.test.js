@@ -20,6 +20,8 @@ import {
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {registerGatewayCausalTimeWitness} from
   './dt6-authoritative-observation-causal-time-test-cases.js';
+import {nodesRow, systemTableRow} from
+  '../test-helpers/system-table-row-fixture.js';
 
 // Quest movielens-authoritative-observation-watermark — deterministic
 // reproduction of the Wave-4 schema-admission failure. A successful complete
@@ -113,7 +115,7 @@ t.test(
   'unchanged authoritative rows publish observation evidence without ' +
     'rewriting the mutation watermark',
   async (t) => {
-    const row = {
+    const row = systemTableRow(TABLES.SERVICE_ENDPOINTS, {
       endpoint_id: 'endpoint-1',
       service_id: 'service-1',
       node_id: 'node-seed',
@@ -124,7 +126,7 @@ t.test(
       metadata: '{}',
       created_at: OLD_MUTATION_AT_MS,
       updated_at: OLD_MUTATION_AT_MS,
-    };
+    });
     const fixture = createFixture({authoritativeRows: [row]});
     fixture.writableCache.applySystemTableChange(
       TABLES.SERVICE_ENDPOINTS,
@@ -211,7 +213,7 @@ t.test(
   'newer complete observation restores a row across an older empty frontier',
   async (t) => {
     const priorObservedAtMs = AUTHORITATIVE_OBSERVED_AT_MS - 1000;
-    const row = {
+    const row = systemTableRow(TABLES.SERVICE_ENDPOINTS, {
       endpoint_id: 'endpoint-after-empty-frontier',
       service_id: 'service-1',
       node_id: 'node-seed',
@@ -222,7 +224,7 @@ t.test(
       metadata: '{}',
       created_at: priorObservedAtMs,
       updated_at: priorObservedAtMs,
-    };
+    });
     const fixture = createFixture({authoritativeRows: [row]});
     fixture.writableCache.recordAuthoritativeObservation(
       TABLES.SERVICE_ENDPOINTS,
@@ -254,7 +256,7 @@ t.test(
 t.test(
   'an older complete receipt cannot regress the cache behind its frontier',
   async (t) => {
-    const row = {
+    const row = systemTableRow(TABLES.SERVICE_ENDPOINTS, {
       endpoint_id: 'endpoint-from-stale-complete-read',
       service_id: 'service-1',
       node_id: 'node-seed',
@@ -265,7 +267,7 @@ t.test(
       metadata: '{}',
       created_at: OLD_MUTATION_AT_MS,
       updated_at: OLD_MUTATION_AT_MS,
-    };
+    });
     const fixture = createFixture({authoritativeRows: [row]});
     const newerObservedAtMs = AUTHORITATIVE_OBSERVED_AT_MS + 1000;
     fixture.writableCache.recordAuthoritativeObservation(
@@ -340,13 +342,15 @@ t.test(
   async (t) => {
     const cache = new SystemTableCache();
     const row = {
-      endpoint_id: 'endpoint-deleted-during-gateway-read',
-      service_id: 'service-1',
-      node_id: 'node-seed',
-      protocol: 'http',
-      address: '127.0.0.1',
-      port: 8080,
-      updated_at: 100,
+      ...systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+        endpoint_id: 'endpoint-deleted-during-gateway-read',
+        service_id: 'service-1',
+        node_id: 'node-seed',
+        protocol: 'http',
+        address: '127.0.0.1',
+        port: 8080,
+        updated_at: 100,
+      }),
       updated_at_hlc: '100-0-owner',
     };
     cache.applySystemTableChange(
@@ -427,10 +431,12 @@ t.test(
   async (t) => {
     const cache = new SystemTableCache();
     const row = {
-      endpoint_id: 'unstamped-owner-replica-row',
-      service_id: 'service-1',
-      node_id: 'node-follower',
-      updated_at: 100,
+      ...systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+        endpoint_id: 'unstamped-owner-replica-row',
+        service_id: 'service-1',
+        node_id: 'node-follower',
+        updated_at: 100,
+      }),
       updated_at_hlc: '100-0-owner',
     };
     cache.applySystemTableChange(
@@ -618,7 +624,7 @@ t.test(
   'a complete observation ignores caller equality overrides before ' +
     'publishing freshness',
   async (t) => {
-    const authoritativeRow = {
+    const authoritativeRow = systemTableRow(TABLES.SERVICE_ENDPOINTS, {
       endpoint_id: 'endpoint-comparator-bypass',
       service_id: 'service-1',
       node_id: 'node-seed',
@@ -629,7 +635,7 @@ t.test(
       metadata: '{}',
       created_at: OLD_MUTATION_AT_MS,
       updated_at: OLD_MUTATION_AT_MS,
-    };
+    });
     const fixture = createFixture({authoritativeRows: [authoritativeRow]});
     fixture.writableCache.applySystemTableChange(
       TABLES.SERVICE_ENDPOINTS,
@@ -686,11 +692,11 @@ t.test(
 t.test(
   'non-observation reconciliation retains caller equality overrides',
   async (t) => {
-    const authoritativeRow = {
+    const authoritativeRow = systemTableRow(TABLES.SERVICE_ENDPOINTS, {
       endpoint_id: 'endpoint-scoped-comparator',
       address: '127.0.0.1',
       updated_at: OLD_MUTATION_AT_MS,
-    };
+    });
     const fixture = createFixture();
     fixture.writableCache.applySystemTableChange(
       TABLES.SERVICE_ENDPOINTS,
@@ -906,14 +912,14 @@ t.test(
     fixture.writableCache.applySystemTableChange(
       TABLES.SERVICE_ENDPOINTS,
       CDC_OPERATION.UPSERT,
-      {
+      systemTableRow(TABLES.SERVICE_ENDPOINTS, {
         endpoint_id: 'stale-endpoint',
         service_id: 'stale-service',
         node_id: 'node-seed',
         protocol: 'http',
         address: '127.0.0.1',
         port: 9090,
-      },
+      }),
     );
 
     await t.rejects(
@@ -1068,7 +1074,7 @@ t.test(
 t.test(
   'a causally newer cached row is explained divergence, not a failed repair',
   async (t) => {
-    const authoritativeRow = {
+    const authoritativeRow = systemTableRow(TABLES.SERVICE_ENDPOINTS, {
       endpoint_id: 'endpoint-stale-authority',
       service_id: 'service-1',
       node_id: 'node-seed',
@@ -1076,7 +1082,7 @@ t.test(
       address: '127.0.0.1',
       port: 8080,
       updated_at: OLD_MUTATION_AT_MS,
-    };
+    });
     const fixture = createFixture({authoritativeRows: [authoritativeRow]});
     fixture.writableCache.applySystemTableChange(
       TABLES.SERVICE_ENDPOINTS,
@@ -1206,7 +1212,7 @@ t.test(
 t.test(
   'cache-only origin HLC does not make a durable authoritative row divergent',
   async (t) => {
-    const authoritativeNodeRow = {
+    const authoritativeNodeRow = nodesRow({
       node_id: 'node-cache-hlc',
       node_address: 'localhost:8080',
       status: 'active',
@@ -1214,7 +1220,7 @@ t.test(
       last_heartbeat: AUTHORITATIVE_OBSERVED_AT_MS - 100,
       ready_lease_expires_at: AUTHORITATIVE_OBSERVED_AT_MS + 10_000,
       created_at: OLD_MUTATION_AT_MS,
-    };
+    });
     const fixture = createFixture({authoritativeRows: [authoritativeNodeRow]});
     fixture.writableCache.applySystemTableChange(
       TABLES.NODES,
@@ -1266,15 +1272,14 @@ t.test(
 t.test(
   'local partition tenure annotations survive durable authoritative repair',
   async (t) => {
-    const authoritativePartitionRow = {
+    const authoritativePartitionRow = systemTableRow(TABLES.PARTITIONS, {
       partition_id: 'replica_operations-p1',
       table_id: 'replica_operations',
-      partition_number: 1,
       leader_node_id: 'node-local-leader',
       state: 'active',
       created_at: OLD_MUTATION_AT_MS,
       updated_at: OLD_MUTATION_AT_MS,
-    };
+    });
     const fixture = createFixture({
       authoritativeRows: [authoritativePartitionRow],
     });
@@ -1346,14 +1351,13 @@ t.test(
   'a causally newer cached nodes heartbeat cannot wedge complete-table ' +
     'observation',
   async (t) => {
-    const authoritativeNodeRow = {
+    const authoritativeNodeRow = nodesRow({
       node_id: 'node-a',
       node_address: 'localhost:8080',
       status: 'active',
       last_heartbeat: AUTHORITATIVE_OBSERVED_AT_MS - 100,
       created_at: OLD_MUTATION_AT_MS,
-      updated_at: AUTHORITATIVE_OBSERVED_AT_MS - 100,
-    };
+    });
     const fixture = createFixture({authoritativeRows: [authoritativeNodeRow]});
     fixture.writableCache.applySystemTableChange(
       TABLES.NODES,
@@ -1379,7 +1383,6 @@ t.test(
       {
         ...authoritativeNodeRow,
         last_heartbeat: NEWER_MUTATION_AT_MS,
-        updated_at: NEWER_MUTATION_AT_MS,
       },
       {causeId: 'cdc:heartbeat-churn'},
     );
@@ -1418,7 +1421,7 @@ t.test(
 t.test(
   'a silently dropped repair write cannot publish observation evidence',
   async (t) => {
-    const authoritativeRow = {
+    const authoritativeRow = systemTableRow(TABLES.SERVICE_ENDPOINTS, {
       endpoint_id: 'endpoint-dropped-write',
       service_id: 'service-1',
       node_id: 'node-seed',
@@ -1426,7 +1429,7 @@ t.test(
       address: '127.0.0.1',
       port: 8080,
       updated_at: NEWER_MUTATION_AT_MS,
-    };
+    });
     const fixture = createFixture({authoritativeRows: [authoritativeRow]});
     fixture.writableCache.applySystemTableChange(
       TABLES.SERVICE_ENDPOINTS,

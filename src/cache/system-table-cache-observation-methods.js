@@ -72,6 +72,19 @@ class SystemTableCacheObservationMethods {
   }
 
   /**
+   * The named diagnostic of the observed-columns marking (lead ruling
+   * RD-1/RD-2): how many partial rows for keys the cache did not hold,
+   * carrying no declared seed projection, the cache marked with their
+   * observed columns.
+   * @param {string} tableName
+   * @return {number}
+   */
+  getObservedColumnsMarkCount(tableName) {
+    this.validateTableName(tableName);
+    return this.observedColumnsMarkCountByTableName.get(tableName);
+  }
+
+  /**
    * Read the accepted CDC receipt bound to one cached row's origin HLC.
    * A row replacement whose origin no longer matches cannot reuse older
    * provenance.

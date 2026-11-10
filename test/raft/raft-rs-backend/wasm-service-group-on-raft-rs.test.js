@@ -43,6 +43,9 @@ import {
   TABLES,
 } from '../../../src/constants/index.js';
 import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
+import {
+  servicesRow,
+} from '../../test-helpers/system-table-row-fixture.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../../src/raft/raft-operation-port-constants.js';
 import {TEST_BOOT_INCARNATION} from
@@ -115,12 +118,12 @@ function waitFor(predicate, boundMs = BUDGET_MS) {
 function createPlacedNodeCache() {
   const cache = new SystemTableCache();
   for (const replicaId of REPLICAS) {
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       [COLUMN.SERVICE_ID]: replicaId,
       [COLUMN.NODE_ID]: NODE_ID,
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-    });
+    }));
   }
   return cache;
 }

@@ -24,6 +24,7 @@ import {
   createEmptySystemTableCache,
   initializeTestEnvironment,
 } from './bootstrap-api-test-fixtures.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 
 test('BootstrapAPI - allows bootstrap when only message-group leaders are missing',
@@ -318,7 +319,7 @@ test('BootstrapAPI - bootstrap never moves a seed message-group replica', async 
     data: {
       message_groups: [],
       services: [
-        {
+        servicesRow({
           service_id: 'mg-1-r1',
           service_type: SERVICE_TYPE.MESSAGE_GROUP,
           node_id: 'seed-node-1',
@@ -327,8 +328,8 @@ test('BootstrapAPI - bootstrap never moves a seed message-group replica', async 
           address: 'seed-node-1/message-group/mg-1-r1',
           raft_role: RAFT_ROLE.FOLLOWER,
           status: SERVICE_STATUS.ACTIVE,
-        },
-        {
+        }),
+        servicesRow({
           service_id: 'mg-1-r2',
           service_type: SERVICE_TYPE.MESSAGE_GROUP,
           node_id: 'seed-node-1',
@@ -337,8 +338,8 @@ test('BootstrapAPI - bootstrap never moves a seed message-group replica', async 
           address: 'seed-node-1/message-group/mg-1-r2',
           raft_role: RAFT_ROLE.FOLLOWER,
           status: SERVICE_STATUS.ACTIVE,
-        },
-        {
+        }),
+        servicesRow({
           service_id: 'mg-1-r3',
           service_type: SERVICE_TYPE.MESSAGE_GROUP,
           node_id: 'seed-node-1',
@@ -347,7 +348,7 @@ test('BootstrapAPI - bootstrap never moves a seed message-group replica', async 
           address: 'seed-node-1/message-group/mg-1-r3',
           raft_role: RAFT_ROLE.FOLLOWER,
           status: SERVICE_STATUS.ACTIVE,
-        },
+        }),
       ],
       nodes: [],
       partitions: [],
@@ -423,7 +424,7 @@ test('BootstrapAPI - cluster state endpoint', async (t) => {
     },
     // Helper to simulate node registration (via CDC in production)
     _registerNode(nodeId, nodeAddress) {
-      registeredNodes.set(nodeId, {node_id: nodeId, node_address: nodeAddress});
+      registeredNodes.set(nodeId, nodesRow({node_id: nodeId, node_address: nodeAddress}));
     },
   };
 
@@ -471,16 +472,20 @@ test('BootstrapAPI - buildSystemTableSnapshots', async (t) => {
   const mockSystemTableCache = {
     data: {
       nodes: [
-        {node_id: 'node-1', node_address: 'ws://localhost:8080', status: 'active'},
-        {node_id: 'node-2', node_address: 'ws://localhost:8081', status: 'active'},
+        nodesRow({node_id: 'node-1', node_address: 'ws://localhost:8080', status: 'active'}),
+        nodesRow({node_id: 'node-2', node_address: 'ws://localhost:8081', status: 'active'}),
       ],
       partitions: [
         {partition_id: 'p1', table_name: 'users', key_range_start: 0, key_range_end: 100},
         {partition_id: 'p2', table_name: 'orders', key_range_start: 0, key_range_end: 100},
       ],
       services: [
-        {service_id: 's1', service_type: 'partition', partition_id: 'p1', node_id: 'node-1'},
-        {service_id: 's2', service_type: 'message_group', group_id: 'mg-1', node_id: 'node-1'},
+        servicesRow({
+          service_id: 's1', service_type: 'partition', partition_id: 'p1', node_id: 'node-1',
+        }),
+        servicesRow({
+          service_id: 's2', service_type: 'message_group', group_id: 'mg-1', node_id: 'node-1',
+        }),
       ],
       tables: [
         {table_id: 'users', table_name: 'users', schema: '{}'},
@@ -1008,11 +1013,11 @@ test('BootstrapAPI - buildSystemTableSnapshots handles missing cache', async (t)
 test('BootstrapAPI - buildSystemTableSnapshots falls back to runtime owner cache', async (t) => {
   initializeTestEnvironment();
 
-  const nodeRow = {
+  const nodeRow = nodesRow({
     node_id: 'seed-node-1',
     node_address: 'ws://localhost:8080',
     status: 'active',
-  };
+  });
   const runtimeOwnerCache = createEmptySystemTableCache();
   runtimeOwnerCache.getAll = (tableName) =>
     tableName === TABLES.NODES ? [nodeRow] : [];
@@ -1050,7 +1055,7 @@ test('BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots', asyn
     },
     getAll(tableName) {
       if (tableName === TABLES.NODES) {
-        return [{node_id: 'seed-node-1', node_address: 'ws://localhost:8080'}];
+        return [nodesRow({node_id: 'seed-node-1', node_address: 'ws://localhost:8080'})];
       }
       if (tableName === TABLES.PARTITIONS) {
         return [{
@@ -1061,7 +1066,7 @@ test('BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots', asyn
       }
       if (tableName === TABLES.SERVICES) {
         return [
-          {
+          servicesRow({
             service_id: 'partition-leader',
             service_type: SERVICE_TYPE.PARTITION,
             partition_id: 'p1',
@@ -1069,8 +1074,8 @@ test('BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots', asyn
             address: 'seed-node-1/partition/partition-leader',
             raft_role: RAFT_ROLE.LEADER,
             status: SERVICE_STATUS.ACTIVE,
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'message-group-leader',
             service_type: SERVICE_TYPE.MESSAGE_GROUP,
             group_id: 'mg1',
@@ -1078,7 +1083,7 @@ test('BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots', asyn
             address: 'seed-node-1/message-group/message-group-leader',
             raft_role: RAFT_ROLE.LEADER,
             status: SERVICE_STATUS.ACTIVE,
-          },
+          }),
         ];
       }
       if (tableName === TABLES.TABLES) {
@@ -1169,18 +1174,20 @@ test('BootstrapAPI - getReadyNodes includes seed node when lease expired only wi
       getAll: (tableName) => {
         if (tableName === TABLES.NODES) {
           return [
-            {
+            nodesRow({
               node_id: 'seed-node-1',
               status: 'active',
               connection_state: STATE.READY,
+              last_heartbeat: now,
               ready_lease_expires_at: expiredLease, // Expired
-            },
-            {
+            }),
+            nodesRow({
               node_id: 'other-node',
               status: 'active',
               connection_state: STATE.READY,
+              last_heartbeat: now,
               ready_lease_expires_at: now + 10000, // Valid
-            },
+            }),
           ];
         }
         return [];

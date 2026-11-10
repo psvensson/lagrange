@@ -16,6 +16,7 @@ import path from 'node:path';
 
 import {createLoopbackTransport} from './partition-service-test-support.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -84,10 +85,12 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
   const build = (member, visible, extra = {}) => {
     const cache = new SystemTableCache();
     cache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT,
-      {partition_id: partitionId, replica_count: members.length});
+      systemTableRow(TABLES.PARTITIONS,
+        {partition_id: partitionId, replica_count: members.length}));
     for (const row of visible) {
       cache.applySystemTableChange(
-        TABLES.SERVICES, CDCOperation.INSERT, serviceRow(row));
+        TABLES.SERVICES, CDCOperation.INSERT,
+        systemTableRow(TABLES.SERVICES, serviceRow(row)));
     }
     const service = new PartitionService(withFoundingStamp({
       ...serviceOptions,
@@ -117,7 +120,7 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
       await replica.initialize();
       for (const cache of caches.slice(0, joined)) {
         cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT,
-          serviceRow(members[joined]));
+          systemTableRow(TABLES.SERVICES, serviceRow(members[joined])));
       }
       replica.startElection();
       assert.equal(await waitFor(() => {

@@ -43,6 +43,7 @@ import {
   REBALANCER_MOVE_TYPE,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 if (!ConfigurationManager.getInstance().isInitialized()) {
   ConfigurationManager.getInstance().initialize({});
@@ -147,7 +148,13 @@ function evaluateWith(overrides = {}) {
 }
 
 function activeReplica(replicaId, nodeId) {
-  return {replica_id: replicaId, node_id: nodeId, status: ReplicaStatus.ACTIVE};
+  return projectedReplica({
+    service_id: replicaId,
+    replica_id: replicaId,
+    partition_id: CRITICAL_PARTITION_ID,
+    node_id: nodeId,
+    status: ReplicaStatus.ACTIVE,
+  });
 }
 
 function overTargetRetentionOptions(overrides = {}) {

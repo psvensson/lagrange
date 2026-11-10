@@ -26,6 +26,7 @@ import {
   createDurableTables,
   registeredNodeRow,
 } from '../test-helpers/endpoint-incarnation-fixture.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const NODE_ID = 'node-endpoint-authority';
 const ENDPOINT_ID = `ep-${NODE_ID}-ws`;
@@ -34,7 +35,7 @@ const G1 = 1;
 const G2 = 2;
 
 function nodeEndpoint(incarnation, address, overrides = {}) {
-  return {
+  return systemTableRow(TABLES.NODE_ENDPOINTS, {
     endpoint_id: ENDPOINT_ID,
     node_id: NODE_ID,
     transport_type: TRANSPORT_TYPE.WEBSOCKET,
@@ -43,7 +44,7 @@ function nodeEndpoint(incarnation, address, overrides = {}) {
     status: ENDPOINT_STATUS.ACTIVE,
     boot_incarnation: incarnation,
     ...overrides,
-  };
+  });
 }
 
 function metaEndpoint(incarnation) {

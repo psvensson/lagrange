@@ -16,6 +16,7 @@ import {
   deriveMembershipPublicationCandidate,
 } from '../../src/control-plane/membership-publication-coordinator.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const NUM_RUNS = 10;
 const MIN_SEQUENCE_LENGTH = 5;
@@ -123,7 +124,7 @@ function buildPriorityPartitionRows() {
 }
 
 function buildServiceRow(partitionId, nodeId, replicaOrdinal = 1, raftRole = RAFT_ROLE.FOLLOWER) {
-  return {
+  return servicesRow({
     service_id: `${partitionId}-r${replicaOrdinal}-${nodeId}`,
     partition_id: partitionId,
     service_type: SERVICE_TYPE.PARTITION,
@@ -131,7 +132,7 @@ function buildServiceRow(partitionId, nodeId, replicaOrdinal = 1, raftRole = RAF
     raft_role: raftRole,
     address: `partition://${partitionId}/${nodeId}`,
     node_id: nodeId,
-  };
+  });
 }
 
 function initializeState() {
@@ -140,7 +141,7 @@ function initializeState() {
   const serviceRows = PRIORITY_PARTITION_IDS.map((partitionId) =>
     buildServiceRow(partitionId, seedNodeId, 1, RAFT_ROLE.LEADER),
   );
-  const nodeRows = [{node_id: seedNodeId, status: 'active'}];
+  const nodeRows = [nodesRow({node_id: seedNodeId, status: 'active'})];
   const readinessEntries = [buildReadinessEntry(seedNodeId, {
     controlPlanePublished: true,
     controlPlaneRecoveryEligible: false,
@@ -185,10 +186,10 @@ function ensureJoined(state, nodeId) {
     return;
   }
   if (!state.nodeRows.some((row) => row.node_id === normalizedNodeId)) {
-    state.nodeRows.push({
+    state.nodeRows.push(nodesRow({
       node_id: normalizedNodeId,
       status: 'active',
-    });
+    }));
   }
   const readinessIndex = state.readinessEntries.findIndex(
     (entry) => entry.nodeId === normalizedNodeId,

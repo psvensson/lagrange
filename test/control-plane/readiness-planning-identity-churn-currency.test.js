@@ -45,6 +45,12 @@ import {
 } from '../../src/control-plane/readiness-planning-semantic-generation.js';
 
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {
+  nodesRow,
+  replicaOperationsRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 const NODE_ID = 'node-a';
 const T0 = Date.parse('2026-10-02T06:00:00.000Z');
 const READY_LEASE_WINDOW_MS = 60000;
@@ -56,7 +62,7 @@ function flushDeferredNotifications() {
 }
 
 function publicationRow(nodeIds) {
-  return {
+  return systemTableRow(TABLES.CONTROL_PLANE_PUBLICATIONS, {
     publication_id: 'pub-1',
     publication_kind: 'cluster_membership',
     publication_epoch: 1,
@@ -65,7 +71,7 @@ function publicationRow(nodeIds) {
       nodeIds),
     required_ack_node_ids: JSON.stringify(nodeIds),
     acknowledged_node_ids: JSON.stringify(nodeIds),
-  };
+  });
 }
 
 async function composeSingleNodeReadiness({clock}) {
@@ -98,43 +104,46 @@ async function composeSingleNodeReadiness({clock}) {
 }
 
 function seedCurrentSingleNodeWorld(cache, clock) {
-  cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+  cache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
     [COLUMN.NODE_ID]: NODE_ID,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.LAST_HEARTBEAT]: clock,
     [COLUMN.READY_LEASE_EXPIRES_AT]: clock + READY_LEASE_WINDOW_MS,
     connection_state: 'ready',
-  });
-  cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-    endpoint_id: 'endpoint-a',
-    node_id: NODE_ID,
-    transport_type: 'websocket',
-    status: 'active',
-    address: `${NODE_ID}/transport`,
-    priority: 1,
-  });
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+  }));
+  cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+    systemTableRow(TABLES.NODE_ENDPOINTS, {
+      endpoint_id: 'endpoint-a',
+      node_id: NODE_ID,
+      transport_type: 'websocket',
+      status: 'active',
+      address: `${NODE_ID}/transport`,
+      priority: 1,
+    }));
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
     [COLUMN.SERVICE_ID]: 'service-a',
     [COLUMN.NODE_ID]: NODE_ID,
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${NODE_ID}/partition/${PRIORITY_PARTITION_ID}`,
     partition_id: PRIORITY_PARTITION_ID,
-  });
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    partition_id: PRIORITY_PARTITION_ID,
-    table_id: 'nodes',
-    table_name: TABLES.NODES,
-    leader_node_id: NODE_ID,
-    replica_count: 1,
-  });
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    partition_id: SECOND_PARTITION_ID,
-    table_id: 'app-table',
-    table_name: 'app_table',
-    leader_node_id: null,
-    replica_count: 0,
-  });
+  }));
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+    systemTableRow(TABLES.PARTITIONS, {
+      partition_id: PRIORITY_PARTITION_ID,
+      table_id: 'nodes',
+      table_name: TABLES.NODES,
+      leader_node_id: NODE_ID,
+      replica_count: 1,
+    }));
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+    systemTableRow(TABLES.PARTITIONS, {
+      partition_id: SECOND_PARTITION_ID,
+      table_id: 'app-table',
+      table_name: 'app_table',
+      leader_node_id: null,
+      replica_count: 0,
+    }));
   cache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'INSERT',
     publicationRow([NODE_ID]));
 }
@@ -219,15 +228,16 @@ test('Case B: genuinely changed planning identity still rotates and refuses', as
     // coordinator creates and the planning source classifies globally)
     // enters the source.
     clock += 1;
-    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
-      operation_id: 'op-1',
-      operation_type: 'ADD',
-      entity_type: 'partition',
-      entity_id: 'replica_operations-p1',
-      target_node_id: NODE_ID,
-      status: 'PENDING',
-      partition_id: 'replica_operations-p1',
-    });
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT',
+      replicaOperationsRow({
+        operation_id: 'op-1',
+        type: 'ADD',
+        entity_type: 'partition',
+        entity_id: 'replica_operations-p1',
+        target_node_id: NODE_ID,
+        status: 'PENDING',
+        partition_id: 'replica_operations-p1',
+      }));
     await flushDeferredNotifications();
 
     const rotated = readiness.readCurrentPlanningProjectionIdentity(NODE_ID);

@@ -21,6 +21,7 @@ import {SystemTableCache, CDC_OPERATIONS} from '../../src/cache/system-table-cac
 import {TABLES} from '../../src/constants/index.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 /**
  * Initialize test environment.
@@ -63,8 +64,7 @@ const nodeRecordArb = fc.record({
   node_address: fc.stringMatching(/^ws:\/\/localhost:[0-9]{4,5}$/),
   status: fc.constantFrom('active', 'inactive', 'draining'),
   created_at: fc.integer({min: 1000000000000, max: 9999999999999}),
-  updated_at: fc.integer({min: 1000000000000, max: 9999999999999}),
-});
+}).map((row) => systemTableRow(TABLES.NODES, row));
 
 /**
  * Generator for partition record data.
@@ -72,10 +72,10 @@ const nodeRecordArb = fc.record({
 const partitionRecordArb = fc.record({
   partition_id: fc.uuid(),
   table_name: fc.stringMatching(/^[a-z_][a-z0-9_]{0,20}$/),
-  start_key: fc.string({maxLength: 50}),
-  end_key: fc.string({maxLength: 50}),
+  partition_key_start: fc.string({maxLength: 50}),
+  partition_key_end: fc.string({maxLength: 50}),
   replica_count: fc.integer({min: 1, max: 5}),
-});
+}).map((row) => systemTableRow(TABLES.PARTITIONS, row));
 
 /**
  * Generator for service record data.
@@ -88,7 +88,7 @@ const serviceRecordArb = fc.record({
   raft_role: fc.constantFrom('leader', 'follower', 'candidate'),
   status: fc.constantFrom('active', 'inactive', 'starting'),
   address: fc.stringMatching(/^node[0-9]+\/partition\/[a-z0-9-]+$/),
-});
+}).map((row) => systemTableRow(TABLES.SERVICES, row));
 
 /**
  * Generator for table record data.
@@ -98,7 +98,7 @@ const tableRecordArb = fc.record({
   table_name: fc.stringMatching(/^[a-z_][a-z0-9_]{0,20}$/),
   partition_count: fc.integer({min: 1, max: 10}),
   created_at: fc.integer({min: 1000000000000, max: 9999999999999}),
-});
+}).map((row) => systemTableRow(TABLES.TABLES, row));
 
 /**
  * Generator for message group record data.
@@ -107,17 +107,17 @@ const messageGroupRecordArb = fc.record({
   group_id: fc.uuid(),
   group_name: fc.stringMatching(/^[a-z_][a-z0-9_]{0,20}$/),
   replica_count: fc.integer({min: 1, max: 5}),
-});
+}).map((row) => systemTableRow(TABLES.MESSAGE_GROUPS, row));
 
 /**
  * Generator for replica operation record data.
  */
 const replicaOperationRecordArb = fc.record({
   operation_id: fc.uuid(),
-  operation_type: fc.constantFrom('add', 'remove', 'move'),
+  type: fc.constantFrom('add', 'remove', 'move'),
   status: fc.constantFrom('pending', 'in_progress', 'completed', 'failed'),
   partition_id: fc.uuid(),
-});
+}).map((row) => systemTableRow(TABLES.REPLICA_OPERATIONS, row));
 
 /**
  * Generator for CDC event with correct record type for table.

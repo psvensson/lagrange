@@ -1,3 +1,5 @@
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
+
 const PRIORITY_RECOVERY_PUBLICATION_STATUS_ACK_PENDING = 'ACK_PENDING';
 const PRIORITY_RECOVERY_ELIGIBILITY_EVIDENCE_PUBLICATION_MEMBERSHIP =
   'publication_membership';
@@ -205,13 +207,13 @@ export function registerPriorityRecoverySnapshotStaleRowSupersessionCohortTests(
             ],
           },
         },
-        serviceRows: [{
+        serviceRows: [servicesRow({
           partition_id: PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
           status: PRIORITY_RECOVERY_STATUS_ACTIVE,
           raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
           node_id: PRIORITY_RECOVERY_NODE_ID_C,
           replica_id: PRIORITY_RECOVERY_SQL_WRITE_COMPLETED_REPLICA_ID,
-        }],
+        })],
       });
 
       const creatingSnapshot = decisionSnapshots.snapshots.find((entry) =>

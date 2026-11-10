@@ -20,6 +20,7 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   PressureGovernor,
   PRESSURE_WORK_CLASS,
@@ -481,13 +482,13 @@ test('ControlPlaneSystemTableGateway reconcileAuthoritativeCacheRows ' +
   'preserves missing cached rows during refresh-evidence reconciliation',
 async (t) => {
   const systemTableCache = new SystemTableCache();
-  const cachedServiceRow = {
+  const cachedServiceRow = servicesRow({
     service_id: 'svc-preserve',
     node_id: 'node-a',
     service_type: 'partition',
     status: 'active',
     address: 'node-a/partition/svc-preserve',
-  };
+  });
   systemTableCache.applySystemTableChange(
     TABLES.SERVICES,
     CDC_OPERATION.UPSERT,
@@ -531,7 +532,7 @@ test('ControlPlaneSystemTableGateway reconcileAuthoritativeCacheRows skips ' +
   'unchanged service rows by default',
 async (t) => {
   const systemTableCache = new SystemTableCache();
-  const cachedServiceRow = {
+  const cachedServiceRow = servicesRow({
     service_id: 'svc-stable',
     node_id: 'node-a',
     service_type: 'partition',
@@ -540,7 +541,7 @@ async (t) => {
     raft_role: 'leader',
     status: 'active',
     address: 'node-a/partition/nodes-p1-r1',
-  };
+  });
   systemTableCache.applySystemTableChange(
     TABLES.SERVICES,
     CDC_OPERATION.UPSERT,
@@ -550,10 +551,9 @@ async (t) => {
     nodeId: 'node-gateway',
     systemTableCache,
   });
-
   const result = await gateway.reconcileAuthoritativeCacheRows(
     TABLES.SERVICES,
-    [{
+    [servicesRow({
       address: 'node-a/partition/nodes-p1-r1',
       node_id: 'node-a',
       partition_id: 'nodes-p1',
@@ -562,7 +562,7 @@ async (t) => {
       service_id: 'svc-stable',
       service_type: 'partition',
       status: 'active',
-    }],
+    })],
     {
       cacheMutationTarget: systemTableCache,
       systemTableCache,

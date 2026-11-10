@@ -51,6 +51,7 @@ import {
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const DEFAULT_SEED_WS_ADDRESS =
   `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
@@ -234,7 +235,7 @@ test('NodeJoiningService - does not self-target move-replica heartbeats ' +
   const nodeService = NodeService.getInstance();
   nodeService.initialize({nodeId: 'joining-node-3'});
   const cache = nodeService.getSystemTableCache();
-  cache.applySystemTableChange('services', 'INSERT', {
+  cache.applySystemTableChange('services', 'INSERT', servicesRow({
     service_id: 'mg-1-r1',
     group_id: 'mg-1',
     node_id: 'joining-node-3',
@@ -242,7 +243,7 @@ test('NodeJoiningService - does not self-target move-replica heartbeats ' +
     address: 'joining-node-3/message-group/mg-1-r1',
     status: 'active',
     raft_role: 'leader',
-  });
+  }));
 
   t.equal(
     service.resolveControlPlaneTargetAddress({allowBootstrapHints: false}),

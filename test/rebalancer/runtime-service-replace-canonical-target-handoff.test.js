@@ -41,6 +41,7 @@ import {
 import {
   RUNTIME_SERVICE_REPLACE_CANONICAL_TARGET_HANDOFF_SCENARIO,
 } from './runtime-service-replace-canonical-target-handoff-scenario.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const ENTITY_ID = 'svc-runtime-replace-proof';
 const SOURCE_NODE_ID = 'node-runtime-source';
@@ -69,14 +70,14 @@ function buildNode(nodeId) {
 }
 
 function buildService(replicaId, nodeId) {
-  return {
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     service_type: EntityType.RUNTIME_SERVICE,
     node_id: nodeId,
     status: ReplicaStatus.ACTIVE,
     address: `${nodeId}/service/${replicaId}`,
-  };
+  });
 }
 
 function attachServiceDefinition(cache) {
@@ -353,7 +354,7 @@ test('runtime-service REPLACE keeps one canonical target through the next ' +
 
     const visibleAfterReplace = rebalancer.getCurrentReplicas();
     t.same(
-      visibleAfterReplace.map((row) => row.service_id).sort(),
+      visibleAfterReplace.map((replica) => replica.serviceId).sort(),
       [STABLE_REPLICA_ID, EXPECTED_TARGET_REPLICA_ID].sort(),
       'placement observes the stable and replacement replicas',
     );

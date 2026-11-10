@@ -1,5 +1,6 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
+import {decodeNodesRowView} from '../control-plane/nodes-row-decoder.js';
 import {selectCurrentEndpointRows} from
   '../control-plane/owners/endpoint-incarnation-currentness.js';
 
@@ -19,7 +20,6 @@ const {
   UNIFIED_REBALANCER_LITERAL,
   isNodeReadyLeaseExplicitlyCleared,
   normalizeNodeEndpointRow,
-  normalizeNodeRow,
   ownerNowMs,
   resolveReplicaOperationSemanticPhase,
 } = UNIFIED_REBALANCER_SHARED;
@@ -82,7 +82,7 @@ function isCriticalNodeReady(rebalancer, nodeRow, nodeId, context) {
   return startupLeaseClear || membershipReady;
 }
 function classifyCriticalNode(rebalancer, nodeRow, context) {
-  const {status, nodeId} = normalizeNodeRow(nodeRow);
+  const {status, nodeId} = decodeNodesRowView(nodeRow);
   if (!isWithinStartupAuthority(context, nodeId) || !status) {
     return null;
   }
@@ -173,7 +173,7 @@ function buildTransitionalNodeBlocker(rebalancer, evidence) {
 function collectKnownNodeIds(nodeRows, evidence) {
   const knownNodeIds = new Set();
   for (const nodeRow of nodeRows) {
-    const {nodeId} = normalizeNodeRow(nodeRow);
+    const {nodeId} = decodeNodesRowView(nodeRow);
     if (nodeId.length > 0 && isWithinStartupAuthority(evidence, nodeId)) {
       knownNodeIds.add(nodeId);
     }

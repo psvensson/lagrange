@@ -1,3 +1,5 @@
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
+
 function registerGatewayCausalTimeWitness({
   t,
   AdminServiceDiscovery,
@@ -60,10 +62,12 @@ function registerGatewayCausalTimeWitness({
       );
 
       const causallyNewerRow = {
-        endpoint_id: 'endpoint-after-leader-observation',
-        service_id: 'service-after-leader-observation',
-        node_id: 'node-newer',
-        updated_at: 200,
+        ...systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+          endpoint_id: 'endpoint-after-leader-observation',
+          service_id: 'service-after-leader-observation',
+          node_id: 'node-newer',
+          updated_at: 200,
+        }),
         updated_at_hlc: '200-0-owner',
       };
       cache.applySystemTableChange(

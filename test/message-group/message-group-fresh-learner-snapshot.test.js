@@ -17,6 +17,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {TABLES} from '../../src/constants/index.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../src/raft/raft-rs-peer-identity.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
@@ -205,11 +206,13 @@ test('fresh message-group learner installs a transferred raft-rs image and ' +
       service.raft.readStatus().role === 'leader')), true);
     const liveLeader = reopened.find((service) =>
       service.raft.readStatus().role === 'leader');
-    const row = {id: 'after-snapshot', address: '10.8.0.4:7000',
-      status: 'active'};
+    // A complete stored nodes row: the replicated command the cache applies
+    // (the cache refuses an insert its table could not hold).
+    const row = nodesRow({node_id: 'after-snapshot', node_address: '10.8.0.4:7000',
+      status: 'active'});
     await liveLeader.applyCDCEvent(TABLES.NODES, 'INSERT', row);
     assert.equal(await waitFor(() => learner.getWritableCache()
-      .get(TABLES.NODES, row.id)?.address === row.address), true,
+      .get(TABLES.NODES, row.node_id)?.node_address === row.node_address), true,
     'the fresh learner catches a real command after the snapshot boundary');
     await host.close(TARGET);
     const restarted = await host.open(TARGET, {isJoiningExistingGroup: true,
@@ -219,16 +222,17 @@ test('fresh message-group learner installs a transferred raft-rs image and ' +
     const durable = new Database(host.dbPath(TARGET), {readonly: true});
     try {
       assert.equal(RaftRsDurableStore.readCommittedEntriesIn(durable, GROUP)
-        .some((entry) => entry.command?.data?.id === row.id), true,
+        .some((entry) => entry.command?.data?.node_id === row.node_id), true,
       'restart retains the post-boundary command in the learner record');
     } finally {
       durable.close();
     }
-    const afterRestart = {id: 'after-restart', address: '10.8.0.5:7000',
-      status: 'active'};
+    const afterRestart = nodesRow({node_id: 'after-restart',
+      node_address: '10.8.0.5:7000', status: 'active'});
     await liveLeader.applyCDCEvent(TABLES.NODES, 'INSERT', afterRestart);
     assert.equal(await waitFor(() => restarted.getWritableCache()
-      .get(TABLES.NODES, afterRestart.id)?.address === afterRestart.address),
+      .get(TABLES.NODES, afterRestart.node_id)?.node_address ===
+        afterRestart.node_address),
     true, 'the restarted learner continues catching real commands');
   } finally {
     await host.dispose();

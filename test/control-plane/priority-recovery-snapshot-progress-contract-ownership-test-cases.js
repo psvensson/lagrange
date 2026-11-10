@@ -1,3 +1,5 @@
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
+
 export function registerPriorityRecoverySnapshotProgressContractOwnershipTests(context) {
   const {
     buildPriorityRecoveryDecisionSnapshot,
@@ -143,14 +145,14 @@ export function registerPriorityRecoverySnapshotProgressContractOwnershipTests(c
         created_at: PRIORITY_RECOVERY_STALE_OPERATION_PROGRESS_AT_MS,
         updated_at: PRIORITY_RECOVERY_STALE_OPERATION_PROGRESS_AT_MS,
       }],
-      serviceRows: [{
+      serviceRows: [servicesRow({
         partition_id: PUBLICATION_PRIORITY_PARTITION_ID,
         replica_id: PRIORITY_RECOVERY_REPLICA_ID_TARGET_SERVICE_PROGRESS,
         service_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
         status: PRIORITY_RECOVERY_STATUS_CREATING,
         node_id: PRIORITY_RECOVERY_NODE_ID_B,
         state_entered_at: PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_AT_MS,
-      }],
+      })],
     });
     const snapshot = decisionSnapshots.snapshots.find((entry) =>
       entry.partitionId === PUBLICATION_PRIORITY_PARTITION_ID &&
@@ -254,14 +256,14 @@ export function registerPriorityRecoverySnapshotProgressContractOwnershipTests(c
         created_at: PRIORITY_RECOVERY_STALE_OPERATION_PROGRESS_AT_MS,
         updated_at: PRIORITY_RECOVERY_STALE_OPERATION_PROGRESS_AT_MS,
       }],
-      serviceRows: [{
+      serviceRows: [servicesRow({
         partition_id: PUBLICATION_PRIORITY_PARTITION_ID,
         replica_id: PRIORITY_RECOVERY_REPLICA_ID_TARGET_SERVICE_PROGRESS,
         service_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
         status: PRIORITY_RECOVERY_STATUS_FAILED,
         node_id: PRIORITY_RECOVERY_NODE_ID_B,
         state_entered_at: PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_AT_MS,
-      }],
+      })],
     });
     const snapshot = decisionSnapshots.snapshots.find((entry) =>
       entry.partitionId === PUBLICATION_PRIORITY_PARTITION_ID &&

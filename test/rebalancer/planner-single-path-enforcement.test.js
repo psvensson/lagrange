@@ -8,6 +8,7 @@ import {
   TriggerType,
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -34,7 +35,7 @@ function createMockCache(nodes = [], services = [], replicaOperations = []) {
 
   const tableMaps = {
     nodes: new Map(normalizedNodes.map((row) => [row.node_id, row])),
-    services: new Map(services.map((row) => [row.service_id, row])),
+    services: new Map(services.map((row) => [row.service_id, servicesRow(row)])),
     replica_operations: new Map(replicaOperations.map((row) => [row.operation_id, row])),
   };
 

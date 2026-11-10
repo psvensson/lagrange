@@ -42,6 +42,7 @@ import {CDC_TABLE} from './participant-transaction-fixture.js';
 import {attachPartitionReleaseOwners} from '../partition/partition-release-fixture.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {servicesRow, systemTableRow} from './system-table-row-fixture.js';
 import {createTransactionPersistenceGateway} from
   './transaction-persistence-gateway.js';
 
@@ -146,7 +147,7 @@ function participantWriteOf(status) {
 }
 
 function routingRowsOf(group, members, partitionId, leaderReplicaId) {
-  return members.map(([replicaId, nodeId]) => ({
+  return members.map(([replicaId, nodeId]) => servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     partition_id: partitionId,
@@ -170,13 +171,16 @@ async function withTransactionGroup(name, body) {
   const partitionId = `${name}-p1`;
   const members = [1, 2, 3].map((index) =>
     [`${partitionId}-r${index}`, `${name}-node-${index}`]);
-  const tableRow = {table_id: GROUP_TABLE, table_name: GROUP_TABLE,
-    active_partition_version: 1, schema: JSON.stringify(GROUP_SCHEMA),
-    partition_key: 'id', primary_key: 'id'};
-  const partitionRow = {partition_id: partitionId, table_id: GROUP_TABLE,
+  // Complete stored rows (the cache refuses an insert omitting a NOT NULL
+  // column); the table's schema is its stored schema_definition.
+  const tableRow = systemTableRow(TABLES.TABLES, {table_id: GROUP_TABLE,
+    table_name: GROUP_TABLE, active_partition_version: 1,
+    schema_definition: JSON.stringify(GROUP_SCHEMA), partition_key: 'id'});
+  const partitionRow = systemTableRow(TABLES.PARTITIONS, {
+    partition_id: partitionId, table_id: GROUP_TABLE,
     table_name: GROUP_TABLE, partition_key_start: null,
     partition_key_end: null, replica_count: members.length,
-    leader_node_id: members[0][1]};
+    leader_node_id: members[0][1]});
   const group = await formAdmittedGroup({partitionId, members,
     tempPrefix: `tx1-coord-${name}-`, budgetMs: GROUP_BUDGET_MS,
     serviceOptions: {tableId: GROUP_TABLE, tableName: GROUP_TABLE,

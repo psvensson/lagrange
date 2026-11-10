@@ -24,6 +24,11 @@ import {
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -40,55 +45,55 @@ afterEach(() => {
 });
 
 /**
- * Generate random data for all system tables.
+ * Generate random authoritative rows for all system tables, each complete as
+ * the table stores it (the hydration source is a SELECT * of the table).
  */
 const systemTableDataArbitrary = fc.record({
   nodes: fc.array(
     fc.record({
       node_id: fc.uuid(),
-      address: fc.string({minLength: 5, maxLength: 30}),
+      node_address: fc.string({minLength: 5, maxLength: 30}),
       status: fc.constantFrom('active', 'inactive'),
-    }),
+    }).map((row) => nodesRow(row)),
     {minLength: 1, maxLength: 3},
   ),
   services: fc.array(
     fc.record({
       service_id: fc.uuid(),
-      name: fc.string({minLength: 1, maxLength: 20}),
       node_id: fc.uuid(),
-    }),
+    }).map((row) => servicesRow(row)),
     {minLength: 1, maxLength: 3},
   ),
   tables: fc.array(
     fc.record({
       table_id: fc.uuid(),
       table_name: fc.string({minLength: 1, maxLength: 20}),
-      primary_key: fc.string({minLength: 1, maxLength: 10}),
-    }),
+      partition_key: fc.string({minLength: 1, maxLength: 10}),
+    }).map((row) => systemTableRow('tables', row)),
     {minLength: 1, maxLength: 3},
   ),
   partitions: fc.array(
     fc.record({
       partition_id: fc.uuid(),
       table_id: fc.uuid(),
-      key_start: fc.string({minLength: 0, maxLength: 10}),
-      key_end: fc.string({minLength: 0, maxLength: 10}),
-    }),
+      partition_key_start: fc.string({minLength: 0, maxLength: 10}),
+      partition_key_end: fc.string({minLength: 0, maxLength: 10}),
+    }).map((row) => systemTableRow('partitions', row)),
     {minLength: 1, maxLength: 3},
   ),
   message_groups: fc.array(
     fc.record({
       group_id: fc.uuid(),
-      name: fc.string({minLength: 1, maxLength: 20}),
-    }),
+      group_name: fc.string({minLength: 1, maxLength: 20}),
+    }).map((row) => systemTableRow('message_groups', row)),
     {minLength: 1, maxLength: 3},
   ),
   indices: fc.array(
     fc.record({
       index_id: fc.uuid(),
       table_id: fc.uuid(),
-      column_name: fc.string({minLength: 1, maxLength: 20}),
-    }),
+      column_names: fc.string({minLength: 1, maxLength: 20}),
+    }).map((row) => systemTableRow('indices', row)),
     {minLength: 1, maxLength: 3},
   ),
 });

@@ -37,6 +37,7 @@ import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.
 import {
   OperationType,
   REPLICA_OPERATION_SEMANTIC_PHASE,
+  ReplicaStatus,
   TERMINAL_STATUSES,
 } from '../../src/rebalancer/replica-status.js';
 import {
@@ -55,6 +56,7 @@ import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
 import {createTestCoordinator} from './test-helpers.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {registerReplicaOperationRepositoryDeferredVisibilityTests} from './replica-operation-repository-deferred-visibility-test-cases.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 import {registerReplicaOperationRepositoryIncompleteVisibilityTests} from './replica-operation-repository-incomplete-visibility-test-cases.js';
 import {registerReplicaOperationRepositoryTailTests} from './replica-operation-repository-tail-test-cases.js';
 
@@ -167,14 +169,14 @@ function createTestRepository(overrides = {}) {
 }
 
 function makeRow(overrides = {}) {
-  return {
+  return replicaOperationsRow({
     operation_id: TEST_OPERATION_ID,
     type: OperationType.ADD,
     partition_id: TEST_PARTITION_ID,
     replica_id: TEST_REPLICA_ID,
     source_node_id: TEST_NODE_ID,
     target_node_id: TEST_TARGET_NODE_ID,
-    status: 'in_progress',
+    status: ReplicaStatus.CREATING,
     workflow_step: WORKFLOW_STEP.CREATING,
     created_at: Date.now(),
     updated_at: Date.now(),
@@ -184,7 +186,7 @@ function makeRow(overrides = {}) {
     entity_type: TEST_ENTITY_TYPE,
     entity_id: TEST_PARTITION_ID,
     ...overrides,
-  };
+  });
 }
 
 function makePriorityOperation(overrides = {}) {
@@ -195,7 +197,7 @@ function makePriorityOperation(overrides = {}) {
     replicaId: TEST_PRIORITY_REPLICA_ID,
     sourceNodeId: TEST_NODE_ID,
     targetNodeId: TEST_TARGET_NODE_ID,
-    status: 'in_progress',
+    status: ReplicaStatus.PENDING,
     workflowStep: WORKFLOW_STEP.SENDING,
     createdAt: 1,
     updatedAt: 2,
@@ -316,32 +318,26 @@ test('rowToOperation rejects rows without canonical entity identity', async (t) 
 
   t.throws(
     () => repo.rowToOperation(row),
-    /Unsupported rebalancer entity type/,
-    'repository replay cannot invent partition semantics for an untyped row',
+    /null_in_not_null_column at entity_type/,
+    'the row decoder refuses the impossible stored row before replay can ' +
+    'invent partition semantics for it',
   );
 });
 
-test('rowToOperation recovers from malformed steps_history', async (t) => {
-  const errors = [];
+test('rowToOperation refuses malformed steps_history', async (t) => {
   const repo = createTestRepository({
     controlPlaneSystemTableGateway: {
       readRows: async () => ({success: true, rows: []}),
       executeQuery: async () => ({success: true}),
     },
   });
-  repo.logger = {
-    info() {},
-    warn() {},
-    debug() {},
-    error(...args) {
-      errors.push(args);
-    },
-  };
   const row = makeRow({steps_history: 'not-json'});
-  const op = repo.rowToOperation(row);
 
-  t.same(op.stepsHistory, []);
-  t.ok(errors.length > 0, 'should log error for malformed JSON');
+  t.throws(
+    () => repo.rowToOperation(row),
+    /malformed_json at steps_history/,
+    'the row decoder refuses the row instead of replaying an empty history',
+  );
 });
 
 registerReplicaOperationRepositoryDeferredVisibilityTests({
@@ -368,7 +364,6 @@ registerReplicaOperationRepositoryDeferredVisibilityTests({
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   PRIORITY_RECOVERY_COMPLETION_STATE,
   OperationType,
-  TERMINAL_STATUSES,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
 });
@@ -890,7 +885,7 @@ test('CL-017(b): zero-row update with missing authoritative row re-inserts the o
   });
   const operation = repo.rowToOperation(
     makeRow({
-      status: 'in_progress',
+      status: ReplicaStatus.PENDING,
       workflow_step: WORKFLOW_STEP.SENDING,
     }),
   );
@@ -963,7 +958,7 @@ test('CL-017(b): zero-row update with VISIBLE authoritative row does not re-inse
         success: true,
         rows: [
           makeRow({
-            status: 'in_progress',
+            status: ReplicaStatus.PENDING,
             workflow_step: WORKFLOW_STEP.SENDING,
           }),
         ],
@@ -972,7 +967,7 @@ test('CL-017(b): zero-row update with VISIBLE authoritative row does not re-inse
   });
   const operation = repo.rowToOperation(
     makeRow({
-      status: 'in_progress',
+      status: ReplicaStatus.PENDING,
       workflow_step: WORKFLOW_STEP.SENDING,
     }),
   );

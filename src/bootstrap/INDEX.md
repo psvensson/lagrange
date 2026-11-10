@@ -57,7 +57,7 @@ documentClass: generated
 - [join-readiness-evaluation-tail-methods.js](join-readiness-evaluation-tail-methods.js) - Resolve node IDs required for join-readiness diagnostics. (importers: one)
 - [join-readiness-evaluator-tail-methods.js](join-readiness-evaluator-tail-methods.js) - No leading comment; first export: createJoinReadinessEvaluatorTailMethods. (importers: one)
 - [join-readiness-evaluator.js](join-readiness-evaluator.js) - Join Readiness Evaluator - evaluates whether a joining node has converged to a ready state by inspecting topology,... (importers: many)
-- [join-readiness-mesh-connectivity-methods.js](join-readiness-mesh-connectivity-methods.js) - Resolve one node id from a mesh-connectivity row shape. (importers: one)
+- [join-readiness-mesh-connectivity-methods.js](join-readiness-mesh-connectivity-methods.js) - Resolve one node id from a stored nodes row. (importers: one)
 - [join-readiness-replica-operation-methods.js](join-readiness-replica-operation-methods.js) - No leading comment; first export: createJoinReadinessReplicaOperationMethods. (importers: one)
 - [join-readiness-snapshot-methods.js](join-readiness-snapshot-methods.js) - Determine the table scope for canonical join schema checks. (importers: one)
 - [join-schema-version-resolver.js](join-schema-version-resolver.js) - Join Schema Version Resolver - pure helpers for schema-version comparison, extraction, and resolution during node join. (importers: few)

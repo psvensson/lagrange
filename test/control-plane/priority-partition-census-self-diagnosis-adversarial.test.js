@@ -13,6 +13,7 @@ import {
   normalizeNodeIdList,
   normalizePositiveInteger,
 } from '../../src/control-plane/membership-publication-row-helpers.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION_ID =
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS];
@@ -22,8 +23,10 @@ const SUMMARY_HELPERS = Object.freeze({
   normalizePositiveInteger,
 });
 
+// The census reads projected replicas (src/rebalancer/projected-replica.js),
+// what its production callers hand it: one per production-shaped services row.
 function createServiceRow(nodeId, index, raftRole = 'follower') {
-  return {
+  return projectedReplica({
     service_id: `${PARTITION_ID}-r${index}`,
     node_id: nodeId,
     partition_id: PARTITION_ID,
@@ -31,7 +34,7 @@ function createServiceRow(nodeId, index, raftRole = 'follower') {
     status: SERVICE_STATUS.ACTIVE,
     raft_role: raftRole,
     address: `${nodeId}/partition/${PARTITION_ID}/${index}`,
-  };
+  });
 }
 
 function createDerivedOptions(overrides = {}) {
@@ -265,6 +268,9 @@ test('revoked proxies fail closed at every canonical census boundary', (t) => {
 test('captured Array classification keeps partition rows visible', (t) => {
   const originalIsArray = Object.getOwnPropertyDescriptor(Array, 'isArray');
   let summary;
+  // The fixture is built before the ambient mutation: only the census
+  // runs under it.
+  const derivedOptions = createDerivedOptions();
   try {
     Reflect.defineProperty(Array, 'isArray', {
       value() {
@@ -274,7 +280,7 @@ test('captured Array classification keeps partition rows visible', (t) => {
       writable: true,
     });
     summary = buildDerivedPriorityPartitionSummary(
-      createDerivedOptions(),
+      derivedOptions,
       SUMMARY_HELPERS,
     );
   } finally {
@@ -291,6 +297,9 @@ test('captured Array classification keeps partition rows visible', (t) => {
 test('captured Map construction keeps partition rows visible', (t) => {
   const originalMap = Object.getOwnPropertyDescriptor(globalThis, 'Map');
   let summary;
+  // The fixture is built before the ambient mutation: only the census
+  // runs under it.
+  const derivedOptions = createDerivedOptions();
   try {
     Reflect.defineProperty(globalThis, 'Map', {
       value: class AmbientMap {},
@@ -298,7 +307,7 @@ test('captured Map construction keeps partition rows visible', (t) => {
       writable: true,
     });
     summary = buildDerivedPriorityPartitionSummary(
-      createDerivedOptions(),
+      derivedOptions,
       SUMMARY_HELPERS,
     );
   } finally {
@@ -314,6 +323,9 @@ test('captured Map construction keeps partition rows visible', (t) => {
 test('captured Set insertion keeps the census stable after ambient mutation', (t) => {
   const originalAdd = Object.getOwnPropertyDescriptor(Set.prototype, 'add');
   let summary;
+  // The fixture is built before the ambient mutation: only the census
+  // runs under it.
+  const derivedOptions = createDerivedOptions();
   try {
     Reflect.defineProperty(Set.prototype, 'add', {
       value() {
@@ -323,7 +335,7 @@ test('captured Set insertion keeps the census stable after ambient mutation', (t
       writable: true,
     });
     summary = buildDerivedPriorityPartitionSummary(
-      createDerivedOptions(),
+      derivedOptions,
       SUMMARY_HELPERS,
     );
   } finally {
@@ -338,6 +350,9 @@ test('captured Map lookup keeps partition classification stable', (t) => {
   const originalGet = Object.getOwnPropertyDescriptor(Map.prototype, 'get');
   const originalHas = Object.getOwnPropertyDescriptor(Map.prototype, 'has');
   let summary;
+  // The fixture is built before the ambient mutation: only the census
+  // runs under it.
+  const derivedOptions = createDerivedOptions();
   try {
     Reflect.defineProperty(Map.prototype, 'get', {
       value() {
@@ -354,7 +369,7 @@ test('captured Map lookup keeps partition classification stable', (t) => {
       writable: true,
     });
     summary = buildDerivedPriorityPartitionSummary(
-      createDerivedOptions(),
+      derivedOptions,
       SUMMARY_HELPERS,
     );
   } finally {
@@ -378,6 +393,9 @@ test('captured collection iterator steps keep every partition visible', (t) => {
     'next',
   );
   let summary;
+  // The fixture is built before the ambient mutation: only the census
+  // runs under it.
+  const derivedOptions = createDerivedOptions();
   try {
     Reflect.defineProperty(mapIteratorPrototype, 'next', {
       value() {
@@ -394,7 +412,7 @@ test('captured collection iterator steps keep every partition visible', (t) => {
       writable: true,
     });
     summary = buildDerivedPriorityPartitionSummary(
-      createDerivedOptions(),
+      derivedOptions,
       SUMMARY_HELPERS,
     );
   } finally {
@@ -548,6 +566,9 @@ test('captured string normalization keeps owner classification stable', (t) => {
     'toLowerCase',
   );
   let summary;
+  // The fixture is built before the ambient mutation: only the census
+  // runs under it.
+  const derivedOptions = createDerivedOptions();
   try {
     Reflect.defineProperty(String.prototype, 'trim', {
       value() {
@@ -564,7 +585,7 @@ test('captured string normalization keeps owner classification stable', (t) => {
       writable: true,
     });
     summary = buildDerivedPriorityPartitionSummary(
-      createDerivedOptions(),
+      derivedOptions,
       SUMMARY_HELPERS,
     );
   } finally {

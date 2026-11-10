@@ -1,3 +1,5 @@
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
+
 export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTests(context) {
   const {
     buildPriorityRecoveryDecisionSnapshots,
@@ -435,12 +437,12 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
             }],
           },
         },
-        serviceRows: [{
+        serviceRows: [servicesRow({
           partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
           status: PRIORITY_RECOVERY_STATUS_ACTIVE,
           raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
           node_id: PRIORITY_RECOVERY_NODE_ID_B,
-        }],
+        })],
       });
 
       const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
@@ -544,14 +546,14 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
             ],
           },
         },
-        serviceRows: [{
+        serviceRows: [servicesRow({
           partition_id: 'control_plane_publications-p1',
           replica_id: 'control_plane_publications-p1-r4',
           service_type: 'partition',
           status: 'active',
           raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
           node_id: 'node-b',
-        }],
+        })],
       });
 
       const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
@@ -674,7 +676,7 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
             ],
           },
         },
-        serviceRows: [{
+        serviceRows: [servicesRow({
           partition_id: PUBLICATION_PRIORITY_PARTITION_ID,
           replica_id: PRIORITY_RECOVERY_PUBLICATION_REPLACEMENT_REPLICA_ID,
           service_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
@@ -682,7 +684,7 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
           raft_role: PRIORITY_RECOVERY_RAFT_ROLE_FOLLOWER,
           node_id: PRIORITY_RECOVERY_NODE_ID_B,
           address: PRIORITY_RECOVERY_PUBLICATION_REPLACEMENT_ADDRESS,
-        }],
+        })],
       });
 
       const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>

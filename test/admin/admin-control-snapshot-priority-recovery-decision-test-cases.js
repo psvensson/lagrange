@@ -1,3 +1,5 @@
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
+
 export function registerAdminControlSnapshotPriorityRecoveryDecisionTests({
   test,
   AdminControlSnapshot,
@@ -93,12 +95,13 @@ export function registerAdminControlSnapshotPriorityRecoveryDecisionTests({
             }],
           },
         },
-        serviceRows: [{
+        serviceRows: [servicesRow({
+          service_id: 'users-p1-node-b',
           partition_id: 'users-p1',
           status: 'active',
           raft_role: 'learner',
           node_id: 'node-b',
-        }],
+        })],
       });
 
       t.equal(
@@ -562,12 +565,15 @@ export function registerAdminControlSnapshotPriorityRecoveryDecisionTests({
             }],
           },
         },
-        serviceRows: [{
+        serviceRows: [servicesRow({
+          service_id: 'control_plane_publications-p1-node-b',
           partition_id: 'control_plane_publications-p1',
           status: 'active',
-          raft_role: 'voter',
+          // services.raft_role is a closed domain (RAFT_ROLE); a voter is a
+          // follower or a leader, never the literal 'voter'.
+          raft_role: 'follower',
           node_id: 'node-b',
-        }],
+        })],
       });
 
       t.same(

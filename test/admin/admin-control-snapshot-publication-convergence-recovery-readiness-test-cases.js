@@ -8,6 +8,7 @@ import {
   buildCanonicalPublicationRecoveryEvidence,
 } from '../../src/control-plane/publication-recovery-evidence.js';
 import * as ACTIVE_GATE_SNAPSHOT_TEST_STATE from './admin-control-snapshot-active-gate-fixture-state.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 
 test('AdminControlSnapshot maps clean priority recovery readiness debt to publication reconcile',
@@ -101,14 +102,14 @@ test('AdminControlSnapshot widens owner truth from missing published recovery no
     });
 
     const activeNodeViews = snapshot.resolveControlSnapshotNodeViews(
-      [{
+      [nodesRow({
         node_id: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
         status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
         connection_state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
         ready_lease_expires_at:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
             ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
-      }],
+      })],
       [],
       [],
       {
@@ -258,14 +259,14 @@ test('AdminControlSnapshot projects recovery-eligible readiness into diagnostic 
     });
 
     const activeNodeViews = snapshot.resolveControlSnapshotNodeViews(
-      [{
+      [nodesRow({
         node_id: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
         status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
         connection_state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
         ready_lease_expires_at:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
             ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
-      }],
+      })],
       [],
       [],
       {
@@ -315,38 +316,38 @@ test('AdminControlSnapshot projects connected active heartbeat rows when readine
     });
     const activeNodeViews = snapshot.resolveControlSnapshotNodeViews(
       [
-        {
+        nodesRow({
           node_id: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
           status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
           connection_state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
           ready_lease_expires_at:
             ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
               ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
-        },
-        {
+        }),
+        nodesRow({
           node_id: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
           status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
           connection_state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_CONNECTED_STATE,
           last_heartbeat:
             ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NOW_MS -
               ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_RECENT_HEARTBEAT_DELTA_MS,
-        },
-        {
+        }),
+        nodesRow({
           node_id: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[1],
           status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
           connection_state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_CONNECTED_STATE,
           last_heartbeat:
             ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NOW_MS -
               ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_RECENT_HEARTBEAT_DELTA_MS,
-        },
-        {
+        }),
+        nodesRow({
           node_id: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[2],
           status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
           connection_state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_CONNECTED_STATE,
           last_heartbeat:
             ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NOW_MS -
               ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_STALE_HEARTBEAT_DELTA_MS,
-        },
+        }),
       ],
       [],
       [{

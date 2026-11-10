@@ -18,6 +18,7 @@ import {ReplicaOperationField} from
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   createMockCache,
   createMockControlPlaneSystemTableGateway,
@@ -53,7 +54,7 @@ function createNoopSqlQueryEngine(onInsert) {
       if (typeof sql === 'string' &&
           sql.includes(INSERT_OPERATION_SQL_FRAGMENT)) {
         onInsert();
-        operations.set(params[0], {
+        operations.set(params[0], replicaOperationsRow({
           operation_id: params[0],
           type: params[1],
           partition_id: params[2],
@@ -71,7 +72,7 @@ function createNoopSqlQueryEngine(onInsert) {
           entity_type: params[14],
           entity_id: params[15],
           membership_publication_epoch: params[16],
-        });
+        }));
       }
       if (typeof sql === 'string' &&
           sql.includes('FROM replica_operations') &&
@@ -174,6 +175,7 @@ function buildEpochBoundAddOperation(epoch, overrides = {}) {
     operationId: TEST_OPERATION_ID,
     type: OperationType.ADD,
     partitionId: TEST_PARTITION_ID,
+    sourceNodeId: TEST_NODE_ID,
     targetNodeId: TEST_TARGET_NODE_ID,
     entityType: SERVICE_TYPE.PARTITION,
     entityId: TEST_PARTITION_ID,

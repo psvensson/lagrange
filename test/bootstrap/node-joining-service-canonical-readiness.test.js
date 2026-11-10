@@ -51,6 +51,7 @@ import {
 import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {nodesRow, systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 
 function attachStartupAuthority(service, canonicalStartupNodeIds) {
@@ -128,16 +129,16 @@ test('NodeJoiningService - canonical readiness snapshot tracks active required n
     ]);
     const cache = new SystemTableCache();
 
-    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: 'seed-node',
       [COLUMN.STATUS]: 'active',
-    });
-    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+    }));
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: 'joining-node-required-node-ids',
       [COLUMN.STATUS]: 'active',
-    });
+    }));
 
     const snapshot = service.joinReadinessEvaluator
       .buildCanonicalJoinReadinessSnapshot({
@@ -180,16 +181,16 @@ test('NodeJoiningService - canonical readiness snapshot does not use partial rea
     };
     const cache = new SystemTableCache();
 
-    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: PARTIAL_READY_NODE_ID,
       [COLUMN.STATUS]: 'active',
-    });
-    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+    }));
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: JOINING_NODE_ID,
       [COLUMN.STATUS]: 'active',
-    });
+    }));
 
     const snapshot = service.joinReadinessEvaluator
       .buildCanonicalJoinReadinessSnapshot({
@@ -605,26 +606,27 @@ test('NodeJoiningService - canonical join readiness repairs endpoint visibility'
     };
     service.backfillPropagatedCacheTablesFromAuthoritativeState = async (tableNames) => {
       repairCalls.push(Array.isArray(tableNames) ? [...tableNames] : []);
-      cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT, {
-        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-        [COLUMN.ENDPOINT_ID]: 'ep-joining-node-join-gate-repair-ws',
-        [COLUMN.NODE_ID]: 'joining-node-join-gate-repair',
-        [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
-        [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
-        [COLUMN.UPDATED_AT]: 3,
-      });
+      cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT,
+        systemTableRow(TABLES.NODE_ENDPOINTS, {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+          [COLUMN.ENDPOINT_ID]: 'ep-joining-node-join-gate-repair-ws',
+          [COLUMN.NODE_ID]: 'joining-node-join-gate-repair',
+          [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
+          [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+          [COLUMN.UPDATED_AT]: 3,
+        }));
     };
 
-    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: 'seed-node',
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-    });
-    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+    }));
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: 'joining-node-join-gate-repair',
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-    });
+    }));
     // The joining node's own websocket endpoint row was missed by CDC; only
     // the authoritative repair backfill restores it.
 
@@ -662,16 +664,16 @@ test('NodeJoiningService - canonical join readiness snapshot waits for endpoint 
     service.getMissingSystemServiceLeaders = () => ({});
     service.getBlockingSystemServiceLeaders = (missing) => missing;
 
-    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: 'seed-node',
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-    });
-    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+    }));
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: 'joining-node-endpoint-gate',
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-    });
+    }));
 
     let snapshot = service.joinReadinessEvaluator
       .buildCanonicalJoinReadinessSnapshot({systemTableCache: cache});
@@ -689,13 +691,14 @@ test('NodeJoiningService - canonical join readiness snapshot waits for endpoint 
 
     // A healthy sys-postgres-wire endpoint is an optional runtime service and
     // never substitutes for the bootstrap transport endpoint.
-    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, CDC_OPERATION.UPSERT, {
-      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-      [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-joining-node-endpoint-gate',
-      [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
-      [COLUMN.NODE_ID]: 'joining-node-endpoint-gate',
-      health_status: 'healthy',
-    });
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, CDC_OPERATION.UPSERT,
+      systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+        [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-joining-node-endpoint-gate',
+        [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+        [COLUMN.NODE_ID]: 'joining-node-endpoint-gate',
+        health_status: 'healthy',
+      }));
 
     snapshot = service.joinReadinessEvaluator
       .buildCanonicalJoinReadinessSnapshot({systemTableCache: cache});
@@ -710,13 +713,14 @@ test('NodeJoiningService - canonical join readiness snapshot waits for endpoint 
       'a postgres-wire endpoint must not satisfy bootstrap transport visibility',
     );
 
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT, {
-      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-      [COLUMN.ENDPOINT_ID]: 'ep-joining-node-endpoint-gate-ws',
-      [COLUMN.NODE_ID]: 'joining-node-endpoint-gate',
-      [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
-      [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
-    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT,
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+        [COLUMN.ENDPOINT_ID]: 'ep-joining-node-endpoint-gate-ws',
+        [COLUMN.NODE_ID]: 'joining-node-endpoint-gate',
+        [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
+        [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+      }));
 
     snapshot = service.joinReadinessEvaluator
       .buildCanonicalJoinReadinessSnapshot({systemTableCache: cache});
@@ -747,32 +751,34 @@ test('NodeJoiningService - authoritative cache backfill closes the CDC blind win
       service.getMissingSystemServiceLeaders = () => ({});
       service.getBlockingSystemServiceLeaders = (missing) => missing;
 
-      cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, nodesRow({
         boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         [COLUMN.NODE_ID]: 'seed-node',
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-      });
-      cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      }));
+      cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, nodesRow({
         boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         [COLUMN.NODE_ID]: 'joining-node-backfill-gate',
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-      });
-      cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT, {
-        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-        [COLUMN.ENDPOINT_ID]: 'ep-seed-node-ws',
-        [COLUMN.NODE_ID]: 'seed-node',
-        [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
-        [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
-        [COLUMN.UPDATED_AT]: 2,
-      });
-      cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, CDC_OPERATION.UPSERT, {
-        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-        [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-seed-node',
-        [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
-        [COLUMN.NODE_ID]: 'seed-node',
-        health_status: 'healthy',
-        [COLUMN.UPDATED_AT]: 2,
-      });
+      }));
+      cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT,
+        systemTableRow(TABLES.NODE_ENDPOINTS, {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+          [COLUMN.ENDPOINT_ID]: 'ep-seed-node-ws',
+          [COLUMN.NODE_ID]: 'seed-node',
+          [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
+          [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+          [COLUMN.UPDATED_AT]: 2,
+        }));
+      cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, CDC_OPERATION.UPSERT,
+        systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+          [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-seed-node',
+          [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+          [COLUMN.NODE_ID]: 'seed-node',
+          health_status: 'healthy',
+          [COLUMN.UPDATED_AT]: 2,
+        }));
 
       service.cdcIntegrationService = {
         sqlQueryEngine: {
@@ -790,14 +796,14 @@ test('NodeJoiningService - authoritative cache backfill closes the CDC blind win
                 success: true,
                 rows: [
                   ...cache.getAll(TABLES.NODE_ENDPOINTS),
-                  {
+                  systemTableRow(TABLES.NODE_ENDPOINTS, {
                     boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
                     [COLUMN.ENDPOINT_ID]: 'ep-joining-node-backfill-gate-ws',
                     [COLUMN.NODE_ID]: 'joining-node-backfill-gate',
                     [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
                     [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
                     [COLUMN.UPDATED_AT]: 3,
-                  },
+                  }),
                 ],
               };
             case TABLES.SERVICE_ENDPOINTS:
@@ -805,14 +811,14 @@ test('NodeJoiningService - authoritative cache backfill closes the CDC blind win
                 success: true,
                 rows: [
                   ...cache.getAll(TABLES.SERVICE_ENDPOINTS),
-                  {
+                  systemTableRow(TABLES.SERVICE_ENDPOINTS, {
                     boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
                     [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-joining-node-backfill-gate',
                     [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
                     [COLUMN.NODE_ID]: 'joining-node-backfill-gate',
                     health_status: 'healthy',
                     [COLUMN.UPDATED_AT]: 3,
-                  },
+                  }),
                 ],
               };
             default:
@@ -873,33 +879,33 @@ test('NodeJoiningService - authoritative backfill merges divergent replica snaps
       });
 
       const incompleteSeedRows = [
-        {
+        systemTableRow(TABLES.SERVICE_ENDPOINTS, {
           [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-joining-node-replica-merge',
           [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
           [COLUMN.NODE_ID]: 'joining-node-replica-merge',
           health_status: 'healthy',
           [COLUMN.UPDATED_AT]: 10,
-        },
+        }),
       ];
       const replicaRowsA = [
         ...incompleteSeedRows,
-        {
+        systemTableRow(TABLES.SERVICE_ENDPOINTS, {
           [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-seed-node',
           [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
           [COLUMN.NODE_ID]: 'seed-node',
           health_status: 'healthy',
           [COLUMN.UPDATED_AT]: 11,
-        },
+        }),
       ];
       const replicaRowsB = [
         ...incompleteSeedRows,
-        {
+        systemTableRow(TABLES.SERVICE_ENDPOINTS, {
           [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-peer-node',
           [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
           [COLUMN.NODE_ID]: 'peer-node',
           health_status: 'healthy',
           [COLUMN.UPDATED_AT]: 12,
-        },
+        }),
       ];
 
       service.messageRouter = {
@@ -1091,20 +1097,20 @@ test(
       });
 
       const bootstrapSnapshotRows = [
-        {
+        systemTableRow(TABLES.SERVICE_ENDPOINTS, {
           [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-seed-node',
           [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
           [COLUMN.NODE_ID]: 'seed-node',
           health_status: 'healthy',
           [COLUMN.UPDATED_AT]: 10,
-        },
-        {
+        }),
+        systemTableRow(TABLES.SERVICE_ENDPOINTS, {
           [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-peer-node',
           [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
           [COLUMN.NODE_ID]: 'peer-node',
           health_status: 'healthy',
           [COLUMN.UPDATED_AT]: 20,
-        },
+        }),
       ];
       service.bootstrapResponse = {
         systemTableSnapshots: {
@@ -1171,13 +1177,13 @@ test(
       service.bootstrapResponse = {
         systemTableSnapshots: {
           [TABLES.SERVICE_ENDPOINTS]: [
-            {
+            systemTableRow(TABLES.SERVICE_ENDPOINTS, {
               [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-seed-node',
               [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
               [COLUMN.NODE_ID]: 'seed-node',
               health_status: 'healthy',
               [COLUMN.UPDATED_AT]: 10,
-            },
+            }),
           ],
         },
       };

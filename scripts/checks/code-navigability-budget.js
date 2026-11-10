@@ -76,8 +76,15 @@ const BUDGET = Object.freeze({
   prototype_copy_bags_partition_service: 0,
   inheritance_depth_over_two: 65,
   inheritance_depth_over_two_readiness: 0,
-  row_field_alias_reads: 745,
+  row_field_alias_reads: 741,
   formation_system_tables_without_decoder: 0,
+  system_table_raw_column_reads_outside_decoder: 1008,
+  system_table_raw_column_reads_outside_decoder_rebalancer: 0,
+  system_table_raw_column_reads_outside_decoder_control_plane: 0,
+  system_table_raw_column_reads_outside_decoder_node: 0,
+  system_table_raw_column_reads_outside_decoder_admin: 0,
+  system_table_raw_column_reads_outside_decoder_query: 0,
+  system_table_raw_column_reads_outside_decoder_partition: 0,
   state_read_defaults: 0,
   value_or_promise_then_checks: 0,
   source_directories_over_cap: 0,
@@ -100,6 +107,7 @@ const CAP_ROWS = Object.freeze(new Set([
   'prototype_copy_bags', 'inheritance_depth_over_two', 'row_field_alias_reads',
   'two_source_fallback_reads', 'typeof_dual_paths', 'catch_returns_default',
   'reexport_only_modules', 'legacy_term_identifiers',
+  'system_table_raw_column_reads_outside_decoder',
 ]));
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -122,6 +130,20 @@ const ADMISSION_PATH_FILES = Object.freeze([
   /^src\/partition\/partition-replica-admission\.js$/u,
 ]);
 const PARTITION_SERVICE_FILES = Object.freeze([/^src\/partition\/partition-service[^/]*\.js$/u]);
+// The directory groups of system_table_raw_column_reads_outside_decoder,
+// one system-table-decoded-reads-<group> quest each; every src directory
+// with a raw read belongs to exactly one group (witnessed).
+const RAW_COLUMN_READ_ROW = 'system_table_raw_column_reads_outside_decoder';
+const RAW_COLUMN_READ_GROUPS = Object.freeze({
+  rebalancer: Object.freeze([/^src\/rebalancer\//u]),
+  control_plane: Object.freeze([/^src\/control-plane\//u, /^src\/bootstrap\//u]),
+  node: Object.freeze([/^src\/node\//u]),
+  admin: Object.freeze([/^src\/admin\//u, /^src\/cli\//u, /^src\/cdc\//u,
+    /^src\/cache\//u]),
+  query: Object.freeze([/^src\/query\//u, /^src\/topology\//u,
+    /^src\/message-group\//u, /^src\/wasm-service\//u, /^src\/runtime\//u]),
+  partition: Object.freeze([/^src\/partition\//u]),
+});
 const READINESS_FILES = Object.freeze([
   /^src\/control-plane\/control-plane-readiness-[^/]*\.js$/u,
 ]);
@@ -444,6 +466,16 @@ function scopedRow(row, patterns) {
 // source root), or neither.
 const READS = Object.freeze({SITES: 'sites', SOURCE_TREE: 'source-tree', NONE: 'none'});
 
+// One scoped row per raw-column-read group: `<row>_<group>`.
+function rawColumnReadGroupMeasures() {
+  const measures = {};
+  for (const [group, patterns] of Object.entries(RAW_COLUMN_READ_GROUPS)) {
+    measures[`${RAW_COLUMN_READ_ROW}_${group}`] =
+      [READS.SITES, scopedRow(RAW_COLUMN_READ_ROW, patterns)];
+  }
+  return measures;
+}
+
 // name -> [what it reads, measure]
 const MEASURES = Object.freeze({
   navigability_patterns_without_ratchet: [READS.NONE, patternsWithoutRatchet],
@@ -456,6 +488,7 @@ const MEASURES = Object.freeze({
   inheritance_depth_over_two_readiness:
     [READS.SITES, scopedRow('inheritance_depth_over_two', READINESS_FILES)],
   formation_system_tables_without_decoder: [READS.NONE, systemTablesWithoutDecoder],
+  ...rawColumnReadGroupMeasures(),
   source_directories_over_cap: [READS.SOURCE_TREE, directoriesOverCap],
   stale_owner_indexes: [READS.SOURCE_TREE, staleOwnerIndexes],
   failure_bundle_log_windows_without_coverage: [READS.NONE, logWindowsWithoutCoverage],

@@ -10,6 +10,11 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {TABLES} from '../../src/constants/index.js';
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 ConfigurationManager.getInstance().initialize();
 LoggingService.getInstance().initialize({level: 'error'});
@@ -30,73 +35,85 @@ function createDiscoveryCache() {
   const cache = new SystemTableCache();
   const updatedAt = Date.now();
 
-  // Each node is registered at its boot incarnation and publishes its
-  // postgres-wire endpoint at that same incarnation.
+  // Production-shaped stored rows (the cache refuses an insert the table
+  // could not hold). Each node is registered at its boot incarnation and
+  // publishes its postgres-wire endpoint at that same incarnation.
   const nodes = [['node-1', 8080, '10.0.0.1'], ['node-2', 8081, '10.0.0.2']];
   for (const [nodeId, port] of nodes) {
-    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-      id: nodeId,
       node_id: nodeId,
-      address: `localhost:${port}`,
+      node_address: `localhost:${port}`,
       status: 'active',
-    });
+    }));
   }
-  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
-    service_id: 'sys-postgres-wire',
-    service_name: 'sys-postgres-wire',
-    replica_count: 2,
-    runtime_kind: 'native_js',
-  });
-  for (const [nodeId, , address] of nodes) {
-    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-      endpoint_id: `sys-postgres-wire-ep-${nodeId}`,
+  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT',
+    systemTableRow(TABLES.SERVICE_DEFINITIONS, {
       service_id: 'sys-postgres-wire',
-      node_id: nodeId,
-      protocol: 'postgresql',
-      address,
-      port: 5432,
-      health_status: 'healthy',
-      metadata: JSON.stringify({service_name: 'sys-postgres-wire',
-        protocol: 'postgresql', version: '1.0.0'}),
+      service_name: 'sys-postgres-wire',
+      replica_count: 2,
+      runtime_kind: 'native_js',
+      created_at: updatedAt,
       updated_at: updatedAt,
-    });
+    }));
+  for (const [nodeId, , address] of nodes) {
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+        endpoint_id: `sys-postgres-wire-ep-${nodeId}`,
+        service_id: 'sys-postgres-wire',
+        node_id: nodeId,
+        protocol: 'postgresql',
+        address,
+        port: 5432,
+        health_status: 'healthy',
+        metadata: JSON.stringify({service_name: 'sys-postgres-wire',
+          protocol: 'postgresql', version: '1.0.0'}),
+        created_at: updatedAt,
+        updated_at: updatedAt,
+      }));
   }
 
-  cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-    id: 'table-benchmark-events',
-    table_id: 'table-benchmark-events',
-    name: 'benchmark_events',
-    table_name: 'benchmark_events',
-  });
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    id: 'partition-benchmark-events-1',
-    partition_id: 'partition-benchmark-events-1',
-    table_id: 'table-benchmark-events',
-    table_name: 'benchmark_events',
-    leader_node_id: 'node-1',
-    keyStart: null,
-    keyEnd: null,
-  });
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-1',
+  cache.applySystemTableChange(TABLES.TABLES, 'INSERT',
+    systemTableRow(TABLES.TABLES, {
+      table_id: 'table-benchmark-events',
+      table_name: 'benchmark_events',
+      schema_definition: JSON.stringify({columns: []}),
+      partition_key: 'id',
+      created_at: updatedAt,
+      updated_at: updatedAt,
+    }));
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+    systemTableRow(TABLES.PARTITIONS, {
+      partition_id: 'partition-benchmark-events-1',
+      table_id: 'table-benchmark-events',
+      table_name: 'benchmark_events',
+      leader_node_id: 'node-1',
+      created_at: updatedAt,
+      updated_at: updatedAt,
+    }));
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
+    service_id: 'service-benchmark-events-node-1',
     service_type: 'partition',
     partition_id: 'partition-benchmark-events-1',
     node_id: 'node-1',
     status: 'active',
     raft_role: 'leader',
     address: '10.0.0.1:7001',
-  });
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-2',
+    created_at: updatedAt,
+    updated_at: updatedAt,
+  }));
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
+    service_id: 'service-benchmark-events-node-2',
     service_type: 'partition',
     partition_id: 'partition-benchmark-events-1',
     node_id: 'node-2',
     status: 'active',
     raft_role: 'follower',
     address: '10.0.0.2:7001',
-  });
+    created_at: updatedAt,
+    updated_at: updatedAt,
+  }));
 
   return cache;
 }

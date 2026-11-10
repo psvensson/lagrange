@@ -1,4 +1,5 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
   registerCase,
   dependencies,
@@ -983,7 +984,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       replicaId: TEST_LOCAL_OWNER_REPLICA_ID,
       nowMs,
     });
-    const serviceRow = {
+    const serviceRow = servicesRow({
       service_id: TEST_LOCAL_OWNER_REPLICA_ID,
       service_type: TEST_ENTITY_TYPE_PARTITION,
       node_id: TEST_TARGET_NODE_ID,
@@ -995,7 +996,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       address: TEST_REPLICA_SERVICE_ADDRESS,
       created_at: nowMs,
       updated_at: nowMs,
-    };
+    });
 
     const sqlQueryEngine = {
       async executeQuery(sql, params = []) {
@@ -1142,7 +1143,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         replicaId: TEST_LOCAL_OWNER_REPLICA_ID,
         nowMs,
       });
-      const serviceRow = {
+      const serviceRow = servicesRow({
         service_id: TEST_LOCAL_OWNER_REPLICA_ID,
         service_type: TEST_ENTITY_TYPE_PARTITION,
         node_id: TEST_TARGET_NODE_ID,
@@ -1154,7 +1155,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         address: TEST_REPLICA_SERVICE_ADDRESS,
         created_at: nowMs,
         updated_at: nowMs,
-      };
+      });
 
       const sqlQueryEngine = {
         async executeQuery(sql, params = []) {

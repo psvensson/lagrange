@@ -85,6 +85,10 @@ import {
 } from './test-helpers.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
+import {buildInsertedReplicaOperationRow} from
+  './timeout-test-coordinator.js';
+import {replicaOperationsRow, systemTableRow} from
+  '../test-helpers/system-table-row-fixture.js';
 import {buildDeliveryEnvelope} from
   '../../src/transport/transport-semantic-outcome.js';
 import {runtimeBuildProvenance} from
@@ -135,11 +139,16 @@ function getTempDir() {
  */
 function createEstablishedPartitionCache({partitionId, tableId}) {
   const cache = new SystemTableCache();
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
-    table_id: tableId,
-    table_name: 'test_table',
-    schema_definition: JSON.stringify(TEST_SCHEMA),
-  });
+  cache.applySystemTableChange(
+    SYSTEM_TABLE_NAME.TABLES,
+    'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.TABLES, {
+      table_id: tableId,
+      table_name: 'test_table',
+      schema_definition: JSON.stringify(TEST_SCHEMA),
+      partition_key: 'id',
+    }),
+  );
   const createdAt = Date.now() - ESTABLISHED_PARTITION_AGE_MS;
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
     partition_id: partitionId,
@@ -263,15 +272,18 @@ function admittedCreateRequest(handler, request) {
     targetNodeId: JOIN_NODE_ID,
     workflowUpdatedAt: updatedAt,
   });
-  handler.testOperationRows.set(request.operationId, {
+  handler.testOperationRows.set(request.operationId, replicaOperationsRow({
     operation_id: request.operationId,
     type: request.operationType,
     entity_type: SERVICE_TYPE.PARTITION,
     entity_id: request.partitionId,
     partition_id: request.partitionId,
     replica_id: request.replicaId,
+    source_node_id: SEED_NODE_ID,
     target_node_id: JOIN_NODE_ID,
+    status: ReplicaStatus.PENDING,
     workflow_step: 'SENDING',
+    created_at: updatedAt,
     updated_at: updatedAt,
     completed_at: null,
     create_admission_state: null,
@@ -282,7 +294,7 @@ function admittedCreateRequest(handler, request) {
     create_admission_attempt_seq: null,
     create_admission_workflow_updated_at: null,
     create_admission_owner_incarnation: null,
-  });
+  }));
   return {
     ...request,
     entityType: SERVICE_TYPE.PARTITION,
@@ -377,11 +389,16 @@ async (t) => {
   initializeTestEnvironment();
   await runtimeBuildProvenance();
   const cache = new SystemTableCache();
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
-    table_id: ADD_TABLE_ID,
-    table_name: 'test_table',
-    schema_definition: JSON.stringify(TEST_SCHEMA),
-  });
+  cache.applySystemTableChange(
+    SYSTEM_TABLE_NAME.TABLES,
+    'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.TABLES, {
+      table_id: ADD_TABLE_ID,
+      table_name: 'test_table',
+      schema_definition: JSON.stringify(TEST_SCHEMA),
+      partition_key: 'id',
+    }),
+  );
   const now = Date.now();
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
     partition_id: ADD_PARTITION_ID,
@@ -501,30 +518,8 @@ function createCohortSqlEngine({authoritativeServices}) {
       return {success: true, rows};
     }
     if (sql.includes('INSERT INTO replica_operations')) {
-      const [
-        operationId, type, partitionId, replicaId, targetClaimKey,
-        sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-        updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-        entityId,
-      ] = params;
-      operations.set(operationId, {
-        operation_id: operationId,
-        type,
-        partition_id: partitionId,
-        replica_id: replicaId,
-        target_claim_key: targetClaimKey,
-        source_node_id: sourceNodeId,
-        target_node_id: targetNodeId,
-        status,
-        workflow_step: workflowStep,
-        created_at: createdAt,
-        updated_at: updatedAt,
-        completed_at: completedAt,
-        error_message: errorMessage,
-        steps_history: stepsHistory,
-        entity_type: entityType,
-        entity_id: entityId,
-      });
+      const row = buildInsertedReplicaOperationRow(sql, params);
+      operations.set(row.operation_id, row);
       return {success: true, changes: 1};
     }
     if (sql.includes('replica_operations')) {

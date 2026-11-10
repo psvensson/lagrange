@@ -40,6 +40,7 @@ import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from '../../src/control-plane/publication-owner-constants.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 import {createOwnedVirginSeedBootstrapService} from
   '../integration/helpers/cluster-test-helpers.js';
 
@@ -112,11 +113,13 @@ test('stale-projection-never-promotes-readiness: an otherwise healthy node ' +
  */
 function projectWithRuntimeAuthority(runtimeAuthorityState) {
   return resolveActiveNodeViews({
-    nodeRows: [{
+    nodeRows: [nodesRow({
       node_id: NODE_ID, status: 'active', connection_state: 'ready',
       ready_lease_expires_at: LEASE_EXPIRES_AT_MS,
-    }],
-    serviceRows: [{service_id: `${NODE_ID}-svc`, node_id: NODE_ID, status: 'active'}],
+    })],
+    serviceRows: [
+      servicesRow({service_id: `${NODE_ID}-svc`, node_id: NODE_ID, status: 'active'}),
+    ],
     nodeEndpointRows: [{
       endpoint_id: `${NODE_ID}-ws`, node_id: NODE_ID, transport_type: 'ws',
       status: 'active', address: `ws://${NODE_ID}:8082`,

@@ -1,6 +1,7 @@
 import {
   registerAdminControlSnapshotPriorityRecoveryDecisionTests,
 } from './admin-control-snapshot-priority-recovery-decision-test-cases.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 export function registerAdminControlSnapshotTailTests({
   test,
@@ -17,37 +18,37 @@ export function registerAdminControlSnapshotTailTests({
         systemTableCache: {
           getAll(tableName) {
             if (tableName === TABLES.NODES) {
-              return [{
+              return [nodesRow({
                 node_id: 'node-1',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 2000,
-              }, {
+              }), nodesRow({
                 node_id: 'node-2',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 2000,
-              }, {
+              }), nodesRow({
                 node_id: 'node-3',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 2000,
-              }];
+              })];
             }
             if (tableName === TABLES.SERVICES) {
-              return [{
+              return [servicesRow({
                 service_id: 'svc-1',
                 node_id: 'node-1',
                 status: 'active',
-              }, {
+              }), servicesRow({
                 service_id: 'svc-2',
                 node_id: 'node-2',
                 status: 'active',
-              }, {
+              }), servicesRow({
                 service_id: 'svc-3',
                 node_id: 'node-3',
                 status: 'active',
-              }];
+              })];
             }
             if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
               return [{
@@ -233,28 +234,28 @@ export function registerAdminControlSnapshotTailTests({
         systemTableCache: {
           getAll(tableName) {
             if (tableName === TABLES.NODES) {
-              return [{
+              return [nodesRow({
                 node_id: 'node-1',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 2000,
-              }, {
+              }), nodesRow({
                 node_id: 'node-2',
                 status: 'active',
                 connection_state: 'ready',
                 ready_lease_expires_at: 2000,
-              }];
+              })];
             }
             if (tableName === TABLES.SERVICES) {
-              return [{
+              return [servicesRow({
                 service_id: 'svc-1',
                 node_id: 'node-1',
                 status: 'active',
-              }, {
+              }), servicesRow({
                 service_id: 'svc-2',
                 node_id: 'node-2',
                 status: 'active',
-              }];
+              })];
             }
             if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
               return [{
@@ -380,19 +381,19 @@ export function registerAdminControlSnapshotTailTests({
   test('AdminControlSnapshot forced authoritative repair retries after stale publication leader routing failures',
     async (t) => {
       const cacheRowsByTable = {
-        [TABLES.NODES]: [{
+        [TABLES.NODES]: [nodesRow({
           node_id: 'node-1',
           status: 'active',
           connection_state: 'ready',
           last_heartbeat: 900,
           ready_lease_expires_at: 2000,
-        }, {
+        }), nodesRow({
           node_id: 'node-2',
           status: 'active',
           connection_state: 'ready',
           last_heartbeat: 900,
           ready_lease_expires_at: 2000,
-        }],
+        })],
         [TABLES.TABLES]: [{
           table_id: 'tbl-bench',
           table_name: 'benchmark_events',
@@ -405,7 +406,7 @@ export function registerAdminControlSnapshotTailTests({
           leader_node_id: 'node-1',
           state: 'NORMAL',
         }],
-        [TABLES.SERVICES]: [{
+        [TABLES.SERVICES]: [servicesRow({
           service_id: 'tbl-bench-p1-r1',
           service_type: 'partition',
           node_id: 'node-1',
@@ -414,7 +415,7 @@ export function registerAdminControlSnapshotTailTests({
           raft_role: 'leader',
           status: 'active',
           address: 'node-1/partition/tbl-bench-p1-r1',
-        }],
+        })],
         [TABLES.NODE_ENDPOINTS]: [],
         [TABLES.CONTROL_PLANE_PUBLICATIONS]: [],
         [TABLES.REPLICA_OPERATIONS]: [],
@@ -458,7 +459,7 @@ export function registerAdminControlSnapshotTailTests({
           ];
           cacheRowsByTable[TABLES.SERVICES] = [
             ...cacheRowsByTable[TABLES.SERVICES],
-            {
+            servicesRow({
               service_id: 'tbl-bench-left-r1',
               service_type: 'partition',
               node_id: 'node-1',
@@ -467,8 +468,8 @@ export function registerAdminControlSnapshotTailTests({
               raft_role: 'leader',
               status: 'active',
               address: 'node-1/partition/tbl-bench-left-r1',
-            },
-            {
+            }),
+            servicesRow({
               service_id: 'tbl-bench-right-r1',
               service_type: 'partition',
               node_id: 'node-2',
@@ -477,7 +478,7 @@ export function registerAdminControlSnapshotTailTests({
               raft_role: 'leader',
               status: 'active',
               address: 'node-2/partition/tbl-bench-right-r1',
-            },
+            }),
           ];
           return {
             applied: true,
@@ -558,19 +559,19 @@ export function registerAdminControlSnapshotTailTests({
   test('AdminControlSnapshot forced authoritative repair refreshes split topology even when stale table versions mask a local gap',
     async (t) => {
       const cacheRowsByTable = {
-        [TABLES.NODES]: [{
+        [TABLES.NODES]: [nodesRow({
           node_id: 'node-1',
           status: 'active',
           connection_state: 'ready',
           last_heartbeat: 900,
           ready_lease_expires_at: 2000,
-        }, {
+        }), nodesRow({
           node_id: 'node-2',
           status: 'active',
           connection_state: 'ready',
           last_heartbeat: 900,
           ready_lease_expires_at: 2000,
-        }],
+        })],
         [TABLES.TABLES]: [{
           table_id: 'tbl-bench',
           table_name: 'benchmark_events',
@@ -585,7 +586,7 @@ export function registerAdminControlSnapshotTailTests({
           leader_node_id: 'node-1',
           state: 'NORMAL',
         }],
-        [TABLES.SERVICES]: [{
+        [TABLES.SERVICES]: [servicesRow({
           service_id: 'tbl-bench-p1-r1',
           service_type: 'partition',
           node_id: 'node-1',
@@ -594,7 +595,7 @@ export function registerAdminControlSnapshotTailTests({
           raft_role: 'leader',
           status: 'active',
           address: 'node-1/partition/tbl-bench-p1-r1',
-        }],
+        })],
         [TABLES.NODE_ENDPOINTS]: [{
           endpoint_id: 'node-1-ws',
           node_id: 'node-1',
@@ -653,7 +654,7 @@ export function registerAdminControlSnapshotTailTests({
           ];
           cacheRowsByTable[TABLES.SERVICES] = [
             ...cacheRowsByTable[TABLES.SERVICES],
-            {
+            servicesRow({
               service_id: 'tbl-bench-left-r1',
               service_type: 'partition',
               node_id: 'node-1',
@@ -662,8 +663,8 @@ export function registerAdminControlSnapshotTailTests({
               raft_role: 'leader',
               status: 'active',
               address: 'node-1/partition/tbl-bench-left-r1',
-            },
-            {
+            }),
+            servicesRow({
               service_id: 'tbl-bench-right-r1',
               service_type: 'partition',
               node_id: 'node-2',
@@ -672,7 +673,7 @@ export function registerAdminControlSnapshotTailTests({
               raft_role: 'leader',
               status: 'active',
               address: 'node-2/partition/tbl-bench-right-r1',
-            },
+            }),
           ];
           return {
             applied: true,

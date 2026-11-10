@@ -26,6 +26,7 @@ import {
   createMockCoordinator,
 } from './test-helpers.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   REBALANCER_SKIP_REASON,
   REBALANCER_DEFAULT,
@@ -132,13 +133,13 @@ function createCriticalRebalancer({budget, inFlightCount, neededMoves}) {
   }
 
   // 1 replica — below minReplicaCount=3, so critical state
-  const services = [{
+  const services = [servicesRow({
     service_id: `${entityId}-${nodeId}`,
     partition_id: entityId,
     node_id: nodeId,
     service_type: 'partition',
     status: ReplicaStatus.ACTIVE,
-  }];
+  })];
 
   const targetCount = 1 + neededMoves;
   const adjustedTarget = targetCount % 2 === 0 ?

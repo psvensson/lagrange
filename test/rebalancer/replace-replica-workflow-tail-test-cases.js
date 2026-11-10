@@ -4,6 +4,7 @@ import {
   installActualReplicaObservationResolver,
 } from './test-helpers.js';
 import {createReplaceWitness} from './replace-witness-fixture.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 export async function registerReplaceReplicaWorkflowTailTests({
   t,
@@ -575,7 +576,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         operation.status = ReplicaStatus.SYNCING;
 
         coordinator.repository.getReplicaOperationRowFromCache =
-          () => ({
+          () => replicaOperationsRow({
             operation_id: operation.operationId,
             type: OperationType.REPLACE,
             partition_id: operation.partitionId,

@@ -18,6 +18,7 @@ import {PARTICIPANT_RELEASE_TYPE} from
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {observeParticipantReleaseDelivery} from './participant-release-delivery-recorder.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {servicesRow, systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 function routeNativeServices(cache, services) {
   for (const service of services) {
@@ -26,18 +27,20 @@ function routeNativeServices(cache, services) {
       candidate.raft.readStatus().role === RAFT_ROLE.LEADER);
     assert.ok(leader, 'routing metadata comes from an actual native leader');
     cache.applySystemTableChange(TABLES.TABLES, CDCOperation.INSERT,
-      {table_id: service.tableId, table_name: service.tableName, active_partition_version: 1});
+      systemTableRow(TABLES.TABLES, {table_id: service.tableId,
+        table_name: service.tableName, active_partition_version: 1}));
     cache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT,
-      {partition_id: service.partitionId, table_id: service.tableId,
-        table_name: service.tableName, leader_node_id: leader.nodeId,
+      systemTableRow(TABLES.PARTITIONS, {partition_id: service.partitionId,
+        table_id: service.tableId, table_name: service.tableName,
+        leader_node_id: leader.nodeId,
         replica_count: services.filter((candidate) =>
-          candidate.partitionId === service.partitionId).length});
+          candidate.partitionId === service.partitionId).length}));
     cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT,
-      {service_id: service.replicaId, replica_id: service.replicaId,
+      servicesRow({service_id: service.replicaId, replica_id: service.replicaId,
         partition_id: service.partitionId, node_id: service.nodeId,
         service_type: SERVICE_TYPE.PARTITION, status: SERVICE_STATUS.ACTIVE,
         raft_role: service.raft.readStatus().role,
-        address: `${service.nodeId}/partition/${service.replicaId}`});
+        address: `${service.nodeId}/partition/${service.replicaId}`}));
   }
 }
 

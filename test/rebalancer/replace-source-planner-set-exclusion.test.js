@@ -38,6 +38,7 @@ import {REBALANCER_MOVE_TYPE} from '../../src/rebalancer/rebalancer-constants.js
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createMockCache, createTestRebalancer} from './test-helpers.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION_ID = 'iv-set-exclusion';
 const REPLICA_COUNT = 3;
@@ -60,14 +61,14 @@ const BYSTANDERS = Object.freeze(Object.values(MEMBERS).filter(
     replicaId !== SOURCE_REPLICA_ID && replicaId !== TARGET_REPLICA_ID));
 
 function serviceRow([replicaId, nodeId], status = ReplicaStatus.ACTIVE) {
-  return {
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     service_type: EntityType.PARTITION,
     partition_id: PARTITION_ID,
     node_id: nodeId,
     status,
-  };
+  });
 }
 
 function replaceAt(workflowStep) {

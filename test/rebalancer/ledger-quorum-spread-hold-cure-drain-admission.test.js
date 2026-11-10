@@ -85,6 +85,7 @@ import {
   createTestRebalancer,
 } from './test-helpers.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_LEDGER_PARTITION_ID = 'replica_operations-p1';
 const TEST_SEED_NODE_ID = 'node-1';
@@ -145,16 +146,16 @@ function createReadyNodeRow(nodeId) {
 // hold's startup-authority barrier withholds it by design while the ledger
 // stays concentrated. This is the live residual's node shape.
 function createBarrierHeldJoinerNodeRow(nodeId) {
-  return {
+  return nodesRow({
     node_id: nodeId,
     status: NodeStatus.ACTIVE,
     connection_state: NODE_STATE.CONNECTED,
     ready_lease_expires_at: 0,
-  };
+  });
 }
 
 function createLedgerVoterServiceRow(replicaId, nodeId, raftRole) {
-  return {
+  return servicesRow({
     service_id: replicaId,
     service_type: TEST_PARTITION_SERVICE_TYPE,
     node_id: nodeId,
@@ -163,7 +164,7 @@ function createLedgerVoterServiceRow(replicaId, nodeId, raftRole) {
     address: TEST_ADDRESS_PREFIX + replicaId,
     raft_role: raftRole,
     status: ReplicaStatus.ACTIVE,
-  };
+  });
 }
 
 // The canonical 2-1-1 surplus placement: 4 ACTIVE voters on 3 distinct

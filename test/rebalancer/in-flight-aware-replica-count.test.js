@@ -2,11 +2,15 @@ import {test} from '../../src/test-helpers/tap.js';
 import {computeInFlightAwareReplicaAccounting} from '../../src/rebalancer/in-flight-aware-replica-count.js';
 import {REBALANCER_MOVE_TYPE as MoveType} from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION = 'sql_write_operations-p1';
 
-function row(replicaId, nodeId, status = ReplicaStatus.ACTIVE) {
-  return {replica_id: replicaId, node_id: nodeId, status, partition_id: PARTITION};
+function row(replicaId, nodeId, status = ReplicaStatus.ACTIVE, raftRole = null) {
+  return projectedReplica({
+    replica_id: replicaId, service_id: replicaId, node_id: nodeId, status,
+    raft_role: raftRole, partition_id: PARTITION,
+  });
 }
 
 function op(type, replicaId, targetNodeId, workflowStep = 'creating') {
@@ -40,13 +44,14 @@ test('in-flight-aware replica accounting (single-owner count)', async (t) => {
     t.end();
   });
 
-  await t.test('a replica row with no node_id is ignored', (t) => {
-    const acc = computeInFlightAwareReplicaAccounting({
+  await t.test('a value that is not a projected replica is refused', (t) => {
+    // services.node_id is NOT NULL: no stored row lacks a node, so the
+    // accounting takes projected replicas only and refuses anything else.
+    t.throws(() => computeInFlightAwareReplicaAccounting({
       currentReplicas: [row('r1', 'n1'), {replica_id: 'rX', node_id: null}],
       inFlightOperations: [],
       partitionId: PARTITION,
-    });
-    t.equal(acc.activeCount, 1);
+    }), {code: 'PROJECTED_REPLICA_REFUSED'});
     t.end();
   });
 
@@ -147,10 +152,10 @@ test('in-flight-aware replica accounting (single-owner count)', async (t) => {
       // over-creation cap must resolve toward the guard's own count.
       const acc = computeInFlightAwareReplicaAccounting({
         currentReplicas: [
-          {replica_id: 'r1', node_id: 'n1', status: ReplicaStatus.ACTIVE, raft_role: 'leader', partition_id: PARTITION},
-          {replica_id: 'r2', node_id: 'n2', status: ReplicaStatus.ACTIVE, raft_role: 'follower', partition_id: PARTITION},
-          {replica_id: 'r3', node_id: 'n3', status: ReplicaStatus.ACTIVE, raft_role: 'follower', partition_id: PARTITION},
-          {replica_id: 'r4', node_id: 'n4', status: ReplicaStatus.CREATING, raft_role: 'follower', partition_id: PARTITION},
+          row('r1', 'n1', ReplicaStatus.ACTIVE, 'leader'),
+          row('r2', 'n2', ReplicaStatus.ACTIVE, 'follower'),
+          row('r3', 'n3', ReplicaStatus.ACTIVE, 'follower'),
+          row('r4', 'n4', ReplicaStatus.CREATING, 'follower'),
         ],
         inFlightOperations: [],
         partitionId: PARTITION,
@@ -166,15 +171,15 @@ test('in-flight-aware replica accounting (single-owner count)', async (t) => {
     (t) => {
       const acc = computeInFlightAwareReplicaAccounting({
         currentReplicas: [
-          {replica_id: 'r1', node_id: 'n1', status: ReplicaStatus.ACTIVE, raft_role: 'leader', partition_id: PARTITION},
+          row('r1', 'n1', ReplicaStatus.ACTIVE, 'leader'),
           // a non-voting catch-up learner is NOT a voter
-          {replica_id: 'r2', node_id: 'n2', status: ReplicaStatus.SYNCING, raft_role: 'learner', partition_id: PARTITION},
+          row('r2', 'n2', ReplicaStatus.SYNCING, 'learner'),
           // a voter-role row being torn down is not live
-          {replica_id: 'r3', node_id: 'n3', status: ReplicaStatus.REMOVING, raft_role: 'follower', partition_id: PARTITION},
-          // an ACTIVE row whose raft_role is not yet reported is counted by
-          // activeCount but NOT activeVoterCount — which is exactly why the cap
-          // takes MAX(activeCount, activeVoterCount) and never fires less.
-          {replica_id: 'r4', node_id: 'n4', status: ReplicaStatus.ACTIVE, partition_id: PARTITION},
+          row('r3', 'n3', ReplicaStatus.REMOVING, 'follower'),
+          // an ACTIVE row whose raft_role is not yet reported (NULL) is counted
+          // by activeCount but NOT activeVoterCount — which is exactly why the
+          // cap takes MAX(activeCount, activeVoterCount) and never fires less.
+          row('r4', 'n4', ReplicaStatus.ACTIVE),
         ],
         inFlightOperations: [],
         partitionId: PARTITION,

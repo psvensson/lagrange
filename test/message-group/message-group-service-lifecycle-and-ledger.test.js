@@ -43,6 +43,9 @@ import {
 import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {
+  nodesRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 setTestPortBase(25000);
 registerMessageGroupServiceLifecycleHooks();
@@ -61,19 +64,19 @@ test('MessageGroupService - querySystemCache returns data', async (t) => {
     await service.subscribeToCDC('nodes');
 
     // Insert test data
-    await service.applyCDCEvent('nodes', 'INSERT', {
-      id: 'node-1',
+    await service.applyCDCEvent('nodes', 'INSERT', nodesRow({
+      node_id: 'node-1',
       status: 'active',
-    });
-    await service.applyCDCEvent('nodes', 'INSERT', {
-      id: 'node-2',
+    }));
+    await service.applyCDCEvent('nodes', 'INSERT', nodesRow({
+      node_id: 'node-2',
       status: 'inactive',
-    });
+    }));
 
     // Query by key
     const byKey = await service.querySystemCache('nodes', {key: 'node-1'});
     t.ok(byKey, 'Should find by key');
-    t.equal(byKey.id, 'node-1', 'Should return correct record');
+    t.equal(byKey.node_id, 'node-1', 'Should return correct record');
 
     // Query with predicate
     const filtered = await service.querySystemCache('nodes', {
@@ -106,7 +109,7 @@ test('MessageGroupService - getReadOnlyCache returns wrapper', async (t) => {
 
     // Verify it's read-only
     t.throws(
-      () => cache.applySystemTableChange('nodes', 'INSERT', {id: 'test'}),
+      () => cache.applySystemTableChange('nodes', 'INSERT', {node_id: 'test'}),
       /not available on read-only cache/,
       'Should block write operations',
     );

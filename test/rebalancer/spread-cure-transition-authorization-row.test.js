@@ -54,6 +54,7 @@ import {
   REPLICA_OPERATION_INSERT_SQL,
 } from '../../src/rebalancer/replica-operation-repository-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   createMockCache,
   createMockControlPlaneReadinessService,
@@ -267,7 +268,7 @@ test('the authorization rides the operation row and rows without it preserve ' +
   // 3. The binding owner decodes the persisted row, and it is the ONLY
   // decoder of this record: rowToOperation is untouched by this quest, so no
   // second decode of the same bytes can drift from this one.
-  const persistedRow = {
+  const persistedRow = replicaOperationsRow({
     operation_id: operation.operationId,
     type: OperationType.ADD,
     partition_id: CRITICAL_PARTITION_ID,
@@ -280,7 +281,7 @@ test('the authorization rides the operation row and rows without it preserve ' +
     workflow_step: 'PENDING',
     steps_history: inserts[0].params[STEPS_HISTORY_PARAM_INDEX],
     membership_publication_epoch: PUBLISHED_EPOCH,
-  };
+  });
   const binding =
     decodeSpreadCureTransitionAuthorizationFromOperationRow(persistedRow);
   assert.equal(binding.state, 'present');

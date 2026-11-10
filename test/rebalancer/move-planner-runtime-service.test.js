@@ -19,6 +19,7 @@ import {
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {MOVE_REASON} from '../../src/rebalancer/rebalancer-constants.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -27,6 +28,26 @@ function initEnv() {
   config.initialize({});
   const logging = LoggingService.getInstance();
   logging.initialize({level: 'error'});
+}
+
+// Replicas as getCurrentReplicas returns them: projected services rows.
+function runtimeReplica(serviceId, nodeId, status) {
+  return projectedReplica({
+    service_id: serviceId,
+    service_type: REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE,
+    node_id: nodeId,
+    status,
+  });
+}
+
+function partitionReplica(replicaId, partitionId, nodeId, status) {
+  return projectedReplica({
+    service_id: replicaId,
+    replica_id: replicaId,
+    partition_id: partitionId,
+    node_id: nodeId,
+    status,
+  });
 }
 
 function createMoveStateProvider(options = {}) {
@@ -173,11 +194,7 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
       {node_id: 'n3', cpu_usage_percent: 30},
     ];
     const currentReplicas = [
-      {
-        service_id: 'sys-postgres-wire',
-        node_id: 'n1',
-        status: ReplicaStatus.ACTIVE,
-      },
+      runtimeReplica('sys-postgres-wire', 'n1', ReplicaStatus.ACTIVE),
     ];
     const planner = new MovePlanner({
       entityId: 'sys-postgres-wire',
@@ -208,21 +225,9 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
       {node_id: 'n2', cpu_usage_percent: 20},
     ];
     const currentReplicas = [
-      {
-        service_id: 'r1',
-        node_id: 'n1',
-        status: ReplicaStatus.ACTIVE,
-      },
-      {
-        service_id: 'r2',
-        node_id: 'n2',
-        status: ReplicaStatus.ACTIVE,
-      },
-      {
-        service_id: 'r3',
-        node_id: 'n3',
-        status: ReplicaStatus.ACTIVE,
-      },
+      runtimeReplica('r1', 'n1', ReplicaStatus.ACTIVE),
+      runtimeReplica('r2', 'n2', ReplicaStatus.ACTIVE),
+      runtimeReplica('r3', 'n3', ReplicaStatus.ACTIVE),
     ];
     const planner = new MovePlanner({
       entityId: 'sys-postgres-wire',
@@ -254,21 +259,9 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
       {node_id: 'n3', cpu_usage_percent: 30},
     ];
     const currentReplicas = [
-      {
-        service_id: 'r1',
-        node_id: 'n1',
-        status: ReplicaStatus.ACTIVE,
-      },
-      {
-        service_id: 'r2',
-        node_id: 'n2',
-        status: ReplicaStatus.ACTIVE,
-      },
-      {
-        service_id: 'r3',
-        node_id: 'n4',
-        status: ReplicaStatus.ACTIVE,
-      },
+      runtimeReplica('r1', 'n1', ReplicaStatus.ACTIVE),
+      runtimeReplica('r2', 'n2', ReplicaStatus.ACTIVE),
+      runtimeReplica('r3', 'n4', ReplicaStatus.ACTIVE),
     ];
     const planner = new MovePlanner({
       entityId: 'sys-postgres-wire',
@@ -301,21 +294,9 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
       {node_id: 'n3', cpu_usage_percent: 30},
     ];
     const currentReplicas = [
-      {
-        service_id: 'r1',
-        node_id: 'n1',
-        status: ReplicaStatus.ACTIVE,
-      },
-      {
-        service_id: 'r2',
-        node_id: 'n2',
-        status: ReplicaStatus.FAILED,
-      },
-      {
-        service_id: 'r3',
-        node_id: 'n3',
-        status: ReplicaStatus.ACTIVE,
-      },
+      runtimeReplica('r1', 'n1', ReplicaStatus.ACTIVE),
+      runtimeReplica('r2', 'n2', ReplicaStatus.FAILED),
+      runtimeReplica('r3', 'n3', ReplicaStatus.ACTIVE),
     ];
     const planner = new MovePlanner({
       entityId: 'sys-postgres-wire',
@@ -348,11 +329,7 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
         {node_id: 'n3', cpu_usage_percent: 30},
       ];
       const currentReplicas = [
-        {
-          service_id: 'r1',
-          node_id: 'n1',
-          status: ReplicaStatus.ACTIVE,
-        },
+        runtimeReplica('r1', 'n1', ReplicaStatus.ACTIVE),
       ];
       const planner = new MovePlanner({
         entityId: 'sys-postgres-wire',
@@ -390,12 +367,7 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
         {node_id: 'n3', cpu_usage_percent: 30},
       ];
       const currentReplicas = [
-        {
-          replica_id: 'r1',
-          service_id: 'r1',
-          node_id: 'n1',
-          status: ReplicaStatus.ACTIVE,
-        },
+        partitionReplica('r1', 'nodes-p1', 'n1', ReplicaStatus.ACTIVE),
       ];
       const planner = new MovePlanner({
         entityId: 'nodes-p1',
@@ -444,21 +416,9 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
       {node_id: 'n3', cpu_usage_percent: 30},
     ];
     const currentReplicas = [
-      {
-        service_id: 'r1',
-        node_id: 'n1',
-        status: ReplicaStatus.ACTIVE,
-      },
-      {
-        service_id: 'r2',
-        node_id: 'n2',
-        status: ReplicaStatus.ACTIVE,
-      },
-      {
-        service_id: 'r3',
-        node_id: 'n3',
-        status: ReplicaStatus.ACTIVE,
-      },
+      runtimeReplica('r1', 'n1', ReplicaStatus.ACTIVE),
+      runtimeReplica('r2', 'n2', ReplicaStatus.ACTIVE),
+      runtimeReplica('r3', 'n3', ReplicaStatus.ACTIVE),
     ];
     const planner = new MovePlanner({
       entityId: 'sys-postgres-wire',

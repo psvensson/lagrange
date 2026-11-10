@@ -20,6 +20,7 @@ import {
 } from './bootstrap-api-test-fixtures.js';
 import {withRegisteredIncarnations} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 
 test('BootstrapAPI - getReadyNodes does not duplicate seed node', async (t) => {
@@ -34,11 +35,12 @@ test('BootstrapAPI - getReadyNodes does not duplicate seed node', async (t) => {
     getAll: (tableName) => {
       if (tableName === TABLES.NODES) {
         return [
-          {
+          nodesRow({
             node_id: 'seed-node-1',
             connection_state: STATE.READY,
+            last_heartbeat: now,
             ready_lease_expires_at: validLease, // Valid
-          },
+          }),
         ];
       }
       return [];
@@ -123,12 +125,13 @@ test('BootstrapAPI - getReadyNodes does not treat repair-only seed readiness as 
       getAll: (tableName) => {
         if (tableName === TABLES.NODES) {
           return [
-            {
+            nodesRow({
               node_id: 'seed-node-1',
               connection_state: STATE.READY,
+              last_heartbeat: now,
               ready_lease_expires_at: now + 10000,
               status: 'active',
-            },
+            }),
           ];
         }
         return [];
@@ -182,18 +185,20 @@ test('BootstrapAPI - strict ready-node reads use published membership without se
       getAll: (tableName) => {
         if (tableName === TABLES.NODES) {
           return [
-            {
+            nodesRow({
               node_id: 'seed-node-1',
               connection_state: STATE.READY,
+              last_heartbeat: now,
               ready_lease_expires_at: now + 10000,
               status: 'active',
-            },
-            {
+            }),
+            nodesRow({
               node_id: 'other-node',
               connection_state: STATE.READY,
+              last_heartbeat: now,
               ready_lease_expires_at: now + 10000,
               status: 'active',
-            },
+            }),
           ];
         }
         if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
@@ -248,20 +253,22 @@ test('BootstrapAPI - cluster state marks active nodes from published membership 
       getAll: (tableName) => {
         if (tableName === TABLES.NODES) {
           return [
-            {
+            nodesRow({
               node_id: 'seed-node-1',
               node_address: 'ws://seed',
               connection_state: STATE.READY,
+              last_heartbeat: now,
               ready_lease_expires_at: now + 10000,
               status: 'active',
-            },
-            {
+            }),
+            nodesRow({
               node_id: 'other-node',
               node_address: 'ws://other',
               connection_state: STATE.READY,
+              last_heartbeat: now,
               ready_lease_expires_at: now + 10000,
               status: 'active',
-            },
+            }),
           ];
         }
         if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
@@ -314,24 +321,27 @@ test('BootstrapAPI - getReadyNodes requires canonical websocket endpoint visibil
     // production writes them; only node-3 publishes a websocket endpoint.
     const rows = withRegisteredIncarnations({
       [TABLES.NODES]: [
-        {
+        nodesRow({
           node_id: 'seed-node-1',
           status: 'active',
           connection_state: STATE.READY,
+          last_heartbeat: now,
           ready_lease_expires_at: validLease,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           status: 'active',
           connection_state: STATE.READY,
+          last_heartbeat: now,
           ready_lease_expires_at: validLease,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-3',
           status: 'active',
           connection_state: STATE.READY,
+          last_heartbeat: now,
           ready_lease_expires_at: validLease,
-        },
+        }),
       ],
       [TABLES.NODE_ENDPOINTS]: [{
         endpoint_id: 'node-3-ws',
@@ -388,12 +398,13 @@ test('BootstrapAPI - getReadyNodes requires owner evidence before raw row ' +
     get: () => null,
     getAll: (tableName) => {
       if (tableName === TABLES.NODES) {
-        return [{
+        return [nodesRow({
           node_id: candidateNodeId,
           status: 'active',
           connection_state: STATE.READY,
+          last_heartbeat: Date.now(),
           ready_lease_expires_at: validLease,
-        }];
+        })];
       }
       if (tableName === TABLES.NODE_ENDPOINTS) {
         return [{
@@ -450,13 +461,15 @@ test('BootstrapAPI - buildSystemTableSnapshots includes node_endpoints', async (
   const mockSystemTableCache = {
     data: {
       nodes: [
-        {node_id: 'node-1', node_address: 'ws://localhost:8080', status: 'active'},
+        nodesRow({node_id: 'node-1', node_address: 'ws://localhost:8080', status: 'active'}),
       ],
       partitions: [
         {partition_id: 'p1', table_name: 'nodes'},
       ],
       services: [
-        {service_id: 's1', service_type: 'partition', partition_id: 'p1', node_id: 'node-1'},
+        servicesRow({
+          service_id: 's1', service_type: 'partition', partition_id: 'p1', node_id: 'node-1',
+        }),
       ],
       tables: [
         {table_id: 'nodes', table_name: 'nodes', schema: '{}'},
@@ -542,7 +555,7 @@ test('BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots
     },
     getAll(tableName) {
       if (tableName === TABLES.NODES) {
-        return [{node_id: 'seed-node-1', node_address: 'ws://localhost:8080'}];
+        return [nodesRow({node_id: 'seed-node-1', node_address: 'ws://localhost:8080'})];
       }
       if (tableName === TABLES.PARTITIONS) {
         return [{
@@ -553,7 +566,7 @@ test('BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots
       }
       if (tableName === TABLES.SERVICES) {
         return [
-          {
+          servicesRow({
             service_id: 'partition-leader',
             service_type: SERVICE_TYPE.PARTITION,
             partition_id: 'p1',
@@ -561,8 +574,8 @@ test('BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots
             address: 'seed-node-1/partition/partition-leader',
             raft_role: RAFT_ROLE.LEADER,
             status: SERVICE_STATUS.ACTIVE,
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'message-group-leader',
             service_type: SERVICE_TYPE.MESSAGE_GROUP,
             group_id: 'mg1',
@@ -570,7 +583,7 @@ test('BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots
             address: 'seed-node-1/message-group/message-group-leader',
             raft_role: RAFT_ROLE.LEADER,
             status: SERVICE_STATUS.ACTIVE,
-          },
+          }),
         ];
       }
       if (tableName === TABLES.TABLES) {
@@ -653,7 +666,7 @@ test('BootstrapAPI - handleBootstrapRequest includes latency topology hints',
       },
       getAll(tableName) {
         if (tableName === TABLES.NODES) {
-          return [{node_id: 'seed-node-1', node_address: 'ws://localhost:8080'}];
+          return [nodesRow({node_id: 'seed-node-1', node_address: 'ws://localhost:8080'})];
         }
         if (tableName === TABLES.PARTITIONS) {
           return [{
@@ -664,7 +677,7 @@ test('BootstrapAPI - handleBootstrapRequest includes latency topology hints',
         }
         if (tableName === TABLES.SERVICES) {
           return [
-            {
+            servicesRow({
               service_id: 'partition-leader',
               service_type: SERVICE_TYPE.PARTITION,
               partition_id: 'p1',
@@ -672,8 +685,8 @@ test('BootstrapAPI - handleBootstrapRequest includes latency topology hints',
               address: 'seed-node-1/partition/partition-leader',
               raft_role: RAFT_ROLE.LEADER,
               status: SERVICE_STATUS.ACTIVE,
-            },
-            {
+            }),
+            servicesRow({
               service_id: 'message-group-leader',
               service_type: SERVICE_TYPE.MESSAGE_GROUP,
               group_id: 'mg1',
@@ -681,7 +694,7 @@ test('BootstrapAPI - handleBootstrapRequest includes latency topology hints',
               address: 'seed-node-1/message-group/message-group-leader',
               raft_role: RAFT_ROLE.LEADER,
               status: SERVICE_STATUS.ACTIVE,
-            },
+            }),
           ];
         }
         if (tableName === TABLES.TABLES) {

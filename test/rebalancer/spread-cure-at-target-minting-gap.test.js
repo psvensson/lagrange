@@ -47,6 +47,7 @@ import {
   initializeSpreadTestEnvironment,
   isAddLikeMoveResult,
 } from './test-helpers.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_TABLE_ID = SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS;
@@ -97,13 +98,30 @@ function initializeTestEnvironment() {
   initializeSpreadTestEnvironment(TEST_NODE_ID_A);
 }
 
-const {createNodeRow, createReplicaRow, isSpreadRestoringOperationRow} =
-  buildSpreadScenarioHelpers({
-    partitionId: TEST_PARTITION_ID,
-    serviceType: TEST_PARTITION_SERVICE_TYPE,
-    addressPrefix: TEST_ADDRESS_PREFIX,
-    freeNodeIds: TEST_FREE_NODE_IDS,
+const spreadScenario = buildSpreadScenarioHelpers({
+  partitionId: TEST_PARTITION_ID,
+  serviceType: TEST_PARTITION_SERVICE_TYPE,
+  addressPrefix: TEST_ADDRESS_PREFIX,
+  freeNodeIds: TEST_FREE_NODE_IDS,
+});
+const {isSpreadRestoringOperationRow} = spreadScenario;
+
+// The cache holds complete stored rows; a cluster member states its
+// readiness (ready connection, fresh heartbeat, live ready lease).
+function createNodeRow(nodeId) {
+  const nowMs = Date.now();
+  return nodesRow({
+    ...spreadScenario.createNodeRow(nodeId),
+    node_address: `ws://${nodeId}:8080`,
+    connection_state: 'ready',
+    last_heartbeat: nowMs,
+    ready_lease_expires_at: nowMs + 60_000,
   });
+}
+
+function createReplicaRow(replicaId, nodeId, raftRole) {
+  return servicesRow(spreadScenario.createReplicaRow(replicaId, nodeId, raftRole));
+}
 
 function createOperationRow({
   operationId,

@@ -1,3 +1,4 @@
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 
@@ -25,7 +26,6 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   PRIORITY_RECOVERY_COMPLETION_STATE,
   OperationType,
-  TERMINAL_STATUSES,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
 }) {
@@ -495,7 +495,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       repo.recordOwnerPersistedTransitionVisibilityWitness(
         repo.rowToOperation(makeRow({
           type: OperationType.REPLACE,
-          status: TERMINAL_STATUSES.FAILED,
+          status: ReplicaStatus.FAILED,
           workflow_step: WORKFLOW_STEP.FAILED,
           updated_at: 200,
           completed_at: 200,
@@ -519,7 +519,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       );
       t.same(
         observation?.operations?.map((operation) => operation.status),
-        [TERMINAL_STATUSES.FAILED],
+        [ReplicaStatus.FAILED],
         'the superseded entity row should preserve the terminal status',
       );
     },
@@ -540,8 +540,8 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       });
       const terminalRow = makeRow({
         operation_id: 'op-confirmed-terminal-add',
-        status: TERMINAL_STATUSES.COMPLETED,
-        workflow_step: WORKFLOW_STEP.COMPLETED,
+        status: ReplicaStatus.ACTIVE,
+        workflow_step: WORKFLOW_STEP.ACTIVE,
         created_at: 100,
         updated_at: 200,
         completed_at: 200,

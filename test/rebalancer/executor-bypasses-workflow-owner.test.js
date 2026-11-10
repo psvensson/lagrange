@@ -37,6 +37,7 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 /**
  * Test-local constants for fixture identities.
@@ -59,21 +60,32 @@ function createSeededCache() {
   const cache = new SystemTableCache();
   const now = Date.now();
 
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
-    table_id: FIXTURE_TABLE_ID,
-    table_name: FIXTURE_TABLE_NAME,
-    schema_definition: JSON.stringify({
-      columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
+  cache.applySystemTableChange(
+    SYSTEM_TABLE_NAME.TABLES,
+    'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.TABLES, {
+      table_id: FIXTURE_TABLE_ID,
+      table_name: FIXTURE_TABLE_NAME,
+      schema_definition: JSON.stringify({
+        columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
+      }),
+      partition_key: 'id',
     }),
-  });
+  );
 
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
-    partition_id: FIXTURE_PARTITION_ID,
-    table_id: FIXTURE_TABLE_ID,
-    partition_key_start: null,
-    partition_key_end: null,
-    leader_node_id: FIXTURE_NODE_ID,
-  });
+  cache.applySystemTableChange(
+    SYSTEM_TABLE_NAME.PARTITIONS,
+    'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.PARTITIONS, {
+      partition_id: FIXTURE_PARTITION_ID,
+      table_id: FIXTURE_TABLE_ID,
+      partition_key_start: null,
+      partition_key_end: null,
+      leader_node_id: FIXTURE_NODE_ID,
+      created_at: now,
+      updated_at: now,
+    }),
+  );
 
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
     service_id: FIXTURE_LEADER_REPLICA_ID,

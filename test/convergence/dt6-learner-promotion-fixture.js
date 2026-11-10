@@ -62,6 +62,7 @@ import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {forwardHandlerRegistry} from
   '../test-helpers/replica-handler-identity-fixture.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 export const PARTITION_ID = 'progress-proof-p1';
 const TABLE_NAME = 'progress_proof_table';
@@ -202,7 +203,7 @@ export function insertServiceRow(cache, replicaId, nodeId, raftRole) {
   cache.applySystemTableChange(
     TABLES.SERVICES,
     CDCOperation.INSERT,
-    buildServiceRow(replicaId, nodeId, raftRole),
+    systemTableRow(TABLES.SERVICES, buildServiceRow(replicaId, nodeId, raftRole)),
   );
 }
 
@@ -218,10 +219,11 @@ export function updateServiceRow(cache, replicaId, nodeId, raftRole) {
 }
 
 function seedPartitionPolicy(cache) {
-  cache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-    partition_id: PARTITION_ID,
-    replica_count: TARGET_REPLICA_COUNT,
-  });
+  cache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT,
+    systemTableRow(TABLES.PARTITIONS, {
+      partition_id: PARTITION_ID,
+      replica_count: TARGET_REPLICA_COUNT,
+    }));
 }
 
 // Seeded in stages: the leader must initialize (and mint its committed
@@ -237,11 +239,11 @@ export function insertPublishedEpochRow(cache, epoch) {
   cache.applySystemTableChange(
     TABLES.CONTROL_PLANE_PUBLICATIONS,
     CDCOperation.INSERT,
-    {
+    systemTableRow(TABLES.CONTROL_PLANE_PUBLICATIONS, {
       publication_id: `publication-epoch-${epoch}`,
       status: PUBLISHED_STATUS,
       publication_epoch: epoch,
-    },
+    }),
   );
 }
 

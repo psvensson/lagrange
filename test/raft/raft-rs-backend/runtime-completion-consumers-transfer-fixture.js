@@ -17,6 +17,8 @@ import {PriorityRecoverySupersededTarget} from
   '../../../src/rebalancer/priority-recovery-superseded-target.js';
 import {ReplicaOperationRepository} from
   '../../../src/rebalancer/replica-operation-repository.js';
+import {projectReplicasFromServicesRows} from '../../../src/rebalancer/projected-replica.js';
+import {servicesRow, systemTableRow} from '../../test-helpers/system-table-row-fixture.js';
 import {formAdmittedGroup} from '../../partition/partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from '../../partition/partition-release-fixture.js';
 import {createLoopbackTransport} from '../../partition/partition-service-test-support.js';
@@ -61,14 +63,14 @@ function refreshCureProjection(groups, cache) {
       service.raft.readStatus().role === RAFT_ROLE.LEADER);
     assert.ok(leader, 'projection requires an actual native leader');
     cache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT,
-      {partition_id: leader.partitionId, table_id: TABLE,
-        replica_count: group.services.length, leader_node_id: leader.nodeId});
+      systemTableRow(TABLES.PARTITIONS, {partition_id: leader.partitionId, table_id: TABLE,
+        replica_count: group.services.length, leader_node_id: leader.nodeId}));
     for (const service of group.services) {
       cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT,
-        {service_id: service.replicaId, replica_id: service.replicaId,
+        servicesRow({service_id: service.replicaId, replica_id: service.replicaId,
           partition_id: service.partitionId, service_type: SERVICE_TYPE.PARTITION,
           node_id: service.nodeId, status: SERVICE_STATUS.ACTIVE,
-          raft_role: service.raft.readStatus().role});
+          raft_role: service.raft.readStatus().role}));
     }
   }
 }
@@ -88,8 +90,8 @@ function cureContext(service, cache) {
     },
     isStabilized: () => true,
     systemTableCache: cache, messageRouter: service.transport, logger: service.logger,
-    getCurrentReplicas: () => cache.filter(TABLES.SERVICES,
-      (row) => row.partition_id === service.partitionId)};
+    getCurrentReplicas: () => projectReplicasFromServicesRows(cache.filter(TABLES.SERVICES,
+      (row) => row.partition_id === service.partitionId))};
 }
 
 async function nativeCureFixture(t) {

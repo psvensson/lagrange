@@ -13,19 +13,23 @@ import {
   CDCEvent,
   CDCHandler,
 } from '../../src/message-group/cdc-handler.js';
+import {nodesRow} from
+  '../test-helpers/system-table-row-fixture.js';
 
 const TABLE_NAME = 'nodes';
 const NODE_ID = 'node-provenance';
 
 function buildNodeRow(updatedAtHlc, overrides = {}) {
   return {
-    node_id: NODE_ID,
-    status: 'active',
-    connection_state: 'ready',
-    last_heartbeat: 1_000,
-    ready_lease_expires_at: 61_000,
+    ...nodesRow({
+      node_id: NODE_ID,
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: 1_000,
+      ready_lease_expires_at: 61_000,
+      ...overrides,
+    }),
     updated_at_hlc: updatedAtHlc,
-    ...overrides,
   };
 }
 

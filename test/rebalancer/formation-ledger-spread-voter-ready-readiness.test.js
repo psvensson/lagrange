@@ -70,6 +70,7 @@ import {
   getAuthoritativeOperationLedgerPlacementObservation,
 } from '../../src/rebalancer/operation-ledger-quorum-concentration.js';
 import {createTestCoordinator} from './test-helpers.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_LEDGER_PARTITION_ID = 'replica_operations-p1';
 const TEST_SEED_NODE_ID = 'seed-node';
@@ -111,12 +112,12 @@ function resetTestEnvironment() {
 }
 
 function createSeedReadyNodeRow() {
-  return {
+  return nodesRow({
     node_id: TEST_SEED_NODE_ID,
     status: NODE_STATE.ACTIVE,
     connection_state: NODE_STATE.READY,
     ready_lease_expires_at: Date.now() + 60000,
-  };
+  });
 }
 
 // A formation-barrier-held joiner: process-alive and CONNECTED
@@ -125,16 +126,16 @@ function createSeedReadyNodeRow() {
 // (node-joining-operation-ledger-formation-readiness.js
 // publishOperationLedgerFormationLiveness).
 function createBarrierHeldJoinerNodeRow(nodeId) {
-  return {
+  return nodesRow({
     node_id: nodeId,
     status: NODE_STATE.ACTIVE,
     connection_state: NODE_STATE.CONNECTED,
     ready_lease_expires_at: 0,
-  };
+  });
 }
 
 function createLedgerVoterServiceRow({replicaId, nodeId, raftRole}) {
-  return {
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     partition_id: TEST_LEDGER_PARTITION_ID,
@@ -143,7 +144,7 @@ function createLedgerVoterServiceRow({replicaId, nodeId, raftRole}) {
     status: 'active',
     raft_role: raftRole,
     address: `${nodeId}/partition/${replicaId}`,
-  };
+  });
 }
 
 // The settled live wedge (run4): the REPLACE completed without draining its

@@ -13,6 +13,7 @@ import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 /**
  * Initialize test environment with configuration and logging.
@@ -47,59 +48,61 @@ function populateTypicalClusterState(cache) {
   // Add nodes
   for (let i = 0; i < nodeCount; i++) {
     const nodeId = `node-${i}`;
-    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', systemTableRow(TABLES.NODES, {
       node_id: nodeId,
       node_address: `http://localhost:${8080 + i}`,
       status: SERVICE_STATUS.ACTIVE,
       created_at: Date.now(),
-      updated_at: Date.now(),
-    });
+    }));
   }
 
   // Add system tables metadata
   for (const tableName of systemTables) {
-    cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.TABLES, 'INSERT', systemTableRow(TABLES.TABLES, {
       table_id: tableName,
       table_name: tableName,
-      schema: JSON.stringify({columns: []}),
+      schema_definition: JSON.stringify({columns: []}),
       created_at: Date.now(),
-    });
+    }));
 
     // Add partition for this table
     const partitionId = `${tableName}-partition-0`;
-    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      partition_id: partitionId,
-      table_id: tableName,
-      table_name: tableName,
-      partition_key_start: null,
-      partition_key_end: null,
-      replica_count: replicasPerPartition,
-      created_at: Date.now(),
-    });
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: partitionId,
+        table_id: tableName,
+        table_name: tableName,
+        partition_key_start: null,
+        partition_key_end: null,
+        replica_count: replicasPerPartition,
+        created_at: Date.now(),
+      }));
 
     // Add replicas for this partition
     for (let r = 0; r < replicasPerPartition; r++) {
       const replicaId = `${partitionId}-r${r}`;
       const nodeId = `node-${r % nodeCount}`;
-      cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-        service_id: replicaId,
-        service_type: SERVICE_TYPE.PARTITION,
-        partition_id: partitionId,
-        node_id: nodeId,
-        address: `${nodeId}/partition/${replicaId}`,
-        raft_role: r === 0 ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
-        status: SERVICE_STATUS.ACTIVE,
-        created_at: Date.now(),
-      });
+      cache.applySystemTableChange(TABLES.SERVICES, 'INSERT',
+        systemTableRow(TABLES.SERVICES, {
+          service_id: replicaId,
+          service_type: SERVICE_TYPE.PARTITION,
+          partition_id: partitionId,
+          node_id: nodeId,
+          address: `${nodeId}/partition/${replicaId}`,
+          raft_role: r === 0 ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
+          status: SERVICE_STATUS.ACTIVE,
+          created_at: Date.now(),
+        }));
     }
   }
 
   // Add message groups
-  cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, 'INSERT', {
-    group_id: 'initial-message-group',
-    replica_count: replicasPerPartition,
-    created_at: Date.now(),
-  });
+  cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, 'INSERT',
+    systemTableRow(TABLES.MESSAGE_GROUPS, {
+      group_id: 'initial-message-group',
+      replica_count: replicasPerPartition,
+      created_at: Date.now(),
+    }));
 }
 
 test('Bootstrap response building performance - typical cluster', async (t) => {
@@ -177,56 +180,58 @@ test('Bootstrap response building performance - large cluster', async (t) => {
   // Add nodes
   for (let i = 0; i < nodeCount; i++) {
     const nodeId = `node-${i}`;
-    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', systemTableRow(TABLES.NODES, {
       node_id: nodeId,
       node_address: `http://localhost:${8080 + i}`,
       status: SERVICE_STATUS.ACTIVE,
       created_at: Date.now(),
-      updated_at: Date.now(),
-    });
+    }));
   }
 
   // Add system tables and partitions
   for (const tableName of systemTables) {
-    cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.TABLES, 'INSERT', systemTableRow(TABLES.TABLES, {
       table_id: tableName,
       table_name: tableName,
-      schema: JSON.stringify({columns: []}),
+      schema_definition: JSON.stringify({columns: []}),
       created_at: Date.now(),
-    });
+    }));
 
     const partitionId = `${tableName}-partition-0`;
-    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      partition_id: partitionId,
-      table_id: tableName,
-      table_name: tableName,
-      partition_key_start: null,
-      partition_key_end: null,
-      replica_count: replicasPerPartition,
-      created_at: Date.now(),
-    });
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: partitionId,
+        table_id: tableName,
+        table_name: tableName,
+        partition_key_start: null,
+        partition_key_end: null,
+        replica_count: replicasPerPartition,
+        created_at: Date.now(),
+      }));
 
     for (let r = 0; r < replicasPerPartition; r++) {
       const replicaId = `${partitionId}-r${r}`;
       const nodeId = `node-${r % nodeCount}`;
-      cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-        service_id: replicaId,
-        service_type: SERVICE_TYPE.PARTITION,
-        partition_id: partitionId,
-        node_id: nodeId,
-        address: `${nodeId}/partition/${replicaId}`,
-        raft_role: r === 0 ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
-        status: SERVICE_STATUS.ACTIVE,
-        created_at: Date.now(),
-      });
+      cache.applySystemTableChange(TABLES.SERVICES, 'INSERT',
+        systemTableRow(TABLES.SERVICES, {
+          service_id: replicaId,
+          service_type: SERVICE_TYPE.PARTITION,
+          partition_id: partitionId,
+          node_id: nodeId,
+          address: `${nodeId}/partition/${replicaId}`,
+          raft_role: r === 0 ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
+          status: SERVICE_STATUS.ACTIVE,
+          created_at: Date.now(),
+        }));
     }
   }
 
-  cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, 'INSERT', {
-    group_id: 'initial-message-group',
-    replica_count: replicasPerPartition,
-    created_at: Date.now(),
-  });
+  cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, 'INSERT',
+    systemTableRow(TABLES.MESSAGE_GROUPS, {
+      group_id: 'initial-message-group',
+      replica_count: replicasPerPartition,
+      created_at: Date.now(),
+    }));
 
   // Create bootstrap API
   const api = new BootstrapAPI({

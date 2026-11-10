@@ -9,6 +9,8 @@ import {
 } from '../../constants/index.js';
 import {NODE_STATE} from '../../constants/node-state.js';
 import {CONNECTION_STATE} from '../../constants/transport.js';
+import {defineNodesProjection} from '../../control-plane/nodes-row-decoder.js';
+import {seedProjectionRow} from '../../control-plane/system-table-row-decoding.js';
 import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
@@ -141,13 +143,24 @@ function buildBootstrapAdmissionPeerEndpointId(nodeId) {
   ].join(LOCAL_STR_DASH);
 }
 
+// An admitted peer's nodes row as a joiner learns it from the bootstrap
+// response before the peer's own row is delivered (quest
+// system-table-row-decoders, seed projections): only identity, address,
+// joining status and connecting state are observed; every other column is
+// not observed until the peer's row arrives.
+const BOOTSTRAP_ADMISSION_PEER_HINT_SEED_PROJECTION = defineNodesProjection(
+  'bootstrap_admission_peer_hint', [
+    COLUMN.NODE_ID, COLUMN.NODE_ADDRESS, COLUMN.STATUS, COLUMN.CONNECTION_STATE,
+  ]);
+
 function buildBootstrapAdmissionPeerNodeRows(peerHints) {
-  return peerHints.map((hint) => ({
-    [COLUMN.NODE_ID]: hint.nodeId,
-    [COLUMN.NODE_ADDRESS]: hint.nodeAddress,
-    [COLUMN.STATUS]: NODE_STATE.JOINING,
-    [COLUMN.CONNECTION_STATE]: CONNECTION_STATE.CONNECTING,
-  }));
+  return peerHints.map((hint) => seedProjectionRow(
+    BOOTSTRAP_ADMISSION_PEER_HINT_SEED_PROJECTION, {
+      [COLUMN.NODE_ID]: hint.nodeId,
+      [COLUMN.NODE_ADDRESS]: hint.nodeAddress,
+      [COLUMN.STATUS]: NODE_STATE.JOINING,
+      [COLUMN.CONNECTION_STATE]: CONNECTION_STATE.CONNECTING,
+    }));
 }
 
 function buildBootstrapAdmissionPeerEndpointRows(peerHints) {

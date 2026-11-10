@@ -41,6 +41,7 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED} from
   '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
 import {createMockCache} from './test-helpers.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 // completeOperation/failOperation report a typed transition outcome
 // ({committed, disposition}); the termination stubs return the
@@ -300,7 +301,7 @@ function buildEventDrivenOperation(overrides = {}) {
 }
 
 function buildEventDrivenOperationRow(overrides = {}) {
-  return Object.freeze({
+  return Object.freeze(replicaOperationsRow({
     operation_id: TEST_OPERATION_ID,
     type: OperationType.REPLACE,
     partition_id: TEST_PARTITION_ID,
@@ -314,7 +315,7 @@ function buildEventDrivenOperationRow(overrides = {}) {
     created_at: TEST_CREATED_AT_MS,
     updated_at: TEST_UPDATED_AT_MS,
     ...overrides,
-  });
+  }));
 }
 
 function buildEventDrivenPlanningSnapshot(options = {}) {

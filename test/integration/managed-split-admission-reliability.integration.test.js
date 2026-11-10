@@ -832,7 +832,6 @@ test('managed split admission repairs stale connected node readiness from ' +
       storage_budget_source: 'integration_test_authoritative_refresh',
       storage_budget_updated_at: now,
       created_at: now,
-      updated_at: now,
     };
     const authoritativeReads = [];
 

@@ -16,6 +16,7 @@ import {
 } from '../../src/rebalancer/replica-status.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {filterDataForTable} from '../../src/cdc/cdc-integration-service-cache-divergence.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SERVICE_TYPE} from '../../src/constants/index.js';
@@ -29,6 +30,11 @@ import {
   getUniquePort,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
+import {
+  nodesRow,
+  servicesRow,
+  sqlInsertedSystemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {resumeFixtureParticipantAdmission} from
@@ -95,7 +101,9 @@ function createCacheBackedControlPlaneGateway(systemTableCache) {
       const tableName = mutation.tableName;
       const operation = String(mutation.operation || '').toLowerCase();
       const whereClause = mutation.whereClause || {};
-      const data = mutation.data || {};
+      // The production write path stores only the table's columns
+      // (cdc filterDataForTable before the SQL); so does this fake.
+      const data = filterDataForTable(tableName, mutation.data || {});
       const keyField = getCachePrimaryKeyField(tableName);
       const rows = cloneRows(systemTableCache.getAll(tableName));
       const matchingRows = rows.filter((row) =>
@@ -103,7 +111,13 @@ function createCacheBackedControlPlaneGateway(systemTableCache) {
       );
 
       if (operation === 'insert' || operation === 'upsert') {
-        systemTableCache.applySystemTableChange(tableName, 'INSERT', {...data});
+        // The stored row is what the SQL table holds after the write: an
+        // INSERT completes omitted columns; an upsert of a held row merges.
+        const held = systemTableCache.get(tableName, data[keyField]);
+        systemTableCache.applySystemTableChange(tableName, 'INSERT',
+          operation === 'upsert' && held ?
+            {...held, ...data} :
+            sqlInsertedSystemTableRow(tableName, data));
         return {success: true, partitionResult: {affectedRows: 1}};
       }
 
@@ -479,7 +493,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
       const now = Date.now();
       const additionalNodes = ['node-2', 'node-3', 'node-4', 'node-5'];
       for (const nodeId of additionalNodes) {
-        systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+        systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', nodesRow({
           node_id: nodeId,
           node_address: `ws://${nodeId}:9001`,
           cpu_cores: 4,
@@ -494,7 +508,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
           last_heartbeat: now,
           ready_lease_expires_at: now + 10000,
           created_at: now,
-        });
+        }));
       }
 
       const partitionId = await waitForStablePartitionId(systemTableCache);
@@ -505,7 +519,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
 
       // Add services (replicas) for the partition, including one with 'failed' status
       // First, add replicas on node-2 and node-3 as active
-      systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+      systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', servicesRow({
         service_id: 'test-replica-2',
         node_id: 'node-2',
         service_type: 'partition',
@@ -513,9 +527,9 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
         status: 'active',
         created_at: now,
         updated_at: now,
-      });
+      }));
 
-      systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+      systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', servicesRow({
         service_id: 'test-replica-3',
         node_id: 'node-3',
         service_type: 'partition',
@@ -523,7 +537,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
         status: 'failed', // This replica failed
         created_at: now,
         updated_at: now,
-      });
+      }));
 
       // Create real UnifiedRebalancer with real dependencies
       const rebalancer = new UnifiedRebalancer({

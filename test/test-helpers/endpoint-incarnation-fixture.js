@@ -8,6 +8,7 @@
  */
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {nodesRow} from './system-table-row-fixture.js';
 
 const FIXTURE_ENDPOINT_INCARNATION = 1;
 
@@ -29,16 +30,15 @@ function withEndpointIncarnation(endpoint,
  */
 function registeredNodeRow(nodeId, bootIncarnation =
 FIXTURE_ENDPOINT_INCARNATION, overrides = {}) {
-  return {
+  return nodesRow({
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.BOOT_INCARNATION]: bootIncarnation,
     status: 'active',
     connection_state: 'connected',
     last_heartbeat: 1,
     created_at: 1,
-    updated_at: 1,
     ...overrides,
-  };
+  });
 }
 
 /**

@@ -754,7 +754,7 @@ class MovePlanner {
     );
     const prioritySpread = this.analyzePrioritySpread(
       targetNodes.map((nodeId) => ({
-        node_id: nodeId,
+        nodeId,
         status: ReplicaStatus.ACTIVE,
       })),
       policy,

@@ -13,6 +13,7 @@ import {applyCDCIntegrationServiceCacheVisibilityWait} from
 import {AUTHORITATIVE_READ_SOURCE} from
   '../../src/cdc/cdc-integration-service-shared-constants.js';
 import {TABLES} from '../../src/constants/index.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 import {CDC_PROPAGATED_TABLES} from '../../src/cache/cdc-table-policy.js';
 import {INITIAL_PARTITION_IDS} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -193,13 +194,13 @@ test('late-services-row-converges-after-one-shot-hydration: a services row that 
   'landed after the one-shot hydration and missed its fan-out converges on the ' +
   'steady-state defer tick', async (t) => {
   const cache = new SystemTableCache();
-  const lateServicesRow = {
+  const lateServicesRow = servicesRow({
     service_id: 'svc-tbl-d915-p1-leader',
     partition_id: 'tbl-d915-p1',
     node_id: '20de1da9',
     status: 'ACTIVE',
-    role: 'leader',
-  };
+    raft_role: 'leader',
+  });
   const service = makeAuthorityService(
     cache,
     [lateServicesRow],
@@ -459,14 +460,14 @@ test('a publications write-leader with a membership deficit still sweeps a ' +
   'missed routing DELETE after driving the higher-priority publication turn',
 async (t) => {
   const cache = new SystemTableCache();
-  cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', {
+  cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', servicesRow({
     service_id: 'replica_operations-p1-r4',
     service_type: 'partition',
     partition_id: 'replica_operations-p1',
     node_id: 'N3',
     status: 'failed',
     updated_at: 1000,
-  }, {causeId: 'missed-delete'});
+  }), {causeId: 'missed-delete'});
 
   const service = Object.create(CacheRepairHost.prototype);
   service.cacheMutationTarget = cache;

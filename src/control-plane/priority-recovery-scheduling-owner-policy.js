@@ -3,7 +3,8 @@ import {
 } from '../bootstrap/system-partition-classification.js';
 import {SERVICE_STATUS} from '../constants/service-status.js';
 import {RAFT_ROLE} from '../raft/constants.js';
-import {normalizeServiceRow} from './system-row-normalizers.js';
+import {decodeServicesRows} from './services-row-decoder.js';
+import {ROW_ABSENT} from './system-table-row-decoding.js';
 
 const PRIORITY_RECOVERY_SCHEDULING_OWNER_MODE = Object.freeze({
   CURRENT_OWNER: 'current_owner',
@@ -79,19 +80,19 @@ function resolveLivePriorityRecoverySchedulingOwnerPartitionIds(
       .filter((nodeId) => nodeId.length > 0),
   );
   const liveLeaderPartitionIds = new Set();
-  for (const serviceRow of Array.isArray(serviceRows) ? serviceRows : []) {
-    const normalizedService = normalizeServiceRow(serviceRow);
+  for (const service of decodeServicesRows(Array.isArray(serviceRows) ? serviceRows : [])) {
     if (
-      !availableNodeIdSet.has(normalizedService.nodeId) ||
-      normalizedService.status !== SERVICE_STATUS.ACTIVE ||
-      normalizedService.raftRole !== RAFT_ROLE.LEADER ||
+      service.partitionId === ROW_ABSENT ||
+      !availableNodeIdSet.has(service.nodeId) ||
+      service.status !== SERVICE_STATUS.ACTIVE ||
+      service.raftRole !== RAFT_ROLE.LEADER ||
       !classifySystemPartition({
-        partitionId: normalizedService.partitionId,
+        partitionId: service.partitionId,
       }).priorityControlPlane
     ) {
       continue;
     }
-    liveLeaderPartitionIds.add(normalizedService.partitionId);
+    liveLeaderPartitionIds.add(service.partitionId);
   }
   return Object.freeze(
     [...liveLeaderPartitionIds].sort((left, right) =>

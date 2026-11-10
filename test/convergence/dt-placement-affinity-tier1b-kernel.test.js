@@ -13,6 +13,7 @@ import {
   REBALANCER_ENTITY_TYPE,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 // ---------------------------------------------------------------------------
 // Tier 1b of the service↔data affinity placement epic
@@ -44,8 +45,13 @@ function node(nodeId, cpu, latencyGroupId) {
   };
 }
 
+// The planner's replica type (getCurrentReplicas): a projected replica of a
+// stored services row.
 function replica(replicaId, nodeId) {
-  return {replica_id: replicaId, node_id: nodeId, status: ReplicaStatus.ACTIVE};
+  return projectedReplica({
+    service_id: replicaId, replica_id: replicaId, node_id: nodeId,
+    status: ReplicaStatus.ACTIVE,
+  });
 }
 
 // One service replica sits on s1 (G2); its accessed data lives in G1

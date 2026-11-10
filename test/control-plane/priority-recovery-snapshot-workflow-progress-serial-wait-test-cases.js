@@ -1,3 +1,5 @@
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
+
 export function registerPriorityRecoverySnapshotWorkflowProgressSerialWaitTests(context) {
   const {
     buildPriorityRecoveryActuationDecisionInput,
@@ -833,12 +835,12 @@ export function registerPriorityRecoverySnapshotWorkflowProgressSerialWaitTests(
             }],
           },
         },
-        serviceRows: [{
+        serviceRows: [servicesRow({
           partition_id: 'control_plane_publications-p1',
           status: 'active',
           raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
           node_id: 'node-b',
-        }],
+        })],
       });
 
       const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>

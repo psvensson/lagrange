@@ -19,6 +19,7 @@ import {resolveProjectedActiveNodeIds} from
 import {applyUnifiedRebalancerCriticalTopologyMethods} from
   '../../src/rebalancer/unified-rebalancer-critical-topology-methods.js';
 import {registeredNodeRow} from '../test-helpers/endpoint-incarnation-fixture.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY,
   NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE,
@@ -41,7 +42,7 @@ function readyNode(incarnation) {
 }
 
 function nodeEndpoint(incarnation) {
-  return {
+  return systemTableRow(TABLES.NODE_ENDPOINTS, {
     endpoint_id: `ep-${NODE_ID}-ws-g${incarnation}`,
     node_id: NODE_ID,
     transport_type: TRANSPORT_TYPE.WEBSOCKET,
@@ -49,7 +50,7 @@ function nodeEndpoint(incarnation) {
     priority: 0,
     status: ENDPOINT_STATUS.ACTIVE,
     boot_incarnation: incarnation,
-  };
+  });
 }
 
 function serviceEndpoint(incarnation) {

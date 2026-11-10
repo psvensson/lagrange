@@ -1,4 +1,5 @@
 import {EventEmitter} from 'events';
+import {sqlInsertedSystemTableRow} from '../test-helpers/system-table-row-fixture.js';
 import {CDCHandler} from '../../src/message-group/cdc-handler.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 
@@ -162,7 +163,9 @@ class MockMessageGroupService extends EventEmitter {
 // The ambient default keeps every existing caller byte-identical.
 function createNodeEntry(nodeId, overrides = {}, nowMs = Date.now()) {
   const now = nowMs;
-  return {
+  // The row the nodes table stores for this INSERT (omitted columns take
+  // their DDL defaults, as SQL does).
+  return sqlInsertedSystemTableRow('nodes', {
     node_id: nodeId,
     node_address: `ws://${nodeId}:9000`,
     cpu_cores: 4,
@@ -178,7 +181,7 @@ function createNodeEntry(nodeId, overrides = {}, nowMs = Date.now()) {
     ready_lease_expires_at: now + TEST_TIMEOUTS.READY_LEASE_DURATION,
     created_at: now,
     ...overrides,
-  };
+  });
 }
 
 async function waitForCondition(

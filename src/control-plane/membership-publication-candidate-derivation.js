@@ -10,8 +10,9 @@ import {
 } from './membership-lifecycle-constants.js';
 import {
   normalizeControlPlanePublicationRow,
-  normalizeNodeRow,
 } from './system-row-normalizers.js';
+import {decodeNodesRowViews} from './nodes-row-decoder.js';
+import {projectReplicasFromServicesRows} from '../rebalancer/projected-replica.js';
 import {
   NODE_STATE,
   STATE,
@@ -226,8 +227,7 @@ function deriveFormationPlacementNodeIds(
     STATE.READY,
   ]);
   return helperFns.normalizeNodeIdList(
-    (Array.isArray(nodeRows) ? nodeRows : [])
-      .map((nodeRow) => normalizeNodeRow(nodeRow))
+    decodeNodesRowViews(Array.isArray(nodeRows) ? nodeRows : [])
       .filter((nodeRow) => {
         const dimensions = readinessByNodeId[nodeRow.nodeId]?.dimensions;
         return (
@@ -415,8 +415,8 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     (nodeId) => !publishedBaselineNodeIds.includes(nodeId),
   );
   const publicationProjectionNodeRowIds = new Set(
-    planningSnapshot.nodeRows
-      .map((nodeRow) => normalizeNodeRow(nodeRow).nodeId)
+    decodeNodesRowViews(planningSnapshot.nodeRows)
+      .map((nodeRow) => nodeRow.nodeId)
       .filter((nodeId) => nodeId.length > 0),
   );
   const publicationWideningHasNodeRowEvidence =
@@ -593,7 +593,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   );
   const derivedPriorityPartitionSummary = buildDerivedPriorityPartitionSummary(
     {
-      serviceRows: planningSnapshot.serviceRows,
+      serviceRows: projectReplicasFromServicesRows(planningSnapshot.serviceRows),
       partitionRows: planningSnapshot.partitionRows,
       readinessByNodeId,
       projectedServingNodeIds: publicationProjectedServingNodeIds,

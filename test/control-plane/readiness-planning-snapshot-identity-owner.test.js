@@ -70,15 +70,18 @@ import {
 const PRE_CHANGE_HEAVY_BUILDS = 1724;
 // Measured after giving the canonical planning snapshot one VERIFIED identity
 // owner plus Q2 semantic source classification: 585 heavy planning builds =
-// 117/s. Each remaining build is either
+// 117/s; 540 (108/s) once the rig's cache notifies the stored row as
+// SystemTableCache does (it notified the partial change row, which the
+// semantic tracker held as the whole row). Each remaining build is either
 // the first projection of genuinely new content, or the one verification
 // rebuild that makes a snapshot canonical.
-const AFTER_HEAVY_BUILDS = 585;
+const AFTER_HEAVY_BUILDS = 540;
 // The publication recovery gate snapshot was the largest instrumented site on
 // the failing seed (586/s). It must not regress: measured 4118 -> 3184 builds
-// over the same sequence after frozen observation gates gained identity reuse.
+// over the same sequence after frozen observation gates gained identity reuse,
+// and 3104 once the rig notifies the stored row (see AFTER_HEAVY_BUILDS).
 const PRE_CHANGE_GATE_BUILDS = 4118;
-const AFTER_GATE_BUILDS = 3184;
+const AFTER_GATE_BUILDS = 3104;
 // The publications winner read is the one live read the planning memo version
 // key performs. The identity owner adds none: it reuses the floored source
 // generation the normalizer already computed.
@@ -792,7 +795,7 @@ function driveOwnerBuildSequence({readiness, cache, clock}) {
           [COLUMN.NODE_ID]: OWNER_NODE_ID,
           [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
           [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-          revision: call,
+          [COLUMN.UPDATED_AT]: clock.value,
         });
       }
       readiness.buildNodeReadinessSyncCurrent(

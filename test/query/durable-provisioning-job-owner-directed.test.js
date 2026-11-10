@@ -76,7 +76,11 @@ function applyDirectedUpdate(rows, mutation) {
       return {success: true, affectedRows: 0};
     }
   }
-  rows.set(key, {...current, ...mutation.data});
+  // SQL binds an undefined SET value as NULL (better-sqlite3), so the stored
+  // row holds NULL, never undefined.
+  const stored = Object.fromEntries(Object.entries(mutation.data)
+    .map(([column, value]) => [column, value === undefined ? null : value]));
+  rows.set(key, {...current, ...stored});
   return {success: true, affectedRows: 1, visibilityState: 'visible'};
 }
 

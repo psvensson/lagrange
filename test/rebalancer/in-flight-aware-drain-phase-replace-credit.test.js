@@ -30,16 +30,18 @@ import {
 } from '../../src/rebalancer/in-flight-aware-replica-count.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {REBALANCER_MOVE_TYPE as MoveType} from '../../src/rebalancer/rebalancer-constants.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION = 'p1';
 
 function replica(nodeId, replicaId, status) {
-  return {
+  return projectedReplica({
     node_id: nodeId,
     replica_id: replicaId,
+    service_id: replicaId,
     partition_id: PARTITION,
     status,
-  };
+  });
 }
 
 // A drain-phase REPLACE: its SOURCE (replica_id) has already left activeCount

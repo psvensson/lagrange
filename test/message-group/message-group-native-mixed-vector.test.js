@@ -13,7 +13,8 @@ import {isRaftRsTransportEnvelope} from '../../src/raft/raft-packet-utils.js';
 import {cdcCommitWaitIdentity, isCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
 import {MESSAGE_GROUP_CDC_FORWARD_MODE} from
   '../../src/message-group/message-group-forwarding-owner-constants.js';
-import {GROUP_ID, NODE_ID, pump, recipientFixture} from './message-group-native-custody-fixture.js';
+import {GROUP_ID, NODE_ID, configRow, pump, recipientFixture} from
+  './message-group-native-custody-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -30,12 +31,12 @@ afterEach(() => {
 function mixedInput(assigned) {
   const stamp = new HLCTimestamp(1000, 0, 'mixed-vector-source').toString();
   const durable = {tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
-    data: {config_key: 'mixed-durable', config_value: 'durable-body'}, timestamp: stamp,
+    data: configRow('mixed-durable', 'durable-body'), timestamp: stamp,
     sourcePartition: 'mixed-config-source', sourceReplica: 'mixed-config-source-r1',
     eventKey: 'mixed-native-write-1', entryId: 'mixed-native-write-1',
     sourceLogIndex: 19, sourceOrdinal: 0};
   const ordinary = {tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
-    data: {config_key: 'mixed-ordinary', config_value: 'ordinary-body'},
+    data: configRow('mixed-ordinary', 'ordinary-body'),
     ...(assigned ? {timestamp: stamp} : {})};
   return [durable, ordinary];
 }

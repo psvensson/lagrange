@@ -1,3 +1,8 @@
+import {
+  nodesRow,
+  replicaOperationsRow,
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -95,46 +100,46 @@ function initializeTestEnvironment() {
   }
 }
 
+// A live in-flight REPLACE as its stored row: created_at / updated_at are
+// NOT NULL and current (a row updated now is not stale under either the
+// wall clock or the suite's fixed clock, which lies in its past).
 function buildInFlightReplaceOperation() {
-  return Object.freeze({
+  const liveUpdatedAtMs = Date.now();
+  return Object.freeze(replicaOperationsRow({
     operation_id: TEST_OPERATION_ID,
-    operationId: TEST_OPERATION_ID,
     type: 'REPLACE',
     entity_type: EntityType.PARTITION,
     entity_id: TEST_PARTITION_ID,
     partition_id: TEST_PARTITION_ID,
-    partitionId: TEST_PARTITION_ID,
     replica_id: TEST_REPLICA_ID,
-    replicaId: TEST_REPLICA_ID,
     source_node_id: TEST_SOURCE_NODE_ID,
-    sourceNodeId: TEST_SOURCE_NODE_ID,
     target_node_id: TEST_TARGET_NODE_ID,
-    targetNodeId: TEST_TARGET_NODE_ID,
     status: ReplicaStatus.SYNCING,
     workflow_step: WORKFLOW_STEP.SYNCING,
-    workflowStep: WORKFLOW_STEP.SYNCING,
+    created_at: liveUpdatedAtMs,
+    updated_at: liveUpdatedAtMs,
     steps_history: JSON.stringify([
       {step: WORKFLOW_STEP.PENDING, status: 'pending', inFlight: true},
       {step: WORKFLOW_STEP.SENDING, status: 'pending', inFlight: true},
       {step: WORKFLOW_STEP.CREATING, status: 'creating', inFlight: true},
       {step: WORKFLOW_STEP.SYNCING, status: 'syncing', inFlight: true},
     ]),
-  });
+  }));
 }
 
 function buildStaleInFlightReplaceOperation() {
   return Object.freeze({
     ...buildInFlightReplaceOperation(),
+    created_at: TEST_STALE_OPERATION_UPDATED_AT_MS,
     updated_at: TEST_STALE_OPERATION_UPDATED_AT_MS,
-    updatedAt: TEST_STALE_OPERATION_UPDATED_AT_MS,
   });
 }
 
 function buildAncientStaleInFlightReplaceOperation() {
   return Object.freeze({
     ...buildInFlightReplaceOperation(),
+    created_at: TEST_ANCIENT_STALE_OPERATION_UPDATED_AT_MS,
     updated_at: TEST_ANCIENT_STALE_OPERATION_UPDATED_AT_MS,
-    updatedAt: TEST_ANCIENT_STALE_OPERATION_UPDATED_AT_MS,
   });
 }
 
@@ -231,6 +236,15 @@ function buildStickySatisfiedPlanningSnapshot() {
   });
 }
 
+// A production-shaped ACTIVE nodes row (the cache serves complete rows).
+function testNodeRow(nodeId) {
+  return nodesRow({
+    node_id: nodeId,
+    node_address: `ws://${nodeId}`,
+    status: TEST_NODE_STATUS_ACTIVE,
+  });
+}
+
 function buildPriorityPlacementCacheData({
   currentPartitionNodeIds,
 }) {
@@ -251,7 +265,7 @@ function buildPriorityPlacementCacheData({
         spreadNodeIds;
     return nodeIds.map((nodeId, index) => {
       const replicaId = `${partitionId}-fixture-r${index + 1}`;
-      return {
+      return servicesRow({
         service_id: replicaId,
         service_type: TEST_SERVICE_TYPE_PARTITION,
         node_id: nodeId,
@@ -260,14 +274,11 @@ function buildPriorityPlacementCacheData({
         address: `partition://${replicaId}`,
         raft_role: TEST_RAFT_ROLE_FOLLOWER,
         status: ReplicaStatus.ACTIVE,
-      };
+      });
     });
   });
   return {
-    nodes: spreadNodeIds.map((nodeId) => ({
-      node_id: nodeId,
-      status: TEST_NODE_STATUS_ACTIVE,
-    })),
+    nodes: spreadNodeIds.map((nodeId) => testNodeRow(nodeId)),
     partitions,
     services,
   };
@@ -706,11 +717,11 @@ test(
       rebalanceCoordinator: coordinator,
       cacheData: {
         nodes: [
-          {node_id: TEST_SOURCE_NODE_ID, status: TEST_NODE_STATUS_ACTIVE},
-          {node_id: TEST_TARGET_NODE_ID, status: TEST_NODE_STATUS_ACTIVE},
-          {node_id: TEST_SUPPORTING_NODE_ID, status: TEST_NODE_STATUS_ACTIVE},
+          testNodeRow(TEST_SOURCE_NODE_ID),
+          testNodeRow(TEST_TARGET_NODE_ID),
+          testNodeRow(TEST_SUPPORTING_NODE_ID),
         ],
-        services: [{
+        services: [servicesRow({
           service_id: TEST_REPLICA_ID,
           service_type: TEST_SERVICE_TYPE_PARTITION,
           node_id: TEST_SOURCE_NODE_ID,
@@ -718,7 +729,7 @@ test(
           replica_id: TEST_REPLICA_ID,
           raft_role: TEST_RAFT_ROLE_FOLLOWER,
           status: ReplicaStatus.ACTIVE,
-        }],
+        })],
         partitions: [{
           partition_id: TEST_PARTITION_ID,
           table_id: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,

@@ -7,6 +7,11 @@ import tap from 'tap';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
   t.test('should hydrate cache from bootstrap response snapshots', async (t) => {
@@ -31,19 +36,19 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
     joiningService.bootstrapResponse = {
       systemTableSnapshots: {
         nodes: [
-          {node_id: 'seed-node', node_address: 'http://localhost:3000'},
+          nodesRow({node_id: 'seed-node', node_address: 'http://localhost:3000'}),
         ],
         partitions: [
-          {partition_id: 'p1', table_name: 'users'},
+          systemTableRow(TABLES.PARTITIONS, {partition_id: 'p1', table_name: 'users'}),
         ],
         services: [
-          {service_id: 's1', partition_id: 'p1'},
+          servicesRow({service_id: 's1', partition_id: 'p1'}),
         ],
         tables: [
-          {table_id: 't1', table_name: 'users'},
+          systemTableRow(TABLES.TABLES, {table_id: 't1', table_name: 'users'}),
         ],
         message_groups: [
-          {group_id: 'mg1'},
+          systemTableRow(TABLES.MESSAGE_GROUPS, {group_id: 'mg1'}),
         ],
         replica_operations: [],
       },
@@ -125,7 +130,7 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
     joiningService.bootstrapResponse = {
       systemTableSnapshots: {
         nodes: [
-          {node_id: 'seed-node', node_address: 'http://localhost:3000'},
+          nodesRow({node_id: 'seed-node', node_address: 'http://localhost:3000'}),
         ],
         // partitions missing
         services: null,
@@ -170,13 +175,13 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
     joiningService.bootstrapResponse = {
       systemTableSnapshots: {
         nodes: [
-          {node_id: 'node-1', node_address: 'http://localhost:3001'},
-          {node_id: 'node-2', node_address: 'http://localhost:3002'},
-          {node_id: 'node-3', node_address: 'http://localhost:3003'},
+          nodesRow({node_id: 'node-1', node_address: 'http://localhost:3001'}),
+          nodesRow({node_id: 'node-2', node_address: 'http://localhost:3002'}),
+          nodesRow({node_id: 'node-3', node_address: 'http://localhost:3003'}),
         ],
         partitions: [
-          {partition_id: 'p1', table_name: 'users'},
-          {partition_id: 'p2', table_name: 'orders'},
+          systemTableRow(TABLES.PARTITIONS, {partition_id: 'p1', table_name: 'users'}),
+          systemTableRow(TABLES.PARTITIONS, {partition_id: 'p2', table_name: 'orders'}),
         ],
         services: [],
         tables: [],
@@ -233,11 +238,11 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
         },
         systemTableSnapshots: {
           nodes: [
-            {
+            nodesRow({
               [COLUMN.NODE_ID]: 'seed-node',
               node_address: 'http://localhost:3000',
               [COLUMN.STATUS]: 'active',
-            },
+            }),
           ],
           partitions: [],
           services: [],

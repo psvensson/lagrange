@@ -34,6 +34,9 @@ import path from 'node:path';
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  SYSTEM_TABLE_ROW_DECODE_ERROR_CODE,
+} from '../../src/control-plane/system-table-row-decoding.js';
+import {
   REPLICA_OPERATIONS_SCHEMA,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -305,15 +308,24 @@ function insertMalformedDurableRow(db, operationId, partitionId, rawEpoch) {
   );
 }
 
-async function expectInvalidBindingRejection(t, readOperation, label) {
+// A non-numeric stored value (text, empty text, a cache string) is refused
+// by the replica_operations row decoder before the binding owner reads it
+// (wrong_type at membership_publication_epoch); a finite number outside the
+// epoch domain (negative, fractional) is the binding owner's refusal.
+async function expectInvalidBindingRejection(
+  t,
+  readOperation,
+  label,
+  expectedCode = INVALID_MEMBERSHIP_PUBLICATION_EPOCH_BINDING,
+) {
   try {
     await readOperation();
     t.fail(`${label}: a malformed durable epoch must not rehydrate`);
   } catch (error) {
     t.equal(
       error?.code,
-      INVALID_MEMBERSHIP_PUBLICATION_EPOCH_BINDING,
-      `${label}: rehydration fails closed with the typed binding error`,
+      expectedCode,
+      `${label}: rehydration fails closed with the typed refusal`,
     );
   }
 }
@@ -558,12 +570,14 @@ async (t) => {
     await createDurableCoordinator(CURRENT_EPOCH_TWO);
   try {
     const malformedDurableValues = [
-      {label: 'text', operationId: 'op-malformed-text', raw: 'abc'},
+      {label: 'text', operationId: 'op-malformed-text', raw: 'abc',
+        code: SYSTEM_TABLE_ROW_DECODE_ERROR_CODE},
       {label: 'negative', operationId: 'op-malformed-negative', raw: -1},
       {label: 'fractional', operationId: 'op-malformed-fraction', raw: 1.5},
-      {label: 'empty text', operationId: 'op-malformed-empty', raw: ''},
+      {label: 'empty text', operationId: 'op-malformed-empty', raw: '',
+        code: SYSTEM_TABLE_ROW_DECODE_ERROR_CODE},
     ];
-    for (const {label, operationId, raw} of malformedDurableValues) {
+    for (const {label, operationId, raw, code} of malformedDurableValues) {
       insertMalformedDurableRow(
         durable.db,
         operationId,
@@ -574,6 +588,7 @@ async (t) => {
         t,
         () => coordinator.repository.queryOperationById(operationId),
         `durable ${label}`,
+        code,
       );
     }
 
@@ -609,6 +624,7 @@ async (t) => {
           'op-numeric-text',
         ),
         'cache string epoch',
+        SYSTEM_TABLE_ROW_DECODE_ERROR_CODE,
       );
     } finally {
       await cached.coordinator.shutdown();

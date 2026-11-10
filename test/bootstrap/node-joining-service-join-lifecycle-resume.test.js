@@ -64,6 +64,7 @@ import {
 } from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const REPORTER_FORWARD_NODE_ID = 'joiner-reporter-publication-mode';
 const REPORTER_FORWARD_NODE_ADDRESS = 'ws://localhost:19103';
@@ -176,16 +177,17 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
     service.phaseQuerySystemState = async function() {
       // Registration: this boot's NODES row and its endpoint, both at the
       // boot incarnation.
-      publishRegisteredEndpoint(NodeService.getInstance().getSystemTableCache(), {
-        endpoint_id: `postgres-wire-endpoint-${this.nodeId}`,
-        service_id: META_SERVICE_ID.POSTGRES_WIRE,
-        node_id: this.nodeId,
-        protocol: 'tcp',
-        address: this.nodeId,
-        port: 5432,
-        metadata: '{}',
-        boot_incarnation: this.bootIncarnation,
-      }, TABLES.SERVICE_ENDPOINTS);
+      publishRegisteredEndpoint(NodeService.getInstance().getSystemTableCache(),
+        systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+          endpoint_id: `postgres-wire-endpoint-${this.nodeId}`,
+          service_id: META_SERVICE_ID.POSTGRES_WIRE,
+          node_id: this.nodeId,
+          protocol: 'tcp',
+          address: this.nodeId,
+          port: 5432,
+          metadata: '{}',
+          boot_incarnation: this.bootIncarnation,
+        }), TABLES.SERVICE_ENDPOINTS);
     };
     service.initializeReplicaHandler = function() {
       // Skip replica handler initialization; keep the replica lifecycle owner
@@ -1287,15 +1289,16 @@ test(
     service.initializeRuntimeServiceHandler = () => {};
     service.phaseQuerySystemState = async () => {
       NodeService.getInstance().getSystemTableCache()
-        .applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-          endpoint_id: `postgres-wire-endpoint-${service.nodeId}`,
-          service_id: META_SERVICE_ID.POSTGRES_WIRE,
-          node_id: service.nodeId,
-          protocol: 'tcp',
-          address: service.nodeId,
-          port: 5432,
-          metadata: '{}',
-        });
+        .applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT',
+          systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+            endpoint_id: `postgres-wire-endpoint-${service.nodeId}`,
+            service_id: META_SERVICE_ID.POSTGRES_WIRE,
+            node_id: service.nodeId,
+            protocol: 'tcp',
+            address: service.nodeId,
+            port: 5432,
+            metadata: '{}',
+          }));
     };
     service.signalReadyForReplicas = async () => {};
     service.activateMessageGroupServiceRows = async () => {};

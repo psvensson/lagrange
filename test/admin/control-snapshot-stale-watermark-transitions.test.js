@@ -37,6 +37,7 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {TABLES} from '../../src/constants/index.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const START_MS = 1_000_000;
 const SECOND_MS = 1_000;
@@ -64,12 +65,16 @@ function writeNodeRow(
   cache, nodeId, nowMs, readyLeaseExpiresAtMs, sequence,
   status = NODE_STATUS_ACTIVE,
 ) {
+  // The first write of a node is the row's insert, so every write carries the
+  // complete stored row; the HLC is the cache's declared local provenance.
   cache.applySystemTableChange(TABLES.NODES, CDC_UPDATE, {
-    node_id: nodeId,
-    status,
-    connection_state: CONNECTION_STATE_READY,
-    last_heartbeat: nowMs - SECOND_MS,
-    ready_lease_expires_at: readyLeaseExpiresAtMs,
+    ...nodesRow({
+      node_id: nodeId,
+      status,
+      connection_state: CONNECTION_STATE_READY,
+      last_heartbeat: nowMs - SECOND_MS,
+      ready_lease_expires_at: readyLeaseExpiresAtMs,
+    }),
     updated_at_hlc: `${nowMs}-${sequence}-${nodeId}`,
   });
 }

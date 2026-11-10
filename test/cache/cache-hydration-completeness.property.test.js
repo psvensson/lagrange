@@ -20,6 +20,7 @@ import {
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -36,57 +37,49 @@ afterEach(() => {
 });
 
 /**
- * Generate random data for all system tables.
+ * Generate random data for all system tables: complete stored rows (the
+ * cache holds the row its table would hold and refuses an insert omitting a
+ * NOT NULL column without a DEFAULT), each built by systemTableRow from
+ * randomized stored columns.
  */
+function storedRowsArbitrary(tableName, columns) {
+  return fc.array(
+    fc.record(columns).map((overrides) => systemTableRow(tableName, overrides)),
+    {minLength: 0, maxLength: 5},
+  );
+}
+
 const systemTableDataArbitrary = fc.record({
-  nodes: fc.array(
-    fc.record({
-      node_id: fc.uuid(),
-      address: fc.string({minLength: 5, maxLength: 30}),
-      status: fc.constantFrom('active', 'inactive'),
-    }),
-    {minLength: 0, maxLength: 5},
-  ),
-  services: fc.array(
-    fc.record({
-      service_id: fc.uuid(),
-      name: fc.string({minLength: 1, maxLength: 20}),
-      node_id: fc.uuid(),
-    }),
-    {minLength: 0, maxLength: 5},
-  ),
-  tables: fc.array(
-    fc.record({
-      table_id: fc.uuid(),
-      table_name: fc.string({minLength: 1, maxLength: 20}),
-      primary_key: fc.string({minLength: 1, maxLength: 10}),
-    }),
-    {minLength: 0, maxLength: 5},
-  ),
-  partitions: fc.array(
-    fc.record({
-      partition_id: fc.uuid(),
-      table_id: fc.uuid(),
-      key_start: fc.string({minLength: 0, maxLength: 10}),
-      key_end: fc.string({minLength: 0, maxLength: 10}),
-    }),
-    {minLength: 0, maxLength: 5},
-  ),
-  message_groups: fc.array(
-    fc.record({
-      group_id: fc.uuid(),
-      name: fc.string({minLength: 1, maxLength: 20}),
-    }),
-    {minLength: 0, maxLength: 5},
-  ),
-  indices: fc.array(
-    fc.record({
-      index_id: fc.uuid(),
-      table_id: fc.uuid(),
-      column_name: fc.string({minLength: 1, maxLength: 20}),
-    }),
-    {minLength: 0, maxLength: 5},
-  ),
+  nodes: storedRowsArbitrary('nodes', {
+    node_id: fc.uuid(),
+    node_address: fc.string({minLength: 5, maxLength: 30}),
+    status: fc.constantFrom('active', 'stopped'),
+  }),
+  services: storedRowsArbitrary('services', {
+    service_id: fc.uuid(),
+    service_type: fc.constantFrom('partition', 'message_group'),
+    node_id: fc.uuid(),
+  }),
+  tables: storedRowsArbitrary('tables', {
+    table_id: fc.uuid(),
+    table_name: fc.string({minLength: 1, maxLength: 20}),
+    partition_key: fc.string({minLength: 1, maxLength: 10}),
+  }),
+  partitions: storedRowsArbitrary('partitions', {
+    partition_id: fc.uuid(),
+    table_id: fc.uuid(),
+    partition_key_start: fc.string({minLength: 0, maxLength: 10}),
+    partition_key_end: fc.string({minLength: 0, maxLength: 10}),
+  }),
+  message_groups: storedRowsArbitrary('message_groups', {
+    group_id: fc.uuid(),
+    group_name: fc.string({minLength: 1, maxLength: 20}),
+  }),
+  indices: storedRowsArbitrary('indices', {
+    index_id: fc.uuid(),
+    table_id: fc.uuid(),
+    index_name: fc.string({minLength: 1, maxLength: 20}),
+  }),
 });
 
 /**

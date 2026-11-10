@@ -25,6 +25,7 @@ import {
   ADMISSION_REASON,
   STORAGE_CAPACITY_ERROR_MSG,
 } from '../../src/rebalancer/storage-capacity-constants.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -615,7 +616,7 @@ test('MovePlanner capacity gating', async (t) => {
         {node_id: 'n3', latency_group_id: 'g-2'},
       ];
       const currentReplicas = [
-        {replica_id: 'r1', node_id: 'n1', status: 'active'},
+        projectedReplica({service_id: 'r1', replica_id: 'r1', node_id: 'n1', status: 'active'}),
       ];
 
       const planner = new MovePlanner({
@@ -643,7 +644,7 @@ test('MovePlanner capacity gating', async (t) => {
         {node_id: 'n3', latency_group_id: 'g-2'},
       ];
       const currentReplicas = [
-        {replica_id: 'r1', node_id: 'n1', status: 'active'},
+        projectedReplica({service_id: 'r1', replica_id: 'r1', node_id: 'n1', status: 'active'}),
       ];
 
       const planner = new MovePlanner({

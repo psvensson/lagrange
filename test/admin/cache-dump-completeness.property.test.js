@@ -17,6 +17,9 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
+import {getSystemCachePrimaryKeyField} from
+  '../../src/cache/system-cache-key-descriptor.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const SYSTEM_TABLES = ['nodes', 'services', 'partitions', 'tables',
   'message_groups', 'indices'];
@@ -36,13 +39,24 @@ afterEach(() => {
 });
 
 /**
- * Generate random records for a system table.
+ * Generate random record identities for a system table; the stored row is
+ * built per table from its primary key (see cacheRow).
  */
 const recordArbitrary = fc.record({
   id: fc.uuid(),
-  name: fc.string({minLength: 1, maxLength: 30}),
-  status: fc.constantFrom('active', 'inactive', 'pending'),
 });
+
+/**
+ * The complete stored row a system table holds for a generated record.
+ * @param {string} tableName - System table.
+ * @param {{id: string}} record - Generated record identity.
+ * @return {Object} The stored row keyed by the table's primary key column.
+ */
+function cacheRow(tableName, record) {
+  return systemTableRow(tableName, {
+    [getSystemCachePrimaryKeyField(tableName)]: record.id,
+  });
+}
 
 /**
  * Generate random cache state with records for each system table.
@@ -100,7 +114,7 @@ function populateCache(cache, state) {
   for (const tableName of SYSTEM_TABLES) {
     const records = state[tableName] || [];
     for (const record of records) {
-      cache.applySystemTableChange(tableName, 'INSERT', record);
+      cache.applySystemTableChange(tableName, 'INSERT', cacheRow(tableName, record));
     }
   }
 }
@@ -186,9 +200,11 @@ test('Property 5: Cache dump data matches cache contents', async (t) => {
               return false;
             }
 
-            // Verify each record exists in the dump
+            // Verify each record exists in the dump under its primary key
+            const primaryKeyField = getSystemCachePrimaryKeyField(tableName);
             for (const expected of expectedRecords) {
-              const found = actualRecords.some((r) => r.id === expected.id);
+              const found = actualRecords.some((r) =>
+                r[primaryKeyField] === expected.id);
               if (!found) {
                 return false;
               }

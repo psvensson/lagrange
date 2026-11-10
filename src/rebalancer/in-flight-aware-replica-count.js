@@ -33,7 +33,8 @@ function adaptLegacyReplaceSourceShape(operation, committedReplicaIds) {
  * classification implementation.
  *
  * @param {Object} options
- * @param {Array<Object>} options.currentReplicas
+ * @param {Array<Object>} options.currentReplicas projected replicas
+ *   (projected-replica.js)
  * @param {Array<Object>} options.inFlightOperations
  * @param {string|null} options.partitionId
  * @return {Object}
@@ -44,8 +45,7 @@ export function computeInFlightAwareReplicaAccounting({
   partitionId = null,
 } = {}) {
   const committedReplicaIds = new Set(currentReplicas.map((replica) =>
-    replica?.replica_id || replica?.replicaId ||
-      replica?.service_id || replica?.serviceId,
+    replica.replicaId,
   ));
   const adaptedOperations = inFlightOperations.map((operation) =>
     adaptLegacyReplaceSourceShape(operation, committedReplicaIds),

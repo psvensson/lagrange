@@ -13,6 +13,8 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {buildInsertedReplicaOperationRow} from './timeout-test-coordinator.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_CRITICAL_CREATED_OPERATION_ID = 'critical-created-op';
 const TEST_CRITICAL_CREATED_PARTITION_ID = 'sql_write_operations-p1';
@@ -199,24 +201,7 @@ async (t) => {
     }
     if (normalizedSql.includes('replica_operations') &&
         normalizedSql.includes('VALUES')) {
-      const row = {
-        operation_id: params[0],
-        type: params[1],
-        partition_id: params[2],
-        replica_id: params[3],
-        target_claim_key: params[4],
-        source_node_id: params[5],
-        target_node_id: params[6],
-        status: params[7],
-        workflow_step: params[8],
-        created_at: params[9],
-        updated_at: params[10],
-        completed_at: params[11],
-        error_message: params[12],
-        steps_history: params[13],
-        entity_type: params[14],
-        entity_id: params[15],
-      };
+      const row = buildInsertedReplicaOperationRow(normalizedSql, params);
       operationRows.set(row.operation_id, row);
       return {success: true, affectedRows: 1};
     }
@@ -409,24 +394,7 @@ test('createOperation defers retryable participant-pressure failures and ' +
     }
     if (normalizedSql.includes('replica_operations') &&
         normalizedSql.includes('VALUES')) {
-      const row = {
-        operation_id: params[0],
-        type: params[1],
-        partition_id: params[2],
-        replica_id: params[3],
-        target_claim_key: params[4],
-        source_node_id: params[5],
-        target_node_id: params[6],
-        status: params[7],
-        workflow_step: params[8],
-        created_at: params[9],
-        updated_at: params[10],
-        completed_at: params[11],
-        error_message: params[12],
-        steps_history: params[13],
-        entity_type: params[14],
-        entity_id: params[15],
-      };
+      const row = buildInsertedReplicaOperationRow(normalizedSql, params);
       operationRows.set(row.operation_id, row);
       return {success: true, affectedRows: 1};
     }
@@ -620,7 +588,7 @@ test('dispatchOperation defers priority claim misses when durable ' +
   const deliveries = [];
   const operationId = 'priority-claim-miss-op';
   const now = Date.now();
-  operationRows.set(operationId, {
+  operationRows.set(operationId, replicaOperationsRow({
     operation_id: operationId,
     type: 'REPLACE',
     partition_id: 'sql_transactions-p1',
@@ -639,7 +607,7 @@ test('dispatchOperation defers priority claim misses when durable ' +
     }]),
     entity_type: 'partition',
     entity_id: 'sql_transactions-p1',
-  });
+  }));
 
   const authoritativeRead = async (tableName, sql, params = []) => {
     if (tableName === 'replica_operations' &&
@@ -1101,7 +1069,7 @@ async (t) => {
   const deliveries = [];
   const operationId = 'priority-deferred-authoritative-op';
   const now = Date.now();
-  operationRows.set(operationId, {
+  operationRows.set(operationId, replicaOperationsRow({
     operation_id: operationId,
     type: 'REPLACE',
     partition_id: 'sql_transactions-p1',
@@ -1120,7 +1088,7 @@ async (t) => {
     }]),
     entity_type: 'partition',
     entity_id: 'sql_transactions-p1',
-  });
+  }));
 
   let authoritativeReadCount = 0;
   const authoritativeRead = async (tableName, sql, params = []) => {

@@ -25,6 +25,7 @@ import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {nodesRow, systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_CLUSTER_INCARNATION_FENCE_ALLOWED = Object.freeze({
   state: 'current',
@@ -530,8 +531,15 @@ test('registerNodeInCluster() - should retry transient participant failures duri
       },
     };
     service.getNodeStorageBudgetService = () => ({
+      // The production budget row (NodeStorageBudgetService.buildBudgetRow)
+      // always carries the three budget columns.
       resolveBudgetRow: (nodeRow) => ({
-        budgetRow: nodeRow,
+        budgetRow: {
+          ...nodeRow,
+          storage_budget_bytes: 1024,
+          storage_budget_source: 'test',
+          storage_budget_updated_at: nodeRow.created_at,
+        },
         resolution: {
           isValid: true,
           budgetBytes: 1024,
@@ -604,8 +612,15 @@ test('registerNodeInCluster() - should retry admission at phase scope when the f
       },
     };
     service.getNodeStorageBudgetService = () => ({
+      // The production budget row (NodeStorageBudgetService.buildBudgetRow)
+      // always carries the three budget columns.
       resolveBudgetRow: (nodeRow) => ({
-        budgetRow: nodeRow,
+        budgetRow: {
+          ...nodeRow,
+          storage_budget_bytes: 1024,
+          storage_budget_source: 'test',
+          storage_budget_updated_at: nodeRow.created_at,
+        },
         resolution: {
           isValid: true,
           budgetBytes: 1024,
@@ -665,8 +680,15 @@ test('registerNodeInCluster() - should fail narrowly on seed participant failure
       },
     };
     service.getNodeStorageBudgetService = () => ({
+      // The production budget row (NodeStorageBudgetService.buildBudgetRow)
+      // always carries the three budget columns.
       resolveBudgetRow: (nodeRow) => ({
-        budgetRow: nodeRow,
+        budgetRow: {
+          ...nodeRow,
+          storage_budget_bytes: 1024,
+          storage_budget_source: 'test',
+          storage_budget_updated_at: nodeRow.created_at,
+        },
         resolution: {
           isValid: true,
           budgetBytes: 1024,
@@ -724,30 +746,32 @@ test('registerNodeInCluster() - should reuse canonical membership during durable
     const nodeId = 'test-node-durable-rejoin';
     const nodeAddress = 'joiner-host:8080';
     const cache = new SystemTableCache();
-    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       node_id: nodeId,
       node_address: nodeAddress,
       status: SERVICE_STATUS.ACTIVE,
       connection_state: STATE.DISCONNECTED,
-    });
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-      endpoint_id: `ep-${nodeId}-ws`,
-      node_id: nodeId,
-      transport_type: TRANSPORT_TYPE.WEBSOCKET,
-      address: 'ws://joiner-host:8082',
-      priority: 0,
-      metadata: '{}',
-      status: ENDPOINT_STATUS.ACTIVE,
-    });
-    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-      endpoint_id: `${META_SERVICE_ID.POSTGRES_WIRE}-ep-${nodeId}`,
-      service_id: META_SERVICE_ID.POSTGRES_WIRE,
-      node_id: nodeId,
-      protocol: 'tcp',
-      address: 'joiner-host',
-      port: 5432,
-      metadata: '{}',
-    });
+    }));
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        endpoint_id: `ep-${nodeId}-ws`,
+        node_id: nodeId,
+        transport_type: TRANSPORT_TYPE.WEBSOCKET,
+        address: 'ws://joiner-host:8082',
+        priority: 0,
+        metadata: '{}',
+        status: ENDPOINT_STATUS.ACTIVE,
+      }));
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+        endpoint_id: `${META_SERVICE_ID.POSTGRES_WIRE}-ep-${nodeId}`,
+        service_id: META_SERVICE_ID.POSTGRES_WIRE,
+        node_id: nodeId,
+        protocol: 'tcp',
+        address: 'joiner-host',
+        port: 5432,
+        metadata: '{}',
+      }));
     NodeService.getInstance().setSystemCacheProxy(cache);
 
     const service = new NodeJoiningService({
@@ -902,30 +926,32 @@ test('registerNodeInCluster() - should not treat cache-only durable rejoin metad
     const nodeId = 'test-node-durable-rejoin-cache-only';
     const nodeAddress = 'joiner-cache-only:8080';
     const cache = new SystemTableCache();
-    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       node_id: nodeId,
       node_address: nodeAddress,
       status: SERVICE_STATUS.ACTIVE,
       connection_state: STATE.DISCONNECTED,
-    });
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-      endpoint_id: `ep-${nodeId}-ws`,
-      node_id: nodeId,
-      transport_type: TRANSPORT_TYPE.WEBSOCKET,
-      address: 'ws://joiner-cache-only:8082',
-      priority: 0,
-      metadata: '{}',
-      status: ENDPOINT_STATUS.ACTIVE,
-    });
-    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-      endpoint_id: `${META_SERVICE_ID.POSTGRES_WIRE}-ep-${nodeId}`,
-      service_id: META_SERVICE_ID.POSTGRES_WIRE,
-      node_id: nodeId,
-      protocol: 'tcp',
-      address: 'joiner-cache-only',
-      port: 5432,
-      metadata: '{}',
-    });
+    }));
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        endpoint_id: `ep-${nodeId}-ws`,
+        node_id: nodeId,
+        transport_type: TRANSPORT_TYPE.WEBSOCKET,
+        address: 'ws://joiner-cache-only:8082',
+        priority: 0,
+        metadata: '{}',
+        status: ENDPOINT_STATUS.ACTIVE,
+      }));
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+        endpoint_id: `${META_SERVICE_ID.POSTGRES_WIRE}-ep-${nodeId}`,
+        service_id: META_SERVICE_ID.POSTGRES_WIRE,
+        node_id: nodeId,
+        protocol: 'tcp',
+        address: 'joiner-cache-only',
+        port: 5432,
+        metadata: '{}',
+      }));
     NodeService.getInstance().setSystemCacheProxy(cache);
 
     const service = new NodeJoiningService({
@@ -974,30 +1000,32 @@ test('registerNodeInCluster() - should fall back to fresh admission writes when 
     const upsertCalls = [];
     const nodeId = 'test-node-durable-rejoin-drift';
     const cache = new SystemTableCache();
-    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       node_id: nodeId,
       node_address: 'old-host:8080',
       status: SERVICE_STATUS.ACTIVE,
       connection_state: STATE.DISCONNECTED,
-    });
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-      endpoint_id: `ep-${nodeId}-ws`,
-      node_id: nodeId,
-      transport_type: TRANSPORT_TYPE.WEBSOCKET,
-      address: 'ws://old-host:8082',
-      priority: 0,
-      metadata: '{}',
-      status: ENDPOINT_STATUS.ACTIVE,
-    });
-    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-      endpoint_id: `${META_SERVICE_ID.POSTGRES_WIRE}-ep-${nodeId}`,
-      service_id: META_SERVICE_ID.POSTGRES_WIRE,
-      node_id: nodeId,
-      protocol: 'tcp',
-      address: 'old-host',
-      port: 5432,
-      metadata: '{}',
-    });
+    }));
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        endpoint_id: `ep-${nodeId}-ws`,
+        node_id: nodeId,
+        transport_type: TRANSPORT_TYPE.WEBSOCKET,
+        address: 'ws://old-host:8082',
+        priority: 0,
+        metadata: '{}',
+        status: ENDPOINT_STATUS.ACTIVE,
+      }));
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+        endpoint_id: `${META_SERVICE_ID.POSTGRES_WIRE}-ep-${nodeId}`,
+        service_id: META_SERVICE_ID.POSTGRES_WIRE,
+        node_id: nodeId,
+        protocol: 'tcp',
+        address: 'old-host',
+        port: 5432,
+        metadata: '{}',
+      }));
     NodeService.getInstance().setSystemCacheProxy(cache);
 
     const service = new NodeJoiningService({

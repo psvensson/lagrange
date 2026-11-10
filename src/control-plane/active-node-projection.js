@@ -12,9 +12,9 @@ import {
 } from './control-plane-readiness-constants.js';
 import {
   normalizeNodeEndpointRow,
-  normalizeNodeRow,
-  normalizeServiceRow,
 } from './system-row-normalizers.js';
+import {decodeNodesRowView} from './nodes-row-decoder.js';
+import {decodeServicesRows} from './services-row-decoder.js';
 import {
   resolveProjectionReadinessStateForEntry,
 } from './projection-readiness-state.js';
@@ -85,15 +85,11 @@ function isProjectionLivenessConnectionState(connectionState) {
     connectionState === String(STATE.CONNECTED).toLowerCase();
 }
 
-function hasFreshProjectionLiveness(nodeRow, options = {}) {
-  const normalizedNode = normalizeNodeRow(nodeRow);
-  if (!normalizedNode.nodeId) {
-    return false;
-  }
+function hasFreshProjectionLiveness(nodeRow, node, options = {}) {
+  if (!node.nodeId) return false;
   const liveness = resolveNodeLivenessProjection(nodeRow, options);
-  return isProjectionLivenessConnectionState(
-    normalizedNode.connectionState,
-  ) && liveness?.derivationGraceActive === true;
+  return isProjectionLivenessConnectionState(node.connectionState) &&
+    liveness?.derivationGraceActive === true;
 }
 
 function buildReadinessByNodeId(options = {}) {
@@ -106,12 +102,13 @@ function buildReadinessByNodeId(options = {}) {
     options.readinessEntries :
     [];
   const readinessByNodeId = {};
+  // A readiness entry is the readiness service's record, keyed by its own
+  // nodeId field; it is not a nodes row.
   for (const entry of readinessEntries) {
-    const normalizedNode = normalizeNodeRow(entry);
-    if (!normalizedNode.nodeId) {
+    if (!entry?.nodeId) {
       continue;
     }
-    readinessByNodeId[normalizedNode.nodeId] = entry;
+    readinessByNodeId[entry.nodeId] = entry;
   }
   return readinessByNodeId;
 }
@@ -142,16 +139,15 @@ function hasCanonicalWebSocketEndpoint(nodeId, nodeEndpointRows = [],
     });
 }
 
-function hasCanonicalActiveService(nodeId, serviceRows = []) {
-  return (Array.isArray(serviceRows) ? serviceRows : [])
-    .some((row) => {
-      const normalizedService = normalizeServiceRow(row);
-      return normalizedService.nodeId === nodeId &&
-        normalizedService.status ===
-          String(SERVICE_STATUS.ACTIVE).toLowerCase() &&
-        typeof normalizedService.serviceId === 'string' &&
-          normalizedService.serviceId.length > 0;
-    });
+// Whether a node hosts an ACTIVE service, judged on DECODED services rows
+// (decodeServicesRows): a caller that asks for several nodes decodes its
+// row set once.
+function hasCanonicalActiveService(nodeId, decodedServiceRows = []) {
+  return (Array.isArray(decodedServiceRows) ? decodedServiceRows : [])
+    .some((service) =>
+      service.nodeId === nodeId && service.status === SERVICE_STATUS.ACTIVE &&
+        service.serviceId.length > 0,
+    );
 }
 
 function hasRuntimeTransportEvidence(nodeId, options = {}) {
@@ -318,6 +314,7 @@ function shouldRetainTransportAlivePublishedNode(nodeId, nodeRow, options = {}) 
 
 function shouldAllowLivenessFallbackProjection(
   nodeRow,
+  node,
   readinessProjection,
   options = {},
 ) {
@@ -325,20 +322,20 @@ function shouldAllowLivenessFallbackProjection(
       readinessProjection.projectionEligible === true) {
     return false;
   }
-  const normalizedNode = normalizeNodeRow(nodeRow);
-  if (!normalizedNode.nodeId) {
+  // A readiness-only candidate has no nodes row: nothing to fall back on.
+  if (!nodeRow || !node.nodeId) {
     return false;
   }
-  if (normalizedNode.status !== String(SERVICE_STATUS.ACTIVE).toLowerCase()) {
+  if (node.status !== NODE_STATE.ACTIVE) {
     return false;
   }
   if (options.allowControlPlaneRecoveryEligibleProjection === true &&
       options.allowLivenessFallbackProjection === true &&
-      hasFreshProjectionLiveness(nodeRow, options)) {
+      hasFreshProjectionLiveness(nodeRow, node, options)) {
     return true;
   }
   return shouldRetainTransportAlivePublishedNode(
-    normalizedNode.nodeId,
+    node.nodeId,
     nodeRow,
     options,
   );
@@ -390,14 +387,12 @@ function isSwimAliveProtected(nodeId, options = {}) {
   return verdicts[nodeId] === SWIM_VERDICT_ALIVE;
 }
 
-function isCanonicallyActiveNode(nodeRow, options = {}) {
-  const normalizedNode = normalizeNodeRow(nodeRow);
-  if (!normalizedNode.nodeId) {
-    return false;
-  }
-  if (
-    normalizedNode.status === String(NODE_STATE.JOINING).toLowerCase()
-  ) {
+// The selection hands the view it decoded; another caller's row is decoded
+// here.
+function isCanonicallyActiveNode(nodeRow, options = {},
+  normalizedNode = decodeNodesRowView(nodeRow)) {
+  if (!normalizedNode.nodeId) return false;
+  if (normalizedNode.status === NODE_STATE.JOINING) {
     return false;
   }
   const liveness = resolveNodeLivenessProjection(nodeRow, options);
@@ -405,8 +400,7 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
     String(STATE.READY).toLowerCase();
   const hasFreshLiveness = hasReadyConnection &&
     liveness?.derivationGraceActive === true;
-  if (normalizedNode.status !==
-      String(SERVICE_STATUS.ACTIVE).toLowerCase() &&
+  if (normalizedNode.status !== NODE_STATE.ACTIVE &&
       !hasFreshLiveness) {
     return false;
   }
@@ -420,6 +414,7 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
   const allowLivenessFallbackProjection =
     shouldAllowLivenessFallbackProjection(
       nodeRow,
+      normalizedNode,
       readinessProjection,
       options,
     );
@@ -462,7 +457,7 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
         ) &&
         !hasCanonicalActiveService(
           normalizedNode.nodeId,
-          options.serviceRows,
+          decodeServicesRows(options.serviceRows || []),
         ) &&
         !hasRuntimeTransportEvidence(normalizedNode.nodeId, {
           ...options,
@@ -495,12 +490,12 @@ function resolveProjectedActiveNodeSelection(options = {}) {
   // trimmed despite the retention grace, attribute WHICH grace condition failed,
   // surfaced through this same diagnostics object (no perturbing per-node log).
   const retentionGraceMisses = [];
+  const nodeViewsById = new Map();
   for (const nodeRow of nodeRows) {
-    const normalizedNode = normalizeNodeRow(nodeRow);
-    if (!normalizedNode.nodeId) {
-      continue;
-    }
-    nodeRowsById.set(normalizedNode.nodeId, nodeRow);
+    const node = decodeNodesRowView(nodeRow);
+    if (!node.nodeId) continue;
+    nodeRowsById.set(node.nodeId, nodeRow);
+    nodeViewsById.set(node.nodeId, node);
   }
 
   const candidateNodeIds = new Set([
@@ -512,6 +507,8 @@ function resolveProjectedActiveNodeSelection(options = {}) {
   const activeNodeIds = [];
   const requireWebSocketEndpoint =
     hasCanonicalWebSocketEndpoints(options.nodeEndpointRows);
+  // Decoded once for every readiness-only candidate judged below.
+  const serviceViews = decodeServicesRows(options.serviceRows || []);
 
   for (const nodeId of candidateNodeIds) {
     const nodeRow = nodeRowsById.get(nodeId) || null;
@@ -527,6 +524,7 @@ function resolveProjectedActiveNodeSelection(options = {}) {
     const allowLivenessFallbackProjection =
       shouldAllowLivenessFallbackProjection(
         nodeRow,
+        nodeViewsById.get(nodeId),
         readinessProjection,
         projectionOptions,
       );
@@ -559,6 +557,7 @@ function resolveProjectedActiveNodeSelection(options = {}) {
       const nodeEligible = isCanonicallyActiveNode(
         nodeRow,
         projectionOptions,
+        nodeViewsById.get(nodeId),
       );
       if (nodeEligible) {
         activeNodeIds.push(nodeId);
@@ -602,7 +601,7 @@ function resolveProjectedActiveNodeSelection(options = {}) {
       continue;
     }
     if ((requireWebSocketEndpoint ||
-        !hasCanonicalActiveService(nodeId, options.serviceRows)) &&
+        !hasCanonicalActiveService(nodeId, serviceViews)) &&
         !hasCanonicalWebSocketEndpoint(nodeId, options.nodeEndpointRows,
           nodeRowsById) &&
         !runtimeTransportEvidence &&

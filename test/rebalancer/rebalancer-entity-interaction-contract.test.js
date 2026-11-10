@@ -1,3 +1,4 @@
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
@@ -434,7 +435,8 @@ test('untyped operation rows are outside canonical entity reads',
         [],
         'an untyped row cannot acquire partition semantics from partition_id');
       t.throws(
-        () => coordinator.repository.rowToOperation(untypedRow),
+        () => coordinator.repository.rowToOperation(
+          replicaOperationsRow(untypedRow)),
         /Unsupported rebalancer entity type/,
         'direct replay rejects an untyped operation instead of inventing identity',
       );

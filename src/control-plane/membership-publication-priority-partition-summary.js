@@ -1,10 +1,11 @@
-import {COLUMN, SERVICE_STATUS, SERVICE_TYPE} from '../constants/index.js';
+import {SERVICE_STATUS, SERVICE_TYPE} from '../constants/index.js';
 import {
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
   resolvePartitionTableId,
 } from '../bootstrap/system-partition-classification.js';
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {PROJECTED_REPLICA_FIELD} from '../rebalancer/projected-replica.js';
 import {
   appendOwnArrayValue,
   buildStringSet,
@@ -50,33 +51,15 @@ const ROW_ABSENT_REASON = 'row_absent';
 // toward spread, whatever its node's readiness, so an ACTIVE-status learner
 // cannot re-mask a spread gap.
 const RAFT_ROLE_NOT_VOTER_REASON = 'raft_role_not_voter';
-const SERVICE_ADDRESS_FIELDS = Object.freeze([COLUMN.ADDRESS, 'address']);
-const SERVICE_ID_FIELDS = Object.freeze([
-  COLUMN.SERVICE_ID,
-  'service_id',
-  'serviceId',
-]);
-const SERVICE_NODE_ID_FIELDS = Object.freeze([
-  COLUMN.NODE_ID,
-  'node_id',
-  'nodeId',
-]);
-const SERVICE_PARTITION_ID_FIELDS = Object.freeze([
-  COLUMN.PARTITION_ID,
-  'partition_id',
-  'partitionId',
-]);
-const SERVICE_RAFT_ROLE_FIELDS = Object.freeze([
-  COLUMN.RAFT_ROLE,
-  'raft_role',
-  'raftRole',
-]);
-const SERVICE_STATUS_FIELDS = Object.freeze([COLUMN.STATUS, 'status']);
-const SERVICE_TYPE_FIELDS = Object.freeze([
-  COLUMN.SERVICE_TYPE,
-  'service_type',
-  'serviceType',
-]);
+// The census reads projected replicas (src/rebalancer/projected-replica.js):
+// one field name each, read as own data properties of the canonical copy.
+const REPLICA_ADDRESS_FIELDS = Object.freeze([PROJECTED_REPLICA_FIELD.ADDRESS]);
+const REPLICA_SERVICE_ID_FIELDS = Object.freeze([PROJECTED_REPLICA_FIELD.SERVICE_ID]);
+const REPLICA_NODE_ID_FIELDS = Object.freeze([PROJECTED_REPLICA_FIELD.NODE_ID]);
+const REPLICA_PARTITION_ID_FIELDS = Object.freeze([PROJECTED_REPLICA_FIELD.PARTITION_ID]);
+const REPLICA_RAFT_ROLE_FIELDS = Object.freeze([PROJECTED_REPLICA_FIELD.RAFT_ROLE]);
+const REPLICA_STATUS_FIELDS = Object.freeze([PROJECTED_REPLICA_FIELD.STATUS]);
+const REPLICA_SERVICE_TYPE_FIELDS = Object.freeze([PROJECTED_REPLICA_FIELD.SERVICE_TYPE]);
 const mathMax = Math.max;
 const mathMin = Math.min;
 
@@ -311,15 +294,20 @@ function incrementOwnCount(counts, key) {
   });
 }
 
-function normalizeCensusServiceRow(row) {
+// The census's own-data read of one projected replica's canonical copy
+// (copyCanonicalDenseOwnDataRecordArray): the fields the spread census and
+// the holder predicate read, an absent (ROW_ABSENT) value as ''; the service
+// type, raft role and status lower-cased as the folded census normaliser
+// (normalizeCensusServiceRow) read them.
+function readCensusReplica(replica) {
   return {
-    serviceId: readOwnPrimitiveString(row, SERVICE_ID_FIELDS),
-    serviceType: readOwnLowerPrimitiveString(row, SERVICE_TYPE_FIELDS),
-    nodeId: readOwnPrimitiveString(row, SERVICE_NODE_ID_FIELDS),
-    partitionId: readOwnPrimitiveString(row, SERVICE_PARTITION_ID_FIELDS),
-    raftRole: readOwnLowerPrimitiveString(row, SERVICE_RAFT_ROLE_FIELDS),
-    status: readOwnLowerPrimitiveString(row, SERVICE_STATUS_FIELDS),
-    address: readOwnPrimitiveString(row, SERVICE_ADDRESS_FIELDS),
+    serviceId: readOwnPrimitiveString(replica, REPLICA_SERVICE_ID_FIELDS),
+    serviceType: readOwnLowerPrimitiveString(replica, REPLICA_SERVICE_TYPE_FIELDS),
+    nodeId: readOwnPrimitiveString(replica, REPLICA_NODE_ID_FIELDS),
+    partitionId: readOwnPrimitiveString(replica, REPLICA_PARTITION_ID_FIELDS),
+    raftRole: readOwnLowerPrimitiveString(replica, REPLICA_RAFT_ROLE_FIELDS),
+    status: readOwnLowerPrimitiveString(replica, REPLICA_STATUS_FIELDS),
+    address: readOwnPrimitiveString(replica, REPLICA_ADDRESS_FIELDS),
   };
 }
 
@@ -430,13 +418,13 @@ function resolvePrioritySpreadReplicaExclusionReason(normalizedService) {
   return null;
 }
 
-// THE row-level holder definition (owner decision 2026-10-04): an ACTIVE
-// partition-service row with a voter raft role, an address and a node.
-// Node eligibility is the caller's cohort. Consumers import this predicate;
-// none re-derives it.
-function isPrioritySpreadHolderServiceRow(serviceRow) {
+// THE replica-level holder definition (owner decision 2026-10-04): an ACTIVE
+// partition replica with a voter raft role, an address and a node. Node
+// eligibility is the caller's cohort. Consumers import this predicate; none
+// re-derives it. The argument is a projected replica.
+function isPrioritySpreadHolderReplica(replica) {
   return resolvePrioritySpreadReplicaExclusionReason(
-    normalizeCensusServiceRow(serviceRow),
+    readCensusReplica(replica),
   ) === null;
 }
 
@@ -481,18 +469,14 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
   for (let serviceRowIndex = 0;
     serviceRowIndex < serviceRows.length;
     serviceRowIndex += 1) {
-    const serviceRow = serviceRows[serviceRowIndex];
-    const partitionId = readOwnPrimitiveString(
-      serviceRow,
-      SERVICE_PARTITION_ID_FIELDS,
-    );
+    const normalizedService = readCensusReplica(serviceRows[serviceRowIndex]);
+    const partitionId = normalizedService.partitionId;
     appendOwnArrayValue(servicePartitionIds, partitionId);
     const partitionRow = mapGet(partitionRowByPartitionId, partitionId) || null;
     const tableId = resolvePartitionTableId({partitionId, partitionRow});
     if (!setHas(PRIORITY_CONTROL_PLANE_TABLE_IDS, tableId)) {
       continue;
     }
-    const normalizedService = normalizeCensusServiceRow(serviceRow);
     observedPriorityServiceRow = true;
     if (!mapHas(readyReplicaStatsByPartitionId, partitionId)) {
       mapSet(readyReplicaStatsByPartitionId, partitionId, {
@@ -631,7 +615,7 @@ export {
   PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT,
   arePriorityPartitionSummariesEqual,
   buildDerivedPriorityPartitionSummary,
-  isPrioritySpreadHolderServiceRow,
+  isPrioritySpreadHolderReplica,
   isReadinessPromotable,
   normalizePriorityPartitionSummary,
 };

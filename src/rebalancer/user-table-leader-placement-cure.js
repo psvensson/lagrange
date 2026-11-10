@@ -41,8 +41,9 @@ import {
   getPartitionRowFromCache,
   resolvePartitionTableId,
 } from '../bootstrap/system-partition-classification.js';
-import {normalizeServiceRow} from '../control-plane/system-row-normalizers.js';
+import {decodeServicesRows} from '../control-plane/services-row-decoder.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {hasReplicaNode, readLowerCaseReplicaText} from './projected-replica.js';
 import {SERVICE_STATUS} from '../constants/service-status.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {
@@ -282,19 +283,13 @@ function collectEligibleVoterHosts(rebalancer, settledPartitions) {
   const partitionIds = new Set(
     settledPartitions.map((entry) => entry.partitionId),
   );
-  const rows = rebalancer.systemTableCache.filter(
-    SYSTEM_TABLE_NAME.SERVICES,
-    (row) => {
-      const service = normalizeServiceRow(row);
-      return service.serviceType === EntityType.PARTITION &&
-        partitionIds.has(service.partitionId);
-    },
-  );
   const hosts = new Set();
-  for (const row of rows) {
-    const service = normalizeServiceRow(row);
+  for (const service of decodeServicesRows(
+    rebalancer.systemTableCache.getAll(SYSTEM_TABLE_NAME.SERVICES))) {
     if (
       service.nodeId &&
+      service.serviceType === EntityType.PARTITION &&
+      partitionIds.has(service.partitionId) &&
       service.status === SERVICE_STATUS.ACTIVE &&
       isVoterRaftRole(service.raftRole)
     ) {
@@ -304,19 +299,24 @@ function collectEligibleVoterHosts(rebalancer, settledPartitions) {
   return hosts;
 }
 
+function hasServiceId(replica) {
+  return typeof replica.serviceId === 'string' && replica.serviceId.length > 0;
+}
+
 function collectOwnVoterFollowers(rebalancer) {
   const followers = [];
-  for (const row of rebalancer.getCurrentReplicas()) {
-    const service = normalizeServiceRow(row);
+  for (const replica of rebalancer.getCurrentReplicas()) {
     if (
-      service.nodeId &&
-      service.nodeId !== rebalancer.nodeId &&
-      service.status === SERVICE_STATUS.ACTIVE &&
-      isVoterRaftRole(service.raftRole)
+      hasReplicaNode(replica) &&
+      replica.nodeId !== rebalancer.nodeId &&
+      readLowerCaseReplicaText(replica.status) === SERVICE_STATUS.ACTIVE &&
+      isVoterRaftRole(replica.raftRole)
     ) {
-      const replicaId = service.serviceId || service.replicaId;
+      // HEAD's normalizeServiceRow identity: the service id, else the
+      // replica id.
+      const replicaId = hasServiceId(replica) ? replica.serviceId : replica.replicaId;
       if (replicaId) {
-        followers.push({nodeId: service.nodeId, replicaId});
+        followers.push({nodeId: replica.nodeId, replicaId});
       }
     }
   }

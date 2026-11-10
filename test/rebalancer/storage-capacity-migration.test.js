@@ -10,6 +10,7 @@ import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {
   COLUMN,
   NUM,
+  STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
@@ -31,6 +32,7 @@ import {
   MIGRATION_ERROR_MSG,
 } from '../../src/rebalancer/storage-capacity-migration.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 function initializeConfig(overrides = {}) {
   ConfigurationManager.resetInstance();
@@ -52,12 +54,30 @@ function initializeConfig(overrides = {}) {
   });
 }
 
+// Inserts the complete stored row: the overrides plus every other column as
+// the SQL table would store it (declared DEFAULT, else NULL).
 function insertRow(cache, tableName, row) {
   cache.applySystemTableChange(
     tableName,
     CDC_OPERATION.INSERT,
-    row,
+    systemTableRow(tableName, row),
   );
+}
+
+// A ready cluster member holds a live ready lease: the readiness owner's
+// cluster-membership projection reads a complete nodes row with status but no
+// live lease (and a non-ready connection) as an unhealthy member.
+const READY_LEASE_MS = 60_000;
+
+function insertReadyNode(cache, nodeId, budgetBytes) {
+  const now = Date.now();
+  insertRow(cache, TABLES.NODES, {
+    [COLUMN.NODE_ID]: nodeId,
+    [COLUMN.STORAGE_BUDGET_BYTES]: budgetBytes,
+    [COLUMN.CONNECTION_STATE]: STATE.READY,
+    [COLUMN.LAST_HEARTBEAT]: now,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: now + READY_LEASE_MS,
+  });
 }
 
 function createMockCdc() {
@@ -301,10 +321,7 @@ test('observe mode - overrides deny to allow', async (t) => {
   });
   accounting.initialize({systemTableCache: cache});
 
-  insertRow(cache, TABLES.NODES, {
-    [COLUMN.NODE_ID]: 'node-1',
-    [COLUMN.STORAGE_BUDGET_BYTES]: NUM.HUNDRED,
-  });
+  insertReadyNode(cache, 'node-1', NUM.HUNDRED);
 
   const admission = createAdmissionService(accounting);
 
@@ -328,10 +345,7 @@ test('observe mode - allows already-allowed decisions unchanged',
     });
     accounting.initialize({systemTableCache: cache});
 
-    insertRow(cache, TABLES.NODES, {
-      [COLUMN.NODE_ID]: 'node-1',
-      [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
-    });
+    insertReadyNode(cache, 'node-1', NUM.THOUSAND);
 
     const admission = createAdmissionService(accounting);
 
@@ -353,10 +367,7 @@ test('enforce mode - default mode is enforce', async (t) => {
   });
   accounting.initialize({systemTableCache: cache});
 
-  insertRow(cache, TABLES.NODES, {
-    [COLUMN.NODE_ID]: 'node-1',
-    [COLUMN.STORAGE_BUDGET_BYTES]: NUM.HUNDRED,
-  });
+  insertReadyNode(cache, 'node-1', NUM.HUNDRED);
 
   const admission = createAdmissionService(accounting);
 
@@ -380,10 +391,7 @@ test('enforce mode - returns actual deny decisions', async (t) => {
   });
   accounting.initialize({systemTableCache: cache});
 
-  insertRow(cache, TABLES.NODES, {
-    [COLUMN.NODE_ID]: 'node-1',
-    [COLUMN.STORAGE_BUDGET_BYTES]: NUM.HUNDRED,
-  });
+  insertReadyNode(cache, 'node-1', NUM.HUNDRED);
 
   const admission = createAdmissionService(accounting);
 
@@ -405,10 +413,7 @@ test('enforce mode - allows when capacity available', async (t) => {
   });
   accounting.initialize({systemTableCache: cache});
 
-  insertRow(cache, TABLES.NODES, {
-    [COLUMN.NODE_ID]: 'node-1',
-    [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
-  });
+  insertReadyNode(cache, 'node-1', NUM.THOUSAND);
 
   const admission = createAdmissionService(accounting);
 
@@ -433,10 +438,7 @@ test('mode transition - observe to enforce via refreshConfig',
     });
     accounting.initialize({systemTableCache: cache});
 
-    insertRow(cache, TABLES.NODES, {
-      [COLUMN.NODE_ID]: 'node-1',
-      [COLUMN.STORAGE_BUDGET_BYTES]: NUM.HUNDRED,
-    });
+    insertReadyNode(cache, 'node-1', NUM.HUNDRED);
 
     const admission = createAdmissionService(accounting);
 

@@ -33,6 +33,8 @@ import {
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 // Initialize test environment
 export function initializeTestEnvironment() {
@@ -64,8 +66,10 @@ export function createMockCache(
   const now = Date.now();
   // Registered nodes and the endpoints they publish share the node's boot
   // incarnation (the endpoint incarnation authority), unless a test says
-  // otherwise.
-  const normalizedNodes = nodes.map((node) => ({
+  // otherwise. The cache holds complete stored rows (as the system-table
+  // cache does): a test states the columns it is about, the fixture builder
+  // completes the rest.
+  const normalizedNodes = nodes.map((node) => nodesRow({
     connection_state: Object.hasOwn(node, 'connection_state') ?
       node.connection_state : 'ready',
     ready_lease_expires_at: Object.hasOwn(node, 'ready_lease_expires_at') ?
@@ -73,6 +77,7 @@ export function createMockCache(
     boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
     ...node,
   }));
+  services = services.map((row) => servicesRow(row));
   nodeEndpoints = nodeEndpoints.map((row) =>
     ({boot_incarnation: FIXTURE_ENDPOINT_INCARNATION, ...row}));
   serviceEndpoints = serviceEndpoints.map((row) =>
@@ -102,6 +107,19 @@ export function createMockCache(
       return Array.from(table.values());
     },
   };
+}
+
+// The projected replicas (what getCurrentReplicas hands the planner) of
+// services rows a test states by stored column: each row is completed by the
+// fixture builder, in `partitionId` unless it names one, and a row naming
+// only its replica_id stores the same value as its service_id (a partition
+// replica's identity).
+export function projectTestReplicas(rows, partitionId = 'partition-1') {
+  return projectReplicasFromServicesRows(rows.map((row) => servicesRow({
+    partition_id: partitionId,
+    ...(Object.hasOwn(row, 'replica_id') ? {service_id: row.replica_id} : {}),
+    ...row,
+  })));
 }
 
 // Create mock CDC integration service

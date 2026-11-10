@@ -20,6 +20,16 @@ import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createTestRebalancer, createMockCache} from './test-helpers.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
+
+/**
+ * Stored services rows (the cache holds complete rows).
+ * @param {Array<Object>} rows - Services column values.
+ * @return {Array<Object>} Complete services rows.
+ */
+function storedServices(rows) {
+  return rows.map((row) => servicesRow(row));
+}
 
 /**
  * Build a replica operation row.
@@ -311,7 +321,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
       ],
     });
     const mockCache = createMockCache({
-      services,
+      services: storedServices(services),
       replicaOperations: [operation],
     });
     const rebalancer = createTestRebalancer({
@@ -324,7 +334,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
     rebalancer.initialize();
     const currentReplicaIds = rebalancer
       .getCurrentReplicas()
-      .map((replica) => replica.replica_id);
+      .map((replica) => replica.replicaId);
     rebalancer.shutdown();
 
     t.equal(
@@ -412,7 +422,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
         entityId: partitionId,
         entityType: EntityType.PARTITION,
         systemTableCache: createMockCache({
-          services,
+          services: storedServices(services),
           replicaOperations: [operation],
         }),
         nodeId: 'test-node',
@@ -421,7 +431,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
       rebalancer.initialize();
       const currentReplicas = rebalancer.getCurrentReplicas();
       const targetReplica = currentReplicas.find(
-        (replica) => replica.replica_id === targetReplicaId,
+        (replica) => replica.replicaId === targetReplicaId,
       );
       const moves = rebalancer.calculateMoves(currentReplicas, {
         targetReplicaCount: 3,
@@ -432,7 +442,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
 
       t.equal(
         currentReplicas.some(
-          (replica) => replica.replica_id === sourceReplicaId,
+          (replica) => replica.replicaId === sourceReplicaId,
         ),
         false,
         'the terminal source is retired from planning',
@@ -441,7 +451,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
         targetReplica,
         {
           status: ReplicaStatus.ACTIVE,
-          raft_role: 'follower',
+          raftRole: 'follower',
         },
         'the completed target is projected through stale syncing/learner cache state',
       );
@@ -479,7 +489,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
         entityId: partitionId,
         entityType: EntityType.PARTITION,
         systemTableCache: createMockCache({
-          services: [
+          services: storedServices([
             {
               service_id: sourceReplicaId,
               replica_id: sourceReplicaId,
@@ -497,7 +507,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
               status: ReplicaStatus.REMOVED,
               raft_role: 'learner',
             },
-          ],
+          ]),
           replicaOperations: [operation],
         }),
         nodeId: 'test-node',
@@ -505,7 +515,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
 
       rebalancer.initialize();
       const targetReplica = rebalancer.getCurrentReplicas().find(
-        (replica) => replica.replica_id === targetReplicaId,
+        (replica) => replica.replicaId === targetReplicaId,
       );
       rebalancer.shutdown();
 
@@ -513,7 +523,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
         targetReplica,
         {
           status: ReplicaStatus.REMOVED,
-          raft_role: 'learner',
+          raftRole: 'learner',
         },
         'explicit terminal target evidence is not promoted',
       );
@@ -569,7 +579,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
         entityId: partitionId,
         entityType: EntityType.PARTITION,
         systemTableCache: createMockCache({
-          services,
+          services: storedServices(services),
           replicaOperations: [operation],
         }),
         nodeId: 'test-node',
@@ -578,7 +588,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
       rebalancer.initialize();
       const currentReplicas = rebalancer.getCurrentReplicas();
       const targetReplica = currentReplicas.find(
-        (replica) => replica.replica_id === targetReplicaId,
+        (replica) => replica.replicaId === targetReplicaId,
       );
       const moves = rebalancer.calculateMoves(currentReplicas, {
         targetReplicaCount: 3,
@@ -591,8 +601,8 @@ test('Property 80: Pending Move Tracking', async (t) => {
         targetReplica,
         {
           status: ReplicaStatus.ACTIVE,
-          raft_role: 'follower',
-          node_id: targetNodeId,
+          raftRole: 'follower',
+          nodeId: targetNodeId,
         },
         'the completed ADD target is current even while its service row lags',
       );
@@ -655,7 +665,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
 
       t.equal(
         currentReplicas.some(
-          (replica) => replica.replica_id === targetReplicaId,
+          (replica) => replica.replicaId === targetReplicaId,
         ),
         false,
         'later operation-owner retirement evidence wins over create history',

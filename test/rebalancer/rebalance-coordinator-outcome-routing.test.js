@@ -50,6 +50,7 @@ import {
   createMockControlPlaneSystemTableGateway,
   withFixtureReplaceWitness,
 } from './test-helpers.js';
+import {replicaOperationsRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_NODE_ID = 'node-local';
 const TEST_OPERATION_ID = 'op-outcome-1';
@@ -102,7 +103,7 @@ function buildTestOperation(overrides = {}) {
     replicaId: TEST_REPLICA_ID,
     sourceNodeId: TEST_NODE_ID,
     targetNodeId: TEST_NODE_ID,
-    status: 'in_progress',
+    status: 'creating',
     workflowStep: WORKFLOW_STEP.CREATING,
     createdAt: now,
     updatedAt: now,
@@ -213,7 +214,7 @@ function createTestCoordinator(options = {}) {
           operation.sourceReplicaId,
           operation.replicaId,
         ].filter((id) => typeof id === 'string' && id.length > 0);
-        const rows = [...new Set(replicaIds)].map((replicaId, index) => ({
+        const rows = [...new Set(replicaIds)].map((replicaId, index) => servicesRow({
           service_id: replicaId,
           replica_id: replicaId,
           partition_id: partitionId,
@@ -286,7 +287,7 @@ function createTestCoordinator(options = {}) {
  * queryOperationById expects from SQL.
  */
 function operationToRow(op) {
-  return {
+  return replicaOperationsRow({
     operation_id: op.operationId,
     type: op.type,
     partition_id: op.partitionId,
@@ -302,7 +303,7 @@ function operationToRow(op) {
     completed_at: op.completedAt,
     error_message: op.errorMessage,
     steps_history: JSON.stringify(op.stepsHistory || []),
-  };
+  });
 }
 
 function buildExecutorOutcomePayload(outcomeType, workflowStep, options = {}) {

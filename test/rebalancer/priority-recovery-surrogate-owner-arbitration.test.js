@@ -3,6 +3,7 @@ import {
   buildPriorityRecoveryDecisionSnapshots,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const CONTROL_PLANE_PUBLICATIONS_PARTITION_ID =
   'control_plane_publications-p1';
@@ -32,12 +33,14 @@ function buildBlockedPriorityPartitionSummary(partitionId) {
 }
 
 function buildLeaderServiceRow(partitionId, nodeId = NODE_A) {
-  return Object.freeze({
+  return Object.freeze(servicesRow({
+    service_id: `${partitionId}-${nodeId}-leader`,
+    replica_id: `${partitionId}-${nodeId}-leader`,
     partition_id: partitionId,
     node_id: nodeId,
     raft_role: RAFT_ROLE_LEADER,
     status: SERVICE_STATUS_ACTIVE,
-  });
+  }));
 }
 
 function buildPlanningSnapshot({

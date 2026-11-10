@@ -10,6 +10,7 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const CACHE_KEY_FIELDS = Object.freeze([
   COLUMN.NODE_ID,
@@ -53,14 +54,14 @@ function createProductionShapedCache() {
   };
   for (let index = 0; index < NODE_COUNT; index++) {
     const nodeId = `node-${index}`;
-    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       [COLUMN.NODE_ID]: nodeId,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.LAST_HEARTBEAT]: NOW_MS,
       [COLUMN.READY_LEASE_EXPIRES_AT]: NOW_MS + 60_000,
       connection_state: 'ready',
-    });
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    }));
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       [COLUMN.SERVICE_ID]: `service-${index}`,
       [COLUMN.NODE_ID]: nodeId,
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
@@ -68,7 +69,7 @@ function createProductionShapedCache() {
       [COLUMN.ADDRESS]: `${nodeId}/partition/${PARTITION_ID}`,
       partition_id: PARTITION_ID,
       raft_role: index === 0 ? 'leader' : 'follower',
-    });
+    }));
   }
   cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
     partition_id: PARTITION_ID,

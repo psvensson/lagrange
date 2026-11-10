@@ -12,6 +12,7 @@ import {
 import {
   STARTUP_AUTHORITY_STATE,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const BOOTSTRAP_INIT_PRIORITY_RECOVERY_REASONS = Object.freeze([
   LIFECYCLE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
@@ -80,9 +81,9 @@ test('BootstrapClusterViewOwner prefers readiness-owned startup cohort during un
     delegates: {
       getSystemTableCache: () => createCache({
         nodes: [
-          {node_id: 'seed-node', status: 'active'},
-          {node_id: 'node-2', status: 'joining'},
-          {node_id: 'node-3', status: 'joining'},
+          nodesRow({node_id: 'seed-node', status: 'active'}),
+          nodesRow({node_id: 'node-2', status: 'joining'}),
+          nodesRow({node_id: 'node-3', status: 'joining'}),
         ],
         services: [],
         node_endpoints: [],

@@ -1,5 +1,6 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {initiatedDeliveryRouter, ControlPlaneField, ControlPlaneMessageType, OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, RAFT_ROLE, ReplicaOperationMessageType, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, SYSTEM_TABLE_NAME, WORKFLOW_STEP, buildPriorityDrainReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 test('RebalanceCoordinator dispatches source handoff instead of draining a ' +
   'priority REPLACE while the source replica is still active', async (t) => {
@@ -574,7 +575,7 @@ test('RebalanceCoordinator reconciles non-dispatchable CREATING progress ' +
     [TEST_SOURCE_REPLICA_ID, TEST_AUTHORITATIVE_OBSERVED_SOURCE],
     [TEST_TARGET_REPLICA_ID, TEST_AUTHORITATIVE_STALE_TARGET],
   ]));
-  const operationRow = {
+  const operationRow = replicaOperationsRow({
     operation_id: TEST_OPERATION_ID,
     type: OperationType.REPLACE,
     partition_id: TEST_PARTITION_ID,
@@ -606,7 +607,7 @@ test('RebalanceCoordinator reconciles non-dispatchable CREATING progress ' +
         previousStep: WORKFLOW_STEP.SENDING,
       },
     ]),
-  };
+  });
   const deliveries = [];
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,

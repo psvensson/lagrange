@@ -19,6 +19,10 @@ import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createTestRebalancer} from './test-helpers.js';
+import {
+  projectedReplica,
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 /**
  * Build a replica operation row.
@@ -123,13 +127,14 @@ test('Property 81: Duplicate Move Prevention', async (t) => {
             cacheData: {
               nodes: [{node_id: nodeId, status: 'active'}],
               services: [
-                {
+                servicesRow({
                   service_id: replicaId,
+                  replica_id: replicaId,
                   partition_id: entityId,
                   node_id: nodeId,
                   service_type: 'partition',
                   status: ReplicaStatus.ACTIVE,
-                },
+                }),
               ],
               partitions: [{partition_id: entityId, table_id: 'table-1'}],
               replicaOperations: [
@@ -148,12 +153,13 @@ test('Property 81: Duplicate Move Prevention', async (t) => {
           rebalancer.setLeader(true);
 
           const currentReplicas = [
-            {
+            projectedReplica({
               service_id: replicaId,
               replica_id: replicaId,
+              partition_id: entityId,
               node_id: nodeId,
               status: ReplicaStatus.ACTIVE,
-            },
+            }),
           ];
           const targetState = {
             targetReplicaCount: 0,
@@ -260,12 +266,13 @@ test('Property 81: Duplicate Move Prevention', async (t) => {
             rebalancer.setLeader(true);
 
             const currentReplicas = [
-              {
+              projectedReplica({
                 service_id: 'replica-1',
                 replica_id: 'replica-1',
+                partition_id: entityId,
                 node_id: 'node-1',
                 status: transitionStatus,
-              },
+              }),
             ];
 
             const targetState = {

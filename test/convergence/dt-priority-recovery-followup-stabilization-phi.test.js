@@ -8,6 +8,8 @@ import {
 } from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {buildReplicaInventorySnapshot} from
   '../../src/rebalancer/replica-inventory.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 // ---------------------------------------------------------------------------
 // Deterministic self-stabilization Φ-prover for the priority-recovery
@@ -103,8 +105,10 @@ function makeWorld({rReadyAtTick = 3, opCountdown = 2} = {}) {
   };
 }
 
+// The modelled world's stored services row of one replica; the kernel reads
+// its projected replica (what getCurrentReplicas returns).
 function replicaRow(nodeId, replicaId, status, role) {
-  return {
+  return servicesRow({
     node_id: nodeId,
     address: `a-${nodeId}`,
     replica_id: replicaId,
@@ -112,7 +116,7 @@ function replicaRow(nodeId, replicaId, status, role) {
     status,
     raft_role: role,
     partition_id: PARTITION_ID,
-  };
+  });
 }
 
 // Wire a REAL UnifiedRebalancerCore instance whose decision kernel is untouched;
@@ -291,16 +295,17 @@ function runStabilizationTrace(world, maxTicks = 40) {
     const decision = buildDecision(world, converged);
 
     // --- REAL kernel decision ---
+    const currentReplicas = projectReplicasFromServicesRows(world.replicas);
     const outcome = rb.buildPriorityRecoveryFollowUpMove({
       decision,
-      currentReplicas: world.replicas,
+      currentReplicas,
       targetState: {targetReplicaCount: TARGET},
     });
 
     // --- Φ: distance to TRUE convergence (target voters on distinct ready
     // nodes), plus over-replication and in-flight work. occupied/inFlightAdds
     // are the REAL suppression accessors, surfaced for the trace. ---
-    const occupied = rb.getReadyNodeOccupiedReplicas(world.replicas).length;
+    const occupied = rb.getReadyNodeOccupiedReplicas(currentReplicas).length;
     const inFlightAdds = rb.countPriorityRecoveryFollowUpInFlightAdds(PARTITION_ID);
     const servedDeficit =
       Math.max(0, TARGET - healthyDistinctReadyVoterCount(world));

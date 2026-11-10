@@ -130,7 +130,8 @@ function createWiredService({nodeId, nodeAddress, executedQueries}) {
   // Provide a budget service so resolveWithoutPersist succeeds.
   service.nodeStorageBudgetService = {
     resolveBudgetRow: (nodeRow) => ({
-      budgetRow: nodeRow,
+      budgetRow: {...nodeRow, storage_budget_bytes: null, storage_budget_source: null,
+        storage_budget_updated_at: nodeRow.created_at},
       resolution: {
         isValid: true,
         budgetBytes: 0,

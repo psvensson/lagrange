@@ -8,6 +8,12 @@ import {
   createMockQueryEngine,
   createPopulatedCache,
 } from './admin-websocket-api-test-support.js';
+import {
+  nodesRow,
+  replicaOperationsRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 import {AdminWebSocketAPI} from
   '../../src/admin/admin-websocket-api.js';
 import {
@@ -34,12 +40,12 @@ LoggingService.getInstance().initialize({level: 'error'});
 test('AdminWebSocketAPI - local CDC diagnostics endpoint shape and readiness',
   async (t) => {
     const cache = createPopulatedCache();
-    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      id: 'partition-2',
-      partition_id: 'partition-2',
-      table_id: 'table-1',
-      state: 'NORMAL',
-    });
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: 'partition-2',
+        table_id: 'table-1',
+        state: 'NORMAL',
+      }));
     const partitionServices = new Map([
       ['partition-1', {
         partitionId: 'partition-1',
@@ -120,14 +126,15 @@ test('AdminWebSocketAPI - local CDC diagnostics endpoint shape and readiness',
 test('AdminWebSocketAPI - local partition diagnostics endpoint exposes leader and replica state',
   async (t) => {
     const cache = new SystemTableCache();
-    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      partition_id: 'partition-1',
-      table_id: 'table-1',
-      table_name: 'events',
-      state: 'NORMAL',
-      leader_node_id: 'node-1',
-    });
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: 'partition-1',
+        table_id: 'table-1',
+        table_name: 'events',
+        state: 'NORMAL',
+        leader_node_id: 'node-1',
+      }));
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       service_id: 'partition-1-r1',
       service_type: 'partition',
       partition_id: 'partition-1',
@@ -136,8 +143,8 @@ test('AdminWebSocketAPI - local partition diagnostics endpoint exposes leader an
       raft_role: 'leader',
       status: 'active',
       address: 'node-1/partition/partition-1-r1',
-    });
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    }));
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       service_id: 'partition-1-r2',
       service_type: 'partition',
       partition_id: 'partition-1',
@@ -146,12 +153,25 @@ test('AdminWebSocketAPI - local partition diagnostics endpoint exposes leader an
       raft_role: 'follower',
       status: 'active',
       address: 'node-2/partition/partition-1-r2',
-    });
-    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
-      operation_id: 'op-1',
-      partition_id: 'partition-1',
-      status: 'creating',
-    });
+    }));
+    // A stored in-flight ADD: stamped now (a row older than the owner node's
+    // start is pre-restart) and targeting a node that holds no replica of the
+    // partition yet (an active target replica would make it observed complete).
+    const operationUpdatedAtMs = Date.now();
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT',
+      replicaOperationsRow({
+        operation_id: 'op-1',
+        type: 'ADD',
+        partition_id: 'partition-1',
+        entity_type: 'partition',
+        entity_id: 'partition-1',
+        source_node_id: 'node-1',
+        target_node_id: 'node-3',
+        status: 'creating',
+        workflow_step: 'CREATING',
+        created_at: operationUpdatedAtMs,
+        updated_at: operationUpdatedAtMs,
+      }));
     const api = new AdminWebSocketAPI({
       nodeId: 'test-node',
       systemTableCache: cache,
@@ -307,14 +327,38 @@ test('AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation
   async (t) => {
     let executeRequestCalls = 0;
     const cache = createPopulatedCache();
-    cache.applySystemTableChange('replica_operations', 'INSERT', {
-      operation_id: 'op-1',
-      status: 'creating',
-    });
-    cache.applySystemTableChange('replica_operations', 'INSERT', {
-      operation_id: 'op-2',
-      status: 'active',
-    });
+    // Stored rows: the in-flight ADD is stamped now and targets a node with
+    // no replica of the partition; the settled ADD carries its completion.
+    const operationUpdatedAtMs = Date.now();
+    cache.applySystemTableChange('replica_operations', 'INSERT',
+      replicaOperationsRow({
+        operation_id: 'op-1',
+        type: 'ADD',
+        partition_id: 'partition-1',
+        entity_type: 'partition',
+        entity_id: 'partition-1',
+        source_node_id: 'node-1',
+        target_node_id: 'node-3',
+        status: 'creating',
+        workflow_step: 'CREATING',
+        created_at: operationUpdatedAtMs,
+        updated_at: operationUpdatedAtMs,
+      }));
+    cache.applySystemTableChange('replica_operations', 'INSERT',
+      replicaOperationsRow({
+        operation_id: 'op-2',
+        type: 'ADD',
+        partition_id: 'partition-1',
+        entity_type: 'partition',
+        entity_id: 'partition-1',
+        source_node_id: 'node-1',
+        target_node_id: 'node-2',
+        status: 'active',
+        workflow_step: 'ACTIVE',
+        created_at: operationUpdatedAtMs,
+        updated_at: operationUpdatedAtMs,
+        completed_at: operationUpdatedAtMs,
+      }));
     const beforeCounts = {
       nodes: cache.count(TABLES.NODES),
       partitions: cache.count(TABLES.PARTITIONS),
@@ -386,9 +430,9 @@ test('AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation
       'should include partition-group in-flight summary',
     );
     t.equal(
-      payload.replicaOperations.partitionGroupInFlight.unknown,
+      payload.replicaOperations.partitionGroupInFlight['partition-1'],
       1,
-      'creating operation without explicit partition id should be grouped',
+      'creating operation should be grouped under its stored partition id',
     );
     t.equal(executeRequestCalls, 0,
       'local snapshot endpoint should not execute SQL query engine requests');
@@ -455,12 +499,13 @@ test('AdminWebSocketAPI - local control snapshot exports authoritative fallback 
 test('AdminWebSocketAPI - local control snapshot derives canonical leaders ' +
   'from partition owner rows', async (t) => {
   const cache = new SystemTableCache();
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    [COLUMN.PARTITION_ID]: 'partition-1',
-    [COLUMN.TABLE_ID]: 'table-1',
-    [COLUMN.LEADER_NODE_ID]: 'node-owner',
-  });
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+    systemTableRow(TABLES.PARTITIONS, {
+      [COLUMN.PARTITION_ID]: 'partition-1',
+      [COLUMN.TABLE_ID]: 'table-1',
+      [COLUMN.LEADER_NODE_ID]: 'node-owner',
+    }));
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
     [COLUMN.SERVICE_ID]: 'partition-1-r1',
     [COLUMN.SERVICE_TYPE]: 'partition',
     [COLUMN.PARTITION_ID]: 'partition-1',
@@ -469,8 +514,8 @@ test('AdminWebSocketAPI - local control snapshot derives canonical leaders ' +
     [COLUMN.RAFT_ROLE]: 'leader',
     [COLUMN.STATUS]: 'active',
     [COLUMN.ADDRESS]: 'node-stale-a/partition/partition-1-r1',
-  });
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+  }));
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
     [COLUMN.SERVICE_ID]: 'partition-1-r2',
     [COLUMN.SERVICE_TYPE]: 'partition',
     [COLUMN.PARTITION_ID]: 'partition-1',
@@ -479,7 +524,7 @@ test('AdminWebSocketAPI - local control snapshot derives canonical leaders ' +
     [COLUMN.RAFT_ROLE]: 'leader',
     [COLUMN.STATUS]: 'active',
     [COLUMN.ADDRESS]: 'node-stale-b/partition/partition-1-r2',
-  });
+  }));
 
   const api = new AdminWebSocketAPI({
     nodeId: 'test-node',
@@ -518,14 +563,15 @@ test(
   'AdminWebSocketAPI - local control snapshot ignores stale ADD rows once exact target replica services are active',
   async (t) => {
     const cache = createPopulatedCache();
-    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      partition_id: 'partition-1',
-      table_id: 'table-1',
-      table_name: 'events',
-      state: 'NORMAL',
-      leader_node_id: 'node-1',
-    });
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: 'partition-1',
+        table_id: 'table-1',
+        table_name: 'events',
+        state: 'NORMAL',
+        leader_node_id: 'node-1',
+      }));
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       service_id: 'partition-1-r1',
       service_type: 'partition',
       partition_id: 'partition-1',
@@ -534,8 +580,8 @@ test(
       raft_role: 'leader',
       status: 'active',
       address: 'node-1/partition/partition-1-r1',
-    });
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    }));
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       service_id: 'partition-1-r2',
       service_type: 'partition',
       partition_id: 'partition-1',
@@ -544,21 +590,22 @@ test(
       raft_role: 'follower',
       status: 'active',
       address: 'node-2/partition/partition-1-r2',
-    });
-    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
-      operation_id: 'op-add-stale-active-replica',
-      type: 'ADD',
-      partition_id: 'partition-1',
-      entity_type: 'partition',
-      entity_id: 'partition-1',
-      source_node_id: 'node-1',
-      target_node_id: 'node-2',
-      replica_id: 'partition-1-r2',
-      status: 'creating',
-      workflow_step: 'CREATING',
-      created_at: 1741000000000,
-      updated_at: 1741000001000,
-    });
+    }));
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT',
+      replicaOperationsRow({
+        operation_id: 'op-add-stale-active-replica',
+        type: 'ADD',
+        partition_id: 'partition-1',
+        entity_type: 'partition',
+        entity_id: 'partition-1',
+        source_node_id: 'node-1',
+        target_node_id: 'node-2',
+        replica_id: 'partition-1-r2',
+        status: 'creating',
+        workflow_step: 'CREATING',
+        created_at: 1741000000000,
+        updated_at: 1741000001000,
+      }));
     const api = new AdminWebSocketAPI({
       nodeId: 'test-node',
       systemTableCache: cache,
@@ -632,7 +679,7 @@ test('AdminWebSocketAPI - local control snapshot exposes structured control-plan
       LogsTableService.instance = originalLogsTableInstance;
     });
     cache.applySystemTableChange(TABLES.TABLES, 'UPDATE', {
-      id: 'table-1',
+      table_id: 'table-1',
       partition_transition_state: 'failed',
       partition_transition_metadata: JSON.stringify({
         workflowId,
@@ -957,43 +1004,44 @@ test('AdminWebSocketAPI - local control snapshot derives active nodes from readi
   async (t) => {
     const cache = createPopulatedCache();
     cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-      id: 'node-1',
       node_id: 'node-1',
       status: 'active',
       connection_state: 'ready',
       last_heartbeat: 1000,
       ready_lease_expires_at: 2000,
     });
-    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
-      id: 'node-2',
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       node_id: 'node-2',
+      node_address: 'localhost:8081',
       status: 'active',
       connection_state: 'ready',
       last_heartbeat: 1000,
       ready_lease_expires_at: 2000,
-    });
-    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
-      id: 'node-3',
+    }));
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       node_id: 'node-3',
+      node_address: 'localhost:8082',
       status: 'active',
       connection_state: 'ready',
       last_heartbeat: 1000,
       ready_lease_expires_at: 2000,
-    });
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-      endpoint_id: 'node-1-ws',
-      node_id: 'node-1',
-      transport_type: 'ws',
-      status: 'active',
-      address: 'ws://node-1:8082',
-    });
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-      endpoint_id: 'node-2-ws',
-      node_id: 'node-2',
-      transport_type: 'ws',
-      status: 'active',
-      address: 'ws://node-2:8082',
-    });
+    }));
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        endpoint_id: 'node-1-ws',
+        node_id: 'node-1',
+        transport_type: 'ws',
+        status: 'active',
+        address: 'ws://node-1:8082',
+      }));
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        endpoint_id: 'node-2-ws',
+        node_id: 'node-2',
+        transport_type: 'ws',
+        status: 'active',
+        address: 'ws://node-2:8082',
+      }));
 
     const api = new AdminWebSocketAPI({
       nodeId: 'node-1',
@@ -1042,14 +1090,13 @@ test('AdminWebSocketAPI - local control snapshot keeps readiness-healthy service
   async (t) => {
     const cache = createPopulatedCache();
     cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-      id: 'node-1',
       node_id: 'node-1',
       status: 'active',
       connection_state: 'ready',
       last_heartbeat: 1000,
       ready_lease_expires_at: 2000,
     });
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       service_id: 'svc-node-1',
       service_type: SERVICE_TYPE.MESSAGE_GROUP,
       node_id: 'node-1',
@@ -1057,8 +1104,8 @@ test('AdminWebSocketAPI - local control snapshot keeps readiness-healthy service
       address: 'node-1/message-group/svc-node-1',
       group_id: 'mg-node-1',
       replica_id: 'svc-node-1',
-    });
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    }));
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       service_id: 'svc-node-2',
       service_type: SERVICE_TYPE.MESSAGE_GROUP,
       node_id: 'node-2',
@@ -1066,21 +1113,23 @@ test('AdminWebSocketAPI - local control snapshot keeps readiness-healthy service
       address: 'node-2/message-group/svc-node-2',
       group_id: 'mg-node-2',
       replica_id: 'svc-node-2',
-    });
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-      endpoint_id: 'node-1-ws',
-      node_id: 'node-1',
-      transport_type: 'ws',
-      status: 'active',
-      address: 'ws://node-1:8082',
-    });
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-      endpoint_id: 'node-2-ws',
-      node_id: 'node-2',
-      transport_type: 'ws',
-      status: 'active',
-      address: 'ws://node-2:8082',
-    });
+    }));
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        endpoint_id: 'node-1-ws',
+        node_id: 'node-1',
+        transport_type: 'ws',
+        status: 'active',
+        address: 'ws://node-1:8082',
+      }));
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        endpoint_id: 'node-2-ws',
+        node_id: 'node-2',
+        transport_type: 'ws',
+        status: 'active',
+        address: 'ws://node-2:8082',
+      }));
 
     const api = new AdminWebSocketAPI({
       nodeId: 'node-1',
@@ -1124,22 +1173,21 @@ test('AdminWebSocketAPI - local control snapshot keeps readiness-healthy peers w
   async (t) => {
     const cache = createPopulatedCache();
     cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-      id: 'node-1',
       node_id: 'node-1',
       status: 'active',
       connection_state: 'ready',
       last_heartbeat: 1000,
       ready_lease_expires_at: 2000,
     });
-    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
-      id: 'node-2',
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       node_id: 'node-2',
+      node_address: 'localhost:8081',
       status: 'active',
       connection_state: 'ready',
       last_heartbeat: 1000,
       ready_lease_expires_at: 2000,
-    });
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    }));
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       service_id: 'svc-node-1',
       service_type: SERVICE_TYPE.MESSAGE_GROUP,
       node_id: 'node-1',
@@ -1147,8 +1195,8 @@ test('AdminWebSocketAPI - local control snapshot keeps readiness-healthy peers w
       address: 'node-1/message-group/svc-node-1',
       group_id: 'mg-node-1',
       replica_id: 'svc-node-1',
-    });
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    }));
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       service_id: 'svc-node-2',
       service_type: SERVICE_TYPE.MESSAGE_GROUP,
       node_id: 'node-2',
@@ -1156,14 +1204,15 @@ test('AdminWebSocketAPI - local control snapshot keeps readiness-healthy peers w
       address: 'node-2/message-group/svc-node-2',
       group_id: 'mg-node-2',
       replica_id: 'svc-node-2',
-    });
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-      endpoint_id: 'node-1-ws',
-      node_id: 'node-1',
-      transport_type: 'ws',
-      status: 'active',
-      address: 'ws://node-1:8082',
-    });
+    }));
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        endpoint_id: 'node-1-ws',
+        node_id: 'node-1',
+        transport_type: 'ws',
+        status: 'active',
+        address: 'ws://node-1:8082',
+      }));
 
     const api = new AdminWebSocketAPI({
       nodeId: 'node-1',

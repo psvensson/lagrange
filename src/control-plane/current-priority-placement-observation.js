@@ -4,8 +4,9 @@ import {
 } from '../bootstrap/system-partition-classification.js';
 import {
   buildDerivedPriorityPartitionSummary,
-  isPrioritySpreadHolderServiceRow,
+  isPrioritySpreadHolderReplica,
 } from './membership-publication-priority-partition-summary.js';
+import {PROJECTED_REPLICA_FIELD} from '../rebalancer/projected-replica.js';
 import {
   appendOwnArrayValue,
   copyCanonicalDenseOwnDataRecordArray,
@@ -156,21 +157,21 @@ function buildCurrentPriorityCensusOptions({
   return censusOptions;
 }
 
-function normalizeCurrentVoterServiceRow({
+// The current voter one projected replica (src/rebalancer/projected-replica.js)
+// contributes to leader coverage, or null when it is not a holder of an
+// eligible priority partition on an eligible node.
+function selectCurrentVoter({
   eligibleNodeIdSet,
   priorityPartitionIdSet,
-  serviceRow,
+  replica,
 }) {
-  const raftRole = readOwnLowerPrimitiveString(
-    serviceRow,
-    ['raft_role', 'raftRole'],
-  );
-  const nodeId = readOwnPrimitiveString(serviceRow, ['node_id', 'nodeId']);
+  const raftRole = readOwnLowerPrimitiveString(replica, [PROJECTED_REPLICA_FIELD.RAFT_ROLE]);
+  const nodeId = readOwnPrimitiveString(replica, [PROJECTED_REPLICA_FIELD.NODE_ID]);
   const partitionId = readOwnPrimitiveString(
-    serviceRow,
-    ['partition_id', 'partitionId'],
+    replica,
+    [PROJECTED_REPLICA_FIELD.PARTITION_ID],
   );
-  if (!isPrioritySpreadHolderServiceRow(serviceRow) ||
+  if (!isPrioritySpreadHolderReplica(replica) ||
       !setHas(priorityPartitionIdSet, partitionId) ||
       (setSize(eligibleNodeIdSet) > 0 &&
         !setHas(eligibleNodeIdSet, nodeId))) {
@@ -233,10 +234,10 @@ function buildCurrentPriorityLeaderCoverage({
   }
   const currentVoterServices = [];
   for (let index = 0; index < serviceRows.length; index += 1) {
-    const service = normalizeCurrentVoterServiceRow({
+    const service = selectCurrentVoter({
       eligibleNodeIdSet,
       priorityPartitionIdSet,
-      serviceRow: serviceRows[index],
+      replica: serviceRows[index],
     });
     if (service !== null) {
       appendOwnArrayValue(currentVoterServices, service);

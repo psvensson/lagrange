@@ -28,6 +28,7 @@ import {
   LEADER_ROLE,
   LEARNER_ROLE,
 } from './learner-promotion-count-check-shared-fixtures.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 if (!ConfigurationManager.getInstance().isInitialized()) {
   ConfigurationManager.getInstance().initialize({});
@@ -56,7 +57,7 @@ const WALK_OTHER_PRIORITY_TABLES = [
 
 function walkServiceRow(index, nodeId, status, role) {
   const replicaId = `${WALK_PARTITION_ID}-r${index}`;
-  return {
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     partition_id: WALK_PARTITION_ID,
@@ -65,12 +66,12 @@ function walkServiceRow(index, nodeId, status, role) {
     raft_role: role,
     node_id: nodeId,
     address: `${nodeId}:${index}`,
-  };
+  });
 }
 
 function walkOtherPriorityRows(holderNodeIds) {
   return WALK_OTHER_PRIORITY_TABLES.flatMap((tableId) =>
-    holderNodeIds.map((nodeId, index) => ({
+    holderNodeIds.map((nodeId, index) => servicesRow({
       service_id: `${tableId}-p1-r${index + 1}`,
       partition_id: `${tableId}-p1`,
       service_type: SERVICE_TYPE.PARTITION,
@@ -116,7 +117,7 @@ function deriveGuardPlanningSummary({replicaRows, eligibleNodeIds, operationReco
     publisherNodeId: eligibleNodeIds[0],
     latestPublicationRow: publishedRow,
     latestPublishedPublicationRow: publishedRow,
-    nodeRows: eligibleNodeIds.map((nodeId) => ({
+    nodeRows: eligibleNodeIds.map((nodeId) => nodesRow({
       node_id: nodeId,
       status: 'active',
       connection_state: 'ready',

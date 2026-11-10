@@ -62,6 +62,11 @@ import {
 import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_DELIVERY_PRIORITY = Object.freeze({
   BACKGROUND: 'background',
@@ -178,15 +183,15 @@ test(
     service.systemTableCache.applySystemTableChange(
       TABLES.MESSAGE_GROUPS,
       CDC_OPERATION.UPSERT,
-      {
+      systemTableRow(TABLES.MESSAGE_GROUPS, {
         [COLUMN.GROUP_ID]: TEST_STRICT_RECOVERY_FORWARD_GROUP_ID,
         [COLUMN.LEADER_NODE_ID]: TEST_STRICT_RECOVERY_FORWARD_LEADER_NODE_ID,
-      },
+      }),
     );
     service.systemTableCache.applySystemTableChange(
       TABLES.SERVICES,
       CDC_OPERATION.UPSERT,
-      {
+      servicesRow({
         [COLUMN.SERVICE_ID]: TEST_STRICT_RECOVERY_FORWARD_REMOTE_REPLICA_ID,
         [COLUMN.GROUP_ID]: TEST_STRICT_RECOVERY_FORWARD_GROUP_ID,
         [COLUMN.NODE_ID]: TEST_STRICT_RECOVERY_FORWARD_REMOTE_NODE_ID,
@@ -195,7 +200,7 @@ test(
         [COLUMN.ADDRESS]: TEST_STRICT_RECOVERY_FORWARD_REMOTE_ADDRESS,
         [COLUMN.RAFT_ROLE]: RaftRole.FOLLOWER,
         [COLUMN.UPDATED_AT]: Date.now(),
-      },
+      }),
     );
 
     const decision = service.resolveCdcIngressDecision({
@@ -354,10 +359,10 @@ test(
           type: 'latency.cdc.propagation',
           tableName: TABLES.NODES,
           operation: CDC_OPERATION.UPSERT,
-          data: {
+          data: nodesRow({
             [COLUMN.NODE_ID]: 'node-strict-recovery-local',
             [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-          },
+          }),
         },
       );
 
@@ -674,16 +679,16 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           [COLUMN.GROUP_ID]: TEST_ADDRESSED_STRICT_CONVERGENCE_GROUP_ID,
           [COLUMN.LEADER_NODE_ID]:
             TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_NODE_ID,
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]:
             TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_REPLICA_ID,
           [COLUMN.GROUP_ID]: TEST_ADDRESSED_STRICT_CONVERGENCE_GROUP_ID,
@@ -695,7 +700,7 @@ test(
             TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_ADDRESS,
           [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
           [COLUMN.UPDATED_AT]: Date.now(),
-        },
+        }),
       );
 
       const initialDecision = service.resolveCdcIngressDecision({
@@ -733,12 +738,12 @@ test(
             MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION,
           tableName: TABLES.PARTITIONS,
           operation: CDC_OPERATION.UPDATE,
-          data: {
+          data: systemTableRow(TABLES.PARTITIONS, {
             [COLUMN.PARTITION_ID]:
               TEST_ADDRESSED_STRICT_CONVERGENCE_PARTITION_ID,
             [COLUMN.LEADER_NODE_ID]:
               TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_NODE_ID,
-          },
+          }),
           timestamp: TEST_ADDRESSED_STRICT_CONVERGENCE_TIMESTAMP,
           sourceNodeId: nodeId,
         },
@@ -810,16 +815,16 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           [COLUMN.GROUP_ID]: TEST_ADDRESSED_STRICT_CONVERGENCE_GROUP_ID,
           [COLUMN.LEADER_NODE_ID]:
             TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_NODE_ID,
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]:
             TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_REPLICA_ID,
           [COLUMN.GROUP_ID]: TEST_ADDRESSED_STRICT_CONVERGENCE_GROUP_ID,
@@ -831,7 +836,7 @@ test(
             TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_ADDRESS,
           [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
           [COLUMN.UPDATED_AT]: Date.now(),
-        },
+        }),
       );
 
       let repairCalls = 0;
@@ -862,12 +867,12 @@ test(
         type: 'CDC',
         tableName: TABLES.PARTITIONS,
         operation: CDC_OPERATION.UPDATE,
-        data: {
+        data: systemTableRow(TABLES.PARTITIONS, {
           [COLUMN.PARTITION_ID]:
             TEST_ADDRESSED_STRICT_CONVERGENCE_PARTITION_ID,
           [COLUMN.LEADER_NODE_ID]:
             TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_NODE_ID,
-        },
+        }),
         timestamp: TEST_ADDRESSED_STRICT_CONVERGENCE_TIMESTAMP,
         causeId: TEST_ADDRESSED_STRICT_CONVERGENCE_CAUSE_ID,
       });
@@ -1025,16 +1030,17 @@ test('MessageGroupService - buildPeerAddress follows cache updates after relocat
       transport: router,
     }));
 
-    service.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
-      service_id: peerId,
-      service_type: SERVICE_TYPE.MESSAGE_GROUP,
-      node_id: 'peer-node-a',
-      group_id: 'mg-1',
-      replica_id: peerId,
-      status: SERVICE_STATUS.ACTIVE,
-      address: initialAddress,
-      updated_at: Date.now(),
-    });
+    service.systemTableCache.applySystemTableChange(
+      TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
+        service_id: peerId,
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'peer-node-a',
+        group_id: 'mg-1',
+        replica_id: peerId,
+        status: SERVICE_STATUS.ACTIVE,
+        address: initialAddress,
+        updated_at: Date.now(),
+      }));
 
     t.equal(
       service.buildPeerAddress(peerId),
@@ -1165,22 +1171,22 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
       const systemTableCache = new SystemTableCache();
-      systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+      systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, servicesRow({
         service_id: 'mg-1-r1',
         service_type: SERVICE_TYPE.MESSAGE_GROUP,
         node_id: nodeId,
         group_id: 'mg-1',
         replica_id: 'mg-1-r1',
         status: SERVICE_STATUS.ACTIVE,
-      });
-      systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+      }));
+      systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, servicesRow({
         service_id: 'mg-1-r2',
         service_type: SERVICE_TYPE.MESSAGE_GROUP,
         node_id: 'node-new',
         group_id: 'mg-1',
         replica_id: 'mg-1-r2',
         status: SERVICE_STATUS.ACTIVE,
-      });
+      }));
 
       const port = new ControllableConsensusPort();
       const service = createControllableMessageGroupService({
@@ -1214,14 +1220,14 @@ test(
         'a moved peer keeps its identity in the configuration: it is neither removed nor admitted again',
       );
 
-      systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+      systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, servicesRow({
         service_id: 'mg-1-r3',
         service_type: SERVICE_TYPE.MESSAGE_GROUP,
         node_id: 'node-3',
         group_id: 'mg-1',
         replica_id: 'mg-1-r3',
         status: SERVICE_STATUS.ACTIVE,
-      });
+      }));
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
 

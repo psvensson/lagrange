@@ -23,6 +23,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {TABLES} from '../../src/constants/index.js';
 import {CACHE_SYSTEM_TABLES} from '../../src/cache/cache-constants.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 /**
  * Required system tables that must exist after bootstrap.
@@ -86,7 +87,7 @@ const nodeDataArb = fc.record({
   connection_state: fc.constantFrom('connected', 'disconnected', 'connecting'),
   last_heartbeat: fc.integer({min: 0, max: Date.now()}),
   created_at: fc.integer({min: 0, max: Date.now()}),
-});
+}).map((row) => systemTableRow(TABLES.NODES, row));
 
 /**
  * Arbitrary for generating valid service data.
@@ -102,7 +103,7 @@ const serviceDataArb = fc.record({
   status: fc.constantFrom('active', 'inactive', 'starting'),
   created_at: fc.integer({min: 0, max: Date.now()}),
   updated_at: fc.integer({min: 0, max: Date.now()}),
-});
+}).map((row) => systemTableRow(TABLES.SERVICES, row));
 
 /**
  * Arbitrary for generating valid partition data.
@@ -115,7 +116,7 @@ const partitionDataArb = fc.record({
   state: fc.constantFrom('NORMAL', 'SPLITTING', 'MERGING'),
   created_at: fc.integer({min: 0, max: Date.now()}),
   updated_at: fc.integer({min: 0, max: Date.now()}),
-});
+}).map((row) => systemTableRow(TABLES.PARTITIONS, row));
 
 /**
  * Arbitrary for generating valid table data.
@@ -128,7 +129,7 @@ const tableDataArb = fc.record({
   partition_count: fc.integer({min: 1, max: 100}),
   created_at: fc.integer({min: 0, max: Date.now()}),
   updated_at: fc.integer({min: 0, max: Date.now()}),
-});
+}).map((row) => systemTableRow(TABLES.TABLES, row));
 
 /**
  * Arbitrary for generating valid message group data.
@@ -140,7 +141,7 @@ const messageGroupDataArb = fc.record({
   leader_node_id: fc.option(fc.uuid(), {nil: null}),
   created_at: fc.integer({min: 0, max: Date.now()}),
   updated_at: fc.integer({min: 0, max: Date.now()}),
-});
+}).map((row) => systemTableRow(TABLES.MESSAGE_GROUPS, row));
 
 /**
  * Arbitrary for generating valid replica operation data.
@@ -157,7 +158,7 @@ const replicaOperationDataArb = fc.record({
   created_at: fc.integer({min: 0, max: Date.now()}),
   updated_at: fc.integer({min: 0, max: Date.now()}),
   steps_history: fc.json(),
-});
+}).map((row) => systemTableRow(TABLES.REPLICA_OPERATIONS, row));
 
 /**
  * Property 1: Bootstrap System Table Invariant - All Tables Exist

@@ -60,12 +60,19 @@ const SEALED_TABLE = Object.freeze([
   ['prototype_copy_bags_partition_service', ZERO, 0, 0, 1],
   ['inheritance_depth_over_two', CAP, 65, 1, 66],
   ['inheritance_depth_over_two_readiness', ZERO, 0, 0, 2],
-  ['row_field_alias_reads', CAP, 745, 1, 746],
+  ['row_field_alias_reads', CAP, 741, 1, 742],
   ['formation_system_tables_without_decoder', ZERO, 0, 0, 3],
+  ['system_table_raw_column_reads_outside_decoder', CAP, 1008, 1, 1009],
+  ['system_table_raw_column_reads_outside_decoder_rebalancer', ZERO, 0, 0, 1],
+  ['system_table_raw_column_reads_outside_decoder_control_plane', ZERO, 0, 0, 1],
+  ['system_table_raw_column_reads_outside_decoder_node', ZERO, 0, 0, 1],
+  ['system_table_raw_column_reads_outside_decoder_admin', ZERO, 0, 0, 1],
+  ['system_table_raw_column_reads_outside_decoder_query', ZERO, 0, 0, 1],
+  ['system_table_raw_column_reads_outside_decoder_partition', ZERO, 0, 0, 1],
   ['state_read_defaults', ZERO, 0, 0, 1],
   ['value_or_promise_then_checks', ZERO, 0, 0, 1],
   ['source_directories_over_cap', ZERO, 0, 0, 1],
-  ['stale_owner_indexes', ZERO, 0, 0, 9],
+  ['stale_owner_indexes', ZERO, 0, 0, 13],
   ['failure_bundle_log_windows_without_coverage', ZERO, 0, 0, 1],
   ['two_source_fallback_reads', CAP, 1789, 1, 1790],
   ['typeof_dual_paths', CAP, 627, 1, 628],
@@ -92,6 +99,12 @@ const DECODERS = Object.freeze({
   'services': 'decodeServicesRow',
   'nodes': 'decodeNodesRow',
   'replica-operations': 'decodeReplicaOperationsRow',
+});
+// One own column per table: each decoder reads its own, which is no site.
+const DECODER_OWN_COLUMN = Object.freeze({
+  'services': 'raft_role',
+  'nodes': 'last_heartbeat',
+  'replica-operations': 'workflow_step',
 });
 
 // The ESLint runner the fixtures use: no rule promotes anything, and ESLint
@@ -195,10 +208,13 @@ function metFixture() {
     'export function nodeIdOf(row) {\n  return row.node_id || row.nodeId;\n}\n');
   write(root, 'src/barrel.js', 'export * from \'./ports.js\';\n');
   write(root, 'src/legacy.js', 'export const legacyMode = 1;\n');
+  // One raw services read outside every group (the cap row reads 1, every
+  // group row 0); the same read inside the services decoder is not a site.
+  write(root, 'src/raw-read.js', 'export function roleOf(row) {\n  return row.raft_role;\n}\n');
   write(root, 'src/catalog/INDEX.md', '# catalog\n');
   for (const table of ['services', 'nodes', 'replica-operations']) {
     write(root, `src/catalog/${table}-row-decoder.js`,
-      `export function ${DECODERS[table]}(row) {\n  return row;\n}\n`);
+      `export function ${DECODERS[table]}(row) {\n  return row.${DECODER_OWN_COLUMN[table]};\n}\n`);
   }
   const fallbacks = `export function m(a, b, f) {\n  const v = ${MET_TWO_SOURCE};\n` +
     `  const w = ${MET_DUAL_PATH};\n  try { f(); } ${MET_CATCH}\n  return [v, w];\n}\n`;
@@ -217,7 +233,7 @@ function metFixture() {
 
 // A tree that offends every row: each cap exceeded by one, each scoped zero
 // row hit in its owner files, no ratchet, no decoder, no INDEX.md in any of
-// its nine source directories, a 121-file flat directory, a truncating
+// its thirteen source directories, a 121-file flat directory, a truncating
 // bundle writer with no coverage, and a census that leaves most sites
 // uncensused and records one never, one fallback-only and one unclassified
 // both.
@@ -247,13 +263,21 @@ function offendingSourceFixture(root) {
   write(root, 'src/control-plane/control-plane-readiness-chain.js',
     'class C3 extends C2 {}\nclass C4 extends C3 {}\n');
   write(root, 'src/aliases.js',
-    arrayModule('read', 'row', 746, 'row.node_id || row.nodeId'));
+    arrayModule('read', 'row', 742, 'row.node_id || row.nodeId'));
   write(root, 'src/state-defaults.js',
     'export function s(row) {\n  return row.status || \'idle\';\n}\n');
   write(root, 'src/alias-export.js', 'const a = 1;\nexport {a as b};\n');
   write(root, 'src/legacy.js', 'const legacy = 0;\nexport const terms = [\n' +
     `${repeated(2924, () => '  legacy,')}\n];\n`);
   for (let index = 0; index < 121; index += 1) write(root, `src/flat/f${index}.js`, '');
+  // One raw read in one directory of each group (six), the rest outside
+  // every group: 1009 = cap + 1.
+  const rawRead = 'export function f(row) {\n  return row.workflow_step;\n}\n';
+  for (const directory of ['rebalancer', 'control-plane', 'node', 'admin', 'query',
+    'partition']) {
+    write(root, `src/${directory}/raw-column-read.js`, rawRead);
+  }
+  write(root, 'src/raw-reads.js', arrayModule('reads', 'row', 1003, 'row.last_heartbeat'));
   for (let index = 0; index < 36; index += 1) {
     write(root, `src/reexports/r${index}.js`, 'export * from \'../ports.js\';\n');
   }
@@ -665,7 +689,7 @@ test('the CLI names a missing source root on stderr', () => {
   assert.equal(rows.get('owner_port_feature_detection').value, null);
   assert.equal(rows.get('source_directories_over_cap').value, null);
   assert.equal(rows.get('stale_owner_indexes').value, null);
-  assert.equal(lastLine, '26', 'every row is unmet in a copy with no src and no inputs');
+  assert.equal(lastLine, '33', 'every row is unmet in a copy with no src and no inputs');
   assert.equal(result.status, 1);
 });
 
@@ -830,3 +854,16 @@ test('the budget script and the detector module pass the changed-path guideline 
       {cwd: REPO_ROOT, encoding: UTF8, timeout: 120_000});
     assert.equal(lint.status, 0, `eslint must pass: ${lint.stdout}${lint.stderr}`);
   });
+
+// Every raw system-table column read in this checkout's src belongs to
+// exactly one directory group: the groups are disjoint directory sets, so
+// their counts sum to the overall row only when no read falls outside them.
+test('the raw-column-read groups partition every read in src', () => {
+  const prefix = 'system_table_raw_column_reads_outside_decoder';
+  const rows = measure(REPO_ROOT).filter((row) => row.name.startsWith(prefix));
+  const overall = rows.find((row) => row.name === prefix);
+  const groups = rows.filter((row) => row.name !== prefix);
+  assert.equal(groups.length, 6, 'rebalancer, control_plane, node, admin, query, partition');
+  assert.equal(groups.reduce((sum, row) => sum + row.value, 0), overall.value,
+    'a read outside every group needs a group (or the other group) before it lands');
+});

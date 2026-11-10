@@ -85,6 +85,8 @@ import {
 } from '../../src/rebalancer/effective-placement-serial-priority-planner.js';
 import {WAIT_BOUND_SPENT_EVENT} from '../../src/logging/wait-bound-spent.js';
 import {createTestCoordinator, createTestRebalancer} from './test-helpers.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   createReplaceWitness,
   deliveredReplaceWitnessResponse,
@@ -111,7 +113,7 @@ const ENTITY_PARTITION = 'partition';
 const SPREAD_REASON = 'spread_replicas';
 
 function replicaRow(replicaId, nodeId, role, status = ReplicaStatus.ACTIVE) {
-  return {
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     service_type: ENTITY_PARTITION,
@@ -120,7 +122,7 @@ function replicaRow(replicaId, nodeId, role, status = ReplicaStatus.ACTIVE) {
     status,
     raft_role: role,
     address: `${nodeId}/partition/${replicaId}`,
-  };
+  });
 }
 
 function seedRow(index, nodeId, role) {
@@ -144,7 +146,7 @@ function servicesOf(coordinator) {
 // The census: the real derived priority partition summary over the rows.
 function census(coordinator) {
   return buildDerivedPriorityPartitionSummary({
-    serviceRows: servicesOf(coordinator),
+    serviceRows: projectReplicasFromServicesRows(servicesOf(coordinator)),
     partitionRows: [],
     readinessByNodeId: {},
     projectedServingNodeIds: NODES,
@@ -372,7 +374,7 @@ async function assertEveryAdmissionRefuses(t, world, label) {
       capturedAtMs,
       committedRowsObservation: {
         state: 'present',
-        rows: servicesOf(coordinator),
+        rows: projectReplicasFromServicesRows(servicesOf(coordinator)),
         observedAtMs: capturedAtMs,
       },
       inFlightOperationObservation: {

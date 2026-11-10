@@ -17,6 +17,7 @@ import {
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const NODE_IDS = Object.freeze([
   'node-1',
@@ -29,7 +30,7 @@ const RECOVERY_NODE_IDS = new Set(NODE_IDS.slice(0, 3));
 const EXPIRED_LEASE = 1;
 
 function nodeRows() {
-  return NODE_IDS.map((nodeId) => ({
+  return NODE_IDS.map((nodeId) => nodesRow({
     node_id: nodeId,
     status: NodeStatus.ACTIVE,
     connection_state: 'ready',
@@ -39,30 +40,30 @@ function nodeRows() {
 
 function concentratedServices() {
   return [
-    {
+    servicesRow({
       service_id: 'nodes-p1-r1',
       partition_id: 'nodes-p1',
       service_type: EntityType.PARTITION,
       node_id: 'node-1',
       status: 'active',
       raft_role: 'leader',
-    },
-    {
+    }),
+    servicesRow({
       service_id: 'nodes-p1-r2',
       partition_id: 'nodes-p1',
       service_type: EntityType.PARTITION,
       node_id: 'node-1',
       status: 'active',
       raft_role: 'follower',
-    },
-    {
+    }),
+    servicesRow({
       service_id: 'nodes-p1-r3',
       partition_id: 'nodes-p1',
       service_type: EntityType.PARTITION,
       node_id: 'node-1',
       status: 'active',
       raft_role: 'follower',
-    },
+    }),
   ];
 }
 

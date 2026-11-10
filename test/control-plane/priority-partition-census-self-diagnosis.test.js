@@ -13,6 +13,7 @@ import {
   normalizeNodeIdList,
   normalizePositiveInteger,
 } from '../../src/control-plane/membership-publication-row-helpers.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION_ID =
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS];
@@ -22,16 +23,19 @@ const SUMMARY_HELPERS = Object.freeze({
   normalizePositiveInteger,
 });
 
+// The census reads projected replicas (src/rebalancer/projected-replica.js),
+// what its production callers hand it: one per production-shaped services row.
 function createServiceRow(nodeId, index, options = {}) {
-  return {
+  const partitionId = options.partitionId || PARTITION_ID;
+  return projectedReplica({
     service_id: `${PARTITION_ID}-r${index}`,
     node_id: nodeId,
-    partition_id: PARTITION_ID,
+    partition_id: partitionId,
     service_type: options.serviceType || SERVICE_TYPE.PARTITION,
     status: SERVICE_STATUS.ACTIVE,
     raft_role: options.raftRole === undefined ? 'follower' : options.raftRole,
     address: `${nodeId}/partition/${PARTITION_ID}/${index}`,
-  };
+  });
 }
 
 function deriveSummary(serviceRows, replicaCount = 3) {
@@ -486,6 +490,12 @@ test('census output is independent of ambient Array prototype helpers', (t) => {
   const originalMap = Object.getOwnPropertyDescriptor(Array.prototype, 'map');
   const originalFilter = Object.getOwnPropertyDescriptor(Array.prototype, 'filter');
   const originalFind = Object.getOwnPropertyDescriptor(Array.prototype, 'find');
+  // The fixture replicas are built before the pollution: only the census
+  // runs under it.
+  const rows = [
+    createServiceRow('node-1', 1),
+    createServiceRow('node-2', 2),
+  ];
   let summary;
   let equal;
   try {
@@ -506,10 +516,7 @@ test('census output is independent of ambient Array prototype helpers', (t) => {
     Reflect.defineProperty(Array.prototype, 'find', {
       value: () => undefined, configurable: true, writable: true,
     });
-    summary = deriveSummary([
-      createServiceRow('node-1', 1),
-      createServiceRow('node-2', 2),
-    ]);
+    summary = deriveSummary(rows);
     equal = arePriorityPartitionSummariesEqual(
       semanticSummary(semanticBlock({
         expectedReplicaCount: 3,
@@ -629,12 +636,9 @@ test('an ACTIVE learner row never counts, whichever path wrote it', (t) => {
   ];
   for (const {label, partitionId} of bypassRows) {
     const rows = [
-      {...createServiceRow('node-1', 1), partition_id: partitionId},
-      {...createServiceRow('node-2', 2), partition_id: partitionId},
-      {
-        ...createServiceRow('node-3', 3, {raftRole: 'learner'}),
-        partition_id: partitionId,
-      },
+      createServiceRow('node-1', 1, {partitionId}),
+      createServiceRow('node-2', 2, {partitionId}),
+      createServiceRow('node-3', 3, {raftRole: 'learner', partitionId}),
     ];
     const summary = buildDerivedPriorityPartitionSummary(
       {

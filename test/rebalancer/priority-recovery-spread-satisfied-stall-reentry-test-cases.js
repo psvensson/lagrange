@@ -1,4 +1,5 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 // Quest operation-workflow-drain-redrive, acceptance #1 (mask-pinning baseline):
 // a durably STALLED, locally-owned REPLACE in its REMOVE-dispatch phase (ACTIVE)
 // that is over target gets classified spread_satisfied_in_flight, and the EXISTING
@@ -100,7 +101,7 @@ export function registerPriorityRecoverySpreadSatisfiedStallReentryTestCases(
         raftRole: TEST_RAFT_ROLE_FOLLOWER,
       });
     }
-    const serviceRows = replicaSpecs.map(({replicaId, nodeId, raftRole}) => ({
+    const serviceRows = replicaSpecs.map(({replicaId, nodeId, raftRole}) => servicesRow({
       service_id: replicaId,
       service_type: TEST_ENTITY_TYPE_PARTITION,
       node_id: nodeId,

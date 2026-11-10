@@ -47,6 +47,10 @@ import {
 import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 
 beforeEach(() => {
@@ -86,19 +90,19 @@ test(
     // through the replication-target authority and DEFERS on an undeclared
     // policy, so the fixture carries what production always persists.
     systemTableCache.applySystemTableChange(
-      TABLES.PARTITIONS, CDCOperation.INSERT, {
+      TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
         partition_id: 'stable-join-partition',
         table_id: 'stable_join_table',
         replica_count: 2,
-      });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+      }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
       service_id: 'replica-1',
       partition_id: 'stable-join-partition',
       service_type: SERVICE_TYPE.PARTITION,
       node_id: 'node-1',
       status: SERVICE_STATUS.ACTIVE,
       raft_role: RaftRole.LEADER,
-    });
+    }));
 
     const transport = createLoopbackTransport();
     const leader = new PartitionService(withFoundingStamp({
@@ -141,14 +145,14 @@ test(
         'single-replica owner should become a real raft leader before expansion',
       );
 
-      systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+      systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
         service_id: 'replica-2',
         partition_id: 'stable-join-partition',
         service_type: SERVICE_TYPE.PARTITION,
         node_id: 'node-2',
         status: SERVICE_STATUS.ACTIVE,
         raft_role: RaftRole.LEARNER,
-      });
+      }));
 
       const peerJoined = await waitForCondition(
         () => leader.raft.readStatus().peers.some(

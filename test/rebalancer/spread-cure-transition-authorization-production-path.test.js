@@ -33,6 +33,8 @@ import {
   createTestCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 if (!ConfigurationManager.getInstance().isInitialized()) {
   ConfigurationManager.getInstance().initialize({
@@ -72,9 +74,16 @@ const SETTLED_VOTERS = Object.freeze([
   Object.freeze(['r3', 'node-c', 'follower']),
 ]);
 
+// The five members, READY with a live lease (complete stored rows).
+function readyNodeRows() {
+  return NODE_IDS.map((nodeId) => nodesRow({node_id: nodeId,
+    status: NodeStatus.ACTIVE, connection_state: 'ready',
+    ready_lease_expires_at: Date.now() + 10000}));
+}
+
 function serviceRow(partitionId, [replicaSuffix, nodeId, raftRole]) {
   const replicaId = `${partitionId}-${replicaSuffix}`;
-  return {
+  return servicesRow({
     service_id: replicaId,
     service_type: 'partition',
     node_id: nodeId,
@@ -83,7 +92,7 @@ function serviceRow(partitionId, [replicaSuffix, nodeId, raftRole]) {
     address: `local/partition/${replicaId}`,
     raft_role: raftRole,
     status: ReplicaStatus.ACTIVE,
-  };
+  });
 }
 
 /**
@@ -98,8 +107,7 @@ async function driveOneRebalance(options) {
   const services = options.voters.map(
     (voter) => serviceRow(partitionId, voter));
   const cache = createMockCache({
-    nodes: NODE_IDS.map((nodeId) => ({nodeId, node_id: nodeId,
-      status: NodeStatus.ACTIVE})),
+    nodes: readyNodeRows(),
     services,
     partitions: options.partitionRow === null ? [] : [{
       partition_id: partitionId,
@@ -193,12 +201,12 @@ async function driveOneRebalance(options) {
 // states, and only a direct plan can hold one of them still.
 async function createIsolatedPlanner() {
   const partitionId = CRITICAL_PARTITION_ID;
-  const currentReplicas = OVER_TARGET_VOTERS.map(
+  const services = OVER_TARGET_VOTERS.map(
     (voter) => serviceRow(partitionId, voter));
+  const currentReplicas = projectReplicasFromServicesRows(services);
   const cache = createMockCache({
-    nodes: NODE_IDS.map((nodeId) => ({nodeId, node_id: nodeId,
-      status: NodeStatus.ACTIVE})),
-    services: currentReplicas,
+    nodes: readyNodeRows(),
+    services,
     partitions: [{
       partition_id: partitionId,
       table_id: partitionId.replace(/-p\d+$/u, ''),
@@ -422,7 +430,7 @@ function tracedCache(base, trace) {
 
 function entityReplicaRow(entityId, serviceType, [suffix, nodeId, raftRole]) {
   const replicaId = `${entityId}-${suffix}`;
-  return {
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     service_type: serviceType,
@@ -433,7 +441,7 @@ function entityReplicaRow(entityId, serviceType, [suffix, nodeId, raftRole]) {
     ...(serviceType === 'partition' ?
       {partition_id: entityId} :
       {group_id: entityId}),
-  };
+  });
 }
 
 function countOnePlansReads(scenario) {
@@ -442,8 +450,7 @@ function countOnePlansReads(scenario) {
     (replica) => entityReplicaRow(
       scenario.entityId, scenario.serviceType, replica));
   const base = createMockCache({
-    nodes: NODE_IDS.map((nodeId) => ({nodeId, node_id: nodeId,
-      status: NodeStatus.ACTIVE})),
+    nodes: readyNodeRows(),
     services,
     partitions: scenario.partitions,
     replicaOperations: [],
@@ -462,7 +469,8 @@ function countOnePlansReads(scenario) {
   });
   rebalancer.setLeader(true);
   const before = trace.length;
-  rebalancer.movePlanner.calculateMoves(services, scenario.targetState,
+  rebalancer.movePlanner.calculateMoves(
+    projectReplicasFromServicesRows(services), scenario.targetState,
     {membershipPublicationEpoch: PUBLISHED_EPOCH});
   const planReads = trace.slice(before);
   rebalancer.shutdown();

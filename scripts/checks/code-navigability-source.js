@@ -421,6 +421,7 @@ export {
   siteIdentity,
   sourceFiles,
   sourceSlice,
+  structuralKey,
   typeofComparisonArgument,
   unwrapChain,
   walkNodes,

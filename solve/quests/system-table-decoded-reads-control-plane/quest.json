@@ -6,7 +6,7 @@
   "doneWhen": {
     "probe": "script",
     "args": {
-      "command": "node scripts/checks/code-navigability-budget.js --metric --rows system_table_raw_column_reads_outside_decoder_control-plane",
+      "command": "node scripts/checks/code-navigability-budget.js --metric --rows system_table_raw_column_reads_outside_decoder_control_plane",
       "target": 0
     }
   },

@@ -63,6 +63,7 @@ import {
 } from '../../src/cache/system-cache-key-descriptor.js';
 import {TABLES} from '../../src/constants/index.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const REPRO_KEY = 'cdc-resurrection-repro-key';
 const MARKER_FIELD = '__repro_marker';
@@ -88,14 +89,23 @@ function hlcString(physical, logical, nodeId) {
 // and HLC version stamps the merge logic compares on. `updated_at_hlc` is the
 // column the fix will populate and compare; it is carried here so the same
 // harness exercises the fixed path unchanged.
-function buildRow(tableName, {marker, updatedAt, hlc}) {
+// The stored row is complete (the cache refuses an insert omitting a NOT NULL
+// column); `updated_at` and the marker are set over it whether or not the
+// table stores them (a non-column key passes through the cache unchanged).
+function buildStoredRow(tableName, fields) {
   const primaryKeyField = getSystemCachePrimaryKeyField(tableName);
   return {
-    [primaryKeyField]: REPRO_KEY,
+    ...systemTableRow(tableName, {[primaryKeyField]: REPRO_KEY}),
+    ...fields,
+  };
+}
+
+function buildRow(tableName, {marker, updatedAt, hlc}) {
+  return buildStoredRow(tableName, {
     updated_at: updatedAt,
     updated_at_hlc: hlc,
     [MARKER_FIELD]: marker,
-  };
+  });
 }
 
 function hasSweepHook(cache) {
@@ -163,12 +173,11 @@ function dropResurrects(tableName) {
 function buildTieWrite(tableName, {fieldValue, logical, nodeId}) {
   const isPublication = tableName === TABLES.CONTROL_PLANE_PUBLICATIONS;
   const tieField = isPublication ? PUBLICATION_TIE_FIELD : MARKER_FIELD;
-  const row = {
-    [getSystemCachePrimaryKeyField(tableName)]: REPRO_KEY,
+  const row = buildStoredRow(tableName, {
     updated_at: 5000,
     updated_at_hlc: hlcString(5000, logical, nodeId),
     [tieField]: fieldValue,
-  };
+  });
   if (isPublication) {
     // Equal epoch so the tie is decided on the scalar field, not the epoch rule.
     row.publication_epoch = 1;
@@ -241,7 +250,7 @@ function recreateBlockedNoHlc(tableName) {
   const cache = new SystemTableCache();
   const pk = getSystemCachePrimaryKeyField(tableName);
   const deleteRow = {[pk]: REPRO_KEY, updated_at: 1000, [MARKER_FIELD]: 'gone'};
-  const reinsertRow = {[pk]: REPRO_KEY, updated_at: 1000, [MARKER_FIELD]: 'reborn'};
+  const reinsertRow = buildStoredRow(tableName, {updated_at: 1000, [MARKER_FIELD]: 'reborn'});
   cache.applySystemTableChange(tableName, CDC_OPERATIONS.DELETE, deleteRow);
   cache.applySystemTableChange(tableName, CDC_OPERATIONS.INSERT, reinsertRow);
   return !rowIsPresent(cache, tableName);

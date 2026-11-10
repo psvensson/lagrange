@@ -8,6 +8,7 @@ import {
 import {
   createTestCoordinator,
 } from './test-helpers.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 // Verdict matrix for the failed-authoritative-read-admission-verdict
 // invariant (architecture/contracts/invariants.json; GP-8 of the
@@ -42,7 +43,7 @@ function initializeTestEnvironment() {
 }
 
 function createServiceRow(replicaId, nodeId, raftRole) {
-  return {
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     service_type: 'partition',
@@ -51,7 +52,7 @@ function createServiceRow(replicaId, nodeId, raftRole) {
     address: `local/partition/${replicaId}`,
     raft_role: raftRole,
     status: ReplicaStatus.ACTIVE,
-  };
+  });
 }
 
 function overTargetServiceRows() {

@@ -69,6 +69,10 @@ import {
   unwrapChain,
   walkNodes,
 } from './code-navigability-source.js';
+import {
+  SYSTEM_TABLE_COLUMNS,
+  systemTableRawColumnReads,
+} from './code-navigability-system-table-detectors.js';
 
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringReplaceAll = Function.call.bind(String.prototype.replaceAll);
@@ -334,7 +338,8 @@ const NAVIGABILITY_VISITORS = Object.freeze([
   stateReadDefaults,
   valueOrPromiseThenChecks,
 ]);
-const FILE_VISITORS = Object.freeze([...NAVIGABILITY_VISITORS, ...FALLBACK_VISITORS]);
+const FILE_VISITORS = Object.freeze([...NAVIGABILITY_VISITORS, ...FALLBACK_VISITORS,
+  systemTableRawColumnReads]);
 
 // The sites of the given visitors in one parsed file, by row.
 function visitFile(parsed, visitors, classes) {
@@ -398,6 +403,7 @@ const ROW_ORDER = Object.freeze([
   ROW.OWNER_PORT, ROW.IDENTITY_STATE, ROW.PROTOTYPE_BAGS, ROW.INHERITANCE,
   ROW.ALIAS_READS, ROW.STATE_DEFAULTS, ROW.THEN_CHECKS,
   ...arrayMap(FALLBACK_VISITORS, (visitor) => visitor.row),
+  systemTableRawColumnReads.row,
 ]);
 
 function parseFile(root, file, unparsedFiles) {
@@ -451,9 +457,11 @@ const detectCatchReturnsDefault = detectWith(catchReturnsDefault);
 const detectReexportOnlyModules = detectWith(reexportOnlyModules);
 const detectAliasExports = detectWith(aliasExports);
 const detectLegacyTermIdentifiers = detectWith(legacyTermIdentifiers);
+const detectSystemTableRawColumnReads = detectWith(systemTableRawColumnReads);
 
 export {
   ROW_ORDER,
+  SYSTEM_TABLE_COLUMNS,
   detectAliasExports,
   detectCatchReturnsDefault,
   detectIdentityKeyedModuleState,
@@ -465,6 +473,7 @@ export {
   detectReexportOnlyModules,
   detectRowFieldAliasReads,
   detectStateReadDefaults,
+  detectSystemTableRawColumnReads,
   detectTwoSourceFallbackReads,
   detectTypeofDualPaths,
   detectValueOrPromiseThenChecks,

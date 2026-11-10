@@ -39,6 +39,7 @@ import {
 } from '../../src/bootstrap/system-partition-classification.js';
 import {EntityType, ReplicaStatus} from '../../src/rebalancer/unified-rebalancer.js';
 import {TABLES} from '../../src/constants/index.js';
+import {servicesRow, systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   runOnExecutionNode,
   runOnSimulationGenerationRoot,
@@ -155,18 +156,20 @@ function seedPriorityRows(hosts, seedId, groupIds) {
   const nowMs = hosts.now();
   for (const tableId of groupIds) {
     const partitionId = `${tableId}${PARTITION_SUFFIX}`;
-    hosts.cache.applySystemTableChange(TABLES.PARTITIONS, INSERT, {
-      partition_id: partitionId, table_id: tableId,
-      replica_count: SCENARIO.targetReplicaCount, created_at: nowMs,
-    });
-    hosts.cache.applySystemTableChange(TABLES.SERVICES, INSERT, {
+    // Complete stored rows: the cache holds the row the table would hold.
+    hosts.cache.applySystemTableChange(TABLES.PARTITIONS, INSERT,
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: partitionId, table_id: tableId,
+        replica_count: SCENARIO.targetReplicaCount, created_at: nowMs, updated_at: nowMs,
+      }));
+    hosts.cache.applySystemTableChange(TABLES.SERVICES, INSERT, servicesRow({
       service_id: `${partitionId}${SEED_REPLICA_SUFFIX}`,
       replica_id: `${partitionId}${SEED_REPLICA_SUFFIX}`,
       partition_id: partitionId, node_id: seedId,
       service_type: EntityType.PARTITION, status: ReplicaStatus.ACTIVE,
       raft_role: RAFT_ROLE_LEADER, address: `${seedId}:${ADDRESS_PORT}`,
-      created_at: nowMs,
-    });
+      created_at: nowMs, updated_at: nowMs,
+    }));
   }
 }
 
@@ -181,12 +184,18 @@ function publishCohortLeadership({hosts, cohorts, leadership, rebalancers, seedI
     const leader = cohort.leaderId();
     if (!leader || leadership.get(groupId) === leader) continue;
     leadership.set(groupId, leader);
+    // CDC carries the complete stored row after the write: the seeded
+    // partition row with its new leader (a joiner's cache may not hold the
+    // row yet, and it holds only rows the table could hold).
+    const seedHost = hosts.get(seedId);
+    const partitionRow = {
+      ...seedHost.cache.get(TABLES.PARTITIONS, `${groupId}${PARTITION_SUFFIX}`),
+      leader_node_id: leader,
+      updated_at: seedHost.now(),
+    };
     for (const node of hosts.values()) {
       runOnExecutionNode(node.nodeId, () =>
-        node.cache.applySystemTableChange(TABLES.PARTITIONS, UPDATE, {
-          partition_id: `${groupId}${PARTITION_SUFFIX}`, table_id: groupId,
-          replica_count: SCENARIO.targetReplicaCount, leader_node_id: leader,
-        }));
+        node.cache.applySystemTableChange(TABLES.PARTITIONS, UPDATE, {...partitionRow}));
     }
     // Leadership acquisition is the production entry that starts planning:
     // setLeader enqueues a check and arms the planner's own periodic timer.

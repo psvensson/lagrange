@@ -39,6 +39,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   waitForAffinityDemoSchemaAdmission,
 } from '../../examples/service-data-affinity/affinity-demo-preload-gate.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const CAPTURED_AT_MS = 1_000_000;
 const SECOND_MS = 1_000;
@@ -83,15 +84,18 @@ const HOSTILE_LOGGER_ERROR = 'logger exploded';
 const HOSTILE_LOGGER_STRING = 'not-a-logger';
 const HOSTILE_LOGGER_NUMBER = 42;
 
+// A stored nodes row plus the cache's local CDC provenance (updated_at_hlc).
 function nodeRow(nodeId, overrides = {}) {
   return {
-    node_id: nodeId,
-    status: NODE_STATUS.ACTIVE,
-    connection_state: CONNECTION_STATE.READY,
-    last_heartbeat: CAPTURED_AT_MS - SECOND_MS,
-    ready_lease_expires_at: CAPTURED_AT_MS + SECOND_MS * 3,
+    ...nodesRow({
+      node_id: nodeId,
+      status: NODE_STATUS.ACTIVE,
+      connection_state: CONNECTION_STATE.READY,
+      last_heartbeat: CAPTURED_AT_MS - SECOND_MS,
+      ready_lease_expires_at: CAPTURED_AT_MS + SECOND_MS * 3,
+      ...overrides,
+    }),
     updated_at_hlc: `${CAPTURED_AT_MS - SECOND_MS * 2}-4-${nodeId}`,
-    ...overrides,
   };
 }
 

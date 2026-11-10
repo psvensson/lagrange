@@ -27,6 +27,7 @@ import {
 import {
   buildPlacementOwnerDecision,
 } from '../../src/rebalancer/placement-owner-decision.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION_ID = 'cl-038-partition';
 const NODE_1 = 'node-1';
@@ -47,16 +48,16 @@ function createNode(nodeId, cpu) {
   };
 }
 
+// The projected replica of a production-shaped partition services row.
 function createReplica(replicaId, nodeId, raftRole = null) {
-  const replica = {
+  return projectedReplica({
     replica_id: replicaId,
+    service_id: replicaId,
+    partition_id: PARTITION_ID,
     node_id: nodeId,
     status: ReplicaStatus.ACTIVE,
-  };
-  if (raftRole) {
-    replica.raft_role = raftRole;
-  }
-  return replica;
+    raft_role: raftRole,
+  });
 }
 
 function createMoveStateProvider(nodes, currentReplicas, extra = {}) {

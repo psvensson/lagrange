@@ -21,6 +21,7 @@ import {
   REBALANCER_ENTITY_TYPE,
   REBALANCER_MOVE_TYPE,
 } from '../../src/rebalancer/rebalancer-constants.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 /**
  * Initialize test environment with clean singletons.
@@ -96,14 +97,14 @@ test('Property 12: Critical moves prioritized over optimization', async (t) => {
             // All replicas concentrated on node-1
             const currentReplicas = [];
             for (let i = 0; i < replicasOnFirst; i++) {
-              currentReplicas.push({
+              currentReplicas.push(projectedReplica({
                 service_id: `${entityId}-r-${i}`,
                 replica_id: `${entityId}-r-${i}`,
                 partition_id: entityId,
                 node_id: 'node-1',
                 service_type: 'partition',
                 status: ReplicaStatus.ACTIVE,
-              });
+              }));
             }
 
             const moveStateProvider = createMoveStateProvider({
@@ -187,16 +188,16 @@ test('Property 12: Critical moves prioritized over optimization', async (t) => {
 
       // One healthy replica on node-1, one failed on node-1
       const currentReplicas = [
-        {
+        projectedReplica({
           service_id: `${entityId}-r1`, replica_id: `${entityId}-r1`,
           partition_id: entityId, node_id: 'node-1',
           service_type: 'partition', status: ReplicaStatus.ACTIVE,
-        },
-        {
+        }),
+        projectedReplica({
           service_id: `${entityId}-r2`, replica_id: `${entityId}-r2`,
           partition_id: entityId, node_id: 'node-1',
           service_type: 'partition', status: ReplicaStatus.FAILED,
-        },
+        }),
       ];
 
       const moveStateProvider = createMoveStateProvider({

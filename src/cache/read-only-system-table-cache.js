@@ -153,6 +153,15 @@ class ReadOnlySystemTableCache {
   }
 
   /**
+   * The observed-columns marking count for one table (cache diagnostic).
+   * @param {string} tableName - Name of the system table.
+   * @return {number}
+   */
+  getObservedColumnsMarkCount(tableName) {
+    return this._cache.getObservedColumnsMarkCount(tableName);
+  }
+
+  /**
    * Get the last local wall-clock apply time for one table.
    * @param {string} tableName - Name of the system table.
    * @return {number|null}

@@ -14,20 +14,30 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 function addMessageGroupService(cache, row) {
-  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, row);
+  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow(row));
 }
 
 function addNode(cache, row) {
-  cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, row);
+  cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, nodesRow(row));
+}
+
+function addMessageGroup(cache, row) {
+  cache.applySystemTableChange(
+    TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, systemTableRow(TABLES.MESSAGE_GROUPS, row));
 }
 
 test('message-group target resolver prefers explicit services leader over stale message_groups leader node',
   async (t) => {
     const cache = new SystemTableCache();
 
-    cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
+    addMessageGroup(cache, {
       [COLUMN.GROUP_ID]: 'mg-1',
       [COLUMN.LEADER_NODE_ID]: 'node-b',
     });
@@ -79,7 +89,7 @@ test('message-group target resolver falls back to canonical leader node when no 
   async (t) => {
     const cache = new SystemTableCache();
 
-    cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
+    addMessageGroup(cache, {
       [COLUMN.GROUP_ID]: 'mg-1',
       [COLUMN.LEADER_NODE_ID]: 'node-b',
     });
@@ -133,7 +143,7 @@ test('message-group target resolver avoids ambiguous same-node canonical leader 
   async (t) => {
     const cache = new SystemTableCache();
 
-    cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
+    addMessageGroup(cache, {
       [COLUMN.GROUP_ID]: 'mg-1',
       [COLUMN.LEADER_NODE_ID]: 'seed-node',
     });
@@ -210,7 +220,7 @@ function createExpiredLeaderLeaseCache() {
     [COLUMN.CONNECTION_STATE]: STATE.READY,
     [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
   });
-  cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
+  addMessageGroup(cache, {
     [COLUMN.GROUP_ID]: 'mg-1',
     [COLUMN.LEADER_NODE_ID]: 'node-a',
   });
@@ -286,7 +296,7 @@ test('message-group target resolver can retain canonical leader selection when s
   async (t) => {
     const cache = new SystemTableCache();
 
-    cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
+    addMessageGroup(cache, {
       [COLUMN.GROUP_ID]: 'mg-1',
       [COLUMN.LEADER_NODE_ID]: 'node-a',
     });
@@ -339,7 +349,7 @@ test('message-group target resolver prefers connected relay candidates over disc
       [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
     });
 
-    cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
+    addMessageGroup(cache, {
       [COLUMN.GROUP_ID]: 'mg-1',
       [COLUMN.LEADER_NODE_ID]: 'node-leader',
     });

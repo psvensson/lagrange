@@ -6,7 +6,9 @@ import {
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
 import {createTestRebalancer} from './test-helpers.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 // Lever (a) — surplus-drain prefers a NON-leader replica as the removal source.
 //
@@ -51,7 +53,7 @@ const FOLLOWER_DROP_NODE = 'node-D';
 
 function buildRebalancer() {
   const nodes = ['node-A', 'node-B', 'node-C', 'node-D', 'node-E'].map(
-    (nodeId) => ({node_id: nodeId, status: 'active'}),
+    (nodeId) => nodesRow({node_id: nodeId, status: 'active'}),
   );
   // Leader (B) listed before the follower drop candidate (D) so the legacy
   // first-wins selection would choose the leader as the REPLACE source.
@@ -60,7 +62,7 @@ function buildRebalancer() {
     {node: LEADER_NODE, role: 'leader'},
     {node: 'node-C', role: 'follower'},
     {node: FOLLOWER_DROP_NODE, role: 'follower'},
-  ].map(({node, role}) => ({
+  ].map(({node, role}) => servicesRow({
     service_id: `${PARTITION_ID}-${node}`,
     replica_id: `${PARTITION_ID}-${node}`,
     partition_id: PARTITION_ID,
@@ -95,9 +97,10 @@ function currentReplicas() {
     {node: LEADER_NODE, role: 'leader'},
     {node: 'node-C', role: 'follower'},
     {node: FOLLOWER_DROP_NODE, role: 'follower'},
-  ].map(({node, role}) => ({
+  ].map(({node, role}) => servicesRow({
     service_id: `${PARTITION_ID}-${node}`,
     replica_id: `${PARTITION_ID}-${node}`,
+    partition_id: PARTITION_ID,
     node_id: node,
     status: ReplicaStatus.ACTIVE,
     raft_role: role,
@@ -120,7 +123,7 @@ function buildColocatedPriorityRebalancer(leaderRole = 'leader') {
     {replicaId: COLOCATED_LEADER_REPLICA_ID, role: leaderRole},
     {replicaId: COLOCATED_FOLLOWER_REPLICA_ID, role: 'follower'},
     {replicaId: `${COLOCATED_PARTITION_ID}-r3`, role: 'follower'},
-  ].map(({replicaId, role}) => ({
+  ].map(({replicaId, role}) => servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     partition_id: COLOCATED_PARTITION_ID,
@@ -138,7 +141,7 @@ function buildColocatedPriorityRebalancer(leaderRole = 'leader') {
       nodeId: COLOCATED_NODE_ID,
       cacheData: {
         nodes: [COLOCATED_NODE_ID, 'node-joiner-a', 'node-joiner-b'].map(
-          (nodeId) => ({node_id: nodeId, status: 'active'}),
+          (nodeId) => nodesRow({node_id: nodeId, status: 'active'}),
         ),
         services: replicaRows,
         partitions: [{
@@ -161,7 +164,8 @@ test('surplus drain does NOT pick the partition leader as a REPLACE source ' +
   rebalancer.initialize();
   rebalancer.setLeader(true);
 
-  const moves = rebalancer.calculateMoves(currentReplicas(), TARGET_STATE);
+  const moves = rebalancer.calculateMoves(
+    projectReplicasFromServicesRows(currentReplicas()), TARGET_STATE);
   rebalancer.shutdown();
   teardownConfig();
 
@@ -187,7 +191,8 @@ test('surplus drain removed-replica SET is unchanged by the leader bias ' +
   rebalancer.initialize();
   rebalancer.setLeader(true);
 
-  const moves = rebalancer.calculateMoves(currentReplicas(), TARGET_STATE);
+  const moves = rebalancer.calculateMoves(
+    projectReplicasFromServicesRows(currentReplicas()), TARGET_STATE);
   rebalancer.shutdown();
   teardownConfig();
 
@@ -225,10 +230,11 @@ test('serial priority spread expands without selecting a leader source, then ' +
     targetNodes: [COLOCATED_NODE_ID, 'node-joiner-a', 'node-joiner-b'],
     availableNodeCount: 3,
   };
-  const expandMoves = rebalancer.calculateMoves(replicas, targetState);
+  const expandMoves = rebalancer.calculateMoves(
+    projectReplicasFromServicesRows(replicas), targetState);
   const postExpandReplicas = [
     ...replicas,
-    {
+    servicesRow({
       service_id: `${COLOCATED_PARTITION_ID}-r4`,
       replica_id: `${COLOCATED_PARTITION_ID}-r4`,
       partition_id: COLOCATED_PARTITION_ID,
@@ -236,19 +242,19 @@ test('serial priority spread expands without selecting a leader source, then ' +
       service_type: 'partition',
       status: ReplicaStatus.ACTIVE,
       raft_role: 'follower',
-    },
+    }),
   ];
   // Quest over-target-cap-spread-cure-wipe: below the distinct-node floor
   // the target-plus-one shape keeps expanding (drain of a co-located source
   // is spread-gated there); the drain under test fires once the floor is
   // met (three distinct nodes).
   const secondExpandMoves = rebalancer.calculateMoves(
-    postExpandReplicas,
+    projectReplicasFromServicesRows(postExpandReplicas),
     targetState,
   );
   const postFullSpreadReplicas = [
     ...postExpandReplicas,
-    {
+    servicesRow({
       service_id: `${COLOCATED_PARTITION_ID}-r5`,
       replica_id: `${COLOCATED_PARTITION_ID}-r5`,
       partition_id: COLOCATED_PARTITION_ID,
@@ -256,10 +262,10 @@ test('serial priority spread expands without selecting a leader source, then ' +
       service_type: 'partition',
       status: ReplicaStatus.ACTIVE,
       raft_role: 'follower',
-    },
+    }),
   ];
   const drainMoves = rebalancer.calculateMoves(
-    postFullSpreadReplicas,
+    projectReplicasFromServicesRows(postFullSpreadReplicas),
     targetState,
   );
   rebalancer.shutdown();
@@ -312,23 +318,24 @@ test('at-target spread retains node-level leadership fallback when the ' +
   // Floor-met surplus shape (quest over-target-cap-spread-cure-wipe: the
   // drain fires only once the distinct-node floor is met, so both joiner
   // nodes host a replica here).
-  const moves = rebalancer.calculateMoves([...replicas, {
-    service_id: `${COLOCATED_PARTITION_ID}-r4`,
-    replica_id: `${COLOCATED_PARTITION_ID}-r4`,
-    partition_id: COLOCATED_PARTITION_ID,
-    node_id: 'node-joiner-a',
-    service_type: 'partition',
-    status: ReplicaStatus.ACTIVE,
-    raft_role: 'follower',
-  }, {
-    service_id: `${COLOCATED_PARTITION_ID}-r5`,
-    replica_id: `${COLOCATED_PARTITION_ID}-r5`,
-    partition_id: COLOCATED_PARTITION_ID,
-    node_id: 'node-joiner-b',
-    service_type: 'partition',
-    status: ReplicaStatus.ACTIVE,
-    raft_role: 'follower',
-  }], {
+  const moves = rebalancer.calculateMoves(projectReplicasFromServicesRows([
+    ...replicas, servicesRow({
+      service_id: `${COLOCATED_PARTITION_ID}-r4`,
+      replica_id: `${COLOCATED_PARTITION_ID}-r4`,
+      partition_id: COLOCATED_PARTITION_ID,
+      node_id: 'node-joiner-a',
+      service_type: 'partition',
+      status: ReplicaStatus.ACTIVE,
+      raft_role: 'follower',
+    }), servicesRow({
+      service_id: `${COLOCATED_PARTITION_ID}-r5`,
+      replica_id: `${COLOCATED_PARTITION_ID}-r5`,
+      partition_id: COLOCATED_PARTITION_ID,
+      node_id: 'node-joiner-b',
+      service_type: 'partition',
+      status: ReplicaStatus.ACTIVE,
+      raft_role: 'follower',
+    })]), {
     targetReplicaCount: 3,
     targetNodes: [COLOCATED_NODE_ID, 'node-joiner-a', 'node-joiner-b'],
     availableNodeCount: 3,

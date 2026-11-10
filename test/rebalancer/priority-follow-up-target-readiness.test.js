@@ -24,6 +24,11 @@ import {
   createMockCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
+import {
+  nodesRow,
+  projectedReplica,
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_NODE_ID_A = 'node-priority-a';
 const TEST_NODE_ID_B = 'node-priority-b';
@@ -37,7 +42,7 @@ const TEST_REPLICA_ID_C = 'sql_write_operations-p1-r3';
 const TEST_TABLE_ID = SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS;
 const TEST_PARTITION_SERVICE_TYPE = 'partition';
 const TEST_ADDRESS_PREFIX = 'local/partition/';
-const TEST_RAFT_ROLE_VOTER = 'voter';
+const TEST_RAFT_ROLE_VOTER = 'follower';
 const TEST_TARGET_REPLICA_COUNT = 3;
 const TEST_NO_IN_FLIGHT_OPERATIONS = 0;
 const TEST_READY_LEASE_EXTENSION_MS = 60000;
@@ -66,15 +71,17 @@ function createNodeRow(nodeId, options = {}) {
   const readyLeaseExpiresAt = Object.hasOwn(options, 'readyLeaseExpiresAt') ?
     options.readyLeaseExpiresAt :
     Date.now() + TEST_READY_LEASE_EXTENSION_MS;
-  return {
+  return nodesRow({
     node_id: nodeId,
+    node_address: `ws://${nodeId}:8080`,
     status: NodeStatus.ACTIVE,
     connection_state: 'ready',
+    last_heartbeat: Date.now(),
     ready_lease_expires_at: readyLeaseExpiresAt,
-  };
+  });
 }
 
-function createReplicaRow(replicaId, nodeId) {
+function replicaColumns(replicaId, nodeId) {
   return {
     service_id: replicaId,
     service_type: TEST_PARTITION_SERVICE_TYPE,
@@ -85,6 +92,14 @@ function createReplicaRow(replicaId, nodeId) {
     raft_role: TEST_RAFT_ROLE_VOTER,
     status: ReplicaStatus.ACTIVE,
   };
+}
+
+function createReplicaRow(replicaId, nodeId) {
+  return servicesRow(replicaColumns(replicaId, nodeId));
+}
+
+function createProjectedReplica(replicaId, nodeId) {
+  return projectedReplica(replicaColumns(replicaId, nodeId));
 }
 
 function createNodeReadiness(nodeId, options = {}) {
@@ -218,7 +233,7 @@ test(
           reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
         }),
       ], {
-        currentReplicas: [createReplicaRow(TEST_REPLICA_ID_A, TEST_NODE_ID_A)],
+        currentReplicas: [createProjectedReplica(TEST_REPLICA_ID_A, TEST_NODE_ID_A)],
         targetState: {
           targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
           targetNodes: [TEST_NODE_ID_A, TEST_RECOVERY_ONLY_NODE_ID],

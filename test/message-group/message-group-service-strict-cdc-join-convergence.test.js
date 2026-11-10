@@ -51,6 +51,11 @@ import {
 import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID =
   'mg-relayed-strict-stale-competing';
@@ -89,26 +94,26 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]: 'mg-move-peer-reconcile-r1',
           [COLUMN.GROUP_ID]: 'mg-move-peer-reconcile',
           [COLUMN.NODE_ID]: 'seed-node',
           [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
           [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
           [COLUMN.ADDRESS]: 'seed-node/message-group/mg-move-peer-reconcile-r1',
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]: 'mg-move-peer-reconcile-r2',
           [COLUMN.GROUP_ID]: 'mg-move-peer-reconcile',
           [COLUMN.NODE_ID]: 'seed-node',
           [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
           [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
           [COLUMN.ADDRESS]: 'seed-node/message-group/mg-move-peer-reconcile-r2',
-        },
+        }),
       );
 
       service.reconcileRaftPeersFromCache();
@@ -203,15 +208,15 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           [COLUMN.GROUP_ID]: 'mg-strict-local-join-ingress',
           [COLUMN.LEADER_NODE_ID]: nodeId,
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]: 'mg-strict-local-join-ingress-r1',
           [COLUMN.GROUP_ID]: 'mg-strict-local-join-ingress',
           [COLUMN.NODE_ID]: nodeId,
@@ -221,12 +226,12 @@ test(
             `${nodeId}/message-group/mg-strict-local-join-ingress-r1`,
           [COLUMN.RAFT_ROLE]: RaftRole.FOLLOWER,
           [COLUMN.UPDATED_AT]: Date.now(),
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]: 'mg-strict-local-join-ingress-r3',
           [COLUMN.GROUP_ID]: 'mg-strict-local-join-ingress',
           [COLUMN.NODE_ID]: 'seed-node',
@@ -236,7 +241,7 @@ test(
             'seed-node/message-group/mg-strict-local-join-ingress-r3',
           [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
           [COLUMN.UPDATED_AT]: Date.now() - 1,
-        },
+        }),
       );
 
       const readiness = service.canAcceptCDCEvent({
@@ -261,10 +266,10 @@ test(
           type: 'latency.cdc.propagation',
           tableName: TABLES.NODES,
           operation: CDC_OPERATION.UPSERT,
-          data: {
+          data: nodesRow({
             [COLUMN.NODE_ID]: 'node-strict-local-join-ingress',
             [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-          },
+          }),
         },
       );
 
@@ -317,15 +322,15 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           [COLUMN.GROUP_ID]: 'mg-strict-local-live-hint',
           [COLUMN.LEADER_NODE_ID]: 'seed-node',
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]: 'mg-strict-local-live-hint-r1',
           [COLUMN.GROUP_ID]: 'mg-strict-local-live-hint',
           [COLUMN.NODE_ID]: nodeId,
@@ -335,7 +340,7 @@ test(
             `${nodeId}/message-group/mg-strict-local-live-hint-r1`,
           [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
           [COLUMN.UPDATED_AT]: Date.now(),
-        },
+        }),
       );
 
       const readiness = service.canAcceptCDCEvent({
@@ -360,10 +365,10 @@ test(
           type: 'latency.cdc.propagation',
           tableName: TABLES.NODES,
           operation: CDC_OPERATION.UPSERT,
-          data: {
+          data: nodesRow({
             [COLUMN.NODE_ID]: 'node-strict-local-live-hint',
             [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-          },
+          }),
         },
       );
 
@@ -411,15 +416,15 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           [COLUMN.GROUP_ID]: 'mg-strict-local-addressed-fallback',
           [COLUMN.LEADER_NODE_ID]: 'seed-node',
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]: 'mg-strict-local-addressed-fallback-r3',
           [COLUMN.GROUP_ID]: 'mg-strict-local-addressed-fallback',
           [COLUMN.NODE_ID]: 'seed-node',
@@ -429,7 +434,7 @@ test(
             'seed-node/message-group/mg-strict-local-addressed-fallback-r3',
           [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
           [COLUMN.UPDATED_AT]: Date.now() - 1,
-        },
+        }),
       );
 
       const readiness = service.canAcceptCDCEvent({
@@ -454,10 +459,10 @@ test(
           type: 'latency.cdc.propagation',
           tableName: TABLES.NODES,
           operation: CDC_OPERATION.UPSERT,
-          data: {
+          data: nodesRow({
             [COLUMN.NODE_ID]: 'node-strict-local-addressed-fallback',
             [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-          },
+          }),
         },
       );
 
@@ -510,15 +515,15 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           [COLUMN.GROUP_ID]: 'mg-strict-local-bootstrap-fallback',
           [COLUMN.LEADER_NODE_ID]: 'seed-node',
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]: 'mg-strict-local-bootstrap-fallback-r3',
           [COLUMN.GROUP_ID]: 'mg-strict-local-bootstrap-fallback',
           [COLUMN.NODE_ID]: 'seed-node',
@@ -528,7 +533,7 @@ test(
             'seed-node/message-group/mg-strict-local-bootstrap-fallback-r3',
           [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
           [COLUMN.UPDATED_AT]: Date.now() - 1,
-        },
+        }),
       );
 
       const readiness = service.canAcceptCDCEvent({
@@ -553,10 +558,10 @@ test(
           type: 'latency.cdc.propagation',
           tableName: TABLES.NODES,
           operation: CDC_OPERATION.UPSERT,
-          data: {
+          data: nodesRow({
             [COLUMN.NODE_ID]: 'node-strict-local-bootstrap-fallback',
             [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-          },
+          }),
         },
       );
 
@@ -604,15 +609,15 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           [COLUMN.GROUP_ID]: 'mg-strict-relayed-local-fallback',
           [COLUMN.LEADER_NODE_ID]: 'seed-node',
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]: 'mg-strict-relayed-local-fallback-r3',
           [COLUMN.GROUP_ID]: 'mg-strict-relayed-local-fallback',
           [COLUMN.NODE_ID]: 'seed-node',
@@ -622,7 +627,7 @@ test(
             'seed-node/message-group/mg-strict-relayed-local-fallback-r3',
           [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
           [COLUMN.UPDATED_AT]: Date.now() - 1,
-        },
+        }),
       );
 
       const initialDecision = service.resolveCdcIngressDecision({
@@ -658,10 +663,10 @@ test(
           tableName: TABLES.NODES,
           operation: CDC_OPERATION.UPSERT,
           relayDepth: 1,
-          data: {
+          data: nodesRow({
             [COLUMN.NODE_ID]: 'node-strict-relayed-local-fallback',
             [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-          },
+          }),
         },
       );
 
@@ -709,15 +714,15 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           [COLUMN.GROUP_ID]: 'mg-strict-relayed-local-batch-fallback',
           [COLUMN.LEADER_NODE_ID]: 'seed-node',
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]: 'mg-strict-relayed-local-batch-fallback-r3',
           [COLUMN.GROUP_ID]: 'mg-strict-relayed-local-batch-fallback',
           [COLUMN.NODE_ID]: 'seed-node',
@@ -727,7 +732,7 @@ test(
             'seed-node/message-group/mg-strict-relayed-local-batch-fallback-r3',
           [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
           [COLUMN.UPDATED_AT]: Date.now() - 1,
-        },
+        }),
       );
 
       const result = await service.handleLatencyCdcPropagationBatchMessage(
@@ -739,23 +744,21 @@ test(
             {
               tableName: TABLES.NODES,
               operation: CDC_OPERATION.UPSERT,
-              data: {
+              data: nodesRow({
                 [COLUMN.NODE_ID]: 'node-strict-relayed-local-batch-fallback',
                 [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-              },
+              }),
             },
             {
               tableName: TABLES.NODE_ENDPOINTS,
               operation: CDC_OPERATION.UPSERT,
-              data: {
+              data: systemTableRow(TABLES.NODE_ENDPOINTS, {
                 [COLUMN.ENDPOINT_ID]: 'endpoint-strict-relayed-local-batch-fallback',
                 [COLUMN.NODE_ID]: 'node-strict-relayed-local-batch-fallback',
-                [COLUMN.PROTOCOL]: 'ws',
-                [COLUMN.HOST]: '127.0.0.1',
-                [COLUMN.PORT]: 3100,
-                [COLUMN.PATH]: '/',
+                [COLUMN.TRANSPORT_TYPE]: 'ws',
+                [COLUMN.ADDRESS]: 'ws://127.0.0.1:3100/',
                 [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-              },
+              }),
             },
           ],
         },
@@ -819,16 +822,16 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           [COLUMN.GROUP_ID]: TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID,
           [COLUMN.LEADER_NODE_ID]:
             TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_NODE_ID,
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]:
             TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_REPLICA_ID,
           [COLUMN.GROUP_ID]: TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID,
@@ -838,7 +841,7 @@ test(
           [COLUMN.ADDRESS]: TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_ADDRESS,
           [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
           [COLUMN.UPDATED_AT]: Date.now(),
-        },
+        }),
       );
 
       const initialDecision = service.resolveCdcIngressDecision({
@@ -877,10 +880,10 @@ test(
           tableName: TABLES.NODES,
           operation: CDC_OPERATION.UPSERT,
           relayDepth: 1,
-          data: {
+          data: nodesRow({
             [COLUMN.NODE_ID]: TEST_RELAYED_STRICT_STALE_COMPETING_NODE_ROW_ID,
             [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-          },
+          }),
         },
       );
 
@@ -936,15 +939,15 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           [COLUMN.GROUP_ID]: 'mg-strict-decision-local',
           [COLUMN.LEADER_NODE_ID]: 'seed-node',
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]: 'mg-strict-decision-local-r3',
           [COLUMN.GROUP_ID]: 'mg-strict-decision-local',
           [COLUMN.NODE_ID]: 'seed-node',
@@ -954,7 +957,7 @@ test(
             'seed-node/message-group/mg-strict-decision-local-r3',
           [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
           [COLUMN.UPDATED_AT]: Date.now() - 1,
-        },
+        }),
       );
 
       const decision = service.resolveCdcIngressDecision({
@@ -1034,10 +1037,10 @@ test(
           type: 'latency.cdc.propagation',
           tableName: TABLES.NODES,
           operation: CDC_OPERATION.UPSERT,
-          data: {
+          data: nodesRow({
             [COLUMN.NODE_ID]: 'node-strict-decision-local',
             [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-          },
+          }),
         },
       );
 

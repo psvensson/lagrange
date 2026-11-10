@@ -47,6 +47,11 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {
+  nodesRow,
+  replicaOperationsRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_NODE_ID = 'expiry-node-1';
 const TEST_TARGET_NODE_ID = 'node-target-1';
@@ -178,17 +183,21 @@ function seedExpiredReservation(store, reservationId, operationId) {
 }
 
 function seedOperation(store, operationId, status, workflowStep) {
-  store.operations.set(operationId, {
+  const now = Date.now();
+  store.operations.set(operationId, replicaOperationsRow({
     operation_id: operationId,
     type: OperationType.ADD,
     partition_id: TEST_PARTITION_ID,
     entity_type: SERVICE_TYPE.PARTITION,
     entity_id: TEST_PARTITION_ID,
+    source_node_id: TEST_NODE_ID,
     target_node_id: TEST_TARGET_NODE_ID,
     status,
     workflow_step: workflowStep,
+    created_at: now - NUM.THIRTY_THOUSAND,
+    updated_at: now - NUM.THIRTY_THOUSAND,
     completed_at: null,
-  });
+  }));
 }
 
 // --- TTL sweep is operation-aware ---
@@ -251,26 +260,37 @@ test('getCapacitySnapshots - an expired reservation for a LIVE operation ' +
   });
   service.initialize({systemTableCache: cache});
 
-  insertRow(cache, TABLES.NODES, {
+  insertRow(cache, TABLES.NODES, nodesRow({
     [COLUMN.NODE_ID]: TEST_TARGET_NODE_ID,
     [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
-  });
-  insertRow(cache, TABLES.STORAGE_RESERVATIONS, {
-    [COLUMN.RESERVATION_ID]: LIVE_RESERVATION_ID,
+  }));
+  insertRow(cache, TABLES.STORAGE_RESERVATIONS, systemTableRow(
+    TABLES.STORAGE_RESERVATIONS,
+    {
+      [COLUMN.RESERVATION_ID]: LIVE_RESERVATION_ID,
+      [COLUMN.OPERATION_ID]: LIVE_OPERATION_ID,
+      [COLUMN.ENTITY_TYPE]: SERVICE_TYPE.PARTITION,
+      [COLUMN.ENTITY_ID]: TEST_PARTITION_ID,
+      [COLUMN.PARTITION_ID]: TEST_PARTITION_ID,
+      [COLUMN.TARGET_NODE_ID]: TEST_TARGET_NODE_ID,
+      [COLUMN.ESTIMATED_BYTES]: NUM.HUNDRED,
+      [COLUMN.AMPLIFICATION_FACTOR]: 1,
+      [COLUMN.STATUS]: RESERVATION_STATUS.ACTIVE,
+      // Past expiry, but the backing operation is still live.
+      [COLUMN.EXPIRES_AT]: Date.now() - NUM.THOUSAND,
+    },
+  ));
+  insertRow(cache, TABLES.REPLICA_OPERATIONS, replicaOperationsRow({
     [COLUMN.OPERATION_ID]: LIVE_OPERATION_ID,
+    type: OperationType.ADD,
+    [COLUMN.PARTITION_ID]: TEST_PARTITION_ID,
+    [COLUMN.ENTITY_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.ENTITY_ID]: TEST_PARTITION_ID,
+    source_node_id: TEST_NODE_ID,
     [COLUMN.TARGET_NODE_ID]: TEST_TARGET_NODE_ID,
-    [COLUMN.ESTIMATED_BYTES]: NUM.HUNDRED,
-    [COLUMN.AMPLIFICATION_FACTOR]: 1,
-    [COLUMN.STATUS]: RESERVATION_STATUS.ACTIVE,
-    // Past expiry, but the backing operation is still live.
-    [COLUMN.EXPIRES_AT]: Date.now() - NUM.THOUSAND,
-  });
-  insertRow(cache, TABLES.REPLICA_OPERATIONS, {
-    [COLUMN.OPERATION_ID]: LIVE_OPERATION_ID,
-    operation_type: OperationType.ADD,
     [COLUMN.STATUS]: 'syncing',
     workflow_step: WORKFLOW_STEP.SYNCING,
-  });
+  }));
 
   const snapshots = await service.getCapacitySnapshots();
   t.equal(snapshots[0].reservedBytes, NUM.HUNDRED,
@@ -287,25 +307,36 @@ test('getCapacitySnapshots - an expired reservation for a TERMINAL ' +
   });
   service.initialize({systemTableCache: cache});
 
-  insertRow(cache, TABLES.NODES, {
+  insertRow(cache, TABLES.NODES, nodesRow({
     [COLUMN.NODE_ID]: TEST_TARGET_NODE_ID,
     [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
-  });
-  insertRow(cache, TABLES.STORAGE_RESERVATIONS, {
-    [COLUMN.RESERVATION_ID]: TERMINAL_RESERVATION_ID,
+  }));
+  insertRow(cache, TABLES.STORAGE_RESERVATIONS, systemTableRow(
+    TABLES.STORAGE_RESERVATIONS,
+    {
+      [COLUMN.RESERVATION_ID]: TERMINAL_RESERVATION_ID,
+      [COLUMN.OPERATION_ID]: TERMINAL_OPERATION_ID,
+      [COLUMN.ENTITY_TYPE]: SERVICE_TYPE.PARTITION,
+      [COLUMN.ENTITY_ID]: TEST_PARTITION_ID,
+      [COLUMN.PARTITION_ID]: TEST_PARTITION_ID,
+      [COLUMN.TARGET_NODE_ID]: TEST_TARGET_NODE_ID,
+      [COLUMN.ESTIMATED_BYTES]: NUM.HUNDRED,
+      [COLUMN.AMPLIFICATION_FACTOR]: 1,
+      [COLUMN.STATUS]: RESERVATION_STATUS.ACTIVE,
+      [COLUMN.EXPIRES_AT]: Date.now() - NUM.THOUSAND,
+    },
+  ));
+  insertRow(cache, TABLES.REPLICA_OPERATIONS, replicaOperationsRow({
     [COLUMN.OPERATION_ID]: TERMINAL_OPERATION_ID,
+    type: OperationType.ADD,
+    [COLUMN.PARTITION_ID]: TEST_PARTITION_ID,
+    [COLUMN.ENTITY_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.ENTITY_ID]: TEST_PARTITION_ID,
+    source_node_id: TEST_NODE_ID,
     [COLUMN.TARGET_NODE_ID]: TEST_TARGET_NODE_ID,
-    [COLUMN.ESTIMATED_BYTES]: NUM.HUNDRED,
-    [COLUMN.AMPLIFICATION_FACTOR]: 1,
-    [COLUMN.STATUS]: RESERVATION_STATUS.ACTIVE,
-    [COLUMN.EXPIRES_AT]: Date.now() - NUM.THOUSAND,
-  });
-  insertRow(cache, TABLES.REPLICA_OPERATIONS, {
-    [COLUMN.OPERATION_ID]: TERMINAL_OPERATION_ID,
-    operation_type: OperationType.ADD,
     [COLUMN.STATUS]: ReplicaStatus.ACTIVE,
     workflow_step: WORKFLOW_STEP.ACTIVE,
-  });
+  }));
 
   const snapshots = await service.getCapacitySnapshots();
   t.equal(snapshots[0].reservedBytes, 0,

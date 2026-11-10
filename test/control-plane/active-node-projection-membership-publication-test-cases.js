@@ -12,9 +12,11 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {nodesRow, servicesRow} from
+  '../test-helpers/system-table-row-fixture.js';
 
 // A registered, ready NODES row at the fixture incarnation.
-const readyNodeRow = (nodeId) => ({node_id: nodeId,
+const readyNodeRow = (nodeId) => nodesRow({node_id: nodeId,
   boot_incarnation: FIXTURE_ENDPOINT_INCARNATION, status: 'active',
   connection_state: 'ready', ready_lease_expires_at: 2000});
 
@@ -41,24 +43,24 @@ export function registerActiveNodeProjectionMembershipPublicationTests() {
           readyNodeRow('node-3'),
         ],
         serviceRows: [
-          {
+          servicesRow({
             service_id: 'svc-node-1',
             service_type: 'message_group',
             node_id: 'node-1',
             status: 'active',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'svc-node-2',
             service_type: 'message_group',
             node_id: 'node-2',
             status: 'active',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'svc-node-3',
             service_type: 'message_group',
             node_id: 'node-3',
             status: 'active',
-          },
+          }),
         ],
         nodeEndpointRows: [
           {

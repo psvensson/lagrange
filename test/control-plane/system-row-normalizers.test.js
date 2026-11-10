@@ -2,51 +2,9 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   canonicalizeSystemTableRow,
   normalizeNodeEndpointRow,
-  normalizeNodeRow,
   normalizeServiceEndpointRow,
-  normalizeServiceRow,
 } from '../../src/control-plane/system-row-normalizers.js';
 import {TABLES} from '../../src/constants/index.js';
-
-test('normalizeNodeRow canonicalizes snake_case and camelCase node metadata',
-  (t) => {
-    t.same(normalizeNodeRow({
-      nodeId: 'node-b',
-      status: 'ACTIVE',
-      connectionState: 'CONNECTED',
-    }), {
-      nodeId: 'node-b',
-      status: 'active',
-      connectionState: 'connected',
-    });
-    t.end();
-  });
-
-test('normalizeServiceRow canonicalizes service identity and lifecycle fields',
-  (t) => {
-    t.same(normalizeServiceRow({
-      serviceId: 'svc-1',
-      serviceType: 'MESSAGE_GROUP',
-      nodeId: 'node-a',
-      partitionId: 'partition-1',
-      groupId: 'group-1',
-      replicaId: 'replica-1',
-      raftRole: 'LEADER',
-      status: 'ACTIVE',
-      address: 'node-a/service/svc-1',
-    }), {
-      serviceId: 'svc-1',
-      serviceType: 'message_group',
-      nodeId: 'node-a',
-      partitionId: 'partition-1',
-      groupId: 'group-1',
-      replicaId: 'replica-1',
-      raftRole: 'leader',
-      status: 'active',
-      address: 'node-a/service/svc-1',
-    });
-    t.end();
-  });
 
 test('normalizeNodeEndpointRow canonicalizes endpoint transport fields',
   (t) => {

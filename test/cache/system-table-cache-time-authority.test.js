@@ -12,6 +12,8 @@ import {test} from 'node:test';
 
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {TABLES} from '../../src/constants/index.js';
+import {nodesRow} from
+  '../test-helpers/system-table-row-fixture.js';
 
 const T1 = 1789295948000;
 const T2 = 1789295951500;
@@ -35,14 +37,14 @@ test('the mutation watermark is stamped by the cache\'s own clock', () => {
   const timeSource = virtualTimeSource(T1);
   const cache = new SystemTableCache({timeSource, cacheId: 'witness/cache'});
   cache.applySystemTableChange(TABLES.NODES, CDC_UPSERT,
-    {node_id: 'node-a', status: 'active'});
+    nodesRow({node_id: 'node-a', status: 'active'}));
   assert.equal(cache.getLastAppliedAtMs(TABLES.NODES), T1,
     'the accepted mutation is stamped at the owner clock\'s instant');
 
   // Logical time moves; nothing about the host does.
   timeSource.advanceTo(T2);
   cache.applySystemTableChange(TABLES.NODES, CDC_UPSERT,
-    {node_id: 'node-b', status: 'active'});
+    nodesRow({node_id: 'node-b', status: 'active'}));
   assert.equal(cache.getLastAppliedAtMs(TABLES.NODES), T2,
     'and the next one moves with the owner clock, not with wall time');
 });
@@ -55,7 +57,7 @@ test('MUTATION: stamping the watermark from ambient time breaks it', () => {
   const cache = new SystemTableCache({timeSource, cacheId: 'witness/cache'});
   cache.timeSource = {now: () => Date.now()};
   cache.applySystemTableChange(TABLES.NODES, CDC_UPSERT,
-    {node_id: 'node-a', status: 'active'});
+    nodesRow({node_id: 'node-a', status: 'active'}));
   assert.notEqual(cache.getLastAppliedAtMs(TABLES.NODES), T1,
     'on ambient time the watermark is the process clock, so the witness ' +
     'above goes red');
@@ -65,7 +67,7 @@ test('the default cache keeps platform time and an ambient instance id', () => {
   const before = Date.now();
   const cache = new SystemTableCache();
   cache.applySystemTableChange(TABLES.NODES, CDC_UPSERT,
-    {node_id: 'node-a', status: 'active'});
+    nodesRow({node_id: 'node-a', status: 'active'}));
   const stamped = cache.getLastAppliedAtMs(TABLES.NODES);
   assert.ok(stamped >= before, 'production still stamps on RealTimeSource');
   assert.ok(typeof cache._cacheId === 'string' && cache._cacheId.length > 0,

@@ -1,4 +1,5 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
   registerCase,
   dependencies,
@@ -76,7 +77,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
     TEST_REPRESENTATIVE_PUBLICATION_OPERATION_ID,
     TEST_REQUIRED_DISTINCT_NODE_COUNT,
     TEST_RETRY_DEFERRED_HANDOFF_TEST_NAME,
-    TEST_RETRY_DEFERRED_STATUS,
     TEST_RETRYABLE_HANDOFF_ERROR,
     TEST_RETRY_AFTER_MS,
     TEST_RETRY_SCHEDULED_REENTRY_TEST_NAME,
@@ -137,7 +137,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       const deliveries = [];
       const authoritativeIncompleteReads = [];
       const nowMs = Date.now();
-      const cacheVisibleOperationRow = {
+      const cacheVisibleOperationRow = replicaOperationsRow({
         operation_id: TEST_OPERATION_ID,
         type: TEST_OPERATION_TYPE_REPLACE,
         partition_id: TEST_PARTITION_ID,
@@ -153,8 +153,8 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         steps_history: JSON.stringify(TEST_EMPTY_LIST),
         entity_type: TEST_ENTITY_TYPE_PARTITION,
         entity_id: TEST_PARTITION_ID,
-      };
-      const authoritativeOnlyOperationRow = {
+      });
+      const authoritativeOnlyOperationRow = replicaOperationsRow({
         operation_id: TEST_AUTHORITATIVE_ONLY_OPERATION_ID,
         type: TEST_OPERATION_TYPE_REPLACE,
         partition_id: TEST_AUTHORITATIVE_ONLY_PARTITION_ID,
@@ -170,7 +170,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         steps_history: JSON.stringify(TEST_EMPTY_LIST),
         entity_type: TEST_ENTITY_TYPE_PARTITION,
         entity_id: TEST_AUTHORITATIVE_ONLY_PARTITION_ID,
-      };
+      });
       const operationRows = new Map([
         [cacheVisibleOperationRow.operation_id, cacheVisibleOperationRow],
         [
@@ -343,7 +343,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       const nowMs = TEST_CAPTURED_AT_MS;
       const originalDateNow = Date.now;
       Date.now = () => nowMs;
-      const operationRow = {
+      const operationRow = replicaOperationsRow({
         operation_id: TEST_OPERATION_ID,
         type: TEST_OPERATION_TYPE_REPLACE,
         partition_id: TEST_PARTITION_ID,
@@ -360,7 +360,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         steps_history: JSON.stringify(TEST_EMPTY_LIST),
         entity_type: TEST_ENTITY_TYPE_PARTITION,
         entity_id: TEST_PARTITION_ID,
-      };
+      });
 
       const sqlQueryEngine = {
         async executeQuery(sql, params = []) {
@@ -522,7 +522,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       let nowMs = TEST_CAPTURED_AT_MS;
       const originalDateNow = Date.now;
       Date.now = () => nowMs;
-      const operationRow = {
+      const operationRow = replicaOperationsRow({
         operation_id: TEST_OPERATION_ID,
         type: TEST_OPERATION_TYPE_REPLACE,
         partition_id: TEST_PARTITION_ID,
@@ -538,7 +538,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         steps_history: JSON.stringify(TEST_EMPTY_LIST),
         entity_type: TEST_ENTITY_TYPE_PARTITION,
         entity_id: TEST_PARTITION_ID,
-      };
+      });
 
       const sqlQueryEngine = {
         async executeQuery(sql, params = []) {
@@ -708,7 +708,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       const nowMs = TEST_CAPTURED_AT_MS;
       const originalDateNow = Date.now;
       Date.now = () => nowMs;
-      const operationRow = {
+      const operationRow = replicaOperationsRow({
         operation_id: TEST_OPERATION_ID,
         type: TEST_OPERATION_TYPE_REPLACE,
         partition_id: TEST_PARTITION_ID,
@@ -724,7 +724,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         steps_history: JSON.stringify(TEST_EMPTY_LIST),
         entity_type: TEST_ENTITY_TYPE_PARTITION,
         entity_id: TEST_PARTITION_ID,
-      };
+      });
 
       const sqlQueryEngine = {
         async executeQuery(sql, params = []) {
@@ -1417,11 +1417,10 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         ['1062b470-3ae7-428f-b0c5-f0eade6230d8',
           TEST_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
           TEST_SQL_TRANSACTION_PARTICIPANTS_REPLICA_ID],
-      ].map(([operationId, partitionId, replicaId]) => Object.freeze({
-        ...buildPendingOperationRow({operationId, partitionId, replicaId,
+      ].map(([operationId, partitionId, replicaId]) => Object.freeze(
+        buildPendingOperationRow({operationId, partitionId, replicaId,
           nowMs: TEST_OPERATION_CREATED_AT_MS}),
-        status: TEST_RETRY_DEFERRED_STATUS,
-      })));
+      )));
       const authoritativeOperationRows = [...witnessOperationRows];
       const sqlQueryEngine = {
         async executeQuery(sql, params = []) {
@@ -1570,7 +1569,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
           operations.map((operation) => [
             operation.partitionId,
             WORKFLOW_STEP.PENDING,
-            TEST_RETRY_DEFERRED_STATUS,
+            TEST_STATUS_PENDING,
             PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
             PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
             TEST_PROGRESS_CONTRACT_STATE_PENDING,

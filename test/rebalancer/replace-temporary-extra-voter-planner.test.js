@@ -25,6 +25,7 @@ import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createMockCache, createTestRebalancer} from './test-helpers.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION_ID = 'd1-extra-voter';
 const REPLICA_COUNT = 3;
@@ -36,14 +37,14 @@ const MEMBERS = Object.freeze({
 });
 
 function serviceRow([replicaId, nodeId]) {
-  return {
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     service_type: EntityType.PARTITION,
     partition_id: PARTITION_ID,
     node_id: nodeId,
     status: ReplicaStatus.ACTIVE,
-  };
+  });
 }
 
 function activeReplace() {

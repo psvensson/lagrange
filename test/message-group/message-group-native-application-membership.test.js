@@ -10,7 +10,8 @@ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {isCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
 import {MESSAGE_GROUP_COMMAND_TYPE} from '../../src/message-group/constants.js';
 import {replacePrototypeProperty, withHostileIntrinsics} from '../helpers/hostile-intrinsics.js';
-import {GROUP_ID, NODE_ID, pump, recipientFixture} from './message-group-native-custody-fixture.js';
+import {GROUP_ID, NODE_ID, configRow, pump, recipientFixture} from
+  './message-group-native-custody-fixture.js';
 
 const KEY = 'membership-durable';
 const ORDINARY_KEY = 'membership-ordinary';
@@ -30,11 +31,11 @@ afterEach(() => {
 function mixedInput() {
   const timestamp = new HLCTimestamp(1000, 0, 'membership-source').toString();
   return [{tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
-    data: {config_key: KEY, config_value: 'durable-value'}, timestamp,
+    data: configRow(KEY, 'durable-value'), timestamp,
     sourcePartition: 'membership-config', sourceReplica: 'membership-config-r1',
     eventKey: 'membership-write', entryId: 'membership-write', sourceLogIndex: 5, sourceOrdinal: 0},
   {tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
-    data: {config_key: ORDINARY_KEY, config_value: 'ordinary-value'}, timestamp}];
+    data: configRow(ORDINARY_KEY, 'ordinary-value'), timestamp}];
 }
 
 function observeCommittedApplication(t, service, attacked) {

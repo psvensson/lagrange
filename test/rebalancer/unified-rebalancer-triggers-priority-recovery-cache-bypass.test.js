@@ -56,6 +56,7 @@ import {
   createMockPolicyService,
   createMockReadinessService,
 } from './unified-rebalancer-test-support.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_NUMBER = Object.freeze({
   ZERO: 0,
@@ -110,13 +111,15 @@ function createMockCache(
   serviceEndpoints = [],
 ) {
   const now = Date.now();
-  const normalizedNodes = nodes.map((node) => ({
+  // The cache holds complete stored rows (as the system-table cache does).
+  const normalizedNodes = nodes.map((node) => nodesRow({
     connection_state: Object.hasOwn(node, 'connection_state') ?
       node.connection_state : TEST_SCALAR.CONNECTION_STATE_READY,
     ready_lease_expires_at: Object.hasOwn(node, 'ready_lease_expires_at') ?
       node.ready_lease_expires_at : now + TEST_NUMBER.READY_LEASE_DURATION_MS,
     ...node,
   }));
+  services = services.map((row) => servicesRow(row));
   const cache = {
     nodes: new Map(normalizedNodes.map((node) => [node.node_id, node])),
     services: new Map(services.map((s) => [s.service_id, s])),
@@ -267,7 +270,8 @@ function createTestRebalancer(options = {}) {
 const PRIORITY_FOLLOW_UP_NODE_ID_A = 'node-priority-a';
 const PRIORITY_FOLLOW_UP_NODE_ID_B = 'node-priority-b';
 const PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX = 'addr-';
-const PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER = 'voter';
+// A voter replica stores the follower role (raft_role has no 'voter').
+const PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER = 'follower';
 const PRIORITY_RECOVERY_PUBLICATION_EPOCH = 7;
 const PRIORITY_RECOVERY_READY_REPLICA_COUNT_CANONICAL = 2;
 const PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT = 1;

@@ -57,6 +57,7 @@ import {
   createMockControlPlaneReadinessService,
   createTestRebalancer,
 } from '../rebalancer/test-helpers.js';
+import {nodesRow, systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const SEED_NODE_ID = 'seed-node';
 const JOINER_NODE_ID = 'joiner-node';
@@ -68,7 +69,7 @@ const QUIET_LOGGER = Object.freeze({warn() {}, info() {}, debug() {}, error() {}
 const REPOSITORY_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 function nodeRow(nodeId, connectionState) {
-  return {
+  return nodesRow({
     node_id: nodeId,
     node_address: `ws://${nodeId}`,
     status: NODE_STATUS.ACTIVE,
@@ -76,7 +77,7 @@ function nodeRow(nodeId, connectionState) {
     ready_lease_expires_at:
       connectionState === STATE.READY ? NOW_MS + READY_LEASE_MS : null,
     last_heartbeat: NOW_MS,
-  };
+  });
 }
 
 function commitNodeRow(cache, nodeId, connectionState) {
@@ -418,11 +419,13 @@ for (const driver of ACTIVE_GATE_DRIVERS) {
       // A third READY node the gate finds missing, and the seed leads the
       // publications partition.
       commitNodeRow(cache, THIRD_NODE_ID, STATE.READY);
-      cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATIONS.UPSERT, {
-        partition_id: 'control_plane_publications-p1',
-        table_name: TABLES.CONTROL_PLANE_PUBLICATIONS,
-        leader_node_id: SEED_NODE_ID,
-      });
+      cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATIONS.UPSERT,
+        systemTableRow(TABLES.PARTITIONS, {
+          partition_id: 'control_plane_publications-p1',
+          table_id: TABLES.CONTROL_PLANE_PUBLICATIONS,
+          table_name: TABLES.CONTROL_PLANE_PUBLICATIONS,
+          leader_node_id: SEED_NODE_ID,
+        }));
       const before = committedMembership(cache);
       assert.deepEqual(before.latest.members,
         [JOINER_NODE_ID, SEED_NODE_ID].sort(),

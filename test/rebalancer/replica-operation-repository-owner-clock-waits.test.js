@@ -1,4 +1,5 @@
 import {captureLogger} from '../test-helpers/wait-bound-spent-capture.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
@@ -33,7 +34,7 @@ const DRIVE_STEP_LIMIT = 200;
 const RETRYABLE_FAILURE = Object.freeze({success: false, deferRetry: true});
 
 function makeOperation(repository, operationId = TEST_OPERATION_ID) {
-  return repository.rowToOperation({
+  return repository.rowToOperation(replicaOperationsRow({
     operation_id: operationId,
     type: OperationType.ADD,
     partition_id: TEST_PARTITION_ID,
@@ -49,7 +50,7 @@ function makeOperation(repository, operationId = TEST_OPERATION_ID) {
     steps_history: JSON.stringify([]),
     entity_type: SERVICE_TYPE.PARTITION,
     entity_id: TEST_PARTITION_ID,
-  });
+  }));
 }
 
 const SILENT_LOGGER = Object.freeze({
@@ -281,7 +282,7 @@ test('a confirmed visibility logs no wait_bound_spent', async (t) => {
     logger: capture.logger,
     readAuthoritativeRows: async () => ({
       success: true,
-      rows: [{
+      rows: [replicaOperationsRow({
         operation_id: operationId,
         type: OperationType.ADD,
         partition_id: TEST_PARTITION_ID,
@@ -297,7 +298,7 @@ test('a confirmed visibility logs no wait_bound_spent', async (t) => {
         steps_history: JSON.stringify([]),
         entity_type: SERVICE_TYPE.PARTITION,
         entity_id: TEST_PARTITION_ID,
-      }],
+      })],
     }),
   });
   const operation = makeOperation(repository, operationId);

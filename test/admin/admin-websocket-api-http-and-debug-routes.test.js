@@ -20,6 +20,11 @@ import {
   waitForMessage,
   waitForNoMessage,
 } from './admin-websocket-api-test-support.js';
+import {
+  nodesRow,
+  replicaOperationsRow,
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
 import {AdminWebSocketAPI, MessageType, ErrorCode} from
   '../../src/admin/admin-websocket-api.js';
 import {
@@ -119,12 +124,14 @@ test(
   async (t) => {
     const cache = createPopulatedCache();
     seedRoutedTableDiscoveryRows(cache);
-    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
-      operation_id: 'op-unrelated',
-      partition_id: 'partition-unrelated-1',
-      entity_id: 'partition-unrelated-1',
-      status: 'creating',
-    });
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT',
+      replicaOperationsRow({
+        operation_id: 'op-unrelated',
+        partition_id: 'partition-unrelated-1',
+        entity_type: 'partition',
+        entity_id: 'partition-unrelated-1',
+        status: 'creating',
+      }));
     const api = new AdminWebSocketAPI({
       nodeId: 'test-node',
       systemTableCache: cache,
@@ -1078,31 +1085,34 @@ test('AdminWebSocketAPI - debug trace stream route wiring and filtering', async 
 test('setSQLQueryEngine refreshes liveQueryManager when admin runtime starts early',
   async (t) => {
     const initializeCalls = [];
+    // Production-shaped stored rows (the cache stub serves full rows).
     const nodeRows = [
-      {
+      nodesRow({
         node_id: 'node-1',
+        node_address: 'ws://node-1',
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: 2000,
-      },
-      {
+      }),
+      nodesRow({
         node_id: 'node-2',
+        node_address: 'ws://node-2',
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: 2000,
-      },
+      }),
     ];
     const serviceRows = [
-      {
+      servicesRow({
         service_id: 'svc-1',
         node_id: 'node-1',
         status: 'active',
-      },
-      {
+      }),
+      servicesRow({
         service_id: 'svc-2',
         node_id: 'node-2',
         status: 'active',
-      },
+      }),
     ];
     const readinessService = {
       async getAllNodeReadiness() {

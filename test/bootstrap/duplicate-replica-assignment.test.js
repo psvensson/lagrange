@@ -16,6 +16,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -61,7 +62,7 @@ test('BootstrapAPI - consecutive joins each host their own group; mg-1 stays on 
   // System cache that will be updated via CDC when services table changes
   const systemCacheData = {
     services: [
-      {
+      servicesRow({
         service_id: 'mg-1-r1',
         service_type: SERVICE_TYPE.MESSAGE_GROUP,
         node_id: 'seed-node-1',
@@ -70,8 +71,8 @@ test('BootstrapAPI - consecutive joins each host their own group; mg-1 stays on 
         address: 'seed-node-1/message-group/mg-1-r1',
         raft_role: RAFT_ROLE.FOLLOWER,
         status: SERVICE_STATUS.ACTIVE,
-      },
-      {
+      }),
+      servicesRow({
         service_id: 'mg-1-r2',
         service_type: SERVICE_TYPE.MESSAGE_GROUP,
         node_id: 'seed-node-1',
@@ -80,8 +81,8 @@ test('BootstrapAPI - consecutive joins each host their own group; mg-1 stays on 
         address: 'seed-node-1/message-group/mg-1-r2',
         raft_role: RAFT_ROLE.FOLLOWER,
         status: SERVICE_STATUS.ACTIVE,
-      },
-      {
+      }),
+      servicesRow({
         service_id: 'mg-1-r3',
         service_type: SERVICE_TYPE.MESSAGE_GROUP,
         node_id: 'seed-node-1',
@@ -90,7 +91,7 @@ test('BootstrapAPI - consecutive joins each host their own group; mg-1 stays on 
         address: 'seed-node-1/message-group/mg-1-r3',
         raft_role: RAFT_ROLE.FOLLOWER,
         status: SERVICE_STATUS.ACTIVE,
-      },
+      }),
     ],
     nodes: [],
     partitions: [],

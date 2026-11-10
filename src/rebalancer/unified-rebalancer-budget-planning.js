@@ -1,5 +1,6 @@
 import {UnifiedRebalancerReplicaState} from './unified-rebalancer-replica-state.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {hasReplicaNode, readPlacementStatus} from './projected-replica.js';
 import {orderLedgerQuorumCureMovesFirst} from './operation-ledger-hold-policy.js';
 import {
   PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
@@ -358,10 +359,9 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
   }
 
   getHealthyReplicas(replicas) {
-    const activeReplicas = replicas.filter((replica) => {
-      const status = replica.status || ReplicaStatus.ACTIVE;
-      return status === ReplicaStatus.ACTIVE;
-    });
+    const activeReplicas = replicas.filter((replica) =>
+      readPlacementStatus(replica) === ReplicaStatus.ACTIVE,
+    );
 
     // Align critical-partition health semantics with coordinator safety checks:
     // consider only routable non-learner replicas on ready nodes as healthy.
@@ -374,13 +374,13 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
     );
 
     return activeReplicas.filter((replica) => {
-      if (!replica?.node_id || !replica?.address) {
+      if (!replica.address) {
         return false;
       }
-      if (!isVoterRaftRole(replica.raft_role)) {
+      if (!isVoterRaftRole(replica.raftRole)) {
         return false;
       }
-      return readyNodeIds.has(replica.node_id);
+      return readyNodeIds.has(replica.nodeId);
     });
   }
 
@@ -405,10 +405,9 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
   // not membership-list retention), so it is still excluded and its replica is
   // re-placed. That is why the guard keys on processAlive, not published-active.
   getReadyNodeOccupiedReplicas(replicas) {
-    const activeReplicas = replicas.filter((replica) => {
-      const status = replica.status || ReplicaStatus.ACTIVE;
-      return status === ReplicaStatus.ACTIVE;
-    });
+    const activeReplicas = replicas.filter((replica) =>
+      readPlacementStatus(replica) === ReplicaStatus.ACTIVE,
+    );
     if (!this.isSystemPartitionEntity()) {
       return activeReplicas;
     }
@@ -417,10 +416,10 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
     );
     return activeReplicas.filter(
       (replica) =>
-        replica?.node_id &&
-        replica?.address &&
-        (readyNodeIds.has(replica.node_id) ||
-          this.isNodeProcessAlive(replica.node_id)),
+        hasReplicaNode(replica) &&
+        replica.address &&
+        (readyNodeIds.has(replica.nodeId) ||
+          this.isNodeProcessAlive(replica.nodeId)),
     );
   }
 

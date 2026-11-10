@@ -9,6 +9,7 @@ import {
   REBALANCER_SKIP_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {createTestCoordinator} from '../rebalancer/test-helpers.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION_ID = `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`;
 const LEDGER_PARTITION_ID = `${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS}-p1`;
@@ -22,7 +23,7 @@ const NODE_IDS = Object.freeze([
 ]);
 
 function replicaRow(partitionId, replicaId, nodeId, options = {}) {
-  const row = {
+  const row = servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     service_type: 'partition',
@@ -30,7 +31,7 @@ function replicaRow(partitionId, replicaId, nodeId, options = {}) {
     node_id: nodeId,
     status: options.status || 'active',
     raft_role: options.raftRole || 'follower',
-  };
+  });
   if (options.omitReplicaId === true) {
     delete row.service_id;
     delete row.replica_id;
@@ -82,11 +83,11 @@ function ledgerSpreadRows() {
 
 function cacheData(localRows = staleHandoffRows()) {
   return {
-    nodes: NODE_IDS.map((nodeId) => ({
+    nodes: NODE_IDS.map((nodeId) => nodesRow(({
       node_id: nodeId,
       connection_state: 'ready',
       status: 'active',
-    })),
+    }))),
     partitions: [PARTITION_ID, LEDGER_PARTITION_ID].map((partitionId) => ({
       partition_id: partitionId,
       replica_count: TARGET_REPLICA_COUNT,

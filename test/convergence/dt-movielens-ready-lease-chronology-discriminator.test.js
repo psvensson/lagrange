@@ -30,6 +30,7 @@ import {
 import {
   buildAffinityDemoLiveReport,
 } from '../../examples/service-data-affinity/affinity-demo-live-report.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 
@@ -49,18 +50,22 @@ function initializeEnvironment() {
   LoggingService.getInstance().initialize({level: 'error'});
 }
 
+// The complete stored nodes row the owner wrote, as CDC delivers it: the
+// stored columns plus the delivered row's origin HLC (cache provenance).
 function buildInitialNodeRow() {
   return {
-    node_id: NODE_ID,
-    node_address: '127.0.0.1:8084',
-    status: 'active',
-    connection_state: 'ready',
-    capabilities: '["partition_replica"]',
-    last_heartbeat: OLD_OWNER_WRITE_AT_MS,
-    ready_lease_expires_at: 61_000,
+    ...nodesRow({
+      node_id: NODE_ID,
+      node_address: '127.0.0.1:8084',
+      status: 'active',
+      connection_state: 'ready',
+      capabilities: '["partition_replica"]',
+      last_heartbeat: OLD_OWNER_WRITE_AT_MS,
+      ready_lease_expires_at: 61_000,
+      boot_incarnation: BOOT_INCARNATION,
+      created_at: 0,
+    }),
     updated_at_hlc: `${OLD_OWNER_WRITE_AT_MS}-0-old-write-owner`,
-    boot_incarnation: BOOT_INCARNATION,
-    created_at: 0,
   };
 }
 

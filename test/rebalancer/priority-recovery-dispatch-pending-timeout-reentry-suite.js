@@ -32,6 +32,7 @@ import {registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases} from './
 import {registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases} from './priority-recovery-serial-wait-coordinator-handoff-test-cases.js';
 import {registerPriorityRecoverySpreadSatisfiedStallReentryTestCases} from './priority-recovery-spread-satisfied-stall-reentry-test-cases.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 const {
   PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION,
@@ -104,7 +105,6 @@ const TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE =
     .REPLICA_OPERATION_DISPATCH;
 const TEST_RETRYABLE_HANDOFF_ERROR = 'handoff retryable timeout';
 const TEST_HANDOFF_MESSAGE_NOT_ACKNOWLEDGED = 'Message not acknowledged';
-const TEST_RETRY_DEFERRED_STATUS = 'retry_deferred';
 const TEST_PROGRESS_CONTRACT_STATE_PENDING = 'pending';
 const TEST_RETRYABLE_TRANSITION_FAILURE =
   'retryable transition claim failure';
@@ -615,7 +615,7 @@ function buildPendingOperationRow({
   replicaId,
   nowMs,
 }) {
-  return {
+  return replicaOperationsRow({
     operation_id: operationId,
     type: TEST_OPERATION_TYPE_REPLACE,
     partition_id: partitionId,
@@ -634,7 +634,7 @@ function buildPendingOperationRow({
     }]),
     entity_type: TEST_ENTITY_TYPE_PARTITION,
     entity_id: partitionId,
-  };
+  });
 }
 
 function buildRetryableTransitionFailure() {
@@ -785,7 +785,6 @@ const registrationDependencies = Object.freeze({
   TEST_REPRESENTATIVE_PUBLICATION_OPERATION_ID,
   TEST_REQUIRED_DISTINCT_NODE_COUNT,
   TEST_RETRY_DEFERRED_HANDOFF_TEST_NAME,
-  TEST_RETRY_DEFERRED_STATUS,
   TEST_RETRYABLE_HANDOFF_ERROR,
   TEST_RETRY_AFTER_MS,
   TEST_RETRY_SCHEDULED_REENTRY_TEST_NAME,

@@ -55,6 +55,7 @@ import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {OwnerPathReplicaHandler as ReplicaHandler} from
   './replica-handler-owner-path-admission-fixture.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_NODE_ID = 'test-node';
 const TEST_PARTITION_ID = 'partition-1';
@@ -83,19 +84,21 @@ function createSeededCache({
 } = {}) {
   const cache = new SystemTableCache();
 
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
-    table_id: tableId,
-    table_name: tableName,
-    schema_definition: JSON.stringify(TEST_SCHEMA),
-  });
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.TABLES, {
+      table_id: tableId,
+      table_name: tableName,
+      schema_definition: JSON.stringify(TEST_SCHEMA),
+    }));
 
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
-    partition_id: partitionId,
-    table_id: tableId,
-    partition_key_start: null,
-    partition_key_end: null,
-    leader_node_id: TEST_LEADER_NODE_ID,
-  });
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.PARTITIONS, {
+      partition_id: partitionId,
+      table_id: tableId,
+      partition_key_start: null,
+      partition_key_end: null,
+      leader_node_id: TEST_LEADER_NODE_ID,
+    }));
 
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT',
     createCanonicalLifecycleServiceRow({

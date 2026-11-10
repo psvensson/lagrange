@@ -48,6 +48,11 @@ import {
   PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 import {ControllableConsensusPort} from
   '../test-helpers/controllable-consensus-port.js';
 
@@ -640,13 +645,13 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.NODES,
         CDC_OPERATION.UPSERT,
-        {
+        nodesRow({
           [COLUMN.NODE_ID]: 'peer-node-a',
           [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
           [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
           [COLUMN.LAST_HEARTBEAT]: Date.now(),
           [COLUMN.READY_LEASE_EXPIRES_AT]: null,
-        },
+        }),
       );
 
       const readiness = service.canAcceptCDCEvent({
@@ -689,26 +694,26 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           [COLUMN.GROUP_ID]: 'mg-strict-cache-ready-gate',
           [COLUMN.LEADER_NODE_ID]: 'peer-node-b',
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.NODES,
         CDC_OPERATION.UPSERT,
-        {
+        nodesRow({
           [COLUMN.NODE_ID]: 'peer-node-b',
           [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
           [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
           [COLUMN.LAST_HEARTBEAT]: Date.now(),
           [COLUMN.READY_LEASE_EXPIRES_AT]: null,
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]: 'mg-strict-cache-ready-gate-r1',
           [COLUMN.GROUP_ID]: 'mg-strict-cache-ready-gate',
           [COLUMN.NODE_ID]: 'peer-node-b',
@@ -718,7 +723,7 @@ test(
             'peer-node-b/message-group/mg-strict-cache-ready-gate-r1',
           [COLUMN.RAFT_ROLE]: RaftRole.FOLLOWER,
           [COLUMN.UPDATED_AT]: Date.now(),
-        },
+        }),
       );
 
       const readiness = service.getMetadataIngressReadiness({
@@ -762,26 +767,26 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           [COLUMN.GROUP_ID]: 'mg-join-strict-connected',
           [COLUMN.LEADER_NODE_ID]: 'seed-node',
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.NODES,
         CDC_OPERATION.UPSERT,
-        {
+        nodesRow({
           [COLUMN.NODE_ID]: 'seed-node',
           [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
           [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
           [COLUMN.LAST_HEARTBEAT]: Date.now(),
           [COLUMN.READY_LEASE_EXPIRES_AT]: null,
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]: 'mg-join-strict-connected-r2',
           [COLUMN.GROUP_ID]: 'mg-join-strict-connected',
           [COLUMN.NODE_ID]: 'seed-node',
@@ -790,7 +795,7 @@ test(
           [COLUMN.ADDRESS]: 'seed-node/message-group/mg-join-strict-connected-r2',
           [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
           [COLUMN.UPDATED_AT]: Date.now(),
-        },
+        }),
       );
 
       const readiness = service.getMetadataIngressReadiness({
@@ -831,26 +836,26 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           [COLUMN.GROUP_ID]: 'mg-move-self-target',
           [COLUMN.LEADER_NODE_ID]: 'seed-node',
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.NODES,
         CDC_OPERATION.UPSERT,
-        {
+        nodesRow({
           [COLUMN.NODE_ID]: 'seed-node',
           [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
           [COLUMN.CONNECTION_STATE]: STATE.READY,
           [COLUMN.LAST_HEARTBEAT]: Date.now(),
           [COLUMN.READY_LEASE_EXPIRES_AT]: Date.now() + 60_000,
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]: 'mg-move-self-target-r1',
           [COLUMN.GROUP_ID]: 'mg-move-self-target',
           [COLUMN.NODE_ID]: 'seed-node',
@@ -859,7 +864,7 @@ test(
           [COLUMN.ADDRESS]: 'seed-node/message-group/mg-move-self-target-r1',
           [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
           [COLUMN.UPDATED_AT]: Date.now(),
-        },
+        }),
       );
 
       const selection = service.resolveCDCForwardSelection({
@@ -913,21 +918,21 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           [COLUMN.GROUP_ID]: 'mg-move-bootstrap-ingress',
           [COLUMN.LEADER_NODE_ID]: 'seed-node',
-        },
+        }),
       );
       service.systemTableCache.applySystemTableChange(
         TABLES.NODES,
         CDC_OPERATION.UPSERT,
-        {
+        nodesRow({
           [COLUMN.NODE_ID]: 'seed-node',
           [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
           [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
           [COLUMN.LAST_HEARTBEAT]: Date.now(),
           [COLUMN.READY_LEASE_EXPIRES_AT]: null,
-        },
+        }),
       );
 
       const readiness = service.getMetadataIngressReadiness({

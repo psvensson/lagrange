@@ -45,7 +45,7 @@ documentClass: generated
 - [replica-handler-constants.js](replica-handler-constants.js) - No leading comment; first export: REPLICA_HANDLER_ADDRESS. (importers: hub)
 - [replica-handler-create-admission-methods.js](replica-handler-create-admission-methods.js) - No leading comment; first export: assignReplicaHandlerCreateAdmissionMethods. (importers: one)
 - [replica-handler-create-methods.js](replica-handler-create-methods.js) - No leading comment; first export: assignReplicaHandlerCreateMethods. (importers: one)
-- [replica-handler-create-status-methods.js](replica-handler-create-status-methods.js) - ReplicaHandler create-status persistence and local recovery seed methods. (importers: one)
+- [replica-handler-create-status-methods.js](replica-handler-create-status-methods.js) - ReplicaHandler create-status persistence and local recovery seed methods. (importers: few)
 - [replica-handler-failed-create-publication.js](replica-handler-failed-create-publication.js) - Authoritative FAILED publication for an admitted replica create. (importers: one)
 - [replica-handler-group-retired-tombstone-methods.js](replica-handler-group-retired-tombstone-methods.js) - ReplicaHandler methods of the member-owned `group retired` tombstone (group-retired-tombstone-store.js; owner ruling... (importers: one)
 - [replica-handler-group-retirement-request-methods.js](replica-handler-group-retirement-request-methods.js) - Verify a REMOVE's group-retirement evidence against the durable workflow record before any removal work starts... (importers: one)

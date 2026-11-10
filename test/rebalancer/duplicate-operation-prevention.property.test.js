@@ -28,9 +28,39 @@ import {
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {
+  projectedReplica,
+  replicaOperationsRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 const EntityType = REBALANCER_ENTITY_TYPE;
 const MoveType = REBALANCER_MOVE_TYPE;
+const PARTITION_ID = 'partition-1';
+const INSERT_COLUMN_LIST_PATTERN = /\(([^)]*)\)\s*VALUES/u;
+
+// The projected replica of a production-shaped partition services row.
+function activeReplica(replicaId, nodeId) {
+  return projectedReplica({
+    replica_id: replicaId,
+    service_id: replicaId,
+    partition_id: PARTITION_ID,
+    node_id: nodeId,
+    status: ReplicaStatus.ACTIVE,
+  });
+}
+
+// What the SQL table stores for one INSERT: every named column bound to its
+// positional parameter, the omitted columns at their stored defaults.
+function storedInsertRow(sql, params) {
+  const columns = sql.match(INSERT_COLUMN_LIST_PATTERN)[1]
+    .split(',')
+    .map((column) => column.trim());
+  const overrides = {};
+  columns.forEach((column, index) => {
+    overrides[column] = params[index] === undefined ? null : params[index];
+  });
+  return replicaOperationsRow(overrides);
+}
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -85,11 +115,11 @@ function createMockSqlQueryEngine(options = {}) {
   const operations = new Map(
     existingOperations.map((operation) => [
       operation.operation_id,
-      {
+      replicaOperationsRow({
         entity_type: EntityType.PARTITION,
         entity_id: operation.partition_id,
         ...operation,
-      },
+      }),
     ]),
   );
 
@@ -130,31 +160,8 @@ function createMockSqlQueryEngine(options = {}) {
 
       if (sql.includes('INSERT INTO replica_operations')) {
         // Insert new operation
-        const [
-          operationId, type, partitionId, replicaId, targetClaimKey,
-          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-          updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-          entityId,
-        ] = params;
-        const newOp = {
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          target_claim_key: targetClaimKey,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-          entity_type: entityType,
-          entity_id: entityId,
-        };
-        operations.set(operationId, newOp);
+        const newOp = storedInsertRow(sql, params);
+        operations.set(newOp.operation_id, newOp);
         return {success: true, changes: 1};
       }
 
@@ -266,11 +273,7 @@ test('MovePlanner - Duplicate Operation Prevention', async (t) => {
           });
 
           // Current replicas on one node only
-          const currentReplicas = [{
-            replica_id: 'r1',
-            node_id: uniqueNodes[0].node_id,
-            status: ReplicaStatus.ACTIVE,
-          }];
+          const currentReplicas = [activeReplica('r1', uniqueNodes[0].node_id)];
 
           const targetState = {
             targetReplicaCount: 3,
@@ -323,11 +326,7 @@ test('MovePlanner - Duplicate Operation Prevention', async (t) => {
             moveStateProvider: provider,
           });
 
-          const currentReplicas = [{
-            replica_id: 'r1',
-            node_id: 'node-1',
-            status: ReplicaStatus.ACTIVE,
-          }];
+          const currentReplicas = [activeReplica('r1', 'node-1')];
 
           const targetState = {
             targetReplicaCount: 3,
@@ -378,11 +377,7 @@ test('MovePlanner - Duplicate Operation Prevention', async (t) => {
             moveStateProvider: provider,
           });
 
-          const currentReplicas = [{
-            replica_id: 'r1',
-            node_id: 'node-1',
-            status: ReplicaStatus.ACTIVE,
-          }];
+          const currentReplicas = [activeReplica('r1', 'node-1')];
 
           const targetState = {
             targetReplicaCount: 3,
@@ -649,11 +644,7 @@ test('Rapid Rebalance Cycles - Race Condition Prevention', async (t) => {
             moveStateProvider: provider,
           });
 
-          const currentReplicas = [{
-            replica_id: 'r1',
-            node_id: 'node-1',
-            status: ReplicaStatus.ACTIVE,
-          }];
+          const currentReplicas = [activeReplica('r1', 'node-1')];
 
           const targetState = {
             targetReplicaCount: 3,
@@ -704,11 +695,7 @@ test('Oscillation Prevention - Stabilization Period', async (t) => {
             moveStateProvider: provider,
           });
 
-          const currentReplicas = [{
-            replica_id: 'r1',
-            node_id: 'node-1',
-            status: ReplicaStatus.ACTIVE,
-          }];
+          const currentReplicas = [activeReplica('r1', 'node-1')];
 
           const targetState = {
             targetReplicaCount: 3,
@@ -762,11 +749,7 @@ test('Oscillation Prevention - Stabilization Period', async (t) => {
             moveStateProvider: provider,
           });
 
-          const currentReplicas = [{
-            replica_id: 'r1',
-            node_id: 'node-1',
-            status: ReplicaStatus.ACTIVE,
-          }];
+          const currentReplicas = [activeReplica('r1', 'node-1')];
 
           const targetState = {
             targetReplicaCount: 3,

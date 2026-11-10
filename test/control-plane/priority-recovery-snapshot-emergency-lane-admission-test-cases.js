@@ -1,3 +1,5 @@
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
+
 export function registerPriorityRecoverySnapshotEmergencyLaneAdmissionTests(context) {
   const {
     buildPriorityRecoveryAdmissionPlan,
@@ -558,12 +560,12 @@ export function registerPriorityRecoverySnapshotEmergencyLaneAdmissionTests(cont
             }],
           },
         },
-        serviceRows: [{
+        serviceRows: [servicesRow({
           partition_id: 'control_plane_publications-p1',
           status: 'active',
           raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
           node_id: 'node-b',
-        }],
+        })],
       });
 
       t.same(
@@ -724,13 +726,13 @@ export function registerPriorityRecoverySnapshotEmergencyLaneAdmissionTests(cont
             }],
           },
         },
-        serviceRows: [{
+        serviceRows: [servicesRow({
           partition_id:
           PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
           status: PRIORITY_RECOVERY_STATUS_ACTIVE,
           raft_role: PRIORITY_RECOVERY_RAFT_ROLE_LEARNER,
           node_id: PRIORITY_RECOVERY_NODE_ID_B,
-        }],
+        })],
       });
 
       t.same(

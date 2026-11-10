@@ -54,6 +54,11 @@ import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 
 beforeEach(() => {
@@ -153,13 +158,14 @@ test('PartitionService - publishes leader state as follower metadata in services
   };
   const systemTableCache = new SystemTableCache();
   const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
-  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-    [COLUMN.PARTITION_ID]: servicesPartitionId,
-    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
-    replica_count: 3,
-    [COLUMN.LEADER_NODE_ID]: 'seed-node',
-  });
-  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+  systemTableCache.applySystemTableChange(
+    TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+      [COLUMN.PARTITION_ID]: servicesPartitionId,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+      replica_count: 3,
+      [COLUMN.LEADER_NODE_ID]: 'seed-node',
+    }));
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
     [COLUMN.SERVICE_ID]: 'services-leader',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: servicesPartitionId,
@@ -167,7 +173,7 @@ test('PartitionService - publishes leader state as follower metadata in services
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
-  });
+  }));
 
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-21',
@@ -234,13 +240,14 @@ test('PartitionService - publishes candidate role as follower metadata', async (
   };
   const systemTableCache = new SystemTableCache();
   const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
-  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-    [COLUMN.PARTITION_ID]: servicesPartitionId,
-    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
-    replica_count: 3,
-    [COLUMN.LEADER_NODE_ID]: 'seed-node',
-  });
-  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+  systemTableCache.applySystemTableChange(
+    TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+      [COLUMN.PARTITION_ID]: servicesPartitionId,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+      replica_count: 3,
+      [COLUMN.LEADER_NODE_ID]: 'seed-node',
+    }));
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
     [COLUMN.SERVICE_ID]: 'services-leader',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: servicesPartitionId,
@@ -248,8 +255,8 @@ test('PartitionService - publishes candidate role as follower metadata', async (
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
-  });
-  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+  }));
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
     [COLUMN.SERVICE_ID]: 'replica-1',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: 'test-partition-candidate',
@@ -259,7 +266,7 @@ test('PartitionService - publishes candidate role as follower metadata', async (
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: 'seed-node/partition/replica-1',
     [COLUMN.UPDATED_AT]: 1,
-  });
+  }));
 
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-candidate',
@@ -324,13 +331,14 @@ test('PartitionService - retries raft role persistence after cache visibility fa
     };
     const systemTableCache = new SystemTableCache();
     const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
-    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-      [COLUMN.PARTITION_ID]: servicesPartitionId,
-      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
-      replica_count: 3,
-      [COLUMN.LEADER_NODE_ID]: 'seed-node',
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+        [COLUMN.PARTITION_ID]: servicesPartitionId,
+        [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+        replica_count: 3,
+        [COLUMN.LEADER_NODE_ID]: 'seed-node',
+      }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
       [COLUMN.SERVICE_ID]: 'services-leader',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: servicesPartitionId,
@@ -338,7 +346,7 @@ test('PartitionService - retries raft role persistence after cache visibility fa
       [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
-    });
+    }));
 
     const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-21-retry',
@@ -393,13 +401,14 @@ test(
     const systemTableCache = new SystemTableCache();
     const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
 
-    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-      [COLUMN.PARTITION_ID]: servicesPartitionId,
-      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
-      replica_count: 3,
-      [COLUMN.LEADER_NODE_ID]: 'seed-node',
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+        [COLUMN.PARTITION_ID]: servicesPartitionId,
+        [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+        replica_count: 3,
+        [COLUMN.LEADER_NODE_ID]: 'seed-node',
+      }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
       [COLUMN.SERVICE_ID]: 'services-leader',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: servicesPartitionId,
@@ -407,12 +416,13 @@ test(
       [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
-    });
-    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-      [COLUMN.PARTITION_ID]: 'stable-join-partition',
-      replica_count: 3,
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    }));
+    systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+        [COLUMN.PARTITION_ID]: 'stable-join-partition',
+        replica_count: 3,
+      }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
       [COLUMN.SERVICE_ID]: 'replica-1',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: 'stable-join-partition',
@@ -422,8 +432,8 @@ test(
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: 'node-1/partition/replica-1',
       [COLUMN.UPDATED_AT]: 1,
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
       [COLUMN.SERVICE_ID]: 'replica-2',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: 'stable-join-partition',
@@ -433,8 +443,8 @@ test(
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: 'node-2/partition/replica-2',
       [COLUMN.UPDATED_AT]: 1,
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
       [COLUMN.SERVICE_ID]: 'replica-3',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: 'stable-join-partition',
@@ -444,7 +454,7 @@ test(
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: 'node-3/partition/replica-3',
       [COLUMN.UPDATED_AT]: 1,
-    });
+    }));
 
     const mockCdcIntegrationService = {
       updateSystemTableRow: async (tableName, whereClause, data, options) => {
@@ -562,13 +572,14 @@ test('PartitionService - persists initial follower role for multi-replica startu
     };
     const systemTableCache = new SystemTableCache();
     const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
-    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-      [COLUMN.PARTITION_ID]: servicesPartitionId,
-      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
-      replica_count: 3,
-      [COLUMN.LEADER_NODE_ID]: 'seed-node',
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+        [COLUMN.PARTITION_ID]: servicesPartitionId,
+        [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+        replica_count: 3,
+        [COLUMN.LEADER_NODE_ID]: 'seed-node',
+      }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
       [COLUMN.SERVICE_ID]: 'services-leader',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: servicesPartitionId,
@@ -576,7 +587,7 @@ test('PartitionService - persists initial follower role for multi-replica startu
       [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
-    });
+    }));
 
     const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-multi',
@@ -628,13 +639,13 @@ test(
       },
     };
     const systemTableCache = new SystemTableCache();
-    systemTableCache.applySystemTableChange(TABLES.NODES, CDCOperation.INSERT, {
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDCOperation.INSERT, nodesRow({
       [COLUMN.NODE_ID]: 'node-2',
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
       [COLUMN.LAST_HEARTBEAT]: now,
       [COLUMN.READY_LEASE_EXPIRES_AT]: null,
-    });
+    }));
 
     const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-ready-gate',
@@ -831,17 +842,19 @@ test('PartitionService - persists leader node updates to partitions table', asyn
 
   const systemTableCache = new SystemTableCache();
   const partitionsPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.PARTITIONS];
-  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-    [COLUMN.PARTITION_ID]: partitionsPartitionId,
-    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
-    [COLUMN.LEADER_NODE_ID]: 'seed-node',
-  });
-  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-    [COLUMN.PARTITION_ID]: 'test-partition-23',
-    [COLUMN.TABLE_ID]: 'services',
-    [COLUMN.LEADER_NODE_ID]: 'previous-node',
-  });
-  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+  systemTableCache.applySystemTableChange(
+    TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+      [COLUMN.PARTITION_ID]: partitionsPartitionId,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
+      [COLUMN.LEADER_NODE_ID]: 'seed-node',
+    }));
+  systemTableCache.applySystemTableChange(
+    TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+      [COLUMN.PARTITION_ID]: 'test-partition-23',
+      [COLUMN.TABLE_ID]: 'services',
+      [COLUMN.LEADER_NODE_ID]: 'previous-node',
+    }));
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
     [COLUMN.SERVICE_ID]: 'partitions-leader',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: partitionsPartitionId,
@@ -849,7 +862,7 @@ test('PartitionService - persists leader node updates to partitions table', asyn
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
-  });
+  }));
 
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-23',
@@ -929,12 +942,12 @@ test('PartitionService - initial leader publication routes while partitions ' +
   systemTableCache.applySystemTableChange(
     TABLES.PARTITIONS,
     CDCOperation.INSERT,
-    {
+    systemTableRow(TABLES.PARTITIONS, {
       [COLUMN.PARTITION_ID]: 'fresh-user-partition',
       [COLUMN.TABLE_ID]: 'fresh-user-table',
       [COLUMN.LEADER_NODE_ID]: null,
       [COLUMN.UPDATED_AT]: 77,
-    },
+    }),
   );
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'fresh-user-partition',
@@ -992,12 +1005,12 @@ test('PartitionService - post-handoff leader publication reads the remote ' +
   systemTableCache.applySystemTableChange(
     TABLES.PARTITIONS,
     CDCOperation.INSERT,
-    {
+    systemTableRow(TABLES.PARTITIONS, {
       [COLUMN.PARTITION_ID]: partitionId,
       [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
       [COLUMN.LEADER_NODE_ID]: 'seed-node',
       [COLUMN.UPDATED_AT]: 91,
-    },
+    }),
   );
   const partition = new PartitionService(withFoundingStamp({
     partitionId,
@@ -1062,18 +1075,20 @@ test('PartitionService - keeps control-plane metadata publication critical', asy
   const systemTableCache = new SystemTableCache();
   const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
   const partitionsPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.PARTITIONS];
-  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-    [COLUMN.PARTITION_ID]: servicesPartitionId,
-    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
-    replica_count: 3,
-    [COLUMN.LEADER_NODE_ID]: 'seed-node',
-  });
-  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-    [COLUMN.PARTITION_ID]: partitionsPartitionId,
-    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
-    [COLUMN.LEADER_NODE_ID]: 'seed-node',
-  });
-  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+  systemTableCache.applySystemTableChange(
+    TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+      [COLUMN.PARTITION_ID]: servicesPartitionId,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+      replica_count: 3,
+      [COLUMN.LEADER_NODE_ID]: 'seed-node',
+    }));
+  systemTableCache.applySystemTableChange(
+    TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+      [COLUMN.PARTITION_ID]: partitionsPartitionId,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
+      [COLUMN.LEADER_NODE_ID]: 'seed-node',
+    }));
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
     [COLUMN.SERVICE_ID]: 'services-leader',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: servicesPartitionId,
@@ -1081,8 +1096,8 @@ test('PartitionService - keeps control-plane metadata publication critical', asy
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
-  });
-  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+  }));
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
     [COLUMN.SERVICE_ID]: 'partitions-leader',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: partitionsPartitionId,
@@ -1090,7 +1105,7 @@ test('PartitionService - keeps control-plane metadata publication critical', asy
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
-  });
+  }));
 
   const partition = new PartitionService(withFoundingStamp({
     partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES],
@@ -1156,12 +1171,13 @@ test('PartitionService - retries leader node persistence after cache visibility 
 
     const systemTableCache = new SystemTableCache();
     const partitionsPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.PARTITIONS];
-    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-      [COLUMN.PARTITION_ID]: partitionsPartitionId,
-      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
-      [COLUMN.LEADER_NODE_ID]: 'seed-node',
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+        [COLUMN.PARTITION_ID]: partitionsPartitionId,
+        [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
+        [COLUMN.LEADER_NODE_ID]: 'seed-node',
+      }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
       [COLUMN.SERVICE_ID]: 'partitions-leader',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: partitionsPartitionId,
@@ -1169,7 +1185,7 @@ test('PartitionService - retries leader node persistence after cache visibility 
       [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
-    });
+    }));
 
     const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-23-retry',

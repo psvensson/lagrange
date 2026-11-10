@@ -37,6 +37,8 @@ import {
   registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionTests,
 } from './rebalance-coordinator-operation-ownership-critical-admission-test-cases.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
+import {buildInsertedReplicaOperationRow} from './timeout-test-coordinator.js';
 
 const EMERGENCY_TRANSPORT_PARTITION_ID = 'control_plane_publications-p1';
 const REPLICA_OPERATION_EMERGENCY_PARTITION_ID = 'replica_operations-p1';
@@ -104,6 +106,13 @@ function createTransactionCoordinator() {
   };
 }
 
+// The stored row of a runtime operation: an absent runtime field is the
+// column's stored default (the fixture fills it), never undefined.
+function storedOperationRow(columns) {
+  return replicaOperationsRow(Object.fromEntries(
+    Object.entries(columns).filter(([, value]) => value !== undefined)));
+}
+
 function withAuthoritativeOperationRows(sqlQueryEngine) {
   const trackedOperations = new Map();
   const trackedReservations = new Map();
@@ -111,7 +120,7 @@ function withAuthoritativeOperationRows(sqlQueryEngine) {
     ...sqlQueryEngine,
     seedStorageIncreasingOperation(operation, reasonCode) {
       const now = Date.now();
-      trackedOperations.set(operation.operationId, {
+      trackedOperations.set(operation.operationId, storedOperationRow({
         operation_id: operation.operationId,
         type: operation.type,
         partition_id: operation.partitionId,
@@ -130,7 +139,7 @@ function withAuthoritativeOperationRows(sqlQueryEngine) {
         entity_id: operation.entityId,
         membership_publication_epoch:
           operation.membershipPublicationEpoch ?? null,
-      });
+      }));
       trackedReservations.set(operation.operationId, {
         reservation_id: `res-${operation.operationId}`,
         operation_id: operation.operationId,
@@ -159,31 +168,8 @@ function withAuthoritativeOperationRows(sqlQueryEngine) {
       const result = await sqlQueryEngine.executeQuery(sql, params, options);
       if (result?.success !== false &&
           sql.includes('INSERT INTO replica_operations')) {
-        const [
-          operationId, type, partitionId, replicaId, targetClaimKey,
-          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-          updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-          entityId, membershipPublicationEpoch,
-        ] = params;
-        trackedOperations.set(operationId, {
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          target_claim_key: targetClaimKey,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-          entity_type: entityType,
-          entity_id: entityId,
-          membership_publication_epoch: membershipPublicationEpoch,
-        });
+        const row = buildInsertedReplicaOperationRow(sql, params);
+        trackedOperations.set(row.operation_id, row);
       }
       return result;
     },

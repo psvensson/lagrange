@@ -11,6 +11,7 @@ import {
 import {withRegisteredIncarnations} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_SEED_NODE_ID = 'seed-node';
 const TEST_COHORT_NODE_ID_B = 'node-2';
@@ -37,12 +38,17 @@ function initEnv() {
   }
 }
 
+// A complete stored nodes row: a ready connection with a fresh heartbeat;
+// the ready lease alone separates the cohort from the stale peers.
 function createNodeRow(nodeId, readyLeaseOffsetMs) {
-  return {
+  return nodesRow({
     node_id: nodeId,
+    node_address: `ws://${nodeId}:8080`,
     status: 'active',
+    connection_state: 'ready',
+    last_heartbeat: Date.now(),
     ready_lease_expires_at: Date.now() + readyLeaseOffsetMs,
-  };
+  });
 }
 
 function createNodeEndpoint(nodeId) {

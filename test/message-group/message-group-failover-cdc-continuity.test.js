@@ -24,6 +24,7 @@ import {
 } from '../../src/message-group/constants.js';
 import {NUM} from '../../src/constants/index.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   ControllableConsensusPort,
 } from '../test-helpers/controllable-consensus-port.js';
@@ -404,10 +405,10 @@ test(
 
       // Subscribe to CDC and apply an event before failover.
       await service.subscribeToCDC(CDC_TABLE_NODES);
-      await service.applyCDCEvent(CDC_TABLE_NODES, 'INSERT', {
-        id: 'node-before-failover',
+      await service.applyCDCEvent(CDC_TABLE_NODES, 'INSERT', nodesRow({
+        node_id: 'node-before-failover',
         status: 'active',
-      });
+      }));
 
       const preFail = service.getWritableCache()
         .get(CDC_TABLE_NODES, 'node-before-failover');
@@ -419,10 +420,10 @@ test(
 
       // Apply a CDC event after failover — this proves the new leader's
       // CDC pipeline is functional without manual intervention.
-      await service.applyCDCEvent(CDC_TABLE_NODES, 'INSERT', {
-        id: 'node-after-failover',
+      await service.applyCDCEvent(CDC_TABLE_NODES, 'INSERT', nodesRow({
+        node_id: 'node-after-failover',
         status: 'active',
-      });
+      }));
 
       const postFail = service.getWritableCache()
         .get(CDC_TABLE_NODES, 'node-after-failover');

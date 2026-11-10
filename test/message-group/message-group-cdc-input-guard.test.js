@@ -16,7 +16,8 @@ import {buildEventIdentity} from '../../src/partition/cdc-event-buffer.js';
 import {digest} from '../../src/utils/canonical-json-data.js';
 import {pollutePrototypeProperty, replacePrototypeProperty, withHostileIntrinsics} from
   '../helpers/hostile-intrinsics.js';
-import {GROUP_ID, NODE_ID, pump, recipientFixture} from './message-group-native-custody-fixture.js';
+import {GROUP_ID, NODE_ID, configRow, pump, recipientFixture} from
+  './message-group-native-custody-fixture.js';
 
 const SOURCE_PARTITION = 'guard-source';
 const KEY = 'guard-native-row';
@@ -36,7 +37,8 @@ afterEach(() => {
 
 function sourceEvent() {
   return {tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
-    data: {config_key: KEY, config_value: 'guard-body', nested: {values: [1, 2]}},
+    // `nested` is test-owned payload depth for the proxy-trap cases.
+    data: {...configRow(KEY, 'guard-body'), nested: {values: [1, 2]}},
     timestamp: new HLCTimestamp(1000, 0, 'guard-producer').toString(),
     sourcePartition: SOURCE_PARTITION, sourceReplica: `${SOURCE_PARTITION}-r1`,
     eventKey: 'guard-occurrence', entryId: 'guard-occurrence', sourceLogIndex: 7, sourceOrdinal: 0};

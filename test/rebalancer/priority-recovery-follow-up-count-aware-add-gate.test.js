@@ -6,6 +6,9 @@ import {
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {createTestRebalancer} from './test-helpers.js';
 import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-inventory.js';
+import {decodeServicesRow} from '../../src/control-plane/services-row-decoder.js';
+import {projectReplicaFromServicesRow} from '../../src/rebalancer/projected-replica.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 // Count-aware deficit ADD gate (reframe lever #2 — see memory
 // metastable-reconfig-reframe / over-removal-readd-oscillation-root).
@@ -34,17 +37,28 @@ const NODE_C = 'node-c';
 const NODE_D = 'node-d';
 const TARGET_REPLICA_COUNT = 3;
 
-function activeVoterReplica(nodeId, replicaId) {
-  return {
+// These fixtures once stored raft_role 'voter', a value no writer stores
+// (the services decoder refuses it). Every role predicate read it as an
+// unknown role: not a quorum voter, not a learner, not an explicit
+// non-leader; a NULL raft_role (a nullable stored column) reads identically.
+const UNSTATED_RAFT_ROLE = null;
+
+function activeVoterRow(nodeId, replicaId, partitionId = PARTITION_ID) {
+  return servicesRow({
     service_id: replicaId,
     service_type: EntityType.PARTITION,
     node_id: nodeId,
-    partition_id: PARTITION_ID,
+    partition_id: partitionId,
     replica_id: replicaId,
     address: `addr-${replicaId}`,
-    raft_role: 'voter',
+    raft_role: UNSTATED_RAFT_ROLE,
     status: ReplicaStatus.ACTIVE,
-  };
+  });
+}
+
+function activeVoterReplica(nodeId, replicaId) {
+  return projectReplicaFromServicesRow(
+    decodeServicesRow(activeVoterRow(nodeId, replicaId)));
 }
 
 
@@ -239,14 +253,8 @@ test('surrogate follow-up trusts needs-operation owner over stale global rows',
   async (t) => {
     const surrogatePartitionId = 'sql_write_operations-p1';
     const surrogateRows = [
-      {
-        ...activeVoterReplica(NODE_A, 'surrogate-r-a'),
-        partition_id: surrogatePartitionId,
-      },
-      {
-        ...activeVoterReplica(NODE_B, 'surrogate-r-b'),
-        partition_id: surrogatePartitionId,
-      },
+      activeVoterRow(NODE_A, 'surrogate-r-a', surrogatePartitionId),
+      activeVoterRow(NODE_B, 'surrogate-r-b', surrogatePartitionId),
     ];
     const surrogateAdd = {
       ...inFlightOperation('surrogate-add-c', MoveType.ADD, NODE_C,
@@ -288,10 +296,8 @@ test('surrogate follow-up trusts needs-operation owner over stale global rows',
 test('surrogate unresolved owner preserves live global ADD influence', async (t) => {
   const surrogatePartitionId = 'sql_write_operations-p1';
   const surrogateRows = [
-    {...activeVoterReplica(NODE_A, 'surrogate-r-a'),
-      partition_id: surrogatePartitionId},
-    {...activeVoterReplica(NODE_B, 'surrogate-r-b'),
-      partition_id: surrogatePartitionId},
+    activeVoterRow(NODE_A, 'surrogate-r-a', surrogatePartitionId),
+    activeVoterRow(NODE_B, 'surrogate-r-b', surrogatePartitionId),
   ];
   const surrogateAdd = {
     ...inFlightOperation('surrogate-add-c', MoveType.ADD, NODE_C,
@@ -348,17 +354,17 @@ test('count-aware gate allows provisioning ADDs while in-flight ADDs fall short'
 // applies to CRITICAL system partitions, so these two pin the occupied-slot gate
 // against a real system partition id (control_plane_publications-p1).
 const CRIT_PARTITION = 'control_plane_publications-p1';
-function critReplica(nodeId, replicaId, role) {
-  return {
+function critReplica(nodeId, replicaId, role, address = `addr-${replicaId}`) {
+  return projectReplicaFromServicesRow(decodeServicesRow(servicesRow({
     service_id: replicaId,
     service_type: EntityType.PARTITION,
     node_id: nodeId,
     partition_id: CRIT_PARTITION,
     replica_id: replicaId,
-    address: `addr-${replicaId}`,
+    address,
     raft_role: role,
     status: ReplicaStatus.ACTIVE,
-  };
+  })));
 }
 function buildCriticalRebalancer(extraNodeIds = []) {
   return createTestRebalancer({
@@ -394,10 +400,8 @@ test('over-target follow-up suppression counts a terminal-projected voter ' +
     [NODE_A, NODE_B, NODE_C, NODE_D].map((nodeId) => ({
       node_id: nodeId,
     }));
-  const projectedReplica = {
-    ...critReplica(NODE_C, 'r-c-projected', 'follower'),
-    address: undefined,
-  };
+  const projectedReplica =
+    critReplica(NODE_C, 'r-c-projected', 'follower', null);
   const currentReplicas = [
     critReplica(NODE_A, 'r-a-1', 'follower'),
     critReplica(NODE_A, 'r-a-2', 'follower'),
@@ -449,8 +453,8 @@ async (t) => {
     const move = rebalancer.buildPriorityRecoveryFollowUpMove({
       decision: buildCriticalDecision(),
       currentReplicas: [
-        critReplica(NODE_A, 'r-a', 'voter'),
-        critReplica(NODE_B, 'r-b', 'voter'),
+        critReplica(NODE_A, 'r-a', UNSTATED_RAFT_ROLE),
+        critReplica(NODE_B, 'r-b', UNSTATED_RAFT_ROLE),
         critReplica(NODE_C, 'r-c', 'learner'),
       ],
     });
@@ -478,8 +482,8 @@ async (t) => {
     const move = rebalancer.buildPriorityRecoveryFollowUpMove({
       decision: buildCriticalDecision(),
       currentReplicas: [
-        critReplica(NODE_A, 'r-a', 'voter'),
-        critReplica(NODE_B, 'r-b', 'voter'),
+        critReplica(NODE_A, 'r-a', UNSTATED_RAFT_ROLE),
+        critReplica(NODE_B, 'r-b', UNSTATED_RAFT_ROLE),
         critReplica(DEAD_NODE, 'r-e', 'learner'),
       ],
     });
@@ -541,8 +545,8 @@ async (t) => {
     const move = rebalancer.buildPriorityRecoveryFollowUpMove({
       decision: buildCriticalDecision(),
       currentReplicas: [
-        critReplica(NODE_A, 'r-a', 'voter'),
-        critReplica(NODE_B, 'r-b', 'voter'),
+        critReplica(NODE_A, 'r-a', UNSTATED_RAFT_ROLE),
+        critReplica(NODE_B, 'r-b', UNSTATED_RAFT_ROLE),
         critReplica(RESTARTING, 'r-r', 'learner'),
       ],
     });

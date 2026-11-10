@@ -10,6 +10,7 @@ import {
 import {CONTROL_PLANE_PRIORITY_RECOVERY_REASON} from '../../src/control-plane/control-plane-readiness-constants.js';
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 const MEMBERSHIP_PUBLICATION_ADMISSION_STATE_BLOCKED = 'blocked';
 
 const MEMBERSHIP_PUBLICATION_ADMISSION_REASON_CLUSTER_INTEGRITY =
@@ -232,13 +233,13 @@ function buildMembershipPublicationTrimPriorityPartitionSummary() {
 }
 
 function buildMembershipPublicationTrimNodeRow(nodeId) {
-  return {
+  return nodesRow({
     node_id: nodeId,
     status: MEMBERSHIP_PUBLICATION_TRIM_NODE_STATUS_ACTIVE,
     connection_state: MEMBERSHIP_PUBLICATION_TRIM_CONNECTION_STATE_READY,
     ready_lease_expires_at:
       MEMBERSHIP_PUBLICATION_TRIM_READY_LEASE_EXPIRES_AT,
-  };
+  });
 }
 
 function buildMembershipPublicationTrimReadinessEntry(nodeId) {
@@ -262,21 +263,21 @@ function buildMembershipPublicationTrimEndpointRow(nodeId) {
 }
 
 function buildMembershipPublicationTrimServiceRow(nodeId) {
-  return {
+  return servicesRow({
     service_id: MEMBERSHIP_PUBLICATION_TRIM_SERVICE_PREFIX + nodeId,
     node_id: nodeId,
     status: MEMBERSHIP_PUBLICATION_TRIM_NODE_STATUS_ACTIVE,
-  };
+  });
 }
 
 function buildMembershipPublicationAckDeferralNodeRow(nodeId, connectionState) {
-  return {
+  return nodesRow({
     node_id: nodeId,
     status: MEMBERSHIP_PUBLICATION_TRIM_NODE_STATUS_ACTIVE,
     connection_state: connectionState,
     ready_lease_expires_at:
       MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_READY_LEASE_EXPIRES_AT,
-  };
+  });
 }
 
 test('membership lifecycle model encodes the hard-cutover publication transitions',
@@ -318,18 +319,18 @@ test('deriveMembershipPublicationCandidate increments publication epochs monoton
         published_active_node_ids: ['node-1'],
       },
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
+        }),
       ],
       readinessEntries: [
         {nodeId: 'node-1', dimensions: {clusterMemberHealthy: true}},
@@ -352,8 +353,8 @@ test('deriveMembershipPublicationCandidate increments publication epochs monoton
         },
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
-        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
+        servicesRow({service_id: 'svc-2', node_id: 'node-2', status: 'active'}),
       ],
       nowMs: 1000,
     });
@@ -525,18 +526,18 @@ test('deriveMembershipPublicationCandidate retains healthy connected nodes when 
         },
       },
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
+        }),
       ],
       nodeEndpointRows: [
         {
@@ -555,8 +556,8 @@ test('deriveMembershipPublicationCandidate retains healthy connected nodes when 
         },
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
-        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
+        servicesRow({service_id: 'svc-2', node_id: 'node-2', status: 'active'}),
       ],
       readinessEntries: [
         {
@@ -617,18 +618,18 @@ test('deriveMembershipPublicationCandidate ignores stale published membership wh
         status: 'PUBLISHED',
       },
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
+        }),
       ],
       readinessEntries: [
         {nodeId: 'node-1', dimensions: {clusterMemberHealthy: true}},
@@ -651,8 +652,8 @@ test('deriveMembershipPublicationCandidate ignores stale published membership wh
         },
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
-        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
+        servicesRow({service_id: 'svc-2', node_id: 'node-2', status: 'active'}),
       ],
       nowMs: 1000,
     });
@@ -716,7 +717,7 @@ test('deriveMembershipPublicationCandidate keeps priority spread blocked when an
     }));
     const serviceRows = priorityTableIds.flatMap((tableId, index) => {
       const partitionId = `${tableId}-p1`;
-      return [{
+      return [servicesRow({
         service_id: `${tableId}-r${index + 1}-a`,
         node_id: 'node-1',
         partition_id: partitionId,
@@ -724,7 +725,7 @@ test('deriveMembershipPublicationCandidate keeps priority spread blocked when an
         status: 'active',
         raft_role: 'leader',
         address: `node-1/partition/${partitionId}-r1`,
-      }, {
+      }), servicesRow({
         service_id: `${tableId}-r${index + 1}-b`,
         node_id: 'node-2',
         partition_id: partitionId,
@@ -732,7 +733,7 @@ test('deriveMembershipPublicationCandidate keeps priority spread blocked when an
         status: 'active',
         raft_role: 'follower',
         address: `node-2/partition/${partitionId}-r2`,
-      }];
+      })];
     });
     const replicaOperationRows = priorityTableIds.map((tableId) => ({
       operation_id: `op-refresh-${tableId}`,
@@ -766,27 +767,27 @@ test('deriveMembershipPublicationCandidate keeps priority spread blocked when an
         priority_partition_summary: stalePriorityPartitionSummary,
       },
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-3',
           boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
+        }),
       ],
       readinessEntries: [
         {

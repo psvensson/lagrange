@@ -1,4 +1,5 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
   registerCase,
   dependencies,
@@ -579,7 +580,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
     let deliveryAttempt = 0;
     let updateCount = 0;
     const nowMs = Date.now();
-    const operationRow = {
+    const operationRow = replicaOperationsRow({
       operation_id: TEST_OPERATION_ID,
       type: TEST_OPERATION_TYPE_REPLACE,
       partition_id: TEST_PARTITION_ID,
@@ -598,7 +599,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
       }]),
       entity_type: TEST_ENTITY_TYPE_PARTITION,
       entity_id: TEST_PARTITION_ID,
-    };
+    });
 
     const sqlQueryEngine = {
       async executeQuery(sql, params = []) {
@@ -854,7 +855,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
       const originalDateNow = Date.now;
       Date.now = () => nowMs;
       const pendingTimeoutMs = TEST_STEP_TIMEOUT_MS;
-      const operationRow = {
+      const operationRow = replicaOperationsRow({
         operation_id: TEST_OPERATION_ID,
         type: TEST_OPERATION_TYPE_REPLACE,
         partition_id: TEST_PARTITION_ID,
@@ -873,7 +874,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
         }]),
         entity_type: TEST_ENTITY_TYPE_PARTITION,
         entity_id: TEST_PARTITION_ID,
-      };
+      });
 
       const sqlQueryEngine = {
         async executeQuery(sql) {
@@ -1035,7 +1036,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
     const deliveries = [];
     let updateCount = 0;
     const nowMs = Date.now();
-    const operationRow = {
+    const operationRow = replicaOperationsRow({
       operation_id: TEST_OPERATION_ID,
       type: TEST_OPERATION_TYPE_REPLACE,
       partition_id: TEST_LOCAL_OWNER_PARTITION_ID,
@@ -1054,7 +1055,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
       }]),
       entity_type: TEST_ENTITY_TYPE_PARTITION,
       entity_id: TEST_LOCAL_OWNER_PARTITION_ID,
-    };
+    });
 
     const sqlQueryEngine = {
       async executeQuery(sql, params = []) {

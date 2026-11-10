@@ -68,6 +68,10 @@ import {
 import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 import {createIdentityTransport} from
   '../test-helpers/replica-handler-identity-fixture.js';
 
@@ -298,12 +302,13 @@ test('PartitionService - persists partition size_bytes for leader-owned partitio
     const updates = [];
     const systemTableCache = new SystemTableCache();
     const partitionsPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.PARTITIONS];
-    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-      [COLUMN.PARTITION_ID]: partitionsPartitionId,
-      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
-      [COLUMN.LEADER_NODE_ID]: 'seed-node',
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+        [COLUMN.PARTITION_ID]: partitionsPartitionId,
+        [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
+        [COLUMN.LEADER_NODE_ID]: 'seed-node',
+      }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
       [COLUMN.SERVICE_ID]: 'partitions-leader',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: partitionsPartitionId,
@@ -311,12 +316,13 @@ test('PartitionService - persists partition size_bytes for leader-owned partitio
       [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
-    });
-    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-      [COLUMN.PARTITION_ID]: 'test-partition-size-persist',
-      [COLUMN.TABLE_ID]: 'size_persist_test',
-      size_bytes: 0,
-    });
+    }));
+    systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+        [COLUMN.PARTITION_ID]: 'test-partition-size-persist',
+        [COLUMN.TABLE_ID]: 'size_persist_test',
+        size_bytes: 0,
+      }));
     const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-size-persist',
       tableId: 'size_persist_test',
@@ -412,12 +418,13 @@ test('PartitionService - retries retryable partition size persistence pressure',
     let attempts = 0;
     const systemTableCache = new SystemTableCache();
     const partitionsPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.PARTITIONS];
-    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-      [COLUMN.PARTITION_ID]: partitionsPartitionId,
-      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
-      [COLUMN.LEADER_NODE_ID]: 'seed-node',
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+        [COLUMN.PARTITION_ID]: partitionsPartitionId,
+        [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
+        [COLUMN.LEADER_NODE_ID]: 'seed-node',
+      }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
       [COLUMN.SERVICE_ID]: 'partitions-leader',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: partitionsPartitionId,
@@ -425,12 +432,13 @@ test('PartitionService - retries retryable partition size persistence pressure',
       [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
-    });
-    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-      [COLUMN.PARTITION_ID]: 'test-partition-size-retry',
-      [COLUMN.TABLE_ID]: 'size_retry_test',
-      size_bytes: 0,
-    });
+    }));
+    systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+        [COLUMN.PARTITION_ID]: 'test-partition-size-retry',
+        [COLUMN.TABLE_ID]: 'size_retry_test',
+        size_bytes: 0,
+      }));
     const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-size-retry',
       tableId: 'size_retry_test',
@@ -1133,30 +1141,30 @@ test('PartitionService - buildPeerAddress returns correct format', async (t) => 
 test('PartitionService - cache reconciliation refreshes moved peers and joins new replicas',
   async (t) => {
     const systemTableCache = new SystemTableCache();
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
       service_id: 'replica-1',
       partition_id: 'test-partition-19b',
       service_type: SERVICE_TYPE.PARTITION,
       node_id: 'node-1',
       status: SERVICE_STATUS.ACTIVE,
       raft_role: RaftRole.LEADER,
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
       service_id: 'replica-2',
       partition_id: 'test-partition-19b',
       service_type: SERVICE_TYPE.PARTITION,
       node_id: 'node-new',
       status: SERVICE_STATUS.ACTIVE,
       raft_role: RaftRole.FOLLOWER,
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
       service_id: 'replica-3',
       partition_id: 'test-partition-19b',
       service_type: SERVICE_TYPE.PARTITION,
       node_id: 'node-3',
       status: SERVICE_STATUS.ACTIVE,
       raft_role: RaftRole.FOLLOWER,
-    });
+    }));
 
     const consensusPort = new ControllableConsensusPort({
       peers: [{

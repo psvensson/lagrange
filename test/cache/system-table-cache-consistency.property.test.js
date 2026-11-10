@@ -18,6 +18,10 @@ import {
 import {
   getSystemCachePrimaryKeyField,
 } from '../../src/cache/system-cache-key-descriptor.js';
+import {getSchemaByTableName} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {nodesRow, systemTableRow} from
+  '../test-helpers/system-table-row-fixture.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
@@ -48,17 +52,28 @@ function mapPublicationStatus(status) {
   return 'OPEN';
 }
 
-function buildCdcRow(tableName, key, name, status, timestamp) {
+// The complete stored row of `tableName`: the generated key, timestamps and
+// status land on the columns the table declares; the rest completes from the
+// schema as the table's INSERT would complete it.
+function buildCdcRow(tableName, key, status, timestamp) {
   const primaryKeyField = getSystemCachePrimaryKeyField(tableName);
-  const row = {
-    [primaryKeyField]: key,
+  const columns = new Set(
+    getSchemaByTableName(tableName).columns.map((column) => column.name),
+  );
+  const overrides = {[primaryKeyField]: key};
+  for (const [column, value] of Object.entries({
     created_at: timestamp,
     updated_at: timestamp,
-  };
+    status,
+  })) {
+    if (columns.has(column)) {
+      overrides[column] = value;
+    }
+  }
 
   if (tableName === 'control_plane_publications') {
-    return {
-      ...row,
+    return systemTableRow(tableName, {
+      ...overrides,
       publication_kind: 'cluster_membership',
       publication_epoch: 1,
       publisher_node_id: 'node-a',
@@ -68,15 +83,10 @@ function buildCdcRow(tableName, key, name, status, timestamp) {
       reason_code: '',
       transition_history: [],
       status: mapPublicationStatus(status),
-    };
+    });
   }
 
-  return {
-    ...row,
-    name,
-    status,
-    timestamp,
-  };
+  return systemTableRow(tableName, overrides);
 }
 
 function getCacheRecordKey(tableName, record) {
@@ -96,13 +106,12 @@ const cdcEventArbitrary = fc.record({
     CDC_OPERATIONS.DELETE,
   ),
   key: fc.uuid(),
-  name: fc.string({minLength: 1, maxLength: 50}),
   status: fc.constantFrom('active', 'inactive', 'pending'),
   timestamp: fc.integer({min: 1, max: Date.now()}),
-}).map(({tableName, operation, key, name, status, timestamp}) => ({
+}).map(({tableName, operation, key, status, timestamp}) => ({
   tableName,
   operation,
-  data: buildCdcRow(tableName, key, name, status, timestamp),
+  data: buildCdcRow(tableName, key, status, timestamp),
 }));
 
 /**
@@ -342,19 +351,17 @@ test('Property 21: Cache updates via CDC maintain data integrity', async (t) => 
       fc.array(
         fc.record({
           node_id: fc.uuid(),
-          name: fc.string({minLength: 1, maxLength: 20}),
-          value: fc.integer({min: 0, max: 1000}),
+          cpu_cores: fc.integer({min: 0, max: 1000}),
           created_at: fc.integer({min: 1, max: Date.now()}),
-          updated_at: fc.integer({min: 1, max: Date.now()}),
         }),
         {minLength: 1, maxLength: 10},
       ),
       (records) => {
         const cache = new SystemTableCache();
 
-        // Insert all records
+        // Insert all records as complete nodes rows
         for (const record of records) {
-          cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, record);
+          cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, nodesRow(record));
         }
 
         // Verify count matches
@@ -366,14 +373,14 @@ test('Property 21: Cache updates via CDC maintain data integrity', async (t) => 
         for (const record of records) {
           cache.applySystemTableChange('nodes', CDC_OPERATIONS.UPDATE, {
             node_id: record.node_id,
-            value: record.value + 100,
+            cpu_cores: record.cpu_cores + 100,
           });
         }
 
         // Verify updates applied
         for (const record of records) {
           const updated = cache.get('nodes', record.node_id);
-          if (!updated || updated.value !== record.value + 100) {
+          if (!updated || updated.cpu_cores !== record.cpu_cores + 100) {
             return false;
           }
         }

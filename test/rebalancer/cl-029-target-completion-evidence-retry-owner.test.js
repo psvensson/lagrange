@@ -116,8 +116,8 @@ import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
 import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
-
 import {createReplaceWitness} from './replace-witness-fixture.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 const TEST_NODE_ID = 'node-target-local';
 const TEST_SEED_NODE_ID = 'node-seed-remote';
 const TEST_OPERATION_ID = 'op-cl-029-replace';
@@ -205,23 +205,23 @@ function buildReplaceOperation() {
  * from steps_history metadata, matching production).
  */
 function operationToRow(op) {
-  return {
+  return replicaOperationsRow({
     operation_id: op.operationId,
     type: op.type,
     partition_id: op.partitionId,
     entity_type: op.entityType,
     entity_id: op.entityId,
-    replica_id: op.replicaId,
+    replica_id: op.replicaId ?? null,
     source_node_id: op.sourceNodeId,
     target_node_id: op.targetNodeId,
     status: op.status,
     workflow_step: op.workflowStep,
     created_at: op.createdAt,
     updated_at: op.updatedAt,
-    completed_at: op.completedAt,
-    error_message: op.errorMessage,
+    completed_at: op.completedAt ?? null,
+    error_message: op.errorMessage ?? null,
     steps_history: JSON.stringify(op.stepsHistory || []),
-  };
+  });
 }
 
 /**

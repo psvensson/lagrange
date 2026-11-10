@@ -1,6 +1,7 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
+import {replicaOperationsRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 // completeOperation/failOperation report a typed transition outcome
 // ({committed, disposition}); termination stubs return the committed
@@ -22,7 +23,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
   test('observed progress reconciles REPLACE workflows from local owner rows ' +
   'when strict owner-rpc reads are unavailable', async (t) => {
     const nowMs = Date.now();
-    const operationRow = {
+    const operationRow = replicaOperationsRow({
       operation_id: 'op-observed-progress-owner-rpc-fallback',
       type: 'REPLACE',
       partition_id: 'control_plane_publications-p1',
@@ -42,8 +43,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         timestamp: nowMs - 5000,
         sourceReplicaId: 'control_plane_publications-p1-r1',
       }]),
-    };
-    const serviceRow = {
+    });
+    const serviceRow = servicesRow({
       service_id: 'control_plane_publications-p1-r4',
       replica_id: 'control_plane_publications-p1-r4',
       partition_id: 'control_plane_publications-p1',
@@ -52,8 +53,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       status: 'active',
       raft_role: 'follower',
       address: 'node-2/partition/control_plane_publications-p1-r4',
-    };
-    const sourceServiceRow = {
+    });
+    const sourceServiceRow = servicesRow({
       service_id: 'control_plane_publications-p1-r1',
       replica_id: 'control_plane_publications-p1-r1',
       partition_id: 'control_plane_publications-p1',
@@ -62,7 +63,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       status: 'active',
       raft_role: 'leader',
       address: 'node-1/partition/control_plane_publications-p1-r1',
-    };
+    });
     const authoritativeReadCalls = [];
     const dispatchedMessages = [];
 
@@ -267,7 +268,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
   test('observed progress prefers local authoritative target status over ' +
   'routed empty status reads for locally owned priority REPLACE', async (t) => {
     const nowMs = Date.now();
-    const operationRow = {
+    const operationRow = replicaOperationsRow({
       operation_id: 'op-observed-progress-local-target-status',
       type: 'REPLACE',
       partition_id: 'control_plane_publications-p1',
@@ -293,8 +294,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         step: 'CREATING',
         timestamp: nowMs - 1000,
       }]),
-    };
-    const serviceRow = {
+    });
+    const serviceRow = servicesRow({
       service_id: 'control_plane_publications-p1-r4',
       replica_id: 'control_plane_publications-p1-r4',
       partition_id: 'control_plane_publications-p1',
@@ -303,8 +304,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       status: 'active',
       raft_role: 'follower',
       address: 'node-2/partition/control_plane_publications-p1-r4',
-    };
-    const sourceServiceRow = {
+    });
+    const sourceServiceRow = servicesRow({
       service_id: 'control_plane_publications-p1-r1',
       replica_id: 'control_plane_publications-p1-r1',
       partition_id: 'control_plane_publications-p1',
@@ -313,7 +314,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       status: 'active',
       raft_role: 'leader',
       address: 'node-1/partition/control_plane_publications-p1-r1',
-    };
+    });
     const authoritativeReadCalls = [];
     const dispatchedMessages = [];
 
@@ -514,7 +515,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       'WHERE partition_id = ? AND node_id = ?';
     const TEST_EMPTY_VALUE = null;
     const nowMs = Date.now();
-    const operationRow = {
+    const operationRow = replicaOperationsRow({
       operation_id: TEST_OPERATION_ID,
       type: TEST_OPERATION_TYPE_REPLACE,
       partition_id: TEST_PARTITION_ID,
@@ -540,8 +541,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         step: TEST_WORKFLOW_STEP_CREATING,
         timestamp: nowMs - 1000,
       }]),
-    };
-    const serviceRow = {
+    });
+    const serviceRow = servicesRow({
       service_id: TEST_REPLICA_ID,
       replica_id: TEST_REPLICA_ID,
       partition_id: TEST_PARTITION_ID,
@@ -551,7 +552,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       raft_role: TEST_RAFT_ROLE_FOLLOWER,
       address:
         `${TEST_TARGET_NODE_ID}/partition/${TEST_REPLICA_ID}`,
-    };
+    });
     const authoritativeReadCalls = [];
     const dispatchedMessages = [];
 
@@ -761,7 +762,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       'WHERE partition_id = ? AND node_id = ?';
     const TEST_EMPTY_VALUE = null;
     const nowMs = Date.now();
-    const operationRow = {
+    const operationRow = replicaOperationsRow({
       operation_id: TEST_OPERATION_ID,
       type: TEST_OPERATION_TYPE_REPLACE,
       partition_id: TEST_PARTITION_ID,
@@ -787,8 +788,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         step: TEST_WORKFLOW_STEP_CREATING,
         timestamp: nowMs - 1000,
       }]),
-    };
-    const serviceRow = {
+    });
+    const serviceRow = servicesRow({
       service_id: TEST_REPLICA_ID,
       replica_id: TEST_REPLICA_ID,
       partition_id: TEST_PARTITION_ID,
@@ -798,7 +799,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       raft_role: TEST_RAFT_ROLE_FOLLOWER,
       address:
         `${TEST_TARGET_NODE_ID}/partition/${TEST_REPLICA_ID}`,
-    };
+    });
     let operationVisibleInCache = false;
     const authoritativeReadCalls = [];
     const dispatchedMessages = [];
@@ -1002,7 +1003,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
   test('observed progress does not replay REPLACE source removal from stale ' +
   'cache state when authoritative reads stay retryable', async (t) => {
     const nowMs = Date.now();
-    const operationRow = {
+    const operationRow = replicaOperationsRow({
       operation_id: 'op-observed-progress-retryable-authoritative-gap',
       type: 'REPLACE',
       partition_id: 'control_plane_publications-p1',
@@ -1029,8 +1030,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
           previousStep: 'SYNCING',
         },
       ]),
-    };
-    const serviceRow = {
+    });
+    const serviceRow = servicesRow({
       service_id: 'control_plane_publications-p1-r4',
       replica_id: 'control_plane_publications-p1-r4',
       partition_id: 'control_plane_publications-p1',
@@ -1039,8 +1040,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       status: 'active',
       raft_role: 'follower',
       address: 'node-2/partition/control_plane_publications-p1-r4',
-    };
-    const sourceServiceRow = {
+    });
+    const sourceServiceRow = servicesRow({
       service_id: 'control_plane_publications-p1-r1',
       replica_id: 'control_plane_publications-p1-r1',
       partition_id: 'control_plane_publications-p1',
@@ -1049,7 +1050,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       status: 'active',
       raft_role: 'leader',
       address: 'node-1/partition/control_plane_publications-p1-r1',
-    };
+    });
     const authoritativeReadCalls = [];
     const dispatchedMessages = [];
     const cdcIntegrationService = {
@@ -1355,14 +1356,14 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       let nextTimerId = 1;
       let observedAttempts = 0;
       const operationId = 'op-observed-progress-deferred-retry';
-      const serviceRow = {
+      const serviceRow = servicesRow({
         service_id: 'partition-1-r2',
         replica_id: 'partition-1-r2',
         partition_id: 'partition-1',
         node_id: 'node-2',
         service_type: 'partition',
         status: 'active',
-      };
+      });
       const coordinator = createCoordinator({
         nodeId: 'node-1',
         transactionCoordinator: buildTransactionCoordinator(),

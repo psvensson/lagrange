@@ -11,6 +11,7 @@ import {NodeLivenessSemanticProjectionOwner} from
 import {ReadinessPlanningSnapshotOwner} from
   '../../src/control-plane/readiness-planning-snapshot-owner.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const NODE_ID = 'node-a';
 const NOW_MS = 10_000;
@@ -37,13 +38,13 @@ function buildSnapshot(revision) {
 function createBarrierRig() {
   const cache = new SystemTableCache();
   const timeSource = new VirtualTimeSource({startMs: NOW_MS});
-  const initialRow = {
+  const initialRow = nodesRow({
     [COLUMN.CONNECTION_STATE]: 'ready',
     [COLUMN.LAST_HEARTBEAT]: NOW_MS,
     [COLUMN.NODE_ID]: NODE_ID,
     [COLUMN.READY_LEASE_EXPIRES_AT]: NOW_MS + 100,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-  };
+  });
   cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, initialRow);
   const readNodeRow = () => cache.get(TABLES.NODES, NODE_ID);
   const livenessOwner = new NodeLivenessSemanticProjectionOwner({

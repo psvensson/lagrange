@@ -19,6 +19,8 @@ import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {
   buildCreateCdcData,
 } from '../../src/node/replica-state-machine-transition.js';
+import {servicesRow, systemTableRow} from '../test-helpers/system-table-row-fixture.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
 
 const PARTITION_ID =
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS];
@@ -50,7 +52,7 @@ function applyCacheRow(cache, tableName, row, causeId) {
 
 function createReadyServiceRow(nodeId, replicaIndex) {
   const replicaId = `${PARTITION_ID}-r${replicaIndex}`;
-  return {
+  return servicesRow({
     service_id: replicaId,
     service_type: SERVICE_TYPE.PARTITION,
     partition_id: PARTITION_ID,
@@ -60,15 +62,20 @@ function createReadyServiceRow(nodeId, replicaIndex) {
     address: `ws://${nodeId}/partition/${PARTITION_ID}/${replicaId}`,
     created_at: FIXTURE_TIMESTAMP_MS,
     updated_at: FIXTURE_TIMESTAMP_MS,
-  };
+  });
 }
 
 function createTwoReplicaCache() {
   const cache = new SystemTableCache();
-  applyCacheRow(cache, SYSTEM_TABLE_NAME.PARTITIONS, {
-    partition_id: PARTITION_ID,
-    replica_count: EXPECTED_REPLICA_COUNT,
-  }, 'publication-census-partition');
+  applyCacheRow(cache, SYSTEM_TABLE_NAME.PARTITIONS, systemTableRow(
+    SYSTEM_TABLE_NAME.PARTITIONS,
+    {
+      partition_id: PARTITION_ID,
+      table_id: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+      table_name: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+      replica_count: EXPECTED_REPLICA_COUNT,
+    },
+  ), 'publication-census-partition');
   applyCacheRow(
     cache,
     SYSTEM_TABLE_NAME.SERVICES,
@@ -100,10 +107,14 @@ function createPublicationContext(cache) {
   };
 }
 
+// The census reads the projected replicas of the cached SERVICES rows, as
+// its production callers (admin snapshot, placement memo) hand it.
 function deriveSummary(cache) {
   return buildDerivedPriorityPartitionSummary({
     partitionRows: cache.getAll(SYSTEM_TABLE_NAME.PARTITIONS),
-    serviceRows: cache.getAll(SYSTEM_TABLE_NAME.SERVICES),
+    serviceRows: projectReplicasFromServicesRows(
+      cache.getAll(SYSTEM_TABLE_NAME.SERVICES),
+    ),
     locallyEligibleNodeIds: ELIGIBLE_NODE_IDS,
   }, SUMMARY_HELPERS);
 }

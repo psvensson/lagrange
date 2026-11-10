@@ -19,6 +19,7 @@ import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {
   COLUMN,
   NUM,
+  STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
@@ -38,12 +39,15 @@ import {
   SPLIT_MERGE_REASON,
 } from '../../src/partition/partition-constants.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 function insertRow(cache, tableName, row) {
   cache.applySystemTableChange(
     tableName,
     CDC_OPERATION.INSERT,
-    row,
+    systemTableRow(tableName, row),
   );
 }
 
@@ -72,6 +76,7 @@ function initConfig(overrides = {}) {
 }
 
 function buildServices(nodeId, budgetBytes) {
+  const now = Date.now();
   const cache = new SystemTableCache();
   const accounting = new StorageCapacityAccountingService({
     systemTableCache: cache,
@@ -81,6 +86,9 @@ function buildServices(nodeId, budgetBytes) {
   insertRow(cache, TABLES.NODES, {
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.STORAGE_BUDGET_BYTES]: budgetBytes,
+    [COLUMN.CONNECTION_STATE]: STATE.READY,
+    [COLUMN.LAST_HEARTBEAT]: now,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60_000,
   });
 
   const cdcGroupPropagationService = {

@@ -22,7 +22,8 @@ import {MESSAGE_GROUP_CDC_FORWARD_MODE, MESSAGE_GROUP_CDC_INGRESS_ACTION} from
   '../../src/message-group/message-group-forwarding-owner-constants.js';
 import {CDC_FORWARD_MAX_RELAY_DEPTH} from
   '../../src/message-group/message-group-service-runtime-support.js';
-import {GROUP_ID, NODE_ID, pump, recipientFixture} from './message-group-native-custody-fixture.js';
+import {GROUP_ID, NODE_ID, configRow, pump, recipientFixture} from
+  './message-group-native-custody-fixture.js';
 
 const KEY = 'receiver-admission-row';
 const RECEIVED_BUDGET_MS = 100;
@@ -42,7 +43,7 @@ afterEach(() => {
 
 function sourceEvent(index) {
   return {tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
-    data: {config_key: KEY, config_value: `receiver-body-${index}`},
+    data: configRow(KEY, `receiver-body-${index}`),
     timestamp: new HLCTimestamp(1000 + index, 0, 'receiver-source').toString(),
     sourcePartition: 'receiver-source', sourceReplica: 'receiver-source-r1',
     eventKey: `receiver-occurrence-${index}`, entryId: `receiver-occurrence-${index}`,

@@ -1,7 +1,7 @@
 import {assertCritical} from '../utils/assert.js';
 import {CACHE_HYDRATION_TABLES} from '../cache/cache-constants.js';
 import {TABLES} from '../constants/index.js';
-import {normalizeNodeRow} from '../control-plane/system-row-normalizers.js';
+import {decodeNodesRowView} from '../control-plane/nodes-row-decoder.js';
 
 const LOCAL_STR_ACTIVE = 'active';
 const LOCAL_STR_BOOTSTRAP_TOPOLOGY_SNAPSHOT_REQUIRES_SYS = 'bootstrap topology snapshot requires systemTableCache.getAll';
@@ -25,7 +25,7 @@ function resolveActiveNodeIds(nodeRows) {
   const activeNodeIds = new Set();
   const rows = Array.isArray(nodeRows) ? nodeRows : [];
   for (const row of rows) {
-    const normalizedRow = normalizeNodeRow(row);
+    const normalizedRow = decodeNodesRowView(row);
     const {nodeId, status} = normalizedRow;
     if (nodeId.length === 0) {
       continue;

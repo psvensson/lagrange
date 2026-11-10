@@ -18,6 +18,7 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createTestRebalancer} from './test-helpers.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -146,11 +147,14 @@ test('Property 23: Rebalancing Scheduling', async (t) => {
           const belowMinimum = currentReplicaCount < policy.minReplicaCount;
 
           // Calculate target state
-          const replicas = Array.from({length: currentReplicaCount}, (_, i) => ({
-            replica_id: `replica-${i}`,
-            node_id: `node-${i}`,
-            status: 'active',
-          }));
+          const replicas = Array.from({length: currentReplicaCount}, (_, i) =>
+            projectedReplica({
+              service_id: `replica-${i}`,
+              replica_id: `replica-${i}`,
+              partition_id: 'partition-1',
+              node_id: `node-${i}`,
+              status: 'active',
+            }));
 
           const targetState = await rebalancer.calculateTargetState(replicas, policy);
           const moves = rebalancer.calculateMoves(replicas, targetState);

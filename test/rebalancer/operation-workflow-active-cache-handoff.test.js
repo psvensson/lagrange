@@ -24,6 +24,7 @@ import {
 import {UNIFIED_SERVICE_TYPE} from
   '../../src/constants/unified-service-lifecycle.js';
 import {createTestCoordinator} from './test-helpers.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_NODE_ID = 'active-cache-handoff-owner';
 const TEST_OPERATION_ID = 'active-cache-handoff-operation';
@@ -75,7 +76,7 @@ function buildSyncingReplaceOperation() {
 }
 
 function buildAuthoritativeServiceRow(overrides = {}) {
-  return {
+  return servicesRow({
     service_id: TEST_REPLICA_ID,
     service_type: 'partition',
     partition_id: TEST_PARTITION_ID,
@@ -88,7 +89,7 @@ function buildAuthoritativeServiceRow(overrides = {}) {
     created_at: 3,
     updated_at: 9,
     ...overrides,
-  };
+  });
 }
 
 function buildProductionCacheRefreshHost({

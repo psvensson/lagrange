@@ -72,6 +72,10 @@ import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {
+  replicaOperationsRow,
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 const {
   PRIORITY_PUBLICATION_FOLLOWER_SOURCE_REMOVAL_SAFETY_STATE,
@@ -306,14 +310,17 @@ t.test(
 // orphaned-operation-reconcile-redrive.test.js isolates it exactly.
 // ---------------------------------------------------------------------------
 
+// The fake SQL tables hold complete stored rows (the repository decodes
+// every replica_operations row it reads): each seeded row is completed with
+// its table's stored columns, the omitted ones at their stored defaults.
 function buildSweepCoordinator({operationRows, serviceRows}) {
   const trackedOperations = new Map();
   for (const row of operationRows) {
-    trackedOperations.set(row.operation_id, {...row});
+    trackedOperations.set(row.operation_id, replicaOperationsRow(row));
   }
   const trackedServices = new Map();
   for (const row of serviceRows) {
-    trackedServices.set(row.service_id, {...row});
+    trackedServices.set(row.service_id, servicesRow(row));
   }
   const sqlEngine = {
     executeQuery: async (sql, params) => {
@@ -458,6 +465,10 @@ t.test(
           partition_id: 'latency_groups-p1',
           node_id: 'test-node-1',
           status: ReplicaStatus.ACTIVE,
+          // A completed partition replica is an ACTIVE voter with an address
+          // (the stored shape the exact-target observation reads).
+          raft_role: 'follower',
+          address: 'ws://test-node-1/replica-local-1',
         },
         {
           service_id: 'replica-handed-off-1',
@@ -465,6 +476,8 @@ t.test(
           partition_id: 'latency_groups-p1',
           node_id: 'test-node-1',
           status: ReplicaStatus.ACTIVE,
+          raft_role: 'follower',
+          address: 'ws://test-node-1/replica-handed-off-1',
         },
       ],
     });

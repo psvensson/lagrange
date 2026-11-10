@@ -505,7 +505,8 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
       const TEST_REPLICA_ID_A = 'sql_write_operations-p1-r1';
       const TEST_BLOCKED_SERVICE_STATUS = ReplicaStatus.ACTIVE;
       const TEST_SERVICE_TYPE_PARTITION = 'partition';
-      const TEST_RAFT_ROLE_VOTER = 'voter';
+      // A voter replica stores the follower role (raft_role has no 'voter').
+      const TEST_RAFT_ROLE_VOTER = 'follower';
       const TEST_CREATED_OPERATION_ID = 'op-priority-blocked-terminal';
       const TEST_CRITICAL_RESERVE_EXHAUSTED_SUMMARY = Object.freeze({
         backpressured: true,

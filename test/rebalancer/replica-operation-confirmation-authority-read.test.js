@@ -1,4 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
@@ -26,7 +27,7 @@ const TEST_VISIBILITY_TIMEOUT_MS = 0;
 const TEST_OWNER_KEY_PREFIX = 'operation-owner';
 
 function makeRow(overrides = {}) {
-  return {
+  return replicaOperationsRow({
     operation_id: TEST_OPERATION_ID,
     type: OperationType.ADD,
     partition_id: TEST_PARTITION_ID,
@@ -45,7 +46,7 @@ function makeRow(overrides = {}) {
     entity_type: SERVICE_TYPE.PARTITION,
     entity_id: TEST_PARTITION_ID,
     ...overrides,
-  };
+  });
 }
 
 function createRepository(readAuthoritativeRows) {

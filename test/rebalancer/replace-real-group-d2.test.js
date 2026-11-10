@@ -35,6 +35,7 @@ import {
   settleTurns,
   startCoordinator,
 } from './replace-real-group-harness.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const FORMER_STEP_BUDGET_MS = 60_000;
 const FORMER_OPERATION_BUDGET_MS = 300_000;
@@ -54,7 +55,8 @@ function plannedRemoves(world) {
     entityId: world.partitionId,
     entityType: EntityType.PARTITION,
     systemTableCache: createMockCache({
-      services: world.cache.getAll('services'),
+      // The cache holds complete stored rows.
+      services: world.cache.getAll('services').map((row) => servicesRow(row)),
       replicaOperations: world.cache.getAll('replica_operations'),
     }),
     nodeId: 'planner-node',

@@ -1,3 +1,5 @@
+import {projectTestReplicas} from './unified-rebalancer-test-support.js';
+
 export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) {
   const {
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -746,7 +748,7 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
         },
       },
     };
-    const currentReplicas = [
+    const currentReplicas = projectTestReplicas([
       {
         service_id: PRIORITY_FOLLOW_UP_SOURCE_REPLICA_ID,
         service_type: SERVICE_TYPE.PARTITION,
@@ -795,7 +797,7 @@ export function registerUnifiedRebalancerPriorityFollowupCreationTests(context) 
         raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
         status: ReplicaStatus.SYNCING,
       },
-    ];
+    ]);
 
     try {
       const move = rebalancer.buildPriorityRecoveryFollowUpMove({

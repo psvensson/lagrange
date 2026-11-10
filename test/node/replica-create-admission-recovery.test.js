@@ -30,6 +30,7 @@ import {REPLICA_OPERATIONS_SCHEMA} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {generateCreateTableSQL} from
   '../../src/bootstrap/system-table-schema-sql.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const tempDirs = [];
 
@@ -76,20 +77,22 @@ function operationRow(overrides = {}) {
 
 function createCache(targetRows = []) {
   const cache = new SystemTableCache();
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
-    table_id: 'table-1',
-    table_name: 'test_table',
-    schema_definition: JSON.stringify({
-      columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
-    }),
-  });
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
-    partition_id: 'partition-1',
-    table_id: 'table-1',
-    partition_key_start: null,
-    partition_key_end: null,
-    leader_node_id: 'leader-node',
-  });
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.TABLES, {
+      table_id: 'table-1',
+      table_name: 'test_table',
+      schema_definition: JSON.stringify({
+        columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
+      }),
+    }));
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.PARTITIONS, {
+      partition_id: 'partition-1',
+      table_id: 'table-1',
+      partition_key_start: null,
+      partition_key_end: null,
+      leader_node_id: 'leader-node',
+    }));
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
     service_id: 'leader-replica',
     service_type: 'partition',

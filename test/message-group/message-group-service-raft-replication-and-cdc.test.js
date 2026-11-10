@@ -50,6 +50,11 @@ import {
 import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_SEMANTIC_LOCAL_LEADER_GROUP_ID =
   'mg-semantic-local-propose';
@@ -791,11 +796,11 @@ test('MessageGroupService - applyCDCEvent updates cache', async (t) => {
       cdcEvent = event;
     });
 
-    await service.applyCDCEvent('nodes', 'INSERT', {
-      id: 'node-1',
-      address: '127.0.0.1:8080',
+    await service.applyCDCEvent('nodes', 'INSERT', nodesRow({
+      node_id: 'node-1',
+      node_address: '127.0.0.1:8080',
       status: 'active',
-    });
+    }));
 
     t.ok(cdcEvent, 'Should emit cdcApplied event');
     t.equal(cdcEvent.tableName, 'nodes', 'Event should have tableName');
@@ -804,7 +809,7 @@ test('MessageGroupService - applyCDCEvent updates cache', async (t) => {
     // Verify cache was updated
     const result = await service.querySystemCache('nodes', {key: 'node-1'});
     t.ok(result, 'Should find record in cache');
-    t.equal(result.address, '127.0.0.1:8080', 'Should have correct address');
+    t.equal(result.node_address, '127.0.0.1:8080', 'Should have correct address');
 
     await service.shutdown();
   } finally {
@@ -834,10 +839,10 @@ test('MessageGroupService - applyCDCEvent fails closed on Raft propose error', a
     }));
 
     await t.rejects(
-      service.applyCDCEvent('nodes', 'INSERT', {
-        id: 'node-raft-fail',
+      service.applyCDCEvent('nodes', 'INSERT', nodesRow({
+        node_id: 'node-raft-fail',
         status: 'active',
-      }),
+      })),
       /raft propose failed/,
       'should surface Raft replication failure to caller',
     );
@@ -1045,7 +1050,7 @@ test(
         service.applyCDCEvent(
           'nodes',
           'INSERT',
-          {id: 'node-retry-same-ts', status: 'active'},
+          nodesRow({node_id: 'node-retry-same-ts', status: 'active'}),
           {timestamp: retryTimestamp},
         ),
         /synthetic propose failure/,
@@ -1055,7 +1060,7 @@ test(
       await service.applyCDCEvent(
         'nodes',
         'INSERT',
-        {id: 'node-retry-same-ts', status: 'active'},
+        nodesRow({node_id: 'node-retry-same-ts', status: 'active'}),
         {timestamp: retryTimestamp},
       );
 
@@ -1107,12 +1112,12 @@ test('MessageGroupService - CDC batch propagation proposes one raft command',
             {
               tableName: 'nodes',
               operation: 'INSERT',
-              data: {id: 'node-batch-1', status: 'active'},
+              data: nodesRow({node_id: 'node-batch-1', status: 'active'}),
             },
             {
               tableName: 'nodes',
               operation: 'INSERT',
-              data: {id: 'node-batch-2', status: 'ready'},
+              data: nodesRow({node_id: 'node-batch-2', status: 'ready'}),
             },
           ],
         },
@@ -1164,13 +1169,13 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
-        {
+        servicesRow({
           [COLUMN.SERVICE_ID]: 'mg-grown-r2',
           [COLUMN.GROUP_ID]: 'mg-grown',
           [COLUMN.NODE_ID]: 'node-grown-2',
           [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
           [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-        },
+        }),
       );
       await new Promise((resolve) => setImmediate(resolve));
       t.same(
@@ -1185,10 +1190,10 @@ test(
       port.setProposeHandler((command) => {
         proposedCommands.push(command);
       });
-      await service.applyCDCEvent('nodes', 'INSERT', {
-        id: 'node-grown-cdc',
+      await service.applyCDCEvent('nodes', 'INSERT', nodesRow({
+        node_id: 'node-grown-cdc',
         status: 'active',
-      });
+      }));
       t.equal(proposedCommands.length, 1,
         'CDC of a group that grew past one replica is proposed through the port');
       t.equal(proposedCommands[0]?.type, 'CDC',
@@ -1217,16 +1222,15 @@ test('MessageGroupService - CDC paths delegate to CDCHandler owner', async (t) =
     await service.subscribeToCDC('nodes');
     t.ok(service.cdcHandler.isSubscribed('nodes'));
 
-    await service.applyCDCEvent('nodes', 'INSERT', {
-      id: 'node-owner-1',
+    await service.applyCDCEvent('nodes', 'INSERT', nodesRow({
+      node_id: 'node-owner-1',
       status: 'active',
-    });
+    }));
     t.ok(service.getWritableCache().get('nodes', 'node-owner-1'));
 
-    await service.applyCDCEvent('partitions', 'INSERT', {
-      id: 'partition-owner-1',
-      status: 'active',
-    });
+    await service.applyCDCEvent('partitions', 'INSERT', systemTableRow(TABLES.PARTITIONS, {
+      partition_id: 'partition-owner-1',
+    }));
     t.equal(
       service.getWritableCache().get('partitions', 'partition-owner-1'),
       undefined,

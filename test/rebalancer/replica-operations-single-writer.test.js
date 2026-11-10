@@ -62,6 +62,7 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_NODE_ID = 'node-single-writer';
 const TEST_OPERATION_ID = 'op-sw-1';
@@ -104,7 +105,7 @@ function buildTestOperation(overrides = {}) {
  * @return {Object} Row-shaped object.
  */
 function operationToRow(op) {
-  return {
+  return replicaOperationsRow({
     operation_id: op.operationId,
     type: op.type,
     partition_id: op.partitionId,
@@ -120,7 +121,7 @@ function operationToRow(op) {
     completed_at: op.completedAt,
     error_message: op.errorMessage,
     steps_history: JSON.stringify(op.stepsHistory || []),
-  };
+  });
 }
 
 /**

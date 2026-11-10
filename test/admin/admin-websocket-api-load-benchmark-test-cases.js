@@ -1,5 +1,10 @@
 import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 export function registerAdminWebSocketApiLoadBenchmarkTests({
   test,
   AdminWebSocketAPI,
@@ -217,111 +222,128 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
     };
   }
 
-  function seedRoutedTableDiscoveryRows(cache) {
+  const BENCHMARK_TABLE_SCHEMA_DEFINITION = '{"columns":[]}';
+  const BENCHMARK_TABLE_PARTITION_KEY = 'id';
+
+  function seedRoutedTableDiscoveryRows(cache, {includeSchemaRows = true} = {}) {
     const updatedAt = Date.now();
 
-    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    // Production-shaped stored rows (the cache holds complete rows).
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-      id: 'node-2',
       node_id: 'node-2',
-      address: 'localhost:8081',
+      node_address: 'localhost:8081',
       status: 'active',
-    });
+    }));
 
-    cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
-      service_id: 'sys-postgres-wire',
-      service_name: 'sys-postgres-wire',
-      replica_count: 2,
-      runtime_kind: 'native_js',
-    });
-
-    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-      endpoint_id: 'sys-postgres-wire-ep-node-1',
-      service_id: 'sys-postgres-wire',
-      node_id: 'node-1',
-      protocol: 'postgresql',
-      address: '10.0.0.1',
-      port: 5432,
-      health_status: 'healthy',
-      metadata: JSON.stringify({
+    cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT',
+      systemTableRow(TABLES.SERVICE_DEFINITIONS, {
+        service_id: 'sys-postgres-wire',
         service_name: 'sys-postgres-wire',
+        replica_count: 2,
+        runtime_kind: 'native_js',
+        created_at: updatedAt,
+        updated_at: updatedAt,
+      }));
+
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+        endpoint_id: 'sys-postgres-wire-ep-node-1',
+        service_id: 'sys-postgres-wire',
+        node_id: 'node-1',
         protocol: 'postgresql',
-        version: '1.0.0',
-      }),
-      updated_at: updatedAt,
-    });
+        address: '10.0.0.1',
+        port: 5432,
+        health_status: 'healthy',
+        metadata: JSON.stringify({
+          service_name: 'sys-postgres-wire',
+          protocol: 'postgresql',
+          version: '1.0.0',
+        }),
+        created_at: updatedAt,
+        updated_at: updatedAt,
+      }));
 
-    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-      endpoint_id: 'sys-postgres-wire-ep-node-2',
-      service_id: 'sys-postgres-wire',
-      node_id: 'node-2',
-      protocol: 'postgresql',
-      address: '10.0.0.2',
-      port: 5432,
-      health_status: 'healthy',
-      metadata: JSON.stringify({
-        service_name: 'sys-postgres-wire',
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+        endpoint_id: 'sys-postgres-wire-ep-node-2',
+        service_id: 'sys-postgres-wire',
+        node_id: 'node-2',
         protocol: 'postgresql',
-        version: '1.0.0',
-      }),
-      updated_at: updatedAt,
-    });
+        address: '10.0.0.2',
+        port: 5432,
+        health_status: 'healthy',
+        metadata: JSON.stringify({
+          service_name: 'sys-postgres-wire',
+          protocol: 'postgresql',
+          version: '1.0.0',
+        }),
+        created_at: updatedAt,
+        updated_at: updatedAt,
+      }));
 
-    cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-      id: 'table-benchmark-events',
-      table_id: 'table-benchmark-events',
-      name: 'benchmark_events',
-      table_name: 'benchmark_events',
-    });
+    if (includeSchemaRows) {
+      cache.applySystemTableChange(TABLES.TABLES, 'INSERT',
+        systemTableRow(TABLES.TABLES, {
+          table_id: 'table-benchmark-events',
+          table_name: 'benchmark_events',
+          schema_definition: BENCHMARK_TABLE_SCHEMA_DEFINITION,
+          partition_key: BENCHMARK_TABLE_PARTITION_KEY,
+          created_at: updatedAt,
+          updated_at: updatedAt,
+        }));
 
-    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      id: 'partition-benchmark-events-1',
-      partition_id: 'partition-benchmark-events-1',
-      table_id: 'table-benchmark-events',
-      table_name: 'benchmark_events',
-      keyStart: null,
-      keyEnd: null,
-    });
+      cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+        systemTableRow(TABLES.PARTITIONS, {
+          partition_id: 'partition-benchmark-events-1',
+          table_id: 'table-benchmark-events',
+          table_name: 'benchmark_events',
+          partition_key_start: null,
+          partition_key_end: null,
+          created_at: updatedAt,
+          updated_at: updatedAt,
+        }));
+    }
 
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-      id: 'service-benchmark-events-node-1',
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
+      service_id: 'service-benchmark-events-node-1',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-1',
       status: 'active',
       raft_role: 'leader',
       address: '10.0.0.1:7001',
-    });
+    }));
   }
 
   function seedTableDiscoveryRowsWithLocalCandidate(cache) {
     seedRoutedTableDiscoveryRows(cache);
 
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-      id: 'service-benchmark-events-node-2',
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
+      service_id: 'service-benchmark-events-node-2',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-2',
       status: 'active',
       raft_role: 'candidate',
       address: '10.0.0.2:7001',
-    });
+    }));
   }
 
-  function seedTableDiscoveryRowsWithLocalFollower(cache) {
-    seedRoutedTableDiscoveryRows(cache);
+  function seedTableDiscoveryRowsWithLocalFollower(cache, options = {}) {
+    seedRoutedTableDiscoveryRows(cache, options);
 
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-      id: 'service-benchmark-events-node-2',
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
+      service_id: 'service-benchmark-events-node-2',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-2',
       status: 'active',
       raft_role: 'follower',
       address: '10.0.0.2:7001',
-    });
+    }));
   }
 
   test('AdminWebSocketAPI - load lane blocks benchmark table queries until local benchmark admission is ready',
@@ -387,21 +409,20 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
   test('AdminWebSocketAPI - load lane repairs cache-gap admission blockers before rejecting benchmark table queries',
     async (t) => {
       let executedQueryCount = 0;
-      const writableCache = createPopulatedCache();
-      seedTableDiscoveryRowsWithLocalFollower(writableCache);
-
+      // The authoritative store holds the benchmark table's schema rows; the
+      // local cache has a gap (it never received them). A DELETE would leave
+      // a tombstone that correctly refuses a replay of the same complete row,
+      // which is a different scenario from a cache gap.
+      const authoritativeSource = createPopulatedCache();
+      seedTableDiscoveryRowsWithLocalFollower(authoritativeSource);
       const authoritativeRowsByTable = {};
       for (const tableName of AUTHORITATIVE_REPAIR_TABLES) {
-        authoritativeRowsByTable[tableName] = writableCache.getAll(tableName);
+        authoritativeRowsByTable[tableName] = authoritativeSource.getAll(tableName);
       }
 
-      writableCache.applySystemTableChange(TABLES.TABLES, 'DELETE', {
-        id: 'table-benchmark-events',
-        table_id: 'table-benchmark-events',
-      });
-      writableCache.applySystemTableChange(TABLES.PARTITIONS, 'DELETE', {
-        id: 'partition-benchmark-events-1',
-        partition_id: 'partition-benchmark-events-1',
+      const writableCache = createPopulatedCache();
+      seedTableDiscoveryRowsWithLocalFollower(writableCache, {
+        includeSchemaRows: false,
       });
 
       const repairEngine = createSystemTableRepairQueryEngine(

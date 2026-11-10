@@ -32,6 +32,7 @@ import {
   createTestRebalancer,
   initializeSpreadTestEnvironment,
 } from './test-helpers.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const SERVICE_ID = 'svc-movielens-topn';
 const NODE_IDS = ['node-0', 'node-1', 'node-2', 'node-3', 'node-4'];
@@ -69,11 +70,11 @@ function buildPlainPolicy() {
  * replicas sitting on the two nodes that hold none of the accessed data.
  */
 function buildStallScenario({policyByFetch}) {
-  const nodes = NODE_IDS.map((nodeId) => ({
+  const nodes = NODE_IDS.map((nodeId) => nodesRow({
     node_id: nodeId,
     status: 'active',
   }));
-  const services = INCUMBENT_NODE_IDS.map((nodeId, index) => ({
+  const services = INCUMBENT_NODE_IDS.map((nodeId, index) => servicesRow({
     service_id: `${SERVICE_ID}-r${index + 1}`,
     replica_id: `${SERVICE_ID}-r${index + 1}`,
     partition_id: SERVICE_ID,
@@ -86,14 +87,14 @@ function buildStallScenario({policyByFetch}) {
   // evenly occupied): without affinity evidence there is nothing to move,
   // exactly the observed zero-move live state.
   for (const nodeId of DATA_NODE_IDS) {
-    services.push({
+    services.push(servicesRow({
       service_id: `svc-unrelated-${nodeId}`,
       replica_id: `svc-unrelated-${nodeId}`,
       partition_id: 'svc-unrelated',
       node_id: nodeId,
       service_type: 'runtime_service',
       status: ReplicaStatus.ACTIVE,
-    });
+    }));
   }
   const controlPlaneReadinessService =
     createMockControlPlaneReadinessService({

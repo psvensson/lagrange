@@ -1,4 +1,5 @@
 import {UnifiedRebalancerFollowUpDecision} from './unified-rebalancer-follow-up-decision.js';
+import {hasReplicaNode} from './projected-replica.js';
 import {
   applyUnifiedRebalancerFollowUpAugmentationMethods,
 } from './unified-rebalancer-follow-up-augmentation-methods.js';
@@ -51,12 +52,11 @@ function readFollowUpText(record, ...fieldNames) {
   const fieldName = fieldNames.find((name) => record?.[name]);
   return String(fieldName ? record[fieldName] : '').trim();
 }
-function readFollowUpNodeId(record) {
-  return readFollowUpText(
-    record,
-    PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID,
-    PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID_CAMEL,
-  );
+// The node of one projected replica (projected-replica.js): the healthy
+// replicas the follow-up selects its source from; '' for a replica that
+// never observed its node, as HEAD's `String(node_id || '')` read it.
+function readFollowUpNodeId(replica) {
+  return hasReplicaNode(replica) ? replica.nodeId : '';
 }
 function readFollowUpOperationPartitionId(operation) {
   return readFollowUpText(
@@ -243,14 +243,12 @@ function buildDeficitFollowUpMove(rebalancer, context) {
     cureCondition: PLACEMENT_CURE_CONDITION.UNDER_REPRESENTATION,
   });
 }
+// The source projected replica's node and identity; '' for both when no
+// source replica was selected.
 function readFollowUpSourceIds(sourceReplica) {
   return {
-    sourceNodeId: readFollowUpNodeId(sourceReplica),
-    replicaId: readFollowUpText(
-      sourceReplica,
-      PRIORITY_RECOVERY_FOLLOW_UP_FIELD.REPLICA_ID,
-      PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERVICE_ID,
-    ),
+    sourceNodeId: sourceReplica ? sourceReplica.nodeId : '',
+    replicaId: sourceReplica ? sourceReplica.replicaId : '',
   };
 }
 

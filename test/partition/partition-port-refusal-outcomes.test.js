@@ -56,6 +56,9 @@ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../../src/raft/raft-rs-durable-store-constants.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 const TEMP_PREFIX = 'partition-port-refusal-';
 const DB_FILE = 'partition.sqlite';
@@ -71,6 +74,7 @@ const CAMPAIGN_REFUSAL = deepFreeze({
 });
 const PEER = Object.freeze({
   replicaIdentity: 'refusal-peer-r2',
+  nodeId: 'refusal-node-2',
   peerAddress: 'refusal-node-2/partition/refusal-peer-r2',
 });
 
@@ -289,14 +293,15 @@ test('F-h: the services-cache reconcile records a refused admission as ' +
         retryable: false,
         recoveryRequired: false,
       }));
-      cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+      cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, servicesRow({
         service_id: PEER.replicaIdentity,
         replica_id: PEER.replicaIdentity,
         partition_id: partitionId,
         service_type: SERVICE_TYPE.PARTITION,
+        node_id: PEER.nodeId,
         address: PEER.peerAddress,
         status: SERVICE_STATUS.ACTIVE,
-      });
+      }));
       service.reconcileRaftPeersFromCache();
 
       const logged = log.filter((entry) =>

@@ -10,6 +10,10 @@ import {
   createPopulatedCache,
   waitForMessage,
 } from './admin-websocket-api-test-support.js';
+import {
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 import {AdminWebSocketAPI, MessageType} from
   '../../src/admin/admin-websocket-api.js';
 import {
@@ -211,7 +215,7 @@ test('AdminWebSocketAPI - local system-table observation query avoids routed SQL
     t.equal(result.success, true, 'local cache observation query should succeed');
     t.equal(result.tableName, TABLES.NODES, 'query should identify the system table');
     t.same(
-      result.rows.map((row) => row.id),
+      result.rows.map((row) => row.node_id),
       ['node-1'],
       'local cache observation query should return cache-backed rows',
     );
@@ -224,7 +228,7 @@ test('AdminWebSocketAPI - local system-table observation query keeps the ' +
 async (t) => {
   let executeRequestCalls = 0;
   const cache = createPopulatedCache();
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
     service_id: 'service-2',
     service_type: 'partition',
     node_id: 'node-2',
@@ -232,14 +236,15 @@ async (t) => {
     partition_id: 'partition-2',
     replica_id: 'partition-2-r1',
     address: 'node-2/partition/partition-2-r1',
-  });
-  cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-    endpoint_id: 'endpoint-node-2',
-    node_id: 'node-2',
-    transport_type: 'ws',
-    address: 'ws://node-2:8082',
-    status: 'active',
-  });
+  }));
+  cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+    systemTableRow(TABLES.NODE_ENDPOINTS, {
+      endpoint_id: 'endpoint-node-2',
+      node_id: 'node-2',
+      transport_type: 'ws',
+      address: 'ws://node-2:8082',
+      status: 'active',
+    }));
 
   const api = new AdminWebSocketAPI({
     nodeId: 'test-node',
@@ -290,24 +295,26 @@ test('AdminWebSocketAPI - local system-table observation supports projection ord
   async (t) => {
     let executeRequestCalls = 0;
     const cache = createPopulatedCache();
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-      endpoint_id: 'ep-node-1-older',
-      node_id: 'node-1',
-      transport_type: 'ws',
-      address: 'ws://node-1:8082',
-      priority: 1,
-      status: 'active',
-      updated_at: 100,
-    });
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
-      endpoint_id: 'ep-node-1-newer',
-      node_id: 'node-1',
-      transport_type: 'ws',
-      address: 'ws://node-1:8083',
-      priority: 0,
-      status: 'active',
-      updated_at: 200,
-    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        endpoint_id: 'ep-node-1-older',
+        node_id: 'node-1',
+        transport_type: 'ws',
+        address: 'ws://node-1:8082',
+        priority: 1,
+        status: 'active',
+        updated_at: 100,
+      }));
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      systemTableRow(TABLES.NODE_ENDPOINTS, {
+        endpoint_id: 'ep-node-1-newer',
+        node_id: 'node-1',
+        transport_type: 'ws',
+        address: 'ws://node-1:8083',
+        priority: 0,
+        status: 'active',
+        updated_at: 200,
+      }));
 
     const api = new AdminWebSocketAPI({
       nodeId: 'test-node',

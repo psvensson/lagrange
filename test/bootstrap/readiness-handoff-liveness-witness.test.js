@@ -31,6 +31,7 @@ import {
   initializeTestEnvironment,
 } from '../integration/membership-consistency-integration-test-helpers.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const arrayMap = Function.call.bind(Array.prototype.map);
 
@@ -144,20 +145,23 @@ async () => {
 function installCanonicalSeedLeaders(cache) {
   for (const tableName of SEED_LEADER_TABLES) {
     const partitionId = INITIAL_PARTITION_IDS[tableName];
-    cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, CDC_OPERATIONS.INSERT, {
-      [COLUMN.PARTITION_ID]: partitionId,
-      table_name: tableName,
-      [COLUMN.LEADER_NODE_ID]: NODE_ID,
-    });
-    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, CDC_OPERATIONS.INSERT, {
-      [COLUMN.SERVICE_ID]: `${partitionId}-r1`,
-      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-      [COLUMN.PARTITION_ID]: partitionId,
-      [COLUMN.NODE_ID]: NODE_ID,
-      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-      [COLUMN.ADDRESS]: `${NODE_ID}/partition/${partitionId}-r1`,
-      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
-    });
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, CDC_OPERATIONS.INSERT,
+      systemTableRow(SYSTEM_TABLE_NAME.PARTITIONS, {
+        [COLUMN.PARTITION_ID]: partitionId,
+        table_id: tableName,
+        table_name: tableName,
+        [COLUMN.LEADER_NODE_ID]: NODE_ID,
+      }));
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, CDC_OPERATIONS.INSERT,
+      systemTableRow(SYSTEM_TABLE_NAME.SERVICES, {
+        [COLUMN.SERVICE_ID]: `${partitionId}-r1`,
+        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+        [COLUMN.PARTITION_ID]: partitionId,
+        [COLUMN.NODE_ID]: NODE_ID,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.ADDRESS]: `${NODE_ID}/partition/${partitionId}-r1`,
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+      }));
   }
 }
 

@@ -16,6 +16,7 @@ import {registerMessageGroupTransportHandler} from
   '../../src/bootstrap/shared/message-group-transport-handler.js';
 import {COLUMN, TABLES, SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {servicesRow, systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const NODE_ID = 'mg-custody-native-node';
@@ -102,11 +103,11 @@ async function recipientFixture(t, key, {replicaCount = REPLICAS.length} = {}) {
   for (const replicaId of replicas) {
     const cache = new SystemTableCache();
     for (const id of replicas) {
-      cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
         [COLUMN.SERVICE_ID]: id, [COLUMN.NODE_ID]: NODE_ID,
         [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-      });
+      }));
     }
     const timeSource = new VirtualTimeSource({startMs: 1000});
     f.clocks.push(timeSource);
@@ -140,4 +141,13 @@ async function recipientFixture(t, key, {replicaCount = REPLICAS.length} = {}) {
   assert.fail(`setup seam: real message-group RF${replicaCount} formation did not complete`);
 }
 
-export {GROUP_ID, NODE_ID, emit, pump, recipientFixture, view};
+// The stored config row a native CDC occurrence carries (the recipient's
+// cache holds complete rows: config.value_type and default_value are NOT
+// NULL without a DEFAULT).
+const CONFIG_ROW_VALUE_TYPE = 'string';
+function configRow(configKey, configValue) {
+  return systemTableRow(TABLES.CONFIG, {config_key: configKey, config_value: configValue,
+    value_type: CONFIG_ROW_VALUE_TYPE, default_value: configValue});
+}
+
+export {GROUP_ID, NODE_ID, configRow, emit, pump, recipientFixture, view};

@@ -43,6 +43,10 @@ import {RAFT_RS_CONF_CHANGE_ENTRY_TYPES} from
 import {RAFT_MEMBERSHIP_ADMISSION_OUTCOME} from
   '../../../src/raft/raft-operation-port-constants.js';
 import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
+import {
+  servicesRow,
+  systemTableRow,
+} from '../../test-helpers/system-table-row-fixture.js';
 
 const PARTITION_ID = 'f16-admission';
 const TABLE_NAME = 'f16_admission_table';
@@ -64,22 +68,24 @@ function addressOf([replicaId, nodeId]) {
 }
 
 function serviceRow([replicaId, nodeId]) {
-  return {
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     partition_id: PARTITION_ID,
     service_type: SERVICE_TYPE.PARTITION,
     node_id: nodeId,
     status: SERVICE_STATUS.ACTIVE,
-  };
+  });
 }
 
 function placementCache(members) {
   const cache = new SystemTableCache();
-  cache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-    partition_id: PARTITION_ID,
-    replica_count: TARGET_REPLICA_COUNT,
-  });
+  cache.applySystemTableChange(
+    TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+      partition_id: PARTITION_ID,
+      table_id: TABLE_NAME,
+      replica_count: TARGET_REPLICA_COUNT,
+    }));
   for (const member of members) {
     cache.applySystemTableChange(
       TABLES.SERVICES, CDCOperation.INSERT, serviceRow(member));

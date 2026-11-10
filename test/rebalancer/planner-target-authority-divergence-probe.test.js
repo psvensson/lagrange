@@ -32,6 +32,7 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {createMockCache, createTestRebalancer} from './test-helpers.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const PROBE_PARTITION_ID = `${SYSTEM_TABLE_NAME.SERVICES}-p1`;
 const PROBE_TABLE_ID = SYSTEM_TABLE_NAME.SERVICES;
@@ -56,7 +57,7 @@ function probeCacheData({persistedReplicaCount, holderCount}) {
     last_heartbeat: Date.now(),
   }));
   const services = HOLDER_NODE_IDS.slice(0, holderCount)
-    .map((nodeId, index) => ({
+    .map((nodeId, index) => servicesRow({
       service_id: `svc-${PROBE_PARTITION_ID}-r${index + 1}`,
       service_type: 'partition',
       node_id: nodeId,

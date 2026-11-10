@@ -15,6 +15,15 @@ import {NodeService} from '../../src/node/node-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TABLES} from '../../src/constants/index.js';
+import {
+  nodesRow,
+  replicaOperationsRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
+
+// Stored rows of one system table built from generated stored-column values.
+const storedRowOf = (tableName) => (overrides) => systemTableRow(tableName, overrides);
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -63,39 +72,38 @@ test('Property 2: All records from snapshots are in cache after hydration', asyn
         nodes: fc.array(fc.record({
           node_id: fc.uuid(),
           node_address: fc.webUrl(),
-          status: fc.constantFrom('active', 'inactive'),
+          status: fc.constantFrom('active', 'stopped'),
           created_at: fc.integer({min: 0, max: Date.now()}),
-          updated_at: fc.integer({min: 0, max: Date.now()}),
-        }), {maxLength: 5}),
+        }).map(nodesRow), {maxLength: 5}),
         partitions: fc.array(fc.record({
           partition_id: fc.uuid(),
           table_name: fc.string({minLength: 1, maxLength: 20}),
-          key_range_start: fc.integer({min: 0, max: 1000}),
-          key_range_end: fc.integer({min: 0, max: 1000}),
+          partition_key_start: fc.integer({min: 0, max: 1000}),
+          partition_key_end: fc.integer({min: 0, max: 1000}),
           replica_count: fc.constantFrom(3, 5, 7),
-        }), {maxLength: 5}),
+        }).map(storedRowOf(TABLES.PARTITIONS)), {maxLength: 5}),
         services: fc.array(fc.record({
           service_id: fc.uuid(),
           service_type: fc.constantFrom('partition', 'message_group'),
           node_id: fc.uuid(),
           address: fc.string({minLength: 1, maxLength: 50}),
-          status: fc.constantFrom('active', 'inactive'),
-        }), {maxLength: 5}),
+          status: fc.constantFrom('active', 'stopped'),
+        }).map(servicesRow), {maxLength: 5}),
         tables: fc.array(fc.record({
           table_id: fc.uuid(),
           table_name: fc.string({minLength: 1, maxLength: 20}),
-          schema: fc.string(),
-        }), {maxLength: 5}),
+          schema_definition: fc.string(),
+        }).map(storedRowOf(TABLES.TABLES)), {maxLength: 5}),
         message_groups: fc.array(fc.record({
           group_id: fc.uuid(),
           group_name: fc.string({minLength: 1, maxLength: 20}),
           replica_count: fc.constantFrom(3, 5, 7),
-        }), {maxLength: 5}),
+        }).map(storedRowOf(TABLES.MESSAGE_GROUPS)), {maxLength: 5}),
         replica_operations: fc.array(fc.record({
           operation_id: fc.uuid(),
-          operation_type: fc.constantFrom('add_replica', 'remove_replica'),
-          status: fc.constantFrom('pending', 'in_progress', 'completed'),
-        }), {maxLength: 5}),
+          type: fc.constantFrom('ADD', 'REMOVE'),
+          status: fc.constantFrom('pending', 'active', 'failed'),
+        }).map(replicaOperationsRow), {maxLength: 5}),
       }),
       async (systemTableSnapshots) => {
         // Initialize NodeService with system table cache
@@ -182,8 +190,8 @@ test('Property 2: Cache can be queried after hydration', async (t) => {
       fc.array(fc.record({
         node_id: fc.uuid(),
         node_address: fc.webUrl(),
-        status: fc.constantFrom('active', 'inactive'),
-      }), {minLength: 1, maxLength: 5}),
+        status: fc.constantFrom('active', 'stopped'),
+      }).map(nodesRow), {minLength: 1, maxLength: 5}),
       async (nodes) => {
         // Initialize NodeService with system table cache
         const nodeService = NodeService.getInstance();
@@ -263,8 +271,8 @@ test('Property 2: SQLQueryEngine uses only system cache after hydration', async 
         nodes: fc.array(fc.record({
           node_id: fc.uuid(),
           node_address: fc.webUrl(),
-          status: fc.constantFrom('active', 'inactive'),
-        }), {maxLength: 3}),
+          status: fc.constantFrom('active', 'stopped'),
+        }).map(nodesRow), {maxLength: 3}),
       }),
       async (systemTableSnapshots) => {
         // Initialize NodeService with system table cache

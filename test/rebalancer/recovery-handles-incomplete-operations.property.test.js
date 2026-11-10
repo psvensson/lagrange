@@ -25,6 +25,11 @@ import {
   createMockPolicyService,
   createMockMessageRouter,
 } from './test-helpers.js';
+import {
+  replicaOperationsRow,
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
+import {buildInsertedReplicaOperationRow} from './timeout-test-coordinator.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 /**
@@ -35,7 +40,7 @@ import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js'
 function createOperationRow(params) {
   const now = Date.now();
   const partitionId = params.partitionId || 'test-partition';
-  return {
+  return replicaOperationsRow({
     operation_id: params.operationId || `op-${Math.random().toString(36).slice(2)}`,
     type: params.type || OperationType.ADD,
     partition_id: partitionId,
@@ -51,7 +56,7 @@ function createOperationRow(params) {
     completed_at: params.completedAt || null,
     error_message: params.errorMessage || null,
     steps_history: params.stepsHistory || JSON.stringify([{step: 'PENDING', timestamp: now}]),
-  };
+  });
 }
 
 /**
@@ -71,7 +76,7 @@ function createRecoveryTestCoordinator(options = {}) {
 
   // Track services for replica status lookup
   const trackedServices = new Map();
-  services.forEach((s) => trackedServices.set(s.service_id, {...s}));
+  services.forEach((s) => trackedServices.set(s.service_id, servicesRow(s)));
 
   // Mock CDC service
   const cdcService = {
@@ -85,33 +90,14 @@ function createRecoveryTestCoordinator(options = {}) {
     executeQuery: async (sql, params) => {
       // Handle INSERT operations
       if (sql.includes('INSERT INTO replica_operations')) {
-        const [
-          operationId, type, partitionId, replicaId, targetClaimKey,
-          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-          updatedAt, completedAt, errorMessage, stepsHistory,
-        ] = params;
-
-        trackedOperations.set(operationId, {
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          target_claim_key: targetClaimKey,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-        });
+        const row = buildInsertedReplicaOperationRow(sql, params);
+        trackedOperations.set(row.operation_id, row);
         return {success: true};
       }
 
-      // Handle UPDATE operations
-      if (sql.includes('UPDATE replica_operations')) {
+      // Handle the positional status-transition UPDATE (status first; the
+      // owner-lease touch carries no transition payload)
+      if (/UPDATE replica_operations SET\s+status = \?/u.test(sql)) {
         const [
           status, workflowStep, updatedAt, completedAt, errorMessage,
           stepsHistory, replicaId, operationId,
@@ -292,6 +278,7 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
             partition_id: params.partitionId,
             node_id: params.targetNodeId,
             status: ReplicaStatus.ACTIVE,
+            raft_role: 'follower',
           };
 
           const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({

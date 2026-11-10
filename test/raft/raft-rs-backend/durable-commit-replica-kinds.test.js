@@ -49,6 +49,9 @@ import {
   persistCommits,
   raftRsRequiresSync,
 } from './durable-commit-observer.js';
+import {
+  servicesRow,
+} from '../../test-helpers/system-table-row-fixture.js';
 
 const NODE_ID = 'durable-kinds-node';
 const BUDGET_MS = 10000;
@@ -229,12 +232,12 @@ test('WASM-service replica: the persist path syncs, the application does ' +
     `${replicaId}.db`);
   fs.mkdirSync(path.dirname(dbPath), {recursive: true});
   const cache = new SystemTableCache();
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
     [COLUMN.SERVICE_ID]: replicaId,
     [COLUMN.NODE_ID]: NODE_ID,
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-  });
+  }));
   const observer = installDurableCommitObserver();
   const replica = new WasmServiceReplica({
     replicaId,

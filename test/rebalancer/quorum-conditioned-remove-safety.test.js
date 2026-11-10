@@ -27,6 +27,7 @@ import {
 import {createTestCoordinator} from './test-helpers.js';
 import {registerQuorumConditionedRemoveSafetyDeferredDispatchTests} from './quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js';
 import {registerQuorumConditionedRemoveSafetyTailTests} from './quorum-conditioned-remove-safety-tail-test-cases.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const OWNER_READ_PARTICIPATION_KIND =
   CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ;
@@ -51,7 +52,7 @@ function createCriticalPartitionServiceRow({
   nodeId,
   raftRole,
 }) {
-  return {
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     partition_id: partitionId,
@@ -60,7 +61,7 @@ function createCriticalPartitionServiceRow({
     status: 'active',
     raft_role: raftRole,
     address: `${nodeId}/partition/${replicaId}`,
-  };
+  });
 }
 
 function createCriticalPartitionRow({

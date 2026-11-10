@@ -15,6 +15,7 @@ import {
 import {
   resolvePriorityRemoveSafetyMembershipSnapshot,
 } from '../../src/rebalancer/operation-workflow-remove-safety-membership.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const NOW_MS = 1000;
 const READY_LEASE_EXPIRES_AT_MS = 5000;
@@ -45,34 +46,34 @@ test('formation placement hands recovery-eligible JOINING nodes only to startup 
         acknowledged_node_ids: ['node-1'],
       },
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           status: NODE_STATE.ACTIVE,
           connection_state: STATE.READY,
           ready_lease_expires_at: READY_LEASE_EXPIRES_AT_MS,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           status: NODE_STATE.JOINING,
           connection_state: STATE.READY,
           ready_lease_expires_at: READY_LEASE_EXPIRES_AT_MS,
           last_heartbeat: NOW_MS,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-disconnected',
           status: NODE_STATE.JOINING,
           connection_state: STATE.DISCONNECTED,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-not-recovery-eligible',
           status: NODE_STATE.JOINING,
           connection_state: STATE.CONNECTED,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-process-dead',
           status: NODE_STATE.JOINING,
           connection_state: STATE.CONNECTED,
-        },
+        }),
       ],
       readinessEntries: [
         buildReadinessEntry('node-1', {
@@ -113,11 +114,11 @@ test('formation placement hands recovery-eligible JOINING nodes only to startup 
         },
       ],
       serviceRows: [
-        {
+        servicesRow({
           service_id: 'service-1',
           node_id: 'node-1',
           status: 'active',
-        },
+        }),
       ],
       nowMs: NOW_MS,
     };

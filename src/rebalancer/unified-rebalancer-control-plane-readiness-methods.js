@@ -1,5 +1,6 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
+import {readLowerCaseReplicaText, readPlacementStatus} from './projected-replica.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {
   REPLICATION_TARGET_SOURCE,
@@ -319,20 +320,10 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
     const activeVoterReplicaCount = (Array.isArray(currentReplicas) ?
       currentReplicas :
       []
-    ).filter((replica) => {
-      const status = String(
-        replica?.status || SERVICE_STATUS.ACTIVE,
-      ).toLowerCase();
-      const raftRole = String(
-        replica?.raft_role ||
-          replica?.raftRole ||
-          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-      ).toLowerCase();
-      return (
-        status === SERVICE_STATUS.ACTIVE &&
-        !isCatchupLearnerRaftRole(raftRole)
-      );
-    }).length;
+    ).filter((replica) =>
+      readLowerCaseReplicaText(readPlacementStatus(replica)) === SERVICE_STATUS.ACTIVE &&
+        !isCatchupLearnerRaftRole(readLowerCaseReplicaText(replica.raftRole)),
+    ).length;
     return activeVoterReplicaCount > targetReplicaCount;
   }
 

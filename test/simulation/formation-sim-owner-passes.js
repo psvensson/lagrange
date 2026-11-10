@@ -19,6 +19,7 @@ import {
 import {
   summarizeReplicaOperationLiveness,
 } from '../../src/rebalancer/replica-operation-liveness.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
 import {TABLES} from '../../src/constants/index.js';
 import {guardedDispatch} from './formation-sim-guard.js';
 
@@ -140,7 +141,7 @@ function spreadObservation(hosts, eligibleNodeIds) {
   const cache = hosts.cache;
   const summary = buildDerivedPriorityPartitionSummary({
     partitionRows: cache.getAll(TABLES.PARTITIONS),
-    serviceRows: cache.getAll(TABLES.SERVICES),
+    serviceRows: projectReplicasFromServicesRows(cache.getAll(TABLES.SERVICES)),
     locallyEligibleNodeIds: eligibleNodeIds,
   });
   const liveness = summarizeReplicaOperationLiveness(

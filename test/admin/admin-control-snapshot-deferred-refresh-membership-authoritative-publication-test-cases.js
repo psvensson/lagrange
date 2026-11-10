@@ -4,6 +4,7 @@ import {TABLES} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 test('AdminControlSnapshot does not invent a repair target without a canonical handoff',
   async (t) => {
@@ -96,28 +97,28 @@ test('AdminControlSnapshot keeps the latest published membership when readiness 
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.NODES) {
-            return [{
+            return [nodesRow({
               node_id: 'node-1',
               status: 'active',
               connection_state: 'ready',
               ready_lease_expires_at: 2000,
-            }, {
+            }), nodesRow({
               node_id: 'node-2',
               status: 'active',
               connection_state: 'ready',
               ready_lease_expires_at: 2000,
-            }];
+            })];
           }
           if (tableName === TABLES.SERVICES) {
-            return [{
+            return [servicesRow({
               service_id: 'svc-1',
               node_id: 'node-1',
               status: 'active',
-            }, {
+            }), servicesRow({
               service_id: 'svc-2',
               node_id: 'node-2',
               status: 'active',
-            }];
+            })];
           }
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
             return [];
@@ -203,28 +204,28 @@ test('AdminControlSnapshot prefers authoritative published membership when cache
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.NODES) {
-            return [{
+            return [nodesRow({
               node_id: 'node-1',
               status: 'active',
               connection_state: 'ready',
               ready_lease_expires_at: 2000,
-            }, {
+            }), nodesRow({
               node_id: 'node-2',
               status: 'active',
               connection_state: 'ready',
               ready_lease_expires_at: 2000,
-            }];
+            })];
           }
           if (tableName === TABLES.SERVICES) {
-            return [{
+            return [servicesRow({
               service_id: 'svc-1',
               node_id: 'node-1',
               status: 'active',
-            }, {
+            }), servicesRow({
               service_id: 'svc-2',
               node_id: 'node-2',
               status: 'active',
-            }];
+            })];
           }
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
             return [{

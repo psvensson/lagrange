@@ -21,6 +21,11 @@ import {TABLES} from '../../src/constants/index.js';
 import {
   createAuthoritativeRepairCache,
 } from './admin-websocket-api-test-support.js';
+import {
+  nodesRow,
+  replicaOperationsRow,
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_NOW_MS = 1784500000000;
 const TEST_PARTITION_ID = 'control_plane_publications-p1';
@@ -30,7 +35,7 @@ const TEST_TARGET_NODE_ID = 'node-target';
 const TEST_SOURCE_REPLICA_ID = `${TEST_PARTITION_ID}-r2`;
 
 function buildTargetServiceRow(overrides = {}) {
-  return {
+  return servicesRow({
     service_id: TEST_REPLICA_ID,
     service_type: 'partition',
     node_id: TEST_TARGET_NODE_ID,
@@ -40,7 +45,7 @@ function buildTargetServiceRow(overrides = {}) {
     status: 'syncing',
     address: `${TEST_TARGET_NODE_ID}/partition/${TEST_REPLICA_ID}`,
     ...overrides,
-  };
+  });
 }
 
 function buildTerminalOperationRow(overrides = {}) {
@@ -48,7 +53,7 @@ function buildTerminalOperationRow(overrides = {}) {
   const terminalStatus = operationType === 'ADD' ? 'active' : 'removed';
   const terminalWorkflowStep =
     operationType === 'ADD' ? 'ACTIVE' : 'REMOVED';
-  return {
+  return replicaOperationsRow({
     operation_id: TEST_OPERATION_ID,
     partition_id: TEST_PARTITION_ID,
     entity_type: 'partition',
@@ -63,7 +68,7 @@ function buildTerminalOperationRow(overrides = {}) {
     updated_at: TEST_NOW_MS - 1000,
     completed_at: TEST_NOW_MS - 1000,
     ...overrides,
-  };
+  });
 }
 
 function buildCurrentPriorityPlacementObservation(options = {}) {
@@ -92,21 +97,18 @@ function createCompletedPlacementHandoffGap(options = {}) {
   const targetStatus = options.targetStatus ?? 'syncing';
   const cache = createAuthoritativeRepairCache('node-local');
   cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-    id: 'node-local',
     node_id: 'node-local',
-    address: 'localhost:8080',
     status: 'active',
     last_heartbeat: TEST_NOW_MS,
     ready_lease_expires_at: TEST_NOW_MS + 60000,
   });
-  cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
-    id: TEST_TARGET_NODE_ID,
+  cache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
     node_id: TEST_TARGET_NODE_ID,
-    address: 'localhost:8081',
+    node_address: 'localhost:8081',
     status: 'active',
     last_heartbeat: TEST_NOW_MS,
     ready_lease_expires_at: TEST_NOW_MS + 60000,
-  });
+  }));
   if (options.includeTarget !== false) {
     cache.applySystemTableChange(
       TABLES.SERVICES,

@@ -17,9 +17,10 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
-import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 
 const TEST_NODE_ID = 'test-node-1';
@@ -31,14 +32,14 @@ const VISIBILITY_TIMEOUT_MS = 200;
 const VISIBILITY_RETRY_DELAY_MS = 10;
 
 function makeRow(overrides = {}) {
-  return {
+  return replicaOperationsRow({
     operation_id: TEST_OPERATION_ID,
     type: OperationType.ADD,
     partition_id: TEST_PARTITION_ID,
     replica_id: TEST_REPLICA_ID,
     source_node_id: TEST_NODE_ID,
     target_node_id: TEST_TARGET_NODE_ID,
-    status: 'in_progress',
+    status: ReplicaStatus.CREATING,
     workflow_step: WORKFLOW_STEP.CREATING,
     created_at: 1000,
     updated_at: 1000,
@@ -48,7 +49,7 @@ function makeRow(overrides = {}) {
     entity_type: SERVICE_TYPE.PARTITION,
     entity_id: TEST_PARTITION_ID,
     ...overrides,
-  };
+  });
 }
 
 function createRepository({insertResults, authoritativeRows, insertCalls}) {

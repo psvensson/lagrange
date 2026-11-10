@@ -4,22 +4,23 @@ import {
 } from '../../src/bootstrap/bootstrap-topology-snapshot.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 function createMockSystemTableCache() {
   const rowsByTable = new Map([
     [TABLES.NODES, [
-      {
+      nodesRow({
         [COLUMN.NODE_ID]: 'seed-node',
         [COLUMN.STATUS]: 'active',
-      },
-      {
+      }),
+      nodesRow({
         [COLUMN.NODE_ID]: 'joining-node',
         [COLUMN.STATUS]: 'active',
-      },
-      {
+      }),
+      nodesRow({
         [COLUMN.NODE_ID]: 'warming-node',
         [COLUMN.STATUS]: 'joining',
-      },
+      }),
     ]],
     [TABLES.PARTITIONS, [
       {partition_id: 'nodes-p1', table_name: TABLES.NODES},

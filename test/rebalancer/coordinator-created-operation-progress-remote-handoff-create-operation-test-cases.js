@@ -42,6 +42,7 @@ import {
   REMOTE_HANDOFF_TEST_INITIAL_NOW_MS,
   REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS,
 } from './coordinator-created-operation-progress-remote-handoff-fixture-builders.js';
+import {buildInsertedReplicaOperationRow} from './timeout-test-coordinator.js';
 
 export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
   test,
@@ -88,24 +89,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       }
       if (normalizedSql.includes('replica_operations') &&
           normalizedSql.includes('VALUES')) {
-        const row = {
-          operation_id: params[0],
-          type: params[1],
-          partition_id: params[2],
-          replica_id: params[3],
-          target_claim_key: params[4],
-          source_node_id: params[5],
-          target_node_id: params[6],
-          status: params[7],
-          workflow_step: params[8],
-          created_at: params[9],
-          updated_at: params[10],
-          completed_at: params[11],
-          error_message: params[12],
-          steps_history: params[13],
-          entity_type: params[14],
-          entity_id: params[15],
-        };
+        const row = buildInsertedReplicaOperationRow(normalizedSql, params);
         operationRows.set(row.operation_id, row);
         return {success: true, affectedRows: 1};
       }
@@ -365,24 +349,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       }
       if (normalizedSql.includes('replica_operations') &&
           normalizedSql.includes('VALUES')) {
-        const row = {
-          operation_id: params[0],
-          type: params[1],
-          partition_id: params[2],
-          replica_id: params[3],
-          target_claim_key: params[4],
-          source_node_id: params[5],
-          target_node_id: params[6],
-          status: params[7],
-          workflow_step: params[8],
-          created_at: params[9],
-          updated_at: params[10],
-          completed_at: params[11],
-          error_message: params[12],
-          steps_history: params[13],
-          entity_type: params[14],
-          entity_id: params[15],
-        };
+        const row = buildInsertedReplicaOperationRow(normalizedSql, params);
         operationRows.set(row.operation_id, row);
         return {success: true, affectedRows: 1};
       }
@@ -552,24 +519,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       }
       if (normalizedSql.includes('replica_operations') &&
           normalizedSql.includes('VALUES')) {
-        const row = {
-          operation_id: params[0],
-          type: params[1],
-          partition_id: params[2],
-          replica_id: params[3],
-          target_claim_key: params[4],
-          source_node_id: params[5],
-          target_node_id: params[6],
-          status: params[7],
-          workflow_step: params[8],
-          created_at: params[9],
-          updated_at: params[10],
-          completed_at: params[11],
-          error_message: params[12],
-          steps_history: params[13],
-          entity_type: params[14],
-          entity_id: params[15],
-        };
+        const row = buildInsertedReplicaOperationRow(normalizedSql, params);
         operationRows.set(row.operation_id, row);
         return {success: true, affectedRows: 1};
       }

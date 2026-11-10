@@ -2,6 +2,11 @@ import {NUM} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {isExplicitNonLeaderRaftRole} from
   '../raft/replica-voter-readiness.js';
+import {
+  PROJECTED_REPLICA_FIELD,
+  hasReplicaNode,
+  readPlacementStatus,
+} from './projected-replica.js';
 import {OperationType, ReplicaStatus} from './replica-status.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
 import {isFailedCreateCleanupToken} from
@@ -55,20 +60,28 @@ const FAILED_CREATE_SOURCE_STATES = Object.freeze(new Set([
 ]));
 // The named "this plan states no cycle facts" context.
 const EMPTY_PLANNING_CONTEXT = Object.freeze({});
-const FAILED_CREATE_CLAIM_IDENTITY_FIELDS = Object.freeze([
-  'created_at',
-  'state_entered_at',
-  'create_attempt_token',
+// The replica's lifecycle identity a failed-create cleanup claim names: the
+// projected replica's field beside the claim's stored spelling (the claim is
+// operation metadata written from the services row).
+const FAILED_CREATE_CLAIM_IDENTITY = Object.freeze([
+  Object.freeze({replica: PROJECTED_REPLICA_FIELD.CREATED_AT, claim: 'created_at'}),
+  Object.freeze({
+    replica: PROJECTED_REPLICA_FIELD.STATE_ENTERED_AT, claim: 'state_entered_at',
+  }),
+  Object.freeze({
+    replica: PROJECTED_REPLICA_FIELD.CREATE_ATTEMPT_TOKEN, claim: 'create_attempt_token',
+  }),
 ]);
 
 function historicalFailedCreateClaimProtects(replica, claims) {
-  if (replica?.previous_state === ReplicaStatus.ACTIVE) return false;
+  if (replica.previousState === ReplicaStatus.ACTIVE) return false;
   if (!Array.isArray(claims) || claims.length === 0) return true;
-  const comparableFields = FAILED_CREATE_CLAIM_IDENTITY_FIELDS.filter(
-    (field) => replica?.[field] !== null && replica?.[field] !== undefined,
+  const comparableFields = FAILED_CREATE_CLAIM_IDENTITY.filter(
+    (identity) => replica[identity.replica] !== null,
   );
   return comparableFields.length === 0 || claims.some((claim) =>
-    comparableFields.every((field) => replica[field] === claim[field]));
+    comparableFields.every((identity) =>
+      replica[identity.replica] === claim[identity.claim]));
 }
 
 // The partition policy row, resolved at most once per plan and only when a
@@ -104,16 +117,11 @@ function excludeNonTerminalReplaceSources(replicas, inFlightOperations, nowMs) {
   if (sourceReplicaIds.size === 0) {
     return replicas;
   }
-  return replicas.filter((replica) =>
-    !sourceReplicaIds.has(replica.replica_id || replica.service_id));
+  return replicas.filter((replica) => !sourceReplicaIds.has(replica.replicaId));
 }
 
 function countDistinctActiveReplicaNodes(replicas) {
-  return new Set(
-    replicas
-      .map((replica) => replica?.node_id)
-      .filter(Boolean),
-  ).size;
+  return new Set(replicas.map((replica) => replica.nodeId)).size;
 }
 
 /**
@@ -216,10 +224,9 @@ class MovePlannerMoveCalculationMethods {
         spreadAcrossNodes: true,
       },
     };
-    const activePlacementReplicas = currentReplicas.filter((replica) => {
-      const status = replica?.status || ReplicaStatus.ACTIVE;
-      return status === ReplicaStatus.ACTIVE && !!replica?.node_id;
-    });
+    const activePlacementReplicas = currentReplicas.filter((replica) =>
+      readPlacementStatus(replica) === ReplicaStatus.ACTIVE && hasReplicaNode(replica),
+    );
     // Read only when a REMOVE is contemplated: a plan that removes nothing
     // costs exactly the reads it cost before the exclusion existed.
     let countedPlacementReplicasRead = null;
@@ -300,8 +307,8 @@ class MovePlannerMoveCalculationMethods {
 
     // Handle failed/inactive replicas - always remove them
     for (const replica of currentReplicas) {
-      const status = replica.status || ReplicaStatus.ACTIVE;
-      const replicaId = replica.replica_id || replica.service_id;
+      const status = readPlacementStatus(replica);
+      const replicaId = replica.replicaId;
       if (this.moveStateProvider.hasPendingMove(replicaId)) {
         continue;
       }
@@ -317,8 +324,8 @@ class MovePlannerMoveCalculationMethods {
         terminalFailedReplaceTargetReplicaIds.has(replicaId)
       ) {
         const ownerProtectedFailedCreate =
-          isFailedCreateCleanupToken(replica.cleanup_token) ||
-          FAILED_CREATE_SOURCE_STATES.has(replica.previous_state) ||
+          isFailedCreateCleanupToken(replica.cleanupToken) ||
+          FAILED_CREATE_SOURCE_STATES.has(replica.previousState) ||
           terminalFailedCreateTargetReplicaIds.has(replicaId) &&
             historicalFailedCreateClaimProtects(
               replica,
@@ -338,7 +345,7 @@ class MovePlannerMoveCalculationMethods {
         const move = {
           type: failedReplicaCure.moveType,
           replicaId,
-          nodeId: replica.node_id,
+          nodeId: replica.nodeId,
           reason: failedReplicaCure.moveReason,
         };
         if (terminalFailedReplaceTargetReplicaIds.has(replicaId)) {
@@ -373,18 +380,15 @@ class MovePlannerMoveCalculationMethods {
       if (!replica) {
         return false;
       }
-      const candidateReplicaId =
-        replica.replica_id || replica.service_id || null;
       if (
         partitionLeaderReplicaId &&
-        candidateReplicaId === partitionLeaderReplicaId
+        replica.replicaId === partitionLeaderReplicaId
       ) {
         return true;
       }
-      const role =
-        typeof replica.raft_role === 'string' ?
-          replica.raft_role.trim().toLowerCase() :
-          null;
+      const role = typeof replica.raftRole === 'string' ?
+        replica.raftRole.trim().toLowerCase() :
+        null;
       if (role === RAFT_ROLE.LEADER) {
         return true;
       }
@@ -397,23 +401,19 @@ class MovePlannerMoveCalculationMethods {
       if (isExplicitNonLeaderRaftRole(role)) {
         return false;
       }
-      const candidateNodeId = replica.node_id || replica.nodeId || null;
       return (
         !!partitionLeaderNodeId &&
-        !!candidateNodeId &&
-        candidateNodeId === partitionLeaderNodeId
+        replica.nodeId === partitionLeaderNodeId
       );
     };
 
     // Group active placement replicas by node for removal selection
     const replicasByNode = new Map();
     for (const replica of activePlacementReplicas) {
-      if (replica && replica.node_id) {
-        if (!replicasByNode.has(replica.node_id)) {
-          replicasByNode.set(replica.node_id, []);
-        }
-        replicasByNode.get(replica.node_id).push(replica);
+      if (!replicasByNode.has(replica.nodeId)) {
+        replicasByNode.set(replica.nodeId, []);
       }
+      replicasByNode.get(replica.nodeId).push(replica);
     }
     // Within each node, drain non-leader replicas before the leader (stable —
     // preserves the prior order among same-leadership replicas).
@@ -619,8 +619,7 @@ class MovePlannerMoveCalculationMethods {
       const excess = currentCount - targetCount;
       for (let i = 0; i < excess; i++) {
         const replicaToRemove = replicas[i];
-        const replicaId =
-          replicaToRemove.replica_id || replicaToRemove.service_id;
+        const replicaId = replicaToRemove.replicaId;
         if (scheduledRemoveReplicaIds.has(replicaId)) {
           continue;
         }

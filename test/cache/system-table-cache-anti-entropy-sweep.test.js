@@ -13,6 +13,8 @@ import {SYSTEM_TABLE_CACHE_MUTATION_MODE} from
   '../../src/cache/cache-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {nodesRow, servicesRow} from
+  '../test-helpers/system-table-row-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -43,8 +45,8 @@ function reconcileComplete(cache, tableName, rows, observedAtMs) {
 
 test('sweep evicts a cache-only row absent from authoritative truth', (t) => {
   const cache = new SystemTableCache();
-  insert(cache, TABLES.SERVICES, {service_id: 'resurrected', updated_at: 1000});
-  insert(cache, TABLES.SERVICES, {service_id: 'real', updated_at: 1000});
+  insert(cache, TABLES.SERVICES, servicesRow({service_id: 'resurrected', updated_at: 1000}));
+  insert(cache, TABLES.SERVICES, servicesRow({service_id: 'real', updated_at: 1000}));
 
   const result = cache.reconcileAgainstAuthoritativeTruth({
     [TABLES.SERVICES]: [{service_id: 'real', updated_at: 1000}],
@@ -59,11 +61,11 @@ test('sweep evicts a cache-only row absent from authoritative truth', (t) => {
 
 test('sweep fences an older replay but allows a newer recreate', (t) => {
   const cache = new SystemTableCache();
-  const deletedRow = {
+  const deletedRow = servicesRow({
     service_id: 'replayed-after-sweep',
     status: 'active',
     updated_at: 1000,
-  };
+  });
   insert(cache, TABLES.SERVICES, deletedRow);
 
   reconcileComplete(cache, TABLES.SERVICES, [], 1500);
@@ -88,9 +90,11 @@ test('sweep fences an older replay but allows a newer recreate', (t) => {
 test('authoritative fence prefers causal HLC over a conflicting wall time', (t) => {
   const cache = new SystemTableCache();
   const row = {
-    service_id: 'hlc-observation-fence',
-    status: 'active',
-    updated_at: 1000,
+    ...servicesRow({
+      service_id: 'hlc-observation-fence',
+      status: 'active',
+      updated_at: 1000,
+    }),
     updated_at_hlc: '1000-0-node-a',
   };
   insert(cache, TABLES.SERVICES, row);
@@ -126,18 +130,22 @@ test('empty-table sweep fences a delayed first delivery for an unseen key', (t) 
     },
   );
   cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATIONS.UPDATE, {
-    service_id: 'unseen-before-empty-read',
-    status: 'active',
-    updated_at: 9000,
+    ...servicesRow({
+      service_id: 'unseen-before-empty-read',
+      status: 'active',
+      updated_at: 9000,
+    }),
     updated_at_hlc: '1400-1-node-a',
   });
   t.equal(cache.has(TABLES.SERVICES, 'unseen-before-empty-read'), false,
     'the complete empty observation fences a pre-observation first delivery');
 
   cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATIONS.UPDATE, {
-    service_id: 'unseen-before-empty-read',
-    status: 'starting',
-    updated_at: 1000,
+    ...servicesRow({
+      service_id: 'unseen-before-empty-read',
+      status: 'starting',
+      updated_at: 1000,
+    }),
     updated_at_hlc: '1600-0-node-a',
   });
   t.equal(
@@ -150,11 +158,11 @@ test('empty-table sweep fences a delayed first delivery for an unseen key', (t) 
 
 test('table absence frontier does not override a present key merge', (t) => {
   const cache = new SystemTableCache();
-  const row = {
+  const row = servicesRow({
     service_id: 'present-at-complete-read',
     status: 'active',
     updated_at: 1000,
-  };
+  });
   insert(cache, TABLES.SERVICES, row);
   reconcileComplete(cache, TABLES.SERVICES, [row], 1500);
   cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATIONS.UPDATE, {
@@ -174,7 +182,7 @@ test('complete-observation UPSERT mode requires read-boundary evidence', (t) => 
     () => cache.applySystemTableChange(
       TABLES.SERVICES,
       CDC_OPERATIONS.UPSERT,
-      {service_id: 'unwitnessed-presence', updated_at: 2000},
+      servicesRow({service_id: 'unwitnessed-presence', updated_at: 2000}),
       {
         mutationMode:
           SYSTEM_TABLE_CACHE_MUTATION_MODE
@@ -191,7 +199,7 @@ test('complete-observation UPSERT mode requires read-boundary evidence', (t) => 
     () => cache.applySystemTableChange(
       TABLES.SERVICES,
       CDC_OPERATIONS.UPSERT,
-      {service_id: 'missing-read-boundary', updated_at: 2000},
+      servicesRow({service_id: 'missing-read-boundary', updated_at: 2000}),
       {
         mutationMode:
           SYSTEM_TABLE_CACHE_MUTATION_MODE
@@ -214,10 +222,10 @@ test('complete-observation UPSERT mode requires read-boundary evidence', (t) => 
       () => cache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATIONS.UPSERT,
-        {
+        servicesRow({
           service_id: `non-advancing-presence-${observedAtMs}`,
           updated_at: 1000,
-        },
+        }),
         {
           mutationMode:
             SYSTEM_TABLE_CACHE_MUTATION_MODE
@@ -241,9 +249,11 @@ test('complete-observation UPSERT mode requires read-boundary evidence', (t) => 
 test('table absence frontier survives bounded key-tombstone eviction', (t) => {
   const cache = new SystemTableCache();
   const deletedRow = {
-    service_id: 'frontier-retained-after-key-eviction',
-    status: 'active',
-    updated_at: 1000,
+    ...servicesRow({
+      service_id: 'frontier-retained-after-key-eviction',
+      status: 'active',
+      updated_at: 1000,
+    }),
     updated_at_hlc: '1000-0-node-a',
   };
   insert(cache, TABLES.SERVICES, deletedRow);
@@ -251,8 +261,10 @@ test('table absence frontier survives bounded key-tombstone eviction', (t) => {
 
   for (let index = 0; index < 1025; index += 1) {
     const row = {
-      service_id: `later-delete-${index}`,
-      updated_at: 2000 + index,
+      ...servicesRow({
+        service_id: `later-delete-${index}`,
+        updated_at: 2000 + index,
+      }),
       updated_at_hlc: `${2000 + index}-0-node-a`,
     };
     insert(cache, TABLES.SERVICES, row);
@@ -276,9 +288,11 @@ test('table absence frontier survives bounded key-tombstone eviction', (t) => {
 test('complete presence must be strictly later than a key tombstone', (t) => {
   const cache = new SystemTableCache();
   const row = {
-    service_id: 'complete-presence-key-boundary',
-    status: 'active',
-    updated_at: 100,
+    ...servicesRow({
+      service_id: 'complete-presence-key-boundary',
+      status: 'active',
+      updated_at: 100,
+    }),
     updated_at_hlc: '100-0-owner',
   };
   insert(cache, TABLES.SERVICES, row);
@@ -323,11 +337,11 @@ test('complete presence must be strictly later than a key tombstone', (t) => {
 
 test('sweep preserves a same-key mutation that lands during its owner read', (t) => {
   const cache = new SystemTableCache();
-  const row = {
+  const row = servicesRow({
     service_id: 'same-key-sweep-race',
     status: 'active',
     updated_at: 1000,
-  };
+  });
   insert(cache, TABLES.SERVICES, row);
   const mutationSnapshot =
     cache.captureTableMutationSnapshot(TABLES.SERVICES);
@@ -349,11 +363,11 @@ test('sweep preserves a same-key mutation that lands during its owner read', (t)
 
 test('sweep upgrades a concurrent ordinary delete before late replay', (t) => {
   const cache = new SystemTableCache();
-  const row = {
+  const row = servicesRow({
     service_id: 'concurrent-delete-sweep-race',
     status: 'active',
     updated_at: 1000,
-  };
+  });
   insert(cache, TABLES.SERVICES, row);
   const mutationSnapshot =
     cache.captureTableMutationSnapshot(TABLES.SERVICES);
@@ -375,7 +389,7 @@ test('sweep upgrades a concurrent ordinary delete before late replay', (t) => {
 
 test('sweep leaves a table absent from the snapshot untouched', (t) => {
   const cache = new SystemTableCache();
-  insert(cache, TABLES.NODES, {id: 'node-1', updated_at: 1000});
+  insert(cache, TABLES.NODES, nodesRow({node_id: 'node-1'}));
 
   cache.reconcileAgainstAuthoritativeTruth({[TABLES.SERVICES]: []});
 
@@ -386,7 +400,7 @@ test('sweep leaves a table absent from the snapshot untouched', (t) => {
 
 test('sweep does NOT wipe a table given a non-array (malformed) value', (t) => {
   const cache = new SystemTableCache();
-  insert(cache, TABLES.SERVICES, {service_id: 'svc-1', updated_at: 1000});
+  insert(cache, TABLES.SERVICES, servicesRow({service_id: 'svc-1', updated_at: 1000}));
 
   cache.reconcileAgainstAuthoritativeTruth({[TABLES.SERVICES]: undefined});
 
@@ -397,7 +411,7 @@ test('sweep does NOT wipe a table given a non-array (malformed) value', (t) => {
 
 test('keyless authoritative row cannot establish table absence', (t) => {
   const cache = new SystemTableCache();
-  const row = {service_id: 'preserved-on-keyless-truth', updated_at: 1000};
+  const row = servicesRow({service_id: 'preserved-on-keyless-truth', updated_at: 1000});
   insert(cache, TABLES.SERVICES, row);
   const mutationSnapshot =
     cache.captureTableMutationSnapshot(TABLES.SERVICES);
@@ -429,8 +443,10 @@ test('malformed mutation snapshot cannot establish table absence', (t) => {
     },
   );
   cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATIONS.UPDATE, {
-    service_id: 'unseen-after-malformed-snapshot',
-    updated_at: 1000,
+    ...servicesRow({
+      service_id: 'unseen-after-malformed-snapshot',
+      updated_at: 1000,
+    }),
     updated_at_hlc: '1000-0-owner',
   });
 
@@ -441,7 +457,7 @@ test('malformed mutation snapshot cannot establish table absence', (t) => {
 
 test('authoritative observation requires an explicit pre-read snapshot', (t) => {
   const cache = new SystemTableCache();
-  const row = {service_id: 'preserved-without-pre-read-proof', updated_at: 1000};
+  const row = servicesRow({service_id: 'preserved-without-pre-read-proof', updated_at: 1000});
   insert(cache, TABLES.SERVICES, row);
 
   const result = cache.reconcileAgainstAuthoritativeTruth(
@@ -485,7 +501,7 @@ test('schema-invalid object key cannot establish table absence', (t) => {
 
 test('malformed mutation snapshot entry cannot establish table absence', (t) => {
   const cache = new SystemTableCache();
-  const row = {service_id: 'preserved-on-malformed-entry', updated_at: 1000};
+  const row = servicesRow({service_id: 'preserved-on-malformed-entry', updated_at: 1000});
   insert(cache, TABLES.SERVICES, row);
   cache.reconcileAgainstAuthoritativeTruth(
     {[TABLES.SERVICES]: []},
@@ -510,10 +526,10 @@ test('malformed mutation snapshot entry cannot establish table absence', (t) => 
 test('invalid mutation revisions cannot establish table absence', (t) => {
   for (const mutationRevision of [0.5, Number.MAX_SAFE_INTEGER + 1]) {
     const cache = new SystemTableCache();
-    const row = {
+    const row = servicesRow({
       service_id: `preserved-on-invalid-revision-${mutationRevision}`,
       updated_at: 1000,
-    };
+    });
     insert(cache, TABLES.SERVICES, row);
     const snapshot = cache.captureTableMutationSnapshot(TABLES.SERVICES);
     cache.reconcileAgainstAuthoritativeTruth(
@@ -539,7 +555,7 @@ test('invalid mutation revisions cannot establish table absence', (t) => {
 
 test('duplicate mutation snapshot keys cannot establish table absence', (t) => {
   const cache = new SystemTableCache();
-  const row = {service_id: 'preserved-on-duplicate-entry', updated_at: 1000};
+  const row = servicesRow({service_id: 'preserved-on-duplicate-entry', updated_at: 1000});
   insert(cache, TABLES.SERVICES, row);
   const snapshot = cache.captureTableMutationSnapshot(TABLES.SERVICES);
   cache.reconcileAgainstAuthoritativeTruth(
@@ -564,8 +580,8 @@ test('duplicate mutation snapshot keys cannot establish table absence', (t) => {
 
 test('age guard: a row newer than the read is not evicted; older is', (t) => {
   const cache = new SystemTableCache();
-  insert(cache, TABLES.SERVICES, {service_id: 'stale', updated_at: 1000});
-  insert(cache, TABLES.SERVICES, {service_id: 'fresh', updated_at: 9000});
+  insert(cache, TABLES.SERVICES, servicesRow({service_id: 'stale', updated_at: 1000}));
+  insert(cache, TABLES.SERVICES, servicesRow({service_id: 'fresh', updated_at: 9000}));
 
   // Authoritative read taken at t=5000 holds neither row; only the row older
   // than the read should be evicted (the fresh one may post-date the snapshot).
@@ -584,7 +600,7 @@ test('age guard: a row newer than the read is not evicted; older is', (t) => {
 
 test('sweep notifies listeners with a DELETE for each evicted row', async (t) => {
   const cache = new SystemTableCache();
-  insert(cache, TABLES.SERVICES, {service_id: 'gone', updated_at: 1000});
+  insert(cache, TABLES.SERVICES, servicesRow({service_id: 'gone', updated_at: 1000}));
 
   const events = [];
   cache.onCacheChange((tableName, operation, record) => {

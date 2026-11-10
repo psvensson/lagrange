@@ -9,6 +9,7 @@
 import {withFixtureCommittedMembership} from
   './committed-membership-fixture.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {sqlInsertedSystemTableRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   createMockCache,
   createMockPolicyService,
@@ -17,7 +18,7 @@ import {
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 
-function buildInsertedRow(sql, params) {
+function buildInsertedReplicaOperationRow(sql, params) {
   const columnList = String(sql).match(
     /INSERT\s+INTO\s+replica_operations\s*\(([^)]+)\)/i,
   )?.[1];
@@ -33,8 +34,14 @@ function buildInsertedRow(sql, params) {
       `${columns.length} columns, ${params.length} values`,
     );
   }
-  return Object.fromEntries(
-    columns.map((column, index) => [column, params[index]]),
+  // The stored row is the one the SQL INSERT would store: every omitted
+  // column completed from the schema (declared DEFAULT, else NULL; a NOT NULL
+  // column without a DEFAULT refuses the insert exactly as the table would).
+  return sqlInsertedSystemTableRow(
+    'replica_operations',
+    Object.fromEntries(
+      columns.map((column, index) => [column, params[index]]),
+    ),
   );
 }
 
@@ -59,7 +66,7 @@ function createTimeoutTestCoordinator(options = {}) {
   const sqlEngine = {
     executeQuery: async (sql, params) => {
       if (sql.includes('INSERT INTO replica_operations')) {
-        const row = buildInsertedRow(sql, params);
+        const row = buildInsertedReplicaOperationRow(sql, params);
         // The canonical insert is OR-IGNORE idempotent: an existing row is
         // never overwritten and the insert lands zero changes.
         if (trackedOperations.has(row.operation_id)) {
@@ -361,4 +368,4 @@ function createTimeoutTestCoordinator(options = {}) {
   };
 }
 
-export {createTimeoutTestCoordinator};
+export {buildInsertedReplicaOperationRow, createTimeoutTestCoordinator};

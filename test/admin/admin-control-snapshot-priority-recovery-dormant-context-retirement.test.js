@@ -6,6 +6,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {AdminControlSnapshot} from '../../src/admin/admin-control-snapshot.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../../src/control-plane/control-plane-readiness-constants.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const GUARD_IDS = Object.freeze([
   'admin-live-planner-replica-admission-projection',
@@ -42,7 +43,8 @@ function decisionSnapshots() {
       ['node-repair', 'partition-a'],
       ['node-recovery', 'partition-a'],
       ['node-unknown', 'partition-a'],
-    ].map(([nodeId, partitionId]) => ({
+    ].map(([nodeId, partitionId]) => servicesRow({
+      service_id: partitionId + '-' + nodeId,
       node_id: nodeId,
       partition_id: partitionId,
       status: 'active',

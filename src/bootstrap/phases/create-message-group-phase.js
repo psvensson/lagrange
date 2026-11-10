@@ -47,10 +47,23 @@ import {
 import {
   CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS,
 } from './create-message-group-replica-lifecycle.js';
+import {defineServicesProjection} from '../../control-plane/services-row-decoder.js';
+import {seedProjectionRow} from '../../control-plane/system-table-row-decoding.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_CREATE_SELF_HOSTED_MESSAGE_GROUP_METADAT = 'CREATE_SELF_HOSTED message-group metadata staged for deferred authoritative publication';
 const MESSAGE_GROUP_REPLICA_ID_INFIX = '-r';
+// The joiner's message-group registration row seeded into its cache before
+// CDC delivers the stored row (quest system-table-row-decoders, seed
+// projections): MessageGroupServiceRowOwner.buildRegistrationRow's columns.
+// The lifecycle forensics (previous_state, trigger_reason, error_message,
+// cleanup_token) are not observed until the row is delivered.
+const MESSAGE_GROUP_REGISTRATION_SEED_PROJECTION = defineServicesProjection(
+  'message_group_registration_seed', [
+    'service_id', 'service_type', 'node_id', 'partition_id', 'group_id', 'replica_id',
+    'raft_role', 'status', 'address', 'create_attempt_token', 'created_at',
+    'state_entered_at', 'updated_at',
+  ]);
 
 const ENSURE_LOCAL_ACCESS = false;
 const SPREAD_ACROSS_NODES = false;
@@ -461,7 +474,7 @@ class CreateMessageGroupPhase {
       if (typeof this.delegates.seedJoinTimeCacheRow === LOCAL_STR_FUNCTION) {
         this.delegates.seedJoinTimeCacheRow(
           TABLES.SERVICES,
-          serviceData,
+          seedProjectionRow(MESSAGE_GROUP_REGISTRATION_SEED_PROJECTION, serviceData),
         );
       }
 
@@ -537,7 +550,7 @@ class CreateMessageGroupPhase {
           systemTableCache.applySystemTableChange(
             TABLES.SERVICES,
             CDC_OPERATION.UPSERT,
-            serviceData,
+            seedProjectionRow(MESSAGE_GROUP_REGISTRATION_SEED_PROJECTION, serviceData),
           );
         }
 

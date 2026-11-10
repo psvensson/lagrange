@@ -16,6 +16,7 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TABLES, COLUMN, CDC_OPERATION} from '../../src/constants/index.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 /**
  * CDC operations to test.
@@ -61,15 +62,15 @@ const nodeRecordArb = fc.record({
   memoryUsagePercent: fc.integer({min: 0, max: 100}),
 }).map(({nodeId, address, status, cpuUsagePercent, memoryUsagePercent}) => {
   const now = Date.now();
-  return {
+  return nodesRow({
     [COLUMN.NODE_ID]: nodeId,
-    [COLUMN.ADDRESS]: address,
+    [COLUMN.NODE_ADDRESS]: address,
     [COLUMN.STATUS]: status,
     [COLUMN.CPU_USAGE_PERCENT]: cpuUsagePercent,
     [COLUMN.MEMORY_USAGE_PERCENT]: memoryUsagePercent,
+    [COLUMN.LAST_HEARTBEAT]: now,
     [COLUMN.CREATED_AT]: now,
-    [COLUMN.UPDATED_AT]: now,
-  };
+  });
 });
 
 /**
@@ -84,7 +85,7 @@ const serviceRecordArb = fc.record({
   raftRole: fc.constantFrom('leader', 'follower', 'candidate'),
 }).map(({serviceId, nodeId, partitionId, serviceType, status, raftRole}) => {
   const now = Date.now();
-  return {
+  return servicesRow({
     [COLUMN.SERVICE_ID]: serviceId,
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.PARTITION_ID]: partitionId,
@@ -93,7 +94,7 @@ const serviceRecordArb = fc.record({
     [COLUMN.RAFT_ROLE]: raftRole,
     [COLUMN.CREATED_AT]: now,
     [COLUMN.UPDATED_AT]: now,
-  };
+  });
 });
 
 /**

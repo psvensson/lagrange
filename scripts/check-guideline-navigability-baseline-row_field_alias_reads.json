@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-08T12:15:36.616Z",
-  "rawViolationCount": 745,
+  "generatedAt": "2026-11-08T22:59:27.686Z",
+  "rawViolationCount": 741,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -401,7 +401,7 @@
     },
     {
       "filePath": "src/bootstrap/join-readiness-mesh-connectivity-methods.js",
-      "line": 254,
+      "line": 252,
       "column": 12,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -410,7 +410,7 @@
     },
     {
       "filePath": "src/bootstrap/join-readiness-mesh-connectivity-methods.js",
-      "line": 255,
+      "line": 253,
       "column": 14,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -1211,7 +1211,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 533,
+      "line": 534,
       "column": 10,
       "functionName": "applySystemTableChange",
       "kind": "row_field_alias_reads",
@@ -1220,7 +1220,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 535,
+      "line": 536,
       "column": 10,
       "functionName": "applySystemTableChange",
       "kind": "row_field_alias_reads",
@@ -1778,7 +1778,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-node-liveness-methods.js",
-      "line": 182,
+      "line": 189,
       "column": 24,
       "functionName": "shouldUseStoredLivenessRow",
       "kind": "row_field_alias_reads",
@@ -1787,7 +1787,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-node-liveness-methods.js",
-      "line": 183,
+      "line": 190,
       "column": 28,
       "functionName": "shouldUseStoredLivenessRow",
       "kind": "row_field_alias_reads",
@@ -1796,7 +1796,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-node-liveness-methods.js",
-      "line": 213,
+      "line": 220,
       "column": 26,
       "functionName": "recordNodeLivenessSourceChange",
       "kind": "row_field_alias_reads",
@@ -1805,8 +1805,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
-      "line": 486,
-      "column": 19,
+      "line": 453,
+      "column": 17,
       "functionName": "isRecentHeartbeat",
       "kind": "row_field_alias_reads",
       "reason": "one field read in two spellings; decode the row once in one row decoder",
@@ -1814,8 +1814,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 287,
-      "column": 9,
+      "line": 285,
+      "column": 7,
       "functionName": "readLatestMembershipPublicationEpochStatusProbe",
       "kind": "row_field_alias_reads",
       "reason": "one field read in two spellings; decode the row once in one row decoder",
@@ -1823,8 +1823,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 618,
-      "column": 6,
+      "line": 610,
+      "column": 4,
       "functionName": "buildMembershipPublicationDiagnostics",
       "kind": "row_field_alias_reads",
       "reason": "one field read in two spellings; decode the row once in one row decoder",
@@ -1832,8 +1832,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 621,
-      "column": 6,
+      "line": 613,
+      "column": 4,
       "functionName": "buildMembershipPublicationDiagnostics",
       "kind": "row_field_alias_reads",
       "reason": "one field read in two spellings; decode the row once in one row decoder",
@@ -1841,8 +1841,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 624,
-      "column": 6,
+      "line": 616,
+      "column": 4,
       "functionName": "buildMembershipPublicationDiagnostics",
       "kind": "row_field_alias_reads",
       "reason": "one field read in two spellings; decode the row once in one row decoder",
@@ -1850,8 +1850,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 627,
-      "column": 6,
+      "line": 619,
+      "column": 4,
       "functionName": "buildMembershipPublicationDiagnostics",
       "kind": "row_field_alias_reads",
       "reason": "one field read in two spellings; decode the row once in one row decoder",
@@ -2039,7 +2039,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-scheduling-owner-policy.js",
-      "line": 171,
+      "line": 173,
       "column": 6,
       "functionName": "isPriorityRecoverySchedulingOwner",
       "kind": "row_field_alias_reads",
@@ -2075,7 +2075,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-global-projection.js",
-      "line": 72,
+      "line": 77,
       "column": 20,
       "functionName": "readNodeId",
       "kind": "row_field_alias_reads",
@@ -2084,7 +2084,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-global-projection.js",
-      "line": 73,
+      "line": 78,
       "column": 4,
       "functionName": "readNodeId",
       "kind": "row_field_alias_reads",
@@ -2093,7 +2093,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-global-projection.js",
-      "line": 91,
+      "line": 96,
       "column": 24,
       "functionName": "buildPriorityPartitionIndex",
       "kind": "row_field_alias_reads",
@@ -2102,7 +2102,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-global-projection.js",
-      "line": 270,
+      "line": 271,
       "column": 22,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -2111,7 +2111,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-global-projection.js",
-      "line": 513,
+      "line": 529,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -2120,7 +2120,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-table-impact-classification.js",
-      "line": 85,
+      "line": 91,
       "column": 20,
       "functionName": "readNodeId",
       "kind": "row_field_alias_reads",
@@ -2129,7 +2129,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-table-impact-classification.js",
-      "line": 86,
+      "line": 92,
       "column": 4,
       "functionName": "readNodeId",
       "kind": "row_field_alias_reads",
@@ -2138,7 +2138,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-table-impact-classification.js",
-      "line": 202,
+      "line": 209,
       "column": 6,
       "functionName": "canReuseOrdinaryTopologyProjection",
       "kind": "row_field_alias_reads",
@@ -3218,7 +3218,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-transition.js",
-      "line": 627,
+      "line": 614,
       "column": 26,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -3227,7 +3227,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-transition.js",
-      "line": 631,
+      "line": 618,
       "column": 26,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -3236,7 +3236,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-transition.js",
-      "line": 635,
+      "line": 622,
       "column": 21,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -3245,7 +3245,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-transition.js",
-      "line": 640,
+      "line": 627,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -3713,7 +3713,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 244,
+      "line": 204,
       "column": 12,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -3722,7 +3722,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 577,
+      "line": 537,
       "column": 18,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -5170,35 +5170,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/in-flight-aware-replica-count.js",
-      "line": 47,
-      "column": 4,
-      "functionName": "<anonymous>",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/in-flight-aware-replica-count.js",
-      "line": 48,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/move-planner-move-calculation-methods.js",
-      "line": 400,
-      "column": 30,
-      "functionName": "isLeaderRemovalCandidate",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/move-planner-move-calculation-methods.js",
-      "line": 542,
+      "line": 536,
       "column": 14,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -5369,7 +5342,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-surplus-remove-placement-fence.js",
-      "line": 24,
+      "line": 25,
       "column": 4,
       "functionName": "rowReplicaId",
       "kind": "row_field_alias_reads",
@@ -5378,7 +5351,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-surplus-remove-placement-fence.js",
-      "line": 24,
+      "line": 25,
       "column": 41,
       "functionName": "rowReplicaId",
       "kind": "row_field_alias_reads",
@@ -5387,7 +5360,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-surplus-remove-placement-fence.js",
-      "line": 29,
+      "line": 30,
       "column": 14,
       "functionName": "rowNodeId",
       "kind": "row_field_alias_reads",
@@ -5396,7 +5369,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-surplus-remove-placement-fence.js",
-      "line": 33,
+      "line": 34,
       "column": 14,
       "functionName": "rowPartitionId",
       "kind": "row_field_alias_reads",
@@ -5405,7 +5378,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-surplus-remove-placement-fence.js",
-      "line": 37,
+      "line": 38,
       "column": 14,
       "functionName": "rowServiceType",
       "kind": "row_field_alias_reads",
@@ -5414,7 +5387,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-surplus-remove-placement-fence.js",
-      "line": 49,
+      "line": 50,
       "column": 9,
       "functionName": "completePartitionReplicaRow",
       "kind": "row_field_alias_reads",
@@ -5765,7 +5738,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
-      "line": 246,
+      "line": 222,
       "column": 33,
       "functionName": "resolveOperationOwnerNodeId",
       "kind": "row_field_alias_reads",
@@ -5774,7 +5747,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
-      "line": 247,
+      "line": 223,
       "column": 34,
       "functionName": "resolveOperationOwnerNodeId",
       "kind": "row_field_alias_reads",
@@ -5783,7 +5756,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
-      "line": 248,
+      "line": 224,
       "column": 34,
       "functionName": "resolveOperationOwnerNodeId",
       "kind": "row_field_alias_reads",
@@ -5792,7 +5765,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
-      "line": 253,
+      "line": 229,
       "column": 8,
       "functionName": "resolveOperationOwnerNodeId",
       "kind": "row_field_alias_reads",
@@ -5810,7 +5783,7 @@
     },
     {
       "filePath": "src/rebalancer/storage-admission-service.js",
-      "line": 582,
+      "line": 570,
       "column": 23,
       "functionName": "summarizeNodeReadinessRow",
       "kind": "row_field_alias_reads",
@@ -5819,7 +5792,7 @@
     },
     {
       "filePath": "src/rebalancer/storage-admission-service.js",
-      "line": 583,
+      "line": 571,
       "column": 21,
       "functionName": "summarizeNodeReadinessRow",
       "kind": "row_field_alias_reads",
@@ -5828,7 +5801,7 @@
     },
     {
       "filePath": "src/rebalancer/storage-admission-service.js",
-      "line": 584,
+      "line": 572,
       "column": 27,
       "functionName": "summarizeNodeReadinessRow",
       "kind": "row_field_alias_reads",
@@ -5837,7 +5810,7 @@
     },
     {
       "filePath": "src/rebalancer/storage-admission-service.js",
-      "line": 585,
+      "line": 573,
       "column": 26,
       "functionName": "summarizeNodeReadinessRow",
       "kind": "row_field_alias_reads",
@@ -5864,7 +5837,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 312,
+      "line": 307,
       "column": 8,
       "functionName": "isStartupAuthorityControlPlanePlacementEligibleNode",
       "kind": "row_field_alias_reads",
@@ -5873,7 +5846,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 430,
+      "line": 418,
       "column": 6,
       "functionName": "readAvailablePriorityRecoveryPlanningSnapshot",
       "kind": "row_field_alias_reads",
@@ -5882,7 +5855,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 490,
+      "line": 477,
       "column": 6,
       "functionName": "getPriorityRecoveryPlanningSnapshotSync",
       "kind": "row_field_alias_reads",
@@ -5890,17 +5863,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 327,
-      "column": 8,
-      "functionName": "<anonymous>",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
-      "line": 220,
+      "line": 217,
       "column": 4,
       "functionName": "readPriorityOperationPartitionId",
       "kind": "row_field_alias_reads",
@@ -5909,7 +5873,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
-      "line": 225,
+      "line": 222,
       "column": 4,
       "functionName": "readPriorityOperationId",
       "kind": "row_field_alias_reads",
@@ -5918,7 +5882,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
-      "line": 499,
+      "line": 496,
       "column": 31,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -5963,7 +5927,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 481,
+      "line": 463,
       "column": 6,
       "functionName": "isTrackedInFlightOperation",
       "kind": "row_field_alias_reads",
@@ -5972,7 +5936,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 714,
+      "line": 677,
       "column": 8,
       "functionName": "getNormalizedOperationType",
       "kind": "row_field_alias_reads",
@@ -5981,7 +5945,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 727,
+      "line": 690,
       "column": 6,
       "functionName": "getNormalizedOperationWorkflowStep",
       "kind": "row_field_alias_reads",

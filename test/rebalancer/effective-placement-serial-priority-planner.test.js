@@ -17,6 +17,7 @@ import {
   REBALANCER_MOVE_TYPE,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION_ID = 'schema_operations-p1';
 const TARGET_STATE = Object.freeze({
@@ -43,13 +44,20 @@ function buildInventory(rows, operations = [], options = {}) {
   });
 }
 
-function active(replicaId, nodeId) {
-  return {
+// The projected replica of a production-shaped partition services row.
+function replica(replicaId, nodeId, status) {
+  return projectedReplica({
     replica_id: replicaId,
+    service_id: replicaId,
+    partition_id: PARTITION_ID,
     node_id: nodeId,
-    status: ReplicaStatus.ACTIVE,
+    status,
     raft_role: 'follower',
-  };
+  });
+}
+
+function active(replicaId, nodeId) {
+  return replica(replicaId, nodeId, ReplicaStatus.ACTIVE);
 }
 
 function candidate(type, reason, extra = {}) {
@@ -164,12 +172,7 @@ test('an unresolved REMOVE workflow is progressed without a companion move', (t)
     inventory: buildInventory([
       active('r1', 'node-1'),
       active('r2', 'node-2'),
-      {
-        replica_id: 'r4',
-        node_id: 'node-3',
-        status: ReplicaStatus.REMOVING,
-        raft_role: 'follower',
-      },
+      replica('r4', 'node-3', ReplicaStatus.REMOVING),
     ], [stoppingRemove]),
     targetState: TARGET_STATE,
     unresolvedOperations: [stoppingRemove],
@@ -256,12 +259,7 @@ test('MovePlanner priority path emits only the serial owner decision', (t) => {
   const currentReplicas = [
     active('r1', 'node-1'),
     active('r2', 'node-2'),
-    {
-      replica_id: 'failed-r',
-      node_id: 'node-1',
-      status: ReplicaStatus.FAILED,
-      raft_role: 'follower',
-    },
+    replica('failed-r', 'node-1', ReplicaStatus.FAILED),
   ];
   const moveStateProvider = {
     getAvailableNodes: () => TARGET_STATE.targetNodes.map(

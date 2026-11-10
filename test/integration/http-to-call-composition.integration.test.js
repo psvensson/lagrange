@@ -63,6 +63,7 @@ import {
   TOP_N,
   composeTwoNodeDeployment,
 } from './call-cell-two-node-deployment-fixture.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const AUTHORING_WORLD = 'service-cell';
 const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
@@ -302,11 +303,15 @@ function composeOutboundCallPolicy(systemTableCache) {
   systemTableCache.applySystemTableChange(
     TABLES.CONFIG,
     CDC_OPERATION.UPSERT,
-    {
+    // A complete stored config row, as the owner's CONFIGURE write stores it
+    // (default_value '{}'): the cache refuses a row its table could not hold.
+    systemTableRow(TABLES.CONFIG, {
       config_key: `runtime.access.service.${REQUEST_SERVICE_ID}`,
       config_value: JSON.stringify(stored),
       value_type: 'json',
-    },
+      default_value: '{}',
+      created_at: Date.now(),
+    }),
   );
   return new RuntimeAccessPolicyOwner({
     // The read path never resolves Bindings by name; the dependency is

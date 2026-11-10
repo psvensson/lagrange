@@ -1,4 +1,5 @@
 import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
+import {assertProjectedReplica} from './projected-replica.js';
 import {normalizeReplicaOperationRecord} from './replica-operation-liveness.js';
 import {OperationType, ReplicaStatus} from './replica-status.js';
 import {
@@ -47,16 +48,6 @@ function text(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function firstTextField(record, fieldNames) {
-  for (const fieldName of fieldNames) {
-    const value = text(record?.[fieldName]);
-    if (value) {
-      return value;
-    }
-  }
-  return '';
-}
-
 function sorted(values) {
   return [...values].sort((left, right) => left.localeCompare(right));
 }
@@ -88,16 +79,18 @@ function normalizeObservationState(observation, values) {
     REPLICA_INVENTORY_OBSERVATION_STATE.EMPTY;
 }
 
-function normalizeReplicaRow(row) {
-  const replicaId = firstTextField(row, [
-    'replica_id',
-    'replicaId',
-    'service_id',
-    'serviceId',
-  ]);
-  const nodeId = firstTextField(row, ['node_id', 'nodeId']);
-  const status = (firstTextField(row, ['status']) || ACTIVE).toLowerCase();
-  const raftRole = firstTextField(row, ['raft_role', 'raftRole']).toLowerCase();
+// The inventory's view of one projected replica (projected-replica.js): its
+// identity and placement plus the lifecycle flags the inventory derives,
+// the one owner of those derivations. Each field reads as HEAD's
+// normalizeReplicaRow read the stored row (trimmed text, a missing, NULL or
+// non-text value ''; status '' reads ACTIVE; status and raft role
+// lower-cased).
+function classifyInventoryReplica(replica) {
+  assertProjectedReplica(replica);
+  const replicaId = text(replica.replicaId);
+  const nodeId = text(replica.nodeId);
+  const status = (text(replica.status) || ACTIVE).toLowerCase();
+  const raftRole = text(replica.raftRole).toLowerCase();
   const hasNode = nodeId.length > 0;
   const live = !NON_LIVE_STATUSES.has(status);
   return {
@@ -111,10 +104,8 @@ function normalizeReplicaRow(row) {
     // row is durably removed. Accounting occupancy remains the narrower
     // pending/creating/syncing/active lifecycle below.
     occupied: hasNode && status !== ReplicaStatus.REMOVED,
-    accountingOccupied:
-      hasNode && OCCUPIED_STATUSES.has(status),
-    voter:
-      hasNode && live && VOTER_RAFT_ROLES.has(raftRole),
+    accountingOccupied: hasNode && OCCUPIED_STATUSES.has(status),
+    voter: hasNode && live && VOTER_RAFT_ROLES.has(raftRole),
   };
 }
 
@@ -223,7 +214,7 @@ export function buildReplicaInventorySnapshot(options = {}) {
   const conflictingReplicaNodes = new Set();
 
   for (const rawRow of rawRows) {
-    const replica = normalizeReplicaRow(rawRow);
+    const replica = classifyInventoryReplica(rawRow);
     if (!replica.replicaId) {
       if (replica.occupied) {
         conflictingReplicaNodes.add(replica.nodeId);

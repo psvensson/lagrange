@@ -41,6 +41,10 @@ import {
   createControllableMessageGroupService,
   seedConsensusPeersFromPeerAddresses,
 } from './message-group-service-test-support.js';
+import {
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 let testPortCounter = 27200;
 const NON_SYSTEM_CDC_TABLE = 'runtime_forward_events';
@@ -769,17 +773,18 @@ test(
       mg.leaderId = null;
       consensus.role = RaftRole.FOLLOWER;
 
-      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
-        service_id: 'mg-cache-leader-r2',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        group_id: 'mg-cache-leader',
-        replica_id: 'mg-cache-leader-r2',
-        node_id: 'remote-node',
-        status: SERVICE_STATUS.ACTIVE,
-        raft_role: 'leader',
-        address: 'remote-node/message-group/mg-cache-leader-r2',
-        updated_at: Date.now(),
-      });
+      mg.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
+          service_id: 'mg-cache-leader-r2',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          group_id: 'mg-cache-leader',
+          replica_id: 'mg-cache-leader-r2',
+          node_id: 'remote-node',
+          status: SERVICE_STATUS.ACTIVE,
+          raft_role: 'leader',
+          address: 'remote-node/message-group/mg-cache-leader-r2',
+          updated_at: Date.now(),
+        }));
 
       const forwardedPayloads = [];
       router.deliver = async (address, payload, options) => {
@@ -856,33 +861,35 @@ test(
       mg.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
-        {
+        systemTableRow(TABLES.MESSAGE_GROUPS, {
           group_id: 'mg-stale-canonical-leader',
           leader_node_id: 'stale-node',
-        },
+        }),
       );
-      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
-        service_id: 'mg-stale-canonical-leader-r2',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        group_id: 'mg-stale-canonical-leader',
-        replica_id: 'mg-stale-canonical-leader-r2',
-        node_id: 'stale-node',
-        status: SERVICE_STATUS.ACTIVE,
-        raft_role: 'follower',
-        address: 'stale-node/message-group/mg-stale-canonical-leader-r2',
-        updated_at: Date.now(),
-      });
-      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
-        service_id: 'mg-stale-canonical-leader-r3',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        group_id: 'mg-stale-canonical-leader',
-        replica_id: 'mg-stale-canonical-leader-r3',
-        node_id: 'fresh-node',
-        status: SERVICE_STATUS.ACTIVE,
-        raft_role: 'leader',
-        address: 'fresh-node/message-group/mg-stale-canonical-leader-r3',
-        updated_at: Date.now() + 1,
-      });
+      mg.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
+          service_id: 'mg-stale-canonical-leader-r2',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          group_id: 'mg-stale-canonical-leader',
+          replica_id: 'mg-stale-canonical-leader-r2',
+          node_id: 'stale-node',
+          status: SERVICE_STATUS.ACTIVE,
+          raft_role: 'follower',
+          address: 'stale-node/message-group/mg-stale-canonical-leader-r2',
+          updated_at: Date.now(),
+        }));
+      mg.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
+          service_id: 'mg-stale-canonical-leader-r3',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          group_id: 'mg-stale-canonical-leader',
+          replica_id: 'mg-stale-canonical-leader-r3',
+          node_id: 'fresh-node',
+          status: SERVICE_STATUS.ACTIVE,
+          raft_role: 'leader',
+          address: 'fresh-node/message-group/mg-stale-canonical-leader-r3',
+          updated_at: Date.now() + 1,
+        }));
 
       const forwardedPayloads = [];
       router.deliver = async (address, payload, options) => {
@@ -956,28 +963,30 @@ test(
       mg.leaderId = null;
       consensus.role = RaftRole.FOLLOWER;
 
-      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
-        service_id: 'mg-lagging-leader-metadata-r2',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        group_id: 'mg-lagging-leader-metadata',
-        replica_id: 'mg-lagging-leader-metadata-r2',
-        node_id: 'remote-node-2',
-        status: SERVICE_STATUS.ACTIVE,
-        raft_role: 'candidate',
-        address: 'remote-node-2/message-group/mg-lagging-leader-metadata-r2',
-        updated_at: 100,
-      });
-      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
-        service_id: 'mg-lagging-leader-metadata-r3',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        group_id: 'mg-lagging-leader-metadata',
-        replica_id: 'mg-lagging-leader-metadata-r3',
-        node_id: 'remote-node-3',
-        status: SERVICE_STATUS.ACTIVE,
-        raft_role: 'candidate',
-        address: 'remote-node-3/message-group/mg-lagging-leader-metadata-r3',
-        updated_at: 200,
-      });
+      mg.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
+          service_id: 'mg-lagging-leader-metadata-r2',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          group_id: 'mg-lagging-leader-metadata',
+          replica_id: 'mg-lagging-leader-metadata-r2',
+          node_id: 'remote-node-2',
+          status: SERVICE_STATUS.ACTIVE,
+          raft_role: 'candidate',
+          address: 'remote-node-2/message-group/mg-lagging-leader-metadata-r2',
+          updated_at: 100,
+        }));
+      mg.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
+          service_id: 'mg-lagging-leader-metadata-r3',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          group_id: 'mg-lagging-leader-metadata',
+          replica_id: 'mg-lagging-leader-metadata-r3',
+          node_id: 'remote-node-3',
+          status: SERVICE_STATUS.ACTIVE,
+          raft_role: 'candidate',
+          address: 'remote-node-3/message-group/mg-lagging-leader-metadata-r3',
+          updated_at: 200,
+        }));
 
       const forwardedPayloads = [];
       router.deliver = async (address, payload, options) => {
@@ -1051,28 +1060,30 @@ test(
       mg.leaderId = null;
       consensus.role = RaftRole.FOLLOWER;
 
-      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
-        service_id: 'mg-system-forward-strict-r2',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        group_id: 'mg-system-forward-strict',
-        replica_id: 'mg-system-forward-strict-r2',
-        node_id: 'remote-node-2',
-        status: SERVICE_STATUS.ACTIVE,
-        raft_role: 'follower',
-        address: 'remote-node-2/message-group/mg-system-forward-strict-r2',
-        updated_at: 100,
-      });
-      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
-        service_id: 'mg-system-forward-strict-r3',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        group_id: 'mg-system-forward-strict',
-        replica_id: 'mg-system-forward-strict-r3',
-        node_id: 'remote-node-3',
-        status: SERVICE_STATUS.ACTIVE,
-        raft_role: 'follower',
-        address: 'remote-node-3/message-group/mg-system-forward-strict-r3',
-        updated_at: 200,
-      });
+      mg.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
+          service_id: 'mg-system-forward-strict-r2',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          group_id: 'mg-system-forward-strict',
+          replica_id: 'mg-system-forward-strict-r2',
+          node_id: 'remote-node-2',
+          status: SERVICE_STATUS.ACTIVE,
+          raft_role: 'follower',
+          address: 'remote-node-2/message-group/mg-system-forward-strict-r2',
+          updated_at: 100,
+        }));
+      mg.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
+          service_id: 'mg-system-forward-strict-r3',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          group_id: 'mg-system-forward-strict',
+          replica_id: 'mg-system-forward-strict-r3',
+          node_id: 'remote-node-3',
+          status: SERVICE_STATUS.ACTIVE,
+          raft_role: 'follower',
+          address: 'remote-node-3/message-group/mg-system-forward-strict-r3',
+          updated_at: 200,
+        }));
 
       const forwardedPayloads = [];
       router.deliver = async (address, payload, options) => {
@@ -1160,28 +1171,30 @@ test(
         },
       ];
 
-      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
-        service_id: 'mg-system-forward-live-leader-r2',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        group_id: 'mg-system-forward-live-leader',
-        replica_id: 'mg-system-forward-live-leader-r2',
-        node_id: 'remote-node-2',
-        status: SERVICE_STATUS.ACTIVE,
-        raft_role: 'follower',
-        address: 'remote-node-2/message-group/mg-system-forward-live-leader-r2',
-        updated_at: 100,
-      });
-      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
-        service_id: 'mg-system-forward-live-leader-r3',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        group_id: 'mg-system-forward-live-leader',
-        replica_id: 'mg-system-forward-live-leader-r3',
-        node_id: 'remote-node-3',
-        status: SERVICE_STATUS.ACTIVE,
-        raft_role: 'follower',
-        address: 'remote-node-3/message-group/mg-system-forward-live-leader-r3',
-        updated_at: 200,
-      });
+      mg.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
+          service_id: 'mg-system-forward-live-leader-r2',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          group_id: 'mg-system-forward-live-leader',
+          replica_id: 'mg-system-forward-live-leader-r2',
+          node_id: 'remote-node-2',
+          status: SERVICE_STATUS.ACTIVE,
+          raft_role: 'follower',
+          address: 'remote-node-2/message-group/mg-system-forward-live-leader-r2',
+          updated_at: 100,
+        }));
+      mg.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
+          service_id: 'mg-system-forward-live-leader-r3',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          group_id: 'mg-system-forward-live-leader',
+          replica_id: 'mg-system-forward-live-leader-r3',
+          node_id: 'remote-node-3',
+          status: SERVICE_STATUS.ACTIVE,
+          raft_role: 'follower',
+          address: 'remote-node-3/message-group/mg-system-forward-live-leader-r3',
+          updated_at: 200,
+        }));
 
       const forwardedPayloads = [];
       const originalGetConnectionState = router.getConnectionState.bind(router);
@@ -1340,32 +1353,35 @@ test(
       mg.leaderId = 'mg-connected-relay-r2';
       consensus.role = RaftRole.FOLLOWER;
 
-      mg.systemTableCache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
-        group_id: 'mg-connected-relay',
-        leader_node_id: 'node-leader',
-      });
-      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
-        service_id: 'mg-connected-relay-r2',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        group_id: 'mg-connected-relay',
-        replica_id: 'mg-connected-relay-r2',
-        node_id: 'node-leader',
-        status: SERVICE_STATUS.ACTIVE,
-        raft_role: 'leader',
-        address: 'node-leader/message-group/mg-connected-relay-r2',
-        updated_at: Date.now() + 2,
-      });
-      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
-        service_id: 'mg-connected-relay-r3',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        group_id: 'mg-connected-relay',
-        replica_id: 'mg-connected-relay-r3',
-        node_id: 'node-relay',
-        status: SERVICE_STATUS.ACTIVE,
-        raft_role: 'follower',
-        address: 'node-relay/message-group/mg-connected-relay-r3',
-        updated_at: Date.now() + 1,
-      });
+      mg.systemTableCache.applySystemTableChange(
+        TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, systemTableRow(TABLES.MESSAGE_GROUPS, {
+          group_id: 'mg-connected-relay',
+          leader_node_id: 'node-leader',
+        }));
+      mg.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
+          service_id: 'mg-connected-relay-r2',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          group_id: 'mg-connected-relay',
+          replica_id: 'mg-connected-relay-r2',
+          node_id: 'node-leader',
+          status: SERVICE_STATUS.ACTIVE,
+          raft_role: 'leader',
+          address: 'node-leader/message-group/mg-connected-relay-r2',
+          updated_at: Date.now() + 2,
+        }));
+      mg.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
+          service_id: 'mg-connected-relay-r3',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          group_id: 'mg-connected-relay',
+          replica_id: 'mg-connected-relay-r3',
+          node_id: 'node-relay',
+          status: SERVICE_STATUS.ACTIVE,
+          raft_role: 'follower',
+          address: 'node-relay/message-group/mg-connected-relay-r3',
+          updated_at: Date.now() + 1,
+        }));
 
       const originalGetConnectionState = router.getConnectionState.bind(router);
       router.getConnectionState = (targetNodeId) => {

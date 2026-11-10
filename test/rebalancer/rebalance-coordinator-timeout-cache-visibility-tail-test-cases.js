@@ -1,5 +1,6 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests} from './rebalance-coordinator-timeout-cache-visibility-tail-more-test-cases.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
 const NON_PRIORITY_DEFERRED_PARTITION_ID = 'customer_orders-p1';
@@ -55,7 +56,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           return {
             success: true,
             source: 'local_partition_replica',
-            rows: [{
+            rows: [replicaOperationsRow({
               operation_id: 'op-local-1',
               type: 'ADD',
               partition_id: 'partition-1',
@@ -71,7 +72,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
               completed_at: null,
               error_message: null,
               steps_history: '[]',
-            }],
+            })],
           };
         },
       },
@@ -321,7 +322,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
     async (t) => {
       let sqlQueryCalls = 0;
       const cacheRows = [
-        {
+        replicaOperationsRow({
           operation_id: 'op-cache-local-1',
           type: 'ADD',
           partition_id: 'partition-1',
@@ -337,8 +338,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           steps_history: '[]',
           entity_type: 'partition',
           entity_id: 'partition-1',
-        },
-        {
+        }),
+        replicaOperationsRow({
           operation_id: 'op-cache-remote-1',
           type: 'ADD',
           partition_id: 'partition-2',
@@ -354,7 +355,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           steps_history: '[]',
           entity_type: 'partition',
           entity_id: 'partition-2',
-        },
+        }),
       ];
       const coordinator = createCoordinator({
         nodeId: 'node-1',
@@ -412,7 +413,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
     'authoritative replica_operations owner rows are unavailable',
     async (t) => {
       let authoritativeReadCalls = 0;
-      const recoveryRow = {
+      const recoveryRow = replicaOperationsRow({
         operation_id: 'op-recovery-cache-visible',
         type: 'ADD',
         partition_id: 'partition-recovery-1',
@@ -428,7 +429,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         steps_history: '[]',
         entity_type: 'partition',
         entity_id: 'partition-recovery-1',
-      };
+      });
       const coordinator = createCoordinator({
         nodeId: 'node-recovery-cache',
         transactionCoordinator: buildTransactionCoordinator(),
@@ -950,7 +951,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
             if (tableName !== 'replica_operations') {
               return [];
             }
-            return [{
+            return [replicaOperationsRow({
               operation_id: 'op-stale-cache',
               type: 'REPLACE',
               partition_id: 'control_plane_publications-p1',
@@ -966,7 +967,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
               completed_at: null,
               error_message: null,
               steps_history: '[]',
-            }];
+            })];
           },
           get() {
             return null;

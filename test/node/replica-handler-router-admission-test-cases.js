@@ -1,4 +1,5 @@
 import {handlerIdentityApi} from '../test-helpers/replica-handler-identity-fixture.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   buildReplicaCreateAdmissionToken,
   buildReplicaCreateAttemptToken,
@@ -37,10 +38,10 @@ function seedRoutedCreateOperation(
     create_admission_workflow_updated_at: null,
     create_admission_owner_incarnation: null,
   });
-  cache.applySystemTableChange(systemTableName.NODES, 'INSERT', {
+  cache.applySystemTableChange(systemTableName.NODES, 'INSERT', nodesRow({
     node_id: 'test-node',
     boot_incarnation: ownerIncarnation,
-  });
+  }));
   return ownerIncarnation;
 }
 

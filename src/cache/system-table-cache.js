@@ -43,6 +43,7 @@ import {
   shouldUsePublicationMerge,
   tryParseHLCTimestamp,
 } from './system-table-cache-row-merge.js';
+import {settleSeedProjection} from './system-table-cache-seed-projection.js';
 import {SystemTableCacheTombstoneStore} from
   './system-table-cache-tombstone-store.js';
 import {
@@ -176,6 +177,8 @@ class SystemTableCache {
     this.lastAuthoritativeObservedAtMsByTableName = new Map();
     this.lastAuthoritativeObservedCauseIdByTableName = new Map();
     this.lastCdcObservationByTableName = new Map();
+    // Named diagnostic (RD-1/RD-2 ruling): observed-columns markings per table.
+    this.observedColumnsMarkCountByTableName = new Map();
     // Monotonic per-table apply counter. Unlike lastAppliedAtMs (wall-clock,
     // same-millisecond applies collide) a version can arbitrate "did anything
     // change since capture" exactly, so multi-table snapshot reuse never has
@@ -217,6 +220,7 @@ class SystemTableCache {
     for (const tableName of SYSTEM_TABLES) {
       this.tables.set(tableName, new Map());
       this.lastCdcObservationByTableName.set(tableName, new Map());
+      this.observedColumnsMarkCountByTableName.set(tableName, 0);
       this.mutationVersionByTableKey.set(tableName, new Map());
     }
     this.tombstoneStore = new SystemTableCacheTombstoneStore(SYSTEM_TABLES, {
@@ -321,6 +325,10 @@ class SystemTableCache {
       return;
     }
 
+    // The stored row is exactly the written data (a key the cache did not
+    // hold, or an INSERT that replaced the held row): the observed-columns
+    // marking applies (settleSeedProjection); a merge never.
+    let storedAsWritten = !table.has(key);
     switch (operation) {
     case CDC_OPERATIONS.INSERT:
       if (table.has(key)) {
@@ -351,6 +359,7 @@ class SystemTableCache {
           key,
         });
       }
+      storedAsWritten = true;
       table.set(key, this.deepClone(data));
       recordForNotification = data;
       incomingVersionAccepted = true;
@@ -497,6 +506,11 @@ class SystemTableCache {
         incomingVersionAccepted = true;
       }
       break;
+    }
+
+    if (recordForNotification && operation !== CDC_OPERATIONS.DELETE) {
+      recordForNotification = settleSeedProjection(this, {tableName, table, key,
+        operation, causeId, storedAsWritten, recordForNotification});
     }
 
     this.logger.debug(CACHE_LOG_MSG.APPLIED_CDC_EVENT, {

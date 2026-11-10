@@ -29,6 +29,7 @@ import {
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {isReplaceRemoveDispatchPhase} from '../../src/rebalancer/replica-operation-progress.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 const PRIORITY_PARTITION_ID = 'sql_transactions-p1';
 const LEDGER_PARTITION_ID = 'replica_operations-p1';
@@ -69,7 +70,9 @@ function createMoveStateProvider({currentReplicas = [], inFlightOperations = []}
 }
 
 function active(replicaId, nodeId) {
-  return {replica_id: replicaId, node_id: nodeId, status: ReplicaStatus.ACTIVE};
+  return projectedReplica({
+    service_id: replicaId, replica_id: replicaId, node_id: nodeId, status: ReplicaStatus.ACTIVE,
+  });
 }
 
 // An in-flight REPLACE in its remove-dispatch DRAIN phase: the replacement is

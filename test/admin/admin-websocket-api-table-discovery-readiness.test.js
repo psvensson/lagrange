@@ -16,6 +16,10 @@ import {
   stageFutureBenchmarkSplitChildren,
   waitForMessage,
 } from './admin-websocket-api-test-support.js';
+import {
+  replicaOperationsRow,
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
 import {AdminWebSocketAPI, MessageType} from
   '../../src/admin/admin-websocket-api.js';
 import {
@@ -129,12 +133,11 @@ test(
     const cache = createPopulatedCache();
     seedTableDiscoveryRowsWithLocalFollower(cache);
     cache.applySystemTableChange(TABLES.PARTITIONS, 'UPDATE', {
-      id: 'partition-benchmark-events-1',
       partition_id: 'partition-benchmark-events-1',
       leader_node_id: 'node-1',
     });
     cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
-      id: 'service-benchmark-events-node-1',
+      service_id: 'service-benchmark-events-node-1',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-1',
@@ -211,14 +214,13 @@ test(
     const cache = createPopulatedCache();
     seedTableDiscoveryRowsWithLocalFollower(cache);
     cache.applySystemTableChange(TABLES.PARTITIONS, 'UPDATE', {
-      id: 'partition-benchmark-events-1',
       partition_id: 'partition-benchmark-events-1',
       leader_node_id: null,
       created_at: 123,
       updated_at: 123,
     });
     cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
-      id: 'service-benchmark-events-node-1',
+      service_id: 'service-benchmark-events-node-1',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-1',
@@ -227,7 +229,7 @@ test(
       address: '10.0.0.1:7001',
     });
     cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
-      id: 'service-benchmark-events-node-2',
+      service_id: 'service-benchmark-events-node-2',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-2',
@@ -542,7 +544,7 @@ test(
   async (t) => {
     const cache = createPopulatedCache();
     seedTableDiscoveryRowsWithLocalFollower(cache);
-    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', replicaOperationsRow({
       operation_id: 'op-replace-failed',
       type: 'REPLACE',
       partition_id: 'partition-benchmark-events-1',
@@ -553,7 +555,7 @@ test(
       status: 'failed',
       workflow_step: 'FAILED',
       error_message: 'replica.moved failed',
-    });
+    }));
     const api = new AdminWebSocketAPI({
       nodeId: 'test-node',
       systemTableCache: cache,
@@ -608,7 +610,7 @@ test(
   async (t) => {
     const cache = createPopulatedCache();
     seedTableDiscoveryRowsWithLocalFollower(cache);
-    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', replicaOperationsRow({
       operation_id: 'op-add-pending',
       type: 'ADD',
       partition_id: 'partition-benchmark-events-1',
@@ -618,7 +620,7 @@ test(
       target_node_id: 'node-2',
       status: 'creating',
       workflow_step: 'CREATING',
-    });
+    }));
     const api = new AdminWebSocketAPI({
       nodeId: 'test-node',
       systemTableCache: cache,
@@ -708,7 +710,7 @@ test(
   async (t) => {
     const cache = createPopulatedCache();
     seedTableDiscoveryRowsWithLocalFollower(cache);
-    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', replicaOperationsRow({
       operation_id: 'op-add-failed',
       type: 'ADD',
       partition_id: 'partition-benchmark-events-1',
@@ -718,7 +720,7 @@ test(
       target_node_id: 'node-2',
       status: 'failed',
       workflow_step: 'FAILED',
-    });
+    }));
     const api = new AdminWebSocketAPI({
       nodeId: 'test-node',
       systemTableCache: cache,
@@ -794,7 +796,7 @@ test(
   async (t) => {
     const cache = createPopulatedCache();
     seedTableDiscoveryRowsWithLocalFollower(cache);
-    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', replicaOperationsRow({
       operation_id: 'op-add-complete',
       type: 'ADD',
       partition_id: 'partition-benchmark-events-1',
@@ -804,7 +806,7 @@ test(
       status: 'active',
       workflow_step: 'ACTIVE',
       completed_at: 1741000000000,
-    });
+    }));
     const api = new AdminWebSocketAPI({
       nodeId: 'test-node',
       systemTableCache: cache,
@@ -859,7 +861,7 @@ test(
   async (t) => {
     const cache = createPopulatedCache();
     seedTableDiscoveryRowsWithLocalFollower(cache);
-    const failedOperationRow = {
+    const failedOperationRow = replicaOperationsRow({
       operation_id: 'op-replace-failed',
       type: 'REPLACE',
       partition_id: 'partition-benchmark-events-1',
@@ -869,7 +871,7 @@ test(
       target_node_id: 'node-2',
       status: 'failed',
       workflow_step: 'FAILED',
-    };
+    });
     cache.applySystemTableChange(
       TABLES.REPLICA_OPERATIONS,
       'INSERT',
@@ -897,7 +899,7 @@ test(
       'DELETE',
       {operation_id: 'op-replace-failed'},
     );
-    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', replicaOperationsRow({
       operation_id: 'op-unrelated-failed',
       type: 'REPLACE',
       partition_id: 'partition-unrelated-1',
@@ -907,7 +909,7 @@ test(
       target_node_id: 'node-4',
       status: 'failed',
       workflow_step: 'FAILED',
-    });
+    }));
 
     const secondResponse = await api.getFastify().inject({
       method: 'GET',
@@ -943,7 +945,7 @@ test(
   async (t) => {
     const cache = createPopulatedCache();
     seedTableDiscoveryRowsWithLocalFollower(cache);
-    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', replicaOperationsRow({
       operation_id: 'op-unrelated-failed',
       type: 'REPLACE',
       partition_id: 'partition-unrelated-1',
@@ -953,7 +955,7 @@ test(
       target_node_id: 'node-2',
       status: 'failed',
       workflow_step: 'FAILED',
-    });
+    }));
     const api = new AdminWebSocketAPI({
       nodeId: 'test-node',
       systemTableCache: cache,
@@ -1085,8 +1087,7 @@ test(
   async (t) => {
     const cache = createPopulatedCache();
     seedRoutedTableDiscoveryRows(cache);
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-      id: 'partition-benchmark-events-1-r2',
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       service_id: 'partition-benchmark-events-1-r2',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
@@ -1095,8 +1096,8 @@ test(
       status: 'active',
       raft_role: 'follower',
       address: '10.0.0.2:7001',
-    });
-    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+    }));
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', replicaOperationsRow({
       operation_id: 'op-add-stale-active-replica',
       type: 'ADD',
       partition_id: 'partition-benchmark-events-1',
@@ -1107,7 +1108,7 @@ test(
       replica_id: 'partition-benchmark-events-1-r2',
       status: 'creating',
       workflow_step: 'CREATING',
-    });
+    }));
     const api = new AdminWebSocketAPI({
       nodeId: 'test-node',
       systemTableCache: cache,

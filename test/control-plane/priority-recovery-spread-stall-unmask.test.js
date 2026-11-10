@@ -50,6 +50,8 @@ import {
   buildDerivedPriorityPartitionSummary,
 } from '../../src/control-plane/membership-publication-priority-partition-summary.js';
 import {OperationWorkflowRecoveryTimeout} from '../../src/rebalancer/operation-workflow-recovery-timeout.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const ELIGIBLE = ['nodeB'];
 // Mirrors PRIORITY_RECOVERY_REPLACE_REMOVE_DISPATCH_SPREAD_STALL_BUDGET_MS (60s).
@@ -446,8 +448,10 @@ const FORMATION_OTHER_TABLES = [
   'sql_write_operations',
 ];
 
+// Production-shaped stored services rows: the decision snapshots decode
+// them; the census reads their projected replicas (censusReplicas).
 function formationServiceRow(replica, nodeId, status, role) {
-  return {
+  return servicesRow({
     service_id: `${FORMATION_PARTITION}-${replica}`,
     service_type: 'partition',
     partition_id: FORMATION_PARTITION,
@@ -455,7 +459,13 @@ function formationServiceRow(replica, nodeId, status, role) {
     status,
     raft_role: role,
     address: `${nodeId}:1`,
-  };
+  });
+}
+
+// What the census's production callers hand it: the projected replicas
+// (src/rebalancer/projected-replica.js) of the stored services rows.
+function censusReplicas(serviceRows) {
+  return projectReplicasFromServicesRows(serviceRows);
 }
 
 function formationAddRow(id, replica, nodeId, status, step, completedAt) {
@@ -495,7 +505,7 @@ function formationRows({
   }
   for (const tableId of FORMATION_OTHER_TABLES) {
     ['node-a', 'node-b', 'node-c'].forEach((nodeId, index) => {
-      serviceRows.push({
+      serviceRows.push(servicesRow({
         service_id: `${tableId}-p1-r${index + 1}`,
         service_type: 'partition',
         partition_id: `${tableId}-p1`,
@@ -503,7 +513,7 @@ function formationRows({
         status: 'active',
         raft_role: index === 0 ? 'leader' : 'follower',
         address: `${nodeId}:1`,
-      });
+      }));
     });
   }
   const partitionRows = [FORMATION_PARTITION, ...FORMATION_OTHER_TABLES.map(
@@ -530,7 +540,7 @@ function formationRows({
 function runFormationShape(options = {}) {
   const rows = formationRows(options);
   const census = buildDerivedPriorityPartitionSummary({
-    serviceRows: rows.serviceRows,
+    serviceRows: censusReplicas(rows.serviceRows),
     partitionRows: rows.partitionRows,
     readinessByNodeId: {},
     projectedServingNodeIds: FORMATION_NODES,
@@ -624,7 +634,7 @@ test('H5: a completed follow-up ADD with spread really reached reads converged',
     'op-r5', 'r5', 'node-c', 'active', 'ACTIVE', 2500,
   ));
   const census = buildDerivedPriorityPartitionSummary({
-    serviceRows: rows.serviceRows,
+    serviceRows: censusReplicas(rows.serviceRows),
     partitionRows: rows.partitionRows,
     readinessByNodeId: {},
     projectedServingNodeIds: FORMATION_NODES,
@@ -677,7 +687,9 @@ test('H5b classification: a completed ADD with a census gap LEFT requests a foll
 // holders: priority-remove-safety-spread-nonregression.test.js, first case).
 test('a progressing REPLACE onto an already-counted target stays the owner\'s in-flight operation', (t) => {
   const census = buildDerivedPriorityPartitionSummary({
-    serviceRows: formationRows({withR4Op: false, withR5: false}).serviceRows,
+    serviceRows: censusReplicas(
+      formationRows({withR4Op: false, withR5: false}).serviceRows,
+    ),
     partitionRows: formationRows().partitionRows,
     readinessByNodeId: {},
     projectedServingNodeIds: FORMATION_NODES,

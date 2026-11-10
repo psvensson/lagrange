@@ -7,6 +7,8 @@
  * Requirements: 10.2, 3.1
  */
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {defineServicesProjection} from '../control-plane/services-row-decoder.js';
+import {seedProjectionRow} from '../control-plane/system-table-row-decoding.js';
 import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
@@ -34,6 +36,16 @@ import {isReplicaServiceHandlerBound} from
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_UPSERT = 'UPSERT';
+// The priority local-commit services row (CL-016, seedLocalPriorityServiceRow)
+// seeded into the local cache before the durable row exists (quest
+// system-table-row-decoders, seed projections): identity, placement, local
+// status and stamps. Group, replica id, raft role and the lifecycle columns
+// are not observed until the durable row's CDC round-trip supplies them.
+const PRIORITY_LOCAL_CREATE_SEED_PROJECTION = defineServicesProjection(
+  'priority_local_create_seed', [
+    'service_id', 'service_type', 'partition_id', 'node_id', 'status', 'address',
+    'created_at', 'updated_at',
+  ]);
 const MISSING_TRACKED_REPLICA_OBSERVATION = Object.freeze({
   available: false,
   trackedState: null,
@@ -537,7 +549,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       this.systemTableCache.applySystemTableChange(
         SYSTEM_TABLE_NAME.SERVICES,
         LOCAL_STR_UPSERT,
-        {
+        seedProjectionRow(PRIORITY_LOCAL_CREATE_SEED_PROJECTION, {
           service_id: replicaId,
           service_type: REPLICA_HANDLER_SERVICE.TYPE,
           partition_id: partitionId,
@@ -546,7 +558,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
           address: this.buildTrackedServiceAddress(replicaId),
           created_at: nowMs,
           updated_at: nowMs,
-        },
+        }),
         {causeId: `priority-local-create:${replicaId}`},
       );
       // Lifecycle persistence must UPSERT for this row until a durable

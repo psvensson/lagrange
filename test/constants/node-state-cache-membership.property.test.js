@@ -22,6 +22,7 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {CACHE_CDC_OPERATIONS} from '../../src/cache/cache-constants.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const NODE_STATE_VALUES = Object.values(NODE_STATE);
 const EXPECTED_STATE_COUNT = 14;
@@ -91,10 +92,10 @@ test('Property 5: Cache state values are from unified enum', async (t) => {
             cache.applySystemTableChange(
               TABLES.NODES,
               CACHE_CDC_OPERATIONS.INSERT,
-              {
+              nodesRow({
                 [COLUMN.NODE_ID]: nodeId,
                 [COLUMN.STATUS]: stateValue,
-              },
+              }),
             );
 
             const record = cache.get(TABLES.NODES, nodeId);
@@ -144,10 +145,10 @@ test('Property 5: Cache state values are from unified enum', async (t) => {
           cache.applySystemTableChange(
             TABLES.NODES,
             CACHE_CDC_OPERATIONS.INSERT,
-            {
+            nodesRow({
               [COLUMN.NODE_ID]: nodeId,
               [COLUMN.STATUS]: initialState,
-            },
+            }),
           );
 
           cache.applySystemTableChange(
@@ -190,10 +191,10 @@ test('Property 5: Cache state values are from unified enum', async (t) => {
             cache.applySystemTableChange(
               TABLES.NODES,
               CACHE_CDC_OPERATIONS.UPSERT,
-              {
+              nodesRow({
                 [COLUMN.NODE_ID]: node.nodeId,
                 [COLUMN.STATUS]: node.state,
-              },
+              }),
             );
           }
 

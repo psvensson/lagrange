@@ -9,6 +9,8 @@ import {
   filterSharedRows,
   readAllSharedRows,
 } from '../../src/cache/shared-row-read.js';
+import {replicaOperationsRow} from
+  '../test-helpers/system-table-row-fixture.js';
 
 const TABLE = 'replica_operations';
 const ROW_COUNT = 20;
@@ -16,13 +18,12 @@ const ROW_COUNT = 20;
 function seedCache() {
   const cache = new SystemTableCache();
   for (let index = 0; index < ROW_COUNT; index += 1) {
-    cache.applySystemTableChange(TABLE, CDC_OPERATIONS.INSERT, {
+    cache.applySystemTableChange(TABLE, CDC_OPERATIONS.INSERT, replicaOperationsRow({
       operation_id: `op-${index}`,
       partition_id: `replica_operations-p${index}`,
-      service_type: 'partition',
       status: 'active',
       steps_history: JSON.stringify([{step: 'SYNCING', timestamp: index}]),
-    });
+    }));
   }
   return cache;
 }

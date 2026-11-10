@@ -25,6 +25,7 @@ import {COORDINATOR_CREATED_REMOTE_HANDOFF_MODE} from
   '../../src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js';
 import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TARGET_NODE_ID = 'target-node';
 const SOURCE_NODE_ID = 'source-node';
@@ -71,13 +72,13 @@ function buildUserPartitionReplaceOperation(overrides = {}) {
 }
 
 function operationToRow(operation) {
-  return {
+  return replicaOperationsRow({
     operation_id: operation.operationId,
     type: operation.type,
     partition_id: operation.partitionId,
     entity_type: operation.entityType,
     entity_id: operation.entityId,
-    replica_id: operation.replicaId,
+    replica_id: operation.replicaId ?? null,
     target_claim_key: operation.targetClaimKey ?? null,
     source_node_id: operation.sourceNodeId,
     target_node_id: operation.targetNodeId,
@@ -85,12 +86,12 @@ function operationToRow(operation) {
     workflow_step: operation.workflowStep,
     created_at: operation.createdAt,
     updated_at: operation.updatedAt,
-    completed_at: operation.completedAt,
-    error_message: operation.errorMessage,
+    completed_at: operation.completedAt ?? null,
+    error_message: operation.errorMessage ?? null,
     steps_history: JSON.stringify(operation.stepsHistory),
     membership_publication_epoch:
       operation.membershipPublicationEpoch ?? null,
-  };
+  });
 }
 
 function createTransactionCoordinator() {

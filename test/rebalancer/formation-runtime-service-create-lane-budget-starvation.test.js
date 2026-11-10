@@ -9,6 +9,10 @@
  */
 
 import {createHash} from 'node:crypto';
+import {
+  replicaOperationsRow,
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 import {test} from '../../src/test-helpers/tap.js';
 import {RuntimeServiceRebalancerOwner} from
@@ -117,7 +121,7 @@ const QUIET_LOGGER = Object.freeze({
 
 function buildChurnOperation(index) {
   const partitionId = `movie-spread-p${index}`;
-  return {
+  return replicaOperationsRow({
     operation_id: `op-spread-replace-${index}`,
     type: OperationType.REPLACE,
     partition_id: partitionId,
@@ -137,7 +141,7 @@ function buildChurnOperation(index) {
     steps_history: '[]',
     entity_type: EntityType.PARTITION,
     entity_id: partitionId,
-  };
+  });
 }
 
 function attachServiceDefinition(cache) {
@@ -208,7 +212,11 @@ function createServicesProjectionGateway(cache) {
       return {success: true, partitionResult: {affectedRows: 1}};
     },
     async insertSystemTableRow(tableName, row) {
-      cache.upsert(tableName, row);
+      // The SQL table stores every column (NULL where the insert omits one).
+      cache.upsert(
+        tableName,
+        tableName === SYSTEM_TABLE_NAME.SERVICES ? servicesRow(row) : row,
+      );
       return {success: true, partitionResult: {affectedRows: 1}};
     },
     async deleteSystemTableRow(tableName, where) {
@@ -569,21 +577,21 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
     t.equal(localReplica?.status, ReplicaStatus.ACTIVE,
       'the real runtime handler materializes an active local replica');
 
-    const servicesRow = systemTableCache.get(
+    const persistedServicesRow = systemTableCache.get(
       SYSTEM_TABLE_NAME.SERVICES,
       REPLICA_ID,
     );
-    t.equal(servicesRow?.service_type, EntityType.RUNTIME_SERVICE,
+    t.equal(persistedServicesRow?.service_type, EntityType.RUNTIME_SERVICE,
       'authoritative services projection records runtime_service');
-    t.equal(servicesRow?.node_id, NODE_ID,
+    t.equal(persistedServicesRow?.node_id, NODE_ID,
       'authoritative services projection records the target node');
-    t.equal(servicesRow?.status, RUNTIME_REPLICA_STATUS.ACTIVE,
+    t.equal(persistedServicesRow?.status, RUNTIME_REPLICA_STATUS.ACTIVE,
       'authoritative services projection reaches ACTIVE');
 
     const currentReplicas = runtimeRebalancer.getCurrentReplicas();
     t.equal(currentReplicas.length, 1,
       'UnifiedRebalancer now observes replicas > 0');
-    t.equal(currentReplicas[0].service_id, REPLICA_ID,
+    t.equal(currentReplicas[0].serviceId, REPLICA_ID,
       'the observed replica is the dispatched canonical replica');
   } finally {
     if (placementOwner) placementOwner.shutdown();

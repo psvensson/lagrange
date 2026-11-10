@@ -46,6 +46,7 @@ import {
   createTestCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION_ID = 'orders-p1';
 const TARGET_ID = 'orders-p1-r4';
@@ -243,11 +244,15 @@ async function installCreateAdmissionAttempt(coordinator, operation) {
 const OTHERS_ABOVE_TARGET = Object.freeze(['node-1', 'node-2', 'node-3']);
 function plannedMoves(rebalancer, targetStatus,
   {others = OTHERS_ABOVE_TARGET, targetFields = {}} = {}) {
-  const currentReplicas = others.map(
-    (nodeId, index) => ({replica_id: `orders-p1-r${index + 1}`,
-      node_id: nodeId, status: ReplicaStatus.ACTIVE}));
-  currentReplicas.push({replica_id: TARGET_ID, node_id: TARGET_NODE,
-    status: targetStatus, ...targetFields});
+  // Replicas as getCurrentReplicas returns them (targetFields are stored
+  // services columns of the target's row, which was created at CREATED_AT).
+  const replicaOf = (replicaId, nodeId, status, fields = {}) =>
+    projectedReplica({service_id: replicaId, replica_id: replicaId,
+      partition_id: PARTITION_ID, node_id: nodeId, status, ...fields});
+  const currentReplicas = others.map((nodeId, index) =>
+    replicaOf(`orders-p1-r${index + 1}`, nodeId, ReplicaStatus.ACTIVE));
+  currentReplicas.push(replicaOf(TARGET_ID, TARGET_NODE, targetStatus,
+    {created_at: CREATED_AT, ...targetFields}));
   const planner = new MovePlanner({
     entityId: PARTITION_ID,
     entityType: REBALANCER_ENTITY_TYPE.PARTITION,

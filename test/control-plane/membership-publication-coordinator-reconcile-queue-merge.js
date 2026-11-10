@@ -18,6 +18,7 @@ import {
 import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
 } from '../../src/control-plane/publication-active-gate-handoff-contract.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLICATION_ID =
   'publication-handoff-target';
@@ -911,24 +912,24 @@ test('deriveMembershipPublicationCandidate promotes healthy projected members wh
         acknowledged_node_ids: ['node-1', 'node-2'],
       },
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-3',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
+        }),
       ],
       readinessEntries: [
         {
@@ -989,9 +990,9 @@ test('deriveMembershipPublicationCandidate promotes healthy projected members wh
         },
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
-        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
-        {service_id: 'svc-3', node_id: 'node-3', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
+        servicesRow({service_id: 'svc-2', node_id: 'node-2', status: 'active'}),
+        servicesRow({service_id: 'svc-3', node_id: 'node-3', status: 'active'}),
       ],
       nowMs: 1000,
     });
@@ -1040,24 +1041,24 @@ test('deriveMembershipPublicationCandidate promotes recovery-eligible projected 
         acknowledged_node_ids: ['node-1', 'node-2'],
       },
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-3',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
+        }),
       ],
       readinessEntries: [
         {
@@ -1119,9 +1120,9 @@ test('deriveMembershipPublicationCandidate promotes recovery-eligible projected 
         },
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
-        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
-        {service_id: 'svc-3', node_id: 'node-3', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
+        servicesRow({service_id: 'svc-2', node_id: 'node-2', status: 'active'}),
+        servicesRow({service_id: 'svc-3', node_id: 'node-3', status: 'active'}),
       ],
       nowMs: 1000,
     });
@@ -1157,18 +1158,18 @@ test('deriveMembershipPublicationCandidate closes unchanged recovery-eligible AC
         acknowledged_node_ids: ['node-1'],
       },
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
+        }),
       ],
       readinessEntries: [
         {
@@ -1211,8 +1212,8 @@ test('deriveMembershipPublicationCandidate closes unchanged recovery-eligible AC
         },
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
-        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
+        servicesRow({service_id: 'svc-2', node_id: 'node-2', status: 'active'}),
       ],
       nowMs: 1000,
     });
@@ -1261,24 +1262,24 @@ test('deriveMembershipPublicationCandidate does not block recovery-eligible prom
         acknowledged_node_ids: ['node-1'],
       },
       nodeRows: [
-        {
+        nodesRow({
           node_id: 'node-1',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-2',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
-        {
+        }),
+        nodesRow({
           node_id: 'node-3',
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
-        },
+        }),
       ],
       readinessEntries: [
         {
@@ -1355,9 +1356,9 @@ test('deriveMembershipPublicationCandidate does not block recovery-eligible prom
         },
       ],
       serviceRows: [
-        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
-        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
-        {service_id: 'svc-3', node_id: 'node-3', status: 'active'},
+        servicesRow({service_id: 'svc-1', node_id: 'node-1', status: 'active'}),
+        servicesRow({service_id: 'svc-2', node_id: 'node-2', status: 'active'}),
+        servicesRow({service_id: 'svc-3', node_id: 'node-3', status: 'active'}),
       ],
       nowMs: 1000,
     });

@@ -19,6 +19,7 @@ import {
   buildServeReadyProjectionReadinessContract,
   buildServeReadyRuntimeAuthority,
 } from './readiness-planning-positive-snapshot-fixtures.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const NOW_MS = 10_000;
 const NODE_A = 'node-a';
@@ -50,7 +51,7 @@ function createFixture(options = {}) {
   const timeSource = new VirtualTimeSource({startMs: NOW_MS});
   const rowsByTable = new Map([
     [TABLES.NODES, [
-      {
+      nodesRow({
         [COLUMN.NODE_ID]: NODE_A,
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
         [COLUMN.CONNECTION_STATE]: 'ready',
@@ -61,8 +62,8 @@ function createFixture(options = {}) {
         [COLUMN.MEMORY_USAGE_PERCENT]: 20,
         [COLUMN.DISK_USAGE_PERCENT]: 30,
         [COLUMN.STORAGE_BUDGET_BYTES]: 1_000_000,
-      },
-      {
+      }),
+      nodesRow({
         [COLUMN.NODE_ID]: NODE_B,
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
         [COLUMN.CONNECTION_STATE]: 'ready',
@@ -72,26 +73,26 @@ function createFixture(options = {}) {
         [COLUMN.MEMORY_USAGE_PERCENT]: 20,
         [COLUMN.DISK_USAGE_PERCENT]: 30,
         [COLUMN.STORAGE_BUDGET_BYTES]: 1_000_000,
-      },
+      }),
     ]],
     [TABLES.NODE_ENDPOINTS, []],
     [TABLES.SERVICES, [
-      {
+      servicesRow({
         [COLUMN.SERVICE_ID]: 'service-a',
         [COLUMN.NODE_ID]: NODE_A,
         [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
         [COLUMN.PARTITION_ID]: USER_PARTITION_ID,
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
         [COLUMN.ADDRESS]: 'ws://node-a',
-      },
-      {
+      }),
+      servicesRow({
         [COLUMN.SERVICE_ID]: 'service-b',
         [COLUMN.NODE_ID]: NODE_B,
         [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
         [COLUMN.PARTITION_ID]: USER_PARTITION_ID,
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
         [COLUMN.ADDRESS]: 'ws://node-b',
-      },
+      }),
     ]],
     [TABLES.PARTITIONS, [
       {

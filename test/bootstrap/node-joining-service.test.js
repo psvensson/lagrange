@@ -70,6 +70,7 @@ import {insertViaUpsert} from
 import {
   FIXTURE_ENDPOINT_INCARNATION,
 } from '../test-helpers/endpoint-incarnation-fixture.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const DEFAULT_SEED_WS_ADDRESS =
   `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
@@ -247,24 +248,24 @@ test('NodeJoiningService - supplements partial cache mesh from bootstrap snapsho
     service.bootstrapResponse = {
       systemTableSnapshots: {
         nodes: [
-          {
+          nodesRow({
             node_id: TEST_JOINING_NODE_ID,
             node_address: TEST_JOINING_NODE_ADDRESS,
             status: TEST_ACTIVE_STATUS,
-          },
-          {
+          }),
+          nodesRow({
             node_id: TEST_SEED_NODE_ID,
             node_address: TEST_SEED_NODE_REST_ADDRESS,
             status: TEST_ACTIVE_STATUS,
-          },
-          {
+          }),
+          nodesRow({
             node_id: TEST_PEER_NODE_ID,
             node_address: TEST_PEER_NODE_REST_ADDRESS,
             status: TEST_JOINING_STATUS,
             connection_state: TEST_CONNECTING_STATE,
             // The peer is registered at the incarnation its endpoint carries.
             boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-          },
+          }),
         ],
         node_endpoints: [
           {
@@ -289,22 +290,22 @@ test('NodeJoiningService - supplements partial cache mesh from bootstrap snapsho
     systemTableCache.applySystemTableChange(
       TABLES.NODES,
       CDC_OPERATION.INSERT,
-      {
+      nodesRow({
         boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         node_id: TEST_JOINING_NODE_ID,
         node_address: TEST_JOINING_NODE_ADDRESS,
         status: TEST_ACTIVE_STATUS,
-      },
+      }),
     );
     systemTableCache.applySystemTableChange(
       TABLES.NODES,
       CDC_OPERATION.INSERT,
-      {
+      nodesRow({
         boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         node_id: TEST_SEED_NODE_ID,
         node_address: TEST_SEED_NODE_REST_ADDRESS,
         status: TEST_ACTIVE_STATUS,
-      },
+      }),
     );
 
     const connectCalls = [];
@@ -462,11 +463,11 @@ test('NodeJoiningService - runtime owner exposes system table cache for bootstra
   async (t) => {
     initializeTestEnvironment();
 
-    const nodeRow = {
+    const nodeRow = nodesRow({
       node_id: 'seed-node-1',
       node_address: 'ws://localhost:8080',
       status: 'active',
-    };
+    });
     const runtimeOwnerCache = {
       get() {
         return null;

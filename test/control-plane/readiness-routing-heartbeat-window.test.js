@@ -19,6 +19,7 @@ import {MembershipPublicationCoordinatorReads} from
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 // Production-shaped witness for the readiness-routing-cache-lag-bridge
 // quest: the REAL SystemTableCache, the real readiness service with its
 // single planning owner, and the real QueryExecutor. The cache has two
@@ -43,7 +44,9 @@ const NODE_ID = 'node-heartbeat-window';
 const SERVICE_ID = 'p1-r1';
 const PARTITION_ID = 'p1';
 const MESSAGE_GROUP_SERVICE_ID = 'mg-1';
-const INACTIVE_STATUS = 'inactive';
+// A stored non-active services status ('inactive' is not a value any writer
+// stores; the services decoder refuses it).
+const INACTIVE_STATUS = SERVICE_STATUS.STOPPED;
 const PEER_NODE_ID = 'node-heartbeat-peer';
 const PUBLICATION_ID = 'pub-1';
 const PUBLISHED_STATUS = 'PUBLISHED';
@@ -70,7 +73,7 @@ function createRig() {
   const clock = {now: START_MS};
   const lease = START_MS + LEASE_MS;
   const cache = new SystemTableCache();
-  cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+  cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, nodesRow({
     [COLUMN.NODE_ID]: NODE_ID,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.CONNECTION_STATE]: 'ready',
@@ -79,16 +82,16 @@ function createRig() {
     [COLUMN.CPU_USAGE_PERCENT]: 10,
     [COLUMN.MEMORY_USAGE_PERCENT]: 10,
     [COLUMN.DISK_USAGE_PERCENT]: 10,
-  });
-  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+  }));
+  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, servicesRow({
     [COLUMN.SERVICE_ID]: SERVICE_ID,
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     partition_id: PARTITION_ID,
     [COLUMN.NODE_ID]: NODE_ID,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${NODE_ID}/partition/${PARTITION_ID}`,
-  });
-  cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+  }));
+  cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, nodesRow({
     [COLUMN.NODE_ID]: PEER_NODE_ID,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.CONNECTION_STATE]: 'ready',
@@ -97,14 +100,14 @@ function createRig() {
     [COLUMN.CPU_USAGE_PERCENT]: 10,
     [COLUMN.MEMORY_USAGE_PERCENT]: 10,
     [COLUMN.DISK_USAGE_PERCENT]: 10,
-  });
-  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+  }));
+  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, servicesRow({
     [COLUMN.SERVICE_ID]: MESSAGE_GROUP_SERVICE_ID,
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
     [COLUMN.NODE_ID]: NODE_ID,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${NODE_ID}/mg/1`,
-  });
+  }));
   // A published cluster-membership row that names both nodes, so the real
   // publication reader feeds the serve lane; an ABANDONED transition whose
   // deferred delivery is pending must never be bridged.

@@ -12,7 +12,11 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
 import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
-import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  REPLICA_OPERATIONS_SCHEMA,
+  SYSTEM_TABLE_NAME,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -51,86 +55,58 @@ function getSystemTablePrimaryKeyField(tableName) {
   return SYSTEM_TABLE_PRIMARY_KEY_FIELD[tableName] || null;
 }
 
-function normalizeStepsHistory(stepsHistory) {
-  if (Array.isArray(stepsHistory)) {
-    return stepsHistory;
-  }
-  if (typeof stepsHistory !== 'string') {
-    return [];
-  }
+// The fake replica_operations store (mock cache + mock SQL engine) holds
+// production-shaped stored rows only: every stored column, snake_case, SQL
+// NULL where a nullable value is absent. A fixture hands it a stored row
+// (possibly partial: the shared fixture helper fills the other columns) or
+// a runtime operation (camelCase, the shape rowToOperation returns and the
+// repository's write path encodes). Like the production gateway's
+// canonicalizeControlPlaneMutation, the store keeps exactly the stored
+// columns: a camelCase field is encoded to its one stored column, a key that
+// is neither is dropped (runtime enrichment such as semanticPhase), and two
+// spellings of one column with different values are refused, so no stored
+// row ever carries a second spelling of a field.
+const REPLICA_OPERATION_STORED_COLUMN_BY_FIELD = new Map(
+  REPLICA_OPERATIONS_SCHEMA.columns.map((column) => [
+    column.name.replace(/_([a-z0-9])/gu, (_match, letter) => letter.toUpperCase()),
+    column.name,
+  ]),
+);
+const REPLICA_OPERATION_STORED_COLUMNS = new Set(
+  REPLICA_OPERATIONS_SCHEMA.columns.map((column) => column.name),
+);
 
-  try {
-    const parsed = JSON.parse(stepsHistory);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+function storedReplicaOperationOverrides(input) {
+  const overrides = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined) continue;
+    const column = REPLICA_OPERATION_STORED_COLUMNS.has(key) ?
+      key :
+      REPLICA_OPERATION_STORED_COLUMN_BY_FIELD.get(key);
+    if (column === undefined) continue;
+    if (Object.hasOwn(overrides, column) && overrides[column] !== value) {
+      throw new Error(
+        `replica_operations fixture carries ${column} in two spellings ` +
+        `with different values (${key})`,
+      );
+    }
+    overrides[column] = value;
   }
+  return overrides;
 }
 
-function normalizeReplicaOperationRow(row = {}) {
-  const normalized = {...row};
-  const operationId = row.operation_id ?? row.operationId ?? null;
-  const partitionId = row.partition_id ?? row.partitionId ?? null;
-  const replicaId = row.replica_id ?? row.replicaId ?? null;
-  const targetClaimKey =
-    row.target_claim_key ?? row.targetClaimKey ?? null;
-  const sourceNodeId = row.source_node_id ?? row.sourceNodeId ?? null;
-  const targetNodeId = row.target_node_id ?? row.targetNodeId ?? row.nodeId ?? null;
-  const workflowStep = row.workflow_step ?? row.workflowStep ?? null;
-  const createdAt = row.created_at ?? row.createdAt ?? null;
-  const updatedAt = row.updated_at ?? row.updatedAt ?? createdAt;
-  const completedAt = row.completed_at ?? row.completedAt ?? null;
-  const leaseExpiresAt =
-    row.lease_expires_at ?? row.leaseExpiresAt ?? null;
-  const errorMessage = row.error_message ?? row.errorMessage ?? null;
-  const rawStepsHistory =
-    row.steps_history ?? row.stepsHistory ?? [];
-  const stepsHistory = normalizeStepsHistory(rawStepsHistory);
-  const serializedStepsHistory =
-    typeof row.steps_history === 'string' ?
-      row.steps_history :
-      typeof row.stepsHistory === 'string' ?
-        row.stepsHistory :
-        JSON.stringify(stepsHistory);
-  const entityType = row.entity_type ?? row.entityType ?? null;
-  const entityId = row.entity_id ?? row.entityId ?? null;
-  const membershipPublicationEpoch =
-    row.membership_publication_epoch ?? row.membershipPublicationEpoch ?? null;
-
-  normalized.operation_id = operationId;
-  normalized.operationId = operationId;
-  normalized.partition_id = partitionId;
-  normalized.partitionId = partitionId;
-  normalized.replica_id = replicaId;
-  normalized.replicaId = replicaId;
-  normalized.target_claim_key = targetClaimKey;
-  normalized.targetClaimKey = targetClaimKey;
-  normalized.source_node_id = sourceNodeId;
-  normalized.sourceNodeId = sourceNodeId;
-  normalized.target_node_id = targetNodeId;
-  normalized.targetNodeId = targetNodeId;
-  normalized.workflow_step = workflowStep;
-  normalized.workflowStep = workflowStep;
-  normalized.created_at = createdAt;
-  normalized.createdAt = createdAt;
-  normalized.updated_at = updatedAt;
-  normalized.updatedAt = updatedAt;
-  normalized.completed_at = completedAt;
-  normalized.completedAt = completedAt;
-  normalized.lease_expires_at = leaseExpiresAt;
-  normalized.leaseExpiresAt = leaseExpiresAt;
-  normalized.error_message = errorMessage;
-  normalized.errorMessage = errorMessage;
-  normalized.steps_history = serializedStepsHistory;
-  normalized.stepsHistory = stepsHistory;
-  normalized.entity_type = entityType;
-  normalized.entityType = entityType;
-  normalized.entity_id = entityId;
-  normalized.entityId = entityId;
-  normalized.membership_publication_epoch = membershipPublicationEpoch;
-  normalized.membershipPublicationEpoch = membershipPublicationEpoch;
-
-  return normalized;
+function storedReplicaOperationRow(input = {}) {
+  const overrides = storedReplicaOperationOverrides(input);
+  if (Array.isArray(overrides.steps_history)) {
+    overrides.steps_history = JSON.stringify(overrides.steps_history);
+  }
+  if (
+    !Object.hasOwn(overrides, 'updated_at') &&
+    Object.hasOwn(overrides, 'created_at')
+  ) {
+    overrides.updated_at = overrides.created_at;
+  }
+  return replicaOperationsRow(overrides);
 }
 
 function isSuccessfulMutationResult(result) {
@@ -195,7 +171,7 @@ function createMockCache(options = {}) {
     ...node,
   }));
   const normalizedReplicaOperations =
-    replicaOperations.map((operation) => normalizeReplicaOperationRow(operation));
+    replicaOperations.map((operation) => storedReplicaOperationRow(operation));
 
   const cache = {
     nodes: new Map(normalizedNodes.map((node) => [node.node_id, node])),
@@ -216,7 +192,7 @@ function createMockCache(options = {}) {
 
   function normalizeCacheRow(tableName, row) {
     if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-      return normalizeReplicaOperationRow(row);
+      return storedReplicaOperationRow(row);
     }
     return row;
   }
@@ -682,7 +658,7 @@ function isTrackedOperationInFlight(operation) {
     return false;
   }
 
-  const workflowStep = operation.workflow_step || operation.workflowStep || null;
+  const workflowStep = operation.workflow_step;
   if (workflowStep === WORKFLOW_STEP.FAILED ||
       workflowStep === WORKFLOW_STEP.REMOVED) {
     return false;
@@ -732,10 +708,12 @@ function createTestCoordinator(options = {}) {
   };
 
   function syncReplicaOperationRow(row) {
-    const normalized = normalizeReplicaOperationRow(row);
-    if (!normalized.operation_id) {
+    // A write that names no operation stores nothing (the fixture would
+    // otherwise complete it with the placeholder operation_id).
+    if (!(row?.operation_id ?? row?.operationId)) {
       return null;
     }
+    const normalized = storedReplicaOperationRow(row);
 
     trackedOperations.set(normalized.operation_id, normalized);
     if (typeof mockCache.upsert === 'function') {
@@ -750,7 +728,6 @@ function createTestCoordinator(options = {}) {
       ...existing,
       ...patch,
       operation_id: operationId,
-      operationId,
     });
   }
 

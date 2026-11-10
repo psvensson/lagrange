@@ -36,6 +36,7 @@ import {
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {SERVICE_STATUS} from '../../src/constants/index.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const DEFAULT_SEED_WS_ADDRESS =
   `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
@@ -309,7 +310,7 @@ test('NodeJoiningService - fails fast on unauthorized replica owner conflict at 
     const nodeService = NodeService.getInstance();
     nodeService.initialize({nodeId: 'joining-node-ownership-1'});
     const cache = nodeService.getSystemTableCache();
-    cache.applySystemTableChange('services', 'INSERT', {
+    cache.applySystemTableChange('services', 'INSERT', servicesRow({
       service_id: 'mg-1-r1',
       service_type: 'message_group',
       node_id: 'seed-node-1',
@@ -318,7 +319,7 @@ test('NodeJoiningService - fails fast on unauthorized replica owner conflict at 
       raft_role: 'follower',
       status: 'active',
       address: 'seed-node-1/message-group/mg-1-r1',
-    });
+    }));
 
     t.throws(
       () => service.assertReplicaStartupOwnership('mg-1-r1'),
@@ -356,7 +357,7 @@ test(
     const nodeService = NodeService.getInstance();
     nodeService.initialize({nodeId: 'joining-node-ownership-2'});
     const cache = nodeService.getSystemTableCache();
-    cache.applySystemTableChange('services', 'INSERT', {
+    cache.applySystemTableChange('services', 'INSERT', servicesRow({
       service_id: 'mg-1-r1',
       service_type: 'message_group',
       node_id: 'seed-node-1',
@@ -365,7 +366,7 @@ test(
       raft_role: 'follower',
       status: 'active',
       address: 'seed-node-1/message-group/mg-1-r1',
-    });
+    }));
 
     t.throws(
       () => service.assertReplicaStartupOwnership('mg-1-r1'),

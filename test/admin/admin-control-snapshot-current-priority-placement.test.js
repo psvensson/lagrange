@@ -9,6 +9,8 @@ import {
 import {
   buildCurrentPriorityPlacementObservation,
 } from '../../src/admin/admin-control-snapshot-current-priority-placement.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_CAPTURED_AT_MS = 1000;
 const TEST_NODE_IDS = Object.freeze(['node-a', 'node-b', 'node-c']);
@@ -34,7 +36,7 @@ function buildPriorityRows() {
     });
     for (const [index, nodeId] of TEST_NODE_IDS.entries()) {
       const replicaId = partitionId + '-r' + String(index + 1);
-      serviceRows.push({
+      serviceRows.push(servicesRow({
         service_id: replicaId,
         service_type: 'partition',
         partition_id: partitionId,
@@ -45,15 +47,24 @@ function buildPriorityRows() {
         // Durable services rows intentionally collapse leader to follower.
         raft_role: 'follower',
         address: nodeId + '/partition/' + replicaId,
-      });
+      }));
     }
   }
   return {partitionRows, serviceRows};
 }
 
+// The observation reads projected replicas (the Admin snapshot projects the
+// stored services rows itself); the stored rows stay mutable for the cases.
+function projectRows(rows) {
+  return {
+    partitionRows: rows.partitionRows,
+    serviceRows: projectReplicasFromServicesRows(rows.serviceRows),
+  };
+}
+
 function buildObservation(rows) {
   return buildCurrentPriorityPlacementObservation({
-    ...rows,
+    ...projectRows(rows),
     capturedAt: TEST_CAPTURED_AT_MS,
     readinessByNodeId: {},
     activeNodeViews: {
@@ -117,7 +128,7 @@ test('current priority placement observes spread and leadership from one capture
     schemaLeaderVoter.status = 'active';
 
     const fractionalCapture = buildCurrentPriorityPlacementObservation({
-      ...rows,
+      ...projectRows(rows),
       capturedAt: TEST_CAPTURED_AT_MS + 0.5,
       readinessByNodeId: {},
       activeNodeViews: {
@@ -136,7 +147,7 @@ test('current priority placement observes spread and leadership from one capture
     );
 
     const unpublishedCapture = buildCurrentPriorityPlacementObservation({
-      ...rows,
+      ...projectRows(rows),
       capturedAt: TEST_CAPTURED_AT_MS,
       readinessByNodeId: {},
       activeNodeViews: {
@@ -156,7 +167,7 @@ test('current priority placement observes spread and leadership from one capture
 
 test('current priority placement adapter fails closed before node-view fallback',
   (t) => {
-    const rows = buildPriorityRows();
+    const rows = projectRows(buildPriorityRows());
     const baseOptions = {
       ...rows,
       capturedAt: TEST_CAPTURED_AT_MS,
@@ -308,7 +319,7 @@ test('current priority leader coverage ignores ambient Array and Map mutation',
       rows.partitionRows[index].leader_node_id = null;
     }
     const options = {
-      ...rows,
+      ...projectRows(rows),
       capturedAt: TEST_CAPTURED_AT_MS,
       readinessByNodeId: {},
       activeNodeViews: {
@@ -317,7 +328,7 @@ test('current priority leader coverage ignores ambient Array and Map mutation',
     };
     const baseline = buildCurrentPriorityPlacementObservation(options);
     const mappedOptions = {
-      ...buildPriorityRows(),
+      ...projectRows(buildPriorityRows()),
       capturedAt: TEST_CAPTURED_AT_MS,
       readinessByNodeId: {},
       activeNodeViews: {
@@ -410,7 +421,7 @@ test('leader-role fallback is deterministic across service-row ordering',
     partitionServices[2].raft_role = 'leader';
     const build = (serviceRows) => buildCurrentPriorityPlacementObservation({
       partitionRows: rows.partitionRows,
-      serviceRows,
+      serviceRows: projectReplicasFromServicesRows(serviceRows),
       capturedAt: TEST_CAPTURED_AT_MS,
       readinessByNodeId: {},
       activeNodeViews: {
@@ -433,7 +444,7 @@ test('leader-role fallback is deterministic across service-row ordering',
 
 test('null and empty active-node views preserve the same fallback semantics',
   (t) => {
-    const rows = buildPriorityRows();
+    const rows = projectRows(buildPriorityRows());
     const baseOptions = {
       ...rows,
       capturedAt: TEST_CAPTURED_AT_MS,
@@ -528,7 +539,7 @@ test('priority ID resolution fails closed for revoked direct inputs', (t) => {
 
 test('conflicting duplicate partition rows are unavailable and deterministic',
   (t) => {
-    const rows = buildPriorityRows();
+    const rows = projectRows(buildPriorityRows());
     const duplicate = {
       ...rows.partitionRows[0],
       leader_node_id: TEST_NODE_IDS[1],

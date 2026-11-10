@@ -53,6 +53,11 @@ import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_CRITICAL_TRANSPORT_PARTITION_ADDRESS =
   'seed-node/partition/control_plane_publications-p1-r1';
@@ -71,12 +76,13 @@ test('MessageGroupService - publishes leader state as follower metadata in servi
   };
   const systemTableCache = new SystemTableCache();
   const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
-  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
-    [COLUMN.PARTITION_ID]: servicesPartitionId,
-    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
-    [COLUMN.LEADER_NODE_ID]: nodeId,
-  });
-  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+  systemTableCache.applySystemTableChange(
+    TABLES.PARTITIONS, CDC_OPERATION.INSERT, systemTableRow(TABLES.PARTITIONS, {
+      [COLUMN.PARTITION_ID]: servicesPartitionId,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+      [COLUMN.LEADER_NODE_ID]: nodeId,
+    }));
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, servicesRow({
     [COLUMN.SERVICE_ID]: 'services-leader',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: servicesPartitionId,
@@ -84,7 +90,7 @@ test('MessageGroupService - publishes leader state as follower metadata in servi
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${nodeId}/partition/services-leader`,
-  });
+  }));
 
   try {
     const service = new MessageGroupService(withTestDbPath({
@@ -153,12 +159,13 @@ test('MessageGroupService - demotes non-control-plane role publication to backgr
   };
   const systemTableCache = new SystemTableCache();
   const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
-  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
-    [COLUMN.PARTITION_ID]: servicesPartitionId,
-    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
-    [COLUMN.LEADER_NODE_ID]: nodeId,
-  });
-  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+  systemTableCache.applySystemTableChange(
+    TABLES.PARTITIONS, CDC_OPERATION.INSERT, systemTableRow(TABLES.PARTITIONS, {
+      [COLUMN.PARTITION_ID]: servicesPartitionId,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+      [COLUMN.LEADER_NODE_ID]: nodeId,
+    }));
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, servicesRow({
     [COLUMN.SERVICE_ID]: 'services-leader',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: servicesPartitionId,
@@ -166,7 +173,7 @@ test('MessageGroupService - demotes non-control-plane role publication to backgr
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${nodeId}/partition/services-leader`,
-  });
+  }));
 
   try {
     const service = new MessageGroupService(withTestDbPath({
@@ -214,12 +221,13 @@ test('MessageGroupService - publishes candidate role as follower metadata', asyn
   };
   const systemTableCache = new SystemTableCache();
   const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
-  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
-    [COLUMN.PARTITION_ID]: servicesPartitionId,
-    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
-    [COLUMN.LEADER_NODE_ID]: nodeId,
-  });
-  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+  systemTableCache.applySystemTableChange(
+    TABLES.PARTITIONS, CDC_OPERATION.INSERT, systemTableRow(TABLES.PARTITIONS, {
+      [COLUMN.PARTITION_ID]: servicesPartitionId,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+      [COLUMN.LEADER_NODE_ID]: nodeId,
+    }));
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, servicesRow({
     [COLUMN.SERVICE_ID]: 'services-leader',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: servicesPartitionId,
@@ -227,8 +235,8 @@ test('MessageGroupService - publishes candidate role as follower metadata', asyn
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${nodeId}/partition/services-leader`,
-  });
-  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+  }));
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, servicesRow({
     [COLUMN.SERVICE_ID]: 'mg-1-r1',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
     [COLUMN.GROUP_ID]: 'mg-1',
@@ -238,7 +246,7 @@ test('MessageGroupService - publishes candidate role as follower metadata', asyn
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${nodeId}/message-group/mg-1-r1`,
     [COLUMN.UPDATED_AT]: 1,
-  });
+  }));
 
   try {
     const service = new MessageGroupService(withTestDbPath({
@@ -301,12 +309,13 @@ test(
     };
     const systemTableCache = new SystemTableCache();
     const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
-    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
-      [COLUMN.PARTITION_ID]: servicesPartitionId,
-      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
-      [COLUMN.LEADER_NODE_ID]: nodeId,
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+    systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS, CDC_OPERATION.INSERT, systemTableRow(TABLES.PARTITIONS, {
+        [COLUMN.PARTITION_ID]: servicesPartitionId,
+        [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+        [COLUMN.LEADER_NODE_ID]: nodeId,
+      }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, servicesRow({
       [COLUMN.SERVICE_ID]: 'services-leader',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: servicesPartitionId,
@@ -314,7 +323,7 @@ test(
       [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: `${nodeId}/partition/services-leader`,
-    });
+    }));
 
     try {
       const service = new MessageGroupService(withTestDbPath({
@@ -357,12 +366,13 @@ test(
     };
     const systemTableCache = new SystemTableCache();
     const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
-    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
-      [COLUMN.PARTITION_ID]: servicesPartitionId,
-      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
-      [COLUMN.LEADER_NODE_ID]: nodeId,
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+    systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS, CDC_OPERATION.INSERT, systemTableRow(TABLES.PARTITIONS, {
+        [COLUMN.PARTITION_ID]: servicesPartitionId,
+        [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+        [COLUMN.LEADER_NODE_ID]: nodeId,
+      }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, servicesRow({
       [COLUMN.SERVICE_ID]: 'services-leader',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: servicesPartitionId,
@@ -370,8 +380,8 @@ test(
       [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: `${nodeId}/partition/services-leader`,
-    });
-    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+    }));
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, servicesRow({
       [COLUMN.SERVICE_ID]: 'mg-1-r1',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
       [COLUMN.GROUP_ID]: 'mg-1',
@@ -380,7 +390,7 @@ test(
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: `${nodeId}/message-group/mg-1-r1`,
       [COLUMN.UPDATED_AT]: Date.now(),
-    });
+    }));
 
     try {
       const service = new MessageGroupService(withTestDbPath({
@@ -628,13 +638,13 @@ test(
       service.systemTableCache.applySystemTableChange(
         TABLES.NODES,
         CDC_OPERATION.INSERT,
-        {
+        nodesRow({
           [COLUMN.NODE_ID]: nodeId,
           [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
           [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
           [COLUMN.LAST_HEARTBEAT]: Date.now(),
           [COLUMN.READY_LEASE_EXPIRES_AT]: null,
-        },
+        }),
       );
       service.pendingRoleUpdate = RaftRole.LEADER;
       service.persistedRole = null;
@@ -750,12 +760,13 @@ test('MessageGroupService - persists leader node updates to message groups table
   };
   const systemTableCache = new SystemTableCache();
   const messageGroupsPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.MESSAGE_GROUPS];
-  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
-    [COLUMN.PARTITION_ID]: messageGroupsPartitionId,
-    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
-    [COLUMN.LEADER_NODE_ID]: nodeId,
-  });
-  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+  systemTableCache.applySystemTableChange(
+    TABLES.PARTITIONS, CDC_OPERATION.INSERT, systemTableRow(TABLES.PARTITIONS, {
+      [COLUMN.PARTITION_ID]: messageGroupsPartitionId,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+      [COLUMN.LEADER_NODE_ID]: nodeId,
+    }));
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, servicesRow({
     [COLUMN.SERVICE_ID]: 'message-groups-leader',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: messageGroupsPartitionId,
@@ -763,7 +774,7 @@ test('MessageGroupService - persists leader node updates to message groups table
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${nodeId}/partition/message-groups-leader`,
-  });
+  }));
 
   try {
     const service = new MessageGroupService(withTestDbPath({

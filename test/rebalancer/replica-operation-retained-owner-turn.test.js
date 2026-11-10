@@ -12,6 +12,7 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_NODE_ID = 'node-retained-turn';
 const TEST_OPERATION_ID = 'schema-job-users:operation:node-retained-turn';
@@ -41,7 +42,7 @@ function buildOperation() {
 }
 
 function operationToRow(operation) {
-  return {
+  return replicaOperationsRow({
     operation_id: operation.operationId,
     type: operation.type,
     partition_id: operation.partitionId,
@@ -57,7 +58,7 @@ function operationToRow(operation) {
     completed_at: operation.completedAt,
     error_message: operation.errorMessage,
     steps_history: JSON.stringify(operation.stepsHistory),
-  };
+  });
 }
 
 function applyOperationUpdate(operation, params) {

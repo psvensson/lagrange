@@ -8,6 +8,7 @@ import {
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {MOVE_REASON} from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -55,10 +56,18 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
     'continues cleanup-only REMOVE planning for above-target active replicas',
     async (t) => {
       const currentReplicas = [
-        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r4', node_id: 'node-4', status: ReplicaStatus.ACTIVE},
+        projectedReplica({
+          service_id: 'r1', replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE,
+        }),
+        projectedReplica({
+          service_id: 'r2', replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE,
+        }),
+        projectedReplica({
+          service_id: 'r3', replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.ACTIVE,
+        }),
+        projectedReplica({
+          service_id: 'r4', replica_id: 'r4', node_id: 'node-4', status: ReplicaStatus.ACTIVE,
+        }),
       ];
       const planner = new MovePlanner({
         entityId: 'partition-1',
@@ -102,8 +111,12 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
     'keeps a pending add target inside target placement while bootstrap is still converging',
     async (t) => {
       const currentReplicas = [
-        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
+        projectedReplica({
+          service_id: 'r1', replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE,
+        }),
+        projectedReplica({
+          service_id: 'r2', replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE,
+        }),
       ];
       const availableNodes = [
         {node_id: 'node-1', status: ReplicaStatus.ACTIVE, cpu_usage_percent: 0},
@@ -158,9 +171,15 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
     'does not drop an at-target topology below target while adds are blocked by in-flight work',
     async (t) => {
       const currentReplicas = [
-        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
-        {replica_id: 'r3', node_id: 'node-4', status: ReplicaStatus.ACTIVE},
+        projectedReplica({
+          service_id: 'r1', replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE,
+        }),
+        projectedReplica({
+          service_id: 'r2', replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE,
+        }),
+        projectedReplica({
+          service_id: 'r3', replica_id: 'r3', node_id: 'node-4', status: ReplicaStatus.ACTIVE,
+        }),
       ];
       const planner = new MovePlanner({
         entityId: 'partition-1',
@@ -204,26 +223,30 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
       const TEST_NODE_ID_C = 'node-3';
       const TEST_STALE_TARGET_NODE_ID = 'node-4';
       const currentReplicas = [
-        {
+        projectedReplica({
+          service_id: 'sql_transaction_participants-p1-r1',
           replica_id: 'sql_transaction_participants-p1-r1',
           node_id: TEST_NODE_ID_A,
           status: ReplicaStatus.ACTIVE,
-        },
-        {
+        }),
+        projectedReplica({
+          service_id: 'sql_transaction_participants-p1-r2',
           replica_id: 'sql_transaction_participants-p1-r2',
           node_id: TEST_NODE_ID_B,
           status: ReplicaStatus.ACTIVE,
-        },
-        {
+        }),
+        projectedReplica({
+          service_id: 'sql_transaction_participants-p1-r3',
           replica_id: 'sql_transaction_participants-p1-r3',
           node_id: TEST_NODE_ID_C,
           status: ReplicaStatus.ACTIVE,
-        },
-        {
+        }),
+        projectedReplica({
+          service_id: TEST_STALE_TARGET_REPLICA_ID,
           replica_id: TEST_STALE_TARGET_REPLICA_ID,
           node_id: TEST_STALE_TARGET_NODE_ID,
           status: ReplicaStatus.SYNCING,
-        },
+        }),
       ];
       const planner = new MovePlanner({
         entityId: TEST_ENTITY_ID,
@@ -263,26 +286,30 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
       const TEST_NODE_ID_C = 'node-3';
       const TEST_STALE_TARGET_NODE_ID = 'node-4';
       const currentReplicas = [
-        {
+        projectedReplica({
+          service_id: 'sql_transaction_participants-p1-r1',
           replica_id: 'sql_transaction_participants-p1-r1',
           node_id: TEST_NODE_ID_A,
           status: ReplicaStatus.ACTIVE,
-        },
-        {
+        }),
+        projectedReplica({
+          service_id: 'sql_transaction_participants-p1-r2',
           replica_id: 'sql_transaction_participants-p1-r2',
           node_id: TEST_NODE_ID_B,
           status: ReplicaStatus.ACTIVE,
-        },
-        {
+        }),
+        projectedReplica({
+          service_id: 'sql_transaction_participants-p1-r3',
           replica_id: 'sql_transaction_participants-p1-r3',
           node_id: TEST_NODE_ID_C,
           status: ReplicaStatus.ACTIVE,
-        },
-        {
+        }),
+        projectedReplica({
+          service_id: TEST_STALE_TARGET_REPLICA_ID,
           replica_id: TEST_STALE_TARGET_REPLICA_ID,
           node_id: TEST_STALE_TARGET_NODE_ID,
           status: ReplicaStatus.ACTIVE,
-        },
+        }),
       ];
       const planner = new MovePlanner({
         entityId: TEST_ENTITY_ID,
@@ -333,21 +360,24 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
       const GLOBAL_REPLICA_ID = 'control_plane_publications-p1-r4';
 
       const currentReplicas = [
-        {
+        projectedReplica({
+          service_id: 'replica_operations-p1-r1',
           replica_id: 'replica_operations-p1-r1',
           node_id: TARGET_SOURCE_NODE_ID,
           status: ReplicaStatus.ACTIVE,
-        },
-        {
+        }),
+        projectedReplica({
+          service_id: 'replica_operations-p1-r2',
           replica_id: 'replica_operations-p1-r2',
           node_id: TARGET_SOURCE_NODE_ID,
           status: ReplicaStatus.ACTIVE,
-        },
-        {
+        }),
+        projectedReplica({
+          service_id: 'replica_operations-p1-r3',
           replica_id: 'replica_operations-p1-r3',
           node_id: TARGET_SOURCE_NODE_ID,
           status: ReplicaStatus.ACTIVE,
-        },
+        }),
       ];
       const planner = new MovePlanner({
         entityId: ENTITY_ID,
@@ -410,21 +440,24 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
       const GLOBAL_OPERATION_ID = 'op-global-target-selection-1';
 
       const currentReplicas = [
-        {
+        projectedReplica({
+          service_id: 'replica_operations-p1-r1',
           replica_id: 'replica_operations-p1-r1',
           node_id: SOURCE_NODE_ID,
           status: ReplicaStatus.ACTIVE,
-        },
-        {
+        }),
+        projectedReplica({
+          service_id: 'replica_operations-p1-r2',
           replica_id: 'replica_operations-p1-r2',
           node_id: SOURCE_NODE_ID,
           status: ReplicaStatus.ACTIVE,
-        },
-        {
+        }),
+        projectedReplica({
+          service_id: 'replica_operations-p1-r3',
           replica_id: 'replica_operations-p1-r3',
           node_id: SOURCE_NODE_ID,
           status: ReplicaStatus.ACTIVE,
-        },
+        }),
       ];
       const availableNodes = [
         {

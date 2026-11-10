@@ -64,6 +64,7 @@ import {
   buildDualBridgeSubscribers,
   subscribeWithoutEagerDrive,
 } from '../message-group/cdc-source-occurrence-helpers.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 const DRIVE = PARTITION_CDC_OBLIGATION_DRIVE_STATE;
 
@@ -402,7 +403,7 @@ test(
       f.source.systemTableCache.applySystemTableChange(
         TABLES.LATENCY_GROUPS,
         CDC_OPERATION.INSERT,
-        groupRow,
+        systemTableRow(TABLES.LATENCY_GROUPS, groupRow),
       );
     }
     f.tree.recompute();
@@ -655,20 +656,35 @@ test(
       return null;
     };
 
-    const negativeDrive = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w9-65th-withheld'),
-    );
-    assert.equal(negativeDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
-    assert.equal(readCdcObligation(f.producerLeader.db, debt.eventKey).delivered, false);
-    const cell = f.producerLeader.cdcDelivery.obligationLane.currentObligation;
-    assert.ok(cell, 'source progress cell retains the 64 completed target receipts');
+    // HELD says only that this invocation ended with the obligation owed (its
+    // delivery budget or retry attempts ran out), not that the wave visited
+    // every target first. Committed receipts stay in the source progress cell
+    // and the next drive continues from them, so the settled state under the
+    // withheld 65th is observed by re-driving while each drive adds receipts:
+    // every drive must stay HELD and undelivered, in the same cell, with no
+    // receipt lost (system-table-row-decoders notes, round 2 F1/F12).
+    const lane = f.producerLeader.cdcDelivery.obligationLane;
+    const committedTargets = (targets) =>
+      targets.filter((t) => t.coverage.state === CDC_COVERAGE_STATE.COMMITTED).length;
+    let cell = null;
+    let committed = -1;
+    for (let drive = 1; committed < 64; drive += 1) {
+      const negativeDrive = await driveWithPump(f, () =>
+        f.producerLeader.cdcDelivery.driveCdcObligations(`w9-65th-withheld-${drive}`),
+      );
+      assert.equal(negativeDrive.state, DRIVE.HELD_BY_SUBSCRIBER);
+      assert.equal(readCdcObligation(f.producerLeader.db, debt.eventKey).delivered, false);
+      assert.ok(lane.currentObligation, 'source progress cell retains the completed receipts');
+      assert.ok(cell === null || lane.currentObligation === cell,
+        'every withheld drive continues the same progress cell');
+      cell = lane.currentObligation;
+      const now = committedTargets(cell.branches[0].topology.targets);
+      assert.ok(now > committed, `withheld drive ${drive} adds receipts (${committed} -> ${now})`);
+      committed = now;
+    }
     const branchTargets = cell.branches[0].topology.targets;
     assert.equal(branchTargets.length, 65);
-    assert.equal(
-      branchTargets.filter((t) => t.coverage.state === CDC_COVERAGE_STATE.COMMITTED)
-        .length,
-      64,
-    );
+    assert.equal(committedTargets(branchTargets), 64);
     assert.equal(
       branchTargets.find((t) => t.groupId === 'mg-w9-target-65').coverage.state,
       CDC_COVERAGE_STATE.UNCOVERED,

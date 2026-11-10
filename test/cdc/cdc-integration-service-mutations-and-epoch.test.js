@@ -17,6 +17,7 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {nodesRow, systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -620,11 +621,13 @@ test(
     const cache = new SystemTableCache();
     const executedQueries = [];
     const divergenceEvents = [];
-    const authoritativeRow = {
+    // The authoritative SELECT * returns the complete stored nodes row (the
+    // cache holds the row its table would hold).
+    const authoritativeRow = nodesRow({
       node_id: 'node-1',
       status: 'suspected',
-      updated_at: 200,
-    };
+      last_heartbeat: 200,
+    });
     const mockSqlEngine = {
       executedQueries,
       async executeQuery(sql, params = []) {
@@ -679,11 +682,11 @@ test(
     const result = await service.updateSystemTableRow(
       SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1'},
-      {status: 'suspected', updated_at: 200},
+      {status: 'suspected', last_heartbeat: 200},
       {
         expectedCacheFields: {
           status: 'suspected',
-          updated_at: 200,
+          last_heartbeat: 200,
         },
       },
     );
@@ -715,14 +718,13 @@ test(
     const cache = new SystemTableCache();
     const executedQueries = [];
     const divergenceEvents = [];
-    const authoritativeRow = {
+    // The complete stored tables row the INSERT writes and SELECT * returns.
+    const authoritativeRow = systemTableRow(SYSTEM_TABLE_NAME.TABLES, {
       table_id: 'tbl-1',
       table_name: 'benchmark_events',
-      partition_id: 'benchmark_events-p1',
-      owner_node_id: 'node-1',
       created_at: 100,
       updated_at: 100,
-    };
+    });
     const mockSqlEngine = {
       executedQueries,
       async executeQuery(sql, params = []) {
@@ -807,11 +809,13 @@ test(
     const readOnlyCache = createReadOnlyCache(writableCache);
     const executedQueries = [];
     const divergenceEvents = [];
-    const authoritativeRow = {
+    // The authoritative SELECT * returns the complete stored nodes row (the
+    // cache holds the row its table would hold).
+    const authoritativeRow = nodesRow({
       node_id: 'node-1',
       status: 'suspected',
-      updated_at: 200,
-    };
+      last_heartbeat: 200,
+    });
     const mockSqlEngine = {
       executedQueries,
       async executeQuery(sql, params = []) {
@@ -867,11 +871,11 @@ test(
     const result = await service.updateSystemTableRow(
       SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1'},
-      {status: 'suspected', updated_at: 200},
+      {status: 'suspected', last_heartbeat: 200},
       {
         expectedCacheFields: {
           status: 'suspected',
-          updated_at: 200,
+          last_heartbeat: 200,
         },
       },
     );

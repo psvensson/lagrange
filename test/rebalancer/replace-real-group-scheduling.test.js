@@ -68,6 +68,7 @@ import {
 } from './replace-real-group-harness.js';
 import {RAFT_RS_MESSAGE_TYPE} from
   '../../src/raft/raft-rs-ingress-constants.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 test('T5-prime installs the canonical waiter and fallback before returning ' +
   'from a re-sent removal effect', async (t) => {
@@ -304,12 +305,20 @@ test('S6: source-row delete x T5\'/R-1f preconditions - decide-first waits ' +
   }
 });
 
+// The status a terminal write stores with its step: the workflow table has
+// no FAILED entry because failOperation stamps ReplicaStatus.FAILED itself.
+function terminalStatusForStep(step) {
+  return step === WORKFLOW_STEP.FAILED ?
+    ReplicaStatus.FAILED :
+    WORKFLOW_STEP_TO_STATUS[step];
+}
+
 // A terminal another node wrote through the same first-terminal-wins CAS
 // (completed_at IS NULL), durable and replicated here when it landed.
 async function replicateRemoteTerminal(world, step) {
   const row = world.cache.get('replica_operations', world.operation.operationId);
   const terminal = {...row, workflow_step: step,
-    status: WORKFLOW_STEP_TO_STATUS[step], completed_at: Date.now()};
+    status: terminalStatusForStep(step), completed_at: Date.now()};
   const result = await world.coordinator.controlPlaneSystemTableGateway
     .submitMutation({
       tableName: 'replica_operations', operation: 'update',
@@ -383,7 +392,8 @@ function plannedRemoves(world) {
     entityId: world.partitionId,
     entityType: EntityType.PARTITION,
     systemTableCache: createMockCache({
-      services: world.cache.getAll('services'),
+      // The cache holds complete stored rows.
+      services: world.cache.getAll('services').map((row) => servicesRow(row)),
       replicaOperations: world.cache.getAll('replica_operations'),
     }),
     nodeId: 'planner-node',

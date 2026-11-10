@@ -716,7 +716,9 @@ test('BR17: a terminal written elsewhere releases the waiting owner',
             world.coordinator.controlPlaneSystemTableGateway,
             'replica_operations', {...row,
               workflow_step: terminalStep,
-              status: WORKFLOW_STEP_TO_STATUS[terminalStep],
+              // The stored terminal status (the step map has no FAILED).
+              status: terminalStep === WORKFLOW_STEP.FAILED ?
+                ReplicaStatus.FAILED : WORKFLOW_STEP_TO_STATUS[terminalStep],
               completed_at: Date.now()});
           await settle();
           t.equal(readReplaceOwnerDiagnostic(owner, operation.operationId),

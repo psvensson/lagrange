@@ -87,6 +87,7 @@ import {
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {createInProcWebSocketPair} from '../../src/transport/inproc-transport.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const GROUP_ID = 'mg-1';
 const CLUSTER_ID = 'fresh-mg-physical-cluster';
@@ -229,11 +230,14 @@ async function ensureLeaderWithAppliedTerm(liveReplicas, preferredReplicaId = nu
     leader = preferred;
   }
   if (!leader.raft.readStatus().currentTermApplied) {
-    await leader.applyCDCEvent(TABLES.NODES, 'INSERT', {
-      id: `term-barrier-${leader.replicaId}-${Date.now()}`,
-      address: '127.0.0.1:7999',
+    // A complete stored nodes row the cache can hold (the entry only needs
+    // to commit in the leader's current term).
+    const barrierNodeId = `term-barrier-${leader.replicaId}-${Date.now()}`;
+    await leader.applyCDCEvent(TABLES.NODES, 'INSERT', nodesRow({
+      node_id: barrierNodeId,
+      node_address: `ws://${barrierNodeId}`,
       status: 'active',
-    });
+    }));
   }
   assert.equal(
     await waitFor(() => leader.raft.readStatus().currentTermApplied === true),
@@ -325,7 +329,9 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
         `INSERT INTO services (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
         cols.map((col) => built[col]),
       );
-      cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      // The cache holds a complete stored row: the NOT NULL timestamps are
+      // the ones the SQL row above stores.
+      cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
         service_id: replicaId,
         replica_id: replicaId,
         group_id: GROUP_ID,
@@ -333,7 +339,9 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
         node_id: nodeId,
         status: SERVICE_STATUS.ACTIVE,
         address,
-      });
+        created_at: built.created_at,
+        updated_at: built.updated_at,
+      }));
     };
 
     for (let i = 0; i < FOUNDERS.length; i += 1) {
@@ -972,19 +980,21 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
         ['mg-1-r4', 'mg-1-r5'].includes(offSeedLeader.replicaId),
         'off-seed voter leads at 2/3 quorum without the seed',
       );
-      const postSeedLossRow = {
-        id: 'node-after-seed-loss',
-        address: '10.42.0.4:7000',
+      // A complete stored nodes row (the replicated cache refuses an insert
+      // its table could not hold).
+      const postSeedLossRow = nodesRow({
+        node_id: 'node-after-seed-loss',
+        node_address: '10.42.0.4:7000',
         status: 'active',
-      };
+      });
       await offSeedLeader.applyCDCEvent(TABLES.NODES, 'INSERT', postSeedLossRow);
       for (const replicaId of ['mg-1-r4', 'mg-1-r5']) {
         const voter = replicas.get(replicaId);
         assert.equal(
           await waitFor(
             () =>
-              voter.getWritableCache().get(TABLES.NODES, postSeedLossRow.id)
-                ?.address === postSeedLossRow.address,
+              voter.getWritableCache().get(TABLES.NODES, postSeedLossRow.node_id)
+                ?.node_address === postSeedLossRow.node_address,
           ),
           true,
           `${replicaId} replicates and hydrates CDC cache state after seed storage loss`,
@@ -1030,19 +1040,21 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
       }
 
       const reopenedLeader = await ensureLeaderWithAppliedTerm(liveReplicas());
-      const postRestartRow = {
-        id: 'node-after-offseed-restart',
-        address: '10.42.0.5:7000',
+      // A complete stored nodes row (the replicated cache refuses an insert
+      // its table could not hold).
+      const postRestartRow = nodesRow({
+        node_id: 'node-after-offseed-restart',
+        node_address: '10.42.0.5:7000',
         status: 'active',
-      };
+      });
       await reopenedLeader.applyCDCEvent(TABLES.NODES, 'INSERT', postRestartRow);
       for (const replicaId of ['mg-1-r4', 'mg-1-r5']) {
         const voter = replicas.get(replicaId);
         assert.equal(
           await waitFor(
             () =>
-              voter.getWritableCache().get(TABLES.NODES, postRestartRow.id)
-                ?.address === postRestartRow.address,
+              voter.getWritableCache().get(TABLES.NODES, postRestartRow.node_id)
+                ?.node_address === postRestartRow.node_address,
           ),
           true,
           `${replicaId} commits and hydrates new CDC state after full off-seed restart`,
@@ -1058,7 +1070,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
           );
           assert.equal(
             entries.some(
-              (entry) => entry.command?.data?.id === postRestartRow.id,
+              (entry) => entry.command?.data?.node_id === postRestartRow.node_id,
             ),
             true,
             `${replicaId} durable store retains post-restart committed entry`,

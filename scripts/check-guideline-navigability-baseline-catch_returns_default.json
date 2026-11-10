@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-08T12:15:36.638Z",
-  "rawViolationCount": 387,
+  "generatedAt": "2026-11-09T06:22:43.405Z",
+  "rawViolationCount": 386,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-readiness-diagnostics-methods.js",
@@ -50,7 +50,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-stale-watermark-record.js",
-      "line": 148,
+      "line": 150,
       "column": 4,
       "functionName": "resolveLogger",
       "kind": "catch_returns_default",
@@ -176,7 +176,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api-readiness-methods.js",
-      "line": 150,
+      "line": 138,
       "column": 6,
       "functionName": "getStartupAuthoritySnapshotForBootstrapResponse",
       "kind": "catch_returns_default",
@@ -302,7 +302,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
-      "line": 581,
+      "line": 571,
       "column": 6,
       "functionName": "getControlPlanePublicationStory",
       "kind": "catch_returns_default",
@@ -311,7 +311,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
-      "line": 620,
+      "line": 597,
       "column": 6,
       "functionName": "getMembershipPublicationDiagnostics",
       "kind": "catch_returns_default",
@@ -374,7 +374,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/startup-runtime-handoff-owner.js",
-      "line": 140,
+      "line": 143,
       "column": 12,
       "functionName": "<anonymous>",
       "kind": "catch_returns_default",
@@ -707,8 +707,8 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 161,
-      "column": 6,
+      "line": 160,
+      "column": 4,
       "functionName": "getHeartbeatPublicationDiagnostics",
       "kind": "catch_returns_default",
       "reason": "catch that returns a default; surface a typed refusal instead",
@@ -716,7 +716,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-snapshot-store.js",
-      "line": 51,
+      "line": 57,
       "column": 6,
       "functionName": "getServicesTableMutationVersionForSnapshotReuse",
       "kind": "catch_returns_default",
@@ -950,7 +950,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-global-projection.js",
-      "line": 81,
+      "line": 86,
       "column": 4,
       "functionName": "isPriorityPartitionRecord",
       "kind": "catch_returns_default",
@@ -959,7 +959,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-global-projection.js",
-      "line": 107,
+      "line": 112,
       "column": 4,
       "functionName": "isPriorityPartitionId",
       "kind": "catch_returns_default",
@@ -968,7 +968,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-global-projection.js",
-      "line": 283,
+      "line": 284,
       "column": 4,
       "functionName": "isPriorityPartitionFromProjection",
       "kind": "catch_returns_default",
@@ -1031,7 +1031,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-table-impact-classification.js",
-      "line": 113,
+      "line": 119,
       "column": 4,
       "functionName": "readSourceRowKey",
       "kind": "catch_returns_default",
@@ -1040,7 +1040,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-table-impact-classification.js",
-      "line": 143,
+      "line": 149,
       "column": 4,
       "functionName": "readNormalizedEndpointNodeId",
       "kind": "catch_returns_default",
@@ -1049,16 +1049,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-table-impact-classification.js",
-      "line": 151,
-      "column": 4,
-      "functionName": "readNormalizedServiceNodeId",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/readiness-planning-table-impact-classification.js",
-      "line": 384,
+      "line": 398,
       "column": 4,
       "functionName": "copySourceRowsSnapshot",
       "kind": "catch_returns_default",
@@ -1490,7 +1481,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine.js",
-      "line": 738,
+      "line": 750,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "catch_returns_default",
@@ -1706,7 +1697,7 @@
     },
     {
       "filePath": "src/partition/partition-service-entry-apply-base.js",
-      "line": 464,
+      "line": 465,
       "column": 6,
       "functionName": "handleTransactionMessage",
       "kind": "catch_returns_default",
@@ -1715,7 +1706,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-proof-methods.js",
-      "line": 301,
+      "line": 302,
       "column": 6,
       "functionName": "resolveLeaderAddressForPromotionProof",
       "kind": "catch_returns_default",
@@ -1733,7 +1724,7 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 105,
+      "line": 107,
       "column": 6,
       "functionName": "resolveCurrentTermSafe",
       "kind": "catch_returns_default",
@@ -1742,7 +1733,7 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 231,
+      "line": 233,
       "column": 6,
       "functionName": "resolveLeaderIdFromHint",
       "kind": "catch_returns_default",
@@ -2147,7 +2138,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-group-membership-admission.js",
-      "line": 323,
+      "line": 327,
       "column": 4,
       "functionName": "liveDelivery",
       "kind": "catch_returns_default",
@@ -2174,7 +2165,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-replica-lifecycle-owner.js",
-      "line": 918,
+      "line": 930,
       "column": 4,
       "functionName": "retirementEvidenceOf",
       "kind": "catch_returns_default",
@@ -2183,7 +2174,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 296,
+      "line": 302,
       "column": 4,
       "functionName": "readOpeningRecord",
       "kind": "catch_returns_default",
@@ -2192,7 +2183,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 530,
+      "line": 536,
       "column": 4,
       "functionName": "persistInitialBootstrapState",
       "kind": "catch_returns_default",
@@ -2201,7 +2192,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1158,
+      "line": 1166,
       "column": 4,
       "functionName": "resolveEntryConfStateOrFailure",
       "kind": "catch_returns_default",
@@ -2210,7 +2201,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1182,
+      "line": 1190,
       "column": 4,
       "functionName": "applyEntryDurablyOrFailure",
       "kind": "catch_returns_default",
@@ -2219,7 +2210,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1329,
+      "line": 1334,
       "column": 4,
       "functionName": "processReadyCycle",
       "kind": "catch_returns_default",
@@ -2228,7 +2219,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1388,
+      "line": 1394,
       "column": 4,
       "functionName": "semanticLeaderIdentity",
       "kind": "catch_returns_default",
@@ -2237,7 +2228,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1631,
+      "line": 1652,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "catch_returns_default",
@@ -2615,7 +2606,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
-      "line": 364,
+      "line": 365,
       "column": 6,
       "functionName": "resolvePrioritySurplusRemoveFenceTargetReplicaCount",
       "kind": "catch_returns_default",
@@ -2822,7 +2813,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 290,
+      "line": 285,
       "column": 6,
       "functionName": "getStartupAuthorityNodeIdSet",
       "kind": "catch_returns_default",
@@ -2831,7 +2822,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
-      "line": 689,
+      "line": 686,
       "column": 6,
       "functionName": "getStartupAuthoritySnapshot",
       "kind": "catch_returns_default",
@@ -2840,7 +2831,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 515,
+      "line": 497,
       "column": 6,
       "functionName": "getReplicaOperationStepsHistory",
       "kind": "catch_returns_default",
@@ -2849,7 +2840,7 @@
     },
     {
       "filePath": "src/rebalancer/user-table-leader-placement-cure.js",
-      "line": 409,
+      "line": 397,
       "column": 4,
       "functionName": "demoteLocalSourceLeader",
       "kind": "catch_returns_default",
@@ -2858,7 +2849,7 @@
     },
     {
       "filePath": "src/rebalancer/user-table-leader-placement-cure.js",
-      "line": 446,
+      "line": 434,
       "column": 4,
       "functionName": "dispatchLeaderHandoff",
       "kind": "catch_returns_default",
@@ -3470,7 +3461,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-replica.js",
-      "line": 459,
+      "line": 460,
       "column": 6,
       "functionName": "_handleWrite",
       "kind": "catch_returns_default",

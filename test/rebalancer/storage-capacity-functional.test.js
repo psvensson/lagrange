@@ -39,6 +39,7 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 // --- Helpers ---
 
@@ -63,11 +64,13 @@ function initConfig(overrides = {}) {
   });
 }
 
+// Inserts the complete stored row: the overrides plus every other column as
+// the SQL table would store it (declared DEFAULT, else NULL).
 function insertRow(cache, tableName, row) {
   cache.applySystemTableChange(
     tableName,
     CDC_OPERATION.INSERT,
-    row,
+    systemTableRow(tableName, row),
   );
 }
 

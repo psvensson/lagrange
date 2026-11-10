@@ -18,6 +18,7 @@ import {
   createReadinessServiceForTest,
   withNodeReadinessService,
 } from '../helpers/readiness-service-fixture.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 function createMockCache({
   nodes = [],
@@ -38,6 +39,11 @@ function createMockCache({
       const table = cache[tableName];
       if (!table) return [];
       return Array.from(table.values()).filter(predicate);
+    },
+    getAll: (tableName) => {
+      const table = cache[tableName];
+      if (!table) return [];
+      return Array.from(table.values());
     },
   };
 }
@@ -105,27 +111,27 @@ test('Task 6 - message-group rebalancer wiring', async (t) => {
       nodeId: 'node-1',
       systemTableCache: createMockCache({
         services: [
-          {
+          servicesRow({
             service_id: 'mg-1-r1',
             service_type: SERVICE_TYPE.MESSAGE_GROUP,
             group_id: 'mg-1',
             node_id: 'node-1',
             status: 'active',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'mg-1-r2',
             service_type: SERVICE_TYPE.MESSAGE_GROUP,
             group_id: 'mg-1',
             node_id: 'node-2',
             status: 'active',
-          },
-          {
+          }),
+          servicesRow({
             service_id: 'p1-r1',
             service_type: SERVICE_TYPE.PARTITION,
             partition_id: 'p1',
             node_id: 'node-1',
             status: 'active',
-          },
+          }),
         ],
       }),
       cdcIntegrationService: {
@@ -153,8 +159,8 @@ test('Task 6 - message-group rebalancer wiring', async (t) => {
     const replicas = rebalancer.getCurrentReplicas();
     t.equal(replicas.length, 2, 'should discover replicas from services rows');
     t.ok(
-      replicas.every((row) =>
-        row.service_type === SERVICE_TYPE.MESSAGE_GROUP && row.group_id === 'mg-1',
+      replicas.every((replica) =>
+        replica.serviceType === SERVICE_TYPE.MESSAGE_GROUP && replica.groupId === 'mg-1',
       ),
       'should include only message_group rows for the target group',
     );
@@ -240,14 +246,14 @@ test('Task 6 - message-group rebalancer wiring', async (t) => {
         },
       ],
       services: [
-        {
+        servicesRow({
           service_id: 'mg-1-r1',
           service_type: SERVICE_TYPE.MESSAGE_GROUP,
           group_id: 'mg-1',
           node_id: 'node-1',
           status: 'active',
           address: 'node-1/message-group/mg-1-r1',
-        },
+        }),
       ],
       messageGroups: [
         {

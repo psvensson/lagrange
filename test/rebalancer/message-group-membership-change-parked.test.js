@@ -32,6 +32,7 @@ import {
   REBALANCER_SKIP_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const SEED = 'node-1';
 const NODE_IDS = Object.freeze([SEED, 'node-2', 'node-3']);
@@ -40,7 +41,7 @@ const PLANNING_ROUNDS = 40;
 const ROUND_MS = 5000;
 
 function replicaRows(entityId, serviceType) {
-  return [0, 1, 2].map((index) => ({
+  return [0, 1, 2].map((index) => servicesRow({
     service_id: `${entityId}-r${index}`,
     replica_id: `${entityId}-r${index}`,
     service_type: serviceType,

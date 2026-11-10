@@ -4,6 +4,8 @@ import {
   SystemTableCache,
 } from '../../src/cache/system-table-cache.js';
 import {TABLES} from '../../src/constants/index.js';
+import {nodesRow, servicesRow} from
+  '../test-helpers/system-table-row-fixture.js';
 
 const SERVICE_ID = 'priority-partition-r4';
 
@@ -11,7 +13,7 @@ function seedRoleAdvancedSyncingRow(cache) {
   cache.applySystemTableChange(
     TABLES.SERVICES,
     CDC_OPERATIONS.INSERT,
-    {
+    servicesRow({
       service_id: SERVICE_ID,
       service_type: 'partition',
       partition_id: 'priority-partition',
@@ -24,7 +26,7 @@ function seedRoleAdvancedSyncingRow(cache) {
       address: 'node-b/partition/priority-partition-r4',
       created_at: 500,
       updated_at: 3000,
-    },
+    }),
     {causeId: 'role-writer-advanced-row-version'},
   );
 }
@@ -39,7 +41,7 @@ test(
     cache.applySystemTableChange(
       TABLES.SERVICES,
       CDC_OPERATIONS.INSERT,
-      {
+      servicesRow({
         service_id: SERVICE_ID,
         service_type: 'partition',
         partition_id: 'priority-partition',
@@ -52,7 +54,7 @@ test(
         address: 'node-b/partition/priority-partition-r4',
         created_at: 500,
         updated_at: 2000,
-      },
+      }),
       {causeId: 'later-active-lifecycle-delivery'},
     );
 
@@ -113,11 +115,12 @@ test(
   'SystemTableCache - non-SERVICES stale rows keep generic row-level LWW',
   (t) => {
     const cache = new SystemTableCache();
+    // nodes stores neither state_entered_at nor updated_at: the test carries
+    // them on top of the complete row to prove the lifecycle rule is
+    // SERVICES-only while the generic row version still orders the merge.
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATIONS.INSERT, {
-      node_id: 'node-a',
-      status: 'active',
+      ...nodesRow({node_id: 'node-a', status: 'active', created_at: 500}),
       state_entered_at: 1000,
-      created_at: 500,
       updated_at: 3000,
     });
 

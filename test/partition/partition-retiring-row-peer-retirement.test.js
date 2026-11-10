@@ -28,6 +28,9 @@ import {
   ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
+import {
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION_ID = 'users-p3';
 const LEADER = 'users-p3-r1';
@@ -35,7 +38,7 @@ const RETIRING = 'users-p3-r2';
 const NODE_OF = Object.freeze({[LEADER]: 'node-a', [RETIRING]: 'node-b'});
 
 function serviceRow(replicaId, status, updatedAt) {
-  return {
+  return servicesRow({
     service_id: replicaId,
     partition_id: PARTITION_ID,
     service_type: SERVICE_TYPE.PARTITION,
@@ -44,7 +47,7 @@ function serviceRow(replicaId, status, updatedAt) {
     status,
     raft_role: RaftRole.FOLLOWER,
     updated_at: updatedAt,
-  };
+  });
 }
 
 function nextImmediate() {

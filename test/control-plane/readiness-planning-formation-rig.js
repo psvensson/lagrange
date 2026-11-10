@@ -19,7 +19,9 @@ import {
 import {MembershipPublicationCoordinator} from
   '../../src/control-plane/membership-publication-coordinator.js';
 
+import {getSchemaByTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 const NODE_COUNT = 5;
 const PARTITION_ID = 'priority-partition';
 const RATE_CALL_COUNT = 1000;
@@ -64,6 +66,11 @@ function publicationRow({epoch, status, nodeIds = ['node-a']}) {
   };
 }
 
+function storesUpdatedAt(tableName) {
+  return getSchemaByTableName(tableName).columns
+    .some((column) => column.name === 'updated_at');
+}
+
 function rowsForState(state) {
   return state.epoch === null ? [] : [publicationRow(state)];
 }
@@ -93,15 +100,19 @@ function createFormationShapedCache(nowMs) {
     applySystemTableChange(table, operation, row) {
       const rows = rowsByTable.get(table);
       const key = keyFor(table, row);
+      // Listeners receive the stored row, as SystemTableCache notifies it
+      // (an UPDATE notifies the merged row, never the partial change).
+      let record = row;
       if (String(operation).toUpperCase() === 'DELETE') {
         rows?.delete(key);
       } else {
-        rows?.set(key, Object.freeze({...rows?.get(key), ...row}));
+        record = Object.freeze({...rows?.get(key), ...row});
+        rows?.set(key, record);
       }
       const tableMutationRevision = (versions.get(table) || 0) + 1;
       versions.set(table, tableMutationRevision);
       for (const listener of listeners) {
-        listener(table, operation, row, Object.freeze({
+        listener(table, operation, record, Object.freeze({
           causeId: null,
           tableMutationRevision,
         }));
@@ -112,14 +123,14 @@ function createFormationShapedCache(nowMs) {
   };
   for (let index = 0; index < NODE_COUNT; index++) {
     const nodeId = `node-${index}`;
-    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', nodesRow({
       [COLUMN.NODE_ID]: nodeId,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.LAST_HEARTBEAT]: nowMs,
       [COLUMN.READY_LEASE_EXPIRES_AT]: nowMs + READY_LEASE_WINDOW_MS,
       connection_state: 'ready',
-    });
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    }));
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       [COLUMN.SERVICE_ID]: `service-${index}`,
       [COLUMN.NODE_ID]: nodeId,
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
@@ -127,7 +138,7 @@ function createFormationShapedCache(nowMs) {
       [COLUMN.ADDRESS]: `${nodeId}/partition/${PARTITION_ID}`,
       partition_id: PARTITION_ID,
       raft_role: index === 0 ? 'leader' : 'follower',
-    });
+    }));
   }
   cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
     partition_id: PARTITION_ID,
@@ -223,10 +234,11 @@ function driveFormationShapedChurn() {
             publication_kind: 'other',
           },
         };
+        // A stored-row write: the stored updated_at advances where the table
+        // stores one (nodes stores none, so its write changes no column).
         cache.applySystemTableChange(tableName, 'UPDATE', {
           ...identityByTable[tableName],
-          revision: writeRevision,
-          updated_at: clock,
+          ...(storesUpdatedAt(tableName) ? {updated_at: clock} : {}),
         });
       }
       readiness.buildNodeReadinessSyncCurrent(

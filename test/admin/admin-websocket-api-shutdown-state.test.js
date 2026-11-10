@@ -4,6 +4,9 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TABLES} from '../../src/constants/index.js';
+import {
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -38,10 +41,10 @@ async function pauseFastifyClose(api) {
 }
 
 function applyTableInsert(cache, tableId) {
-  cache.applySystemTableChange('tables', 'INSERT', {
+  cache.applySystemTableChange('tables', 'INSERT', systemTableRow('tables', {
     table_id: tableId,
     table_name: tableId,
-  });
+  }));
 }
 
 function createSnapshotMarkerCache(marker, nodeId) {

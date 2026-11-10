@@ -58,11 +58,6 @@ const OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE = Object.freeze({
   OWNER_RECONCILE: 'owner_reconcile',
 });
 const OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE = 'function';
-const OPERATION_WORKFLOW_OWNER_PORT_OPERATION_ID_UNDERSCORE =
-  'operation_id';
-const OPERATION_WORKFLOW_OWNER_PORT_WORKFLOW_STEP_UNDERSCORE =
-  'workflow_step';
-const OPERATION_WORKFLOW_OWNER_PORT_STATUS_UNDERSCORE = 'status';
 const OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_STATE =
   Object.freeze({
     COORDINATOR_MODE_UNAVAILABLE: 'coordinator_mode_unavailable',
@@ -199,8 +194,7 @@ function getOperationWorkflowOwnerPortOperationId(owner, operationInput) {
     return OPERATION_WORKFLOW_IDENTIFIER_VARIANTS.OPERATION_KEY_UNAVAILABLE;
   }
   return normalizeOperationWorkflowOwnerPortText(
-    operationInput.operationId ||
-      operationInput[OPERATION_WORKFLOW_OWNER_PORT_OPERATION_ID_UNDERSCORE],
+    operationInput.operationId,
     OPERATION_WORKFLOW_IDENTIFIER_VARIANTS.OPERATION_KEY_UNAVAILABLE,
   );
 }
@@ -212,18 +206,20 @@ function resolveOperationWorkflowOwnerProgressStore(owner) {
   return owner.operationProgressStore;
 }
 
+// The ports read the runtime operation (rowToOperation's shape); a stored
+// row never reaches them: the owner decodes its row-shaped dispatch input
+// before any port sees it (operation-workflow-dispatch-execution.js
+// resolveOperation).
 function getOperationWorkflowOwnerPortWorkflowStep(operation) {
   return normalizeOperationWorkflowOwnerPortText(
-    operation?.workflowStep ||
-      operation?.[OPERATION_WORKFLOW_OWNER_PORT_WORKFLOW_STEP_UNDERSCORE],
+    operation?.workflowStep,
     OPERATION_WORKFLOW_IDENTIFIER_VARIANTS.OPERATION_KEY_UNAVAILABLE,
   );
 }
 
 function getOperationWorkflowOwnerPortStatus(operation) {
   return normalizeOperationWorkflowOwnerPortText(
-    operation?.status ||
-      operation?.[OPERATION_WORKFLOW_OWNER_PORT_STATUS_UNDERSCORE],
+    operation?.status,
     OPERATION_WORKFLOW_IDENTIFIER_VARIANTS.OPERATION_KEY_UNAVAILABLE,
   );
 }

@@ -29,6 +29,8 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {buildInsertedReplicaOperationRow} from './timeout-test-coordinator.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_DEFERRED_RESERVATION_ID = 'res-deferred';
 const TEST_DEFERRED_OPERATION_ID = 'op-deferred';
@@ -70,21 +72,8 @@ function createTrackingSqlEngine() {
     reservations,
     executeQuery: async (sql, params) => {
       if (sql.includes('INSERT INTO replica_operations')) {
-        const [
-          opId, type, partId, repId, targetClaimKey, srcNode, tgtNode,
-          status, step, created, updated, completed, err, history,
-          entityType, entityId,
-        ] = params;
-        operations.set(opId, {
-          operation_id: opId, type, partition_id: partId,
-          replica_id: repId, target_claim_key: targetClaimKey,
-          source_node_id: srcNode,
-          target_node_id: tgtNode, status, workflow_step: step,
-          created_at: created, updated_at: updated,
-          completed_at: completed, error_message: err,
-          steps_history: history,
-          entity_type: entityType, entity_id: entityId,
-        });
+        const row = buildInsertedReplicaOperationRow(sql, params);
+        operations.set(row.operation_id, row);
         return {success: true, changes: 1};
       }
 
@@ -686,7 +675,7 @@ test('reconcileReservations - releases orphan reservations',
     });
 
     // Insert a terminal operation
-    sqlEngine.operations.set('op-done', {
+    sqlEngine.operations.set('op-done', replicaOperationsRow({
       operation_id: 'op-done',
       type: OperationType.ADD,
       partition_id: 'p-1',
@@ -694,7 +683,7 @@ test('reconcileReservations - releases orphan reservations',
       entity_id: 'p-1',
       status: 'active',
       workflow_step: WORKFLOW_STEP.ACTIVE,
-    });
+    }));
 
     const {coordinator} = createCoordinatorWithStorage({
       sqlQueryEngine: sqlEngine,
@@ -732,7 +721,7 @@ test('reconcileReservations - skips non-terminal active reservations',
     });
 
     // Insert a non-terminal operation
-    sqlEngine.operations.set('op-inflight', {
+    sqlEngine.operations.set('op-inflight', replicaOperationsRow({
       operation_id: 'op-inflight',
       type: OperationType.ADD,
       partition_id: 'p-1',
@@ -740,7 +729,7 @@ test('reconcileReservations - skips non-terminal active reservations',
       entity_id: 'p-1',
       status: 'pending',
       workflow_step: WORKFLOW_STEP.PENDING,
-    });
+    }));
 
     const {coordinator} = createCoordinatorWithStorage({
       sqlQueryEngine: sqlEngine,
@@ -865,7 +854,7 @@ test('handleRecovery - reconciles reservations after operations',
     });
 
     // Terminal operation
-    sqlEngine.operations.set('op-failed', {
+    sqlEngine.operations.set('op-failed', replicaOperationsRow({
       operation_id: 'op-failed',
       type: OperationType.ADD,
       partition_id: 'p-1',
@@ -873,7 +862,7 @@ test('handleRecovery - reconciles reservations after operations',
       entity_id: 'p-1',
       status: 'failed',
       workflow_step: WORKFLOW_STEP.FAILED,
-    });
+    }));
 
     const {coordinator} = createCoordinatorWithStorage({
       sqlQueryEngine: sqlEngine,

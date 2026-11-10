@@ -20,6 +20,8 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {buildInsertedReplicaOperationRow} from './timeout-test-coordinator.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 const TEST_NODE_ID = 'reservation-gate-node';
 const TEST_PARTITION_ID = 'p-gate';
@@ -43,20 +45,11 @@ function initializeConfig(overrides = {}) {
   });
 }
 
-function insertOperationRow(operations, params) {
-  const [
-    opId, type, partId, repId, targetClaimKey, srcNode, tgtNode,
-    status, step, created, updated, completed, err, history,
-    entityType, entityId,
-  ] = params;
-  operations.set(opId, {
-    operation_id: opId, type, partition_id: partId,
-    replica_id: repId, target_claim_key: targetClaimKey,
-    source_node_id: srcNode, target_node_id: tgtNode,
-    status, workflow_step: step, created_at: created, updated_at: updated,
-    completed_at: completed, error_message: err, steps_history: history,
-    entity_type: entityType, entity_id: entityId,
-  });
+// Stores the row the SQL INSERT would store (its column list, every omitted
+// column completed from the schema).
+function insertOperationRow(operations, sql, params) {
+  const row = buildInsertedReplicaOperationRow(sql, params);
+  operations.set(row.operation_id, row);
   return {success: true, changes: 1};
 }
 
@@ -153,7 +146,7 @@ function createTrackingSqlEngine(options = {}) {
     reservations,
     executeQuery: async (sql, params) => {
       if (sql.includes('INSERT INTO replica_operations')) {
-        return insertOperationRow(operations, params);
+        return insertOperationRow(operations, sql, params);
       }
       if (sql.includes('INTO storage_reservations')) {
         const result = insertReservationRow(reservations, params, options);
@@ -346,6 +339,8 @@ function buildStorageIncreasingOperation(overrides = {}) {
     operationId: TEST_OPERATION_ID,
     type: OperationType.ADD,
     partitionId: TEST_PARTITION_ID,
+    // replica_operations.source_node_id is NOT NULL: the coordinating node.
+    sourceNodeId: TEST_NODE_ID,
     targetNodeId: TEST_TARGET_NODE_ID,
     entityType: SERVICE_TYPE.PARTITION,
     entityId: TEST_PARTITION_ID,
@@ -360,13 +355,13 @@ function buildStorageIncreasingOperation(overrides = {}) {
 }
 
 function seedAuthoritativeOperation(sqlEngine, operation) {
-  sqlEngine.operations.set(operation.operationId, {
+  sqlEngine.operations.set(operation.operationId, replicaOperationsRow({
     operation_id: operation.operationId,
     type: operation.type,
     partition_id: operation.partitionId,
     replica_id: operation.replicaId || null,
     target_claim_key: operation.targetClaimKey || null,
-    source_node_id: operation.sourceNodeId || null,
+    source_node_id: operation.sourceNodeId,
     target_node_id: operation.targetNodeId,
     status: operation.status,
     workflow_step: operation.workflowStep,
@@ -377,7 +372,7 @@ function seedAuthoritativeOperation(sqlEngine, operation) {
     steps_history: JSON.stringify(operation.stepsHistory || []),
     entity_type: operation.entityType,
     entity_id: operation.entityId,
-  });
+  }));
 }
 
 export {

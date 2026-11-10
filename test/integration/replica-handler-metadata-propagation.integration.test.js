@@ -36,6 +36,10 @@ import {
 } from '../test-helpers/replica-handler-identity-fixture.js';
 import {createLifecycleCdcServiceForCache} from
   '../test-helpers/lifecycle-state-store.js';
+import {
+  replicaOperationsRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 function createMockCDCService(cache) {
   return createLifecycleCdcServiceForCache(cache);
@@ -43,36 +47,49 @@ function createMockCDCService(cache) {
 
 function seedReplicaOperation(cache, operationId, partitionId, replicaId, targetNodeId) {
   const now = Date.now();
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, 'INSERT', {
-    operation_id: operationId,
-    type: 'ADD',
-    partition_id: partitionId,
-    replica_id: replicaId,
-    source_node_id: targetNodeId,
-    target_node_id: targetNodeId,
-    status: ReplicaStatus.PENDING,
-    workflow_step: 'PENDING',
-    created_at: now,
-    updated_at: now,
-    steps_history: '[]',
-  });
+  // Complete stored rows (the cache refuses an insert its table could not
+  // hold); a partition ADD names the partition as its canonical entity.
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, 'INSERT',
+    replicaOperationsRow({
+      operation_id: operationId,
+      type: 'ADD',
+      partition_id: partitionId,
+      entity_type: 'partition',
+      entity_id: partitionId,
+      replica_id: replicaId,
+      source_node_id: targetNodeId,
+      target_node_id: targetNodeId,
+      status: ReplicaStatus.PENDING,
+      workflow_step: 'PENDING',
+      created_at: now,
+      updated_at: now,
+      steps_history: '[]',
+    }));
 }
 
 function seedTablePartitionMetadata(cache, tableId, tableName, partitionId) {
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
-    table_id: tableId,
-    table_name: tableName,
-    schema_definition: JSON.stringify({
-      columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
-    }),
-  });
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
-    partition_id: partitionId,
-    table_id: tableId,
-    partition_key_start: null,
-    partition_key_end: null,
-    leader_node_id: null,
-  });
+  const now = Date.now();
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.TABLES, {
+      table_id: tableId,
+      table_name: tableName,
+      schema_definition: JSON.stringify({
+        columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
+      }),
+      partition_key: 'id',
+      created_at: now,
+      updated_at: now,
+    }));
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT',
+    systemTableRow(SYSTEM_TABLE_NAME.PARTITIONS, {
+      partition_id: partitionId,
+      table_id: tableId,
+      partition_key_start: null,
+      partition_key_end: null,
+      leader_node_id: null,
+      created_at: now,
+      updated_at: now,
+    }));
 }
 
 function waitForReplicaEvent(handler, successEvent, failureEvent) {

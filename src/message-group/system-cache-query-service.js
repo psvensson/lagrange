@@ -8,7 +8,10 @@ import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {ERRORS} from '../constants/index.js';
+import {COLUMN, ERRORS} from '../constants/index.js';
+
+// The stored column holding a tables row's name.
+const TABLES_TABLE_NAME_COLUMN = 'table_name';
 
 const LOCAL_NUM_THIRTY_THOUSAND = 30000;
 const LOCAL_STR_CACHE_QUERY = 'cache-query';
@@ -234,7 +237,7 @@ class SystemCacheQueryService extends EventEmitter {
       return partition ? [partition] : [];
     }
     if (filter.tableId) {
-      return this.filter(LOCAL_STR_PARTITIONS, (p) => p.tableId === filter.tableId);
+      return this.filter(LOCAL_STR_PARTITIONS, (p) => p[COLUMN.TABLE_ID] === filter.tableId);
     }
     return this.getAll(LOCAL_STR_PARTITIONS);
   }
@@ -250,7 +253,7 @@ class SystemCacheQueryService extends EventEmitter {
       return table ? [table] : [];
     }
     if (filter.tableName) {
-      return this.filter(LOCAL_STR_TABLES, (t) => t.name === filter.tableName);
+      return this.filter(LOCAL_STR_TABLES, (t) => t[TABLES_TABLE_NAME_COLUMN] === filter.tableName);
     }
     return this.getAll(LOCAL_STR_TABLES);
   }

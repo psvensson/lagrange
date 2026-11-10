@@ -2,6 +2,7 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {test} from '../../src/test-helpers/tap.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED as SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {createTestCoordinator} from './test-helpers.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -49,7 +50,7 @@ function buildOperationRow({
       timestamp: now - UPDATED_AT_LAG_MS,
     });
   }
-  return {
+  return replicaOperationsRow({
     operation_id: operationId,
     type: operationType,
     partition_id: PARTITION_ID,
@@ -65,7 +66,7 @@ function buildOperationRow({
     entity_type: SERVICE_TYPE.PARTITION,
     entity_id: ENTITY_ID,
     steps_history: JSON.stringify(stepsHistory),
-  };
+  });
 }
 
 function buildActiveServiceRow(replicaId = REPLICA_ID, nodeId = TARGET_NODE_ID) {

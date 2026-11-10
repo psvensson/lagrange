@@ -16,6 +16,7 @@ import {MovePlanner} from '../../src/rebalancer/move-planner.js';
 import {REBALANCER_ENTITY_TYPE}
   from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 import {PLACEMENT_OWNER_DATA_AFFINITY_SCORE}
   from '../../src/rebalancer/placement-owner-constants.js';
 import {isDataAffinityPlacementSuboptimal}
@@ -28,12 +29,13 @@ function node(nodeId) {
 }
 
 function replica(replicaId, nodeId) {
-  return {
+  return projectedReplica({
     service_id: replicaId,
+    service_type: REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE,
     replica_id: replicaId,
     node_id: nodeId,
     status: ReplicaStatus.ACTIVE,
-  };
+  });
 }
 
 function createMoveStateProvider(nodes, currentReplicas) {
@@ -192,7 +194,7 @@ test('observer helper edge cases fail closed', (t) => {
     isDataAffinityPlacementSuboptimal(
       affinityPolicy(STALL_WEIGHTS),
       STALL_REPLICAS,
-      STALL_REPLICAS.map((row) => node(row.node_id)),
+      STALL_REPLICAS.map((row) => node(row.nodeId)),
     ),
     false,
     'ready set covering only incumbent nodes never triggers',

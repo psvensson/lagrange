@@ -27,6 +27,7 @@ import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
   PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
 } from '../../src/control-plane/publication-active-gate-handoff-contract.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS = 'active';
 const PUBLICATION_CONVERGENCE_REPAIR_READY_CONNECTION = 'ready';
@@ -671,7 +672,7 @@ test('reconcileActiveGateMembershipPublication widens seed-only active-gate hand
         PUBLICATION_CONVERGENCE_AUTH_REFRESH_PRIORITY_SUMMARY,
     };
     const activeNodeRows =
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS.map((nodeId) => ({
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS.map((nodeId) => nodesRow({
         node_id: nodeId,
         status: PUBLICATION_CONVERGENCE_REPAIR_ACTIVE_STATUS,
         connection_state:

@@ -5,6 +5,11 @@ import {
   MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
   assertMembershipPublicationEpochBinding,
 } from './replica-operation-membership-epoch-binding.js';
+import {
+  decodeReplicaOperationsRow,
+  defineReplicaOperationsNotObservedReading,
+} from './replica-operations-row-decoder.js';
+import {ROW_ABSENT, readDecodedRow} from '../control-plane/system-table-row-decoding.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const DURABLE_ROW_EPOCH_BINDING_SOURCE = 'replica_operations row';
@@ -23,14 +28,57 @@ function isReadOnlyCacheWriteViolation(error) {
   );
 }
 
+// rowToOperation's reading of a column an observed-columns row never
+// observed: what its code read for a row lacking the column before the
+// decoder (a raw read: undefined; `?? null`: null; the integer columns'
+// raw value, which nullableSafeInteger reads as null; steps_history: the
+// empty history; the epoch and the lease: the raw undefined, which reads as
+// unbound and as no lease).
+const OPERATION_ROW_NOT_OBSERVED_READING =
+  defineReplicaOperationsNotObservedReading('rowToOperation', {
+    operationId: undefined,
+    type: undefined,
+    partitionId: undefined,
+    entityType: undefined,
+    entityId: undefined,
+    membershipPublicationEpoch: undefined,
+    messageGroupMembershipOwnerClaim: null,
+    messageGroupMembershipPermit: null,
+    sourceReplicaId: null,
+    messageGroupMembershipLaneKey: null,
+    messageGroupMembershipPhase: null,
+    messageGroupMembershipObligationState: null,
+    messageGroupMembershipIdentity: null,
+    messageGroupLearnerStamp: null,
+    messageGroupVoterStamp: null,
+    messageGroupRemovalStamp: null,
+    messageGroupSourceLifecycleClaim: null,
+    createAdmissionState: null,
+    createAdmissionToken: null,
+    createAdmissionReplicaCreatedAt: undefined,
+    createAdmissionAttemptToken: null,
+    createAdmissionPreviousAttemptToken: null,
+    createAdmissionAttemptSeq: undefined,
+    createAdmissionWorkflowUpdatedAt: undefined,
+    createAdmissionOwnerIncarnation: undefined,
+    replicaId: undefined,
+    targetClaimKey: null,
+    sourceNodeId: undefined,
+    targetNodeId: undefined,
+    status: undefined,
+    workflowStep: undefined,
+    createdAt: undefined,
+    updatedAt: undefined,
+    completedAt: undefined,
+    leaseExpiresAt: undefined,
+    errorMessage: undefined,
+    stepsHistory: [],
+  });
+
 function nullableSafeInteger(value) {
   if (value == null) return null;
   const number = Number(value);
   return Number.isSafeInteger(number) ? number : null;
-}
-
-function nullableValue(value) {
-  return value ?? null;
 }
 
 function assignReplicaOperationRepositoryRowMethods(
@@ -40,7 +88,6 @@ function assignReplicaOperationRepositoryRowMethods(
   const {
     OPERATION_METADATA_KEY,
     OperationType,
-    REBALANCE_COORDINATOR_LOG_MSG,
     REPLICA_OPERATION_SEMANTIC_PHASE,
     ReplicaOperationField,
     SYSTEM_TABLE_NAME,
@@ -72,83 +119,66 @@ function assignReplicaOperationRepositoryRowMethods(
 
   class ReplicaOperationRepositoryRowMethods {
   /**
-   * Translate a raw SQL/cache row into a normalized operation object.
-   * @param {object} row
+   * Build the runtime operation from a stored replica_operations row: the
+   * row is decoded once by decodeReplicaOperationsRow (the one reader of its
+   * stored columns); this adds the operation's enrichment (entity identity,
+   * epoch binding, owner lease, semantic phase, steps_history metadata).
+   * @param {object} row the stored row
    * @return {object}
    */
     rowToOperation(row) {
-      let stepsHistory = [];
-      if (row.steps_history) {
-        try {
-          stepsHistory = JSON.parse(row.steps_history);
-        } catch (error) {
-          this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.STEPS_HISTORY_PARSE_ERROR, {
-            operationId: row.operation_id,
-            error: error.message,
-          });
-          stepsHistory = [];
-        }
-      }
+      const decoded = readDecodedRow(OPERATION_ROW_NOT_OBSERVED_READING,
+        decodeReplicaOperationsRow(row));
+      // HEAD read a NULL steps_history as the empty history.
+      const stepsHistory = decoded.stepsHistory === ROW_ABSENT ? [] :
+        [...decoded.stepsHistory];
       const {entityType, entityId} =
         assertCanonicalRebalancerEntityIdentity({
-          entityType: row.entity_type,
-          entityId: row.entity_id,
+          entityType: decoded.entityType,
+          entityId: decoded.entityId,
         });
       const operation = {
-        operationId: row.operation_id,
-        type: row.type,
-        partitionId: row.partition_id,
+        operationId: decoded.operationId,
+        type: decoded.type,
+        partitionId: decoded.partitionId,
         entityType,
         entityId,
-        replicaId: row.replica_id,
-        targetClaimKey: nullableValue(row.target_claim_key),
-        sourceNodeId: row.source_node_id,
-        targetNodeId: row.target_node_id,
-        status: row.status,
-        workflowStep: row.workflow_step,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        completedAt: row.completed_at,
-        errorMessage: row.error_message,
+        replicaId: decoded.replicaId,
+        targetClaimKey: decoded.targetClaimKey,
+        sourceNodeId: decoded.sourceNodeId,
+        targetNodeId: decoded.targetNodeId,
+        status: decoded.status,
+        workflowStep: decoded.workflowStep,
+        createdAt: decoded.createdAt,
+        updatedAt: decoded.updatedAt,
+        completedAt: decoded.completedAt,
+        errorMessage: decoded.errorMessage,
         stepsHistory,
-        sourceReplicaId: nullableValue(row.source_replica_id),
-        messageGroupMembershipLaneKey:
-          nullableValue(row.message_group_membership_lane_key),
-        messageGroupMembershipPhase:
-          nullableValue(row.message_group_membership_phase),
+        sourceReplicaId: decoded.sourceReplicaId,
+        messageGroupMembershipLaneKey: decoded.messageGroupMembershipLaneKey,
+        messageGroupMembershipPhase: decoded.messageGroupMembershipPhase,
         messageGroupMembershipObligationState:
-          nullableValue(row.message_group_membership_obligation_state),
-        messageGroupMembershipIdentity:
-          nullableValue(row.message_group_membership_identity),
-        messageGroupMembershipOwnerClaim:
-          nullableValue(row.message_group_membership_owner_claim),
-        messageGroupMembershipPermit:
-          nullableValue(row.message_group_membership_permit),
-        messageGroupLearnerStamp:
-          nullableValue(row.message_group_learner_stamp),
-        messageGroupVoterStamp:
-          nullableValue(row.message_group_voter_stamp),
-        messageGroupRemovalStamp:
-          nullableValue(row.message_group_removal_stamp),
-        messageGroupSourceLifecycleClaim:
-          nullableValue(row.message_group_source_lifecycle_claim),
-        createAdmissionState: nullableValue(row.create_admission_state),
-        createAdmissionToken: nullableValue(row.create_admission_token),
+          decoded.messageGroupMembershipObligationState,
+        messageGroupMembershipIdentity: decoded.messageGroupMembershipIdentity,
+        messageGroupMembershipOwnerClaim: decoded.messageGroupMembershipOwnerClaim,
+        messageGroupMembershipPermit: decoded.messageGroupMembershipPermit,
+        messageGroupLearnerStamp: decoded.messageGroupLearnerStamp,
+        messageGroupVoterStamp: decoded.messageGroupVoterStamp,
+        messageGroupRemovalStamp: decoded.messageGroupRemovalStamp,
+        messageGroupSourceLifecycleClaim: decoded.messageGroupSourceLifecycleClaim,
+        createAdmissionState: decoded.createAdmissionState,
+        createAdmissionToken: decoded.createAdmissionToken,
         createAdmissionReplicaCreatedAt: nullableSafeInteger(
-          row.create_admission_replica_created_at,
+          decoded.createAdmissionReplicaCreatedAt,
         ),
-        createAdmissionAttemptToken:
-          nullableValue(row.create_admission_attempt_token),
-        createAdmissionPreviousAttemptToken:
-          nullableValue(row.create_admission_previous_attempt_token),
-        createAdmissionAttemptSeq: nullableSafeInteger(
-          row.create_admission_attempt_seq,
-        ),
+        createAdmissionAttemptToken: decoded.createAdmissionAttemptToken,
+        createAdmissionPreviousAttemptToken: decoded.createAdmissionPreviousAttemptToken,
+        createAdmissionAttemptSeq: nullableSafeInteger(decoded.createAdmissionAttemptSeq),
         createAdmissionWorkflowUpdatedAt: nullableSafeInteger(
-          row.create_admission_workflow_updated_at,
+          decoded.createAdmissionWorkflowUpdatedAt,
         ),
         createAdmissionOwnerIncarnation: nullableSafeInteger(
-          row.create_admission_owner_incarnation,
+          decoded.createAdmissionOwnerIncarnation,
         ),
       };
       // Durable planning-epoch binding: SQL NULL / absent column stays
@@ -156,10 +186,10 @@ function assignReplicaOperationRepositoryRowMethods(
       // zero), and anything else fails closed at this decode boundary.
       const membershipPublicationEpochBinding =
         assertMembershipPublicationEpochBinding(
-          row.membership_publication_epoch,
+          decoded.membershipPublicationEpoch,
           {
             source: DURABLE_ROW_EPOCH_BINDING_SOURCE,
-            operationId: row.operation_id,
+            operationId: decoded.operationId,
           },
         );
       if (
@@ -172,7 +202,7 @@ function assignReplicaOperationRepositoryRowMethods(
       // Durable owner lease (audit findings 5+14): the row's lease_expires_at
       // is the persisted owner heartbeat; resolveOperationOwnerNodeId stays
       // the structural owner for unfenced rows.
-      const leaseExpiresAt = Number(row.lease_expires_at);
+      const leaseExpiresAt = Number(decoded.leaseExpiresAt);
       if (Number.isFinite(leaseExpiresAt) && leaseExpiresAt > 0) {
         operation.ownerLeaseExpiresAt = leaseExpiresAt;
       }

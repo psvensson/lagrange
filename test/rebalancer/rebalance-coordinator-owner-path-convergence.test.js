@@ -13,6 +13,7 @@
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
@@ -84,7 +85,7 @@ function buildTransactionCoordinator() {
  */
 function buildOperationRow(overrides = {}) {
   const now = Date.now();
-  return {
+  return replicaOperationsRow({
     operation_id: overrides.operationId || TEST_OPERATION_ID,
     type: overrides.type || OperationType.ADD,
     partition_id: overrides.partitionId || TEST_PARTITION_ID,
@@ -102,7 +103,7 @@ function buildOperationRow(overrides = {}) {
     error_message: overrides.errorMessage || null,
     steps_history: overrides.stepsHistory ||
       JSON.stringify([{step: WORKFLOW_STEP.PENDING, timestamp: now}]),
-  };
+  });
 }
 
 /**

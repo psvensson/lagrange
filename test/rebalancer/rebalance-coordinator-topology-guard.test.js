@@ -20,6 +20,10 @@ import {
 } from '../../src/rebalancer/storage-admission-constants.js';
 import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-inventory.js';
 import {
+  replicaOperationsRow,
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
+import {
   createMockCache,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
@@ -58,7 +62,7 @@ function createServiceRow(replicaId, nodeId, options = {}) {
   const serviceType = options.serviceType || SERVICE_TYPE.PARTITION;
   const partitionId = options.partitionId || TEST_PARTITION_ID;
   const groupId = options.groupId || null;
-  return {
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     partition_id: partitionId,
@@ -66,9 +70,9 @@ function createServiceRow(replicaId, nodeId, options = {}) {
     node_id: nodeId,
     service_type: serviceType,
     status: options.status || 'active',
-    raft_role: 'follower',
+    raft_role: options.raftRole || 'follower',
     address: 'ws://' + nodeId + ':7000',
-  };
+  });
 }
 
 function createSqlEngine(options = {}) {
@@ -112,30 +116,16 @@ function createSqlEngine(options = {}) {
       };
     }
     if (sql.includes('INSERT INTO replica_operations')) {
-      const [
-        operationId, type, partitionId, replicaId, targetClaimKey,
-        sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-        updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-        entityId,
-      ] = params;
-      operations.set(operationId, {
-        operation_id: operationId,
-        type,
-        partition_id: partitionId,
-        replica_id: replicaId,
-        target_claim_key: targetClaimKey,
-        source_node_id: sourceNodeId,
-        target_node_id: targetNodeId,
-        status,
-        workflow_step: workflowStep,
-        created_at: createdAt,
-        updated_at: updatedAt,
-        completed_at: completedAt,
-        error_message: errorMessage,
-        steps_history: stepsHistory,
-        entity_type: entityType,
-        entity_id: entityId,
-      });
+      // The stored row the INSERT writes: its declared columns zipped with
+      // their parameters (the repository encodes every column it inserts).
+      const insertColumns = sql
+        .slice(sql.indexOf('(') + 1, sql.indexOf(')'))
+        .split(',')
+        .map((column) => column.trim());
+      const row = replicaOperationsRow(Object.fromEntries(
+        insertColumns.map((column, index) => [column, params[index]]),
+      ));
+      operations.set(row.operation_id, row);
       return {success: true, changes: 1};
     }
     if (sql.includes('SELECT * FROM replica_operations') &&
@@ -696,10 +686,11 @@ test('RebalanceCoordinator applies topology occupancy guard to message-group cre
 // surplus drains. The net-new catch vs the existing rows-only distinct-node ADD
 // guard is REPLACE (which that guard exempts), so the red-on-revert is a REPLACE.
 const CRIT_PARTITION_ID = 'control_plane_publications-p1';
-function critRow(replicaId, nodeId, status) {
+function critRow(replicaId, nodeId, status, raftRole) {
   return createServiceRow(replicaId, nodeId, {
     partitionId: CRIT_PARTITION_ID,
     status: status || 'active',
+    raftRole,
   });
 }
 
@@ -955,7 +946,7 @@ test('count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target n
 // (the interlock, raft_role-aware, correctly sees the group under-replicated) —
 // a self-referential formation deadlock.
 function orphanRow(replicaId, nodeId) {
-  return {...critRow(replicaId, nodeId), raft_role: 'learner', status: 'active'};
+  return critRow(replicaId, nodeId, 'active', 'learner');
 }
 
 test('s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op) ' +

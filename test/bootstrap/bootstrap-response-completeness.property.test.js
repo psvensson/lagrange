@@ -15,6 +15,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -82,7 +83,7 @@ function ensureLeaderServices(systemTableData) {
     );
 
     if (!hasLeader) {
-      services.push({
+      services.push(servicesRow({
         service_id: partitionId,
         service_type: SERVICE_TYPE.PARTITION,
         partition_id: partitionId,
@@ -90,7 +91,7 @@ function ensureLeaderServices(systemTableData) {
         address: seedNodeAddress,
         raft_role: RAFT_ROLE.LEADER,
         status: SERVICE_STATUS.ACTIVE,
-      });
+      }));
     }
   }
 
@@ -111,7 +112,7 @@ function ensureLeaderServices(systemTableData) {
     );
 
     if (!hasLeader) {
-      services.push({
+      services.push(servicesRow({
         service_id: groupId,
         service_type: SERVICE_TYPE.MESSAGE_GROUP,
         group_id: groupId,
@@ -119,7 +120,7 @@ function ensureLeaderServices(systemTableData) {
         address: seedNodeAddress,
         raft_role: RAFT_ROLE.LEADER,
         status: SERVICE_STATUS.ACTIVE,
-      });
+      }));
     }
   }
 
@@ -140,8 +141,8 @@ test('Property 1: Bootstrap response contains all system table snapshots', async
         nodes: fc.array(fc.record({
           node_id: fc.uuid(),
           node_address: fc.webUrl(),
-          status: fc.constantFrom('active', 'inactive'),
-        })),
+          status: fc.constantFrom('active', 'stopped'),
+        }).map(nodesRow)),
         partitions: fc.array(fc.record({
           partition_id: fc.uuid(),
           table_name: fc.string({minLength: 1, maxLength: 20}),
@@ -153,7 +154,7 @@ test('Property 1: Bootstrap response contains all system table snapshots', async
           service_type: fc.constantFrom('partition', 'message_group'),
           node_id: fc.uuid(),
           address: fc.string({minLength: 1, maxLength: 50}),
-        })),
+        }).map(servicesRow)),
         tables: fc.array(fc.record({
           table_id: fc.uuid(),
           table_name: fc.string({minLength: 1, maxLength: 20}),
@@ -253,8 +254,8 @@ test('Property 1: Bootstrap response snapshots match cache data', async (t) => {
         nodes: fc.array(fc.record({
           node_id: fc.uuid(),
           node_address: fc.webUrl(),
-          status: fc.constantFrom('active', 'inactive'),
-        }), {maxLength: 5}),
+          status: fc.constantFrom('active', 'stopped'),
+        }).map(nodesRow), {maxLength: 5}),
         partitions: fc.array(fc.record({
           partition_id: fc.uuid(),
           table_name: fc.string({minLength: 1, maxLength: 20}),
@@ -262,7 +263,7 @@ test('Property 1: Bootstrap response snapshots match cache data', async (t) => {
         services: fc.array(fc.record({
           service_id: fc.uuid(),
           service_type: fc.constantFrom('partition', 'message_group'),
-        }), {maxLength: 5}),
+        }).map(servicesRow), {maxLength: 5}),
         tables: fc.array(fc.record({
           table_id: fc.uuid(),
           table_name: fc.string({minLength: 1, maxLength: 20}),
@@ -348,9 +349,9 @@ test('Property 1: Bootstrap response structure is correct', async (t) => {
       fc.constant(null),
       async (_input) => {
         const systemTableData = {
-          nodes: [{node_id: 'n1', node_address: 'ws://localhost:8080'}],
+          nodes: [nodesRow({node_id: 'n1', node_address: 'ws://localhost:8080'})],
           partitions: [{partition_id: 'p1', table_name: 'nodes'}],
-          services: [{service_id: 's1', service_type: 'partition'}],
+          services: [servicesRow({service_id: 's1', service_type: 'partition'})],
           tables: [{table_id: 't1', table_name: 'nodes'}],
           message_groups: [{group_id: 'mg1', group_name: 'mg1'}],
           replica_operations: [],

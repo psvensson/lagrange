@@ -34,6 +34,7 @@ import {
   ControllableConsensusPort,
   createControllablePartitionService,
 } from '../partition/partition-service-test-support.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION_ID = 'sql_transaction_participants-p1';
 const R1 = 'sql_transaction_participants-p1-r1';
@@ -55,7 +56,7 @@ const ADDRESS_BY_REPLICA = Object.freeze({
 const FINAL_REPLICA_IDS = Object.freeze([R1, R5, REPLACEMENT]);
 
 function serviceRow(replicaId, updatedAt = 1) {
-  return {
+  return servicesRow({
     service_id: replicaId,
     partition_id: PARTITION_ID,
     service_type: SERVICE_TYPE.PARTITION,
@@ -64,7 +65,7 @@ function serviceRow(replicaId, updatedAt = 1) {
     status: ReplicaStatus.ACTIVE,
     raft_role: RaftRole.FOLLOWER,
     updated_at: updatedAt,
-  };
+  });
 }
 
 // The configuration the operation port reports: the remote peers' addresses.

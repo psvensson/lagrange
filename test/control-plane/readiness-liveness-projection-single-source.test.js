@@ -49,6 +49,7 @@ import {isDeferredReadinessPlanningSnapshot} from
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 ConfigurationManager.getInstance().initialize();
 
 const SELF_NODE_ID = 'node-owner-self';
@@ -69,7 +70,7 @@ const DIMENSION =
 const PARTICIPATION_KINDS = Object.values(CONTROL_PLANE_PARTICIPATION_KIND);
 
 function nodeRow(nodeId, heartbeatAtMs) {
-  return {
+  return nodesRow({
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.CONNECTION_STATE]: 'ready',
@@ -78,7 +79,7 @@ function nodeRow(nodeId, heartbeatAtMs) {
     [COLUMN.CPU_USAGE_PERCENT]: 10,
     [COLUMN.MEMORY_USAGE_PERCENT]: 10,
     [COLUMN.DISK_USAGE_PERCENT]: 10,
-  };
+  });
 }
 
 function macrotask() {
@@ -114,14 +115,14 @@ async function createRig(authoritativeRead) {
   for (const nodeId of [SELF_NODE_ID, PEER_NODE_ID]) {
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT,
       nodeRow(nodeId, START_MS - HEARTBEAT_AGE_MS));
-    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, servicesRow({
       [COLUMN.SERVICE_ID]: `p1-${nodeId}`,
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       partition_id: 'p1',
       [COLUMN.NODE_ID]: nodeId,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: `${nodeId}/partition/p1`,
-    });
+    }));
   }
   await macrotask();
   const service = createReadinessServiceForTest({

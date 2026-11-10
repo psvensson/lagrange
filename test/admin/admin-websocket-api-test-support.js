@@ -11,11 +11,36 @@ import {getSystemCachePrimaryKeyField} from
   '../../src/cache/system-cache-key-descriptor.js';
 import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
 import {TABLES} from '../../src/constants/index.js';
-import {
-  FIXTURE_ENDPOINT_INCARNATION,
-  registeredNodeRow,
-} from
+import {FIXTURE_ENDPOINT_INCARNATION} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {
+  nodesRow,
+  servicesRow,
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
+
+const FIXTURE_NODE_ADDRESS = Object.freeze({
+  'node-1': 'localhost:8080',
+  'node-2': 'localhost:8081',
+});
+
+/**
+ * A registered NODES row as the nodes table stores it (complete row at the
+ * fixture incarnation).
+ * @param {string} nodeId
+ * @param {Object} [overrides] stored column values
+ * @return {Object}
+ */
+export function fixtureNodeRow(nodeId, overrides = {}) {
+  return nodesRow({
+    node_id: nodeId,
+    node_address: FIXTURE_NODE_ADDRESS[nodeId] || 'localhost:8080',
+    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+    status: 'active',
+    connection_state: 'connected',
+    ...overrides,
+  });
+}
 
 export const AUTHORITATIVE_REPAIR_TABLES = Object.freeze([
   TABLES.NODES,
@@ -276,30 +301,23 @@ export function createAuthoritativeCacheGateway(writableCache, options = {}) {
 export function createAuthoritativeRepairCache(nodeId = 'test-node') {
   const cache = new SystemTableCache();
 
-  cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
-    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-    id: nodeId,
-    node_id: nodeId,
-    address: 'localhost:8080',
-    status: 'active',
-  });
+  cache.applySystemTableChange(TABLES.NODES, 'INSERT', fixtureNodeRow(nodeId));
 
   for (const tableName of AUTHORITATIVE_REPAIR_TABLES) {
-    cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-      id: tableName,
-      table_id: tableName,
-      name: tableName,
-      table_name: tableName,
-    });
-    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      id: `${tableName}-p1`,
-      partition_id: `${tableName}-p1`,
-      table_id: tableName,
-      table_name: tableName,
-      partition_version: 1,
-      state: 'NORMAL',
-    });
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    cache.applySystemTableChange(TABLES.TABLES, 'INSERT',
+      systemTableRow(TABLES.TABLES, {
+        table_id: tableName,
+        table_name: tableName,
+      }));
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: `${tableName}-p1`,
+        table_id: tableName,
+        table_name: tableName,
+        partition_version: 1,
+        state: 'NORMAL',
+      }));
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({
       service_id: `${tableName}-p1-r1`,
       service_type: 'partition',
       node_id: nodeId,
@@ -308,7 +326,7 @@ export function createAuthoritativeRepairCache(nodeId = 'test-node') {
       raft_role: 'leader',
       status: 'active',
       address: `${nodeId}/partition/${tableName}-p1-r1`,
-    });
+    }));
   }
 
   return cache;
@@ -362,42 +380,38 @@ export function createAuthoritativeRepairPartitionServices(
 export function createPopulatedCache() {
   const cache = new SystemTableCache();
 
-  cache.applySystemTableChange('nodes', 'INSERT', {
-    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-    id: 'node-1',
+  cache.applySystemTableChange('nodes', 'INSERT', fixtureNodeRow('node-1'));
+
+  cache.applySystemTableChange('services', 'INSERT', servicesRow({
+    service_id: 'service-1',
     node_id: 'node-1',
-    address: 'localhost:8080',
-    status: 'active',
-  });
+    service_type: 'partition',
+  }));
 
-  cache.applySystemTableChange('services', 'INSERT', {
-    id: 'service-1',
-    nodeId: 'node-1',
-    type: 'partition',
-  });
+  cache.applySystemTableChange('partitions', 'INSERT',
+    systemTableRow('partitions', {
+      partition_id: 'partition-1',
+      table_id: 'table-1',
+      partition_key_start: null,
+      partition_key_end: null,
+    }));
 
-  cache.applySystemTableChange('partitions', 'INSERT', {
-    id: 'partition-1',
-    tableId: 'table-1',
-    keyStart: null,
-    keyEnd: null,
-  });
+  cache.applySystemTableChange('tables', 'INSERT', systemTableRow('tables', {
+    table_id: 'table-1',
+    table_name: 'test_table',
+  }));
 
-  cache.applySystemTableChange('tables', 'INSERT', {
-    id: 'table-1',
-    name: 'test_table',
-  });
+  cache.applySystemTableChange('message_groups', 'INSERT',
+    systemTableRow('message_groups', {
+      group_id: 'mg-1',
+      replica_count: 3,
+    }));
 
-  cache.applySystemTableChange('message_groups', 'INSERT', {
-    id: 'mg-1',
-    replicaCount: 3,
-  });
-
-  cache.applySystemTableChange('indices', 'INSERT', {
-    id: 'index-1',
-    tableId: 'table-1',
-    column: 'name',
-  });
+  cache.applySystemTableChange('indices', 'INSERT', systemTableRow('indices', {
+    index_id: 'index-1',
+    table_id: 'table-1',
+    column_names: JSON.stringify(['name']),
+  }));
 
   return cache;
 }
@@ -411,49 +425,52 @@ export function seedServiceDiscoveryRows(cache) {
   for (const nodeId of ['node-1', 'node-2']) {
     if (!cache.get(TABLES.NODES, nodeId)) {
       cache.applySystemTableChange(TABLES.NODES, 'INSERT',
-        registeredNodeRow(nodeId));
+        fixtureNodeRow(nodeId));
     }
   }
-  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
-    service_id: 'sys-postgres-wire',
-    service_name: 'sys-postgres-wire',
-    replica_count: 3,
-    runtime_kind: 'native_js',
-  });
-
-  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-    endpoint_id: 'sys-postgres-wire-ep-node-1',
-    service_id: 'sys-postgres-wire',
-    node_id: 'node-1',
-    protocol: 'postgresql',
-    address: '10.0.0.1',
-    port: 5432,
-    health_status: 'healthy',
-    metadata: JSON.stringify({
+  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT',
+    systemTableRow(TABLES.SERVICE_DEFINITIONS, {
+      service_id: 'sys-postgres-wire',
       service_name: 'sys-postgres-wire',
-      protocol: 'postgresql',
-      version: '1.0.0',
-    }),
-    updated_at: Date.now(),
-  });
+      replica_count: 3,
+      runtime_kind: 'native_js',
+    }));
 
-  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-    endpoint_id: 'sys-postgres-wire-ep-node-2',
-    service_id: 'sys-postgres-wire',
-    node_id: 'node-2',
-    protocol: 'postgresql',
-    address: '10.0.0.2',
-    port: 5432,
-    health_status: 'unhealthy',
-    metadata: JSON.stringify({
-      service_name: 'sys-postgres-wire',
+  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT',
+    systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+      endpoint_id: 'sys-postgres-wire-ep-node-1',
+      service_id: 'sys-postgres-wire',
+      node_id: 'node-1',
       protocol: 'postgresql',
-      version: '1.0.0',
-    }),
-    updated_at: Date.now(),
-  });
+      address: '10.0.0.1',
+      port: 5432,
+      health_status: 'healthy',
+      metadata: JSON.stringify({
+        service_name: 'sys-postgres-wire',
+        protocol: 'postgresql',
+        version: '1.0.0',
+      }),
+      updated_at: Date.now(),
+    }));
+
+  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT',
+    systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+      endpoint_id: 'sys-postgres-wire-ep-node-2',
+      service_id: 'sys-postgres-wire',
+      node_id: 'node-2',
+      protocol: 'postgresql',
+      address: '10.0.0.2',
+      port: 5432,
+      health_status: 'unhealthy',
+      metadata: JSON.stringify({
+        service_name: 'sys-postgres-wire',
+        protocol: 'postgresql',
+        version: '1.0.0',
+      }),
+      updated_at: Date.now(),
+    }));
 }
 
 /**
@@ -466,79 +483,87 @@ export function seedServiceDiscoveryRows(cache) {
 export function seedRoutedTableDiscoveryRows(cache) {
   const updatedAt = Date.now();
 
-  cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
-    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-    id: 'node-2',
-    node_id: 'node-2',
-    address: 'localhost:8081',
-    status: 'active',
-  });
+  cache.applySystemTableChange(TABLES.NODES, 'INSERT', fixtureNodeRow('node-2'));
 
-  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
-    service_id: 'sys-postgres-wire',
-    service_name: 'sys-postgres-wire',
-    replica_count: 2,
-    runtime_kind: 'native_js',
-  });
-
-  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-    endpoint_id: 'sys-postgres-wire-ep-node-1',
-    service_id: 'sys-postgres-wire',
-    node_id: 'node-1',
-    protocol: 'postgresql',
-    address: '10.0.0.1',
-    port: 5432,
-    health_status: 'healthy',
-    metadata: JSON.stringify({
+  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT',
+    systemTableRow(TABLES.SERVICE_DEFINITIONS, {
+      service_id: 'sys-postgres-wire',
       service_name: 'sys-postgres-wire',
+      replica_count: 2,
+      runtime_kind: 'native_js',
+    }));
+
+  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT',
+    systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+      endpoint_id: 'sys-postgres-wire-ep-node-1',
+      service_id: 'sys-postgres-wire',
+      node_id: 'node-1',
       protocol: 'postgresql',
-      version: '1.0.0',
-    }),
-    updated_at: updatedAt,
-  });
+      address: '10.0.0.1',
+      port: 5432,
+      health_status: 'healthy',
+      metadata: JSON.stringify({
+        service_name: 'sys-postgres-wire',
+        protocol: 'postgresql',
+        version: '1.0.0',
+      }),
+      updated_at: updatedAt,
+    }));
 
-  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-    endpoint_id: 'sys-postgres-wire-ep-node-2',
-    service_id: 'sys-postgres-wire',
-    node_id: 'node-2',
-    protocol: 'postgresql',
-    address: '10.0.0.2',
-    port: 5432,
-    health_status: 'healthy',
-    metadata: JSON.stringify({
-      service_name: 'sys-postgres-wire',
+  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT',
+    systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+      endpoint_id: 'sys-postgres-wire-ep-node-2',
+      service_id: 'sys-postgres-wire',
+      node_id: 'node-2',
       protocol: 'postgresql',
-      version: '1.0.0',
-    }),
-    updated_at: updatedAt,
-  });
+      address: '10.0.0.2',
+      port: 5432,
+      health_status: 'healthy',
+      metadata: JSON.stringify({
+        service_name: 'sys-postgres-wire',
+        protocol: 'postgresql',
+        version: '1.0.0',
+      }),
+      updated_at: updatedAt,
+    }));
 
-  cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-    id: 'table-benchmark-events',
-    table_id: 'table-benchmark-events',
-    name: 'benchmark_events',
-    table_name: 'benchmark_events',
-  });
+  cache.applySystemTableChange(TABLES.TABLES, 'INSERT',
+    systemTableRow(TABLES.TABLES, {
+      table_id: 'table-benchmark-events',
+      table_name: 'benchmark_events',
+    }));
 
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    id: 'partition-benchmark-events-1',
-    partition_id: 'partition-benchmark-events-1',
-    table_id: 'table-benchmark-events',
-    table_name: 'benchmark_events',
-    keyStart: null,
-    keyEnd: null,
-  });
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+    systemTableRow(TABLES.PARTITIONS, {
+      partition_id: 'partition-benchmark-events-1',
+      table_id: 'table-benchmark-events',
+      table_name: 'benchmark_events',
+      partition_key_start: null,
+      partition_key_end: null,
+    }));
 
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-1',
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT',
+    benchmarkPartitionServiceRow('node-1', 'leader', '10.0.0.1:7001'));
+}
+
+/**
+ * A partition-service row of the benchmark partition hosted on a node.
+ * @param {string} nodeId
+ * @param {string} raftRole
+ * @param {string} address
+ * @return {Object}
+ */
+function benchmarkPartitionServiceRow(nodeId, raftRole, address) {
+  return servicesRow({
+    service_id: `service-benchmark-events-${nodeId}`,
     service_type: 'partition',
     partition_id: 'partition-benchmark-events-1',
-    node_id: 'node-1',
+    node_id: nodeId,
     status: 'active',
-    raft_role: 'leader',
-    address: '10.0.0.1:7001',
+    raft_role: raftRole,
+    address,
   });
 }
 
@@ -553,15 +578,8 @@ export function seedRoutedTableDiscoveryRows(cache) {
 export function seedTableDiscoveryRowsWithLocalLearner(cache) {
   seedRoutedTableDiscoveryRows(cache);
 
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-2',
-    service_type: 'partition',
-    partition_id: 'partition-benchmark-events-1',
-    node_id: 'node-2',
-    status: 'active',
-    raft_role: 'learner',
-    address: '10.0.0.2:7001',
-  });
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT',
+    benchmarkPartitionServiceRow('node-2', 'learner', '10.0.0.2:7001'));
 }
 
 /**
@@ -575,15 +593,8 @@ export function seedTableDiscoveryRowsWithLocalLearner(cache) {
 export function seedTableDiscoveryRowsWithLocalCandidate(cache) {
   seedRoutedTableDiscoveryRows(cache);
 
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-2',
-    service_type: 'partition',
-    partition_id: 'partition-benchmark-events-1',
-    node_id: 'node-2',
-    status: 'active',
-    raft_role: 'candidate',
-    address: '10.0.0.2:7001',
-  });
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT',
+    benchmarkPartitionServiceRow('node-2', 'candidate', '10.0.0.2:7001'));
 }
 
 /**
@@ -595,15 +606,8 @@ export function seedTableDiscoveryRowsWithLocalCandidate(cache) {
 export function seedTableDiscoveryRowsWithLocalFollower(cache) {
   seedRoutedTableDiscoveryRows(cache);
 
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-2',
-    service_type: 'partition',
-    partition_id: 'partition-benchmark-events-1',
-    node_id: 'node-2',
-    status: 'active',
-    raft_role: 'follower',
-    address: '10.0.0.2:7001',
-  });
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT',
+    benchmarkPartitionServiceRow('node-2', 'follower', '10.0.0.2:7001'));
 }
 
 /**
@@ -633,9 +637,7 @@ export function stageFutureBenchmarkSplitChildren(
     1;
 
   cache.applySystemTableChange(TABLES.TABLES, 'UPDATE', {
-    id: tableId,
     table_id: tableId,
-    name: 'benchmark_events',
     table_name: 'benchmark_events',
     active_partition_version: activePartitionVersion,
     partition_count: partitionCount,
@@ -648,7 +650,6 @@ export function stageFutureBenchmarkSplitChildren(
     }),
   });
   cache.applySystemTableChange(TABLES.PARTITIONS, 'UPDATE', {
-    id: sourcePartitionId,
     partition_id: sourcePartitionId,
     table_id: tableId,
     table_name: 'benchmark_events',
@@ -656,24 +657,17 @@ export function stageFutureBenchmarkSplitChildren(
     state: 'NORMAL',
     leader_node_id: 'node-1',
   });
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    id: leftPartitionId,
-    partition_id: leftPartitionId,
-    table_id: tableId,
-    table_name: 'benchmark_events',
-    partition_version: 2,
-    state: 'NORMAL',
-    leader_node_id: null,
-  });
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    id: rightPartitionId,
-    partition_id: rightPartitionId,
-    table_id: tableId,
-    table_name: 'benchmark_events',
-    partition_version: 2,
-    state: 'NORMAL',
-    leader_node_id: null,
-  });
+  for (const childPartitionId of [leftPartitionId, rightPartitionId]) {
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+      systemTableRow(TABLES.PARTITIONS, {
+        partition_id: childPartitionId,
+        table_id: tableId,
+        table_name: 'benchmark_events',
+        partition_version: 2,
+        state: 'NORMAL',
+        leader_node_id: null,
+      }));
+  }
 
   return {
     sourcePartitionId,
@@ -690,49 +684,53 @@ export function stageFutureBenchmarkSplitChildren(
  * @param {number} updatedAt
  */
 export function seedPartitionScopedDiscoveryRowsWithoutTableRecord(cache, updatedAt) {
-  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
-    service_id: 'sys-postgres-wire',
-    service_name: 'sys-postgres-wire',
-    replica_count: 1,
-    runtime_kind: 'native_js',
-  });
+  seedSingleNodePostgresWireDiscoveryRows(cache, updatedAt);
 
-  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-    endpoint_id: 'sys-postgres-wire-ep-node-1',
-    service_id: 'sys-postgres-wire',
-    node_id: 'node-1',
-    protocol: 'postgresql',
-    address: '10.0.0.1',
-    port: 5432,
-    health_status: 'healthy',
-    metadata: JSON.stringify({
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+    systemTableRow(TABLES.PARTITIONS, {
+      partition_id: 'partition-benchmark-events-1',
+      table_id: 'table-benchmark-events',
+      table_name: 'benchmark_events',
+      partition_key_start: null,
+      partition_key_end: null,
+      updated_at: updatedAt,
+    }));
+
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT',
+    benchmarkPartitionServiceRow('node-1', 'leader', '10.0.0.1:7001'));
+}
+
+/**
+ * The single-replica sys-postgres-wire definition and its node-1 endpoint.
+ * @param {SystemTableCache} cache
+ * @param {number} updatedAt
+ */
+function seedSingleNodePostgresWireDiscoveryRows(cache, updatedAt) {
+  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT',
+    systemTableRow(TABLES.SERVICE_DEFINITIONS, {
+      service_id: 'sys-postgres-wire',
       service_name: 'sys-postgres-wire',
+      replica_count: 1,
+      runtime_kind: 'native_js',
+    }));
+
+  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT',
+    systemTableRow(TABLES.SERVICE_ENDPOINTS, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+      endpoint_id: 'sys-postgres-wire-ep-node-1',
+      service_id: 'sys-postgres-wire',
+      node_id: 'node-1',
       protocol: 'postgresql',
-      version: '1.0.0',
-    }),
-    updated_at: updatedAt,
-  });
-
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    id: 'partition-benchmark-events-1',
-    partition_id: 'partition-benchmark-events-1',
-    table_id: 'table-benchmark-events',
-    table_name: 'benchmark_events',
-    keyStart: null,
-    keyEnd: null,
-    updated_at: updatedAt,
-  });
-
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-1',
-    service_type: 'partition',
-    partition_id: 'partition-benchmark-events-1',
-    node_id: 'node-1',
-    status: 'active',
-    raft_role: 'leader',
-    address: '10.0.0.1:7001',
-  });
+      address: '10.0.0.1',
+      port: 5432,
+      health_status: 'healthy',
+      metadata: JSON.stringify({
+        service_name: 'sys-postgres-wire',
+        protocol: 'postgresql',
+        version: '1.0.0',
+      }),
+      updated_at: updatedAt,
+    }));
 }
 
 /**
@@ -743,48 +741,20 @@ export function seedPartitionScopedDiscoveryRowsWithoutTableRecord(cache, update
  * @param {number} updatedAt
  */
 export function seedPartitionScopedDiscoveryRowsWithoutTableName(cache, updatedAt) {
-  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
-    service_id: 'sys-postgres-wire',
-    service_name: 'sys-postgres-wire',
-    replica_count: 1,
-    runtime_kind: 'native_js',
-  });
+  seedSingleNodePostgresWireDiscoveryRows(cache, updatedAt);
 
-  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
-    endpoint_id: 'sys-postgres-wire-ep-node-1',
-    service_id: 'sys-postgres-wire',
-    node_id: 'node-1',
-    protocol: 'postgresql',
-    address: '10.0.0.1',
-    port: 5432,
-    health_status: 'healthy',
-    metadata: JSON.stringify({
-      service_name: 'sys-postgres-wire',
-      protocol: 'postgresql',
-      version: '1.0.0',
-    }),
-    updated_at: updatedAt,
-  });
+  // table_name is nullable: the stored row holds SQL NULL for it.
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT',
+    systemTableRow(TABLES.PARTITIONS, {
+      partition_id: 'partition-benchmark-events-1',
+      table_id: 'table-benchmark-events',
+      partition_key_start: null,
+      partition_key_end: null,
+      updated_at: updatedAt,
+    }));
 
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    id: 'partition-benchmark-events-1',
-    partition_id: 'partition-benchmark-events-1',
-    table_id: 'table-benchmark-events',
-    keyStart: null,
-    keyEnd: null,
-    updated_at: updatedAt,
-  });
-
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-1',
-    service_type: 'partition',
-    partition_id: 'partition-benchmark-events-1',
-    node_id: 'node-1',
-    status: 'active',
-    raft_role: 'leader',
-    address: '10.0.0.1:7001',
-  });
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT',
+    benchmarkPartitionServiceRow('node-1', 'leader', '10.0.0.1:7001'));
 }
 
 /**

@@ -23,6 +23,10 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {createTestRebalancer} from './test-helpers.js';
 import {createLifecycleCdcService} from
   '../test-helpers/lifecycle-state-store.js';
+import {
+  projectedReplica,
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
   t.beforeEach(async () => {
@@ -84,13 +88,14 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
             cacheData: {
               nodes: [{node_id: nodeId, status: 'active'}],
               services: [
-                {
+                servicesRow({
                   service_id: replicaId,
+                  replica_id: replicaId,
                   partition_id: partitionId,
                   node_id: nodeId,
                   service_type: 'partition',
                   status: ReplicaStatus.FAILED,
-                },
+                }),
               ],
               partitions: [{partition_id: partitionId, table_id: 'table-1'}],
             },
@@ -102,12 +107,13 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
 
           // Calculate moves
           const currentReplicas = [
-            {
+            projectedReplica({
               service_id: replicaId,
               replica_id: replicaId,
+              partition_id: partitionId,
               node_id: nodeId,
               status: ReplicaStatus.FAILED,
-            },
+            }),
           ];
           const targetState = {
             targetReplicaCount: 1,
@@ -197,13 +203,14 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
             cacheData: {
               nodes: [{node_id: nodeId, status: 'active'}],
               services: [
-                {
+                servicesRow({
                   service_id: replicaId,
+                  replica_id: replicaId,
                   partition_id: partitionId,
                   node_id: nodeId,
                   service_type: 'partition',
                   status: ReplicaStatus.FAILED,
-                },
+                }),
               ],
               partitions: [{partition_id: partitionId, table_id: 'table-1'}],
             },
@@ -214,12 +221,13 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
 
           // Calculate moves with failed replica
           const currentReplicas = [
-            {
+            projectedReplica({
               service_id: replicaId,
               replica_id: replicaId,
+              partition_id: partitionId,
               node_id: nodeId,
               status: ReplicaStatus.FAILED,
-            },
+            }),
           ];
           const targetState = {
             targetReplicaCount: 1,

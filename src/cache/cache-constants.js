@@ -1,4 +1,4 @@
-import {CDC_OPERATION, TIME_MS} from '../constants/index.js';
+import {CDC_OPERATION, TABLES, TIME_MS} from '../constants/index.js';
 import {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
 } from './system-cache-key-descriptor.js';
@@ -26,6 +26,8 @@ const CACHE_LOG_MSG = Object.freeze({
   CACHE_CLEARED: 'Cache cleared',
   READ_ONLY_WRITE_ATTEMPT: 'Attempted to write to read-only cache',
   GET_READY_NODES_DEBUG: 'getReadyNodes debug info',
+  PARTIAL_ROW_MARKED_OBSERVED_COLUMNS:
+    'Partial row stored for an unheld key; marked with its observed columns',
 });
 
 const CACHE_ERROR_MSG = Object.freeze({
@@ -72,12 +74,37 @@ const SYSTEM_TABLE_CACHE_MUTATION_MODE = Object.freeze({
     'authoritative_service_lifecycle_reconciliation',
 });
 
+// The cache-local field a seeder's partial row carries: the seed projection
+// (`{table, name, columns}`) naming the columns the seeder observed. The
+// decoders give every column outside it the named state ROW_NOT_OBSERVED;
+// the cache drops it once the row holds every stored column
+// (system-table-cache-seed-projection.js).
+const SYSTEM_TABLE_CACHE_SEED_PROJECTION_FIELD = 'seed_projection';
+
+// The seed projection the cache itself declares (lead ruling RD-1/RD-2,
+// 2026-11-09): a partial row stored for a key the cache does not hold,
+// carrying no declared seed projection, is marked with
+// `{table, name: SYSTEM_TABLE_CACHE_OBSERVED_COLUMNS_PROJECTION_NAME,
+// columns: <exactly the observed columns>}` in the same marker field, so the
+// decoders read it exactly as a seeder's declared projection.
+const SYSTEM_TABLE_CACHE_OBSERVED_COLUMNS_PROJECTION_NAME = 'cache_observed_columns';
+
+// The tables whose rows a system-table row decoder reads (the only reader of
+// the marker): the observed-columns marking applies to these alone, so rows
+// of tables no decoder reads are stored exactly as written.
+const SYSTEM_TABLE_CACHE_DECODED_TABLES = Object.freeze([
+  TABLES.NODES,
+  TABLES.SERVICES,
+  TABLES.REPLICA_OPERATIONS,
+]);
+
 const SYSTEM_TABLE_CACHE_LOCAL_FIELD_NAMES = Object.freeze([
   'updated_at_hlc',
   'updatedAtHlc',
   'leader_claim_node_id',
   'leader_claim_raft_term',
   'leader_claim_minted_against_updated_at',
+  SYSTEM_TABLE_CACHE_SEED_PROJECTION_FIELD,
 ]);
 
 const SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES = Object.freeze([
@@ -216,7 +243,10 @@ export {
   CACHE_SYSTEM_TABLES,
   CDC_NON_PROPAGATED_TABLES,
   CDC_PROPAGATED_TABLES,
+  SYSTEM_TABLE_CACHE_DECODED_TABLES,
   SYSTEM_TABLE_CACHE_LOCAL_FIELD_NAMES,
+  SYSTEM_TABLE_CACHE_OBSERVED_COLUMNS_PROJECTION_NAME,
+  SYSTEM_TABLE_CACHE_SEED_PROJECTION_FIELD,
   SYSTEM_TABLE_CACHE_MUTATION_MODE,
   SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES,
   SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES,

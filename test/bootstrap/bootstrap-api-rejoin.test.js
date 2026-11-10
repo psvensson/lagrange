@@ -8,6 +8,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
+import {CDC_OPERATIONS, SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
@@ -436,3 +437,86 @@ test('checkForConflicts allows re-registration when authoritative nodes row is s
       'should prefer authoritative stopped row over stale cache row',
     );
   });
+
+// Quest system-table-row-decoders (round 3, seed projections): the cache
+// stores exactly what was written, so a nodes row keeps HEAD's distinction
+// between a ready lease never written (the key is missing: no lease, live
+// unless terminal) and a lease explicitly cleared (stored NULL: Number(null)
+// = 0, expired, dead), on the cache fallback, the address-claim sweep and
+// the authoritative read alike. Each row passes through a real
+// SystemTableCache first: a cache that completed rows would turn the missing
+// key into NULL and fail the "missing" witnesses.
+function nodeRowAsCached(nodeId, nodeAddress, lease) {
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(TABLES.NODES, CDC_OPERATIONS.UPSERT, {
+    [COLUMN.NODE_ID]: nodeId,
+    [COLUMN.NODE_ADDRESS]: nodeAddress,
+    [COLUMN.STATUS]: NODE_STATE.JOINING,
+    ...lease,
+  });
+  return cache.get(TABLES.NODES, nodeId);
+}
+
+const LEASE_NEVER_WRITTEN = Object.freeze({});
+const LEASE_CLEARED = Object.freeze({[COLUMN.READY_LEASE_EXPIRES_AT]: null});
+
+function createApiOverCacheRow(row, authoritativeRows) {
+  return new BootstrapAPI({
+    seedNodeId: SEED_NODE_ID,
+    seedNodeAddress: SEED_NODE_ADDRESS,
+    systemTableCache: createCacheWithExistingNode(row),
+    ...(authoritativeRows ? {
+      authoritativeControlPlaneView: {
+        canRead() {
+          return true;
+        },
+        async readRows() {
+          return {success: true, rows: authoritativeRows};
+        },
+      },
+    } : {}),
+  });
+}
+
+test('cache fallback: a live row whose lease was never written is the ' +
+  'terminal conflict (HEAD)', async (t) => {
+  initializeTestEnvironment();
+  const row = nodeRowAsCached(REJOIN_NODE_ID, REJOIN_NODE_ADDRESS, LEASE_NEVER_WRITTEN);
+  t.notOk(Object.hasOwn(row, COLUMN.READY_LEASE_EXPIRES_AT), 'the cache added no lease key');
+  const result = await createApiOverCacheRow(row).checkForConflicts(
+    REJOIN_NODE_ID, 'ws://localhost:9091');
+  t.ok(typeof result === 'string' && result.includes('already registered'),
+    'a missing lease reads as no lease: live');
+});
+
+test('cache fallback: a live row whose lease was explicitly cleared admits ' +
+  'the changed-address rejoin (HEAD)', async (t) => {
+  initializeTestEnvironment();
+  const row = nodeRowAsCached(REJOIN_NODE_ID, REJOIN_NODE_ADDRESS, LEASE_CLEARED);
+  const result = await createApiOverCacheRow(row).checkForConflicts(
+    REJOIN_NODE_ID, 'ws://localhost:9091');
+  t.equal(result, null, 'a stored NULL lease reads as expired: dead');
+});
+
+test('address-claim sweep: another node\'s row holds its address while its ' +
+  'lease was never written, not once it was cleared (HEAD)', async (t) => {
+  initializeTestEnvironment();
+  const neverWritten = await createApiOverCacheRow(
+    nodeRowAsCached('other-node', 'ws://localhost:9092', LEASE_NEVER_WRITTEN),
+  ).checkForConflicts(REJOIN_NODE_ID, 'ws://localhost:9092');
+  t.ok(typeof neverWritten === 'string' && neverWritten.includes('already in use'),
+    'missing lease: the live node keeps its address');
+  const cleared = await createApiOverCacheRow(
+    nodeRowAsCached('other-node', 'ws://localhost:9092', LEASE_CLEARED),
+  ).checkForConflicts(REJOIN_NODE_ID, 'ws://localhost:9092');
+  t.equal(cleared, null, 'cleared lease: the dead node no longer holds it');
+});
+
+test('authoritative path unchanged: an authoritative live row with a NULL ' +
+  'lease reads as expired and admits', async (t) => {
+  initializeTestEnvironment();
+  const row = nodeRowAsCached(REJOIN_NODE_ID, REJOIN_NODE_ADDRESS, LEASE_CLEARED);
+  const api = createApiOverCacheRow(row, [row]);
+  const result = await api.checkForConflicts(REJOIN_NODE_ID, 'ws://localhost:9091');
+  t.equal(result, null, 'the authoritative read keeps its NULL-as-expired decision');
+});

@@ -6,7 +6,13 @@ import {
   hasCanonicalWebSocketEndpoint,
   resolveLatestPublicationRow,
 } from './active-node-projection.js';
-import {normalizeServiceRow} from './system-row-normalizers.js';
+import {
+  decodeServicesRow,
+  decodeServicesRowColumnView,
+  decodeServicesRows,
+  readServicesRowView,
+} from './services-row-decoder.js';
+import {ROW_ABSENT} from './system-table-row-decoding.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {copyMapValuesToArray} from '../utils/map-values-array.js';
 
@@ -116,31 +122,29 @@ function readAliasedValue(record, fieldName, aliasName) {
   return alternate === undefined || alternate === null ? null : alternate;
 }
 
-function normalizeOptionalString(value) {
-  return value === undefined || value === null ? '' : stringConstructor(value);
+// The planning projection's record of one priority service row: the nine
+// fields whose change is a semantic change (isDeepStrictEqual decides reuse
+// on it; a wider record would rebuild on every updated_at bump). Values are
+// the decoded row's, an absent column ROW_ABSENT.
+// The record is the normaliser readers' view (readServicesRowView: a column
+// a partial row never observed reads as normalizeServiceRow read a missing
+// key, like the stored value it read alike), so a partial row and its full
+// row with that value record equal, as they did.
+function buildPlanningServiceRecord(service) {
+  return readServicesRowView(service);
 }
 
-function readNormalizedAliasedString(record, primaryName, alternateName) {
-  const primary = normalizeOptionalString(record?.[primaryName]);
-  return primary.length > 0 ?
-    primary :
-    normalizeOptionalString(record?.[alternateName]);
+// A service row without a partition belongs to no priority partition.
+function isPriorityServicePartition(partitionId, partitionIndex) {
+  return partitionId !== ROW_ABSENT &&
+    isPriorityPartitionId(partitionId, partitionIndex);
 }
 
-function readNormalizedServicePartitionId(record) {
-  return readNormalizedAliasedString(
-    record,
-    COLUMN.PARTITION_ID,
-    FIELD.PARTITION_ID,
-  );
-}
-
-function readNormalizedServiceId(record) {
-  return readNormalizedAliasedString(
-    record,
-    COLUMN.SERVICE_ID,
-    FIELD.SERVICE_ID,
-  );
+// The partition of one stored services row, decoded alone: the prefilter
+// that keeps an ordinary row from being decoded whole (HEAD's
+// readNormalizedServicePartitionId read a missing key and NULL alike).
+function readServicePartitionId(row) {
+  return decodeServicesRowColumnView(row, COLUMN.PARTITION_ID);
 }
 
 function buildPriorityPartitionSemanticRecord(record) {
@@ -235,15 +239,8 @@ function buildPriorityServiceRecords(serviceRows, partitionIndex) {
   const records = [];
   for (let index = 0; index < serviceRows.length; index += 1) {
     const row = serviceRows[index];
-    if (!isPriorityPartitionId(
-      readNormalizedServicePartitionId(row),
-      partitionIndex,
-    )) continue;
-    defineValue(
-      records,
-      records.length,
-      objectFreeze(normalizeServiceRow(row)),
-    );
+    if (!isPriorityServicePartition(readServicePartitionId(row), partitionIndex)) continue;
+    defineValue(records, records.length, buildPlanningServiceRecord(decodeServicesRow(row)));
   }
   return records;
 }
@@ -297,8 +294,9 @@ function priorityServiceChangeAffectsProjection(
     const record = records[index];
     if (!record) continue;
     recordSeen = true;
+    const partitionId = readServicePartitionId(record);
     if (isPriorityPartitionFromProjection(
-      readNormalizedServicePartitionId(record),
+      partitionId === ROW_ABSENT ? '' : partitionId,
       sourceRowsByTable,
       previousProjection,
     )) return true;
@@ -306,18 +304,22 @@ function priorityServiceChangeAffectsProjection(
   return !recordSeen;
 }
 
+// One services change: the previous row's identity and the decoded current
+// row (a missing side: an INSERT has no previous row, a DELETE no current
+// row). Only the current row's semantic record is rebuilt.
 function resolveChangedServiceRecords(sourceChange) {
   if (!sourceChange) return null;
   const previousRecord = sourceChange.previousRecord;
   const currentRecord = sourceChange.currentRecord;
   if (!previousRecord && !currentRecord) return null;
+  const currentService = currentRecord ?
+    buildPlanningServiceRecord(decodeServicesRow(currentRecord)) : null;
+  const currentServiceId = currentService ? currentService.serviceId : '';
   const previousServiceId = previousRecord ?
-    readNormalizedServiceId(previousRecord) : '';
-  const currentServiceId = currentRecord ?
-    readNormalizedServiceId(currentRecord) : '';
+    decodeServicesRowColumnView(previousRecord, COLUMN.SERVICE_ID) : '';
   if ((previousRecord && !previousServiceId) ||
       (currentRecord && !currentServiceId)) return null;
-  return {currentRecord, currentServiceId, previousRecord, previousServiceId};
+  return {currentService, currentServiceId, previousServiceId};
 }
 
 function buildChangedPriorityServiceRecords(
@@ -331,15 +333,9 @@ function buildChangedPriorityServiceRecords(
   const records = arrayFilter(previousRecords, (record) =>
     record?.serviceId !== change.previousServiceId &&
       record?.serviceId !== change.currentServiceId);
-  if (change.currentRecord && isPriorityPartitionId(
-    readNormalizedServicePartitionId(change.currentRecord),
-    partitionIndex,
-  )) {
-    defineValue(
-      records,
-      records.length,
-      objectFreeze(normalizeServiceRow(change.currentRecord)),
-    );
+  if (change.currentService &&
+      isPriorityServicePartition(change.currentService.partitionId, partitionIndex)) {
+    defineValue(records, records.length, change.currentService);
   }
   return sortSemanticRecords(records, (record) => record.serviceId);
 }
@@ -456,13 +452,22 @@ function resolveProjectedServiceFallbackNodeIds(
   nodeIds,
   previousProjection,
 ) {
-  return plan.rebuildServiceFallbackNodeIds ? arrayFilter(
+  if (!plan.rebuildServiceFallbackNodeIds) {
+    return previousProjection.serviceFallbackNodeIds;
+  }
+  // Decoded once, and only when a node without a canonical WebSocket
+  // endpoint needs the active-service fallback.
+  let services = null;
+  return arrayFilter(
     nodeIds,
-    (nodeId) =>
-      !hasCanonicalWebSocketEndpoint(nodeId, rows.endpointRows,
-        rows.nodeRows) &&
-      hasCanonicalActiveService(nodeId, rows.serviceRows),
-  ) : previousProjection.serviceFallbackNodeIds;
+    (nodeId) => {
+      if (hasCanonicalWebSocketEndpoint(nodeId, rows.endpointRows, rows.nodeRows)) {
+        return false;
+      }
+      services ??= decodeServicesRows(rows.serviceRows);
+      return hasCanonicalActiveService(nodeId, services);
+    },
+  );
 }
 
 function resolveProjectedPriorityPartitions(plan, rows, previousProjection) {
@@ -475,21 +480,25 @@ function resolveProjectedPriorityPartitions(plan, rows, previousProjection) {
   ) : previousProjection.priorityPartitions;
 }
 
+// A services change rebuilds only its own semantic row; any other change
+// that requires the slice (a partitions change, a full build) rebuilds it.
 function resolveProjectedPriorityServices(
   plan,
   rows,
   previousProjection,
-  sourceChange,
+  {changedTableName, sourceChange},
   partitionIndex,
 ) {
   if (!plan.rebuildPriorityServices) {
     return previousProjection.priorityServices;
   }
-  const changedRecords = buildChangedPriorityServiceRecords(
-    previousProjection?.priorityServices,
-    sourceChange,
-    partitionIndex,
-  );
+  const changedRecords = changedTableName === TABLES.SERVICES ?
+    buildChangedPriorityServiceRecords(
+      previousProjection?.priorityServices,
+      sourceChange,
+      partitionIndex,
+    ) :
+    null;
   return changedRecords ?? sortSemanticRecords(
     buildPriorityServiceRecords(rows.serviceRows, partitionIndex),
     (row) => row.serviceId,
@@ -591,7 +600,7 @@ function buildDirectGlobalProjection(
       plan,
       rows,
       previousProjection,
-      sourceChange,
+      {changedTableName, sourceChange},
       partitionIndex,
     ),
     serviceFallbackNodeIds: resolveProjectedServiceFallbackNodeIds(
@@ -604,8 +613,9 @@ function buildDirectGlobalProjection(
 }
 
 export {
-  DIRECT_GLOBAL_PROJECTION_FIELD,
   buildDirectGlobalProjection,
+  buildPlanningServiceRecord,
+  DIRECT_GLOBAL_PROJECTION_FIELD,
   isPriorityPartitionFromProjection,
   projectedListIncludes,
 };

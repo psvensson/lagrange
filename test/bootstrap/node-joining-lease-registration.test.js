@@ -54,6 +54,7 @@ test('registerNodeInCluster defers ready_lease_expires_at until ready signaling'
           ...nodeRow,
           storage_budget_bytes: 100,
           storage_budget_source: 'test',
+          storage_budget_updated_at: nodeRow.created_at,
         },
         resolution: {
           isValid: true,

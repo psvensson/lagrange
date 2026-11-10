@@ -23,6 +23,19 @@ import {
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
+
+// An ACTIVE replica of replica_operations-p1 as getCurrentReplicas returns it.
+function ledgerReplica(replicaId, nodeId, raftRole) {
+  return projectedReplica({
+    service_id: replicaId,
+    replica_id: replicaId,
+    partition_id: 'replica_operations-p1',
+    node_id: nodeId,
+    status: ReplicaStatus.ACTIVE,
+    raft_role: raftRole,
+  });
+}
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -369,30 +382,10 @@ test(
     rebalancer.isControlPlanePriorityPartition = () => true;
 
     const currentReplicas = [
-      {
-        replica_id: 'ledger-r1',
-        node_id: 'seed-node',
-        status: ReplicaStatus.ACTIVE,
-        raft_role: 'leader',
-      },
-      {
-        replica_id: 'ledger-r2',
-        node_id: 'seed-node',
-        status: ReplicaStatus.ACTIVE,
-        raft_role: 'follower',
-      },
-      {
-        replica_id: 'ledger-r4',
-        node_id: 'joiner-1',
-        status: ReplicaStatus.ACTIVE,
-        raft_role: 'follower',
-      },
-      {
-        replica_id: 'ledger-r5',
-        node_id: 'joiner-2',
-        status: ReplicaStatus.ACTIVE,
-        raft_role: 'follower',
-      },
+      ledgerReplica('ledger-r1', 'seed-node', 'leader'),
+      ledgerReplica('ledger-r2', 'seed-node', 'follower'),
+      ledgerReplica('ledger-r4', 'joiner-1', 'follower'),
+      ledgerReplica('ledger-r5', 'joiner-2', 'follower'),
     ];
     rebalancer.getCurrentReplicas = () => currentReplicas;
     rebalancer.getAvailableNodes = () => [];

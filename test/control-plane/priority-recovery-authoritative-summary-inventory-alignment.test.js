@@ -20,7 +20,10 @@ import {
   buildReplicaInventorySnapshot,
 } from '../../src/rebalancer/replica-inventory.js';
 
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
+
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 const NODE_IDS = Object.freeze(['seed', 'node-2', 'node-3', 'node-4']);
 const READY_NODE_IDS = Object.freeze(['seed', 'node-2', 'node-4']);
 const PRIORITY_PARTITION_IDS = Object.freeze([
@@ -32,12 +35,13 @@ const PUBLICATION_EPOCH = 3;
 const REPLICA_TARGET = 3;
 
 function createNodeRow(nodeId) {
-  return {
+  return nodesRow({
     [COLUMN.NODE_ID]: nodeId,
+    node_address: `ws://${nodeId}:8082`,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     connection_state: 'ready',
     ready_lease_expires_at: 50_000,
-  };
+  });
 }
 
 function createEndpointRow(nodeId) {
@@ -51,7 +55,7 @@ function createEndpointRow(nodeId) {
 }
 
 function createPartitionService(partitionId, nodeId, replicaId, status) {
-  return {
+  return servicesRow({
     [COLUMN.SERVICE_ID]: replicaId,
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.PARTITION_ID]: partitionId,
@@ -59,7 +63,7 @@ function createPartitionService(partitionId, nodeId, replicaId, status) {
     [COLUMN.STATUS]: status,
     [COLUMN.RAFT_ROLE]: 'follower',
     [COLUMN.ADDRESS]: `${nodeId}/partition/${partitionId}`,
-  };
+  });
 }
 
 function createPriorityServiceRows() {
@@ -202,7 +206,7 @@ test('priority planning invalidates every publisher memo when terminal replica r
       capturedAtMs: nowMs,
       committedRowsObservation: {
         state: 'present',
-        rows: authoritativeRows,
+        rows: projectReplicasFromServicesRows(authoritativeRows),
         observedAtMs: nowMs,
       },
       inFlightOperationObservation: {

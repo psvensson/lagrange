@@ -58,6 +58,7 @@ import {
 } from '../../src/control-plane/projection-readiness-evidence-generation.js';
 
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 const CLOCK_START_MS = 350000;
 // Keep observation time moving without crossing a node-liveness semantic
 // deadline; this suite isolates mutation-driven planning generation scope.
@@ -174,14 +175,12 @@ function buildCluster({realClock = false} = {}) {
       cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
         [COLUMN.NODE_ID]: nodeId,
         [COLUMN.LAST_HEARTBEAT]: startMs - 100 + step,
-        updated_at: startMs + step,
       });
     },
     serviceTouch(nodeId, step, overrides = {}) {
       cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
         ...createMessageGroupService(nodeId),
         updated_at: startMs + step,
-        load_hint: step,
         ...overrides,
       });
     },
@@ -545,7 +544,6 @@ test('A1/A2: an authoritative mutation affecting only node A rotates A ' +
   cluster.cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
     [COLUMN.NODE_ID]: AFFECTED,
     [COLUMN.STATUS]: NODE_STATE.STOPPED,
-    updated_at: cluster.startMs + 2,
   });
   cluster.serviceTouch(AFFECTED, 2);
   await flushCacheListeners();
@@ -619,14 +617,19 @@ test('A3b: a CONTROL_PLANE_PUBLICATIONS write that leaves the membership ' +
   // (ii) a non-membership publication row (a different publication kind)
   // lands in the same table: the membership winner is unchanged.
   cluster.cache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS,
-    'INSERT', {
+    'INSERT', systemTableRow(TABLES.CONTROL_PLANE_PUBLICATIONS, {
       publication_id: 'handoff-1',
       publication_kind: FORMATION_RELEASE_HANDOFF_PUBLICATION_KIND,
       publication_epoch: 99,
+      publisher_node_id: SEED,
+      published_active_node_ids: '[]',
+      required_ack_node_ids: '[]',
+      acknowledged_node_ids: '[]',
       status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
       created_at: cluster.startMs + 21,
       updated_at: cluster.startMs + 21,
-    });
+      transition_history: '[]',
+    }));
   cluster.serviceTouch(AFFECTED, 21);
   await flushCacheListeners();
   const afterOtherKind = cluster.readAll();

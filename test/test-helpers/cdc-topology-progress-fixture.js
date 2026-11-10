@@ -53,6 +53,7 @@ function controlledProjection() {
   const projection = {nodes, groups: [], services: [serviceRow(TARGET_GROUP, TARGET_NODE)]};
   projection.cache = {
     get: (table, key) => table === TABLES.NODES ? nodes.get(key) ?? null : null,
+    getShared: (table, key) => projection.cache.get(table, key),
     getAll: (table) => table === TABLES.LATENCY_GROUPS ? projection.groups : [],
     filter: (table, predicate) => table === TABLES.SERVICES ?
       projection.services.filter(predicate) : [],

@@ -9,6 +9,7 @@ import {
   selectPublicationActiveGateHandoffContract,
 } from '../../src/control-plane/publication-active-gate-handoff-contract.js';
 import * as ACTIVE_GATE_SNAPSHOT_TEST_STATE from './admin-control-snapshot-active-gate-fixture-state.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const PUBLICATION_CONVERGENCE_QUERY_ENGINE_NODE_ID = 'node-1';
 const PUBLICATION_CONVERGENCE_QUERY_ENGINE_NOW_MS = 1000;
@@ -200,7 +201,7 @@ test('AdminControlSnapshot uses authoritative published fallback when readiness 
 test('AdminControlSnapshot carries authoritative published fallback through local snapshot diagnostics',
   async (t) => {
     const nodeRows = ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS.map(
-      (nodeId) => ({
+      (nodeId) => nodesRow({
         node_id: nodeId,
         status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
         connection_state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
@@ -210,7 +211,7 @@ test('AdminControlSnapshot carries authoritative published fallback through loca
       }),
     );
     const serviceRows = ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS.map(
-      (nodeId) => ({
+      (nodeId) => servicesRow({
         service_id: nodeId,
         node_id: nodeId,
         status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
@@ -516,14 +517,14 @@ test('AdminControlSnapshot exposes publication owner-truth active cohort in cont
       systemTableCache: {
         getAll(tableId) {
           if (tableId === TABLES.NODES) {
-            return [{
+            return [nodesRow({
               node_id: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
               status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
               connection_state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
               ready_lease_expires_at:
                 ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
                   ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
-            }];
+            })];
           }
           return [];
         },
@@ -690,22 +691,22 @@ test('AdminControlSnapshot normalizes active-gate owner cohort budget state',
     const activeGateOwnerCohort =
       snapshot.resolveActiveGateOwnerCohortSnapshot({
         nodeRows: [
-          {
+          nodesRow({
             node_id: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
             status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
             connection_state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
             ready_lease_expires_at:
               ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
                 ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
-          },
-          {
+          }),
+          nodesRow({
             node_id: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_RECENT_NODE_IDS[0],
             status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_STATUS,
             connection_state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_CONNECTION_STATE,
             ready_lease_expires_at:
               ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NOW_MS +
                 ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_READY_LEASE_DELTA_MS,
-          },
+          }),
         ],
         activeNodeViews: {
           effectiveActiveNodeIds: [

@@ -11,6 +11,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {nodesRow, systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 // Port counter for unique ports per test
 let testPortCounter = 26000;
@@ -51,25 +52,24 @@ beforeEach(async () => {
   await messageGroup.subscribeToCDC('indices');
 
   // Add test data
-  await messageGroup.applyCDCEvent('nodes', 'INSERT', {
-    id: 'node-1',
-    address: '127.0.0.1:8080',
+  await messageGroup.applyCDCEvent('nodes', 'INSERT', nodesRow({
+    node_id: 'node-1',
+    node_address: '127.0.0.1:8080',
     status: 'active',
-  });
-  await messageGroup.applyCDCEvent('nodes', 'INSERT', {
-    id: 'node-2',
-    address: '127.0.0.1:8081',
-    status: 'inactive',
-  });
-  await messageGroup.applyCDCEvent('partitions', 'INSERT', {
-    id: 'partition-1',
-    tableId: 'table-1',
-    status: 'active',
-  });
-  await messageGroup.applyCDCEvent('tables', 'INSERT', {
-    id: 'table-1',
-    name: 'users',
-  });
+  }));
+  await messageGroup.applyCDCEvent('nodes', 'INSERT', nodesRow({
+    node_id: 'node-2',
+    node_address: '127.0.0.1:8081',
+    status: 'stopped',
+  }));
+  await messageGroup.applyCDCEvent('partitions', 'INSERT', systemTableRow('partitions', {
+    partition_id: 'partition-1',
+    table_id: 'table-1',
+  }));
+  await messageGroup.applyCDCEvent('tables', 'INSERT', systemTableRow('tables', {
+    table_id: 'table-1',
+    table_name: 'users',
+  }));
 });
 
 afterEach(async () => {
@@ -116,7 +116,7 @@ test('SystemCacheQueryService - querySystemCache routes to replica', async (t) =
   const result = await queryService.querySystemCache('nodes', {key: 'node-1'});
 
   t.ok(result, 'Should return result');
-  t.equal(result.id, 'node-1', 'Should return correct record');
+  t.equal(result.node_id, 'node-1', 'Should return correct record');
   t.equal(result.status, 'active', 'Should have correct status');
 });
 
@@ -137,7 +137,7 @@ test('SystemCacheQueryService - get returns record by key', async (t) => {
   const result = await queryService.get('nodes', 'node-1');
 
   t.ok(result, 'Should return result');
-  t.equal(result.id, 'node-1', 'Should return correct record');
+  t.equal(result.node_id, 'node-1', 'Should return correct record');
 });
 
 test('SystemCacheQueryService - get returns undefined for missing key', async (t) => {
@@ -166,7 +166,7 @@ test('SystemCacheQueryService - filter returns all matches', async (t) => {
   const results = await queryService.filter('nodes', (n) => n.status === 'active');
 
   t.equal(results.length, 1, 'Should return 1 match');
-  t.equal(results[0].id, 'node-1', 'Should return correct record');
+  t.equal(results[0].node_id, 'node-1', 'Should return correct record');
 });
 
 test('SystemCacheQueryService - getAll returns all records', async (t) => {
@@ -282,5 +282,5 @@ test('SystemCacheQueryService - uses getLocalReplica function', async (t) => {
   const result = await queryService.get('nodes', 'node-1');
 
   t.ok(result, 'Should use provided function');
-  t.equal(result.id, 'node-1', 'Should return correct record');
+  t.equal(result.node_id, 'node-1', 'Should return correct record');
 });

@@ -54,6 +54,7 @@ import {waitForCondition} from '../partition/partition-service-test-support.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 const ZERO = 0;
@@ -117,7 +118,7 @@ function poisonTowardB(address) {
 }
 
 function serviceRow(id, address, serviceType) {
-  return {
+  return servicesRow({
     service_id: id,
     partition_id: id.split('-r')[ZERO],
     service_type: serviceType,
@@ -126,7 +127,7 @@ function serviceRow(id, address, serviceType) {
     status: ReplicaStatus.ACTIVE,
     raft_role: RaftRole.FOLLOWER,
     updated_at: ONE,
-  };
+  });
 }
 
 function cacheSaying(rows) {

@@ -23,6 +23,20 @@ import {createTestCoordinator, createTestRebalancer} from './test-helpers.js';
 import {registerReplaceReplicaWorkflowCreateSatisfactionTests} from './replace-replica-workflow-create-satisfaction-test-cases.js';
 import {registerReplaceReplicaWorkflowSourceRemovalRetryTests} from './replace-replica-workflow-source-removal-retry-test-cases.js';
 import {registerReplaceReplicaWorkflowTailTests} from './replace-replica-workflow-tail-test-cases.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
+
+// An ACTIVE nodes-p1 replica as getCurrentReplicas returns it.
+function nodesP1Replica(replicaId, nodeId, raftRole) {
+  return projectedReplica({
+    service_id: replicaId,
+    replica_id: replicaId,
+    partition_id: 'nodes-p1',
+    node_id: nodeId,
+    status: ReplicaStatus.ACTIVE,
+    address: `${nodeId}/partition/${replicaId}`,
+    raft_role: raftRole,
+  });
+}
 
 const TEST_REPLACE_REMOVE_SAFETY_BLOCKED = 'replace_remove_safety_blocked';
 const TEST_PRIORITY_SPREAD_PENDING = 'priority_spread_pending';
@@ -135,27 +149,9 @@ test('REPLACE replica workflow', async (t) => {
       });
 
       const currentReplicas = [
-        {
-          replica_id: 'nodes-p1-r1',
-          node_id: 'node-1',
-          status: ReplicaStatus.ACTIVE,
-          address: 'node-1/partition/nodes-p1-r1',
-          raft_role: 'leader',
-        },
-        {
-          replica_id: 'nodes-p1-r2',
-          node_id: 'node-1',
-          status: ReplicaStatus.ACTIVE,
-          address: 'node-1/partition/nodes-p1-r2',
-          raft_role: 'follower',
-        },
-        {
-          replica_id: 'nodes-p1-r3',
-          node_id: 'node-1',
-          status: ReplicaStatus.ACTIVE,
-          address: 'node-1/partition/nodes-p1-r3',
-          raft_role: 'follower',
-        },
+        nodesP1Replica('nodes-p1-r1', 'node-1', 'leader'),
+        nodesP1Replica('nodes-p1-r2', 'node-1', 'follower'),
+        nodesP1Replica('nodes-p1-r3', 'node-1', 'follower'),
       ];
 
       const targetState = {
@@ -169,13 +165,8 @@ test('REPLACE replica workflow', async (t) => {
       // goal-state planner emits at most one executable move per tick, so the
       // spread cure converges over two planning ticks.
       const applyReplaceMove = (replicas, move) => replicas.map((replica) =>
-        replica.replica_id === move.replicaId ?
-          {
-            ...replica,
-            node_id: move.nodeId,
-            address: move.nodeId + '/partition/' + replica.replica_id,
-            raft_role: 'follower',
-          } :
+        replica.replicaId === move.replicaId ?
+          nodesP1Replica(replica.replicaId, move.nodeId, 'follower') :
           replica,
       );
       const firstMoves = rebalancer.calculateMoves(currentReplicas, targetState);

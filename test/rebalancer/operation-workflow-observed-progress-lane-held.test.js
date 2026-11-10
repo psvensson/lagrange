@@ -1,4 +1,5 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
@@ -103,7 +104,7 @@ function buildTransactionCoordinator() {
 }
 
 function buildSendingOperationRow(operationId, nowMs) {
-  return {
+  return replicaOperationsRow({
     operation_id: operationId,
     type: OperationType.REPLACE,
     partition_id: TEST_PARTITION_ID,
@@ -126,11 +127,11 @@ function buildSendingOperationRow(operationId, nowMs) {
       step: WORKFLOW_STEP.SENDING,
       timestamp: nowMs - TEST_UPDATED_AT_LAG_MS,
     }]),
-  };
+  });
 }
 
 function buildCreatingOperationRow(operationId, nowMs) {
-  return {
+  return replicaOperationsRow({
     operation_id: operationId,
     type: OperationType.REPLACE,
     partition_id: TEST_PARTITION_ID,
@@ -156,7 +157,7 @@ function buildCreatingOperationRow(operationId, nowMs) {
       step: WORKFLOW_STEP.CREATING,
       timestamp: nowMs - TEST_UPDATED_AT_LAG_MS,
     }]),
-  };
+  });
 }
 
 function buildObservedServiceRow({

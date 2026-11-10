@@ -65,7 +65,10 @@ function resolveCoordinatorService(options = {}) {
 }
 
 function observedServiceRoute(service, systemTableCache) {
-  const node = systemTableCache.get(TABLES.NODES, service[COLUMN.NODE_ID]);
+  // The shared frozen view, not a cloned row: this runs per target on every
+  // propagation progress check and reads one primitive; nothing retains or
+  // mutates the row.
+  const node = systemTableCache.getShared(TABLES.NODES, service[COLUMN.NODE_ID]);
   // These are existing owner-published lifetime facts, not a cache revision
   // or a guessed lease. Missing remote facts cannot establish a replacement.
   return {

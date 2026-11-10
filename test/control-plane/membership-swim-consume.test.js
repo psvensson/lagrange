@@ -7,14 +7,16 @@ import {
   isCanonicallyActiveNode,
   resolveProjectedActiveNodeIds,
 } from '../../src/control-plane/active-node-projection.js';
+import {nodesRow, systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 
 // A healthy node (status active) whose connection looks not-ready locally and which
 // has no fresh lease/heartbeat -> the readiness/liveness gate would trim it.
-const TRIMMABLE_HEALTHY_NODE = Object.freeze({
+const TRIMMABLE_HEALTHY_NODE = Object.freeze(nodesRow({
   node_id: 'peer-B',
+  node_address: 'ws://127.0.0.1:8082',
   status: 'active',
   connection_state: 'connecting',
-});
+}));
 
 test('without consumption a grace-trimmable healthy node is excluded', (t) => {
   t.equal(
@@ -68,15 +70,21 @@ test('protection requires the consume flag (verdict alone does nothing)', (t) =>
   t.end();
 });
 
-test('protection does NOT override status: a draining node stays trimmed', (t) => {
-  const draining = {node_id: 'peer-B', status: 'draining', connection_state: 'connecting'};
+test('protection does NOT override status: a stopped node stays trimmed', (t) => {
+  // A stored non-active status (nodes.status never holds 'draining').
+  const stopped = nodesRow({
+    node_id: 'peer-B',
+    node_address: 'ws://127.0.0.1:8082',
+    status: 'stopped',
+    connection_state: 'connecting',
+  });
   t.equal(
-    isCanonicallyActiveNode(draining, {
+    isCanonicallyActiveNode(stopped, {
       membershipSwimConsumeEnabled: true,
       swimVerdictByNodeId: {'peer-B': 'alive'},
     }),
     false,
-    'a non-active (draining) node is not protected by a SWIM alive verdict',
+    'a non-active (stopped) node is not protected by a SWIM alive verdict',
   );
   t.end();
 });
@@ -86,7 +94,10 @@ test('SWIM alive bypasses the transport-evidence exclusion (the rejoiner case)',
   // rejoiner has no endpoint/service/transport evidence for peer-B (it cannot reach it).
   const opts = {
     nodeEndpointRows: [
-      {node_id: 'A', transport_type: 'websocket', status: 'active', address: 'ws://127.0.0.1:8080'},
+      systemTableRow('node_endpoints', {
+        node_id: 'A', transport_type: 'websocket', status: 'active',
+        address: 'ws://127.0.0.1:8080',
+      }),
     ],
     serviceRows: [],
   };
@@ -109,9 +120,12 @@ test('SWIM alive bypasses the transport-evidence exclusion (the rejoiner case)',
 
 test('projection retains a SWIM-alive node it would otherwise trim (and only it)', (t) => {
   const nodeRows = [
-    {node_id: 'A', status: 'active', connection_state: 'ready'},
-    {node_id: 'peer-B', status: 'active', connection_state: 'connecting'},
-    {node_id: 'peer-C', status: 'active', connection_state: 'connecting'},
+    nodesRow({node_id: 'A', node_address: 'ws://127.0.0.1:8080', status: 'active',
+      connection_state: 'ready'}),
+    nodesRow({node_id: 'peer-B', node_address: 'ws://127.0.0.1:8082', status: 'active',
+      connection_state: 'connecting'}),
+    nodesRow({node_id: 'peer-C', node_address: 'ws://127.0.0.1:8083', status: 'active',
+      connection_state: 'connecting'}),
   ];
   const baseOptions = {nodeRows, localNodeId: 'A', localNodeResponsive: true};
   const without = resolveProjectedActiveNodeIds(baseOptions);

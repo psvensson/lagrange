@@ -58,6 +58,7 @@ import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {invokeCallCell} from
   '../../src/runtime/call-cell-driver-invoke.js';
 import {HEALTH_STATUS} from '../../src/runtime/runtime-driver.js';
+import {servicesRow, systemTableRow} from '../test-helpers/system-table-row-fixture.js';
 import {WasiComponentCellRuntime} from
   '../../src/runtime/wasi-component-cell-runtime.js';
 
@@ -285,23 +286,37 @@ function createSharedMessageRouter(partitionStores) {
   };
 }
 
+// A routing-only table declares no columns of its own here.
+const ROUTING_TABLE_SCHEMA_DEFINITION = JSON.stringify({columns: []});
+
 function seedTableRouting(cache, tableName, partitionIds, options = {}) {
-  cache.applySystemTableChange(TABLES.TABLES, CDC_OPERATION.UPSERT, {
-    primary_key: options.primaryKey || 'id',
-    table_id: tableName,
-    table_name: tableName,
-  });
+  // Complete stored rows (the cache refuses an insert its table could not
+  // hold). The routing key is the stored partition_key column.
+  const now = Date.now();
+  cache.applySystemTableChange(TABLES.TABLES, CDC_OPERATION.UPSERT,
+    systemTableRow(TABLES.TABLES, {
+      partition_key: options.primaryKey || 'id',
+      schema_definition: ROUTING_TABLE_SCHEMA_DEFINITION,
+      table_id: tableName,
+      table_name: tableName,
+      created_at: now,
+      updated_at: now,
+    }));
   for (const partitionId of partitionIds) {
     const hostNodeId = options.hostByPartition?.[partitionId] || NODE_A;
-    cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPSERT, {
-      leader_node_id: hostNodeId,
-      partition_id: partitionId,
-      partition_key_end: options.rangeByPartition?.[partitionId]?.end ?? null,
-      partition_key_start:
-        options.rangeByPartition?.[partitionId]?.start ?? null,
-      table_name: tableName,
-    });
-    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+    cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPSERT,
+      systemTableRow(TABLES.PARTITIONS, {
+        leader_node_id: hostNodeId,
+        partition_id: partitionId,
+        partition_key_end: options.rangeByPartition?.[partitionId]?.end ?? null,
+        partition_key_start:
+          options.rangeByPartition?.[partitionId]?.start ?? null,
+        table_name: tableName,
+        table_id: tableName,
+        created_at: now,
+        updated_at: now,
+      }));
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow({
       address: `${hostNodeId}/partition/${partitionId}`,
       node_id: hostNodeId,
       partition_id: partitionId,
@@ -309,7 +324,9 @@ function seedTableRouting(cache, tableName, partitionIds, options = {}) {
       service_id: partitionId,
       service_type: PARTITION_SERVICE_TYPE,
       status: PARTITION_SERVICE_STATUS,
-    });
+      created_at: now,
+      updated_at: now,
+    }));
   }
 }
 

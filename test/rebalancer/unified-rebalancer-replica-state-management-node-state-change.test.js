@@ -44,6 +44,7 @@ import {
   createMockPolicyService,
   createMockReadinessService,
   initializeTestEnvironment,
+  projectTestReplicas,
 } from './unified-rebalancer-test-support.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 
@@ -131,12 +132,12 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
       nodeId: 'node-1',
     });
 
-    const replicas = [
+    const replicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.FAILED},
       {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.REMOVED},
       {replica_id: 'r4', node_id: 'node-4', status: ReplicaStatus.ACTIVE},
-    ];
+    ]);
 
     const healthy = rebalancer.getHealthyReplicas(replicas);
 
@@ -171,7 +172,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
       ],
     });
 
-    const replicas = [
+    const replicas = projectTestReplicas([
       {
         replica_id: 'r1',
         node_id: 'node-1',
@@ -200,12 +201,12 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         raft_role: 'follower',
         address: null,
       },
-    ];
+    ], 'nodes-p1');
 
     const healthy = rebalancer.getHealthyReplicas(replicas);
 
     t.equal(healthy.length, 1, 'only routable non-learner replicas on ready nodes should count');
-    t.equal(healthy[0].replica_id, 'r1', 'leader on ready node should remain healthy');
+    t.equal(healthy[0].replicaId, 'r1', 'leader on ready node should remain healthy');
   });
 
   await t.test('surfaces priority spread as an explicit planner invariant',
@@ -221,7 +222,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         ],
       });
 
-      const replicas = [
+      const replicas = projectTestReplicas([
         {
           replica_id: 'r1',
           node_id: 'node-1',
@@ -236,7 +237,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
           raft_role: 'follower',
           address: 'node-1/partition/nodes-p1-r2',
         },
-      ];
+      ], 'replica_operations-p1');
       const policy = {
         replicaCount: 3,
         minReplicaCount: 3,
@@ -778,11 +779,11 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         ],
       });
 
-      const currentReplicas = [
+      const currentReplicas = projectTestReplicas([
         {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
         {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
         {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.ACTIVE},
-      ];
+      ], 'sql_write_operations-p1');
 
       const moves = rebalancer.calculateMoves(currentReplicas, {
         targetReplicaCount: 2,
@@ -834,7 +835,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         ],
       });
 
-      const currentReplicas = [
+      const currentReplicas = projectTestReplicas([
         {
           replica_id: SOURCE_REPLICA_ONE,
           node_id: SOURCE_NODE_ID,
@@ -870,7 +871,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
           raft_role: FOLLOWER_ROLE,
           address: `${SYNCING_NODE_ID}/partition/${SYNCING_REPLICA_ID}`,
         },
-      ];
+      ], PARTITION_ID);
 
       const moves = rebalancer.calculateMoves(currentReplicas, {
         targetReplicaCount: 3,
@@ -943,7 +944,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         controlPlaneReadinessService: readinessService,
       });
 
-      const replicas = [
+      const replicas = projectTestReplicas([
         {
           replica_id: 'r1',
           node_id: 'node-1',
@@ -965,12 +966,12 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
           raft_role: 'follower',
           address: 'node-3/partition/nodes-p1-r3',
         },
-      ];
+      ], 'nodes-p1');
 
       const healthy = rebalancer.getHealthyReplicas(replicas);
 
       t.same(
-        healthy.map((replica) => replica.replica_id).sort(),
+        healthy.map((replica) => replica.replicaId).sort(),
         ['r1', 'r2'],
         'critical partition health should ignore replicas on nodes outside published membership',
       );
@@ -983,11 +984,11 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
       nodeId: 'node-1',
     });
 
-    const currentReplicas = [
+    const currentReplicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.FAILED},
       {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.ACTIVE},
-    ];
+    ]);
 
     const targetState = {
       targetReplicaCount: 3,
@@ -1074,11 +1075,11 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
     });
 
     // Current: 3 healthy replicas, Policy: 5 replicas
-    const replicas = [
+    const replicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
       {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.ACTIVE},
-    ];
+    ]);
 
     const policy = {
       replicaCount: 5,
@@ -1100,9 +1101,9 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
     });
 
     // Current: 1 healthy replica, Policy: 3 replicas, Min: 3
-    const replicas = [
+    const replicas = projectTestReplicas([
       {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
-    ];
+    ]);
 
     const policy = {
       replicaCount: 3,
@@ -1124,11 +1125,11 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
     });
 
     // Current: 9 healthy replicas, Policy: 5 replicas, Max: 7
-    const replicas = Array.from({length: 9}, (_, i) => ({
+    const replicas = projectTestReplicas(Array.from({length: 9}, (_, i) => ({
       replica_id: `r${i + 1}`,
       node_id: `node-${i + 1}`,
       status: ReplicaStatus.ACTIVE,
-    }));
+    })));
 
     const policy = {
       replicaCount: 5,

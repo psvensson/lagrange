@@ -27,6 +27,9 @@ import {
   createControllableMessageGroupService,
   seedConsensusPeersFromPeerAddresses,
 } from './message-group-service-test-support.js';
+import {
+  systemTableRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 let testPortCounter = 27200;
 const NON_SYSTEM_CDC_TABLE = 'runtime_forward_events';
@@ -593,12 +596,12 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
               {
                 tableName: TABLES.PARTITIONS,
                 operation: 'INSERT',
-                data: {partition_id: 'batch-partition-1'},
+                data: systemTableRow(TABLES.PARTITIONS, {partition_id: 'batch-partition-1'}),
               },
               {
                 tableName: TABLES.PARTITIONS,
                 operation: 'INSERT',
-                data: {partition_id: 'batch-partition-2'},
+                data: systemTableRow(TABLES.PARTITIONS, {partition_id: 'batch-partition-2'}),
               },
             ],
             relayDepth: 0,

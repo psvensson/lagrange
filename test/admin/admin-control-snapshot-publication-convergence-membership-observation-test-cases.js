@@ -5,7 +5,7 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import * as ACTIVE_GATE_SNAPSHOT_TEST_STATE from './admin-control-snapshot-active-gate-fixture-state.js';
-
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 test('AdminControlSnapshot resolves active nodes from published membership only', async (t) => {
   const snapshot = new AdminControlSnapshot({
@@ -15,30 +15,30 @@ test('AdminControlSnapshot resolves active nodes from published membership only'
 
   const activeNodeIds = snapshot.resolveControlSnapshotActiveNodeIds(
     [
-      {
+      nodesRow({
         node_id: 'node-1',
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: 2000,
-      },
-      {
+      }),
+      nodesRow({
         node_id: 'node-2',
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: 2000,
-      },
+      }),
     ],
     [
-      {
+      servicesRow({
         service_id: 'svc-1',
         node_id: 'node-1',
         status: 'active',
-      },
-      {
+      }),
+      servicesRow({
         service_id: 'svc-2',
         node_id: 'node-2',
         status: 'active',
-      },
+      }),
     ],
     [
       {
@@ -238,17 +238,17 @@ test('AdminControlSnapshot discounts post-publication stale replica-operation re
 test('AdminControlSnapshot exposes effective stale replica-operation counts in diagnostics',
   async (t) => {
     const nowMs = 200000;
-    const nodeRows = [{
+    const nodeRows = [nodesRow({
       node_id: 'node-1',
       status: 'active',
       connection_state: 'ready',
       ready_lease_expires_at: nowMs + 1000,
-    }];
-    const serviceRows = [{
+    })];
+    const serviceRows = [servicesRow({
       service_id: 'svc-1',
       node_id: 'node-1',
       status: 'active',
-    }];
+    })];
     const buildStaleOperation = (operationId, partitionId, entityType) => ({
       operation_id: operationId,
       operation_type: 'REPLACE',
@@ -383,30 +383,30 @@ test('AdminControlSnapshot prefers published membership observation over newer o
 
   const activeNodeIds = snapshot.resolveControlSnapshotActiveNodeIds(
     [
-      {
+      nodesRow({
         node_id: 'node-1',
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: 2000,
-      },
-      {
+      }),
+      nodesRow({
         node_id: 'node-2',
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: 2000,
-      },
+      }),
     ],
     [
-      {
+      servicesRow({
         service_id: 'svc-1',
         node_id: 'node-1',
         status: 'active',
-      },
-      {
+      }),
+      servicesRow({
         service_id: 'svc-2',
         node_id: 'node-2',
         status: 'active',
-      },
+      }),
     ],
     [
       {
@@ -469,41 +469,41 @@ test('AdminControlSnapshot keeps the older PUBLISHED epoch authoritative while a
 
   const activeNodeViews = snapshot.resolveControlSnapshotNodeViews(
     [
-      {
+      nodesRow({
         node_id: 'node-1',
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: 2000,
-      },
-      {
+      }),
+      nodesRow({
         node_id: 'node-2',
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: 2000,
-      },
-      {
+      }),
+      nodesRow({
         node_id: 'node-3',
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: 2000,
-      },
+      }),
     ],
     [
-      {
+      servicesRow({
         service_id: 'svc-1',
         node_id: 'node-1',
         status: 'active',
-      },
-      {
+      }),
+      servicesRow({
         service_id: 'svc-2',
         node_id: 'node-2',
         status: 'active',
-      },
-      {
+      }),
+      servicesRow({
         service_id: 'svc-3',
         node_id: 'node-3',
         status: 'active',
-      },
+      }),
     ],
     [
       {
@@ -601,41 +601,41 @@ test('AdminControlSnapshot never manufactures a published membership baseline fr
 
   const activeNodeViews = snapshot.resolveControlSnapshotNodeViews(
     [
-      {
+      nodesRow({
         node_id: 'node-1',
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: 2000,
-      },
-      {
+      }),
+      nodesRow({
         node_id: 'node-2',
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: 2000,
-      },
-      {
+      }),
+      nodesRow({
         node_id: 'node-3',
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: 2000,
-      },
+      }),
     ],
     [
-      {
+      servicesRow({
         service_id: 'svc-1',
         node_id: 'node-1',
         status: 'active',
-      },
-      {
+      }),
+      servicesRow({
         service_id: 'svc-2',
         node_id: 'node-2',
         status: 'active',
-      },
-      {
+      }),
+      servicesRow({
         service_id: 'svc-3',
         node_id: 'node-3',
         status: 'active',
-      },
+      }),
     ],
     [
       {
@@ -723,30 +723,30 @@ test('AdminControlSnapshot exposes separate published and projected node views',
 
   const activeNodeViews = snapshot.resolveControlSnapshotNodeViews(
     [
-      {
+      nodesRow({
         node_id: 'node-1',
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: 2000,
-      },
-      {
+      }),
+      nodesRow({
         node_id: 'node-2',
         status: 'active',
         connection_state: 'ready',
         ready_lease_expires_at: 2000,
-      },
+      }),
     ],
     [
-      {
+      servicesRow({
         service_id: 'svc-1',
         node_id: 'node-1',
         status: 'active',
-      },
-      {
+      }),
+      servicesRow({
         service_id: 'svc-2',
         node_id: 'node-2',
         status: 'active',
-      },
+      }),
     ],
     [
       {
@@ -812,30 +812,30 @@ test('AdminControlSnapshot exposes separate published and projected node views',
 
 test('AdminControlSnapshot uses observed membership publication when readiness entries lag publication metadata', async (t) => {
   const nodeRows = [
-    {
+    nodesRow({
       node_id: 'node-1',
       status: 'active',
       connection_state: 'ready',
       ready_lease_expires_at: 2000,
-    },
-    {
+    }),
+    nodesRow({
       node_id: 'node-2',
       status: 'active',
       connection_state: 'ready',
       ready_lease_expires_at: 2000,
-    },
+    }),
   ];
   const serviceRows = [
-    {
+    servicesRow({
       service_id: 'svc-1',
       node_id: 'node-1',
       status: 'active',
-    },
-    {
+    }),
+    servicesRow({
       service_id: 'svc-2',
       node_id: 'node-2',
       status: 'active',
-    },
+    }),
   ];
   const snapshot = new AdminControlSnapshot({
     nodeId: 'node-1',
@@ -931,30 +931,30 @@ test('AdminControlSnapshot uses observed membership publication when readiness e
 
 test('AdminControlSnapshot uses repaired publication rows when publication services are unavailable', async (t) => {
   const nodeRows = [
-    {
+    nodesRow({
       node_id: 'node-1',
       status: 'active',
       connection_state: 'ready',
       ready_lease_expires_at: 2000,
-    },
-    {
+    }),
+    nodesRow({
       node_id: 'node-2',
       status: 'active',
       connection_state: 'ready',
       ready_lease_expires_at: 2000,
-    },
+    }),
   ];
   const serviceRows = [
-    {
+    servicesRow({
       service_id: 'svc-1',
       node_id: 'node-1',
       status: 'active',
-    },
-    {
+    }),
+    servicesRow({
       service_id: 'svc-2',
       node_id: 'node-2',
       status: 'active',
-    },
+    }),
   ];
   const snapshot = new AdminControlSnapshot({
     nodeId: 'node-1',
@@ -1029,28 +1029,28 @@ test('AdminControlSnapshot reads pending publication rows without acknowledging 
     systemTableCache: {
       getAll(tableName) {
         if (tableName === TABLES.NODES) {
-          return [{
+          return [nodesRow({
             node_id: 'node-1',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 2000,
-          }, {
+          }), nodesRow({
             node_id: 'node-2',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 2000,
-          }];
+          })];
         }
         if (tableName === TABLES.SERVICES) {
-          return [{
+          return [servicesRow({
             service_id: 'svc-1',
             node_id: 'node-1',
             status: 'active',
-          }, {
+          }), servicesRow({
             service_id: 'svc-2',
             node_id: 'node-2',
             status: 'active',
-          }];
+          })];
         }
         if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
           return [{
@@ -1151,28 +1151,28 @@ test('AdminControlSnapshot keeps the last published membership when publication 
     systemTableCache: {
       getAll(tableName) {
         if (tableName === TABLES.NODES) {
-          return [{
+          return [nodesRow({
             node_id: 'node-1',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 2000,
-          }, {
+          }), nodesRow({
             node_id: 'node-2',
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 2000,
-          }];
+          })];
         }
         if (tableName === TABLES.SERVICES) {
-          return [{
+          return [servicesRow({
             service_id: 'svc-1',
             node_id: 'node-1',
             status: 'active',
-          }, {
+          }), servicesRow({
             service_id: 'svc-2',
             node_id: 'node-2',
             status: 'active',
-          }];
+          })];
         }
         if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
           return [{
@@ -1312,28 +1312,28 @@ test('AdminControlSnapshot prefers cached membership publication observation ove
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.NODES) {
-            return [{
+            return [nodesRow({
               node_id: 'node-1',
               status: 'active',
               connection_state: 'ready',
               ready_lease_expires_at: 2000,
-            }, {
+            }), nodesRow({
               node_id: 'node-2',
               status: 'active',
               connection_state: 'ready',
               ready_lease_expires_at: 2000,
-            }];
+            })];
           }
           if (tableName === TABLES.SERVICES) {
-            return [{
+            return [servicesRow({
               service_id: 'svc-1',
               node_id: 'node-1',
               status: 'active',
-            }, {
+            }), servicesRow({
               service_id: 'svc-2',
               node_id: 'node-2',
               status: 'active',
-            }];
+            })];
           }
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
             return [{

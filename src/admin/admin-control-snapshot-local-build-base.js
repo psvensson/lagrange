@@ -31,6 +31,7 @@ import {buildCanonicalPublicationRecoveryEvidence} from '../control-plane/public
 import {
   buildCurrentPriorityPlacementObservation,
 } from './admin-control-snapshot-current-priority-placement.js';
+import {projectReplicasFromServicesRows} from '../rebalancer/projected-replica.js';
 import {AdminCacheOwnerState} from './admin-cache-owner-state.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
@@ -724,7 +725,7 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
       ] = buildCurrentPriorityPlacementObservation({
         capturedAt,
         partitionRows,
-        serviceRows,
+        serviceRows: projectReplicasFromServicesRows(serviceRows),
         readinessByNodeId: controlPlaneDiagnostics.readinessByNodeId,
         activeNodeViews,
       });

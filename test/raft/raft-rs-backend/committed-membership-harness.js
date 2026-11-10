@@ -46,6 +46,10 @@ import {OperationType} from
 import {ReplicaOperationField} from
   '../../../src/rebalancer/replica-operation-constants.js';
 import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
+import {
+  servicesRow,
+  systemTableRow,
+} from '../../test-helpers/system-table-row-fixture.js';
 import {handlerIdentityApi} from
   '../../test-helpers/replica-handler-identity-fixture.js';
 
@@ -72,7 +76,7 @@ function addressOf([replicaId, nodeId]) {
 }
 
 function serviceRow(partitionId, [replicaId, nodeId]) {
-  return {
+  return servicesRow({
     service_id: replicaId,
     replica_id: replicaId,
     partition_id: partitionId,
@@ -80,24 +84,26 @@ function serviceRow(partitionId, [replicaId, nodeId]) {
     node_id: nodeId,
     address: addressOf([replicaId, nodeId]),
     status: SERVICE_STATUS.ACTIVE,
-  };
+  });
 }
 
 function metadataCache(partitionId, members, {leaderNodeId = null} = {}) {
   const cache = new SystemTableCache();
-  cache.applySystemTableChange(TABLES.TABLES, CDCOperation.INSERT, {
+  cache.applySystemTableChange(TABLES.TABLES, CDCOperation.INSERT, systemTableRow(TABLES.TABLES, {
     table_id: TABLE_NAME,
     table_name: TABLE_NAME,
     schema_definition: JSON.stringify(TABLE_SCHEMA),
-  });
-  cache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-    partition_id: partitionId,
-    table_id: TABLE_NAME,
-    replica_count: members.length,
-    partition_key_start: null,
-    partition_key_end: null,
-    leader_node_id: leaderNodeId,
-  });
+    partition_key: TABLE_SCHEMA.columns[0].name,
+  }));
+  cache.applySystemTableChange(
+    TABLES.PARTITIONS, CDCOperation.INSERT, systemTableRow(TABLES.PARTITIONS, {
+      partition_id: partitionId,
+      table_id: TABLE_NAME,
+      replica_count: members.length,
+      partition_key_start: null,
+      partition_key_end: null,
+      leader_node_id: leaderNodeId,
+    }));
   for (const member of members) {
     cache.applySystemTableChange(
       TABLES.SERVICES, CDCOperation.INSERT, serviceRow(partitionId, member));

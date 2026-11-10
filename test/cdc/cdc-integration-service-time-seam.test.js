@@ -29,6 +29,7 @@ import {RealTimeSource, VirtualTimeSource} from '../../src/time/time-source.js';
 
 import {METRICS_LOG_TAG} from '../../src/constants/index.js';
 import {HLCClockService} from '../../src/hlc/hlc-clock-service.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 const NODE_ID = 'seam-node';
 const ABSENT_KEY = 'node-that-never-arrives';
 const WAIT_BUDGET_MS = 1000;
@@ -196,8 +197,9 @@ test('the catch-up sweep sweeps a stale row under a virtual clock', async () => 
   const {service, timeSource} = serviceOnVirtualClock();
   const cache = service.systemTableCache;
   // The row's own writer stamps it in the same domain as the reader.
-  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT,
-    {service_id: 'stale', status: 'active', updated_at: timeSource.now() - 10_000});
+  const staleAt = timeSource.now() - 10_000;
+  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow(
+    {service_id: 'stale', status: 'active', created_at: staleAt, updated_at: staleAt}));
   service.executeAuthoritativeSystemTableRead = async () => ({
     success: true, rows: [], source: 'owner_rpc_lane',
     readAuthorityWitness: {
@@ -222,8 +224,9 @@ test('MUTATION: one producer back on ambient time breaks the sweep again',
     // goes inert exactly as it did when only the consumer had moved.
     const {service, timeSource} = serviceOnVirtualClock();
     const cache = service.systemTableCache;
-    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT,
-      {service_id: 'stale', status: 'active', updated_at: Date.now() - 10_000});
+    const staleAt = Date.now() - 10_000;
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, servicesRow(
+      {service_id: 'stale', status: 'active', created_at: staleAt, updated_at: staleAt}));
     service.executeAuthoritativeSystemTableRead = async () => ({
       success: true, rows: [], source: 'owner_rpc_lane',
       readAuthorityWitness: {

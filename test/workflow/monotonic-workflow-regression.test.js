@@ -17,6 +17,7 @@ import {
   OPERATION_TRANSITION_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {replicaOperationsRow} from '../test-helpers/system-table-row-fixture.js';
 
 // ---------------------------------------------------------------------------
 // Test-local fixture constants
@@ -38,7 +39,8 @@ function buildPersistedReplicaOperationRowFromUpdate(
   params = [],
   existingRow = {},
 ) {
-  return {
+  // The complete stored row the UPDATE leaves (SELECT * returns every column).
+  return replicaOperationsRow({
     ...existingRow,
     operation_id: params[7] || existingRow.operation_id || null,
     type: existingRow.type || 'ADD',
@@ -55,7 +57,7 @@ function buildPersistedReplicaOperationRowFromUpdate(
     steps_history: params[5] ?? existingRow.steps_history ?? JSON.stringify([]),
     entity_type: existingRow.entity_type || 'partition',
     entity_id: existingRow.entity_id || 'partition-1',
-  };
+  });
 }
 
 /**

@@ -8,6 +8,7 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 import {UnifiedRebalancer, EntityType} from
   '../../src/rebalancer/unified-rebalancer.js';
 import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
@@ -147,9 +148,11 @@ function createMockRebalanceCoordinator(operations) {
  */
 function insertReadyNode(cache, nodeId) {
   const now = Date.now();
-  cache.applySystemTableChange('nodes', 'INSERT', {
-    id: nodeId,
+  // A production-shaped stored nodes row (the cache refuses an insert the
+  // table could not hold).
+  cache.applySystemTableChange('nodes', 'INSERT', nodesRow({
     node_id: nodeId,
+    node_address: `ws://${nodeId}`,
     status: 'active',
     cpu_usage_percent: 10,
     memory_usage_percent: 20,
@@ -157,7 +160,7 @@ function insertReadyNode(cache, nodeId) {
     connection_state: 'ready',
     ready_lease_expires_at: now + 30000,
     created_at: now,
-  });
+  }));
 }
 
 /**
@@ -169,8 +172,7 @@ function insertReadyNode(cache, nodeId) {
  */
 function insertActiveReplica(cache, serviceId, nodeId, partitionId) {
   const now = Date.now();
-  cache.applySystemTableChange('services', 'INSERT', {
-    id: serviceId,
+  cache.applySystemTableChange('services', 'INSERT', servicesRow({
     service_id: serviceId,
     service_type: 'partition',
     node_id: nodeId,
@@ -178,7 +180,7 @@ function insertActiveReplica(cache, serviceId, nodeId, partitionId) {
     status: 'active',
     created_at: now,
     updated_at: now,
-  });
+  }));
 }
 
 test('Three-node partition rebalance', async (t) => {

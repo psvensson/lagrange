@@ -1,4 +1,5 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {projectReplicasFromServicesRows} from './projected-replica.js';
 import {
   countsTowardVoterTarget,
   occupiesNode,
@@ -518,7 +519,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
       committedRowsObservation: {
         state: authoritativeObservation.available === false ? 'unavailable' :
           mergedServiceRows.length > 0 ? 'present' : 'empty',
-        rows: mergedServiceRows,
+        rows: projectReplicasFromServicesRows(mergedServiceRows),
         revision: authoritativeObservation.snapshotVersion,
         revisionBefore: cacheStateBefore.committedRows.revision,
         revisionAfter: cacheStateAfter.committedRows.revision,

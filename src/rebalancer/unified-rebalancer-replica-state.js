@@ -15,12 +15,21 @@ import {
 import {UNIFIED_REBALANCER_FAILED_CREATE_CLEANUP_METHODS} from
   './unified-rebalancer-failed-create-cleanup.js';
 import {readGlobalTopologyBlockingInFlightOperations} from './global-topology-blocking-operation-view.js';
+import {
+  decodeServicesRow,
+  readServicesRowView,
+} from '../control-plane/services-row-decoder.js';
+import {
+  buildTerminalCreateTargetReplica,
+  projectReplicaAsTerminalCreateTarget,
+  projectReplicaFromServicesRow,
+  readLowerCaseReplicaText,
+} from './projected-replica.js';
 const {
   COLUMN,
   CONTROL_PLANE_READINESS_DIMENSION,
   EntityType,
   OperationType,
-  RAFT_ROLE,
   READINESS_SKIP_DETAIL,
   REPLICA_OPERATION_SEMANTIC_PHASE,
   ReplicaStatus,
@@ -39,12 +48,10 @@ const {
   isTerminalSuccessfulCreateOperation,
   isValidWorkflowStep,
   normalizeReplicaOperationRecord,
-  normalizeServiceRow,
 } = UNIFIED_REBALANCER_SHARED;
 
 const REBALANCE_OPERATION_FIELD = Object.freeze({
   REPLICA_ID_CAMEL: 'replicaId',
-  SERVICE_ID_CAMEL: 'serviceId',
   SOURCE_REPLICA_ID: 'sourceReplicaId',
   SOURCE_REPLICA_ID_SNAKE: 'source_replica_id',
   STEPS_HISTORY: 'stepsHistory',
@@ -266,22 +273,31 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   }
 
   /**
-   * Get current replicas for this entity.
+   * The projected replicas (projected-replica.js) of the cached services
+   * rows a selector accepts: each row is decoded once and projected once;
+   * the selector reads the normaliser readers' view (readServicesRowView).
+   * @param {Function} selectDecodedRow accepts a services row view
+   * @return {Array<Object>} the projected replicas
+   */
+  readProjectedReplicas(selectDecodedRow) {
+    return this.systemTableCache.getAll(SYSTEM_TABLE_NAME.SERVICES)
+      .map((row) => decodeServicesRow(row))
+      .filter((decodedRow) => selectDecodedRow(readServicesRowView(decodedRow)))
+      .map(projectReplicaFromServicesRow);
+  }
+
+  /**
+   * Get current replicas for this entity, as projected replicas
+   * (projected-replica.js).
    * @readModel REBALANCE_CURRENT_REPLICAS — READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
-   * @return {Array<Object>} Array of replica objects.
+   * @return {Array<Object>} the entity's projected replicas
    */
   getCurrentReplicas() {
     if (this.entityType === EntityType.MESSAGE_GROUP) {
       return this.filterReplicasRetiredByTerminalOperations(
-        this.systemTableCache.filter(
-          SYSTEM_TABLE_NAME.SERVICES,
-          (service) => {
-            const normalizedService = normalizeServiceRow(service);
-            return (
-              normalizedService.groupId === this.entityId &&
-              normalizedService.serviceType === EntityType.MESSAGE_GROUP
-            );
-          },
+        this.readProjectedReplicas((service) =>
+          service.groupId === this.entityId &&
+          service.serviceType === EntityType.MESSAGE_GROUP,
         ),
       );
     }
@@ -290,18 +306,9 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     // that equals or is prefixed by the entity (definition) ID.
     if (this.entityType === EntityType.RUNTIME_SERVICE) {
       return this.filterReplicasRetiredByTerminalOperations(
-        this.systemTableCache.filter(
-          SYSTEM_TABLE_NAME.SERVICES,
-          (service) => {
-            const normalizedService = normalizeServiceRow(service);
-            return (
-              normalizedService.serviceType === EntityType.RUNTIME_SERVICE &&
-              runtimeServiceReplicaBelongsToEntity(
-                normalizedService.serviceId,
-                this.entityId,
-              )
-            );
-          },
+        this.readProjectedReplicas((service) =>
+          service.serviceType === EntityType.RUNTIME_SERVICE &&
+          runtimeServiceReplicaBelongsToEntity(service.serviceId, this.entityId),
         ),
       );
     }
@@ -309,15 +316,9 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     // For partitions, get services with matching partition_id
     const currentReplicas =
       this.filterReplicasRetiredByTerminalOperations(
-        this.systemTableCache.filter(
-          SYSTEM_TABLE_NAME.SERVICES,
-          (service) => {
-            const normalizedService = normalizeServiceRow(service);
-            return (
-              normalizedService.partitionId === this.entityId &&
-              normalizedService.serviceType === EntityType.PARTITION
-            );
-          },
+        this.readProjectedReplicas((service) =>
+          service.partitionId === this.entityId &&
+          service.serviceType === EntityType.PARTITION,
         ),
       );
     return this.projectPriorityTerminalCreateTargets(currentReplicas);
@@ -348,8 +349,8 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
    * failure/removal evidence and later terminal retirement remain
    * authoritative.
    *
-   * @param {Array<Object>} replicas
-   * @return {Array<Object>}
+   * @param {Array<Object>} replicas projected replicas
+   * @return {Array<Object>} projected replicas
    * @private
    */
   projectPriorityTerminalCreateTargets(replicas) {
@@ -371,10 +372,7 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     const retiredReplicaIds = this.getTerminalRetiredReplicaIds();
     const projectedReplicas = [...normalizedReplicas];
     const replicaIndexById = new Map(
-      projectedReplicas.map((replica, index) => [
-        this.getReplicaIdFromServiceRow(replica),
-        index,
-      ]),
+      projectedReplicas.map((replica, index) => [replica.replicaId, index]),
     );
 
     for (const operation of terminalCreateOperations) {
@@ -396,37 +394,25 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
           continue;
         }
         replicaIndexById.set(targetReplicaId, projectedReplicas.length);
-        projectedReplicas.push({
-          [COLUMN.SERVICE_ID]: targetReplicaId,
-          [COLUMN.REPLICA_ID]: targetReplicaId,
-          [COLUMN.SERVICE_TYPE]: EntityType.PARTITION,
-          [COLUMN.PARTITION_ID]: this.entityId,
-          [COLUMN.NODE_ID]: targetNodeId,
-          [COLUMN.STATUS]: ReplicaStatus.ACTIVE,
-          [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
-        });
+        projectedReplicas.push(buildTerminalCreateTargetReplica({
+          replicaId: targetReplicaId,
+          partitionId: this.entityId,
+          nodeId: targetNodeId,
+        }));
         continue;
       }
 
       const existingReplica = projectedReplicas[existingIndex];
-      const normalizedTarget = normalizeServiceRow(existingReplica);
+      // The status as normalizeServiceRow read it (lower-cased, absent '').
+      const existingStatus = readLowerCaseReplicaText(existingReplica.status);
       if (
-        TERMINAL_CREATE_TARGET_BLOCKING_STATUSES.has(
-          normalizedTarget.status,
-        ) ||
-        !TERMINAL_CREATE_TARGET_PROJECTABLE_STATUSES.has(
-          normalizedTarget.status,
-        )
+        TERMINAL_CREATE_TARGET_BLOCKING_STATUSES.has(existingStatus) ||
+        !TERMINAL_CREATE_TARGET_PROJECTABLE_STATUSES.has(existingStatus)
       ) {
         continue;
       }
-      projectedReplicas[existingIndex] = {
-        ...existingReplica,
-        [COLUMN.STATUS]: ReplicaStatus.ACTIVE,
-        [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
-        status: ReplicaStatus.ACTIVE,
-        raftRole: RAFT_ROLE.FOLLOWER,
-      };
+      projectedReplicas[existingIndex] =
+        projectReplicaAsTerminalCreateTarget(existingReplica);
     }
 
     return projectedReplicas;
@@ -559,21 +545,6 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   }
 
   /**
-   * @param {Object} replica
-   * @return {string}
-   * @private
-   */
-  getReplicaIdFromServiceRow(replica) {
-    return String(
-      replica?.[COLUMN.REPLICA_ID] ||
-        replica?.[REBALANCE_OPERATION_FIELD.REPLICA_ID_CAMEL] ||
-        replica?.[COLUMN.SERVICE_ID] ||
-        replica?.[REBALANCE_OPERATION_FIELD.SERVICE_ID_CAMEL] ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).trim();
-  }
-
-  /**
    * Completed REMOVE rows retire their replica, while completed REPLACE rows
    * retire their source replica. These operation-owner facts prevent both
    * stale service rows and earlier create-operation history from resurrecting
@@ -617,8 +588,8 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   }
 
   /**
-   * @param {Array<Object>} replicas
-   * @return {Array<Object>}
+   * @param {Array<Object>} replicas projected replicas
+   * @return {Array<Object>} the replicas no terminal operation retired
    * @private
    */
   filterReplicasRetiredByTerminalOperations(replicas) {
@@ -627,13 +598,9 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     if (retiredReplicaIds.size === 0) {
       return normalizedReplicas;
     }
-    return normalizedReplicas.filter((replica) => {
-      const replicaId = this.getReplicaIdFromServiceRow(replica);
-      return (
-        replicaId.length === 0 ||
-        !retiredReplicaIds.has(replicaId)
-      );
-    });
+    return normalizedReplicas.filter((replica) =>
+      !retiredReplicaIds.has(replica.replicaId),
+    );
   }
 
   /**

@@ -20,9 +20,14 @@ import {
   evaluatePartitionReplicaTopology,
 } from '../../src/admin/admin-shared-metadata-consistency.js';
 import {MovePlanner} from '../../src/rebalancer/move-planner.js';
+import {projectReplicasFromServicesRows} from '../../src/rebalancer/projected-replica.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  projectedReplica,
+  servicesRow,
+} from '../test-helpers/system-table-row-fixture.js';
 
 // The priority control-plane partitions resolved from a live 3-node cluster.
 const PRIORITY_PARTITION_IDS = [
@@ -64,14 +69,15 @@ function buildConvergedSnapshot() {
   for (const [index, partitionId] of PRIORITY_PARTITION_IDS.entries()) {
     const leaderNodeId = NODE_IDS[index % NODE_IDS.length];
     for (const nodeId of NODE_IDS) {
-      serviceRows.push({
+      serviceRows.push(servicesRow({
+        service_id: `${partitionId}-${nodeId}`,
         service_type: 'partition',
         partition_id: partitionId,
         node_id: nodeId,
         address: `tcp://127.0.0.1:${4000 + NODE_IDS.indexOf(nodeId)}`,
         status: 'ACTIVE',
         raft_role: nodeId === leaderNodeId ? 'leader' : 'follower',
-      });
+      }));
     }
   }
   return {partitionRows, serviceRows};
@@ -148,7 +154,7 @@ async (t) => {
   const {partitionRows, serviceRows} = buildStaleLeaderRowSnapshot();
   const observation = buildCurrentPriorityPlacementObservation({
     partitionRows,
-    serviceRows,
+    serviceRows: projectReplicasFromServicesRows(serviceRows),
     readinessByNodeId: readyReadinessByNodeId(),
     activeNodeViews: activeNodeViews(),
   });
@@ -173,7 +179,7 @@ async (t) => {
   const {partitionRows, serviceRows} = buildGenuinelyLeaderlessSnapshot();
   const observation = buildCurrentPriorityPlacementObservation({
     partitionRows,
-    serviceRows,
+    serviceRows: projectReplicasFromServicesRows(serviceRows),
     readinessByNodeId: readyReadinessByNodeId(),
     activeNodeViews: activeNodeViews(),
   });
@@ -243,7 +249,7 @@ async (t) => {
   const {partitionRows, serviceRows} = buildConvergedSnapshot();
   const observation = buildCurrentPriorityPlacementObservation({
     partitionRows,
-    serviceRows,
+    serviceRows: projectReplicasFromServicesRows(serviceRows),
     readinessByNodeId: readyReadinessByNodeId(),
     activeNodeViews: activeNodeViews(),
   });
@@ -273,7 +279,7 @@ async (t) => {
   const {partitionRows, serviceRows} = buildStaleRoleRowSnapshot();
   const observation = buildCurrentPriorityPlacementObservation({
     partitionRows,
-    serviceRows,
+    serviceRows: projectReplicasFromServicesRows(serviceRows),
     readinessByNodeId: readyReadinessByNodeId(),
     activeNodeViews: activeNodeViews(),
   });
@@ -326,9 +332,13 @@ async (t) => {
   });
 
   const physicalReplicas = [
-    {node_id: 'node-r1', status: 'ACTIVE', raftRole: 'follower'},
-    {node_id: 'node-r4', status: 'ACTIVE', raftRole: 'leader'},
-    {node_id: 'node-r5', status: 'ACTIVE', raftRole: null}, // persist failed
+    projectedReplica({service_id: 'r1', node_id: 'node-r1', status: 'ACTIVE',
+      raft_role: 'follower'}),
+    projectedReplica({service_id: 'r4', node_id: 'node-r4', status: 'ACTIVE',
+      raft_role: 'leader'}),
+    // persist failed
+    projectedReplica({service_id: 'r5', node_id: 'node-r5', status: 'ACTIVE',
+      raft_role: null}),
   ];
   const policy = {
     targetReplicaCount: 3,
@@ -364,7 +374,7 @@ async (t) => {
   const {partitionRows, serviceRows} = buildStaleRoleRowSnapshot();
   const observation = buildCurrentPriorityPlacementObservation({
     partitionRows,
-    serviceRows,
+    serviceRows: projectReplicasFromServicesRows(serviceRows),
     readinessByNodeId: readyReadinessByNodeId(),
     activeNodeViews: activeNodeViews(),
   });

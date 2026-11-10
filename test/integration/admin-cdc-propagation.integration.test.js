@@ -12,6 +12,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 import {
   cleanupTestEnvironment,
   getUniquePort,
@@ -89,13 +90,14 @@ test('Admin CDC propagation', {timeout: 120000}, async (t) => {
       // This mimics what happens when a partition leader broadcasts a CDC event
       const testNodeId = '550e8400-e29b-41d4-a716-446655440099';
       const causalTimestamp = nextCausalTimestamp(systemTableCache, 'nodes');
-      const testNodeRecord = {
+      // A production-shaped stored nodes row (nodes has no updated_at
+      // column; created_at is the row's causal timestamp).
+      const testNodeRecord = nodesRow({
         node_id: testNodeId,
         node_address: 'ws://127.0.0.1:9999',
         status: 'active',
         created_at: causalTimestamp,
-        updated_at: causalTimestamp,
-      };
+      });
 
       // Insert into cache (simulating CDC event from partition)
       systemTableCache.applySystemTableChange('nodes', 'INSERT', testNodeRecord);
@@ -261,13 +263,12 @@ test('Admin CDC propagation', {timeout: 120000}, async (t) => {
       const causalTimestamp = nextCausalTimestamp(systemTableCache, 'nodes');
       const versionBeforeInsert =
         systemTableCache.getTableMutationVersion('nodes');
-      systemTableCache.applySystemTableChange('nodes', 'INSERT', {
+      systemTableCache.applySystemTableChange('nodes', 'INSERT', nodesRow({
         node_id: testNodeId,
         node_address: 'ws://127.0.0.1:9998',
         status: 'active',
         created_at: causalTimestamp,
-        updated_at: causalTimestamp,
-      });
+      }));
       t.equal(
         systemTableCache.getTableMutationVersion('nodes'),
         versionBeforeInsert + 1,

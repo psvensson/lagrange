@@ -33,6 +33,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {withRegisteredIncarnations} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 const FAKE_NOW_MS = 1_800_000_000_000;
 const READY_LEASE_EXPIRES_AT_MS = FAKE_NOW_MS + 600_000;
@@ -72,13 +73,13 @@ function initializeTestEnvironment() {
 
 function createNodeRows() {
   return [
-    ...READY_NODE_IDS.map((nodeId) => ({
+    ...READY_NODE_IDS.map((nodeId) => nodesRow({
       node_id: nodeId,
       status: 'active',
       connection_state: 'ready',
       ready_lease_expires_at: READY_LEASE_EXPIRES_AT_MS,
     })),
-    ...COHORT_NODE_IDS.map((nodeId) => ({
+    ...COHORT_NODE_IDS.map((nodeId) => nodesRow({
       node_id: nodeId,
       status: 'joining',
       connection_state: 'connected',
@@ -364,13 +365,13 @@ test('CL-044 operation-terminal edge resets an escalated settle interval ' +
   const visibilityHandled = rebalancer.handlePriorityRecoveryVisibilityEvent({
     tableName: 'services',
     operation: 'UPDATE',
-    data: {
+    data: servicesRow({
       service_id: 'formation-cure-service',
       node_id: COHORT_NODE_IDS[0],
       partition_id: PRIORITY_PARTITION_ID,
       service_type: 'partition',
       status: 'active',
-    },
+    }),
   });
   t.equal(
     visibilityHandled,

@@ -25,6 +25,7 @@ import {INITIAL_PARTITION_IDS} from
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {CDCHandler} from '../../src/message-group/cdc-handler.js';
 import {captureLogger} from '../test-helpers/wait-bound-spent-capture.js';
+import {nodesRow, servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 class AuthoritativeCatchupCacheRepairHost {}
 applyCDCIntegrationServiceCacheVisibilityWait(
@@ -114,13 +115,12 @@ test(
   'CL-014: an already-aligned authoritative catch-up is side-effect-idempotent',
   async (t) => {
     const cache = new SystemTableCache();
-    const rows = Array.from({length: 64}, (_unused, index) => ({
+    const rows = Array.from({length: 64}, (_unused, index) => nodesRow({
       node_id: `node-aligned-${index}`,
       status: 'active',
       connection_state: 'ready',
       ready_lease_expires_at: 20_000,
       created_at: 1_000,
-      updated_at: 2_000,
     }));
     const service = new AuthoritativeCatchupCacheRepairHost();
     service.cacheMutationTarget = cache;
@@ -403,7 +403,7 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
 
 test('CL-014: a sweep without its pre-read causal proof fails closed', (t) => {
   const cache = new SystemTableCache();
-  const row = {service_id: 'missing-proof', status: 'active', updated_at: 1000};
+  const row = servicesRow({service_id: 'missing-proof', status: 'active', updated_at: 1000});
   cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, row);
   const service = new AuthoritativeCatchupCacheRepairHost();
   service.cacheMutationTarget = cache;
@@ -429,11 +429,11 @@ test('CL-014: a sweep without its pre-read causal proof fails closed', (t) => {
 
 test('CL-014: malformed authoritative rows cannot mint absence truth', (t) => {
   const cache = new SystemTableCache();
-  const existing = {
+  const existing = servicesRow({
     service_id: 'preserved-on-malformed-read',
     status: 'active',
     updated_at: 1000,
-  };
+  });
   cache.applySystemTableChange(
     TABLES.SERVICES,
     CDC_OPERATION.UPSERT,
@@ -459,8 +459,7 @@ test('CL-014: malformed authoritative rows cannot mint absence truth', (t) => {
     'malformed authority cannot sweep a cached row');
 
   cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, {
-    service_id: 'unseen-after-malformed-read',
-    updated_at: 1000,
+    ...servicesRow({service_id: 'unseen-after-malformed-read', updated_at: 1000}),
     updated_at_hlc: '1000-0-owner',
   });
   t.ok(cache.has(TABLES.SERVICES, 'unseen-after-malformed-read'),
@@ -559,11 +558,11 @@ test(
   'CL-014: full catch-up preserves a same-key apply that lands during its read',
   async (t) => {
     const cache = new SystemTableCache();
-    const row = {
+    const row = servicesRow({
       service_id: 'same-key-catchup-race',
       status: 'active',
       updated_at: 1000,
-    };
+    });
     cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, row);
     const service = new AuthoritativeCatchupCacheRepairHost();
     service.cacheMutationTarget = cache;
@@ -602,11 +601,11 @@ test(
   'CL-014: full catch-up upgrades a concurrent delete into a replay fence',
   async (t) => {
     const cache = new SystemTableCache();
-    const row = {
+    const row = servicesRow({
       service_id: 'concurrent-delete-catchup-race',
       status: 'active',
       updated_at: 1000,
-    };
+    });
     cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, row);
     const service = new AuthoritativeCatchupCacheRepairHost();
     service.cacheMutationTarget = cache;
@@ -651,9 +650,11 @@ test(
     handler.initialize();
     handler.subscribe(TABLES.SERVICES);
     const delayedRow = {
-      service_id: 'buffered-before-empty-catchup',
-      status: 'active',
-      updated_at: 100,
+      ...servicesRow({
+        service_id: 'buffered-before-empty-catchup',
+        status: 'active',
+        updated_at: 100,
+      }),
       updated_at_hlc: '100-0-owner',
     };
     t.equal(handler.handleEvent({
@@ -714,11 +715,11 @@ test(
   'CL-014: a later complete leader read restores an unseen fenced recreate',
   async (t) => {
     const cache = new SystemTableCache();
-    const durableRow = {
+    const durableRow = servicesRow({
       service_id: 'unseen-same-ms-recreate',
       status: 'active',
       updated_at: 150,
-    };
+    });
     await hydrateServicesFromLeader(cache, [], 150);
     cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, {
       ...durableRow,
@@ -743,9 +744,11 @@ test(
   async (t) => {
     const cache = new SystemTableCache();
     const original = {
-      service_id: 'known-same-ms-recreate',
-      status: 'active',
-      updated_at: 100,
+      ...servicesRow({
+        service_id: 'known-same-ms-recreate',
+        status: 'active',
+        updated_at: 100,
+      }),
       updated_at_hlc: '100-0-owner',
     };
     cache.applySystemTableChange(
@@ -754,11 +757,11 @@ test(
       original,
     );
     await hydrateServicesFromLeader(cache, [], 150);
-    const durableRow = {
+    const durableRow = servicesRow({
       service_id: original.service_id,
       status: 'starting',
       updated_at: 150,
-    };
+    });
     cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, {
       ...durableRow,
       updated_at_hlc: '150-1-owner',
@@ -816,9 +819,11 @@ test(
   async (t) => {
     const cache = new SystemTableCache();
     const durableRow = {
-      service_id: 'deleted-during-complete-read',
-      status: 'active',
-      updated_at: 100,
+      ...servicesRow({
+        service_id: 'deleted-during-complete-read',
+        status: 'active',
+        updated_at: 100,
+      }),
       updated_at_hlc: '100-0-owner',
     };
     cache.applySystemTableChange(
@@ -861,9 +866,11 @@ test(
   async (t) => {
     const cache = new SystemTableCache();
     const durableRow = {
-      service_id: 'deleted-between-snapshot-and-witness',
-      status: 'active',
-      updated_at: 100,
+      ...servicesRow({
+        service_id: 'deleted-between-snapshot-and-witness',
+        status: 'active',
+        updated_at: 100,
+      }),
       updated_at_hlc: '100-0-owner',
     };
     cache.applySystemTableChange(

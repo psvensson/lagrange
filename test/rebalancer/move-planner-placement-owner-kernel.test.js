@@ -29,6 +29,7 @@ import {
 import {
   buildPlacementOwnerDecision,
 } from '../../src/rebalancer/placement-owner-decision.js';
+import {projectedReplica} from '../test-helpers/system-table-row-fixture.js';
 
 const PARTITION_ID = 'placement-kernel-partition';
 const NODE_1 = 'node-1';
@@ -54,11 +55,13 @@ function createNode(nodeId, overrides = {}) {
 }
 
 function createReplica(replicaId, nodeId) {
-  return {
+  return projectedReplica({
+    service_id: replicaId,
     replica_id: replicaId,
+    partition_id: PARTITION_ID,
     node_id: nodeId,
     status: ReplicaStatus.ACTIVE,
-  };
+  });
 }
 
 function createMoveStateProvider(options = {}) {

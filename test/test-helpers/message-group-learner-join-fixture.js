@@ -32,6 +32,7 @@ import {createInProcWebSocketPair} from '../../src/transport/inproc-transport.js
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_RS_MESSAGE_TYPE} from '../../src/raft/raft-rs-ingress-constants.js';
+import {servicesRow} from './system-table-row-fixture.js';
 
 const CLUSTER_ID = 'b2-learner-cluster';
 const CHUNK_BYTES = 4096;
@@ -46,9 +47,9 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function founderCache() {
   const cache = new SystemTableCache();
   for (const replicaId of FOUNDERS) {
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {service_id: replicaId,
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', servicesRow({service_id: replicaId,
       replica_id: replicaId, group_id: GROUP, service_type: SERVICE_TYPE.MESSAGE_GROUP,
-      node_id: NODE, status: SERVICE_STATUS.ACTIVE});
+      node_id: NODE, status: SERVICE_STATUS.ACTIVE}));
   }
   return cache;
 }

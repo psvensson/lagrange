@@ -10,6 +10,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
+import {nodesRow} from '../test-helpers/system-table-row-fixture.js';
 import {MessageGroupServiceRowOwner} from '../../src/message-group/message-group-service-row-owner.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {RealTimeSource, VirtualTimeSource} from '../../src/time/time-source.js';
@@ -55,15 +56,14 @@ function targetReplicasOf(groupId) {
 }
 
 function activeNodeRow(nodeId, wsPort, latencyGroupId) {
-  return {
+  return nodesRow({
     node_id: nodeId,
-    address: `ws://127.0.0.1:${wsPort}`,
+    node_address: `ws://127.0.0.1:${wsPort}`,
     status: SERVICE_STATUS.ACTIVE,
     boot_incarnation: 1,
     latency_group_id: latencyGroupId,
     created_at: 1,
-    updated_at: 1,
-  };
+  });
 }
 
 function activeServiceRow(groupId, replicaId, nodeId, role = RAFT_ROLE.FOLLOWER) {

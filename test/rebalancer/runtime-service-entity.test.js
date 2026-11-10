@@ -26,6 +26,7 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {servicesRow} from '../test-helpers/system-table-row-fixture.js';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -53,7 +54,7 @@ function createMockCache(
   }));
   const cache = {
     nodes: new Map(normalizedNodes.map((n) => [n.node_id, n])),
-    services: new Map(services.map((s) => [s.service_id, s])),
+    services: new Map(services.map((s) => [s.service_id, servicesRow(s)])),
     service_definitions: new Map(
       serviceDefinitions.map((d) => [d.service_id, d]),
     ),
@@ -342,8 +343,8 @@ test('getCurrentReplicas discovers runtime-service replicas', async (t) => {
     });
     const replicas = rebalancer.getCurrentReplicas();
     t.equal(replicas.length, 1);
-    t.equal(replicas[0].service_id, 'sys-postgres-wire');
-    t.equal(replicas[0].service_type, 'runtime_service');
+    t.equal(replicas[0].serviceId, 'sys-postgres-wire');
+    t.equal(replicas[0].serviceType, 'runtime_service');
   });
 
   await t.test('excludes non-matching service types', async (t) => {
@@ -373,7 +374,7 @@ test('getCurrentReplicas discovers runtime-service replicas', async (t) => {
     });
     const replicas = rebalancer.getCurrentReplicas();
     t.equal(replicas.length, 1);
-    t.equal(replicas[0].service_type, 'runtime_service');
+    t.equal(replicas[0].serviceType, 'runtime_service');
   });
 
   await t.test('excludes other runtime_service definitions', async (t) => {
@@ -396,7 +397,7 @@ test('getCurrentReplicas discovers runtime-service replicas', async (t) => {
     });
     const replicas = rebalancer.getCurrentReplicas();
     t.equal(replicas.length, 1);
-    t.equal(replicas[0].service_id, 'sys-postgres-wire');
+    t.equal(replicas[0].serviceId, 'sys-postgres-wire');
   });
 
   await t.test('returns empty when no matching replicas', async (t) => {
