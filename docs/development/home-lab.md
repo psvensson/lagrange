@@ -210,6 +210,27 @@ node scripts/lab.js fleet
 
 ## Sharing the lab between agents and projects
 
+Placement orchestration remains in `scripts/lab/probe.js`: it decides selection,
+starts, settlement, deadlines and outcomes. Its low-level delegates have one
+implementation each: `machine-lock.js` owns the exclusion recipe and bounded
+hold-session resources; `shell-transport.js` assembles SSH/shell arguments;
+`process-output.js` observes completion and frames/tails output;
+`placement-contract.js` holds shared placement outcome vocabulary. The existing
+`process.js` owns the bounded Git command adapter as well as child-process
+mechanics. These delegates do not start an alternate placement policy. The
+public probe exports remain compatible, including formation holds.
+Capability parsing and readiness observations live in `test-capability.js`;
+`worker-provisioning.js` assembles the canary-derived setup script;
+`fleet-discovery.js` observes and reports inventory. They preserve the single
+self-contained dependency digest used on both controller and remote host.
+`placement-planning.js` calculates deterministic assignments and held-host splits;
+`placement-reporting.js` interprets runner verdicts and formats diagnostics.
+They do not start work, settle it or accept diagnostic artifacts.
+`remote-shard-script.js` assembles the exact remote shell and EXIT collector;
+`proof-source.js` prepares exact candidates, bundles and planning checkouts;
+`controller-test-child.js` owns the controller child's stdin file and process
+mechanics. The probe still decides when to start, await or abort these delegates.
+
 Several agents, in this repository and in other projects, use the same lab
 machines. Every lab host therefore has one machine-wide lock,
 `${LAB_LOCK_DIR:-$HOME/.lab}/machine.lock`, and one holder record beside it,
@@ -449,6 +470,13 @@ package diagnostic, declare `trace.ndjson` at 256 KiB and `packed.json`,
 under `test-output/npm-package-diagnostic/`; the package sink exports these
 names and limits. Missing required files make custody incomplete. Missing
 optional files remain explicitly recorded and do not make custody incomplete.
+
+The release entrypoint alone owns package sequencing and cleanup. Its
+`npm-package-metadata.js` delegate supplies pure manifest validation and pack
+output parsing; `npm-release-contract.js` supplies the single release error
+class and contract vocabulary. The entrypoint keeps its compatibility exports.
+These helpers introduce no command, retry, authority or publication policy.
+
 
 Placement (`scripts/lab/probe.js`) owns this interaction. Its delegated
 `placement-artifact-custody.js` helper collects after the runner's wait/stop has

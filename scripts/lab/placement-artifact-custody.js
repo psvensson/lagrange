@@ -183,20 +183,23 @@ function createPlacementArtifactCustody({root, artifacts, binding}) {
       reasons.add(REASON.DESTINATION);
     }
   }
+  const retainSavedFrame = (frame, entry) => {
+    const bytes = decodeFile(frame, entry, ARTIFACT_LIMITS.TOTAL_BYTES - receivedBytes);
+    receivedBytes += bytes.length;
+    if (directory) {
+      try {
+        retainFile(directory, entry.path, bytes);
+      } catch {
+        reasons.add(REASON.WRITE);
+      }
+    }
+  };
   const acceptFile = (frame) => {
     const entry = request.declared[files.length];
     requireFact(!terminal && entry && frame.index === files.length &&
       frame.path === entry.path && frame.required === entry.required, REASON.ORDER);
     if (frame.state === STATE.SAVED) {
-      const bytes = decodeFile(frame, entry, ARTIFACT_LIMITS.TOTAL_BYTES - receivedBytes);
-      receivedBytes += bytes.length;
-      if (directory) {
-        try {
-          retainFile(directory, entry.path, bytes);
-        } catch {
-          reasons.add(REASON.WRITE);
-        }
-      }
+      retainSavedFrame(frame, entry);
     } else {
       requireFact(frame.bytes === 0 && frame.sha256 === null && frame.data === undefined &&
         (FILE_FAILURES.has(frame.state) ||
@@ -234,18 +237,14 @@ function createPlacementArtifactCustody({root, artifacts, binding}) {
     }
     return true;
   };
-  const finish = (failure = null) => {
-    if (failure) reasons.add(failure);
-    if (!terminal) reasons.add(REASON.TERMINAL);
+  const recordFileFailures = () => {
     for (const file of files) {
       if (file.state !== STATE.SAVED && file.state !== STATE.OPTIONAL_MISSING) {
         reasons.add(file.state);
       }
     }
-    const state = reasons.size === 0 ? STATE.COMPLETE : STATE.INCOMPLETE;
-    const envelope = {state, binding: request?.binding ?? binding, directory,
-      declared: request?.declared ?? [], files, reasons: [...reasons],
-      exitStatus: terminal?.exitStatus ?? null};
+  };
+  const retainEnvelope = (envelope) => {
     if (directory) {
       try {
         fs.writeFileSync(path.join(directory, IO.CUSTODY),
@@ -255,6 +254,16 @@ function createPlacementArtifactCustody({root, artifacts, binding}) {
       }
     }
     return envelope;
+  };
+  const finish = (failure = null) => {
+    if (failure) reasons.add(failure);
+    if (!terminal) reasons.add(REASON.TERMINAL);
+    recordFileFailures();
+    const state = reasons.size === 0 ? STATE.COMPLETE : STATE.INCOMPLETE;
+    const envelope = {state, binding: request?.binding ?? binding, directory,
+      declared: request?.declared ?? [], files, reasons: [...reasons],
+      exitStatus: terminal?.exitStatus ?? null};
+    return retainEnvelope(envelope);
   };
   const readLog = (file) => {
     try {

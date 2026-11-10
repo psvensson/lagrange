@@ -64,6 +64,7 @@ const ACTIVE_RELEASE_SURFACES = [
 // `lab test` and `lab harness run`, each under the machine-wide lock, or
 // through the documented recipe in another project - never a raw ssh runner.
 const LAB_SHARING_ROOTS = ['scripts', '.github'];
+const LAB_MODULE_ROOT = 'scripts/lab/';
 const LAB_SHARING_TEXT = /\.(?:js|mjs|cjs|sh|ya?ml)$/u;
 const SSH_WORD = /\bssh\b/u;
 // The classified runner or the distributed harness, as a shell command.
@@ -78,18 +79,22 @@ const LAB_RECIPE_COMMANDS = [
   /^trap 'rm -f "\$LAB_LOCK_DIR\/machine\.holder\.json"' EXIT$/mu,
 ];
 
-// Every shell-command invocation of the runner or the harness in a file that
-// also speaks ssh, as `file: command`.
-async function remoteRunnerInvocations() {
-  const found = [];
+// Placement delegates need not mention SSH themselves. Scan the whole lab
+// module area, plus SSH-bearing scripts/workflows outside it.
+function remoteRunnerCommands(file, text) {
+  if (!file.startsWith(LAB_MODULE_ROOT) && !SSH_WORD.test(text)) return [];
+  return [...text.matchAll(REMOTE_RUNNER_COMMAND)].map((match) => `${file}: ${match[0]}`);
+}
+
+async function remoteRunnerInvocations(extraSources = []) {
+  const found = extraSources.flatMap(({file, text}) => remoteRunnerCommands(file, text));
   for (const root of LAB_SHARING_ROOTS) {
     const entries = await readdir(root, {recursive: true, withFileTypes: true});
     for (const entry of entries) {
       if (!entry.isFile() || !LAB_SHARING_TEXT.test(entry.name)) continue;
       const file = `${entry.parentPath}/${entry.name}`;
       const text = await readFile(file, UTF8);
-      if (!SSH_WORD.test(text)) continue;
-      for (const match of text.matchAll(REMOTE_RUNNER_COMMAND)) found.push(`${file}: ${match[0]}`);
+      found.push(...remoteRunnerCommands(file, text));
     }
   }
   return found.sort();
@@ -98,15 +103,25 @@ async function remoteRunnerInvocations() {
 describe('project hardening contracts', () => {
   it('runs heavy lab work only under the machine-wide lock', async () => {
     assert.deepEqual(await remoteRunnerInvocations(),
-      ['scripts/lab/probe.js: node scripts/run-classified-test-files.js'],
+      ['scripts/lab/remote-shard-script.js: node scripts/run-classified-test-files.js'],
       'the placement wrapper is the one remote invocation of the runner or the harness');
-    const [probe, harness, homeLab, runbook] = await Promise.all([
-      readFile('scripts/lab/probe.js', UTF8), readFile('scripts/lab/harness.js', UTF8),
+    const [probe, shell, lock, harness, homeLab, runbook] = await Promise.all([
+      readFile('scripts/lab/probe.js', UTF8), readFile('scripts/lab/remote-shard-script.js', UTF8),
+      readFile('scripts/lab/machine-lock.js', UTF8),
+      readFile('scripts/lab/harness.js', UTF8),
       readFile('docs/development/home-lab.md', UTF8),
       readFile('docs/development/solver-runbook.md', UTF8)]);
-    assert.ok(/\$\{LAB_LOCK_DIR:-\$HOME\/\.lab\}/u.test(probe),
+    assert.ok(/\$\{LAB_LOCK_DIR:-\$HOME\/\.lab\}/u.test(lock),
       'and it takes the convention\'s machine-wide lock');
-    assert.ok(!/flock -n 9 \|\|/u.test(probe), 'never a per-checkout lock alone, unwaited');
+    assert.match(lock, /flock -w "\$lock_wait" 9/u, 'the delegated lock has a bounded wait');
+    assert.match(shell, /\.\.\.LAB_LOCK_TAKE/u, 'the wrapper consumes the actual lock recipe');
+    assert.match(shell, /exec 8>"\$common\/lagrange-placement\.lock"/u,
+      'the wrapper also retains its checkout lock');
+    assert.ok(!/flock -n 9 \|\|/u.test(shell), 'never a per-checkout lock alone, unwaited');
+    assert.match(probe, /const wrapper = remoteShardWrapper\(machine,/u,
+      'orchestration consumes the private wrapper assembly');
+    assert.match(probe, /function remoteShardWrapper\(machine,\n {2}\{[^}]+\}\) \{\n {2}return shardWrapper\(\{/u,
+      'the assembly returns the sole delegated remote wrapper');
     assert.ok(/^import \{[^}]*\bholdLabMachine\b[^}]*\} from '\.\/probe\.js';$/mu.test(harness),
       'a formation holds its nodes through the same owner');
     const section = LAB_SHARING_SECTION.exec(homeLab)?.[1] ?? '';
@@ -118,6 +133,17 @@ describe('project hardening contracts', () => {
       assert.match(text, /never a raw ssh\s+runner\s+invocation/u,
         'heavy lab work goes through lab test, placement or lab harness run');
     }
+  });
+
+  it('detects a second lab runner even when its module never mentions SSH', async () => {
+    const invocations = await remoteRunnerInvocations([{
+      file: 'scripts/lab/additional-runner.js',
+      text: 'node scripts/run-classified-test-files.js',
+    }]);
+    assert.deepEqual(invocations, [
+      'scripts/lab/additional-runner.js: node scripts/run-classified-test-files.js',
+      'scripts/lab/remote-shard-script.js: node scripts/run-classified-test-files.js',
+    ], 'the uniqueness assertion must see the unauthorized second invocation');
   });
 
   it('keeps network defaults local and mutation enforcement active', () => {

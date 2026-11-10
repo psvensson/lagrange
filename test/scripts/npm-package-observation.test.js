@@ -36,14 +36,7 @@ async function packageFixture(configuration = {}) {
     .replace(/lagrange-npm-pack-[A-Za-z0-9]+/gu, 'lagrange-npm-pack-TEMP')
     .replace(/lagrange-npm-install-[A-Za-z0-9]+/gu, 'lagrange-npm-install-TEMP')
     .replace(/output-(?:baseline|observed)/gu, 'output'));
-  childProcess.spawnSync = (command, args, options) => {
-    assert.equal(options.env, process.env, 'the original env object reaches spawnSync');
-    calls.push({command, args, options: {...options, env: 'process.env'}});
-    const result = {status: 0, signal: null, stdout: '', stderr: ''};
-    for (const path of [options.cwd, ...args]) {
-      const match = String(path).match(/^(.*\/lagrange-npm-(?:pack|install)-[^/]+)/u);
-      if (match) temporaryRoots.add(match[1]);
-    }
+  function simulateCommand(command, args, options, result) {
     if (basename(command).startsWith('npm') && args[0] === 'pack') {
       result.stdout = JSON.stringify([{
         name: manifest.name,
@@ -78,6 +71,8 @@ async function packageFixture(configuration = {}) {
       assert.ok(command === process.execPath || args[0] === 'service',
         'the fixture refuses unexpected commands');
     }
+  }
+  function fixtureOutcome(result, args) {
     if (configuration.failure === 'install-timeout' && args[0] === 'install') {
       return {...result, status: null, signal: 'SIGTERM',
         error: Object.assign(new Error('fixture timeout'), {code: 'ETIMEDOUT'})};
@@ -89,6 +84,17 @@ async function packageFixture(configuration = {}) {
       return {...result, stdout: 'wrong version'};
     }
     return result;
+  }
+  childProcess.spawnSync = (command, args, options) => {
+    assert.equal(options.env, process.env, 'the original env object reaches spawnSync');
+    calls.push({command, args, options: {...options, env: 'process.env'}});
+    const result = {status: 0, signal: null, stdout: '', stderr: ''};
+    for (const path of [options.cwd, ...args]) {
+      const match = String(path).match(/^(.*\/lagrange-npm-(?:pack|install)-[^/]+)/u);
+      if (match) temporaryRoots.add(match[1]);
+    }
+    simulateCommand(command, args, options, result);
+    return fixtureOutcome(result, args);
   };
   syncBuiltinESMExports();
   const {buildAndVerifyNpmPackage} = await import('../../scripts/release-npm-package.js'

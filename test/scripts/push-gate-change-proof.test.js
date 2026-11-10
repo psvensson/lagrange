@@ -40,6 +40,8 @@ import {loadSealedImporters} from '../../scripts/checks/helper-import-closure.js
 import {CORPUS_FULL_PROOF} from '../../scripts/proof-authority.js';
 import {buildExecutionPlan} from '../../scripts/select-change-tests.js';
 import {executionReportProblems} from '../../scripts/test-execution-report.js';
+import {classifyChangedPath} from '../../scripts/checks/impact-proof-cone.js';
+import {TIER_SELECTOR_SELF} from '../../scripts/checks/impact-proof-cone-constants.js';
 
 const UTF8 = 'utf8';
 const CORPUS_SIZE = 2000;
@@ -50,6 +52,21 @@ const POSTPUSH_MANIFEST =
 const PRE_PUSH_HOOK = '.githooks/pre-push';
 const ORDINARY_SOURCE = 'src/raft/log.js';
 const ENV_UNSET = Object.freeze({});
+const PLACEMENT_DELEGATES = Object.freeze([
+  'scripts/lab/process-output.js',
+  'scripts/lab/shell-transport.js',
+  'scripts/lab/machine-lock.js',
+  'scripts/lab/placement-contract.js',
+  'scripts/lab/placement-artifact-custody.js',
+  'scripts/lab/test-capability.js',
+  'scripts/lab/worker-provisioning.js',
+  'scripts/lab/fleet-discovery.js',
+  'scripts/lab/placement-planning.js',
+  'scripts/lab/placement-reporting.js',
+  'scripts/lab/remote-shard-script.js',
+  'scripts/lab/proof-source.js',
+  'scripts/lab/controller-test-child.js',
+]);
 // One real file per trigger rule, so a rule can never match nothing.
 const TRIGGERING_FILES = Object.freeze([
   'test/shards/safety-spine.json',
@@ -58,6 +75,7 @@ const TRIGGERING_FILES = Object.freeze([
   'scripts/run-test-files.js',
   'scripts/run-classified-test-files.js',
   'scripts/lab/probe.js',
+  ...PLACEMENT_DELEGATES,
   'scripts/lab/process.js',
   'scripts/lab/state.js',
   'scripts/plan-test-lane.js',
@@ -142,6 +160,13 @@ test('a refused selection runs the whole corpus, never nothing', () => {
   assert.equal(decision.mode, PROOF_MODE.FULL_CORPUS);
   assert.deepEqual(decision.reasons,
     [`selection refused: ${REFUSAL_UNKNOWN_SCOPE}`]);
+});
+
+test('each placement delegate independently retains proof-selector self protection', () => {
+  for (const file of PLACEMENT_DELEGATES) {
+    assert.equal(classifyChangedPath(file, []), TIER_SELECTOR_SELF,
+      `${file} retains proof-selector self protection independently of imports`);
+  }
 });
 
 test('a change to the selection machinery, runner, curated state or hook runs the whole corpus', () => {

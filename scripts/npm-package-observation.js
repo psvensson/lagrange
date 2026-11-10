@@ -173,6 +173,18 @@ function observePackageAsync(observer, stage, operation) {
   return observer ? observedAsync(observer, stage, operation) : operation();
 }
 
+function snapshotResult(state, artifact, result) {
+  rejectAsyncSink(state, result);
+  const bytes = result?.bytes;
+  const details = {snapshotOutcome: label(result?.outcome),
+    bytes: Number.isFinite(bytes) ? bytes : 0};
+  const completeOutcomes = [SNAPSHOT_OUTCOME.SAVED, SNAPSHOT_OUTCOME.OPTIONAL_MISSING];
+  if (!completeOutcomes.includes(details.snapshotOutcome)) {
+    failure(state, `snapshot-${artifact}-incomplete`);
+  }
+  return details;
+}
+
 function snapshotPackageObservation(observer, artifact, source) {
   if (!observer) return;
   const state = stateFor(observer);
@@ -185,14 +197,7 @@ function snapshotPackageObservation(observer, artifact, source) {
     }
     if (typeof observer.snapshot !== 'function') return;
     const result = observer.snapshot(artifact, source);
-    rejectAsyncSink(state, result);
-    const bytes = result?.bytes;
-    details = {snapshotOutcome: label(result?.outcome),
-      bytes: Number.isFinite(bytes) ? bytes : 0};
-    const completeOutcomes = [SNAPSHOT_OUTCOME.SAVED, SNAPSHOT_OUTCOME.OPTIONAL_MISSING];
-    if (!completeOutcomes.includes(details.snapshotOutcome)) {
-      failure(state, `snapshot-${artifact}-incomplete`);
-    }
+    details = snapshotResult(state, artifact, result);
   } catch {
     failure(state, `snapshot-${artifact}-failed`);
     details = {snapshotOutcome: SNAPSHOT_OUTCOME.ERROR, bytes: 0};
@@ -237,91 +242,114 @@ function validatePackageObservation(text, {requiredStages = []} = {}) {
     validation.outcome = OBSERVATION_COMPLETENESS.INCOMPLETE;
     validation.reasons.push(reason);
   };
-  const stack = [];
-  const stageIds = new Set();
-  const endedStages = new Set();
-  const snapshots = new Set();
-  let sequence = 0;
-  let elapsedMs = -1;
-  let terminal = null;
-  let sessionEnded = false;
+  const state = {stack: [], stageIds: new Set(), endedStages: new Set(),
+    snapshots: new Set(), sequence: 0, elapsedMs: -1, terminal: null, sessionEnded: false};
   if (typeof text !== 'string' || Buffer.byteLength(text) > TRACE_MAX_BYTES) {
-    return {complete: false, reasons: [TRACE_REJECTION.INVALID_TRACE_SIZE], terminal};
+    return {complete: false, reasons: [TRACE_REJECTION.INVALID_TRACE_SIZE],
+      terminal: state.terminal};
   }
   if (!text.endsWith(RECORD_NEWLINE)) reject(TRACE_REJECTION.TRUNCATED_TRACE);
   try {
     for (const line of text.trimEnd().split(RECORD_NEWLINE)) {
-      const record = JSON.parse(line);
-      if (terminal) throw new Error(TRACE_REJECTION.RECORD_AFTER_TERMINAL);
-      if (record?.schema !== OBSERVATION_SCHEMA || record.sequence !== ++sequence ||
-        !Number.isFinite(record.elapsedMs) || record.elapsedMs < elapsedMs ||
-        !Number.isFinite(Date.parse(record.wallTime)) ||
-        Object.values(record).some((value) => value !== null &&
-          typeof value !== 'number' && typeof value !== 'string')) {
-        throw new Error(TRACE_REJECTION.INVALID_RECORD_OR_SEQUENCE);
-      }
-      elapsedMs = record.elapsedMs;
-      if (sequence === 1 && (record.event !== EVENT.BEGIN ||
-        record.kind !== KIND.SESSION || record.stage !== OBSERVATION_STAGE.SESSION)) {
-        throw new Error(TRACE_REJECTION.MISSING_SESSION);
-      }
-      if (sessionEnded && record.event !== EVENT.TERMINAL) {
-        throw new Error(TRACE_REJECTION.RECORD_AFTER_SESSION);
-      }
-      if (record.event === EVENT.BEGIN) {
-        if (!Number.isInteger(record.stageId) || record.stageId < 1 ||
-          stageIds.has(record.stageId) || typeof record.stage !== 'string' ||
-          ![KIND.STAGE, KIND.COMMAND, KIND.SESSION].includes(record.kind) ||
-          (record.kind === KIND.SESSION && sequence !== 1) ||
-          record.parentStageId !== (stack.at(-1)?.stageId ?? null)) {
-          throw new Error(TRACE_REJECTION.INVALID_STAGE_BEGIN);
-        }
-        stageIds.add(record.stageId);
-        stack.push(record);
-      } else if (record.event === EVENT.END) {
-        const opened = stack.pop();
-        if (!opened || opened.stageId !== record.stageId || opened.stage !== record.stage ||
-          opened.kind !== record.kind || opened.parentStageId !== record.parentStageId ||
-          ![OPERATION_OUTCOME.SUCCESS, OPERATION_OUTCOME.ERROR].includes(record.outcome) ||
-          !Number.isFinite(record.durationMs) || record.durationMs < 0) {
-          throw new Error(TRACE_REJECTION.INVALID_STAGE_END);
-        }
-        endedStages.add(record.stage);
-        if (record.kind === KIND.COMMAND) validateCommandRecord(record);
-        if (record.kind === KIND.SESSION) sessionEnded = true;
-      } else if (record.event === EVENT.SNAPSHOT) {
-        validateSnapshotRecord(record, stack, snapshots);
-        if (record.snapshotOutcome !== SNAPSHOT_OUTCOME.SAVED &&
-          !(record.artifact === PACKAGE_ARTIFACT.INSTALLED_LOCK &&
-            record.snapshotOutcome === SNAPSHOT_OUTCOME.OPTIONAL_MISSING)) {
-          reject(TRACE_REJECTION.SNAPSHOT_INCOMPLETE);
-        }
-      } else if (record.event === EVENT.TERMINAL) {
-        if (record.kind !== KIND.TERMINAL || !sessionEnded || stack.length ||
-          endedStages.size < 2 || !Number.isFinite(record.overheadMs) ||
-          record.overheadMs < 0 || typeof record.failures !== 'string' ||
-          !Object.values(OBSERVATION_COMPLETENESS).includes(record.outcome) ||
-          record.overheadScope !== OBSERVATION_OVERHEAD_SCOPE) {
-          throw new Error(TRACE_REJECTION.INVALID_TERMINAL);
-        }
-        terminal = record;
-      } else {
-        throw new Error(TRACE_REJECTION.INVALID_EVENT);
-      }
+      validateTraceRecord(JSON.parse(line), state, reject);
     }
   } catch (error) {
     reject(error.message);
   }
-  if (stack.length) reject(OBSERVATION_FAILURE.OPEN_STAGES);
-  if (!terminal) reject(TRACE_REJECTION.MISSING_TERMINAL);
-  else if (terminal.outcome !== OBSERVATION_COMPLETENESS.COMPLETE || terminal.failures !== '') {
+  finishTraceValidation(state, requiredStages, reject);
+  return {complete: validation.outcome === OBSERVATION_COMPLETENESS.COMPLETE,
+    reasons: validation.reasons, terminal: state.terminal};
+}
+
+function finishTraceValidation(state, requiredStages, reject) {
+  if (state.stack.length) reject(OBSERVATION_FAILURE.OPEN_STAGES);
+  if (!state.terminal) reject(TRACE_REJECTION.MISSING_TERMINAL);
+  else if (state.terminal.outcome !== OBSERVATION_COMPLETENESS.COMPLETE ||
+    state.terminal.failures !== '') {
     reject(TRACE_REJECTION.OBSERVATION_INCOMPLETE);
   }
   for (const stage of requiredStages) {
-    if (!endedStages.has(stage)) reject(`missing-required-stage:${stage}`);
+    if (!state.endedStages.has(stage)) reject(`missing-required-stage:${stage}`);
   }
-  return {complete: validation.outcome === OBSERVATION_COMPLETENESS.COMPLETE,
-    reasons: validation.reasons, terminal};
+}
+
+function validateRecordEnvelope(record, state) {
+  if (record?.schema !== OBSERVATION_SCHEMA || record.sequence !== ++state.sequence ||
+    !Number.isFinite(record.elapsedMs) || record.elapsedMs < state.elapsedMs ||
+    !Number.isFinite(Date.parse(record.wallTime)) ||
+    Object.values(record).some((value) => value !== null &&
+      typeof value !== 'number' && typeof value !== 'string')) {
+    throw new Error(TRACE_REJECTION.INVALID_RECORD_OR_SEQUENCE);
+  }
+}
+
+function validateRecordHeader(record, state) {
+  if (state.terminal) throw new Error(TRACE_REJECTION.RECORD_AFTER_TERMINAL);
+  validateRecordEnvelope(record, state);
+  state.elapsedMs = record.elapsedMs;
+  if (state.sequence === 1 && (record.event !== EVENT.BEGIN ||
+    record.kind !== KIND.SESSION || record.stage !== OBSERVATION_STAGE.SESSION)) {
+    throw new Error(TRACE_REJECTION.MISSING_SESSION);
+  }
+  if (state.sessionEnded && record.event !== EVENT.TERMINAL) {
+    throw new Error(TRACE_REJECTION.RECORD_AFTER_SESSION);
+  }
+}
+
+function validateStageBegin(record, state) {
+  if (!Number.isInteger(record.stageId) || record.stageId < 1 ||
+    state.stageIds.has(record.stageId) || typeof record.stage !== 'string' ||
+    ![KIND.STAGE, KIND.COMMAND, KIND.SESSION].includes(record.kind) ||
+    (record.kind === KIND.SESSION && state.sequence !== 1) ||
+    record.parentStageId !== (state.stack.at(-1)?.stageId ?? null)) {
+    throw new Error(TRACE_REJECTION.INVALID_STAGE_BEGIN);
+  }
+  state.stageIds.add(record.stageId);
+  state.stack.push(record);
+}
+
+function validateStageEnd(record, state) {
+  const opened = state.stack.pop();
+  if (!opened || opened.stageId !== record.stageId || opened.stage !== record.stage ||
+    opened.kind !== record.kind || opened.parentStageId !== record.parentStageId ||
+    ![OPERATION_OUTCOME.SUCCESS, OPERATION_OUTCOME.ERROR].includes(record.outcome) ||
+    !Number.isFinite(record.durationMs) || record.durationMs < 0) {
+    throw new Error(TRACE_REJECTION.INVALID_STAGE_END);
+  }
+  state.endedStages.add(record.stage);
+  if (record.kind === KIND.COMMAND) validateCommandRecord(record);
+  if (record.kind === KIND.SESSION) state.sessionEnded = true;
+}
+
+function validateTerminalRecord(record, state) {
+  if (record.kind !== KIND.TERMINAL || !state.sessionEnded || state.stack.length ||
+    state.endedStages.size < 2 || !Number.isFinite(record.overheadMs) ||
+    record.overheadMs < 0 || typeof record.failures !== 'string' ||
+    !Object.values(OBSERVATION_COMPLETENESS).includes(record.outcome) ||
+    record.overheadScope !== OBSERVATION_OVERHEAD_SCOPE) {
+    throw new Error(TRACE_REJECTION.INVALID_TERMINAL);
+  }
+  state.terminal = record;
+}
+
+function validateTraceRecord(record, state, reject) {
+  validateRecordHeader(record, state);
+  if (record.event === EVENT.BEGIN) {
+    validateStageBegin(record, state);
+  } else if (record.event === EVENT.END) {
+    validateStageEnd(record, state);
+  } else if (record.event === EVENT.SNAPSHOT) {
+    validateSnapshotRecord(record, state.stack, state.snapshots);
+    if (record.snapshotOutcome !== SNAPSHOT_OUTCOME.SAVED &&
+      !(record.artifact === PACKAGE_ARTIFACT.INSTALLED_LOCK &&
+        record.snapshotOutcome === SNAPSHOT_OUTCOME.OPTIONAL_MISSING)) {
+      reject(TRACE_REJECTION.SNAPSHOT_INCOMPLETE);
+    }
+  } else if (record.event === EVENT.TERMINAL) {
+    validateTerminalRecord(record, state);
+  } else {
+    throw new Error(TRACE_REJECTION.INVALID_EVENT);
+  }
 }
 
 function validateCommandRecord(record) {
@@ -334,13 +362,17 @@ function validateCommandRecord(record) {
   }
 }
 
+function invalidSnapshotSize(record) {
+  return !Number.isInteger(record.bytes) || record.bytes < 0 || record.bytes > SNAPSHOT_MAX_BYTES ||
+    (record.snapshotOutcome !== SNAPSHOT_OUTCOME.SAVED && record.bytes !== 0);
+}
+
 function validateSnapshotRecord(record, stack, snapshots) {
   if (record.kind !== KIND.SNAPSHOT || !stack.length ||
     record.parentStageId !== stack.at(-1).stageId || record.artifact === PACKAGE_ARTIFACT.TRACE ||
     !Object.hasOwn(PACKAGE_DIAGNOSTIC_FILES, record.artifact) || snapshots.has(record.artifact) ||
     !Object.values(SNAPSHOT_OUTCOME).includes(record.snapshotOutcome) ||
-    !Number.isInteger(record.bytes) || record.bytes < 0 || record.bytes > SNAPSHOT_MAX_BYTES ||
-    (record.snapshotOutcome !== SNAPSHOT_OUTCOME.SAVED && record.bytes !== 0)) {
+    invalidSnapshotSize(record)) {
     throw new Error(TRACE_REJECTION.INVALID_SNAPSHOT);
   }
   snapshots.add(record.artifact);
