@@ -9,6 +9,9 @@ import {
   AdminOwnerOperations,
   registerAdminOwnerOperationRoutes,
 } from './admin-owner-operations.js';
+import {
+  normalizeKnownNodeBootIncarnation,
+} from '../control-plane/control-plane-error-classification.js';
 
 const LOCAL_STR_SYSTEM_TABLE_CACHE_NOT_INITIALIZED = 'System table cache not initialized';
 
@@ -46,10 +49,12 @@ const {
   LOAD_LANE_READINESS_CACHE_MAX_AGE_MS,
   LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS,
   LoggingService,
+  META_SERVICE_ID,
   MessageType,
   PressureGovernor,
   TRANSPORT_EVENT,
   TraceCollector,
+  WASM_SERVICE_PROTOCOL,
   buildControlPlaneWorkloadProfile,
   createAdminOperationError,
   getRegisteredControlPlaneSystemTableGateway,
@@ -135,6 +140,18 @@ class AdminWebSocketAPIBase {
       null;
     this.messageRouter = options.messageRouter || null;
     this.nodeId = options.nodeId || ADMIN_DEFAULT.NODE_ID;
+    this.bootIncarnation =
+      normalizeKnownNodeBootIncarnation(options.bootIncarnation);
+    this.ingressServiceId =
+      typeof options.ingressServiceId === 'string' &&
+      options.ingressServiceId.length > 0 ?
+        options.ingressServiceId :
+        META_SERVICE_ID.ADMIN_META;
+    this.ingressProtocol =
+      typeof options.ingressProtocol === 'string' &&
+      options.ingressProtocol.length > 0 ?
+        options.ingressProtocol :
+        WASM_SERVICE_PROTOCOL.WEBSOCKET;
     this.enforcementMode =
       options.enforcementMode || ADMIN_DEFAULT.ENFORCEMENT_MODE;
     this.nowFn = options.nowFn || (() => Date.now());

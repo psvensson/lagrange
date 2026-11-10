@@ -1,6 +1,14 @@
 import {
   isServeEligibilityAnswerEligible,
 } from '../control-plane/serve-eligibility-owner.js';
+import {COLUMN, TABLES} from '../constants/index.js';
+import {
+  endpointIncarnationOf,
+  isEndpointCurrentForNode,
+} from '../control-plane/owners/endpoint-incarnation-currentness.js';
+import {
+  normalizeKnownNodeBootIncarnation,
+} from '../control-plane/control-plane-error-classification.js';
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {AdminWebSocketAPIBase} from './admin-websocket-api-base.js';
 import {
@@ -20,6 +28,9 @@ const LOCAL_STR_TIMED_OUT = 'timed out';
 const LOCAL_STR_DEADLINE_EXCEEDED = 'deadline exceeded';
 const LOCAL_STR_SERVE_ELIGIBILITY_REFRESH_FAILED =
   'load-lane serve eligibility refresh failed';
+const LOCAL_STR_STALE_ENDPOINT_INCARNATION = 'stale_endpoint_incarnation';
+const LOCAL_STR_BENCHMARK_ADMISSION_BLOCKED = 'benchmark_admission_blocked';
+const LOCAL_STR_COLON_COLON = '::';
 
 const {
   ADMIN_CACHE_DUMP,
@@ -35,9 +46,7 @@ const {
   LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS,
   LOAD_LANE_TABLE_ADMISSION_STATE,
   LOAD_ROUTABLE_RAFT_ROLES,
-  META_SERVICE_ID,
   SQLParser,
-  WASM_SERVICE_PROTOCOL,
   buildLoadLaneAdmissionErrorDetails,
   buildLoadLaneQueryAdmissionResult,
   buildLoadLaneQueryAdmissionSnapshot,
@@ -48,6 +57,16 @@ const {
   resolveLoadLaneQueryAdmissionState,
   resolveRequestedQueryTimeoutMs,
 } = ADMIN_WEBSOCKET_API_SHARED;
+
+const filterMatchingServices = (rawServices, actualIngress) => {
+  const targetProto = String(actualIngress.protocol).toLowerCase();
+  return rawServices.filter((service) => {
+    const serviceIds = Array.isArray(service?.serviceIds) ? service.serviceIds :
+      (service?.serviceId ? [service.serviceId] : ADMIN_CACHE_DUMP.EMPTY);
+    const protocol = String(service?.protocol || EMPTY_STRING).toLowerCase();
+    return serviceIds.includes(actualIngress.serviceId) && protocol === targetProto;
+  });
+};
 
 async function refreshServeEligibilityWhenIneligible(
   readinessService,
@@ -299,31 +318,72 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
   }
 
   /**
+   * Resolve known endpoint boot incarnation from one replica record or system cache.
+   * @param {Object} replica
+   * @return {number}
+   * @private
+   */
+  resolveReplicaEndpointIncarnation(replica) {
+    if (!replica || typeof replica !== 'object') return 0;
+    const direct = endpointIncarnationOf(replica);
+    if (direct > 0) return direct;
+    const endpointId = replica.endpointId;
+    if (typeof endpointId === 'string' && endpointId.length > 0) {
+      const row = this.systemTableCache?.get?.(TABLES.SERVICE_ENDPOINTS, endpointId);
+      if (row) return endpointIncarnationOf(row);
+    }
+    return 0;
+  }
+
+  isCachedEndpointCurrent(endpointId) {
+    if (!endpointId || !this.systemTableCache?.get) return true;
+    const endpointRow = this.systemTableCache.get(TABLES.SERVICE_ENDPOINTS, endpointId);
+    const nodeRow = this.systemTableCache.get(TABLES.NODES, this.nodeId);
+    return !(endpointRow && nodeRow && !isEndpointCurrentForNode(endpointRow, nodeRow));
+  }
+
+  /**
+   * Determine whether one replica endpoint matches the node's current incarnation.
+   * @param {Object} replica
+   * @param {Object|null} actualIngress
+   * @return {boolean}
+   * @private
+   */
+  isReplicaEndpointCurrent(replica, actualIngress) {
+    if (!replica || typeof replica !== 'object') return false;
+    if (!this.isCachedEndpointCurrent(replica.endpointId)) return false;
+    const current = normalizeKnownNodeBootIncarnation(
+      actualIngress?.incarnation || this.resolveCurrentNodeIncarnation(),
+    );
+    const replicaInc = this.resolveReplicaEndpointIncarnation(replica);
+    if (current > 0 && replicaInc > 0) return replicaInc === current;
+    return true;
+  }
+
+  /**
    * Resolve one replica-scoped load-lane table-admission result from one
    * replica readiness snapshot.
    * @param {Object} replica
    * @param {string} tableName
+   * @param {Object|null} [actualIngress=null]
    * @return {Object}
    * @private
    */
-  resolveLoadLaneReplicaAdmissionResult(replica, tableName) {
-    const benchmarkAdmission =
-      this.resolveLoadLaneReplicaBenchmarkAdmission(replica);
-    if (benchmarkAdmission) {
-      return this.buildLoadLaneBenchmarkAdmissionResult(
-        tableName,
-        benchmarkAdmission,
+  resolveLoadLaneReplicaAdmissionResult(replica, tableName, actualIngress = null) {
+    if (!this.isReplicaEndpointCurrent(replica, actualIngress)) {
+      return this.buildLoadLaneTableAdmissionResult(
+        tableName, LOAD_LANE_TABLE_ADMISSION_STATE.READINESS_BLOCKED,
+        [LOCAL_STR_STALE_ENDPOINT_INCARNATION],
       );
     }
-
-    const readiness = this.resolveLoadLaneReplicaReadiness(replica);
-    if (readiness) {
-      return this.buildLoadLaneReadinessAdmissionResult(tableName, readiness);
+    const benchmarkAdmission = this.resolveLoadLaneReplicaBenchmarkAdmission(replica);
+    if (benchmarkAdmission) {
+      return this.buildLoadLaneBenchmarkAdmissionResult(tableName, benchmarkAdmission);
     }
-
+    const readiness = this.resolveLoadLaneReplicaReadiness(replica);
+    if (readiness) return this.buildLoadLaneReadinessAdmissionResult(tableName, readiness);
     return this.buildLoadLaneTableAdmissionResult(
-      tableName,
-      LOAD_LANE_TABLE_ADMISSION_STATE.DISCOVERY_MISSING,
+      tableName, LOAD_LANE_TABLE_ADMISSION_STATE.DISCOVERY_MISSING,
       [LOAD_LANE_TABLE_ADMISSION_STATE.DISCOVERY_MISSING],
     );
   }
@@ -408,81 +468,167 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
   }
 
   /**
+   * Resolve local node's current boot incarnation.
+   * @return {number}
+   * @private
+   */
+  resolveCurrentNodeIncarnation() {
+    if (typeof this.bootIncarnation === 'number' && this.bootIncarnation > 0) {
+      return this.bootIncarnation;
+    }
+    if (this.systemTableCache?.get) {
+      const nodeRow = this.systemTableCache.get(TABLES.NODES, this.nodeId);
+      const inc = normalizeKnownNodeBootIncarnation(nodeRow?.[COLUMN.BOOT_INCARNATION]);
+      if (inc > 0) return inc;
+    }
+    return 0;
+  }
+
+  /**
+   * Resolve actual ingress service, protocol, and incarnation.
+   * Wire execution contexts bind strictly to canonical server ingress.
+   * @param {Object} [contextOrIngress={}]
+   * @return {Object}
+   * @private
+   */
+  resolveActualIngressIdentity(contextOrIngress = {}) {
+    const canonicalServiceId = this.ingressServiceId;
+    const canonicalProtocol = this.ingressProtocol;
+    const canonicalNodeId = this.nodeId;
+    const canonicalIncarnation = this.resolveCurrentNodeIncarnation();
+
+    if (!contextOrIngress?.clientInfo) {
+      const candidate = contextOrIngress?.ingress || null;
+      if (candidate && typeof candidate === 'object') {
+        const candInc = normalizeKnownNodeBootIncarnation(candidate.incarnation);
+        return {
+          serviceId: candidate.serviceId || canonicalServiceId,
+          protocol: candidate.protocol || canonicalProtocol,
+          nodeId: candidate.nodeId || canonicalNodeId,
+          incarnation: candInc > 0 ? candInc : canonicalIncarnation,
+        };
+      }
+    }
+
+    return {
+      serviceId: canonicalServiceId,
+      protocol: canonicalProtocol,
+      nodeId: canonicalNodeId,
+      incarnation: canonicalIncarnation,
+    };
+  }
+
+  /**
+   * Build composite cache key for table admission state.
+   * @param {string} tableName
+   * @param {Object} ingressIdentity
+   * @return {string}
+   * @private
+   */
+  buildLoadLaneTableAdmissionCacheKey(tableName, ingressIdentity) {
+    const name = normalizeIdentifier(tableName);
+    const serviceId = String(ingressIdentity?.serviceId || EMPTY_STRING).trim();
+    const protocol = String(ingressIdentity?.protocol || EMPTY_STRING).trim().toLowerCase();
+    const nodeId = String(ingressIdentity?.nodeId || EMPTY_STRING).trim();
+    const inc = normalizeKnownNodeBootIncarnation(ingressIdentity?.incarnation);
+    return `${name}${LOCAL_STR_COLON_COLON}${serviceId}${LOCAL_STR_COLON_COLON}${protocol}` +
+      `${LOCAL_STR_COLON_COLON}${nodeId}${LOCAL_STR_COLON_COLON}${inc}`;
+  }
+
+  /**
+   * Verify that one cached admission entry matches the requested ingress binding.
+   * @param {Object} cachedEntry
+   * @param {Object} ingressIdentity
+   * @return {boolean}
+   * @private
+   */
+  isLoadLaneTableAdmissionCacheEntryCurrent(cachedEntry, ingressIdentity) {
+    if (!cachedEntry?.binding || !ingressIdentity) return false;
+    const {binding} = cachedEntry;
+    const curInc = normalizeKnownNodeBootIncarnation(ingressIdentity.incarnation);
+    return binding.serviceId === ingressIdentity.serviceId &&
+      binding.protocol === ingressIdentity.protocol &&
+      binding.nodeId === ingressIdentity.nodeId &&
+      binding.incarnation === curInc;
+  }
+
+  /**
    * Resolve local benchmark admission for one routed load-lane table.
    * @param {string} tableName
+   * @param {Object} [contextOrIngress={}]
    * @return {Object|null}
    * @private
    */
-  async resolveLoadLaneTableAdmissionState(tableName) {
-    const normalizedTableName = normalizeIdentifier(tableName);
-    if (!normalizedTableName) {
-      return null;
-    }
-
-    const nowMs = this.nowFn();
-    const cachedEntry =
-      this.loadLaneTableAdmissionCache.get(normalizedTableName);
-    if (
-      cachedEntry &&
-      nowMs - cachedEntry.capturedAtMs <=
-        this.loadLaneTableAdmissionCacheMaxAgeMs
-    ) {
-      return cachedEntry.state;
-    }
-
-    const snapshot =
-      await this.serviceDiscovery.resolveServiceDiscoverySnapshot({
-        tableName: normalizedTableName,
-        serviceIdAllowlist: [
-          META_SERVICE_ID.POSTGRES_WIRE,
-          META_SERVICE_ID.ADMIN_META,
-        ],
-        protocolAllowlist: [
-          WASM_SERVICE_PROTOCOL.POSTGRESQL,
-          WASM_SERVICE_PROTOCOL.WEBSOCKET,
-        ],
-        allowAuthoritativeRepair: true,
-      });
-    const services = Array.isArray(snapshot?.services) ?
-      snapshot.services :
-      ADMIN_CACHE_DUMP.EMPTY;
-
-    let resolvedState = this.buildLoadLaneTableAdmissionResult(
-      normalizedTableName,
-      LOAD_LANE_TABLE_ADMISSION_STATE.DISCOVERY_MISSING,
+  _resolveReplicaFromServices(services, actualIngress, normalizedTableName) {
+    let resolved = this.buildLoadLaneTableAdmissionResult(
+      normalizedTableName, LOAD_LANE_TABLE_ADMISSION_STATE.DISCOVERY_MISSING,
       [LOAD_LANE_TABLE_ADMISSION_STATE.DISCOVERY_MISSING],
     );
-
     for (const service of services) {
-      const replicas = Array.isArray(service?.replicas) ?
-        service.replicas :
-        ADMIN_CACHE_DUMP.EMPTY;
+      const replicas = Array.isArray(service?.replicas) ? service.replicas : ADMIN_CACHE_DUMP.EMPTY;
       for (const replica of replicas) {
-        if (String(replica?.nodeId || EMPTY_STRING) !== this.nodeId) {
-          continue;
-        }
-        resolvedState = this.resolveLoadLaneReplicaAdmissionResult(
-          replica,
-          normalizedTableName,
+        if (String(replica?.nodeId || EMPTY_STRING) !== actualIngress.nodeId) continue;
+        resolved = this.resolveLoadLaneReplicaAdmissionResult(
+          replica, normalizedTableName, actualIngress,
         );
         break;
       }
       if (
-        resolvedState.ready === true ||
-        resolvedState.state !==
-          LOAD_LANE_TABLE_ADMISSION_STATE.DISCOVERY_MISSING
+        resolved.ready === true ||
+        resolved.state !== LOAD_LANE_TABLE_ADMISSION_STATE.DISCOVERY_MISSING
       ) {
         break;
       }
     }
+    return resolved;
+  }
+
+  async resolveLoadLaneTableAdmissionState(tableName, contextOrIngress = {}) {
+    const normalizedTableName = normalizeIdentifier(tableName);
+    if (!normalizedTableName) return null;
+
+    const actualIngress = this.resolveActualIngressIdentity(contextOrIngress);
+    const cacheKey = this.buildLoadLaneTableAdmissionCacheKey(
+      normalizedTableName, actualIngress,
+    );
+
+    const nowMs = this.nowFn();
+    const cachedEntry = this.loadLaneTableAdmissionCache.get(cacheKey);
+    if (
+      cachedEntry &&
+      nowMs - cachedEntry.capturedAtMs <= this.loadLaneTableAdmissionCacheMaxAgeMs &&
+      this.isLoadLaneTableAdmissionCacheEntryCurrent(cachedEntry, actualIngress)
+    ) {
+      return cachedEntry.state;
+    }
+
+    const snapshot = await this.serviceDiscovery.resolveServiceDiscoverySnapshot({
+      tableName: normalizedTableName,
+      serviceIdAllowlist: [actualIngress.serviceId],
+      protocolAllowlist: [actualIngress.protocol],
+      allowAuthoritativeRepair: true,
+    });
+    const rawServices = Array.isArray(snapshot?.services) ?
+      snapshot.services : ADMIN_CACHE_DUMP.EMPTY;
+    const services = filterMatchingServices(rawServices, actualIngress);
+    const resolvedState = this._resolveReplicaFromServices(
+      services, actualIngress, normalizedTableName,
+    );
 
     if (this.shouldCacheLoadLaneTableAdmissionState(snapshot, resolvedState)) {
-      this.loadLaneTableAdmissionCache.set(normalizedTableName, {
+      this.loadLaneTableAdmissionCache.set(cacheKey, {
         capturedAtMs: nowMs,
         state: resolvedState,
+        binding: {
+          tableName: normalizedTableName,
+          serviceId: actualIngress.serviceId,
+          protocol: actualIngress.protocol,
+          nodeId: actualIngress.nodeId,
+          incarnation: actualIngress.incarnation,
+        },
       });
     } else {
-      this.loadLaneTableAdmissionCache.delete(normalizedTableName);
+      this.loadLaneTableAdmissionCache.delete(cacheKey);
     }
     return resolvedState;
   }
@@ -529,24 +675,18 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
       return;
     }
     const admissionState =
-      await this.resolveLoadLaneTableAdmissionState(tableName);
+      await this.resolveLoadLaneTableAdmissionState(tableName, executionContext);
     if (admissionState?.ready === true) {
       return;
     }
-    const reasonCodes =
-      Array.isArray(admissionState?.reasonCodes) &&
-      admissionState.reasonCodes.length > 0 ?
-        admissionState.reasonCodes :
-        ['benchmark_admission_blocked'];
+    const reasonCodes = Array.isArray(admissionState?.reasonCodes) &&
+      admissionState.reasonCodes.length > 0 ? admissionState.reasonCodes :
+      [LOCAL_STR_BENCHMARK_ADMISSION_BLOCKED];
     throw createRetryableAdminOperationError(
       ErrorCode.INTERNAL_ERROR,
-      LOCAL_STR_SERVE_NOT_READY_LOAD_LANE_ADMISSION_DENI +
-        this.nodeId +
-        LOCAL_STR_TABLENAME +
-        tableName +
-        LOCAL_STR_BENCHMARKREADY_FALSE_REASONS +
-        reasonCodes.join(LOCAL_STR_COMMA) +
-        LOCAL_STR_RPAREN,
+      LOCAL_STR_SERVE_NOT_READY_LOAD_LANE_ADMISSION_DENI + this.nodeId +
+        LOCAL_STR_TABLENAME + tableName + LOCAL_STR_BENCHMARKREADY_FALSE_REASONS +
+        reasonCodes.join(LOCAL_STR_COMMA) + LOCAL_STR_RPAREN,
     );
   }
 

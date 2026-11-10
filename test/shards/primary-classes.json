@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2282,
+    "unit": 2283,
     "integration": 124,
     "bootstrap": 223,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2636,
-  "digest": "fnv1a32-813568dd",
+  "censusSize": 2637,
+  "digest": "fnv1a32-0a6fb726",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -77,6 +77,7 @@
     "test/admin/cache-dump-completeness.property.test.js": "unit",
     "test/admin/completed-placement-autonomous-progress.test.js": "unit",
     "test/admin/control-snapshot-stale-watermark-transitions.test.js": "unit",
+    "test/admin/load-admission-ingress-identity.test.js": "unit",
     "test/admin/standalone-test-run-server.test.js": "unit",
     "test/admin/test-run-dashboard-trace-panel.test.js": "unit",
     "test/admin/wasm-meta-serviceized-routing.test.js": "unit",

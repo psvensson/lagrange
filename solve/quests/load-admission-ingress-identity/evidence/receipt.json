@@ -1,0 +1,67 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "load-admission-ingress-identity",
+  "status": "pass",
+  "testFileDigests": {
+    "test/admin/load-admission-ingress-identity.test.js": "83656d4eaaf157dc9751c9e42c05e263dea1916e7d9bdc75deff6de25aa65fe7"
+  },
+  "generatedAt": "2026-11-10T12:13:50.629Z",
+  "receipts": [
+    {
+      "id": "actual-ingress-binding",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^actual-ingress-binding: .*$\" test/admin/load-admission-ingress-identity.test.js",
+      "detail": "Load admission is bound to actual request ingress service, protocol, and node/incarnation.",
+      "testFile": "test/admin/load-admission-ingress-identity.test.js"
+    },
+    {
+      "id": "discovery-order-invariance",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^discovery-order-invariance: .*$\" test/admin/load-admission-ingress-identity.test.js",
+      "detail": "Reordering discovery service records does not affect load admission outcome.",
+      "testFile": "test/admin/load-admission-ingress-identity.test.js"
+    },
+    {
+      "id": "opposite-endpoint-health",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^opposite-endpoint-health: .*$\" test/admin/load-admission-ingress-identity.test.js",
+      "detail": "Admin blocked with postgres ready rejects; admin ready with postgres blocked admits.",
+      "testFile": "test/admin/load-admission-ingress-identity.test.js"
+    },
+    {
+      "id": "zero-postgres-replicas",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^zero-postgres-replicas: .*$\" test/admin/load-admission-ingress-identity.test.js",
+      "detail": "Zero postgres replicas admits admin websocket query when admin endpoint is ready.",
+      "testFile": "test/admin/load-admission-ingress-identity.test.js"
+    },
+    {
+      "id": "stale-endpoint-incarnation-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^stale-endpoint-incarnation-refused: .*$\" test/admin/load-admission-ingress-identity.test.js",
+      "detail": "Stale endpoint boot incarnation is refused for load admission.",
+      "testFile": "test/admin/load-admission-ingress-identity.test.js"
+    },
+    {
+      "id": "admission-cache-binding",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admission-cache-binding: .*$\" test/admin/load-admission-ingress-identity.test.js",
+      "detail": "Admission cache key and validation bind to full composite ingress identity and refuse cross-authorization.",
+      "testFile": "test/admin/load-admission-ingress-identity.test.js"
+    },
+    {
+      "id": "real-ingress-to-query-composition",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^real-ingress-to-query-composition: .*$\" test/admin/load-admission-ingress-identity.test.js",
+      "detail": "End-to-end query dispatch over admin websocket load lane verifies actual ingress binding.",
+      "testFile": "test/admin/load-admission-ingress-identity.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/load-admission-ingress-identity.js --check-verification",
+      "detail": "Independent verification approving last attempt recorded by subagent.",
+      "testFile": null
+    }
+  ]
+}

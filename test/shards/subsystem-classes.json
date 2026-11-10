@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 120,
+    "admin-diagnostics": 121,
     "architecture-governance": 21,
     "bootstrap-membership": 343,
     "cdc-metadata": 70,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2636,
-  "digest": "fnv1a32-fc6fc081",
+  "censusSize": 2637,
+  "digest": "fnv1a32-8a8f95c8",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-fdf8213c",
+  "observationDigest": "fnv1a32-c2e76ab6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -96,6 +96,7 @@
     "test/admin/cache-dump-completeness.property.test.js": "admin-diagnostics",
     "test/admin/completed-placement-autonomous-progress.test.js": "admin-diagnostics",
     "test/admin/control-snapshot-stale-watermark-transitions.test.js": "admin-diagnostics",
+    "test/admin/load-admission-ingress-identity.test.js": "admin-diagnostics",
     "test/admin/standalone-test-run-server.test.js": "admin-diagnostics",
     "test/admin/test-run-dashboard-trace-panel.test.js": "admin-diagnostics",
     "test/admin/wasm-meta-serviceized-routing.test.js": "admin-diagnostics",
@@ -2922,6 +2923,14 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/admin/load-admission-ingress-identity.test.js": {
+      "files": [
+        "src/admin/admin-websocket-api-shared.js",
+        "src/admin/admin-websocket-api.js",
+        "src/cache/system-cache-key-descriptor.js",
+        "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/admin/standalone-test-run-server.test.js": {

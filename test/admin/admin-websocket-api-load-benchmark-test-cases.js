@@ -269,6 +269,48 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
       updated_at: updatedAt,
     });
 
+    cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
+      service_id: 'sys-admin-meta',
+      service_name: 'sys-admin-meta',
+      protocol: 'websocket',
+      replica_count: 2,
+      runtime_kind: 'native_js',
+    });
+
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+      endpoint_id: 'sys-admin-meta-ep-node-1',
+      service_id: 'sys-admin-meta',
+      node_id: 'node-1',
+      protocol: 'websocket',
+      address: '10.0.0.1',
+      port: 8080,
+      health_status: 'healthy',
+      metadata: JSON.stringify({
+        service_name: 'sys-admin-meta',
+        protocol: 'websocket',
+        version: '1.0.0',
+      }),
+      updated_at: updatedAt,
+    });
+
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+      endpoint_id: 'sys-admin-meta-ep-node-2',
+      service_id: 'sys-admin-meta',
+      node_id: 'node-2',
+      protocol: 'websocket',
+      address: '10.0.0.2',
+      port: 8080,
+      health_status: 'healthy',
+      metadata: JSON.stringify({
+        service_name: 'sys-admin-meta',
+        protocol: 'websocket',
+        version: '1.0.0',
+      }),
+      updated_at: updatedAt,
+    });
+
     cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
       id: 'table-benchmark-events',
       table_id: 'table-benchmark-events',
@@ -548,6 +590,9 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
 
       api.serviceDiscovery.resolveServiceDiscoverySnapshot = async () => ({
         services: [{
+          serviceId: 'sys-admin-meta',
+          serviceIds: ['sys-admin-meta'],
+          protocol: 'websocket',
           replicas: [{
             nodeId: 'node-2',
             benchmarkAdmission: {
@@ -609,6 +654,9 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
 
       api.serviceDiscovery.resolveServiceDiscoverySnapshot = async () => ({
         services: [{
+          serviceId: 'sys-admin-meta',
+          serviceIds: ['sys-admin-meta'],
+          protocol: 'websocket',
           replicas: [{
             nodeId: 'node-2',
             readiness: {
