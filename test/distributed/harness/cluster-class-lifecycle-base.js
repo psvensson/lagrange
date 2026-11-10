@@ -943,6 +943,13 @@ class ClusterLifecycleBase {
     const startupGate = new StartupGate(this, seedNode, seedId);
     await startupGate.waitForSeedJoinReady();
 
+    // Historical diagnostic only: no product write or formation predicate change.
+    if (process.env.LAGRANGE_H1_OUTPUT) {
+      const {startH1Observation} = await import('../../../test-output/h1-observation/observer.mjs');
+      this._h1Stop = await startH1Observation(seedNode,
+        this._config.benchmark.controlQueryTimeoutMs);
+    }
+
     // Joiners reach the seed over the node-to-node path: the seed host's
     // VPC-internal IP in host-network mode, or the seed container's bridge IP
     // otherwise (seedNode.ip already holds the bridge IP in that case).
@@ -1061,6 +1068,10 @@ class ClusterLifecycleBase {
     const errors = [];
     const reuseContainers = this._isContainerReuseEnabled();
     try {
+      if (this._h1Stop) {
+        await this._runTeardownStep('Historical H1 observer cleanup', errors,
+          this._h1Stop);
+      }
       await this._runTeardownStep(
         TEARDOWN_WARNING_PLAYBACK_BEGIN,
         errors,
