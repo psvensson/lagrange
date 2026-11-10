@@ -22,6 +22,13 @@ import {
   readExecutionReport, readExecutionRuns, writeExecutionReport,
 } from './test-execution-report.js';
 
+
+const RECEIPT_REFUSAL = Object.freeze({
+  INVALID_HEAD: 'publish: invalid receipt head',
+  INVALID_RECORD: 'publish: invalid retained receipt',
+});
+
+
 const ZERO_SHA = '0'.repeat(40);
 const PIPE_STDIO = 'pipe';
 const INHERIT_STDIO = 'inherit';
@@ -352,6 +359,18 @@ function receiptPath(root, head) {
   const common = git(root, ['rev-parse', '--git-common-dir']);
   const commonDir = path.resolve(root, common);
   return path.join(commonDir, RECEIPT_DIRECTORY, `${head}.json`);
+}
+
+// Consumers read publication evidence from this owner, never from a second path.
+export function readPublishReceipt(root, head) {
+  if (!/^[0-9a-f]{40}$/u.test(head)) throw new Error(RECEIPT_REFUSAL.INVALID_HEAD);
+  const receipt = JSON.parse(fs.readFileSync(receiptPath(root, head), UTF8));
+  if (receipt.schemaVersion !== 1 || receipt.head !== head || receipt.remoteAfter !== head ||
+    receipt.remote !== ORIGIN_REMOTE || receipt.remoteRef !== REMOTE_MAIN_REF ||
+    receipt.gate !== GATE_DESCRIPTION || !Number.isFinite(Date.parse(receipt.publishedAt))) {
+    throw new Error(RECEIPT_REFUSAL.INVALID_RECORD);
+  }
+  return receipt;
 }
 
 // Fail fast, before the worktree exists: a fresh quest worktree has no

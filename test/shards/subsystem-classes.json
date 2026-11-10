@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 218,
     "storage-raft": 151,
-    "test-infrastructure": 168,
+    "test-infrastructure": 171,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2643,
-  "digest": "fnv1a32-555a782a",
+  "censusSize": 2646,
+  "digest": "fnv1a32-4d1f2310",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b60d049c",
+  "observationDigest": "fnv1a32-5d0ab075",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2252,6 +2252,9 @@
     "test/runtime/work-class-scheduler.test.js": "services-runtime",
     "test/scripts/acceptance-proof-manifest-runner.test.js": "test-infrastructure",
     "test/scripts/action-authority.test.js": "test-infrastructure",
+    "test/scripts/agent-tooling-configuration.test.js": "test-infrastructure",
+    "test/scripts/agent-tooling-evidence.test.js": "test-infrastructure",
+    "test/scripts/agent-tooling-process.test.js": "test-infrastructure",
     "test/scripts/analyze-cl039-link-rate.test.js": "test-infrastructure",
     "test/scripts/analyze-fix-engagement.test.js": "test-infrastructure",
     "test/scripts/analyze-formation-release-phases.test.js": "test-infrastructure",
@@ -18626,6 +18629,125 @@
         "src",
         "test",
         "wit"
+      ],
+      "env": [
+        "LAGRANGE_PROBE"
+      ]
+    },
+    "test/scripts/agent-tooling-configuration.test.js": {
+      "files": [
+        "AGENTS.md",
+        "docs/steering/router.md",
+        "docs/steering/rules.md",
+        "scripts/agent-tooling/cli.js",
+        "scripts/agent-tooling/host-protocol.js",
+        "scripts/agent-tooling/profile.json",
+        "scripts/agent-tooling/serena-config.py"
+      ]
+    },
+    "test/scripts/agent-tooling-evidence.test.js": {
+      "files": [
+        ".githooks/pre-commit",
+        ".githooks/pre-push",
+        "AGENTS.md",
+        "Dockerfile",
+        "README.md",
+        "data/formation-health/trend.ndjson",
+        "dependency-cruiser.config.cjs",
+        "docs/development/agent-tooling.md",
+        "docs/development/quest-artifacts.md",
+        "docs/steering/router.md",
+        "docs/steering/rules.md",
+        "docs/steering/workflow-guidelines/solver-quests.md",
+        "package-lock.json",
+        "package.json",
+        "scripts/agent-tooling/NOTICE.md",
+        "scripts/agent-tooling/cli.js",
+        "scripts/agent-tooling/component-evidence.js",
+        "scripts/agent-tooling/evidence-contract.js",
+        "scripts/agent-tooling/evidence-records.js",
+        "scripts/agent-tooling/evidence.js",
+        "scripts/agent-tooling/host-protocol.js",
+        "scripts/agent-tooling/profile.js",
+        "scripts/agent-tooling/profile.json",
+        "scripts/agent-tooling/serena-config.py",
+        "scripts/check-file-size-thresholds.js",
+        "scripts/check-guideline-ambient-intrinsics.js",
+        "scripts/check-guideline-decision-boundaries.js",
+        "scripts/check-guideline-literals.js",
+        "scripts/check-guideline-navigability.js",
+        "scripts/check-guideline-silent-catch.js",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/checks/quest-agent-tooling-acceptance.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-priority-recovery-owner-inventory.js",
+        "scripts/generate-source-owner-index.js",
+        "scripts/inventory-ordinal-segments.js",
+        "scripts/proof-authority.js",
+        "scripts/prune-test-output.js",
+        "scripts/publish-head.js",
+        "scripts/quest-evidence/quest-agent-tooling-lifecycle.py",
+        "scripts/quest-evidence/quest-agent-tooling-receipt.js",
+        "scripts/quest-evidence/quest-agent-tooling.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/solve.js",
+        "scripts/solve/commands.js",
+        "scripts/solve/evidence-store.js",
+        "scripts/solve/guards.js",
+        "scripts/solve/probes.js",
+        "scripts/solve/schema.js",
+        "scripts/solve/script-artifacts.js",
+        "scripts/solve/store.js",
+        "scripts/test-machine-factor.js",
+        "solve/changes/global-owner-debt-inventory/inventory.json",
+        "solve/changes/priority-recovery-owner-inventory/inventory.json",
+        "src/INDEX.md",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/scripts/agent-tooling-configuration.test.js",
+        "test/scripts/agent-tooling-evidence.test.js",
+        "test/scripts/agent-tooling-process.test.js",
+        "test/scripts/publish-head.test.js",
+        "test/shards/impact-contracts.json",
+        "test/shards/impact-graph-seal.json",
+        "test/shards/primary-classes.json",
+        "test/shards/resource-classes.json",
+        "test/shards/subsystem-classes.json",
+        "test/solve/probes.test.js"
+      ],
+      "directories": [
+        "scripts",
+        "scripts/agent-tooling",
+        "scripts/checks",
+        "solve",
+        "solve/changes/evidence-relocation",
+        "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
+        "solve/quests",
+        "src",
+        "src/test-helpers",
+        "test",
+        "test/scripts",
+        "test/solve"
+      ],
+      "env": [
+        "LAGRANGE_PROBE"
+      ]
+    },
+    "test/scripts/agent-tooling-process.test.js": {
+      "files": [
+        "scripts/agent-tooling/process.js"
+      ],
+      "env": [
+        "LAGRANGE_PROBE",
+        "PROCESS_TEST_VALUE"
       ]
     },
     "test/scripts/analyze-formation-release-phases.test.js": {
@@ -19413,6 +19535,9 @@
         "src/test-helpers",
         "test",
         "wit"
+      ],
+      "env": [
+        "LAGRANGE_PROBE"
       ]
     },
     "test/scripts/dependency-policy-authority.test.js": {
@@ -19550,6 +19675,9 @@
         "test/distributed",
         "test/guidelines",
         "test/solve"
+      ],
+      "env": [
+        "LAGRANGE_PROBE"
       ]
     },
     "test/scripts/evidence-relocation.test.js": {
@@ -19620,6 +19748,9 @@
         "test/distributed",
         "test/guidelines",
         "test/solve"
+      ],
+      "env": [
+        "LAGRANGE_PROBE"
       ]
     },
     "test/scripts/exact-election-evidence-same-turn-model-contract.test.js": {
@@ -21918,6 +22049,7 @@
       "env": [
         "APPDATA",
         "LAGRANGE_LAB_HOME",
+        "LAGRANGE_PROBE",
         "PATH",
         "XDG_CONFIG_HOME"
       ]
@@ -21929,6 +22061,9 @@
         "solve/changes/evidence-relocation",
         "solve/epics",
         "solve/quests"
+      ],
+      "env": [
+        "LAGRANGE_PROBE"
       ]
     },
     "test/solve/guards.test.js": {

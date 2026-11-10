@@ -1,0 +1,116 @@
+{
+  "author": "subagent:/root",
+  "observations": [
+    {
+      "quest": "quest-tooling-owner-and-profile",
+      "id": "current-setup-3",
+      "sha256": "2d3b0cf7cb3605ba1bc6481399b9dc22a298eff75ae7cc12ecac8cc5cc3333c3",
+      "asset": "quest-tooling-owner-and-profile--current-setup-3.json",
+      "bytes": 20419
+    },
+    {
+      "quest": "quest-tooling-review-and-evidence",
+      "id": "final-controls-3",
+      "sha256": "1fd84f96b692c21640c4b0ffc4564473a8336ef7dc2acf444c3fdf23dd32a4f8",
+      "asset": "quest-tooling-review-and-evidence--final-controls-3.json",
+      "bytes": 17531
+    }
+  ],
+  "setup": "current-setup-3",
+  "controls": "final-controls-3",
+  "checks": [
+    {
+      "id": "current-owner-and-host-inventory",
+      "analysis": "Actual Codex0.167.1, uv0.10.2, Node22.23.2/Linux, intended worktree and real host configuration reader are retained. Profile upgrade followed an actual refusal after the daemon changed the executable; no older executable was selected.",
+      "observations": [
+        "current-setup-3",
+        "final-controls-3"
+      ]
+    },
+    {
+      "id": "upstream-version-and-license-provenance",
+      "analysis": "Reviewed immutable Git revisions for selected skills and Serena, exact Context7 npmversion/integrity, observed backend versions and installed dependency digests. NOTICE retains attribution. The Context7 documentation revision is explicitly not npm build provenance.",
+      "observations": [
+        "current-setup-3",
+        "final-controls-3"
+      ]
+    },
+    {
+      "id": "selected-capabilities-and-conflict-disposition",
+      "analysis": "Five scoped skills defer task state, review, publication and learning to existing owners; actual config exposes only selected navigation and documentation tools. Canonical controls refuse unpinned or editing-tool inputs, collisions, unsafe paths and configuration drift.",
+      "observations": [
+        "current-setup-3",
+        "final-controls-3"
+      ]
+    },
+    {
+      "id": "profile-to-quest-contract-reviewed",
+      "analysis": "Independent source review approved the owner interaction and preserved one canonical path. Actual setup, repeat/configuration controls and current dependencies bind the projection to the profile. No component/formation/comparative acceptance is inferred from installation.",
+      "observations": [
+        "current-setup-3",
+        "final-controls-3"
+      ]
+    }
+  ],
+  "schema": "quest-agent-tooling-evidence/1",
+  "quest": "quest-tooling-owner-and-profile",
+  "profileDigest": "f4f4f102ee19c07a5470414a59d02f91de4230d47b10302ac1e5fc23123c8960",
+  "source": {
+    "root": "/mnt/data/peter/projects/.worktrees/quest-agent-tooling-20261110",
+    "commit": "103f132c13268321445369d3b4c1183ca2c39c66",
+    "files": {
+      ".agents/skills/quest-investigate/SKILL.md": "25a6aafa36ea7083208f283ecec1b432073dd0396c5213da8c882be493d6b717",
+      ".agents/skills/quest-learn/SKILL.md": "42c1d070d699841402f14e92db7b6d75e30b1a3da1338e70a060a56bb7d011ce",
+      ".agents/skills/quest-library-docs/SKILL.md": "480cf9c8a5232b6ce9be488f8795d627a12864bb4d7d3705b34c4cc589f4ab7b",
+      ".agents/skills/quest-navigate/SKILL.md": "da3cbd33f005cded7b1211b1890f338961143c20d84d6f72b821c4b627f331b7",
+      ".agents/skills/quest-review/SKILL.md": "9e9906f99d405bf41cbea74f8c17d95e2b33181a6c38a2903fbbb456aeda3097",
+      "AGENTS.md": "640008279732be15c50b42bdfef1b5ec1893c6a31eaa851580c711de22ccc0bb",
+      "docs/development/agent-tooling.md": "c85402a6dad104d5789580d0af63c48288a5a332eba69736f0a7cd5982e4f7da",
+      "docs/development/quest-artifacts.md": "10766df4c380d7de7d554778a0d96f60c042ff5fecde7d1dce35955caccd0e03",
+      "docs/steering/router.md": "95b7c662c59834fd9c865fa141746268baf7511b96c0c9a04f7818a02de5c23f",
+      "docs/steering/rules.md": "ff82e2e1318f964871a3655e39755f0410f11c8bdd5edc89e7ed1f0a16fdd08b",
+      "docs/steering/workflow-guidelines/solver-quests.md": "164e704e046cb9af9dcb67dd88f1fb9a0fa10acbe6dc728ba3affef9423f5fdb",
+      "package-lock.json": "ed4eb66117aa8a847faf2ad99a36876b05f95d7a6874d50ff545c7a257bab560",
+      "package.json": "ff12a2f3da118b9b0dd1546ab36c5cb9199f8a76b31ce1e6af4a762fadc93303",
+      "scripts/agent-tooling/NOTICE.md": "117ab26e28a42642a9390ed1b6efa5426125d34c8fd698f410954707d0f402a6",
+      "scripts/agent-tooling/cli.js": "dd75268ab1390cf08ae287aeb1b8f90f3c66744dfd4fd0ea99e977f88dab9c2e",
+      "scripts/agent-tooling/component-evidence.js": "d4c9ac9accb4b6211142df71d406e34a98d17f0046744909a662e8651a48a75a",
+      "scripts/agent-tooling/configuration.js": "60e56ad31f9304ba1010e303f33f1cd78a56f64c08bcdf30097ebd62f5b44305",
+      "scripts/agent-tooling/evidence-contract.js": "0f7cd24192648afc8dec9942f5ee6d7882a5be8e457e152e8c0d89cbf173d919",
+      "scripts/agent-tooling/evidence-records.js": "9ed320cb527f0d9d8eff0bed18a8e8b8e8a0c34e9772775ffc702493a0c1c93f",
+      "scripts/agent-tooling/evidence-scope.js": "1b599e7b2697c937fa96229d1a2bc6148ff1c7916089c0a1f099f87c88dd5e0f",
+      "scripts/agent-tooling/evidence.js": "a72ff83d3cf466ca9441a611497d1b6036fe2f6014bdedbd13d8772a85290c75",
+      "scripts/agent-tooling/host-protocol.js": "be3f90dee73867ddd78729bf12981765499759655e4b8416ce759e096bc35154",
+      "scripts/agent-tooling/lifecycle-lock.js": "09bf4eaaa8cfc6175b05fe680168c85429986357b999bd3cc1fb010f65889bb3",
+      "scripts/agent-tooling/paths.js": "0a54291e52066487c261863cb2932e4f213b527fcc36ed16155871d0777f20a8",
+      "scripts/agent-tooling/process.js": "abb31d265d024cbb77d4eb884bca1ea6b2447bbe019804bc79867ad766b9134e",
+      "scripts/agent-tooling/profile.js": "474355dbfeb143d4d6331e053b4fba9a8822e6b4ad383bd19b2b5b1f520f49d0",
+      "scripts/agent-tooling/profile.json": "f4f4f102ee19c07a5470414a59d02f91de4230d47b10302ac1e5fc23123c8960",
+      "scripts/agent-tooling/runtime.js": "38ad258fd1288cb3142fa1a5c7336b7fdf6d47d2d9c29b0a32eb4358ebafa6e6",
+      "scripts/agent-tooling/serena-config.py": "cbd4af89d967f85fed5f46d8eddea177700d6252a62d69850004ff36c1d71c07",
+      "scripts/checks/quest-agent-tooling-acceptance.js": "fdc5b815b2767ef0ebcdbc9dac139f92dfc3bd442214c5b450261b59c918196b",
+      "scripts/publish-head.js": "2afe632632f6bf449eb9602000b65bb12edcc8c3c0841a3e2c075f23c81d25ce",
+      "scripts/quest-evidence/quest-agent-tooling-lifecycle.py": "075c3e75e182495ceffe0ad498a901dc6cb74011998a2bcb64f17214f33f74fe",
+      "scripts/quest-evidence/quest-agent-tooling-receipt.js": "41e2ca1f482bafd62bfd64f17aabf7a0ec095e7b23f0d901023bcffde15a7b3d",
+      "scripts/quest-evidence/quest-agent-tooling.js": "b59e879efba4baebe76e2cc9f05aab9bd80a4e28afff85644cccf1911b5d301a",
+      "scripts/solve/commands.js": "ed0ffafd09e5545ed7d9231940d1670a30f7eb3955b999913e9f5d1de5cc7e44",
+      "scripts/solve/evidence-store.js": "17619909b5bb3c5f810715f55bcb37f1fb9f819edfce44048466844303a3f0eb",
+      "scripts/solve/guards.js": "5b9b36eb7df49dcc326a2ce742ad5d144f3946db45b94631a4f9e061b21af7ca",
+      "scripts/solve/probes.js": "ba060b723b992314cf10e02aab4c85bd30f7513334aed3e3b382cc6ba53404b6",
+      "scripts/solve/schema.js": "0375a84148168435d723e2b7b7b3d0461a60043b528c1da5db098ef155675351",
+      "scripts/solve/script-artifacts.js": "4bb60e38bcfed860ee487a7246b7facf89fb4bf00ee0dda6cd67be965b36d7e0",
+      "scripts/solve/store.js": "8ebeae4e31856ad42ce141a629cb5e8ff87780c838cfbe0ddccfcf7ebfb92633",
+      "test/scripts/agent-tooling-configuration.test.js": "4eafe3bf81424fb3060b6e68c928c5182a42e4fec7354009b4b730890c848b8f",
+      "test/scripts/agent-tooling-evidence.test.js": "35cd871f5f438e0b05995580b095cd7e9a9a7b13b5e4bde582a1a1a8acce87c2",
+      "test/scripts/agent-tooling-process.test.js": "1fd5f686ca9a54a5264ae3e4b64253addeb4bfa6d956c7ac5a5681440bd1a150",
+      "test/scripts/publish-head.test.js": "b8cfdb911c8355a5170cf7190abeaeb7ea6b4d575f75c1fdf22da93d0c9c0ebe",
+      "test/solve/commands.test.js": "77bd329ea90d5d5e69d6522a24247574ecf79bccac1bd8ac27aa07557b752793",
+      "test/solve/evidence-store.test.js": "68dd7bacc60c8d5a660141f0d14c0092717899b802e1bd679a8280961e6af641",
+      "test/solve/guards.test.js": "df23a93426ba68a8e64a449a7f3e6d9a2cce320875b581f85c0f90a750bcf1aa",
+      "test/solve/migrate-v1.test.js": "fdd08b233eb0e6ed45a5cd06321a035271d603fb60f3e5b3ed3b1d80ce42a08e",
+      "test/solve/probes.test.js": "d86d1b4d2adee7b740cf6aa7eaca6c7e4183765d8a7d00958470fad5d7029bb9",
+      "test/solve/schema.test.js": "3367a4945bd7382646d747da4047e38c9daa6fef552e722835e8a49edcd8380c",
+      "test/solve/store.test.js": "9d49bd7bfb43a5bd60e5622d6c4561be82a2c2c36cf350e2b0f8bce0c9257228"
+    }
+  }
+}

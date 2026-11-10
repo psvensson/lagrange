@@ -35,6 +35,18 @@ import {ACTION, authorizeAction, isAuthorized} from '../action-authority.js';
 import {GIT_OUTPUT_BOUND, spawnGit} from '../checks/git-invocation.js';
 import {LOG_FILE, QUEST_FILE} from './schema.js';
 
+
+const MATERIALIZATION_REFUSAL = Object.freeze({
+  INVALID_RECORD: 'evidence materialization: invalid verified store record',
+  NOT_CONTAINED: 'evidence materialization: local object is not a contained regular file',
+  LOCAL_MISMATCH: 'evidence materialization: local object digest or length mismatch',
+  PROBE: 'evidence materialization refuses under a read-only probe',
+  DOWNLOAD_MISMATCH: 'evidence materialization: downloaded object mismatch',
+  CACHE_ESCAPE: 'evidence materialization: cache path resolves outside its owner',
+});
+const PROBE_MARKER = '1';
+
+
 const EVIDENCE_RELEASE_TAG = 'solve-evidence';
 const ASSET_SEPARATOR = '--';
 const GH_BINARY = 'gh';
@@ -62,6 +74,62 @@ const GH_JSON_FLAG = '--json';
 const VERIFY_DIR = 'verify';
 const PATH_SEGMENT_JOINER = '__';
 const SOLVE_PREFIX = 'solve/';
+const MATERIALIZED_DIRECTORY = 'test-output/solve-evidence';
+const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
+
+function materializedEvidencePath(root, record) {
+  if (!SHA256_PATTERN.test(record.sha256) || !Number.isSafeInteger(record.bytes) ||
+    record.bytes < 0 || typeof record.asset !== 'string' ||
+    !/^[a-zA-Z0-9_.-]+$/u.test(record.asset)) {
+    throw new Error(MATERIALIZATION_REFUSAL.INVALID_RECORD);
+  }
+  return path.join(root, MATERIALIZED_DIRECTORY, record.sha256);
+}
+
+function readMaterializedEvidence(root, record) {
+  const file = materializedEvidencePath(root, record);
+  if (!fs.lstatSync(file).isFile() || fs.realpathSync(file) !== file) {
+    throw new Error(MATERIALIZATION_REFUSAL.NOT_CONTAINED);
+  }
+  const bytes = fs.readFileSync(file);
+  const digest = crypto.createHash(HASH_ALGORITHM).update(bytes).digest(HASH_ENCODING);
+  if (digest !== record.sha256 || bytes.length !== record.bytes) {
+    throw new Error(MATERIALIZATION_REFUSAL.LOCAL_MISMATCH);
+  }
+  return bytes;
+}
+
+function materializeEvidence({root, record, run = gh, tmpdir = os.tmpdir()}) {
+  if (process.env.LAGRANGE_PROBE === PROBE_MARKER) {
+    throw new Error(MATERIALIZATION_REFUSAL.PROBE);
+  }
+  const destination = materializedEvidencePath(root, record);
+  if (fs.existsSync(destination)) {
+    readMaterializedEvidence(root, record);
+    return destination;
+  }
+  const scratch = fs.mkdtempSync(path.join(tmpdir, SCRATCH_PREFIX));
+  try {
+    run([GH_RELEASE, GH_DOWNLOAD, EVIDENCE_RELEASE_TAG, GH_PATTERN_FLAG, record.asset,
+      GH_DIR_FLAG, scratch]);
+    const downloaded = path.join(scratch, record.asset);
+    if (sha256Of(downloaded) !== record.sha256 || fs.statSync(downloaded).size !== record.bytes) {
+      throw new Error(MATERIALIZATION_REFUSAL.DOWNLOAD_MISMATCH);
+    }
+    const directory = path.dirname(destination);
+    let ancestor = directory;
+    while (!fs.existsSync(ancestor)) ancestor = path.dirname(ancestor);
+    if (fs.realpathSync(ancestor) !== ancestor) {
+      throw new Error(MATERIALIZATION_REFUSAL.CACHE_ESCAPE);
+    }
+    fs.mkdirSync(directory, {recursive: true});
+    fs.copyFileSync(downloaded, destination, fs.constants.COPYFILE_EXCL);
+    readMaterializedEvidence(root, record);
+    return destination;
+  } finally {
+    fs.rmSync(scratch, {recursive: true, force: true});
+  }
+}
 
 function sha256Of(file) {
   return crypto.createHash(HASH_ALGORITHM)
@@ -614,6 +682,7 @@ export {
   ASSET_SEPARATOR, EVIDENCE_RELEASE_TAG, EVIDENCE_REF_PREFIX,
   FINDING_KIND_EVIDENCE, MEMBER_MISMATCH, RELOCATION, RELOCATION_REFUSAL,
   addingCommits, assetName, bundleBasename, deleteSharedEvidenceAsset,
+  materializeEvidence, materializedEvidencePath, readMaterializedEvidence,
   parsePathsList, recordRelocation, relocationManifest, relocationRefusals,
   relocationRecordsDir, relocationShard, removeRelocated, sha256Of, sourceBlobs, sourceRefusals,
   uploadAndVerify, verifyRelocationBundle, writeRelocationBundle,

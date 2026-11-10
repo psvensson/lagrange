@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {CHECKS_DIR, ENTRY_TYPE, FINDING_KIND, PROBE} from './schema.js';
+import {scriptArtifacts} from './script-artifacts.js';
 import {
   SCENARIO_OUTCOME,
   scenarioOutcomeOf,
@@ -426,6 +427,11 @@ function measureOracle(root, args) {
 // A deterministic command under scripts/checks that prints one numeric
 // metric on stdout; exit 0 with metric <= target is done.
 function measureScript(root, args) {
+  try {
+    scriptArtifacts(args);
+  } catch (error) {
+    return notMeasuring(error.message);
+  }
   const command = String(args.command || '');
   const tokens = command.split(/\s+/u).filter(Boolean);
   if (tokens[0] === NODE_TOKEN) tokens.shift();
@@ -454,13 +460,13 @@ function measureScript(root, args) {
 // Which repository paths a sealed doneWhen designates as proof artifacts.
 // The probe owner answers this because it owns how each kind is measured: a
 // consumer must never infer a requirement from a filename or from prose. A
-// scenario-harness reads live reports and a script runs a checker, so neither
-// designates an artifact the quest itself retains.
+// scenario-harness reads live reports. A script can declare literal retained
+// artifacts; older sealed probes without that declaration retain none.
 const PROBE_ARTIFACTS = Object.freeze({
   [PROBE.TEST_RECEIPT]: (args) => [args.file],
   [PROBE.ORACLE]: (args) => [args.file],
   [PROBE.SCENARIO_HARNESS]: () => NO_ARTIFACTS,
-  [PROBE.SCRIPT]: () => NO_ARTIFACTS,
+  [PROBE.SCRIPT]: scriptArtifacts,
 });
 
 /**

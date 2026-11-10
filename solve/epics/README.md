@@ -1,49 +1,30 @@
-# Epics — optional decision memos before executable work
+---
+audience: development
+---
 
-An **epic** is a bounded place to resolve options that span more than one potential
-Quest. Use it only while the intended result is not sharp enough for a sealed
-`doneWhen` or a broad approved contract. It is deliberately schema-light: one
-Markdown file from `_template.md`, capped at 150 lines for version 2 epics.
+# Epics and executable Quests
 
-## Where it sits
+An epic coordinates an approved multi-Quest objective. It records current status,
+dependencies, scope, evidence limits and the next responsible owner. A Quest is
+the bounded executable unit; a detailed spec holds the implementation contract.
+Single-sitting work with an obvious proof can use the direct path in
+[solver-quests.md](../../docs/steering/workflow-guidelines/solver-quests.md).
 
-Choose the smallest planning home that matches the work:
+Current shapes are owned by [schema.js](../../scripts/solve/schema.js), and
+interpretation by [store.js](../../scripts/solve/store.js). An epic has front matter
+with `id`, `status` (`open`, `done`, `superseded`), `proof`, `quests` and
+`authorizes`. An open nonhistorical epic also has `doneWhen: {probe, args}`.
+Do not infer acceptance from its prose or from the status of linked work alone.
+Every measured claim retains its own proof and applicability.
 
-- bounded deterministic work with an obvious proof: work directly;
-- a bounded executable result: author a Quest;
-- unresolved options spanning possible Quests: use an epic temporarily;
-- an approved multi-Quest contract: use a spec or architecture document.
+Use `node scripts/solve.js board` to inspect current records. Create each Quest's
+`quest.json` and append-only `log.ndjson` according to the routed workflow; seal
+through `start` only against a genuinely measuring negative. `probe` measures
+without executing live work. `land` checks the sealed predicate, scope, review and
+canonical gates before committing. Publication is a separate exact-HEAD step.
+See [the runbook](../../docs/development/solver-runbook.md) for actual commands.
 
-An epic is not a mandatory waypoint between a roadmap row and a Quest, and an
-epic and spec must not duplicate the same executable plan.
-
-## Lifecycle
-
-`node scripts/solve.js overview` derives the epic's mechanical work stage from
-explicit links:
-
-- `framing` — no linked executable work exists;
-- `linked-spec` — `graduatesTo` names an existing spec;
-- `linked-draft` / `linked-open` — an explicitly linked Quest is drafted/open;
-- `linked-terminal` — every explicitly linked Quest is terminal.
-
-These stages describe linked work, not whether the idea was accepted, rejected,
-or dropped. Record those human decisions as dated decision-log entries. Version 2
-epics MUST NOT declare a mutable `status:` field. Legacy status fields remain
-readable during migration but are not execution authority.
-
-## Conventions
-
-- `roadmapRow` co-locates planning records in `node scripts/solve.js overview`.
-  It deliberately does not imply an epic-to-Quest link. That link is exact and
-  explicit through `links.planDoc`, `links.specRef`, or an epic's `graduatesTo`
-  target. `trace --row` reports Quests for the row; use `overview` for the full
-  planning graph.
-- Prefer one epic per unresolved decision theme. Version 2 epics are limited to
-  150 lines, require `## Decision log`, and use no `status:`. Unknown contract
-  versions fail closed. Graduate executable detail to a spec or Quest instead
-  of extending the epic.
-- Epics are NOT a closure surface. Measured truth lives in quests and the
-  closure-ledger; an epic only records intent and the decision trail.
-
-Copy `_template.md` only when unresolved cross-Quest framing actually exists.
+Keep the epic's current summary actionable. Separate implementation, independent
+verification, bounded repair, representative service proof and full acceptance.
+Retain dated decisions and failed evidence; reconcile older guidance with current
+owners instead of reintroducing retired commands or parallel task state.

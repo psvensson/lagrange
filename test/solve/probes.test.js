@@ -11,6 +11,7 @@ import {test} from 'node:test';
 import {PROBE} from '../../scripts/solve/schema.js';
 import {
   NON_MEASURING_VERDICT_REASONS, PROBE_REASON, measure, reportSampleIsNonMeasuring,
+  requiredProofArtifacts,
 } from '../../scripts/solve/probes.js';
 
 const ORACLE = 'oracle.json';
@@ -24,6 +25,21 @@ const CHECK_SCRIPT = 'scripts/checks/demo-metric.js';
 const OUTSIDE_SCRIPT = 'scripts/demo-metric.js';
 const PASS = 'pass';
 const FAIL = 'fail';
+
+test('script artifact declarations retain exact paths and reject unsafe shapes before execution', (t) => {
+  const dir = root(t);
+  write(dir, CHECK_SCRIPT, 'throw new Error("must not execute");');
+  assert.deepEqual(requiredProofArtifacts({probe: PROBE.SCRIPT,
+    args: {command: CHECK_SCRIPT}}), []);
+  const files = ['solve/quests/example/evidence/receipt.json'];
+  assert.deepEqual(requiredProofArtifacts({probe: PROBE.SCRIPT, args: {artifacts: files}}), files);
+  for (const artifacts of ['receipt.json', [null], ['../outside'], ['/absolute'],
+    ['a/../b'], ['a//b'], ['a/*'], ['C:/outside'], ['a\\b'], ['same', 'same']]) {
+    const spec = {probe: PROBE.SCRIPT, args: {command: CHECK_SCRIPT, artifacts}};
+    assert.throws(() => requiredProofArtifacts(spec), /literal repository-relative/u);
+    assert.equal(measure(dir, spec).measuring, false);
+  }
+});
 
 function root(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'solve-v2-probes-'));

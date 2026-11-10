@@ -4,6 +4,8 @@
 // _Scope authority (docs/development/agpl-feature-map.md)._ Roadmap rows live
 // there; an epic cites one through `roadmapRow`.
 
+import {scriptArtifacts} from './script-artifacts.js';
+
 const QUEST_SCHEMA = 'solve-quest/2';
 const QUEST_FILE = 'quest.json';
 const LOG_FILE = 'log.ndjson';
@@ -124,8 +126,15 @@ function isPlainObject(value) {
 }
 
 function validProbe(spec) {
-  return isPlainObject(spec) && PROBES.includes(spec.probe) &&
-    isPlainObject(spec.args);
+  if (!isPlainObject(spec) || !PROBES.includes(spec.probe) ||
+    !isPlainObject(spec.args)) return false;
+  if (spec.probe !== PROBE.SCRIPT) return true;
+  try {
+    scriptArtifacts(spec.args);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

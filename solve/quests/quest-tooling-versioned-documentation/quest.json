@@ -1,0 +1,54 @@
+{
+  "schema": "solve-quest/2",
+  "id": "quest-tooling-versioned-documentation",
+  "epic": "quest-agent-tooling-integration",
+  "statement": "A real Context7 invocation resolves an external dependency from the installed package or lockfile identity and returns attributable documentation for the requested supported version. Unavailable or mismatched versions remain explicitly unresolved. The documentation informs external API usage and cannot replace the actual internal Lagrange contract or establish execution evidence.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/quest-agent-tooling-acceptance.js --quest quest-tooling-versioned-documentation --metric",
+      "artifacts": [
+        "solve/quests/quest-tooling-versioned-documentation/evidence/receipt.json"
+      ],
+      "requiredChecks": [
+        "dependency-version-to-library-binding",
+        "actual-documentation-tool-response",
+        "source-and-version-attribution",
+        "unavailable-and-mismatched-version-handling",
+        "bounded-configuration-and-query-scope",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "planning-only",
+      "statement": "Unsealed draft created for implementation planning. Required check IDs are obligations, not results. No observation or seal may be fabricated. Prepare a genuinely measuring negative witness through the existing proof owners before start; missing evidence remains non-measuring. Refine an unsealed draft or explicitly supersede a changed seal."
+    },
+    {
+      "id": "existing-authority-and-no-fallback",
+      "statement": "Current AGENTS, routed owners and the user remain authoritative. Use the existing Quest workflow, append-only records, independent review and publication path. No parallel task or memory authority, legacy adapter, silent fallback, invented producer shape, weakened gate or increased ratchet baseline."
+    },
+    {
+      "id": "real-evidence-and-claim-boundaries",
+      "statement": "Retain actual source, worktree, host, tool/configuration versions and execution provenance. Do not use, create or generate mock, fake or emulated information in comparative system measurements. Isolated validator controls are never measured system results. Tooling acceptance cannot establish formation, native durability, product release or benchmark acceptance."
+    },
+    {
+      "id": "scope-and-independent-review",
+      "statement": "Use one writer per changing interaction, preserve unrelated work and route out-of-scope findings. Review the affected owner contract before dependent implementation and bind independent verification to the actual candidate and evidence. A plugin's own success report or agreeing reviewers cannot substitute for proof."
+    },
+    {
+      "id": "owned-scope",
+      "statement": "Context7 client capability and documentation skill references. Keep external documentation optional for work that has no such dependency, and retain an explicit unmeasured result for any capability whose required live invocation is unavailable."
+    },
+    {
+      "id": "plan-and-dependencies",
+      "statement": "Q6: Context7 versioned dependency documentation. Implementation contract: solve/specs/quest-agent-tooling-integration/implementation-plan.md#q6-context7-versioned-dependency-documentation. Prerequisites: Q1. Dependencies are coordination instructions, not an implemented scheduler. No implementation agent or run is assigned by this draft."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ],
+  "sealedAt": "103f132c13268321445369d3b4c1183ca2c39c66"
+}

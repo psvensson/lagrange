@@ -1,0 +1,56 @@
+{
+  "schema": "solve-quest/2",
+  "id": "quest-tooling-real-pilot-acceptance",
+  "epic": "quest-agent-tooling-integration",
+  "statement": "Demonstrate the composed integration through an actual supported agent client on one bounded real Quest, from source investigation through independently verified repair and canonical landing, then a separate real session that retrieves and checks the captured lesson. All required component and lifecycle evidence is validated at the declared candidate and tool versions, and any improvement claim uses attributable actual observations with explicit comparability limits.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/quest-agent-tooling-acceptance.js --quest quest-tooling-real-pilot-acceptance --metric",
+      "artifacts": [
+        "solve/quests/quest-tooling-real-pilot-acceptance/evidence/receipt.json"
+      ],
+      "requiredChecks": [
+        "actual-client-profile-and-component-evidence",
+        "real-quest-investigation-through-landing",
+        "independent-composed-candidate-review",
+        "separate-session-lesson-reuse",
+        "observed-costs-and-comparability-limits",
+        "canonical-landing-and-required-publication",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "planning-only",
+      "statement": "Unsealed draft created for implementation planning. Required check IDs are obligations, not results. No observation or seal may be fabricated. Prepare a genuinely measuring negative witness through the existing proof owners before start; missing evidence remains non-measuring. Refine an unsealed draft or explicitly supersede a changed seal."
+    },
+    {
+      "id": "existing-authority-and-no-fallback",
+      "statement": "Current AGENTS, routed owners and the user remain authoritative. Use the existing Quest workflow, append-only records, independent review and publication path. No parallel task or memory authority, legacy adapter, silent fallback, invented producer shape, weakened gate or increased ratchet baseline."
+    },
+    {
+      "id": "real-evidence-and-claim-boundaries",
+      "statement": "Retain actual source, worktree, host, tool/configuration versions and execution provenance. Do not use, create or generate mock, fake or emulated information in comparative system measurements. Isolated validator controls are never measured system results. Tooling acceptance cannot establish formation, native durability, product release or benchmark acceptance."
+    },
+    {
+      "id": "scope-and-independent-review",
+      "statement": "Use one writer per changing interaction, preserve unrelated work and route out-of-scope findings. Review the affected owner contract before dependent implementation and bind independent verification to the actual candidate and evidence. A plugin's own success report or agreeing reviewers cannot substitute for proof."
+    },
+    {
+      "id": "owned-scope",
+      "statement": "Tooling pilot evidence, composed checker and epic coordination only. The selected product Quest retains its own scope, author, acceptance, lab/formation/comparison obligations and publication requirements. No product fix is authorized by this tooling record alone."
+    },
+    {
+      "id": "plan-and-dependencies",
+      "statement": "Q8: Real Quest pilot and composed acceptance. Implementation contract: solve/specs/quest-agent-tooling-integration/implementation-plan.md#q8-real-quest-pilot-and-composed-acceptance. Prerequisites: Q1, Q2, Q3, Q4, Q5, Q6, Q7. Dependencies are coordination instructions, not an implemented scheduler. No implementation agent or run is assigned by this draft."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity",
+    "recovery-replay"
+  ],
+  "sealedAt": "103f132c13268321445369d3b4c1183ca2c39c66"
+}
