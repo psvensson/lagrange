@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 218,
     "storage-raft": 151,
-    "test-infrastructure": 167,
+    "test-infrastructure": 168,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2642,
-  "digest": "fnv1a32-0ab63238",
+  "censusSize": 2643,
+  "digest": "fnv1a32-555a782a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-e01306b9",
+  "observationDigest": "fnv1a32-b60d049c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2379,6 +2379,7 @@
     "test/scripts/release-preflight.test.js": "test-infrastructure",
     "test/scripts/release-proof-identity.test.js": "test-infrastructure",
     "test/scripts/release-publication-receipt.test.js": "test-infrastructure",
+    "test/scripts/repository-legacy-fallback-closure.test.js": "test-infrastructure",
     "test/scripts/rerun-failed-distributed-scenarios.test.js": "test-infrastructure",
     "test/scripts/rolling-restart-stat-gate-summary.test.js": "test-infrastructure",
     "test/scripts/rule-set-revision.test.js": "test-infrastructure",
@@ -19328,6 +19329,7 @@
         "scripts/check-guideline-literals.js",
         "scripts/checks/code-navigability-budget.js",
         "scripts/checks/code-navigability-detectors.js",
+        "scripts/checks/code-navigability-fallback-classification.json",
         "scripts/generate-source-owner-index.js",
         "src/INDEX.md",
         "src/partition/partition-service-raft-membership-administration.js",
@@ -19651,6 +19653,7 @@
         "scripts/checks/census-pre-kill-flush.js",
         "scripts/checks/code-navigability-budget.js",
         "scripts/checks/code-navigability-detectors.js",
+        "scripts/checks/code-navigability-fallback-classification.json",
         "scripts/checks/fallback-branch-census-constants.js",
         "scripts/checks/fallback-branch-census-preload.js",
         "scripts/checks/fallback-branch-census-shell.js",
@@ -20776,6 +20779,28 @@
       ],
       "directories": [
         "data/releases"
+      ]
+    },
+    "test/scripts/repository-legacy-fallback-closure.test.js": {
+      "files": [
+        "data/fallback-census/census.json",
+        "scripts/checks/code-navigability-fallback-classification.json",
+        "scripts/generate-source-owner-index.js",
+        "src/bootstrap/owners/rolling-upgrade-owner.js",
+        "src/raft/raft-rs-turn-answer.js",
+        "test/bootstrap/bootstrap-topology-snapshot.test.js",
+        "test/bootstrap/node-joining-service.test.js",
+        "test/control-plane/active-node-projection.test.js",
+        "test/distributed/harness/failure-bundle-artifact-foundation.js",
+        "test/partition/partition-service.test.js",
+        "test/raft/leadership-transfer-single-path.test.js",
+        "test/rebalancer/unified-rebalancer.test.js"
+      ],
+      "directories": [
+        "src",
+        "src/control-plane",
+        "src/diagnostics",
+        "src/rebalancer"
       ]
     },
     "test/scripts/rerun-failed-distributed-scenarios.test.js": {

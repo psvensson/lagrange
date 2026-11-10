@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3538721,
-        "sha256": "b837516c84b8e3abba0b3730d2590625016fc74417c850d8fdb2fdf40b068cf9"
+        "bytes": 3540129,
+        "sha256": "06e9bafa5160438e1e5923aa517daa1060d2a5f266a25ed47302148682bd9df1"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "a9f933c36d55d3420be379b861e2ebeed5121616471c2c64f66ed1fa77c61e43"
+        "sha256": "b4ccab43e2c6cccf4b102605241272142391e24c30f79de21c9f38a26e8d4602"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "6a4c81800274a3c7d75c71107340eab7e1402551cf34314d32744675309bfee1"
+        "sha256": "9389e8b781b3533fcea313e03b8a52a40d58c8d0eb35b73f399fc3d58711109a"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "9e1f80443f708a265623f45bc2c09e2ec6119a1191f9a478db399fa288171a25"
+    "inputDigest": "9d4a4d354b30a96368b2e4ea89324bf3a732efa5858490203ceafdc60b48485d"
   },
   "reconciliation": {
     "complexity": {
@@ -117,13 +117,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "a9f933c36d55d3420be379b861e2ebeed5121616471c2c64f66ed1fa77c61e43"
+          "sha256": "b4ccab43e2c6cccf4b102605241272142391e24c30f79de21c9f38a26e8d4602"
         },
-        "cloneGroups": 44,
-        "duplicatedLines": 1321,
-        "sourceCloneTouches": 88,
-        "sourceDuplicatedLineTouches": 2642,
-        "nonzeroSourceCount": 61,
+        "cloneGroups": 45,
+        "duplicatedLines": 1342,
+        "sourceCloneTouches": 90,
+        "sourceDuplicatedLineTouches": 2684,
+        "nonzeroSourceCount": 62,
         "touchMultiplicity": 2
       },
       {
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "6a4c81800274a3c7d75c71107340eab7e1402551cf34314d32744675309bfee1"
+          "sha256": "9389e8b781b3533fcea313e03b8a52a40d58c8d0eb35b73f399fc3d58711109a"
         },
         "cloneGroups": 632,
         "duplicatedLines": 23582,
@@ -173,35 +173,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3538721,
-        "sha256": "b837516c84b8e3abba0b3730d2590625016fc74417c850d8fdb2fdf40b068cf9"
+        "bytes": 3540129,
+        "sha256": "06e9bafa5160438e1e5923aa517daa1060d2a5f266a25ed47302148682bd9df1"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "b65e825f1c0278fc6c9583f2889e514bb4bae0c42138dd3fc9f2eadba3e84720",
-      "moduleCount": 6170,
-      "edgeCount": 34949,
+      "sourceDigest": "e4924fea0a38cbfa0e548603886ef7464ee8574ee3498ee42c56ce0f57924348",
+      "moduleCount": 6173,
+      "edgeCount": 34961,
       "unresolvedCount": 47
     }
   },
   "assignment": {
-    "sourceSignalCount": 2402,
-    "assignedSignalCount": 2402,
-    "uniqueAssignmentCount": 2402,
-    "digest": "f0285414ba4b658d99d838f1c1bb06ff59a2a8f3a9b6b1bbf2ba24a174c2234d"
+    "sourceSignalCount": 2403,
+    "assignedSignalCount": 2403,
+    "uniqueAssignmentCount": 2403,
+    "digest": "6d1d76f9d790a6a6b0a55e5b1c3ce3d3901b9af36a02301b591d749ef17a348e"
   },
   "signalCounts": {
     "cognitive": 148,
     "complexity": 1703,
-    "duplication": 470,
+    "duplication": 471,
     "fileSize": 42,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1252,
+    "filesWithDebt": 1253,
     "rankedBoundaryCount": 114,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 94,
@@ -1436,6 +1436,34 @@
       ]
     },
     {
+      "key": "area:scripts/quest-evidence",
+      "owner": null,
+      "boundary": "scripts/quest-evidence",
+      "classification": "tool-owner-area",
+      "ownerAreas": [
+        "scripts/quest-evidence"
+      ],
+      "fileCount": 12,
+      "signalCount": 12,
+      "complexity": 0,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 466,
+      "cloneTouches": 20,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 0,
+      "importOut": 37,
+      "score": 46.6,
+      "topPaths": [
+        "scripts/quest-evidence/table-policy-outstanding-read-currency.js",
+        "scripts/quest-evidence/tidb-canonical-semantic-case-completion.js",
+        "scripts/quest-evidence/management-action-authority.js",
+        "scripts/quest-evidence/cache-replica-incarnation-coherence.js",
+        "scripts/quest-evidence/canonical-report-outcome-classification.js"
+      ]
+    },
+    {
       "key": "area:test/runtime",
       "owner": null,
       "boundary": "test/runtime",
@@ -1461,34 +1489,6 @@
         "test/runtime/native-js-driver.test.js",
         "test/runtime/oci-container-driver.test.js",
         "test/runtime/service-runtime-lifecycle-idempotency.test.js"
-      ]
-    },
-    {
-      "key": "area:scripts/quest-evidence",
-      "owner": null,
-      "boundary": "scripts/quest-evidence",
-      "classification": "tool-owner-area",
-      "ownerAreas": [
-        "scripts/quest-evidence"
-      ],
-      "fileCount": 11,
-      "signalCount": 11,
-      "complexity": 0,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 424,
-      "cloneTouches": 18,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 0,
-      "importOut": 34,
-      "score": 42.4,
-      "topPaths": [
-        "scripts/quest-evidence/table-policy-outstanding-read-currency.js",
-        "scripts/quest-evidence/tidb-canonical-semantic-case-completion.js",
-        "scripts/quest-evidence/management-action-authority.js",
-        "scripts/quest-evidence/cache-replica-incarnation-coherence.js",
-        "scripts/quest-evidence/canonical-report-outcome-classification.js"
       ]
     },
     {

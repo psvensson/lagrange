@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2616,
+    "ordinary": 2617,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2642,
-  "digest": "fnv1a32-d8e504d5",
+  "censusSize": 2643,
+  "digest": "fnv1a32-51d29ae7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2359,6 +2359,7 @@
     "test/scripts/release-preflight.test.js": "ordinary",
     "test/scripts/release-proof-identity.test.js": "ordinary",
     "test/scripts/release-publication-receipt.test.js": "ordinary",
+    "test/scripts/repository-legacy-fallback-closure.test.js": "ordinary",
     "test/scripts/rerun-failed-distributed-scenarios.test.js": "ordinary",
     "test/scripts/rolling-restart-stat-gate-summary.test.js": "ordinary",
     "test/scripts/rule-set-revision.test.js": "ordinary",

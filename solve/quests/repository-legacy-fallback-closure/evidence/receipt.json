@@ -1,0 +1,60 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "repository-legacy-fallback-closure",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/repository-legacy-fallback-closure.test.js": "2eaf5d92e8810dd200f2edb96100e73f3f35abcd1ab0085e903d69af0ccb6991"
+  },
+  "generatedAt": "2026-11-10T15:42:11.442Z",
+  "receipts": [
+    {
+      "id": "repository-wide-candidate-inventory",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^repository-wide candidate inventory is complete and reconciled with census$\" test/scripts/repository-legacy-fallback-closure.test.js",
+      "detail": "All 2,685 census candidate sites across 16 runs are accounted for, with valid (row, file, hash, occurrence) identities and coverage classes",
+      "testFile": "test/scripts/repository-legacy-fallback-closure.test.js"
+    },
+    {
+      "id": "zero-unclassified-candidates",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^zero unclassified candidates remain across the repository-wide inventory$\" test/scripts/repository-legacy-fallback-closure.test.js",
+      "detail": "Every census candidate site has a recorded classification with valid owner and reason; fallback_sites_unclassified evaluates to zero in code-navigability-budget",
+      "testFile": "test/scripts/repository-legacy-fallback-closure.test.js"
+    },
+    {
+      "id": "zero-unresolved-legacy-fallback-violations",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^zero unresolved legacy or fallback violations survive in maintained code$\" test/scripts/repository-legacy-fallback-closure.test.js",
+      "detail": "All classified candidate sites possess authorized semantic dispositions and zero unresolved alternate authorities or unrouted legacy shims exist",
+      "testFile": "test/scripts/repository-legacy-fallback-closure.test.js"
+    },
+    {
+      "id": "canonical-caller-and-export-closure",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^canonical caller and export closure verifies absent shims and canonical paths$\" test/scripts/repository-legacy-fallback-closure.test.js",
+      "detail": "Retired paths are absent from exports and callers, and runtime legacy deletion terms remain absent across maintained files",
+      "testFile": "test/scripts/repository-legacy-fallback-closure.test.js"
+    },
+    {
+      "id": "affected-owner-proofs",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^affected owner test proofs pass across classified subsystems$\" test/scripts/repository-legacy-fallback-closure.test.js",
+      "detail": "Witness proofs and core test suites for affected owners (partition, bootstrap, control-plane, rebalancer, raft) pass without regressions",
+      "testFile": "test/scripts/repository-legacy-fallback-closure.test.js"
+    },
+    {
+      "id": "reintroduction-guard-and-coverage-limits",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^reintroduction guard fails closed on unclassified sites and records coverage limits$\" test/scripts/repository-legacy-fallback-closure.test.js",
+      "detail": "Reintroduction guard fails closed on unclassified sites or tampered hashes, and static/runtime coverage limits are explicitly recorded without equating unobserved execution to dead code",
+      "testFile": "test/scripts/repository-legacy-fallback-closure.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/repository-legacy-fallback-closure.js --check-verification",
+      "detail": "An approving subagent verification newer than the last attempt, read through the solve store owner",
+      "testFile": null
+    }
+  ]
+}
