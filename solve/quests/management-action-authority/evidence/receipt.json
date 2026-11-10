@@ -1,0 +1,53 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "management-action-authority",
+  "status": "pass",
+  "testFileDigests": {
+    "test/bootstrap/management-action-authority.test.js": "e08cf96e179477742f95ade5b1c9d014e5c2bf1ce8169aca2c723d84e86c4438"
+  },
+  "generatedAt": "2026-11-10T15:07:08.305Z",
+  "receipts": [
+    {
+      "id": "operation-authority-contract",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^operation-authority-contract: canonical operation authority contract shape and fields$\" test/bootstrap/management-action-authority.test.js",
+      "detail": "PartitionService.readPartitionConsensusAuthority and evaluatePartitionQuorumAuthority produce the canonical operation authority contract carrying configuration key, term, incarnation, voters and freshness bound",
+      "testFile": "test/bootstrap/management-action-authority.test.js"
+    },
+    {
+      "id": "invalid-authority-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^invalid-authority-refused: hand-set role and uncertified consensus are refused$\" test/bootstrap/management-action-authority.test.js",
+      "detail": "hand-set role, stubbed term, uncertified consensus, uninitialized service, shutdown service, follower, and unapplied configuration change are refused",
+      "testFile": "test/bootstrap/management-action-authority.test.js"
+    },
+    {
+      "id": "mutation-time-identity-and-freshness",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^mutation-time-identity-and-freshness: mutation point revalidates configuration identity and freshness bound$\" test/bootstrap/management-action-authority.test.js",
+      "detail": "ManagementV1Owner._executeOperation revalidates configuration identity, incarnation, and freshness bound at mutation execution point, refusing expired or changed state with QUORUM_SAFETY_HALT",
+      "testFile": "test/bootstrap/management-action-authority.test.js"
+    },
+    {
+      "id": "real-native-producer-consumer-action",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^real-native-producer-consumer-action: real native consensus leader executes management operation$\" test/bootstrap/management-action-authority.test.js",
+      "detail": "real native createRaftRsOperationPort drives PartitionService to BootstrapClusterViewOwner to ManagementV1Owner, executing management action from native consensus evidence",
+      "testFile": "test/bootstrap/management-action-authority.test.js"
+    },
+    {
+      "id": "refusal-recovery-and-cleanup",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^refusal-recovery-and-cleanup: refusal during quorum loss, recovery on restoration, and clean resource teardown$\" test/bootstrap/management-action-authority.test.js",
+      "detail": "management action is refused when native consensus loses quorum, recovers when quorum is restored, and all native resources are cleanly torn down",
+      "testFile": "test/bootstrap/management-action-authority.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/management-action-authority.js --check-verification",
+      "detail": "an approving independent subagent verification recorded in log.ndjson newer than the last attempt",
+      "testFile": null
+    }
+  ]
+}

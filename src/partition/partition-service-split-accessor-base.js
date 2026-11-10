@@ -5,12 +5,8 @@ import {
   assertPartitionLocalServiceStatusConformance,
   isPartitionLocalServiceStatusRecord,
 } from './partition-local-service-status-contract.js';
-import {
-  partitionSizeRetryOptions,
-} from './partition-service-write-path-helpers.js';
-import {
-  buildReplayCursorCheckpoint,
-} from './partition-mirror-replay-cursor.js';
+import {partitionSizeRetryOptions} from './partition-service-write-path-helpers.js';
+import {buildReplayCursorCheckpoint} from './partition-mirror-replay-cursor.js';
 import {
   assertSplitRoutingDescriptorEpochForService,
   normalizeSplitTransitionMetadataForService,
@@ -20,45 +16,109 @@ import {
 import {PARTICIPANT_ACK_RESULT} from '../workflow/workflow-constants.js';
 import {classifyControlPlaneMutationResult} from
   '../control-plane/control-plane-mutation-outcome-classifier.js';
+import {readLowerStateField} from '../utils/state-field-read.js';
 
 const {
-  CONTROL_PLANE_MUTATION_OPERATION,
-  Database,
-  PARTICIPANT_ACK_FIELD,
-  PARTITION_SERVICE_DEFAULT,
-  PARTITION_SERVICE_ERROR_MSG,
-  PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_LITERAL,
-  PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_TYPE,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
-  PRESSURE_WORK_CLASS,
-  RaftRole,
-  SPLIT_ACK_CHECKPOINT_FIELD,
-  SPLIT_ACK_STATUS,
-  SPLIT_PARTICIPANT_PREFIX,
-  TABLES,
-  assertCritical,
-  cloneSplitRoutingEntry,
-  extractPartitionSplitRoutingKey,
-  replayPartitionSplitEntry,
-  resolvePartitionSplitSnapshotBatchRowLimit,
-  resolvePartitionSplitTargetPartitionId,
-  routePartitionSplitMirroredWrite,
-  routePartitionSplitSnapshotBatch,
+  CONTROL_PLANE_MUTATION_OPERATION, Database, PARTICIPANT_ACK_FIELD,
+  PARTITION_SERVICE_DEFAULT, PARTITION_SERVICE_ERROR_MSG, PARTITION_SERVICE_EVENT,
+  PARTITION_SERVICE_LITERAL, PARTITION_SERVICE_LOG_MSG, PARTITION_SERVICE_TYPE,
+  PARTITION_TRANSITION_METADATA_FIELD, PARTITION_TRANSITION_STATE,
+  PRESSURE_WORK_CLASS, RaftRole, SPLIT_ACK_CHECKPOINT_FIELD, SPLIT_ACK_STATUS,
+  SPLIT_PARTICIPANT_PREFIX, TABLES, assertCritical, cloneSplitRoutingEntry,
+  extractPartitionSplitRoutingKey, replayPartitionSplitEntry,
+  resolvePartitionSplitSnapshotBatchRowLimit, resolvePartitionSplitTargetPartitionId,
+  routePartitionSplitMirroredWrite, routePartitionSplitSnapshotBatch,
   runRetryableControlPlaneWrite,
 } = PARTITION_SERVICE_SHARED;
 
+const CONSENSUS_CORE_OK = 'core-ok';
+const CONSENSUS_CORE_OK_UNDERSCORE = 'core_ok';
+const CONSENSUS_CORE_REFUSED = 'core-refused';
+const CONSENSUS_PORT_UNAVAILABLE = 'consensus-port-unavailable';
+const CONSENSUS_STATUS_READ_THREW = 'consensus-status-read-threw';
+const CONSENSUS_STATUS_UNAVAILABLE = 'consensus-status-unavailable';
+
+function makeUnavailableConsensusAuthority(outcome, reason, nowMs, role = null, term = 0) {
+  return {
+    outcome, reason, available: false, hasQuorum: false,
+    role, isLeader: false, term, observedAtMs: nowMs,
+  };
+}
+
+function resolveNowMs(service, options) {
+  if (Number.isFinite(options?.nowMs)) return options.nowMs;
+  return service.timeSource?.now?.() ?? Date.now();
+}
+
+function readRaftStatusSafe(service) {
+  if (service.initialized !== true || service.isShutdown === true || !service.raft) {
+    return {ok: false, reason: CONSENSUS_PORT_UNAVAILABLE};
+  }
+  let snapshotRecord = false;
+  let readThrew = false;
+  try {
+    snapshotRecord = service.raft.readStatus();
+  } catch (_error) {
+    readThrew = true;
+  }
+  return readThrew ?
+    {ok: false, reason: CONSENSUS_STATUS_READ_THREW} :
+    {ok: true, status: snapshotRecord};
+}
+
+function isConsensusOutcomeOk(status) {
+  const outcome = typeof status?.outcome === 'string' ? status.outcome.toLowerCase() : null;
+  return outcome === CONSENSUS_CORE_OK || outcome === CONSENSUS_CORE_OK_UNDERSCORE;
+}
+
+function makeRefusedAuthorityFromStatus(status, nowMs) {
+  const statusOutcome = typeof status?.outcome === 'string' ?
+    status.outcome : CONSENSUS_CORE_REFUSED;
+  const statusReason = typeof status?.reason === 'string' ?
+    status.reason : CONSENSUS_STATUS_UNAVAILABLE;
+  const statusRole = readLowerStateField(status?.role);
+  const statusTerm = Number.isInteger(status?.term) ? status.term : 0;
+  return makeUnavailableConsensusAuthority(
+    statusOutcome, statusReason, nowMs, statusRole, statusTerm,
+  );
+}
+
+function extractConsensusStatusFields(status) {
+  const voters = Array.isArray(status?.voters) ? status.voters : [];
+  const confKey = typeof status.configurationKey === 'string' &&
+    status.configurationKey.length > 0 ? status.configurationKey : null;
+  const memGen = Number.isInteger(status.membershipGenerationIndex) ?
+    status.membershipGenerationIndex : null;
+  const lifeInc = typeof status.lifecycleIncarnation === 'string' ||
+    Number.isInteger(status.lifecycleIncarnation) ? status.lifecycleIncarnation : null;
+  return {
+    role: readLowerStateField(status.role),
+    term: Number.isInteger(status.term) ? status.term : 0,
+    commitIndex: Number.isInteger(status.commitIndex) ? status.commitIndex : 0,
+    appliedIndex: Number.isInteger(status.appliedIndex) ? status.appliedIndex : 0,
+    confChangePending: Boolean(status.confChangePending),
+    voters, configurationKey: confKey, membershipGenerationIndex: memGen,
+    lifecycleIncarnation: lifeInc,
+  };
+}
+
+function resolveConsensusLeadership(service, fields, statusLeaderId) {
+  const isConsensusLeader = fields.role === RaftRole.LEADER &&
+    !fields.confChangePending && fields.term > 0 &&
+    fields.configurationKey !== null && fields.voters.length > 0;
+  const isLeader = isConsensusLeader && service.role === fields.role &&
+    service.isLeader === true;
+  const leaderId = typeof statusLeaderId === 'string' ?
+    statusLeaderId : (isLeader ? service.replicaId : null);
+  return {isLeader, leaderId};
+}
+
 async function authorizeSplitSnapshotStart(owner, metadata, options) {
   if (options.startAuthorized === true) return;
-  const start = await owner.emitSplitSourceAck(
-    metadata, SPLIT_ACK_STATUS.SNAPSHOT_STARTED);
-  const accepted = start?.result === PARTICIPANT_ACK_RESULT.ACCEPTED;
-  const duplicate = start?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
-  if (!accepted && !duplicate) {
-    throw new Error(
-      PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
+  const start = await owner.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.SNAPSHOT_STARTED);
+  const r = start?.result;
+  if (r !== PARTICIPANT_ACK_RESULT.ACCEPTED && r !== PARTICIPANT_ACK_RESULT.DUPLICATE) {
+    throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
   }
 }
 
@@ -77,38 +137,25 @@ async function runSplitBackfillPhase(owner, handle, metadata) {
 async function runSplitCatchupPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.SPLIT_CATCHUP) return;
   await owner.flushSplitReplicationQueue();
-  const catchupAck = await owner.emitSplitSourceAck(
-    metadata,
-    SPLIT_ACK_STATUS.CATCHUP_READY,
-    buildReplayCursorCheckpoint(
-      SPLIT_ACK_CHECKPOINT_FIELD,
-      handle.snapshotBarrierIndex,
-      handle.replayWatermarkIndex,
-    ),
+  const cp = buildReplayCursorCheckpoint(
+    SPLIT_ACK_CHECKPOINT_FIELD, handle.snapshotBarrierIndex, handle.replayWatermarkIndex,
   );
-  if (catchupAck?.splitCutoverApplied !== true) {
-    throw new Error(
-      PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
-    );
+  const ack = await owner.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.CATCHUP_READY, cp);
+  if (ack?.splitCutoverApplied !== true) {
+    throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
   }
   handle.phase = PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
 }
 
 async function runSplitCutoverPhase(owner, handle, metadata) {
-  if (handle.phase !==
-      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) return;
+  if (handle.phase !== PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) return;
   await owner.flushSplitReplicationQueue();
+  const cp = buildReplayCursorCheckpoint(
+    SPLIT_ACK_CHECKPOINT_FIELD, handle.snapshotBarrierIndex, handle.replayWatermarkIndex,
+  );
   const cleanupAck = await owner.emitSplitSourceAck(
-    metadata,
-    SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
-    {
-      [SPLIT_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: false,
-      ...buildReplayCursorCheckpoint(
-        SPLIT_ACK_CHECKPOINT_FIELD,
-        handle.snapshotBarrierIndex,
-        handle.replayWatermarkIndex,
-      ),
-    },
+    metadata, SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
+    {[SPLIT_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: false, ...cp},
   );
   handle.terminal = cleanupAck?.splitSourceRetired === true;
 }
@@ -133,20 +180,15 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    */
   async persistPartitionSize(sizeBytes) {
     if (
-      this.isSystemTable === true ||
-      this.tableName === TABLES.PARTITIONS ||
-      !this.isLeader ||
-      !this.systemTableCache ||
-      !this.cdcIntegrationService ||
-      !this.isPartitionsLeaderAvailable()
+      this.isSystemTable === true || this.tableName === TABLES.PARTITIONS ||
+      !this.isLeader || !this.systemTableCache ||
+      !this.cdcIntegrationService || !this.isPartitionsLeaderAvailable()
     ) {
       return;
     }
     const {term} = this.raft.readStatus();
     const kept = this.committedPartitionSize;
-    if (kept?.term === term && kept.sizeBytes === sizeBytes) {
-      return;
-    }
+    if (kept?.term === term && kept.sizeBytes === sizeBytes) return;
     try {
       const answer = await this.submitPartitionSizeMutation(sizeBytes);
       if (classifyControlPlaneMutationResult(answer).applied) {
@@ -262,19 +304,16 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       );
     }
     this.logger.info(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_STARTED, {
-      partitionId: this.partitionId,
-      targetPartitionIds: metadata.targetPartitionIds,
+      partitionId: this.partitionId, targetPartitionIds: metadata.targetPartitionIds,
       targetPartitionVersion: metadata.targetPartitionVersion,
     });
     await authorizeSplitSnapshotStart(this, metadata, options);
     await runSplitBackfillPhase(this, splitReplication, metadata);
     await runSplitCatchupPhase(this, splitReplication, metadata);
     await runSplitCutoverPhase(this, splitReplication, metadata);
-    if (splitReplication.phase ===
-        PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) {
+    if (splitReplication.phase === PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) {
       this.logger.info(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_COMPLETED, {
-        partitionId: this.partitionId,
-        targetPartitionIds: metadata.targetPartitionIds,
+        partitionId: this.partitionId, targetPartitionIds: metadata.targetPartitionIds,
         targetPartitionVersion: metadata.targetPartitionVersion,
       });
     }
@@ -296,42 +335,27 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     const splitWorkflow = this.sqlQueryEngine?.managedSplitWorkflow;
     if (
       !splitWorkflow ||
-      typeof splitWorkflow.acknowledgeSourceParticipant !==
-        PARTITION_SERVICE_TYPE.FUNCTION
+      typeof splitWorkflow.acknowledgeSourceParticipant !== PARTITION_SERVICE_TYPE.FUNCTION ||
+      !metadata.workflowId
     ) {
-      throw new Error(
-        PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
-      );
-    }
-    const workflowId = metadata.workflowId;
-    if (!workflowId) {
-      throw new Error(
-        PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
-      );
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
     }
     const ack = {
-      [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
-        SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
+      [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
       [PARTICIPANT_ACK_FIELD.STATUS]: ackStatus,
       [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: Date.now(),
+      [PARTICIPANT_ACK_FIELD.ATTEMPT]: metadata.workflowAttempt ?? 0,
     };
-    // Every source ack carries the workflow fence epoch it was started
-    // under; the owner rejects a superseded epoch as STALE_FENCE.
     if (Number.isInteger(metadata.workflowFenceToken)) {
       ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN] = metadata.workflowFenceToken;
     }
-    ack[PARTICIPANT_ACK_FIELD.ATTEMPT] = metadata.workflowAttempt ?? 0;
-    if (checkpoint) {
-      ack[PARTICIPANT_ACK_FIELD.CHECKPOINT] = checkpoint;
-    }
+    if (checkpoint) ack[PARTICIPANT_ACK_FIELD.CHECKPOINT] = checkpoint;
     const result = await splitWorkflow.acknowledgeSourceParticipant(
-      workflowId,
-      ack,
-      {metadata, tableId: this.tableId, tableName: this.tableName},
+      metadata.workflowId, ack, {metadata, tableId: this.tableId, tableName: this.tableName},
     );
     this.logger.info(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_ACK_EMITTED, {
       partitionId: this.partitionId,
-      workflowId,
+      workflowId: metadata.workflowId,
       ackStatus,
       result: result?.result,
     });
@@ -344,16 +368,10 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    * @private
    */
   openSplitSnapshotDatabase() {
-    if (
-      !this.dbPath ||
-      this.dbPath === PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH
-    ) {
+    if (!this.dbPath || this.dbPath === PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
       return {prepare: (...args) => this.db.prepare(...args), close() {}};
     }
-    const snapshotDb = new Database(this.dbPath, {
-      readonly: true,
-      fileMustExist: true,
-    });
+    const snapshotDb = new Database(this.dbPath, {readonly: true, fileMustExist: true});
     snapshotDb.exec(PARTITION_SERVICE_LITERAL.BEGIN);
     return snapshotDb;
   }
@@ -399,14 +417,11 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    * @private
    */
   async backfillSplitSnapshot(snapshotDb, metadata) {
-    const columns = snapshotDb
-      .prepare(`PRAGMA table_info(${this.tableName})`)
-      .all()
+    const columns = snapshotDb.prepare(`PRAGMA table_info(${this.tableName})`).all()
       .map((column) => column.name);
     const rows = this.createSplitSnapshotRowIterator(snapshotDb, metadata);
     const batchSize = resolvePartitionSplitSnapshotBatchRowLimit(
-      columns,
-      this.splitSnapshotBackfillYieldEveryRows,
+      columns, this.splitSnapshotBackfillYieldEveryRows,
     );
     let batch = [];
     for (const row of rows) {
@@ -419,9 +434,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
         await this.yieldSplitBackfillTurn();
       }
     }
-    if (batch.length > 0) {
-      await this.applySplitSnapshotBatch(batch, columns, metadata);
-    }
+    if (batch.length > 0) await this.applySplitSnapshotBatch(batch, columns, metadata);
   }
   /**
    * Apply one bounded snapshot batch to the child partitions.
@@ -460,32 +473,22 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     const splitWorkflow = this.sqlQueryEngine?.managedSplitWorkflow;
     if (
       !splitWorkflow ||
-      typeof splitWorkflow.advanceSplitPhase !== 'function'
+      typeof splitWorkflow.advanceSplitPhase !== 'function' ||
+      !metadata.workflowId
     ) {
-      throw new Error(
-        PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
-      );
-    }
-    const workflowId = metadata.workflowId;
-    if (!workflowId) {
-      throw new Error(
-        PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
-      );
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
     }
     await splitWorkflow.advanceSplitPhase(
-      workflowId,
+      metadata.workflowId,
       PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
       {[PARTITION_TRANSITION_METADATA_FIELD.CUTOVER_APPLIED_AT]: Date.now()},
     );
-    this.logger.info(
-      PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_CUTOVER_UPDATED,
-      {
-        partitionId: this.partitionId,
-        tableId: this.tableId,
-        targetPartitionVersion: metadata.targetPartitionVersion,
-        targetPartitionIds: metadata.targetPartitionIds,
-      },
-    );
+    this.logger.info(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_CUTOVER_UPDATED, {
+      partitionId: this.partitionId,
+      tableId: this.tableId,
+      targetPartitionVersion: metadata.targetPartitionVersion,
+      targetPartitionIds: metadata.targetPartitionIds,
+    });
   }
   /**
    * Clone a write entry before placing it in the split catch-up queue.
@@ -573,15 +576,9 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    */
   isKeyInRange(key) {
     const {start, end} = this.keyRange;
-    if (start === null && end === null) {
-      return true;
-    }
-    if (start === null) {
-      return key < end;
-    }
-    if (end === null) {
-      return key >= start;
-    }
+    if (start === null && end === null) return true;
+    if (start === null) return key < end;
+    if (end === null) return key >= start;
     return key >= start && key < end;
   }
   /**
@@ -621,25 +618,50 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     return this.state;
   }
   /**
+   * Read the canonical partition consensus operation authority contract
+   * directly from the native consensus port. Never falls back to table rows,
+   * diagnostic cache projections, or unverified hand-set replica roles.
+   *
+   * @param {Object} [options]
+   * @param {number} [options.nowMs]
+   * @return {Object}
+   */
+  readPartitionConsensusAuthority(options = {}) {
+    const nowMs = resolveNowMs(this, options);
+    const read = readRaftStatusSafe(this);
+    if (!read.ok) {
+      return makeUnavailableConsensusAuthority(CONSENSUS_CORE_REFUSED, read.reason, nowMs);
+    }
+    const {status} = read;
+    if (!isConsensusOutcomeOk(status)) {
+      return makeRefusedAuthorityFromStatus(status, nowMs);
+    }
+    const fields = extractConsensusStatusFields(status);
+    const {isLeader, leaderId} = resolveConsensusLeadership(this, fields, status.leaderId);
+    return {
+      outcome: CONSENSUS_CORE_OK, available: true,
+      partitionId: this.partitionId, replicaId: this.replicaId, nodeId: this.nodeId,
+      role: fields.role, isLeader, leaderId,
+      term: fields.term, commitIndex: fields.commitIndex, appliedIndex: fields.appliedIndex,
+      configurationKey: fields.configurationKey,
+      membershipGenerationIndex: fields.membershipGenerationIndex,
+      lifecycleIncarnation: fields.lifecycleIncarnation,
+      voters: fields.voters, voterCount: fields.voters.length,
+      confChangePending: fields.confChangePending,
+      hasQuorum: isLeader, observedAtMs: nowMs,
+    };
+  }
+  /**
    * Get service status.
    * @return {import('./partition-local-service-status-contract.js').PartitionLocalServiceStatusRecord} Service status.
    */
   getStatus() {
     return createPartitionLocalServiceStatusRecord({
-      partitionId: this.partitionId,
-      tableId: this.tableId,
-      tableName: this.tableName,
-      replicaId: this.replicaId,
-      nodeId: this.nodeId,
-      role: this.role,
-      isLeader: this.isLeader,
-      leaderId: this.leaderId,
-      term: this.getCurrentTerm(),
-      state: this.state,
-      keyRange: this.keyRange,
-      sizeBytes: this.sizeBytes,
-      replicaCount: this.replicaIds.length,
-      cdcSubscribers: this.cdcSubscribers.size,
+      partitionId: this.partitionId, tableId: this.tableId, tableName: this.tableName,
+      replicaId: this.replicaId, nodeId: this.nodeId, role: this.role,
+      isLeader: this.isLeader, leaderId: this.leaderId, term: this.getCurrentTerm(),
+      state: this.state, keyRange: this.keyRange, sizeBytes: this.sizeBytes,
+      replicaCount: this.replicaIds.length, cdcSubscribers: this.cdcSubscribers.size,
       initialized: this.initialized,
     });
   }
@@ -650,12 +672,8 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    */
   setSystemTableCache(systemTableCache) {
     this.systemTableCache = systemTableCache;
-    if (this.rebalancer) {
-      this.rebalancer.systemTableCache = systemTableCache;
-    }
-    if (this.rebalanceCoordinator) {
-      this.rebalanceCoordinator.systemTableCache = systemTableCache;
-    }
+    if (this.rebalancer) this.rebalancer.systemTableCache = systemTableCache;
+    if (this.rebalanceCoordinator) this.rebalanceCoordinator.systemTableCache = systemTableCache;
     this.maybeInitializeRebalancer();
   }
   /**
@@ -666,32 +684,20 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    */
   setCdcIntegrationService(cdcIntegrationService) {
     this.cdcIntegrationService = cdcIntegrationService;
-    if (this.rebalancer) {
-      this.rebalancer.cdcIntegrationService = cdcIntegrationService;
-    }
+    if (this.rebalancer) this.rebalancer.cdcIntegrationService = cdcIntegrationService;
     if (this.rebalanceCoordinator) {
       this.rebalanceCoordinator.cdcIntegrationService = cdcIntegrationService;
     }
     this.maybeInitializeRebalancer();
     this.flushRoleUpdate().catch((error) => {
-      this.logger.warn(
-        PARTITION_SERVICE_ERROR_MSG.PERSIST_ROLE_AFTER_CDC_FAILED,
-        {
-          partitionId: this.partitionId,
-          replicaId: this.replicaId,
-          error: error.message,
-        },
-      );
+      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.PERSIST_ROLE_AFTER_CDC_FAILED, {
+        partitionId: this.partitionId, replicaId: this.replicaId, error: error.message,
+      });
     });
     this.flushLeaderNodeUpdate().catch((error) => {
-      this.logger.warn(
-        PARTITION_SERVICE_ERROR_MSG.PERSIST_LEADER_AFTER_CDC_FAILED,
-        {
-          partitionId: this.partitionId,
-          replicaId: this.replicaId,
-          error: error.message,
-        },
-      );
+      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.PERSIST_LEADER_AFTER_CDC_FAILED, {
+        partitionId: this.partitionId, replicaId: this.replicaId, error: error.message,
+      });
     });
   }
   /**
@@ -700,9 +706,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    */
   setTablePolicyService(tablePolicyService) {
     this.tablePolicyService = tablePolicyService;
-    if (this.rebalancer) {
-      this.rebalancer.tablePolicyService = tablePolicyService;
-    }
+    if (this.rebalancer) this.rebalancer.tablePolicyService = tablePolicyService;
     if (this.rebalanceCoordinator) {
       this.rebalanceCoordinator.tablePolicyService = tablePolicyService;
     }
@@ -714,9 +718,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    * @param {Object} rebalanceCoordinator - Rebalance coordinator.
    */
   setRebalanceCoordinator(rebalanceCoordinator) {
-    if (!rebalanceCoordinator) {
-      return;
-    }
+    if (!rebalanceCoordinator) return;
     this.rebindCoordinator(rebalanceCoordinator);
   }
   /**
@@ -735,37 +737,27 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     const previousCoordinator = this.rebalanceCoordinator;
     const hadPrevious = !!previousCoordinator;
     const isReplacement = hadPrevious && previousCoordinator !== newCoordinator;
-    const shouldShutdownPrevious =
-      this.ownsRebalanceCoordinator &&
+    const shouldShutdownPrevious = this.ownsRebalanceCoordinator &&
       isReplacement &&
       typeof previousCoordinator.shutdown === PARTITION_SERVICE_TYPE.FUNCTION;
     this.rebalanceCoordinator = newCoordinator;
     this.ownsRebalanceCoordinator = false;
     if (this.rebalancer) {
       const setCoordinator = assertCritical(
-        typeof this.rebalancer.setRebalanceCoordinator ===
-          PARTITION_SERVICE_TYPE.FUNCTION ?
-          this.rebalancer.setRebalanceCoordinator.bind(this.rebalancer) :
-          null,
+        typeof this.rebalancer.setRebalanceCoordinator === PARTITION_SERVICE_TYPE.FUNCTION ?
+          this.rebalancer.setRebalanceCoordinator.bind(this.rebalancer) : null,
         PARTITION_SERVICE_ERROR_MSG.REBALANCER_SET_COORDINATOR_REQUIRED,
       );
       setCoordinator(newCoordinator);
     }
     this.logger.info(PARTITION_SERVICE_LOG_MSG.COORDINATOR_REBOUND, {
-      partitionId: this.partitionId,
-      replicaId: this.replicaId,
-      hadPrevious,
-      isReplacement,
+      partitionId: this.partitionId, replicaId: this.replicaId, hadPrevious, isReplacement,
     });
     if (shouldShutdownPrevious) {
       previousCoordinator.shutdown().catch((error) => {
         this.logger.warn(
           PARTITION_SERVICE_ERROR_MSG.REBALANCE_COORDINATOR_SHUTDOWN_FAILED,
-          {
-            partitionId: this.partitionId,
-            replicaId: this.replicaId,
-            error: error.message,
-          },
+          {partitionId: this.partitionId, replicaId: this.replicaId, error: error.message},
         );
       });
     }

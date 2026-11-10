@@ -33,7 +33,7 @@ documentClass: generated
 - [join-message-group-runtime-owner.js](join-message-group-runtime-owner.js) - A message-group replica is started on the node its active services row names, or on a node no active row names; a... (importers: few)
 - [join-phase-owners.js](join-phase-owners.js) - Joining phase owner registry. (importers: few)
 - [management-v1-constants.js](management-v1-constants.js) - Canonical constants for the `lagrange.management.v1` contract: - B2 Cluster Facts (`GET /management/v1/facts`) - B3... (importers: many)
-- [management-v1-owner.js](management-v1-owner.js) - The physical rolling-upgrade ports handed to the rolling-upgrade owner. (importers: few)
+- [management-v1-owner.js](management-v1-owner.js) - The physical rolling-upgrade ports handed to the rolling-upgrade owner. (importers: many)
 - [management-v1-request-validator.js](management-v1-request-validator.js) - No leading comment; first export: computeCanonicalOperationDigest. (importers: few)
 - [move-replica-assignment-admission-blocking.js](move-replica-assignment-admission-blocking.js) - No leading comment; first export: moveReplicaAssignmentAdmissionBlockingMethods. (importers: one)
 - [move-replica-assignment-lease-validation.js](move-replica-assignment-lease-validation.js) - No leading comment; first export: moveReplicaAssignmentLeaseValidationMethods. (importers: one)

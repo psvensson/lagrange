@@ -2,6 +2,8 @@ import {randomUUID} from 'node:crypto';
 import {HTTP_STATUS} from '../../constants/index.js';
 import {
   CLUSTER_FACTS_CONSTANTS,
+  L3_BACKUP_RESTORE_REASON_CODE,
+  L4_ROLLING_UPGRADE_REASON_CODE,
   L6_DECOMMISSION_REASON_CODE,
   MANAGEMENT_ERROR_CODE,
   MANAGEMENT_OPERATION_KIND,
@@ -29,6 +31,8 @@ const PREFLIGHT_PASSED = '';
 const HEADER_CONTENT_LENGTH = 'content-length';
 const OPERATION_STATE_BLOCKED = 'BLOCKED';
 const MIN_QUORUM_SAFE_NODE_COUNT = 2;
+const MAX_ADMISSION_CLOCK_SKEW_MS = 1000;
+const MUTATION_AUTHORITY_PERMITTED = '';
 const STRING_TYPE = 'string';
 const FUNCTION_TYPE = 'function';
 const NULL_CLUSTER_ID = null;
@@ -89,9 +93,10 @@ function pickPorts(options, names) {
 function checkDecommissionPreflight(owner, snap, id) {
   const c = L6_DECOMMISSION_REASON_CODE;
   if (!owner.decommissionSupported) return c.DECOMMISSION_CAPABILITY_UNSUPPORTED;
-  if (snap === NULL_SNAPSHOT || snap.ready !== true) return c.CLUSTER_NOT_READY;
+  if (snap === NULL_SNAPSHOT) return c.CLUSTER_NOT_READY;
   if (owner.hasActiveOperation()) return c.CONCURRENT_OPERATION_ACTIVE;
   if (snap.hasPartitionQuorum !== true) return c.QUORUM_SAFETY_VIOLATION;
+  if (snap.ready !== true) return c.CLUSTER_NOT_READY;
   if (snap.underReplicatedPartitionCount > 0) return c.UNDER_REPLICATED_PARTITIONS;
   if (!snap.nodeIds.includes(id)) return c.NODE_NOT_FOUND;
   const unsafe = snap.nodeCount <= MIN_QUORUM_SAFE_NODE_COUNT ||
@@ -223,9 +228,10 @@ function buildFacts(owner, snap, incLin) {
 
 function overlayRuntimeSnapshot(owner, runtime) {
   if (!isRuntimeClusterSnapshot(runtime)) return NULL_SNAPSHOT;
+  const clusterId = owner.getClusterId();
   return {
     ...runtime,
-    clusterId: owner.getClusterId(),
+    clusterId,
     ready: runtime.ready === true && !isBackupFencingReadiness(owner.backupRestoreOwner),
     hasPartitionQuorum: runtime.hasPartitionQuorum === true,
     capacityState: owner.getCapacityFacts().state,
@@ -233,6 +239,15 @@ function overlayRuntimeSnapshot(owner, runtime) {
     readyNodeCount: Math.max(0,
       runtime.readyNodeCount - resolveDrainingCount(owner.rollingUpgradeOwner)),
     versionSkew: owner.isVersionSkewActive(),
+    configurationKey: runtime.configurationKey ?? null,
+    membershipGenerationIndex: runtime.membershipGenerationIndex ?? null,
+    lifecycleIncarnation: runtime.lifecycleIncarnation ?? null,
+    capturedAtMs: runtime.capturedAtMs ?? null,
+    maxFreshnessMs: runtime.maxFreshnessMs ?? null,
+    operationAuthority: runtime.operationAuthority ? {
+      ...runtime.operationAuthority,
+      clusterId,
+    } : null,
   };
 }
 
@@ -264,6 +279,96 @@ function createBackupRestoreOwner(owner) {
       options.onSetClusterId?.(id);
     },
   });
+}
+
+function resolveQuorumRefusalCode(kind) {
+  if (kind === MANAGEMENT_OPERATION_KIND.CREATE_BACKUP) {
+    return L3_BACKUP_RESTORE_REASON_CODE.PARTITION_QUORUM_UNAVAILABLE;
+  }
+  if (kind === MANAGEMENT_OPERATION_KIND.DECOMMISSION_NODE) {
+    return L6_DECOMMISSION_REASON_CODE.QUORUM_SAFETY_VIOLATION;
+  }
+  return L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT;
+}
+
+function hasValidConfigurationAuthority(clusterSnapshot) {
+  const {configurationKey, lifecycleIncarnation} = clusterSnapshot;
+  return typeof configurationKey === STRING_TYPE &&
+    configurationKey.length > 0 &&
+    lifecycleIncarnation !== null &&
+    lifecycleIncarnation !== undefined;
+}
+
+function isFreshSnapshotAuthority(clusterSnapshot, nowMs) {
+  const {capturedAtMs, maxFreshnessMs} = clusterSnapshot;
+  if (!Number.isFinite(capturedAtMs) || !Number.isFinite(maxFreshnessMs) || maxFreshnessMs <= 0) {
+    return false;
+  }
+  const ageMs = nowMs - capturedAtMs;
+  return ageMs >= -MAX_ADMISSION_CLOCK_SKEW_MS && ageMs <= maxFreshnessMs;
+}
+
+function evaluateMutationAuthority(owner, clusterSnapshot, nowMs, kind) {
+  if (!clusterSnapshot || clusterSnapshot.hasPartitionQuorum !== true) {
+    return resolveQuorumRefusalCode(kind);
+  }
+  const clusterId = owner.getClusterId();
+  if (clusterId === NULL_CLUSTER_ID || clusterSnapshot.clusterId !== clusterId) {
+    return resolveQuorumRefusalCode(kind);
+  }
+  if (!hasValidConfigurationAuthority(clusterSnapshot)) {
+    return resolveQuorumRefusalCode(kind);
+  }
+  if (!isFreshSnapshotAuthority(clusterSnapshot, nowMs)) {
+    return resolveQuorumRefusalCode(kind);
+  }
+  return MUTATION_AUTHORITY_PERMITTED;
+}
+
+function executeDecommission(owner, input, clusterSnapshot, nowMs) {
+  const preflight = owner._preflightDecommission(
+    input.parameters?.lagrangeNodeId,
+    nowMs,
+    clusterSnapshot,
+  );
+  if (preflight.state === MANAGEMENT_OPERATION_STATE.REJECTED) {
+    return preflight;
+  }
+  const refusalCode = evaluateMutationAuthority(owner, clusterSnapshot, nowMs, input.kind);
+  if (refusalCode !== MUTATION_AUTHORITY_PERMITTED) {
+    return {
+      state: MANAGEMENT_OPERATION_STATE.REJECTED,
+      reasonCode: refusalCode,
+      updatedAtMs: nowMs,
+    };
+  }
+  return preflight;
+}
+
+async function executeGuardedOperation(owner, input, args, nowMs) {
+  if (input.kind === MANAGEMENT_OPERATION_KIND.DECOMMISSION_NODE) {
+    return executeDecommission(owner, input, args.clusterSnapshot, nowMs);
+  }
+  const refusalCode = evaluateMutationAuthority(owner, args.clusterSnapshot, nowMs, input.kind);
+  if (refusalCode !== MUTATION_AUTHORITY_PERMITTED) {
+    if (input.kind === MANAGEMENT_OPERATION_KIND.TRANSITION_RELEASE &&
+        !owner.rollingUpgradeOwner?.capabilitySupported) {
+      return owner.rollingUpgradeOwner.startUpgrade(args);
+    }
+    if (input.kind === MANAGEMENT_OPERATION_KIND.CREATE_BACKUP &&
+        !owner.backupRestoreOwner?.capabilitySupported) {
+      return owner.backupRestoreOwner.createBackup(args);
+    }
+    return {
+      state: MANAGEMENT_OPERATION_STATE.REJECTED,
+      reasonCode: refusalCode,
+      updatedAtMs: nowMs,
+    };
+  }
+  if (input.kind === MANAGEMENT_OPERATION_KIND.TRANSITION_RELEASE) {
+    return owner.rollingUpgradeOwner.startUpgrade(args);
+  }
+  return owner.backupRestoreOwner.createBackup(args);
 }
 
 class ManagementV1Owner {
@@ -386,27 +491,29 @@ class ManagementV1Owner {
     const isNoop = input.kind === MANAGEMENT_OPERATION_KIND.NOOP;
     const pfx = isNoop ? c.NOOP_OPERATION_ID_PREFIX : c.OPERATION_ID_PREFIX;
     const opId = `${pfx}${input.operationId}`;
-    const clusterSnapshot = await this.resolveClusterSnapshot();
-    const args = {
-      operationId: input.operationId, lagrangeOperationId: opId, parameters: input.parameters,
-      clusterSnapshot, nowMs,
-    };
     let res;
     if (isNoop) {
       res = {
         state: MANAGEMENT_OPERATION_STATE.SUCCEEDED,
-        reasonCode: NULL_REASON_CODE, updatedAtMs: nowMs,
+        reasonCode: NULL_REASON_CODE,
+        updatedAtMs: nowMs,
       };
-    } else if (input.kind === MANAGEMENT_OPERATION_KIND.TRANSITION_RELEASE) {
-      res = this.rollingUpgradeOwner.startUpgrade(args);
-    } else if (input.kind === MANAGEMENT_OPERATION_KIND.CREATE_BACKUP) {
-      res = await this.backupRestoreOwner.createBackup(args);
     } else {
-      res = this._preflightDecommission(input.parameters.lagrangeNodeId, nowMs, clusterSnapshot);
+      const clusterSnapshot = await this.resolveClusterSnapshot();
+      const args = {
+        operationId: input.operationId,
+        lagrangeOperationId: opId,
+        parameters: input.parameters,
+        clusterSnapshot,
+        nowMs,
+      };
+      res = await executeGuardedOperation(this, input, args, nowMs);
     }
     return {
-      state: res.state, reasonCode: res.reasonCode ?? NULL_REASON_CODE,
-      lagrangeOperationId: opId, updatedAtMs: res.updatedAtMs ?? nowMs,
+      state: res.state,
+      reasonCode: res.reasonCode ?? NULL_REASON_CODE,
+      lagrangeOperationId: opId,
+      updatedAtMs: res.updatedAtMs ?? nowMs,
     };
   }
 

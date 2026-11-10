@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 121,
     "architecture-governance": 21,
-    "bootstrap-membership": 344,
+    "bootstrap-membership": 345,
     "cdc-metadata": 70,
     "cli-tooling": 99,
     "control-plane": 237,
@@ -25,8 +25,8 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2640,
-  "digest": "fnv1a32-97b4647d",
+  "censusSize": 2641,
+  "digest": "fnv1a32-6942f633",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-21de62fa",
   "classes": {
@@ -211,6 +211,7 @@
     "test/bootstrap/lifecycle-controller.test.js": "bootstrap-membership",
     "test/bootstrap/lifecycle-owner-replica-routing.test.js": "bootstrap-membership",
     "test/bootstrap/lifecycle-unification.test.js": "bootstrap-membership",
+    "test/bootstrap/management-action-authority.test.js": "bootstrap-membership",
     "test/bootstrap/management-v1-l4-l3.test.js": "bootstrap-membership",
     "test/bootstrap/management-v1-route-authority.test.js": "bootstrap-membership",
     "test/bootstrap/mesh-reconcile-terminal-revive.test.js": "bootstrap-membership",

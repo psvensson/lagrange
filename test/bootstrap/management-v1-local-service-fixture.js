@@ -106,6 +106,30 @@ function buildLocalPartitionService(partitionId, overrides = {}) {
     getStatus: () => status,
     buildRemoteReadAuthorityWitness: () =>
       (cfg.role === 'leader' ? buildLeaderWitness(partitionId, cfg.nodeId) : null),
+    readPartitionConsensusAuthority: ({nowMs = Date.now()} = {}) => {
+      const isLeader = cfg.role === 'leader' && cfg.isLeader === true;
+      return {
+        outcome: 'core-ok',
+        available: cfg.initialized === true && cfg.isShutdown !== true,
+        partitionId,
+        replicaId: cfg.replicaId,
+        nodeId: cfg.nodeId,
+        role: cfg.role,
+        isLeader,
+        leaderId: isLeader ? cfg.replicaId : null,
+        term: cfg.term,
+        commitIndex: 1,
+        appliedIndex: 1,
+        configurationKey: `conf-${partitionId}`,
+        membershipGenerationIndex: 1,
+        lifecycleIncarnation: `inc-${partitionId}`,
+        voters: [cfg.replicaId],
+        voterCount: 1,
+        confChangePending: false,
+        hasQuorum: isLeader,
+        observedAtMs: nowMs,
+      };
+    },
     executeLocalQuery: () => ({
       success: true,
       rows: cfg.getRows(),

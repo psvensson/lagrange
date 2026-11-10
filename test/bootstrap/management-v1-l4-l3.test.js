@@ -49,7 +49,14 @@ const backupPorts = (extra = {}, failures = {}) => ({
 /** A complete runtime cluster snapshot port for the management owner. */
 const snapshotPort = (overrides = {}) => () => ({
   nodeCount: 3, readyNodeCount: 3, underReplicatedPartitionCount: 0,
-  nodeIds: [...NODES], ready: true, hasPartitionQuorum: true, ...overrides,
+  nodeIds: [...NODES], ready: true, hasPartitionQuorum: true,
+  clusterId: PRIMARY_CLUSTER_ID,
+  configurationKey: 'conf-auth-test',
+  membershipGenerationIndex: 1,
+  lifecycleIncarnation: 'inc-auth-test',
+  capturedAtMs: Date.now(),
+  maxFreshnessMs: 30000,
+  ...overrides,
 });
 
 let opSeq = 1;

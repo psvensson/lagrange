@@ -107,6 +107,22 @@ function recordingAdapters() {
       return {
         nodeCount: 3, readyNodeCount: 3, underReplicatedPartitionCount: 0,
         nodeIds: [...NODE_IDS], ready: true, hasPartitionQuorum: true,
+        clusterId: GENUINE_CLUSTER_ID,
+        configurationKey: 'conf-auth-test',
+        membershipGenerationIndex: 1,
+        lifecycleIncarnation: 'inc-auth-test',
+        capturedAtMs: Date.now(),
+        maxFreshnessMs: 30000,
+        operationAuthority: {
+          contractVersion: 1,
+          configurationKey: 'conf-auth-test',
+          membershipGenerationIndex: 1,
+          lifecycleIncarnation: 'inc-auth-test',
+          clusterId: GENUINE_CLUSTER_ID,
+          capturedAtMs: Date.now(),
+          maxFreshnessMs: 30000,
+          hasQuorum: true,
+        },
       };
     },
     healthSnapshot: () => {
@@ -938,9 +954,30 @@ test('PartitionService.prototype.getStatus contract parity, ready-node quorum, a
     nodeRows, partitionRows, serviceRows,
   }).hasPartitionQuorum, false, 'uninitialized real PartitionService rejected');
 
-  // Real PartitionService promoted via applyReplicaLeadership with live raft term > 0 passes.
+  // Hand-set role and stubbed term without certified consensus authority rejected.
   realAppService.initialized = true;
   realAppService.raft = {readStatus: () => ({term: 4})};
+  applyReplicaLeadership(realAppService, 'leader');
+  t.equal(evaluatePartitionQuorumAuthority(viewOwner, {
+    nodeRows, partitionRows, serviceRows,
+  }).hasPartitionQuorum, false, 'hand-set role with stubbed term rejected');
+
+  // Real PartitionService with certified native consensus leader satisfies quorum.
+  realAppService.raft = {
+    readStatus: () => ({
+      outcome: 'CORE_OK',
+      role: 'leader',
+      term: 4,
+      commitIndex: 10,
+      appliedIndex: 10,
+      configurationKey: 'conf-auth-test',
+      membershipGenerationIndex: 1,
+      lifecycleIncarnation: 'inc-test-1',
+      voters: [realAppService.replicaId],
+      confState: {voters: [realAppService.replicaId]},
+      leaderId: realAppService.replicaId,
+    }),
+  };
   applyReplicaLeadership(realAppService, 'leader');
   const validSnap = evaluatePartitionQuorumAuthority(viewOwner, {
     nodeRows, partitionRows, serviceRows,
@@ -965,7 +1002,19 @@ test('PartitionService.prototype.getStatus contract parity, ready-node quorum, a
     nodeRows, partitionRows, serviceRows,
   }).hasPartitionQuorum, false, 'real PartitionService with closed raft port (term 0) rejected');
 
-  realAppService.raft = {readStatus: () => ({term: 4})};
+  realAppService.raft = {
+    readStatus: () => ({
+      outcome: 'CORE_OK',
+      role: 'leader',
+      term: 4,
+      commitIndex: 10,
+      appliedIndex: 10,
+      configurationKey: 'conf-auth-test',
+      voters: [realAppService.replicaId],
+      confState: {voters: [realAppService.replicaId]},
+      leaderId: realAppService.replicaId,
+    }),
+  };
   realAppService.isShutdown = true;
   t.equal(evaluatePartitionQuorumAuthority(viewOwner, {
     nodeRows, partitionRows, serviceRows,

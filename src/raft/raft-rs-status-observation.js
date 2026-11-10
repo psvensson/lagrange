@@ -154,6 +154,8 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     lifecycleIncarnation: observation.lifecycleIncarnation,
     role: ROLE[status.raftState] || RUNTIME_REASON.UNKNOWN,
     ...leader,
+    voters: confState.voters,
+    voterCount: confState.voters.length,
     peerCount: Math.max(0,
       confState.voters.length + confState.learners.length - 1),
     peers,

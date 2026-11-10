@@ -37,10 +37,7 @@
  */
 
 import {
-  COLUMN,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  TABLES,
+  COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES,
 } from '../../constants/index.js';
 import {
   resolveLocalPartitionServicesForPartition,
@@ -50,87 +47,112 @@ import {
 } from '../../control-plane/control-plane-authoritative-read-witness.js';
 import {RAFT_ROLE} from '../../raft/constants.js';
 import {
-  isCatchupLearnerRaftRole,
-  isLoadRoutableRaftRole,
-  isVoterRaftRole,
+  isCatchupLearnerRaftRole, isLoadRoutableRaftRole, isVoterRaftRole,
 } from '../../raft/replica-voter-readiness.js';
 import {
-  STATE_ABSENT,
-  readLowerStateField,
+  STATE_ABSENT, readLowerStateField,
 } from '../../utils/state-field-read.js';
 import {
-  REPLICATION_TARGET_SOURCE,
-  resolveDesiredReplicationFactor,
+  REPLICATION_TARGET_SOURCE, resolveDesiredReplicationFactor,
 } from '../replication-target-authority.js';
 import {INITIAL_PARTITION_IDS} from '../system-table-schemas-constants.js';
 import {
   isPartitionLocalServiceStatusRecord,
 } from '../../partition/partition-local-service-status-contract.js';
 
-const objectAssign = Object.assign;
-const objectCreate = Object.create;
-const objectFreeze = Object.freeze;
-const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-const objectGetPrototypeOf = Object.getPrototypeOf;
-const objectHasOwn = Object.hasOwn;
-const objectKeys = Object.keys;
-const objectPrototype = Object.prototype;
+const {
+  assign: objectAssign, create: objectCreate, freeze: objectFreeze,
+  getOwnPropertyDescriptor: objectGetOwnPropertyDescriptor,
+  getPrototypeOf: objectGetPrototypeOf, hasOwn: objectHasOwn,
+  keys: objectKeys, prototype: objectPrototype,
+} = Object;
 
 const DESCRIPTOR_VALUE_FIELD = 'value';
 const UNAVAILABLE_MANAGEMENT_SNAPSHOT = null;
+const DEFAULT_MAX_FRESHNESS_MS = 30000;
+const CONSENSUS_CORE_OK = 'core-ok';
 const LOCAL_STATUS_UNAVAILABLE = objectFreeze({unavailable: true});
+const NO_OPERATION_AUTHORITY = objectFreeze({
+  available: false, hasQuorum: false, contractVersion: 0,
+});
+const NULL_LIFECYCLE_INCARNATION = null;
+const NULL_CONFIGURATION_KEY = null;
+
+/**
+ * @param {boolean} valid
+ * @param {any} [authority]
+ */
+function makeRuntimeAuthorityResult(valid, authority = NO_OPERATION_AUTHORITY) {
+  return {valid, authority};
+}
+
+/**
+ * @param {boolean} hasQuorum
+ * @param {any} [authority]
+ */
+function makePartitionQuorumDecision(hasQuorum, authority = NO_OPERATION_AUTHORITY) {
+  return {hasQuorum, authority};
+}
+
+/**
+ * @param {Object} [summary]
+ * @param {number} [summary.underReplicatedPartitionCount]
+ * @param {boolean} [summary.hasPartitionQuorum]
+ * @param {any} [summary.collectedAuthority]
+ */
+function makePartitionsQuorumSummary({
+  underReplicatedPartitionCount = 0,
+  hasPartitionQuorum = false,
+  collectedAuthority = NO_OPERATION_AUTHORITY,
+} = {}) {
+  const authorityValid = hasPartitionQuorum &&
+    collectedAuthority !== null &&
+    collectedAuthority !== NO_OPERATION_AUTHORITY;
+  return {
+    underReplicatedPartitionCount,
+    hasPartitionQuorum: authorityValid,
+    operationAuthority: authorityValid ? collectedAuthority : NO_OPERATION_AUTHORITY,
+    configurationKey: authorityValid ?
+      collectedAuthority.configurationKey : NULL_CONFIGURATION_KEY,
+    membershipGenerationIndex: authorityValid ?
+      collectedAuthority.membershipGenerationIndex : null,
+    lifecycleIncarnation: authorityValid ?
+      collectedAuthority.lifecycleIncarnation : NULL_LIFECYCLE_INCARNATION,
+  };
+}
 const AUTHORITATIVE_READ_REJECTED = objectFreeze({
-  success: false,
-  rowSetComplete: false,
+  success: false, rowSetComplete: false,
 });
 const AUTHORITATIVE_QUORUM_READ_SOURCES = objectFreeze([
-  'local_partition_replica',
-  'owner_rpc_lane',
+  'local_partition_replica', 'owner_rpc_lane',
 ]);
 const READ_RESULT_FIELD = objectFreeze({
-  PARTIAL: 'partial',
-  ROWS: 'rows',
-  ROW_SET_COMPLETE: 'rowSetComplete',
-  SOURCE: 'source',
-  SUCCESS: 'success',
-  WITNESS: 'readAuthorityWitness',
+  PARTIAL: 'partial', ROWS: 'rows', ROW_SET_COMPLETE: 'rowSetComplete',
+  SOURCE: 'source', SUCCESS: 'success', WITNESS: 'readAuthorityWitness',
 });
 const SERVICE_FIELD = objectFreeze({
-  GET_STATUS: 'getStatus',
-  INITIALIZED: 'initialized',
-  IS_SHUTDOWN: 'isShutdown',
-  LOCAL_SERVICES: 'localServices',
+  GET_STATUS: 'getStatus', INITIALIZED: 'initialized', IS_SHUTDOWN: 'isShutdown',
+  LOCAL_SERVICES: 'localServices', READ_AUTHORITY: 'readPartitionConsensusAuthority',
   REPLICA_ID: 'replicaId',
 });
 const STATUS_FIELD = objectFreeze({
-  INITIALIZED: 'initialized',
-  IS_LEADER: 'isLeader',
-  LEADER_ID: 'leaderId',
-  NODE_ID: 'nodeId',
-  PARTITION_ID: 'partitionId',
-  REPLICA_ID: 'replicaId',
-  ROLE: 'role',
-  TERM: 'term',
+  INITIALIZED: 'initialized', IS_LEADER: 'isLeader', LEADER_ID: 'leaderId',
+  NODE_ID: 'nodeId', PARTITION_ID: 'partitionId', REPLICA_ID: 'replicaId',
+  ROLE: 'role', TERM: 'term',
 });
 const ROW_CLASSIFICATION = objectFreeze({
-  CORRUPT: 'corrupt',
-  IGNORE: 'ignore',
-  PARTITION: 'partition',
+  CORRUPT: 'corrupt', IGNORE: 'ignore', PARTITION: 'partition',
 });
-const SYSTEM_TABLE_COMPLETE_SELECT = objectFreeze(
-  objectAssign(objectCreate(null), {
-    [TABLES.NODES]: `SELECT * FROM ${TABLES.NODES}`,
-    [TABLES.PARTITIONS]: `SELECT * FROM ${TABLES.PARTITIONS}`,
-    [TABLES.SERVICES]: `SELECT * FROM ${TABLES.SERVICES}`,
-  }),
-);
-const OWNER_PARTITION_BY_TABLE = objectFreeze(
-  objectAssign(objectCreate(null), {
-    [TABLES.NODES]: INITIAL_PARTITION_IDS[TABLES.NODES],
-    [TABLES.PARTITIONS]: INITIAL_PARTITION_IDS[TABLES.PARTITIONS],
-    [TABLES.SERVICES]: INITIAL_PARTITION_IDS[TABLES.SERVICES],
-  }),
-);
+const SYSTEM_TABLE_COMPLETE_SELECT = objectFreeze(objectAssign(objectCreate(null), {
+  [TABLES.NODES]: `SELECT * FROM ${TABLES.NODES}`,
+  [TABLES.PARTITIONS]: `SELECT * FROM ${TABLES.PARTITIONS}`,
+  [TABLES.SERVICES]: `SELECT * FROM ${TABLES.SERVICES}`,
+}));
+const OWNER_PARTITION_BY_TABLE = objectFreeze(objectAssign(objectCreate(null), {
+  [TABLES.NODES]: INITIAL_PARTITION_IDS[TABLES.NODES],
+  [TABLES.PARTITIONS]: INITIAL_PARTITION_IDS[TABLES.PARTITIONS],
+  [TABLES.SERVICES]: INITIAL_PARTITION_IDS[TABLES.SERVICES],
+}));
 
 function createNullDictionary() {
   return objectCreate(null);
@@ -154,8 +176,7 @@ function readOwnDataField(record, key) {
   }
   const descriptor = objectGetOwnPropertyDescriptor(record, key);
   return descriptor && objectHasOwn(descriptor, DESCRIPTOR_VALUE_FIELD) ?
-    descriptor.value :
-    undefined;
+    descriptor.value : undefined;
 }
 
 function getOrCreateNullBucket(dictionary, key) {
@@ -186,11 +207,8 @@ function isCompleteAuthoritativeTableRead(readResult, tableName) {
   const source = readOwnDataField(readResult, READ_RESULT_FIELD.SOURCE);
   const witness = readOwnDataField(readResult, READ_RESULT_FIELD.WITNESS);
   if (
-    success !== true ||
-    complete !== true ||
-    partial === true ||
-    !Array.isArray(rows) ||
-    !AUTHORITATIVE_QUORUM_READ_SOURCES.includes(source)
+    success !== true || complete !== true || partial === true ||
+    !Array.isArray(rows) || !AUTHORITATIVE_QUORUM_READ_SOURCES.includes(source)
   ) {
     return false;
   }
@@ -200,14 +218,10 @@ function isCompleteAuthoritativeTableRead(readResult, tableName) {
 }
 
 async function readCompleteSystemTable(authoritativeView, tableName) {
-  if (!objectHasOwn(SYSTEM_TABLE_COMPLETE_SELECT, tableName)) {
-    return AUTHORITATIVE_READ_REJECTED;
-  }
+  if (!objectHasOwn(SYSTEM_TABLE_COMPLETE_SELECT, tableName)) return AUTHORITATIVE_READ_REJECTED;
   try {
     return await authoritativeView.readReadinessOwnerRows(
-      tableName,
-      SYSTEM_TABLE_COMPLETE_SELECT[tableName],
-      [],
+      tableName, SYSTEM_TABLE_COMPLETE_SELECT[tableName], [],
     );
   } catch {
     return AUTHORITATIVE_READ_REJECTED;
@@ -260,29 +274,21 @@ function collectNodeMembership(nodeRows) {
       corrupt = true;
       continue;
     }
-    if (status === SERVICE_STATUS.ACTIVE) {
-      activeNodeMap[nodeId] = true;
-    }
+    if (status === SERVICE_STATUS.ACTIVE) activeNodeMap[nodeId] = true;
   }
-
   return {nodeIds, activeNodeMap, corrupt};
 }
 
 function resolveAuthoritativeReadyNodes(owner, membership, inventory) {
   const resolved = owner?.resolveReadyNodeIdsFromRows?.({
-    nodeRows: inventory.nodeRows,
-    serviceRows: inventory.serviceRows,
-    nodeEndpointRows: [],
-    publicationRows: [],
-    requirePublishedMembership: false,
-    extraCandidateNodeIds: membership.nodeIds,
+    nodeRows: inventory.nodeRows, serviceRows: inventory.serviceRows,
+    nodeEndpointRows: [], publicationRows: [],
+    requirePublishedMembership: false, extraCandidateNodeIds: membership.nodeIds,
   });
   const readyNodeMap = createNullDictionary();
   if (Array.isArray(resolved)) {
     for (const nodeId of resolved) {
-      if (isNonEmptyString(nodeId)) {
-        readyNodeMap[nodeId] = true;
-      }
+      if (isNonEmptyString(nodeId)) readyNodeMap[nodeId] = true;
     }
   }
   const servingNodeMap = createNullDictionary();
@@ -290,19 +296,14 @@ function resolveAuthoritativeReadyNodes(owner, membership, inventory) {
   for (const nodeId of membership.nodeIds) {
     if (objectHasOwn(readyNodeMap, nodeId)) {
       readyNodeCount += 1;
-      if (objectHasOwn(membership.activeNodeMap, nodeId)) {
-        servingNodeMap[nodeId] = true;
-      }
+      if (objectHasOwn(membership.activeNodeMap, nodeId)) servingNodeMap[nodeId] = true;
     }
   }
   return {readyNodeCount, servingNodeMap};
 }
 
 function markInventoryCorruption(state, partitionId) {
-  state.hasGlobalServiceCorruption = true;
-  if (isNonEmptyString(partitionId)) {
-    state.corruptPartitions[partitionId] = true;
-  }
+  if (isNonEmptyString(partitionId)) state.corruptPartitions[partitionId] = true;
 }
 
 function classifyServiceRowKind(state, row) {
@@ -313,25 +314,15 @@ function classifyServiceRowKind(state, row) {
   state.seenServiceIds[serviceId] = true;
 
   const serviceType = readLowerStateField(readOwnDataField(row, COLUMN.SERVICE_TYPE));
-  if (serviceType === STATE_ABSENT) {
-    return ROW_CLASSIFICATION.CORRUPT;
-  }
+  if (serviceType === STATE_ABSENT) return ROW_CLASSIFICATION.CORRUPT;
   return serviceType === SERVICE_TYPE.PARTITION ?
-    ROW_CLASSIFICATION.PARTITION :
-    ROW_CLASSIFICATION.IGNORE;
+    ROW_CLASSIFICATION.PARTITION : ROW_CLASSIFICATION.IGNORE;
 }
 
 function registerUniqueReplicaId(state, partitionId, replicaId) {
-  if (!isNonEmptyString(replicaId)) {
-    return false;
-  }
-  const seenReplicas = getOrCreateNullBucket(
-    state.seenReplicasByPartition,
-    partitionId,
-  );
-  if (objectHasOwn(seenReplicas, replicaId)) {
-    return false;
-  }
+  if (!isNonEmptyString(replicaId)) return false;
+  const seenReplicas = getOrCreateNullBucket(state.seenReplicasByPartition, partitionId);
+  if (objectHasOwn(seenReplicas, replicaId)) return false;
   seenReplicas[replicaId] = true;
   return true;
 }
@@ -344,14 +335,9 @@ function recordActivePartitionVoterRow(state, row, partitionId, nodeId) {
     markInventoryCorruption(state, partitionId);
     return;
   }
-  if (!isVoterRaftRole(raftRole) || !hasDictionaryKey(state.servingNodeMap, nodeId)) {
-    return;
-  }
+  if (!isVoterRaftRole(raftRole) || !hasDictionaryKey(state.servingNodeMap, nodeId)) return;
 
-  const voterRolesByNode = getOrCreateNullBucket(
-    state.voterRolesByPartition,
-    partitionId,
-  );
+  const voterRolesByNode = getOrCreateNullBucket(state.voterRolesByPartition, partitionId);
   if (objectHasOwn(voterRolesByNode, nodeId)) {
     markInventoryCorruption(state, partitionId);
     return;
@@ -370,17 +356,13 @@ function ingestServiceRowIntoInventory(state, row) {
   }
   const partitionId = readOwnDataField(row, COLUMN.PARTITION_ID);
   const kind = classifyServiceRowKind(state, row);
-  if (kind === ROW_CLASSIFICATION.IGNORE) {
-    return;
-  }
+  if (kind === ROW_CLASSIFICATION.IGNORE) return;
   const nodeId = readOwnDataField(row, COLUMN.NODE_ID);
   const replicaId = readOwnDataField(row, COLUMN.REPLICA_ID);
   const rowStatus = readLowerStateField(readOwnDataField(row, COLUMN.STATUS));
   if (
-    kind === ROW_CLASSIFICATION.CORRUPT ||
-    rowStatus === STATE_ABSENT ||
-    !isNonEmptyString(partitionId) ||
-    !isNonEmptyString(nodeId) ||
+    kind === ROW_CLASSIFICATION.CORRUPT || rowStatus === STATE_ABSENT ||
+    !isNonEmptyString(partitionId) || !isNonEmptyString(nodeId) ||
     !registerUniqueReplicaId(state, partitionId, replicaId)
   ) {
     markInventoryCorruption(state, partitionId);
@@ -402,9 +384,7 @@ function collectPartitionReplicaInventory(serviceRows, servingNodeMap) {
     corruptPartitions: createNullDictionary(),
     hasGlobalServiceCorruption: false,
   };
-  for (const row of serviceRows) {
-    ingestServiceRowIntoInventory(state, row);
-  }
+  for (const row of serviceRows) ingestServiceRowIntoInventory(state, row);
   return {
     voterRolesByPartition: state.voterRolesByPartition,
     activeHostNodesByPartition: state.activeHostNodesByPartition,
@@ -423,14 +403,12 @@ function collectLocalPartitionServices(owner, partitionId) {
       matches.push(candidate);
     }
   };
-
   for (const svc of resolveLocalPartitionServicesForPartition(
     owner?.getPartitionServices?.(),
     partitionId,
   )) {
     addService(svc);
   }
-
   const handler = owner?.getReplicaHandler?.();
   if (isObjectRecord(handler)) {
     for (const svc of resolveLocalPartitionServicesForPartition(
@@ -440,7 +418,6 @@ function collectLocalPartitionServices(owner, partitionId) {
       addService(svc);
     }
   }
-
   return matches;
 }
 
@@ -451,6 +428,15 @@ function hasCanonicalGetStatusPort(localService) {
       isCallable(localService[SERVICE_FIELD.GET_STATUS]);
   }
   return isCallable(localService[SERVICE_FIELD.GET_STATUS]);
+}
+
+function hasCanonicalAuthorityPort(localService) {
+  const proto = objectGetPrototypeOf(localService);
+  if (proto === objectPrototype || proto === null) {
+    return objectHasOwn(localService, SERVICE_FIELD.READ_AUTHORITY) &&
+      isCallable(localService[SERVICE_FIELD.READ_AUTHORITY]);
+  }
+  return isCallable(localService[SERVICE_FIELD.READ_AUTHORITY]);
 }
 
 /**
@@ -470,8 +456,7 @@ function readCanonicalLocalServiceStatus(localService) {
     /** @type {import('../../partition/partition-local-service-status-contract.js').PartitionLocalServiceStatusRecord} */
     const status = localService.getStatus();
     return isPartitionLocalServiceStatusRecord(status) ?
-      status :
-      LOCAL_STATUS_UNAVAILABLE;
+      status : LOCAL_STATUS_UNAVAILABLE;
   } catch {
     return LOCAL_STATUS_UNAVAILABLE;
   }
@@ -479,9 +464,7 @@ function readCanonicalLocalServiceStatus(localService) {
 
 function resolveExpectedLocalReplicaId(localService, status) {
   const statusReplicaId = readOwnDataField(status, STATUS_FIELD.REPLICA_ID);
-  if (isNonEmptyString(statusReplicaId)) {
-    return statusReplicaId;
-  }
+  if (isNonEmptyString(statusReplicaId)) return statusReplicaId;
   const serviceReplicaId = readOwnDataField(localService, SERVICE_FIELD.REPLICA_ID);
   return isNonEmptyString(serviceReplicaId) ? serviceReplicaId : null;
 }
@@ -493,13 +476,9 @@ function isLeaderStatusConsistent(status, expectedReplicaId) {
   ) {
     return false;
   }
-  if (!objectHasOwn(status, STATUS_FIELD.LEADER_ID)) {
-    return true;
-  }
+  if (!objectHasOwn(status, STATUS_FIELD.LEADER_ID)) return true;
   const statusLeaderId = readOwnDataField(status, STATUS_FIELD.LEADER_ID);
-  if (!isNonEmptyString(statusLeaderId)) {
-    return false;
-  }
+  if (!isNonEmptyString(statusLeaderId)) return false;
   return expectedReplicaId === null || statusLeaderId === expectedReplicaId;
 }
 
@@ -510,16 +489,10 @@ function isNonLeaderStatusConsistent(status, expectedReplicaId) {
   ) {
     return false;
   }
-  if (!objectHasOwn(status, STATUS_FIELD.LEADER_ID)) {
-    return true;
-  }
+  if (!objectHasOwn(status, STATUS_FIELD.LEADER_ID)) return true;
   const statusLeaderId = readOwnDataField(status, STATUS_FIELD.LEADER_ID);
-  if (statusLeaderId === null) {
-    return true;
-  }
-  if (!isNonEmptyString(statusLeaderId)) {
-    return false;
-  }
+  if (statusLeaderId === null) return true;
+  if (!isNonEmptyString(statusLeaderId)) return false;
   return expectedReplicaId === null || statusLeaderId !== expectedReplicaId;
 }
 
@@ -532,18 +505,14 @@ function isStatusLeaderIdentityConsistent(localService, status, statusRole) {
 
 function evaluateCanonicalLocalServiceRole(localService, partitionId, localNodeId) {
   const status = readCanonicalLocalServiceStatus(localService);
-  if (status === LOCAL_STATUS_UNAVAILABLE) {
-    return STATE_ABSENT;
-  }
+  if (status === LOCAL_STATUS_UNAVAILABLE) return STATE_ABSENT;
   const statusPartitionId = readOwnDataField(status, STATUS_FIELD.PARTITION_ID);
   const statusInitialized = readOwnDataField(status, STATUS_FIELD.INITIALIZED);
   const statusTerm = readOwnDataField(status, STATUS_FIELD.TERM);
   const statusNodeId = readOwnDataField(status, STATUS_FIELD.NODE_ID);
   if (
-    statusPartitionId !== partitionId ||
-    statusInitialized !== true ||
-    !Number.isInteger(statusTerm) ||
-    statusTerm <= 0 ||
+    statusPartitionId !== partitionId || statusInitialized !== true ||
+    !Number.isInteger(statusTerm) || statusTerm <= 0 ||
     (statusNodeId !== undefined && statusNodeId !== localNodeId)
   ) {
     return STATE_ABSENT;
@@ -552,17 +521,12 @@ function evaluateCanonicalLocalServiceRole(localService, partitionId, localNodeI
   if (!isLoadRoutableRaftRole(statusRole) && !isCatchupLearnerRaftRole(statusRole)) {
     return STATE_ABSENT;
   }
-  if (!isStatusLeaderIdentityConsistent(localService, status, statusRole)) {
-    return STATE_ABSENT;
-  }
+  if (!isStatusLeaderIdentityConsistent(localService, status, statusRole)) return STATE_ABSENT;
   return statusRole;
 }
 
 function resolveLocalHostExpectations(
-  localNodeId,
-  leaderNodeId,
-  voterRolesByNode,
-  activeHostNodes,
+  localNodeId, leaderNodeId, voterRolesByNode, activeHostNodes,
 ) {
   const expectedVoter = hasDictionaryKey(voterRolesByNode, localNodeId);
   const expectedLeader = leaderNodeId === localNodeId;
@@ -571,60 +535,87 @@ function resolveLocalHostExpectations(
   return {expectedVoter, expectedLeader, expectedHost};
 }
 
+function isAuthorityPayloadLeaderValid(auth, isHealthyLeader) {
+  return isHealthyLeader && auth.isLeader === true && auth.hasQuorum === true &&
+    auth.confChangePending !== true && typeof auth.configurationKey === 'string' &&
+    auth.configurationKey.length > 0 && auth.voterCount >= 1;
+}
+
+function buildLeaderAuthorityRecord(auth) {
+  return {
+    contractVersion: 1,
+    configurationKey: auth.configurationKey,
+    membershipGenerationIndex: auth.membershipGenerationIndex,
+    lifecycleIncarnation: auth.lifecycleIncarnation,
+    term: auth.term, commitIndex: auth.commitIndex, appliedIndex: auth.appliedIndex,
+    voters: auth.voters, voterCount: auth.voterCount,
+    leaderId: auth.leaderId, role: auth.role, isLeader: true, hasQuorum: true,
+  };
+}
+
+function readValidLocalConsensusRecord(service, nowMs) {
+  if (!isObjectRecord(service) || !hasCanonicalAuthorityPort(service)) return null;
+  const auth = service.readPartitionConsensusAuthority({nowMs});
+  return auth?.available === true && auth.outcome === CONSENSUS_CORE_OK ? auth : null;
+}
+
+function evaluateLocalHostRoleConsistency(statusRole, authRole, expectations) {
+  if (statusRole === STATE_ABSENT || statusRole !== authRole) return false;
+  const isHealthyVoter = isLoadRoutableRaftRole(statusRole);
+  const isHealthyLeader = statusRole === RAFT_ROLE.LEADER;
+  if (isHealthyLeader && !expectations.expectedLeader) return false;
+  if (expectations.expectedVoter && !isHealthyVoter) return false;
+  return true;
+}
+
 function verifyLocalPartitionRuntimeAuthority({
-  owner,
-  partitionId,
-  leaderNodeId,
-  voterRolesByNode,
-  activeHostNodes,
+  owner, partitionId, leaderNodeId, voterRolesByNode, activeHostNodes, nowMs,
 }) {
   const localNodeId = owner?.getSeedNodeId?.();
-  if (!isNonEmptyString(localNodeId)) {
-    return false;
-  }
+  if (!isNonEmptyString(localNodeId)) return makeRuntimeAuthorityResult(false);
   const expectations = resolveLocalHostExpectations(
-    localNodeId,
-    leaderNodeId,
-    voterRolesByNode,
-    activeHostNodes,
+    localNodeId, leaderNodeId, voterRolesByNode, activeHostNodes,
   );
   const localServices = collectLocalPartitionServices(owner, partitionId);
   if (localServices.length === 0) {
-    return !expectations.expectedHost;
+    return makeRuntimeAuthorityResult(!expectations.expectedHost);
   }
-  if (localServices.length > 1) {
-    return false;
+  if (localServices.length !== 1) return makeRuntimeAuthorityResult(false);
+  const auth = readValidLocalConsensusRecord(localServices[0], nowMs);
+  if (!auth) return makeRuntimeAuthorityResult(false);
+  const statusRole = evaluateCanonicalLocalServiceRole(localServices[0], partitionId, localNodeId);
+  if (!evaluateLocalHostRoleConsistency(statusRole, auth.role, expectations)) {
+    return makeRuntimeAuthorityResult(false);
   }
-  const statusRole = evaluateCanonicalLocalServiceRole(
-    localServices[0],
-    partitionId,
-    localNodeId,
-  );
-  if (statusRole === STATE_ABSENT) {
-    return false;
+  if (expectations.expectedLeader) {
+    const isHealthyLeader = statusRole === RAFT_ROLE.LEADER;
+    if (!isAuthorityPayloadLeaderValid(auth, isHealthyLeader)) {
+      return makeRuntimeAuthorityResult(false);
+    }
+    return makeRuntimeAuthorityResult(true, buildLeaderAuthorityRecord(auth));
   }
-  const isHealthyVoter = isLoadRoutableRaftRole(statusRole);
-  const isHealthyLeader = statusRole === RAFT_ROLE.LEADER;
-  if (isHealthyLeader && !expectations.expectedLeader) {
-    return false;
-  }
-  return (!expectations.expectedVoter || isHealthyVoter) &&
-    (!expectations.expectedLeader || isHealthyLeader);
+  return makeRuntimeAuthorityResult(true);
 }
 
 function hasValidPartitionLeaderEvidence({
   partition, partitionId, servingNodeMap, voterRolesByNode, replicaInventory,
 }) {
   const leaderNodeId = readOwnDataField(partition, COLUMN.LEADER_NODE_ID);
-  if (!isNonEmptyString(leaderNodeId) || !hasDictionaryKey(servingNodeMap, leaderNodeId) ||
-      !hasDictionaryKey(voterRolesByNode, leaderNodeId)) {
+  if (
+    !isNonEmptyString(leaderNodeId) ||
+    !hasDictionaryKey(servingNodeMap, leaderNodeId) ||
+    !hasDictionaryKey(voterRolesByNode, leaderNodeId) ||
+    !isLoadRoutableRaftRole(voterRolesByNode[leaderNodeId])
+  ) {
     return null;
   }
-  if (!isLoadRoutableRaftRole(voterRolesByNode[leaderNodeId])) return null;
   const explicitLeaders = getNullBucketOrNull(
-    replicaInventory.explicitLeaderNodesByPartition, partitionId);
-  if (explicitLeaders && (countDictionaryKeys(explicitLeaders) > 1 ||
-      !hasDictionaryKey(explicitLeaders, leaderNodeId))) {
+    replicaInventory.explicitLeaderNodesByPartition, partitionId,
+  );
+  if (
+    explicitLeaders &&
+    (countDictionaryKeys(explicitLeaders) > 1 || !hasDictionaryKey(explicitLeaders, leaderNodeId))
+  ) {
     return null;
   }
   return leaderNodeId;
@@ -634,109 +625,152 @@ function validatePartitionRowDeclaration(partition, seenPartitionIds) {
   if (!isObjectRecord(partition)) return null;
   const partitionId = readOwnDataField(partition, COLUMN.PARTITION_ID);
   const desiredRf = resolveDesiredReplicationFactor(partition);
-  if (!isNonEmptyString(partitionId) || objectHasOwn(seenPartitionIds, partitionId) ||
-      desiredRf.source !== REPLICATION_TARGET_SOURCE.PARTITION_ROW ||
-      desiredRf.replicationFactor < 1) {
+  if (
+    !isNonEmptyString(partitionId) || objectHasOwn(seenPartitionIds, partitionId) ||
+    desiredRf.source !== REPLICATION_TARGET_SOURCE.PARTITION_ROW ||
+    desiredRf.replicationFactor < 1
+  ) {
     return null;
   }
   seenPartitionIds[partitionId] = true;
   return {partitionId, targetCount: desiredRf.replicationFactor};
 }
 
-function doesPartitionHoldQuorum(owner, partition, declaration, servingNodeMap, replicaInventory) {
+function doesPartitionHoldQuorum(
+  owner, partition, declaration, servingNodeMap, replicaInventory, nowMs,
+) {
   const {partitionId, targetCount} = declaration;
-  if (hasDictionaryKey(replicaInventory.corruptPartitions, partitionId)) return false;
+  if (hasDictionaryKey(replicaInventory.corruptPartitions, partitionId)) {
+    return makePartitionQuorumDecision(false);
+  }
   const voterRolesByNode = getNullBucketOrNull(
-    replicaInventory.voterRolesByPartition, partitionId);
+    replicaInventory.voterRolesByPartition, partitionId,
+  );
   const activeHostNodes = getNullBucketOrNull(
-    replicaInventory.activeHostNodesByPartition, partitionId);
-  if (countDictionaryKeys(voterRolesByNode) < Math.floor(targetCount / 2) + 1) return false;
+    replicaInventory.activeHostNodesByPartition, partitionId,
+  );
+  if (countDictionaryKeys(voterRolesByNode) < Math.floor(targetCount / 2) + 1) {
+    return makePartitionQuorumDecision(false);
+  }
   const leaderNodeId = hasValidPartitionLeaderEvidence({
     partition, partitionId, servingNodeMap, voterRolesByNode, replicaInventory,
   });
-  if (leaderNodeId === null) return false;
-  return verifyLocalPartitionRuntimeAuthority({
-    owner, partitionId, leaderNodeId, voterRolesByNode, activeHostNodes,
+  if (leaderNodeId === null) return makePartitionQuorumDecision(false);
+  const runtimeCheck = verifyLocalPartitionRuntimeAuthority({
+    owner, partitionId, leaderNodeId, voterRolesByNode, activeHostNodes, nowMs,
   });
+  if (!runtimeCheck.valid) return makePartitionQuorumDecision(false);
+  return makePartitionQuorumDecision(true, runtimeCheck.authority);
 }
 
-function evaluatePartitionsQuorum(owner, partitionRows, servingNodeMap, replicaInventory) {
+function evaluatePartitionsQuorum(
+  owner, partitionRows, servingNodeMap, replicaInventory, nowMs,
+) {
   if (!Array.isArray(partitionRows) || partitionRows.length === 0) {
-    return {underReplicatedPartitionCount: 0, hasPartitionQuorum: false};
+    return makePartitionsQuorumSummary();
   }
   const seenPartitionIds = createNullDictionary();
   let underReplicatedPartitionCount = 0;
   let hasPartitionQuorum = !replicaInventory.hasGlobalServiceCorruption;
+  let collectedAuthority = NO_OPERATION_AUTHORITY;
 
   for (const partition of partitionRows) {
     const declaration = validatePartitionRowDeclaration(partition, seenPartitionIds);
-    if (!declaration) {
-      hasPartitionQuorum = false;
-      underReplicatedPartitionCount += 1;
-      continue;
-    }
+    if (!declaration) return makePartitionsQuorumSummary();
     const voterRolesByNode = getNullBucketOrNull(
-      replicaInventory.voterRolesByPartition, declaration.partitionId);
+      replicaInventory.voterRolesByPartition, declaration.partitionId,
+    );
     if (countDictionaryKeys(voterRolesByNode) < declaration.targetCount) {
       underReplicatedPartitionCount += 1;
     }
-    if (!doesPartitionHoldQuorum(
-      owner, partition, declaration, servingNodeMap, replicaInventory,
-    )) {
+    const partitionResult = doesPartitionHoldQuorum(
+      owner, partition, declaration, servingNodeMap, replicaInventory, nowMs,
+    );
+    if (!partitionResult.hasQuorum) {
       hasPartitionQuorum = false;
+    } else if (partitionResult.authority && partitionResult.authority !== NO_OPERATION_AUTHORITY) {
+      collectedAuthority = partitionResult.authority;
     }
   }
 
-  return {underReplicatedPartitionCount, hasPartitionQuorum};
+  return makePartitionsQuorumSummary({
+    underReplicatedPartitionCount, hasPartitionQuorum, collectedAuthority,
+  });
+}
+
+function isValidInventory(inventory) {
+  return isObjectRecord(inventory) &&
+    Array.isArray(inventory.nodeRows) &&
+    Array.isArray(inventory.partitionRows) &&
+    Array.isArray(inventory.serviceRows);
+}
+
+function resolveSnapshotTiming(options) {
+  const nowMs = Number.isFinite(options?.nowMs) ? options.nowMs : Date.now();
+  const configuredFreshness = options?.maxFreshnessMs;
+  const maxFreshnessMs =
+    typeof configuredFreshness === 'number' && configuredFreshness > 0 ?
+      configuredFreshness : DEFAULT_MAX_FRESHNESS_MS;
+  return {nowMs, maxFreshnessMs};
+}
+
+function buildQuorumSnapshotRecord({
+  membership, readyNodeCount, quorum, hasPartitionQuorum, nowMs, maxFreshnessMs, clusterId,
+}) {
+  if (!hasPartitionQuorum) {
+    return {
+      nodeCount: membership.nodeIds.length, readyNodeCount,
+      underReplicatedPartitionCount: quorum.underReplicatedPartitionCount,
+      nodeIds: membership.nodeIds, ready: false, hasPartitionQuorum: false,
+      configurationKey: NULL_CONFIGURATION_KEY, membershipGenerationIndex: null,
+      lifecycleIncarnation: NULL_LIFECYCLE_INCARNATION, capturedAtMs: null, maxFreshnessMs: null,
+      operationAuthority: NO_OPERATION_AUTHORITY,
+    };
+  }
+  return {
+    nodeCount: membership.nodeIds.length, readyNodeCount,
+    underReplicatedPartitionCount: quorum.underReplicatedPartitionCount,
+    nodeIds: membership.nodeIds, ready: readyNodeCount === membership.nodeIds.length,
+    hasPartitionQuorum: true, configurationKey: quorum.configurationKey,
+    membershipGenerationIndex: quorum.membershipGenerationIndex,
+    lifecycleIncarnation: quorum.lifecycleIncarnation, capturedAtMs: nowMs, maxFreshnessMs,
+    operationAuthority: {
+      ...quorum.operationAuthority, clusterId, capturedAtMs: nowMs, maxFreshnessMs,
+    },
+  };
 }
 
 /**
- * Evaluate canonical partition quorum and management cluster topology from
- * authoritative control-plane inventories and local `PartitionService` status.
+ * Evaluate whether the candidate cluster view holds unambiguous quorum.
  *
  * @param {Object} owner `BootstrapClusterViewOwner` instance
  * @param {Object} inventory `{nodeRows, partitionRows, serviceRows}`
+ * @param {Object} [options]
+ * @param {number} [options.nowMs]
+ * @param {number} [options.maxFreshnessMs]
  * @return {Object|null}
  */
-function evaluatePartitionQuorumAuthority(owner, inventory) {
-  if (
-    !isObjectRecord(inventory) ||
-    !Array.isArray(inventory.nodeRows) ||
-    !Array.isArray(inventory.partitionRows) ||
-    !Array.isArray(inventory.serviceRows)
-  ) {
-    return UNAVAILABLE_MANAGEMENT_SNAPSHOT;
-  }
+function evaluatePartitionQuorumAuthority(owner, inventory, options = {}) {
+  if (!isValidInventory(inventory)) return UNAVAILABLE_MANAGEMENT_SNAPSHOT;
   const membership = collectNodeMembership(inventory.nodeRows);
-  if (membership.nodeIds.length === 0) {
-    return UNAVAILABLE_MANAGEMENT_SNAPSHOT;
-  }
+  if (membership.nodeIds.length === 0) return UNAVAILABLE_MANAGEMENT_SNAPSHOT;
+  const {nowMs, maxFreshnessMs} = resolveSnapshotTiming(options);
   const {readyNodeCount, servingNodeMap} = resolveAuthoritativeReadyNodes(
-    owner,
-    membership,
-    inventory,
+    owner, membership, inventory,
   );
   const replicaInventory = collectPartitionReplicaInventory(
-    inventory.serviceRows,
-    servingNodeMap,
+    inventory.serviceRows, servingNodeMap,
   );
   const quorum = evaluatePartitionsQuorum(
-    owner,
-    inventory.partitionRows,
-    servingNodeMap,
-    replicaInventory,
+    owner, inventory.partitionRows, servingNodeMap, replicaInventory, nowMs,
   );
-  const hasPartitionQuorum =
-    !membership.corrupt && quorum.hasPartitionQuorum === true;
-
-  return {
-    nodeCount: membership.nodeIds.length,
-    readyNodeCount,
-    underReplicatedPartitionCount: quorum.underReplicatedPartitionCount,
-    nodeIds: membership.nodeIds,
-    ready: readyNodeCount === membership.nodeIds.length,
-    hasPartitionQuorum,
-  };
+  const hasPartitionQuorum = !membership.corrupt &&
+    quorum.hasPartitionQuorum === true &&
+    quorum.operationAuthority !== NO_OPERATION_AUTHORITY;
+  const clusterId = owner?.getClusterId?.() ?? null;
+  return buildQuorumSnapshotRecord({
+    membership, readyNodeCount, quorum, hasPartitionQuorum, nowMs, maxFreshnessMs, clusterId,
+  });
 }
 
 /**
@@ -749,9 +783,7 @@ function evaluatePartitionQuorumAuthority(owner, inventory) {
 async function readAuthoritativeManagementClusterSnapshot(owner) {
   const authoritativeView = owner?.getAuthoritativeControlPlaneView?.();
   const inventory = await readAuthoritativeInventory(authoritativeView);
-  if (!inventory) {
-    return UNAVAILABLE_MANAGEMENT_SNAPSHOT;
-  }
+  if (!inventory) return UNAVAILABLE_MANAGEMENT_SNAPSHOT;
   return evaluatePartitionQuorumAuthority(owner, inventory);
 }
 
