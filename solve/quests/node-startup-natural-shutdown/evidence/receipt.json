@@ -1,0 +1,53 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "node-startup-natural-shutdown",
+  "status": "pass",
+  "testFileDigests": {
+    "test/node/node-startup-natural-shutdown.test.js": "e027a8bf68b7f353cb80b960cbfbc8b1b415b677bccc460bd34fc4ffc2cf85ef"
+  },
+  "generatedAt": "2026-11-10T13:55:04.026Z",
+  "receipts": [
+    {
+      "id": "retained-resource-cause",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R1 .*$\" test/node/node-startup-natural-shutdown.test.js",
+      "detail": "Explicitly identifies and reproduces retained handles/resources (NodeService intervals, LogsTableService flush timers/buffers, join cleanup leaks) preventing natural exit.",
+      "testFile": "test/node/node-startup-natural-shutdown.test.js"
+    },
+    {
+      "id": "successful-start-natural-exit",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R2 .*$\" test/node/node-startup-natural-shutdown.test.js",
+      "detail": "Node startup and shutdown completes and exits naturally with code 0 and zero active handles without SIGKILL or forced-exit workarounds.",
+      "testFile": "test/node/node-startup-natural-shutdown.test.js"
+    },
+    {
+      "id": "failed-join-natural-exit",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R3 .*$\" test/node/node-startup-natural-shutdown.test.js",
+      "detail": "Startup failure during join unwinds acquired resources and exits naturally without leaked handles or timers.",
+      "testFile": "test/node/node-startup-natural-shutdown.test.js"
+    },
+    {
+      "id": "owned-resources-released",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R4 .*$\" test/node/node-startup-natural-shutdown.test.js",
+      "detail": "Every owned worker, subscription, timer, and runtime service registered in the startup and shutdown chain is released.",
+      "testFile": "test/node/node-startup-natural-shutdown.test.js"
+    },
+    {
+      "id": "restart-retains-committed-obligations",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R5 .*$\" test/node/node-startup-natural-shutdown.test.js",
+      "detail": "After natural shutdown and restart, committed durable obligations remain intact and resume while volatile background work is cancelled.",
+      "testFile": "test/node/node-startup-natural-shutdown.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/node-startup-natural-shutdown.js --check-verification",
+      "detail": "An approving subagent verification newer than the last attempt, read through the solve store owner.",
+      "testFile": null
+    }
+  ]
+}

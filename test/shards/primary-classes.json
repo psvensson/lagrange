@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2284,
+    "unit": 2285,
     "integration": 124,
     "bootstrap": 223,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2638,
-  "digest": "fnv1a32-914a20a0",
+  "censusSize": 2639,
+  "digest": "fnv1a32-4d006954",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1277,6 +1277,7 @@
     "test/node/node-service-presence.property.test.js": "unit",
     "test/node/node-service-runtime-isolation.test.js": "unit",
     "test/node/node-service.test.js": "unit",
+    "test/node/node-startup-natural-shutdown.test.js": "unit",
     "test/node/participant-release-control-refusal-observation.test.js": "unit",
     "test/node/participant-release-fresh-create-completion.test.js": "unit",
     "test/node/replica-cleanup-token-authority.test.js": "unit",

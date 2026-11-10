@@ -277,6 +277,7 @@ class LogsTableService extends EventEmitter {
     if (this.initialized) {
       return;
     }
+    this.isShuttingDown = false;
 
     if (options.logsOwner) {
       this.logsOwner = options.logsOwner;
@@ -588,6 +589,15 @@ class LogsTableService extends EventEmitter {
   }
 
   /**
+   * Stop the service (alias to shutdown for lifecycle managers).
+   * @return {Promise<void>}
+   */
+  async stop() {
+    await this.shutdown();
+    this.isShuttingDown = true;
+  }
+
+  /**
    * Shutdown the service.
    * Flushes any pending writes before shutting down.
    * @return {Promise<void>}
@@ -595,17 +605,28 @@ class LogsTableService extends EventEmitter {
   async shutdown() {
     this.isShuttingDown = true;
     this.stopFlushTimer();
+    this.writeDeferredUntilMs = LOCAL_NUM_ZERO;
+    this.flushContinuationDueAtMs = null;
+    this.flushWorkScheduled = false;
 
-    // Final drain. Avoid busy-spinning while an in-flight write is active.
-    // Use direct flush mode so shutdown does not depend on class-C scheduling.
+    // Disconnect from logging service immediately so no new log entries are queued
+    const loggingService = LoggingService.getInstance();
+    loggingService.detachLogsTable();
+
+    if (!this.initialized || !this.logsOwner) {
+      this.pendingWrites.length = LOCAL_NUM_ZERO;
+    }
+
+    // Final drain when logsOwner is present. Avoid busy-spinning while an
+    // in-flight write is active, and drop deferred writes during shutdown.
     while (this.pendingWrites.length > LOCAL_NUM_ZERO || this.isWriting) {
       if (this.isWriting) {
         await this.sleep(Math.max(MIN_SLEEP_MS, this.flushYieldMs));
         continue;
       }
       if (this.isWriteDeferred()) {
-        await this.sleep(this.getRemainingWriteDeferMs());
-        continue;
+        this.pendingWrites.length = LOCAL_NUM_ZERO;
+        break;
       }
       await this.flush({
         scheduleThroughWorkClass: false,

@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 121,
     "architecture-governance": 21,
-    "bootstrap-membership": 343,
+    "bootstrap-membership": 344,
     "cdc-metadata": 70,
     "cli-tooling": 99,
     "control-plane": 237,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2638,
-  "digest": "fnv1a32-b9dba62c",
+  "censusSize": 2639,
+  "digest": "fnv1a32-a82048d9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c2e76ab6",
+  "observationDigest": "fnv1a32-ddc6ff11",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1296,6 +1296,7 @@
     "test/node/node-service-presence.property.test.js": "bootstrap-membership",
     "test/node/node-service-runtime-isolation.test.js": "bootstrap-membership",
     "test/node/node-service.test.js": "bootstrap-membership",
+    "test/node/node-startup-natural-shutdown.test.js": "bootstrap-membership",
     "test/node/participant-release-control-refusal-observation.test.js": "bootstrap-membership",
     "test/node/participant-release-fresh-create-completion.test.js": "bootstrap-membership",
     "test/node/replica-cleanup-token-authority.test.js": "bootstrap-membership",
@@ -11152,6 +11153,11 @@
       "files": [
         "test/test-helpers/lifecycle-state-store.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/node/node-startup-natural-shutdown.test.js": {
+      "files": [
+        "test/test-helpers/natural-shutdown-child.js"
       ]
     },
     "test/node/participant-release-control-refusal-observation.test.js": {

@@ -49,7 +49,7 @@ documentClass: generated
 - [critical-placement-formation-observer.js](critical-placement-formation-observer.js) - Read every row of one table the cache can supply. (importers: few)
 - [durable-rejoin-storage-admission.js](durable-rejoin-storage-admission.js) - No leading comment; first export: assertDurableRejoinStorageAdmission. (importers: one)
 - [index.js](index.js) - Bootstrap module - System initialization and startup. (importers: one)
-- [join-cleanup-handler.js](join-cleanup-handler.js) - Join Cleanup Handler - handles failure cleanup and resource teardown for a joining node. (importers: few)
+- [join-cleanup-handler.js](join-cleanup-handler.js) - Join Cleanup Handler - handles failure cleanup and resource teardown for a joining node. (importers: many)
 - [join-cleanup-publication-context.js](join-cleanup-publication-context.js) - No leading comment; first export: buildFailedJoinMembershipPublicationContext. (importers: one)
 - [join-coordinator.js](join-coordinator.js) - JoinCoordinator executes checkpointed join steps idempotently. (importers: few)
 - [join-promotion-state-owner.js](join-promotion-state-owner.js) - No leading comment; first export: evaluateJoinPromotionState. (importers: many)

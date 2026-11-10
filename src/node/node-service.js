@@ -548,15 +548,21 @@ class NodeService extends EventEmitter {
   }
 
   /**
+   * Check if the node service has stopped.
+   * @return {boolean} True if stopped.
+   */
+  isStopped() {
+    return this.status === NODE_STATUS.STOPPED;
+  }
+
+  /**
    * This node runtime's clock authority. Every node-local collaborator that
    * stamps or schedules on behalf of this node reads it, so one runtime's
    * evidence is never another runtime's - or the host's - time.
    * @return {Object} The node's TimeSource; a real one unless supplied.
    */
   getTimeSource() {
-    if (!this._timeSource) {
-      this._timeSource = resolveNodeRuntimeTimeSource(this.providedTimeSource);
-    }
+    if (!this._timeSource) this._timeSource = resolveNodeRuntimeTimeSource(this.providedTimeSource);
     return this._timeSource;
   }
 
@@ -608,10 +614,7 @@ class NodeService extends EventEmitter {
    * @return {string|null} The current lifecycle state, or null if not initialized.
    */
   getLifecycleState() {
-    if (!this.lifecycleStateMachine) {
-      return null;
-    }
-    return this.lifecycleStateMachine.getState();
+    return this.lifecycleStateMachine ? this.lifecycleStateMachine.getState() : null;
   }
 
   /**
@@ -629,10 +632,7 @@ class NodeService extends EventEmitter {
    * @param {NodeLifecycleStateMachine} replacement
    * @return {boolean} True when the expected owner was replaced.
    */
-  replaceExternallyManagedLifecycleStateMachine(
-    expectedCurrent,
-    replacement,
-  ) {
+  replaceExternallyManagedLifecycleStateMachine(expectedCurrent, replacement) {
     if (
       this.lifecycleStateMachine !== expectedCurrent ||
       !(replacement instanceof NodeLifecycleStateMachine)
@@ -709,12 +709,28 @@ class NodeService extends EventEmitter {
     return null;
   }
 
+  clearIntervals() {
+    this._clearIntervals();
+  }
+
+  _clearIntervals() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    if (this.statsInterval) {
+      clearInterval(this.statsInterval);
+      this.statsInterval = null;
+    }
+  }
+
   /**
    * Shutdown the node service and all managed services.
    * @return {Promise<void>}
    */
   async shutdown() {
     if (!this.initialized) {
+      this.status = NODE_STATUS.STOPPED;
       return;
     }
 
@@ -727,15 +743,7 @@ class NodeService extends EventEmitter {
       this.lifecycleStateMachine.transition(NodeState.DRAINING);
     }
 
-    // Clear intervals
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
-    if (this.statsInterval) {
-      clearInterval(this.statsInterval);
-      this.statsInterval = null;
-    }
+    this._clearIntervals();
 
     // Stop all services
     const serviceIds = Array.from(this.services.keys());
@@ -744,17 +752,14 @@ class NodeService extends EventEmitter {
         await this.stopService(serviceId);
       } catch (error) {
         this.logger.warn(NODE_SERVICE_LOG_MSG.SHUTDOWN_SERVICE_STOP_FAILED, {
-          serviceId,
-          error: error.message,
+          serviceId, error: error.message,
         });
         throw error;
       }
     }
 
     // Unregister node address
-    if (this.nodeAddress) {
-      this.addressManager.unregisterNodeAddress(this.nodeAddress);
-    }
+    if (this.nodeAddress) this.addressManager.unregisterNodeAddress(this.nodeAddress);
 
     // Transition to STOPPED state
     if (this.lifecycleStateMachine &&
@@ -766,15 +771,12 @@ class NodeService extends EventEmitter {
     // machine can have independent join/bootstrap listeners.
     if (this.lifecycleStateMachine) {
       this.lifecycleStateMachine.off(
-        NODE_LIFECYCLE_EVENT.STATE_CHANGE,
-        this.lifecycleStateChangeHandler,
+        NODE_LIFECYCLE_EVENT.STATE_CHANGE, this.lifecycleStateChangeHandler,
       );
     }
 
     // Shutdown thread manager
-    if (this.threadManager) {
-      await this.threadManager.shutdown();
-    }
+    if (this.threadManager) await this.threadManager.shutdown();
 
     // Clear system table cache references
     this._systemTableCache = null;

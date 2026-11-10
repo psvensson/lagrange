@@ -17,11 +17,10 @@ import {
 import {readSeedStartupStorageAdmission} from './bootstrap/seed-startup-storage-admission.js';
 import {NodeJoiningService} from './bootstrap/node-joining-service.js';
 import {NodeService} from './node/node-service.js';
+import {LogsTableService} from './logging/logs-table-service.js';
 import {
-  ENTRYPOINT_ERROR_MSG,
-  ENTRYPOINT_LOG_MSG,
-  ENTRYPOINT_RUNTIME_VALUE,
-  ENTRYPOINT_SUBSYSTEM,
+  ENTRYPOINT_ERROR_MSG, ENTRYPOINT_LOG_MSG,
+  ENTRYPOINT_RUNTIME_VALUE, ENTRYPOINT_SUBSYSTEM,
 } from './constants/entrypoint.js';
 import {VERSION} from './public-api.js';
 import {assertCritical} from './utils/assert.js';
@@ -44,8 +43,7 @@ import {
 } from './entrypoint-runtime-helpers.js';
 import {shutdownAdminRuntimeComposition} from './entrypoint-runtime-admin-composition.js';
 import {
-  persistJoinSeedRejoinHints,
-  resolveSeedContactUrls,
+  persistJoinSeedRejoinHints, resolveSeedContactUrls,
 } from './entrypoint-runtime-join-decision.js';
 import {
   reportDryRunCompletion,
@@ -381,13 +379,9 @@ async function startJoinNode(options) {
     failureMessage: 'Failed to shutdown joining node cleanly',
   });
   return Object.freeze({
-    bootstrapAPI,
-    logger: mainLogger,
-    nodeId,
-    openApplicationDatabase:
-      applicationDatabaseRuntime.openApplicationDatabase,
-    shutdownRuntime,
-    startupBranch: ENTRYPOINT_RUNTIME_VALUE.JOIN,
+    bootstrapAPI, logger: mainLogger, nodeId,
+    openApplicationDatabase: applicationDatabaseRuntime.openApplicationDatabase,
+    shutdownRuntime, startupBranch: ENTRYPOINT_RUNTIME_VALUE.JOIN,
     startupOwner: nodeJoiningService,
   });
 }
@@ -419,10 +413,7 @@ async function startSeedNode(options) {
   const startupServicesAdmission = await readSeedStartupStorageAdmission(
     dataDirectoryManager.getDataDir(), awaitStartupAcquisition, options.signal);
 
-  const readinessState = createReadinessStateWithDiagnostics(
-    mainLogger,
-    nodeId,
-  );
+  const readinessState = createReadinessStateWithDiagnostics(mainLogger, nodeId);
   let seedAdminRuntime = null;
   throwIfStartupAborted(options.signal);
   const bootstrapService = new BootstrapService({
@@ -531,9 +522,7 @@ async function startSeedNode(options) {
       await runtime.sqlQueryEngine.shutdown();
     }),
   });
-  const sqlQueryEngine = seedSqlRuntime.sqlQueryEngine;
-  const detachSeedMigrationRecovery =
-    seedSqlRuntime.detachMigrationRecovery;
+  const {sqlQueryEngine, detachSeedMigrationRecovery} = seedSqlRuntime;
   attachSqlRuntimeToStartupOwner({
     owner: bootstrapService,
     sqlQueryEngine,
@@ -574,9 +563,7 @@ async function startSeedNode(options) {
     register: (runtime) => options.cleanupLedger.defer(() =>
       shutdownAdminRuntimeComposition(runtime)),
   });
-  const adminAPI = seedAdminRuntime.adminAPI;
-  const liveQueryWiring = seedAdminRuntime.liveQueryWiring;
-  const adminPort = seedAdminRuntime.adminPort;
+  const {adminAPI, liveQueryWiring, adminPort} = seedAdminRuntime;
   reportStartupRuntimeHandoff({
     logger: mainLogger,
     nodeId,
@@ -610,31 +597,21 @@ async function startSeedNode(options) {
   );
   options.cleanupLedger.defer(() => seedLogsPersistence.cancel?.());
 
-  const applicationDatabaseRuntime =
-    seedSqlRuntime.applicationDatabaseRuntime;
+  const {applicationDatabaseRuntime} = seedSqlRuntime;
   const shutdownRuntime = createRuntimeShutdown({
-    logger: mainLogger,
-    nodeId,
-    bootstrapAPI,
+    logger: mainLogger, nodeId, bootstrapAPI,
     heartbeatService: bootstrapService.heartbeatService,
-    logsPersistence: seedLogsPersistence,
-    rejoinHintsPersistence,
+    logsPersistence: seedLogsPersistence, rejoinHintsPersistence,
     dynamicConfigWiring: seedDynamicConfigWiring,
     detachMigrationRecovery: detachSeedMigrationRecovery,
-    ownerCleanup: () => bootstrapService.shutdown(),
-    adminAPI,
-    liveQueryWiring,
+    ownerCleanup: () => bootstrapService.shutdown(), adminAPI, liveQueryWiring,
     closeApplicationDatabases: () => applicationDatabaseRuntime.close(),
     failureMessage: 'Failed to shutdown seed node cleanly',
   });
   return Object.freeze({
-    bootstrapAPI,
-    logger: mainLogger,
-    nodeId,
-    openApplicationDatabase:
-      applicationDatabaseRuntime.openApplicationDatabase,
-    shutdownRuntime,
-    startupBranch: ENTRYPOINT_RUNTIME_VALUE.SEED,
+    bootstrapAPI, logger: mainLogger, nodeId,
+    openApplicationDatabase: applicationDatabaseRuntime.openApplicationDatabase,
+    shutdownRuntime, startupBranch: ENTRYPOINT_RUNTIME_VALUE.SEED,
     startupOwner: bootstrapService,
   });
 }
@@ -722,9 +699,19 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
   const dataDirectoryManager = DataDirectoryManager.getInstance();
   dataDirectoryManager.initialize();
   const dataDirectoryProcessOwner = acquireDataDirectoryProcessOwner(
-    dataDirectoryManager.getDataDir());
-  cleanupLedger.defer(() => dataDirectoryProcessOwner.release(), {
-    requiresSuccessfulCleanup: true,
+    dataDirectoryManager.getDataDir(),
+  );
+  cleanupLedger.defer(
+    () => dataDirectoryProcessOwner.release(),
+    {requiresSuccessfulCleanup: true},
+  );
+  cleanupLedger.defer(async () => {
+    if (NodeService.instance && !NodeService.instance.isStopped()) {
+      await NodeService.instance.shutdown();
+    }
+    if (LogsTableService.instance) {
+      await LogsTableService.instance.shutdown();
+    }
   });
 
   const hlcClock = new HLCClockService(config.get(CONFIG_KEY.NODE_ID), {
@@ -746,37 +733,31 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
   }
 
   const startupJoinDecision = await awaitStartupAcquisition(resolveStartupJoinDecision({
-    cliArgs,
-    env: environment,
-    config,
-    dataDirectoryManager,
-    logger: mainLogger,
+    cliArgs, env: environment, config, dataDirectoryManager, logger: mainLogger,
   }), options.signal);
   const rolloutControls = resolveRolloutControlsFromEnvironment(environment);
 
   let runtime;
   if (startupJoinDecision.seedNodeAddress) {
     runtime = await startJoinNode({
-      cleanupLedger,
-      config,
-      mainLogger,
-      dataDirectoryManager,
-      rolloutControls,
+      cleanupLedger, config, mainLogger, dataDirectoryManager, rolloutControls,
       seedNodeAddress: startupJoinDecision.seedNodeAddress,
       seedNodeAddresses: startupJoinDecision.seedNodeAddresses,
       startupMode: startupJoinDecision.startupMode,
       membershipOwnerOutcome: startupJoinDecision.membershipOwnerOutcome,
-      env: environment,
-      signal: options.signal,
+      env: environment, signal: options.signal,
     });
   } else {
-    runtime = await startSeedNode({cleanupLedger, config, mainLogger,
-      dataDirectoryManager, dataDirectoryProcessOwner, rolloutControls, env: environment,
+    runtime = await startSeedNode({
+      cleanupLedger, config, mainLogger, dataDirectoryManager, dataDirectoryProcessOwner,
+      rolloutControls, env: environment,
       membershipOwnerOutcome: startupJoinDecision.membershipOwnerOutcome,
-      signal: options.signal});
+      signal: options.signal,
+    });
   }
   return bindDataDirectoryProcessOwner(runtime, dataDirectoryProcessOwner);
 }
+
 async function startLagrangeRuntime(options) {
   const claimAccepted = options.processClaim ?
     ownsProcessRuntimeClaim(options.processClaim) :

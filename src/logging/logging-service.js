@@ -473,6 +473,14 @@ class LoggingService {
   }
 
   /**
+   * Detach the logs table persistence service on shutdown.
+   */
+  detachLogsTable() {
+    this.logsTableReady = false;
+    this.flushCallback = null;
+  }
+
+  /**
    * Flush buffered entries asynchronously in chunks.
    * @param {Function} writeCallback
    * @param {Array<Object>} entries

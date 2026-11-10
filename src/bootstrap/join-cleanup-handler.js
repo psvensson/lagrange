@@ -32,6 +32,8 @@ import {
   STALE_NODE_INCARNATION_CODE,
   isRetryableControlPlaneError,
 } from '../control-plane/control-plane-error-classification.js';
+import {NodeService} from '../node/node-service.js';
+import {LogsTableService} from '../logging/logs-table-service.js';
 
 const LOCAL_STR_NODE_WITHDRAWAL = 'node withdrawal';
 const LOCAL_STR_WITHDRAWAL_NODE_ID_REQUIRED =
@@ -229,28 +231,15 @@ class JoinCleanupHandler {
         cleanupContext.createdMessageGroupIds.length,
     });
 
-    const startIndex =
-      JOINING_PHASE_TO_CLEANUP_INDEX[failedPhase];
-    const effectiveStart = startIndex !== undefined ?
-      startIndex :
-      0;
-
-    const stepsToRun =
-      JOINING_CLEANUP_STEPS_REVERSE.slice(effectiveStart);
-
+    const startIndex = JOINING_PHASE_TO_CLEANUP_INDEX[failedPhase];
+    const effectiveStart = startIndex !== undefined ? startIndex : 0;
+    const stepsToRun = JOINING_CLEANUP_STEPS_REVERSE.slice(effectiveStart);
     const stepResults = {};
-
     for (const step of stepsToRun) {
-      stepResults[step] =
-        await this._executeJoinCleanupStep(step, cleanupContext);
+      stepResults[step] = await this._executeJoinCleanupStep(step, cleanupContext);
     }
-
-    const lifecycleStateMachine =
-      this.delegates.getLifecycleStateMachine();
-    this.transitionJoinCleanupLifecycleToStopped(
-      lifecycleStateMachine,
-      logger,
-    );
+    const lifecycleStateMachine = this.delegates.getLifecycleStateMachine();
+    this.transitionJoinCleanupLifecycleToStopped(lifecycleStateMachine, logger);
 
     logger.info(JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_SUMMARY, {
       nodeId: this.nodeId,
@@ -265,26 +254,14 @@ class JoinCleanupHandler {
   }
 
   transitionJoinCleanupLifecycleToStopped(lifecycleStateMachine, logger) {
-    const stopPath = this.resolveJoinCleanupLifecycleStopPath(
-      lifecycleStateMachine.getState(),
-    );
+    const stopPath = this.resolveJoinCleanupLifecycleStopPath(lifecycleStateMachine.getState());
     for (const targetState of stopPath) {
-      if (lifecycleStateMachine.getState() === targetState) {
-        continue;
-      }
-      const transitioned = lifecycleStateMachine.transition(targetState);
-      if (transitioned === true) {
-        continue;
-      }
-      logger.warn(
-        JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_COMPLETE,
-        {
-          nodeId: this.nodeId,
-          transitionError:
-            JOIN_CLEANUP_LIFECYCLE_TRANSITION_ERROR.TARGET_FAILED_PREFIX +
-              targetState,
-        },
-      );
+      if (lifecycleStateMachine.getState() === targetState) continue;
+      if (lifecycleStateMachine.transition(targetState) === true) continue;
+      logger.warn(JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_COMPLETE, {
+        nodeId: this.nodeId,
+        transitionError: JOIN_CLEANUP_LIFECYCLE_TRANSITION_ERROR.TARGET_FAILED_PREFIX + targetState,
+      });
       return;
     }
   }
@@ -586,16 +563,44 @@ class JoinCleanupHandler {
     }
   }
 
+  async shutdownReadinessAndPublicationServices() {
+    const rebalanceCoordinator = this.delegates.getRebalanceCoordinator();
+    let readinessService = rebalanceCoordinator?.controlPlaneReadinessService || null;
+    if (!readinessService && this.delegates.getControlPlaneReadinessService) {
+      readinessService = this.delegates.getControlPlaneReadinessService();
+    }
+    if (readinessService?.shutdown) await readinessService.shutdown();
+    const pubService = readinessService?.membershipPublicationService || null;
+    pubService?.stopOwnerMembershipDriver?.();
+  }
+
+  shutdownCdcIntegrationService() {
+    const cdcIntegrationService = this.delegates.getCdcIntegrationService?.() || null;
+    if (cdcIntegrationService) {
+      cdcIntegrationService.markShuttingDown?.();
+      cdcIntegrationService.removeAllListeners?.();
+    }
+  }
+
+  async shutdownProcessSingletons() {
+    const nodeInst = NodeService.instance;
+    const ownsSingletons = !nodeInst?.nodeId || nodeInst.nodeId === this.nodeId;
+    if (ownsSingletons && nodeInst) {
+      nodeInst.clearIntervals?.();
+    }
+    if (ownsSingletons && LogsTableService.instance) {
+      await LogsTableService.instance.shutdown();
+    }
+  }
+
   /**
    * Clean up partially initialized services.
    * @return {Promise<void>}
    */
   async cleanup() {
     const logger = this.delegates.getLogger();
-    const messageGroupServices =
-      this.delegates.getMessageGroupServices();
-    const partitionServices =
-      this.delegates.getPartitionServices();
+    const messageGroupServices = this.delegates.getMessageGroupServices();
+    const partitionServices = this.delegates.getPartitionServices();
 
     logger.info(JOINING_LOG_MSG.CLEANUP_START, {
       nodeId: this.nodeId,
@@ -603,18 +608,7 @@ class JoinCleanupHandler {
       partitionServices: partitionServices.size,
     });
     this.delegates.stopJoiningLifecycleOwners();
-    // Stop the always-on owner-driven membership reconcile interval before the
-    // rebalance coordinator (which owns the shared readiness service that holds
-    // the coordinator) is nulled below. Otherwise its 5s tick keeps arming a
-    // ref'd 15s reconcile-timeout timer that hangs the event loop after teardown.
-    const membershipPublicationService =
-      this.delegates.getRebalanceCoordinator()?.controlPlaneReadinessService
-        ?.membershipPublicationService || null;
-    if (membershipPublicationService &&
-      typeof membershipPublicationService.stopOwnerMembershipDriver ===
-        LOCAL_STR_FUNCTION) {
-      membershipPublicationService.stopOwnerMembershipDriver();
-    }
+    await this.shutdownReadinessAndPublicationServices();
     await this.shutdownRebalanceCoordinator(logger);
     const latencyTopology = this.delegates.getLatencyTopology();
     await LatencyTopologySetup.stop(latencyTopology);
@@ -622,32 +616,24 @@ class JoinCleanupHandler {
 
     const messageRouter = this.delegates.getMessageRouter();
     await this.releaseReplicaLifecycleOwner(messageRouter);
-    // Stop all runtime drivers (request/call cell workers) before the
-    // service maps come down: the per-replica REMOVE_REPLICA stop path
-    // never runs at whole-node teardown, so without this sweep the
-    // cell Workers keep the event loop alive after teardown.
-    const serviceRuntimeLifecycle =
-      this.delegates.getServiceRuntimeLifecycle?.() || null;
-    if (
-      typeof serviceRuntimeLifecycle?.shutdown === LOCAL_STR_FUNCTION
-    ) {
+    const serviceRuntimeLifecycle = this.delegates.getServiceRuntimeLifecycle?.() || null;
+    if (typeof serviceRuntimeLifecycle?.shutdown === LOCAL_STR_FUNCTION) {
       await serviceRuntimeLifecycle.shutdown({logger});
     }
     await this.shutdownRpcClient();
     await this.shutdownCdcSqlQueryEngine();
+    this.shutdownCdcIntegrationService();
     this.stopControlPlaneServices();
 
     await this.shutdownServiceMap({
-      logger,
-      services: partitionServices,
+      logger, services: partitionServices,
       successLogMessage: JOINING_LOG_MSG.PARTITION_CLEANED,
       failureLogMessage: JOINING_LOG_MSG.PARTITION_CLEAN_FAILED,
     });
     partitionServices.clear();
 
     await this.shutdownServiceMap({
-      logger,
-      services: messageGroupServices,
+      logger, services: messageGroupServices,
       successLogMessage: JOINING_LOG_MSG.MESSAGE_GROUP_CLEANED,
       failureLogMessage: JOINING_LOG_MSG.MESSAGE_GROUP_CLEAN_FAILED,
     });
@@ -656,9 +642,9 @@ class JoinCleanupHandler {
     const transport = this.delegates.getTransport();
     await this.shutdownTransportAndRouter(transport, messageRouter);
     this.delegates.setCdcIntegrationService(null);
+    await this.shutdownProcessSingletons();
 
-    logger.info(JOINING_LOG_MSG.CLEANUP_COMPLETE,
-      {nodeId: this.nodeId});
+    logger.info(JOINING_LOG_MSG.CLEANUP_COMPLETE, {nodeId: this.nodeId});
   }
 
   async shutdownRebalanceCoordinator(logger) {
@@ -675,7 +661,7 @@ class JoinCleanupHandler {
         error: error.message,
       });
     }
-    this.delegates.setRebalanceCoordinator(null);
+    this.delegates.setRebalanceCoordinator?.(null);
   }
 
   // Release the incarnation's one recorded lifecycle owner (its timer stops

@@ -84,6 +84,9 @@ const logsTableServiceFlushHelperMethods = {
    * @private
    */
   scheduleContinuationFlush(delayOverrideMs = this.flushYieldMs) {
+    if (this.isShuttingDown === true) {
+      return;
+    }
     const delayMs = Number.isFinite(delayOverrideMs) &&
       delayOverrideMs >= MIN_YIELD_MS ?
       Math.floor(delayOverrideMs) :
@@ -131,7 +134,7 @@ const logsTableServiceFlushHelperMethods = {
         return true;
       } catch (error) {
         lastError = error;
-        if (this.shouldDeferWriteError(error)) {
+        if (this.isShuttingDown === true || this.shouldDeferWriteError(error)) {
           throw error;
         }
         if (attempt < this.maxRetries - LOCAL_NUM_ONE) {
@@ -202,6 +205,10 @@ const logsTableServiceFlushHelperMethods = {
    * @private
    */
   deferPendingWrites(entries, error) {
+    if (this.isShuttingDown === true) {
+      this.pendingWrites.length = LOCAL_NUM_ZERO;
+      return;
+    }
     const requeuedEntries = Array.isArray(entries) ? entries.length : 0;
     if (Array.isArray(entries) && entries.length > LOCAL_NUM_ZERO) {
       this.pendingWrites = entries.concat(this.pendingWrites);
