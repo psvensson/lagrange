@@ -59,12 +59,15 @@ this epic owns coordination and its current summary.
   The working tree contains unrelated runtime and evidence work; it is preserved.
 - Current unit: implementation in the isolated worktree
   `/mnt/data/peter/projects/.worktrees/quest-agent-tooling-20261110`, branch
-  `work/quest-agent-tooling-20261110`, at the same source commit. All eight Quests
+  `work/quest-agent-tooling-20261110`. Q1 landed as `f9da7b04a`; the current
+  integration commit is `15be1890a`, including the independently reviewed remote
+  formation trend row. All eight Quests
   were sealed against directly observed absent capabilities. The bounded design
   has independent approval. The first canonical landing refused inline values,
   implicit decisions and mutable checker calls before committing. Their owners
   are repaired without baseline changes; independent source review approves the
-  updated candidate. Replacement receipt review and composed acceptance remain open.
+  updated candidate. Q1 receipt review and canonical landing are complete;
+  remaining component closure and composed acceptance remain open.
 - Implemented candidate: pinned profile, five project skills, local configuration
   and service lifecycle, real observation capture and shared read-only admission.
   Actual Codex sessions invoked both Serena and Context7. The first host invocation
@@ -86,10 +89,14 @@ this epic owns coordination and its current summary.
 - Integration responsibility: the agent assigned this epic owns its composition;
   existing product Quest owners retain their source and evidence responsibilities.
   No unattended coordinator or scheduler is installed.
-- Next action: finish the refreshed current-client journey and component receipts,
-  land through Solver, then complete the separate pilot, lesson-reuse and
-  publication proof. No component
-  receipt or epic completion is asserted before its full contract is measured.
+- Publication blocker: the exact `15be1890a` publisher gate refused the existing
+  duplication ratchets (source/scripts 45 groups and 1,342 lines versus 35/1,109;
+  tests 632/23,582 versus 623/23,339). No push occurred. The retained clone reports
+  contain no pair involving this epic's changed files. That attribution does not
+  waive the full gate or establish publishability of the inherited candidate.
+- Next action: finish exact component receipts, canonical landings and separate
+  lesson reuse. Q8 retains its real publication requirement; no publication or
+  epic completion is inferred from the implemented source or focused proof.
 - Scope and lifecycle follow current `scripts/solve/schema.js`, AGENTS and routed
   owners. The older epic README describes retired commands and a contradictory
   no-status format; Q1 reconciles that guidance with the current owners.

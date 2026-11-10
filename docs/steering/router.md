@@ -26,8 +26,7 @@ an implementation changes its row, not the rule. Consult only relevant owners.
 
 ## Conditional material
 
-Load these owners only for the work named. `npm run audit:doc-audience` owns
-which paths a public reader may be sent to.
+Load only relevant owners; `npm run audit:doc-audience` governs public links.
 
 | Work | Read |
 | --- | --- |
