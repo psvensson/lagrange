@@ -78,7 +78,7 @@ const operationCreationSupportMethods = {
         {
           operationId: operation.operationId,
           partitionId: operation.partitionId || null,
-          workflowStep: operation.workflowStep || null,
+          workflowStep: operation.workflowStep,
           error: error?.message || String(error),
         },
       );

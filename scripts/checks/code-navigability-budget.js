@@ -13,25 +13,16 @@
  * count on stdout, exit 1, so a probe never reads a silent all-rows run.
  *
  * Patterns are recognised only by code-navigability-detectors.js; this
- * script scopes and counts its sites. A row whose input does not exist yet
- * (the coverage census) is outstanding with value null, never met; a source
- * file that does not parse makes every detector-backed row outstanding, and
- * the failing files are printed, because a count that skipped a file is not
- * a count. An absent `src` is the same incompleteness: every row that reads
- * detector sites or the source tree is outstanding and the missing root is
- * printed on stderr.
+ * script scopes and counts its sites. A row whose input does not exist yet or
+ * fails five-lane completeness / witness accounting (the coverage census) is
+ * outstanding with value null, never met; a source file that does not parse
+ * makes every detector-backed row outstanding, and the failing files are
+ * printed. Zero uncensused or unclassified sites means every detected fallback
+ * site is accounted for in census/classification, never zero fallback logic.
  *
- * It reads the tree and writes nothing (R27). Change a number here and in the
- * epic table together, never in one place. The measuring half takes the
- * tree root and is exported, so the rows are witnessed against fixture trees
- * (test/scripts/code-navigability-budget.test.js).
- *
- * Governed by the ambient-intrinsic audit: the prototype methods that audit
- * names and this script calls (Array filter, find, includes, indexOf, map,
- * some; String padEnd, padStart, split, trim) are captured at module load.
- * Methods the audit does not govern (join, slice, RegExp test, Map and Set
- * methods) are called directly. Census and classification records are read
- * by own fields only (ownField).
+ * Governed by the ambient-intrinsic audit: prototype methods governed by that
+ * audit are captured at module load, and census and classification records are
+ * read by own fields only (`ownField`).
  */
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
@@ -39,28 +30,43 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {
-  ROW_ORDER,
-  detectNavigabilityPatterns,
-  moduleExportNames,
-  ownField,
-  parseNavigabilitySource,
-  siteIdentity,
-  sourceFiles,
+  ROW_ORDER, detectNavigabilityPatterns, moduleExportNames, ownField,
+  parseNavigabilitySource, siteIdentity, sourceFiles,
 } from './code-navigability-detectors.js';
 import {
-  defaultEslintRunner,
-  promotedPatterns,
-  promotedReportCounts,
+  defaultEslintRunner, promotedPatterns, promotedReportCounts,
 } from './code-navigability-eslint-promotion.js';
 
+const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
+const arrayIsArray = Array.isArray;
 const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayPush = Function.call.bind(Array.prototype.push);
 const arraySome = Function.call.bind(Array.prototype.some);
+const dateParse = Date.parse;
+const jsonParse = JSON.parse;
+const jsonStringify = JSON.stringify;
+const MapConstructor = Map;
+const mapGet = Function.call.bind(Map.prototype.get);
+const mapHas = Function.call.bind(Map.prototype.has);
+const mapSet = Function.call.bind(Map.prototype.set);
+const numberIsFinite = Number.isFinite;
+const numberIsInteger = Number.isInteger;
+const objectAssign = Object.assign;
+const objectCreate = Object.create;
+const objectFreeze = Object.freeze;
+const objectHasOwn = Object.hasOwn;
+const objectKeys = Object.keys;
+const regexpTest = Function.call.bind(RegExp.prototype.test);
+const SetConstructor = Set;
+const setAdd = Function.call.bind(Set.prototype.add);
+const setHas = Function.call.bind(Set.prototype.has);
 const stringPadEnd = Function.call.bind(String.prototype.padEnd);
 const stringPadStart = Function.call.bind(String.prototype.padStart);
+const stringSlice = Function.call.bind(String.prototype.slice);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
@@ -100,6 +106,13 @@ const CAP_ROWS = Object.freeze(new Set([
   'prototype_copy_bags', 'inheritance_depth_over_two', 'row_field_alias_reads',
   'two_source_fallback_reads', 'typeof_dual_paths', 'catch_returns_default',
   'reexport_only_modules', 'legacy_term_identifiers',
+]));
+
+const FALLBACK_BUDGET_ROWS = Object.freeze(new Set([
+  'fallback_sites_uncensused',
+  'fallback_branches_never_taken',
+  'fallback_branches_only_fallback_taken',
+  'fallback_sites_unclassified',
 ]));
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -153,22 +166,53 @@ const LOG_COVERAGE_EXPORT = 'LOG_WINDOW_COVERAGE';
 
 // The census and classification fields read, each only as an own field.
 const INPUT_FIELD = Object.freeze({
-  SCHEMA: 'schema', SITES: 'sites', CLASS: 'class', ENTRIES: 'entries',
-  CLASSIFICATION: 'classification',
+  SCHEMA: 'schema', SITES: 'sites', CLASS: 'class', RUNS: 'runs', ID: 'id',
+  LANE: 'lane', HOST: 'host', COMMIT: 'commit', STARTED_AT: 'startedAt',
+  COVERAGE_DIGEST: 'coverageDigest', INCOMPLETE: 'incomplete', PROBLEMS: 'problems',
+  WITNESSES: 'witnesses', STARTED: 'started', COMPLETE: 'complete', LOST: 'lost',
+  EXTERNAL: 'external', LOST_WITNESSES: 'lostWitnesses', SIDES_EXECUTED: 'sidesExecuted',
+  SIDES_BY_RUN: 'sidesByRun', PRIMARY: 'primary', FALLBACK: 'fallback',
+  ENTRIES: 'entries', CLASSIFICATION: 'classification', VERSION: 'version',
+  VIOLATIONS: 'violations', ESLINT_RUNNER: 'eslintRunner',
 });
 const CENSUS_FILE = 'data/fallback-census/census.json';
 const CENSUS_SCHEMA = 'fallback-census/1';
+const REQUIRED_CENSUS_LANES = Object.freeze([
+  'unit', 'packaging', 'integration', 'bootstrap', 'formation',
+]);
+const REQUIRED_CENSUS_LANE_SET = Object.freeze(new Set(REQUIRED_CENSUS_LANES));
+const COMMIT_HASH = /^[0-9a-f]{40}$/u;
+const SHA256_HEX = /^[0-9a-f]{64}$/u;
+const ISO_8601_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
 const CLASSIFICATION_FILE = 'scripts/checks/code-navigability-fallback-classification.json';
 const CENSUS_ROWS = Object.freeze(new Set([
-  'two_source_fallback_reads', 'typeof_dual_paths', 'catch_returns_default']));
+  'two_source_fallback_reads', 'typeof_dual_paths', 'catch_returns_default',
+]));
 const CLASS_NEVER = 'never';
 const CLASS_FALLBACK_ONLY = 'fallback-only';
 const CLASS_BOTH = 'both';
 const CLASS_PRIMARY_ONLY = 'primary-only';
 const STRING_TYPE_NAME = 'string';
-// The classes a run that loaded the file can give; `unloaded` is not one.
+const BOOLEAN_TYPE_NAME = 'boolean';
+const OBJECT_TYPE_NAME = 'object';
 const EXECUTED_CLASSES = Object.freeze(new Set([
-  CLASS_NEVER, CLASS_PRIMARY_ONLY, CLASS_FALLBACK_ONLY, CLASS_BOTH]));
+  CLASS_NEVER, CLASS_PRIMARY_ONLY, CLASS_FALLBACK_ONLY, CLASS_BOTH,
+]));
+const EXPECTED_SIDES_BY_CLASS = objectFreeze(objectAssign(objectCreate(null), {
+  [CLASS_NEVER]: objectFreeze([false, false]),
+  [CLASS_PRIMARY_ONLY]: objectFreeze([true, false]),
+  [CLASS_FALLBACK_ONLY]: objectFreeze([false, true]),
+  [CLASS_BOTH]: objectFreeze([true, true]),
+}));
+
+const FALLBACK_SUMMARY_NOTE =
+  'Zero uncensused or unclassified sites means every detected fallback site is accounted ' +
+  'for in census/classification, never zero fallback logic.';
+const TABLE_NOTE_PREFIX = 'note: ';
+const TABLE_NOTE_SITES_LABEL = ' fallback logic sites detected in src (censused: ';
+const TABLE_NOTE_UNCENSUSED_LABEL = ', uncensused: ';
+const TABLE_NOTE_SUFFIX =
+  '); 0 uncensused/unclassified sites means accounted for, never zero fallback logic';
 
 const ARGV_OFFSET = 2;
 const JSON_FLAG = '--json';
@@ -196,6 +240,20 @@ const EXIT_OK = 0;
 const EXIT_OVER_BUDGET = 1;
 const EXIT_USAGE = 1;
 
+function isPlainObject(value) {
+  return typeof value === OBJECT_TYPE_NAME && value !== null && !arrayIsArray(value);
+}
+
+function isNonBlankString(value) {
+  return typeof value === STRING_TYPE_NAME && stringTrim(value).length > 0;
+}
+
+function isIsoTimestamp(value) {
+  return typeof value === STRING_TYPE_NAME &&
+    regexpTest(ISO_8601_TIMESTAMP, value) &&
+    numberIsFinite(dateParse(value));
+}
+
 function exists(root, relative) {
   return fs.existsSync(path.join(root, relative));
 }
@@ -204,11 +262,10 @@ function readText(root, relative) {
   return fs.readFileSync(path.join(root, relative), TEXT_ENCODING);
 }
 
-// A JSON input, or undefined when it is absent or unreadable as JSON.
 function readJsonInput(root, relative) {
   if (!exists(root, relative)) return undefined;
   try {
-    return JSON.parse(readText(root, relative));
+    return jsonParse(readText(root, relative));
   } catch (error) {
     process.stderr.write(`${relative}${PARSE_FAILURE_SEPARATOR}${error.message}\n`);
     return undefined;
@@ -216,7 +273,9 @@ function readJsonInput(root, relative) {
 }
 
 function matchesAny(file, patterns) {
-  for (const pattern of patterns) if (pattern.test(file)) return true;
+  for (let index = 0; index < patterns.length; index += 1) {
+    if (regexpTest(patterns[index], file)) return true;
+  }
   return false;
 }
 
@@ -228,39 +287,39 @@ function scopedCount(context, row, patterns) {
   return arrayFilter(rowSites(context, row), (site) => matchesAny(site.file, patterns)).length;
 }
 
-// The patterns ESLint promotes, and their report counts, read once.
 function eslintPromotion(context) {
   if (!context.promotion) {
     const runner = context.eslintRunner;
     const sampleFile = sourceFiles(context.root, SOURCE_DIRECTORY)[0];
     const promoted = promotedPatterns(context.root, runner, sampleFile, RATCHETED_PATTERNS);
-    context.promotion = {promoted,
-      counts: promotedReportCounts(context.root, runner, promoted)};
+    context.promotion = {
+      promoted,
+      counts: promotedReportCounts(context.root, runner, promoted),
+    };
   }
   return context.promotion;
 }
 
-// A baseline file counts only in the shared count-baseline shape.
 function hasAuditBaseline(root, pattern) {
   const baseline = readJsonInput(root,
     `${PATTERN_BASELINE_PREFIX}${pattern}${PATTERN_BASELINE_SUFFIX}`);
-  return Boolean(baseline) && baseline.version === BASELINE_VERSION &&
-    Array.isArray(baseline.violations);
+  return Boolean(baseline) && ownField(baseline, INPUT_FIELD.VERSION) === BASELINE_VERSION &&
+    arrayIsArray(ownField(baseline, INPUT_FIELD.VIOLATIONS));
 }
 
 function patternsWithoutRatchet(context) {
   const {promoted} = eslintPromotion(context);
   return arrayFilter(RATCHETED_PATTERNS, (pattern) =>
-    !promoted.has(pattern) && !hasAuditBaseline(context.root, pattern)).length;
+    !setHas(promoted, pattern) && !hasAuditBaseline(context.root, pattern)).length;
 }
 
-// Every directory under src (src included) with its direct entries.
 function sourceDirectories(root) {
   const directories = [];
   const visit = (relative) => {
     const entries = fs.readdirSync(path.join(root, relative), {withFileTypes: true});
-    directories.push({relative, entries});
-    for (const entry of entries) {
+    arrayPush(directories, {relative, entries});
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index];
       if (entry.isDirectory()) visit(`${relative}/${entry.name}`);
     }
   };
@@ -270,7 +329,7 @@ function sourceDirectories(root) {
 
 function directJsFileCount(entries) {
   return arrayFilter(entries, (entry) =>
-    entry.isFile() && entry.name.slice(-JS_SUFFIX.length) === JS_SUFFIX).length;
+    entry.isFile() && stringSlice(entry.name, -JS_SUFFIX.length) === JS_SUFFIX).length;
 }
 
 function directoriesOverCap(context) {
@@ -280,13 +339,10 @@ function directoriesOverCap(context) {
 
 function lastNumericLine(text) {
   const numbers = arrayFilter(stringSplit(String(text), LINE_SEPARATOR), (line) =>
-    NUMERIC_LINE.test(line));
+    regexpTest(NUMERIC_LINE, line));
   return numbers.length > 0 ? Number(numbers[numbers.length - 1]) : null;
 }
 
-// The generator's own --check verdict once it exists (a generator that
-// fails has no verdict: outstanding); until then every directory without an
-// INDEX.md is stale.
 function staleOwnerIndexes(context) {
   const root = context.root;
   if (exists(root, OWNER_INDEX_GENERATOR)) {
@@ -303,22 +359,6 @@ function sourceExportNames(root, file) {
   return moduleExportNames(parsed);
 }
 
-function exportsDecoder(root, file, decoder) {
-  const names = readableExportNames(root, file);
-  return Boolean(names) && arrayIncludes(names, decoder);
-}
-
-// A table has its decoder when a `<table>-row-decoder.js` under src exports
-// `decode<Table>Row`.
-function systemTablesWithoutDecoder(context) {
-  const files = sourceFiles(context.root, SOURCE_DIRECTORY);
-  return arrayFilter(SYSTEM_TABLE_DECODERS, ([fileName, decoder]) =>
-    !arraySome(files, (file) => path.basename(file) === fileName &&
-      exportsDecoder(context.root, file, decoder))).length;
-}
-
-// The names a module exports, or undefined (reported) when it cannot be
-// read or parsed.
 function readableExportNames(root, file) {
   try {
     return sourceExportNames(root, file);
@@ -328,10 +368,18 @@ function readableExportNames(root, file) {
   }
 }
 
-// 1 when the bundle writer exports LOG_TAIL_LINE_COUNT without
-// LOG_WINDOW_COVERAGE, 0 when it exports LOG_WINDOW_COVERAGE. Outstanding
-// (null) while the writer is absent or unparsable, or exports neither name:
-// a writer that names no window cannot be judged.
+function exportsDecoder(root, file, decoder) {
+  const names = readableExportNames(root, file);
+  return Boolean(names) && arrayIncludes(names, decoder);
+}
+
+function systemTablesWithoutDecoder(context) {
+  const files = sourceFiles(context.root, SOURCE_DIRECTORY);
+  return arrayFilter(SYSTEM_TABLE_DECODERS, (entry) =>
+    !arraySome(files, (file) => path.basename(file) === entry[0] &&
+      exportsDecoder(context.root, file, entry[1]))).length;
+}
+
 function logWindowsWithoutCoverage(context) {
   if (!exists(context.root, FAILURE_BUNDLE_WRITER)) return null;
   const names = readableExportNames(context.root, FAILURE_BUNDLE_WRITER);
@@ -340,63 +388,168 @@ function logWindowsWithoutCoverage(context) {
   return arrayIncludes(names, LOG_TAIL_EXPORT) ? 1 : null;
 }
 
-// identity -> the classes its census records give (a duplicate identity
-// has more than one), or undefined for a census that is absent, unreadable
-// or fails the schema (`fallback-census/1` with a `sites` array). A record
-// is an object with string row, file and hash and an integer occurrence
-// (siteIdentity); anything else is invalid, has no identity and censuses
-// nothing. A valid identity keeps whatever class it carries, so a second
-// record with a malformed class still makes the identity a duplicate. Every
-// field is read as an own field, never inherited.
+function hasCompleteRunWitnesses(run) {
+  const witnesses = ownField(run, INPUT_FIELD.WITNESSES);
+  const started = ownField(witnesses, INPUT_FIELD.STARTED);
+  const complete = ownField(witnesses, INPUT_FIELD.COMPLETE);
+  const lost = ownField(witnesses, INPUT_FIELD.LOST);
+  const rawExternal = ownField(witnesses, INPUT_FIELD.EXTERNAL);
+  const external = rawExternal === undefined ? 0 : rawExternal;
+  return numberIsInteger(started) && started > 0 &&
+    numberIsInteger(complete) && complete > 0 &&
+    lost === 0 &&
+    numberIsInteger(external) && external >= 0 &&
+    complete + external === started;
+}
+
+function hasCleanRunStatus(run) {
+  if (ownField(run, INPUT_FIELD.INCOMPLETE) === true) return false;
+  const problems = ownField(run, INPUT_FIELD.PROBLEMS);
+  return problems === undefined || (arrayIsArray(problems) && problems.length === 0);
+}
+
+function isValidCensusRun(run) {
+  const lane = ownField(run, INPUT_FIELD.LANE);
+  const commit = ownField(run, INPUT_FIELD.COMMIT);
+  const digest = ownField(run, INPUT_FIELD.COVERAGE_DIGEST);
+  return isNonBlankString(ownField(run, INPUT_FIELD.ID)) &&
+    typeof lane === STRING_TYPE_NAME && setHas(REQUIRED_CENSUS_LANE_SET, lane) &&
+    isNonBlankString(ownField(run, INPUT_FIELD.HOST)) &&
+    typeof commit === STRING_TYPE_NAME && regexpTest(COMMIT_HASH, commit) &&
+    isIsoTimestamp(ownField(run, INPUT_FIELD.STARTED_AT)) &&
+    typeof digest === STRING_TYPE_NAME && regexpTest(SHA256_HEX, digest) &&
+    hasCleanRunStatus(run) &&
+    hasCompleteRunWitnesses(run);
+}
+
+function validCensusRunIds(census) {
+  const runs = ownField(census, INPUT_FIELD.RUNS);
+  if (!arrayIsArray(runs) || runs.length < REQUIRED_CENSUS_LANES.length) return undefined;
+  const ids = new SetConstructor();
+  const lanes = new SetConstructor();
+  for (let index = 0; index < runs.length; index += 1) {
+    if (!objectHasOwn(runs, index)) return undefined;
+    const run = runs[index];
+    const id = ownField(run, INPUT_FIELD.ID);
+    if (!isValidCensusRun(run) || setHas(ids, id)) return undefined;
+    setAdd(ids, id);
+    setAdd(lanes, ownField(run, INPUT_FIELD.LANE));
+  }
+  const hasEveryRequiredLane = arrayEvery(REQUIRED_CENSUS_LANES, (lane) => setHas(lanes, lane));
+  return hasEveryRequiredLane ? ids : undefined;
+}
+
+function sidesPair(sidesObject) {
+  if (!isPlainObject(sidesObject)) return undefined;
+  const primary = ownField(sidesObject, INPUT_FIELD.PRIMARY);
+  const fallback = ownField(sidesObject, INPUT_FIELD.FALLBACK);
+  if (typeof primary !== BOOLEAN_TYPE_NAME || typeof fallback !== BOOLEAN_TYPE_NAME) {
+    return undefined;
+  }
+  return [primary, fallback];
+}
+
+function matchesExpectedSides(pair, expected) {
+  return Boolean(pair) && pair[0] === expected[0] && pair[1] === expected[1];
+}
+
+function hasConsistentSidesByRun(sidesByRun, runs, expected) {
+  if (sidesByRun === undefined) return true;
+  if (!isPlainObject(sidesByRun) || objectKeys(sidesByRun).length !== runs.length) {
+    return false;
+  }
+  let anyPrimary = false;
+  let anyFallback = false;
+  for (let index = 0; index < runs.length; index += 1) {
+    const pair = sidesPair(ownField(sidesByRun, runs[index]));
+    if (!pair) return false;
+    if (pair[0]) anyPrimary = true;
+    if (pair[1]) anyFallback = true;
+  }
+  return anyPrimary === expected[0] && anyFallback === expected[1];
+}
+
+function hasConsistentSiteSides(record, runs, siteClass) {
+  const expected = typeof siteClass === STRING_TYPE_NAME &&
+    objectHasOwn(EXPECTED_SIDES_BY_CLASS, siteClass) ? EXPECTED_SIDES_BY_CLASS[siteClass] :
+    undefined;
+  if (!expected) return true;
+  const sidesExecuted = ownField(record, INPUT_FIELD.SIDES_EXECUTED);
+  if (sidesExecuted !== undefined && !matchesExpectedSides(sidesPair(sidesExecuted), expected)) {
+    return false;
+  }
+  return hasConsistentSidesByRun(ownField(record, INPUT_FIELD.SIDES_BY_RUN), runs, expected);
+}
+
+function hasValidSiteRuns(record, runIds) {
+  const runs = ownField(record, INPUT_FIELD.RUNS);
+  if (!arrayIsArray(runs) || runs.length === 0) return false;
+  const lostWitnesses = ownField(record, INPUT_FIELD.LOST_WITNESSES);
+  if (lostWitnesses !== undefined &&
+      (!arrayIsArray(lostWitnesses) || lostWitnesses.length > 0)) {
+    return false;
+  }
+  const seen = new SetConstructor();
+  for (let index = 0; index < runs.length; index += 1) {
+    if (!objectHasOwn(runs, index)) return false;
+    const runId = runs[index];
+    if (typeof runId !== STRING_TYPE_NAME || !setHas(runIds, runId) || setHas(seen, runId)) {
+      return false;
+    }
+    setAdd(seen, runId);
+  }
+  return hasConsistentSiteSides(record, runs, ownField(record, INPUT_FIELD.CLASS));
+}
+
 function readCensus(root) {
   const census = readJsonInput(root, CENSUS_FILE);
   const sites = ownField(census, INPUT_FIELD.SITES);
+  const runIds = validCensusRunIds(census);
   const valid = ownField(census, INPUT_FIELD.SCHEMA) === CENSUS_SCHEMA &&
-    Array.isArray(sites);
+    arrayIsArray(sites) && Boolean(runIds);
   if (!valid) return undefined;
-  const records = new Map();
-  for (const record of sites) {
+  const records = new MapConstructor();
+  for (let index = 0; index < sites.length; index += 1) {
+    if (!objectHasOwn(sites, index)) continue;
+    const record = sites[index];
     const identity = siteIdentity(record);
     if (identity === undefined) continue;
-    records.set(identity, [...(records.get(identity) || []),
-      ownField(record, INPUT_FIELD.CLASS)]);
+    const siteClass = hasValidSiteRuns(record, runIds) ?
+      ownField(record, INPUT_FIELD.CLASS) : undefined;
+    let list = mapGet(records, identity);
+    if (!list) {
+      list = [];
+      mapSet(records, identity, list);
+    }
+    arrayPush(list, siteClass);
   }
   return records;
 }
 
-function isClassification(value) {
-  return typeof value === STRING_TYPE_NAME && stringTrim(value).length > 0;
-}
-
-// The identities a classification classifies: an entry is an object with a
-// site identity and a string classification that is not blank (whitespace
-// only is blank); anything else, null included, classifies nothing. Every
-// field is read as an own field, never inherited.
 function readClassifiedIdentities(root) {
   const declared = ownField(readJsonInput(root, CLASSIFICATION_FILE), INPUT_FIELD.ENTRIES);
-  const entries = Array.isArray(declared) ? declared : [];
-  const identities = new Set();
-  for (const entry of entries) {
+  const entries = arrayIsArray(declared) ? declared : [];
+  const identities = new SetConstructor();
+  for (let index = 0; index < entries.length; index += 1) {
+    if (!objectHasOwn(entries, index)) continue;
+    const entry = entries[index];
     const identity = siteIdentity(entry);
     const classified = identity !== undefined &&
-      isClassification(ownField(entry, INPUT_FIELD.CLASSIFICATION));
-    if (classified) identities.add(identity);
+      isNonBlankString(ownField(entry, INPUT_FIELD.CLASSIFICATION));
+    if (classified) setAdd(identities, identity);
   }
   return identities;
 }
 
-// The executed class the census gives a site: exactly one record with one
-// of the four executed classes; `unloaded`, unknown, missing or duplicated
-// records leave the site uncensused.
 function censusClassOf(records, site) {
-  const classes = records.get(siteIdentity(site)) || [];
-  return classes.length === 1 && EXECUTED_CLASSES.has(classes[0]) ? classes[0] : undefined;
+  const classes = mapGet(records, siteIdentity(site)) || [];
+  return classes.length === 1 && setHas(EXECUTED_CLASSES, classes[0]) ? classes[0] : undefined;
 }
 
 function censusContext(context) {
   if (!context.census) {
     const records = readCensus(context.root);
-    const sites = arrayFilter(context.detection.sites, (site) => CENSUS_ROWS.has(site.row));
+    const sites = arrayFilter(context.detection.sites, (site) => setHas(CENSUS_ROWS, site.row));
     context.census = {
       present: Boolean(records),
       classes: arrayMap(sites, (site) =>
@@ -423,15 +576,39 @@ function unclassifiedSites(context) {
   const census = censusContext(context);
   if (!census.present) return null;
   return arrayFilter(census.classes, (entry) => entry.siteClass === CLASS_BOTH &&
-    !census.classified.has(siteIdentity(entry.site))).length;
+    !setHas(census.classified, siteIdentity(entry.site))).length;
 }
 
-// A promoted pattern is measured by ESLint's reports; any other by its
-// detector.
+const READS = objectFreeze({SITES: 'sites', SOURCE_TREE: 'source-tree', NONE: 'none'});
+
+function buildFallbackSummary(context) {
+  if (isIncomplete(context.detection, READS.SITES)) return null;
+  const census = censusContext(context);
+  const totalFallbackSites = census.classes.length;
+  const censusedSites = arrayFilter(census.classes, (entry) => Boolean(entry.siteClass)).length;
+  const uncensusedCount = totalFallbackSites - censusedSites;
+  const byClass = census.present ? {
+    [CLASS_NEVER]: censusClassCount(CLASS_NEVER)(context),
+    [CLASS_PRIMARY_ONLY]: censusClassCount(CLASS_PRIMARY_ONLY)(context),
+    [CLASS_FALLBACK_ONLY]: censusClassCount(CLASS_FALLBACK_ONLY)(context),
+    [CLASS_BOTH]: censusClassCount(CLASS_BOTH)(context),
+  } : null;
+  return {
+    totalFallbackSites,
+    censusedSites,
+    uncensusedSites: uncensusedCount,
+    unclassifiedLiveSites: unclassifiedSites(context),
+    byClass,
+    note: FALLBACK_SUMMARY_NOTE,
+  };
+}
+
 function patternCount(row) {
   return (context) => {
     const {promoted, counts} = eslintPromotion(context);
-    return promoted.has(row) ? counts.get(row) : context.detection.counts[row];
+    return setHas(promoted, row) ?
+      (mapHas(counts, row) ? mapGet(counts, row) : undefined) :
+      context.detection.counts[row];
   };
 }
 
@@ -439,13 +616,7 @@ function scopedRow(row, patterns) {
   return (context) => scopedCount(context, row, patterns);
 }
 
-// What a row reads, and so what leaves it outstanding: detector SITES (a
-// parse failure or an absent source root), the SOURCE_TREE (an absent
-// source root), or neither.
-const READS = Object.freeze({SITES: 'sites', SOURCE_TREE: 'source-tree', NONE: 'none'});
-
-// name -> [what it reads, measure]
-const MEASURES = Object.freeze({
+const MEASURES = objectFreeze({
   navigability_patterns_without_ratchet: [READS.NONE, patternsWithoutRatchet],
   owner_port_feature_detection_pilot_owners:
     [READS.SITES, scopedRow('owner_port_feature_detection', PILOT_OWNER_FILES)],
@@ -478,12 +649,12 @@ function isIncomplete(detection, reads) {
 
 function isMet(name, value) {
   if (value === null || value === undefined) return false;
-  return CAP_ROWS.has(name) ? value <= BUDGET[name] : value === 0;
+  return setHas(CAP_ROWS, name) ? value <= BUDGET[name] : value === 0;
 }
 
 function measureRow(context, name) {
-  const [reads, measure] = rowMeasure(name);
-  const measured = isIncomplete(context.detection, reads) ? null : measure(context);
+  const spec = rowMeasure(name);
+  const measured = isIncomplete(context.detection, spec[0]) ? null : spec[1](context);
   const value = measured === undefined ? null : measured;
   return {name, value, budget: BUDGET[name], met: isMet(name, value)};
 }
@@ -492,52 +663,89 @@ function measureRow(context, name) {
  * Measure every budget row against a tree, in the sealed table's order.
  * @param {string} root the checkout root
  * @param {Object} options `{eslintRunner}`: `(args, root) => {status, stdout}`
- * @return {Object} `{rows, parseFailures, missingRoot}`
+ * @return {Object} `{rows, parseFailures, missingRoot, fallbackSummary}`
  */
 function measureNavigabilityBudgetWithFailures(root = REPO_ROOT, options = {}) {
-  const context = {root, detection: detectNavigabilityPatterns(root),
-    eslintRunner: options.eslintRunner || defaultEslintRunner};
-  const rows = arrayMap(Object.keys(BUDGET), (name) => measureRow(context, name));
-  return {rows, parseFailures: context.detection.parseFailures,
-    missingRoot: context.detection.missingRoot};
+  const eslintRunnerOption = ownField(options, INPUT_FIELD.ESLINT_RUNNER);
+  const context = {
+    root,
+    detection: detectNavigabilityPatterns(root),
+    eslintRunner: eslintRunnerOption || defaultEslintRunner,
+  };
+  const rows = arrayMap(objectKeys(BUDGET), (name) => measureRow(context, name));
+  return {
+    rows,
+    parseFailures: context.detection.parseFailures,
+    missingRoot: context.detection.missingRoot,
+    fallbackSummary: buildFallbackSummary(context),
+  };
 }
 
 function measureNavigabilityBudget(root = REPO_ROOT, options = {}) {
   return measureNavigabilityBudgetWithFailures(root, options).rows;
 }
 
-function renderTable(rows, parseFailures) {
-  const width = Math.max(...arrayMap(rows, (row) => row.name.length));
+function formatFallbackTableNote(rows, fallbackSummary) {
+  if (!fallbackSummary || fallbackSummary.totalFallbackSites === 0) return EMPTY_ROWS;
+  const showsFallbackRow = arraySome(rows, (row) => setHas(FALLBACK_BUDGET_ROWS, row.name));
+  if (!showsFallbackRow) return EMPTY_ROWS;
+  return `${TABLE_NOTE_PREFIX}${fallbackSummary.totalFallbackSites}` +
+    `${TABLE_NOTE_SITES_LABEL}${fallbackSummary.censusedSites}` +
+    `${TABLE_NOTE_UNCENSUSED_LABEL}${fallbackSummary.uncensusedSites}` +
+    `${TABLE_NOTE_SUFFIX}${LINE_SEPARATOR}`;
+}
+
+function maxRowNameWidth(rows) {
+  let width = 0;
+  for (let index = 0; index < rows.length; index += 1) {
+    if (rows[index].name.length > width) width = rows[index].name.length;
+  }
+  return width;
+}
+
+function renderTable(rows, parseFailures, fallbackSummary = null) {
+  const width = maxRowNameWidth(rows);
   let text = EMPTY_ROWS;
-  for (const row of rows) {
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
     const mark = row.met ? MET_MARK : UNMET_MARK;
     const shown = row.value === null ? OUTSTANDING_VALUE : String(row.value);
     text += `${mark} ${stringPadEnd(row.name, width)}${COLUMN_GAP}` +
       `${stringPadStart(shown, VALUE_COLUMN_WIDTH)}${BUDGET_SEPARATOR}${row.budget}` +
       LINE_SEPARATOR;
   }
-  for (const failure of parseFailures) {
+  for (let index = 0; index < parseFailures.length; index += 1) {
+    const failure = parseFailures[index];
     text += `${PARSE_FAILURE_PREFIX}${failure.file}${PARSE_FAILURE_SEPARATOR}` +
       `${failure.message}${LINE_SEPARATOR}`;
   }
+  text += formatFallbackTableNote(rows, fallbackSummary);
   return text;
 }
 
-// --rows <name,name>: measure only the named rows (each quest's probe).
-// Row names have no spaces, so a name matches verbatim; a name that matches
-// no row is itself unmet, so a misspelled probe reads red.
 function selectedRows(rows, argv) {
   const index = arrayIndexOf(argv, ROWS_FLAG);
   if (index < 0) return rows;
-  const names = [...new Set(stringSplit(String(argv[index + 1] || EMPTY_ROWS), ROW_SEPARATOR))];
+  const rawNames = stringSplit(String(argv[index + 1] || EMPTY_ROWS), ROW_SEPARATOR);
+  const seen = new SetConstructor();
+  const names = [];
+  for (let nameIndex = 0; nameIndex < rawNames.length; nameIndex += 1) {
+    const name = rawNames[nameIndex];
+    if (!setHas(seen, name)) {
+      setAdd(seen, name);
+      arrayPush(names, name);
+    }
+  }
   return arrayMap(names, (name) =>
     arrayFind(rows, (row) => row.name === name) ||
-    {name: `${UNKNOWN_ROW_PREFIX}${name}`, value: UNKNOWN_ROW_VALUE,
-      budget: UNKNOWN_ROW_BUDGET, met: false});
+    {
+      name: `${UNKNOWN_ROW_PREFIX}${name}`,
+      value: UNKNOWN_ROW_VALUE,
+      budget: UNKNOWN_ROW_BUDGET,
+      met: false,
+    });
 }
 
-// The first argument the script does not recognise, or undefined: --json,
-// --metric, and --rows with the value after it.
 function unrecognisedArgument(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -560,10 +768,15 @@ function main(argv) {
   const rows = selectedRows(measured.rows, argv);
   const unmet = arrayFilter(rows, (row) => !row.met).length;
   if (arrayIncludes(argv, JSON_FLAG)) {
-    const report = {rows, unmet, parseFailures: measured.parseFailures};
-    process.stdout.write(`${JSON.stringify(report, null, JSON_INDENT)}${LINE_SEPARATOR}`);
+    const report = {
+      rows,
+      unmet,
+      parseFailures: measured.parseFailures,
+      fallbackSummary: measured.fallbackSummary,
+    };
+    process.stdout.write(`${jsonStringify(report, null, JSON_INDENT)}${LINE_SEPARATOR}`);
   } else if (!arrayIncludes(argv, METRIC_FLAG)) {
-    process.stdout.write(renderTable(rows, measured.parseFailures));
+    process.stdout.write(renderTable(rows, measured.parseFailures, measured.fallbackSummary));
   }
   process.stdout.write(`${unmet}${LINE_SEPARATOR}`);
   return unmet === 0 ? EXIT_OK : EXIT_OVER_BUDGET;

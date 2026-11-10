@@ -1,3 +1,5 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
+import {readPublicationRecordStatus} from './system-row-normalizers.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
 import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
 import {
@@ -435,12 +437,9 @@ function shouldUseProvidedReadyGateForMembershipPublicationPlanningMerge(
     return false;
   }
   const directPublicationStatus =
-    directPriorityRecoveryProjection?.publicationStatus ||
-    directPriorityRecoveryProjection?.status ||
-    null;
+    readPublicationRecordStatus(directPriorityRecoveryProjection) || null;
   const providedPublicationStatus =
-    providedPriorityRecoveryProjection?.publicationStatus ||
-    providedPriorityRecoveryProjection?.status ||
+    readPublicationRecordStatus(providedPriorityRecoveryProjection) ||
     providedPublicationRecoveryGate?.publicationStatus ||
     null;
   if (
@@ -482,14 +481,10 @@ function shouldPreferDirectPublicationStatusForMembershipPublicationPlanningMerg
   providedPlanningSnapshot = null,
   publicationConvergenceGate = null,
 ) {
-  const directPublicationStatus =
-    typeof directPlanningSnapshot?.publicationStatus === 'string' &&
-      directPlanningSnapshot.publicationStatus.length > 0 ?
-      directPlanningSnapshot.publicationStatus :
-      typeof directPlanningSnapshot?.status === 'string' &&
-          directPlanningSnapshot.status.length > 0 ?
-        directPlanningSnapshot.status :
-        null;
+  const directPublicationStatus = readStateField(
+    directPlanningSnapshot?.publicationStatus,
+    directPlanningSnapshot?.status,
+  );
   if (!directPublicationStatus) {
     return false;
   }
@@ -885,6 +880,10 @@ function buildPriorityRecoveryPlanningProjectionUntracked(service, planningSnaps
   if (!publicationRecoveryGate) {
     const providedPublicationRecoveryGate =
       service.getMembershipPublicationRecoveryGate(planningSnapshot);
+    const snapshotPublicationStatus = readStateField(
+      planningSnapshot.publicationStatus,
+      planningSnapshot.status,
+    );
     publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
       ...(providedPublicationRecoveryGate || {}),
       publicationEpoch:
@@ -892,15 +891,9 @@ function buildPriorityRecoveryPlanningProjectionUntracked(service, planningSnaps
           Math.floor(planningSnapshot.publicationEpoch) :
           providedPublicationRecoveryGate?.publicationEpoch ??
           null,
-      publicationStatus:
-        typeof planningSnapshot.publicationStatus === 'string' &&
-          planningSnapshot.publicationStatus.length > 0 ?
-          planningSnapshot.publicationStatus :
-          typeof planningSnapshot.status === 'string' &&
-            planningSnapshot.status.length > 0 ?
-            planningSnapshot.status :
-            providedPublicationRecoveryGate?.publicationStatus ??
-            null,
+      publicationStatus: snapshotPublicationStatus === STATE_ABSENT ?
+        providedPublicationRecoveryGate?.publicationStatus ?? null :
+        snapshotPublicationStatus,
       publicationObservationState:
         typeof planningSnapshot.publicationObservationState === 'string' &&
           planningSnapshot.publicationObservationState.length > 0 ?
@@ -994,14 +987,13 @@ function buildPriorityRecoveryPlanningProjectionUntracked(service, planningSnaps
     planningSnapshot.publicationObservationState.length > 0 ?
       planningSnapshot.publicationObservationState :
       publicationRecoveryGate?.publicationObservationState || null;
-  const publicationStatus =
-    typeof planningSnapshot.publicationStatus === 'string' &&
-    planningSnapshot.publicationStatus.length > 0 ?
-      planningSnapshot.publicationStatus :
-      typeof planningSnapshot.status === 'string' &&
-          planningSnapshot.status.length > 0 ?
-        planningSnapshot.status :
-        publicationRecoveryGate?.publicationStatus || null;
+  const snapshotPublicationStatus = readStateField(
+    planningSnapshot.publicationStatus,
+    planningSnapshot.status,
+  );
+  const publicationStatus = snapshotPublicationStatus === STATE_ABSENT ?
+    publicationRecoveryGate?.publicationStatus || null :
+    snapshotPublicationStatus;
   const recoveryProtocolState =
     typeof planningSnapshot.recoveryProtocolState === 'string' &&
     planningSnapshot.recoveryProtocolState.length > 0 ?

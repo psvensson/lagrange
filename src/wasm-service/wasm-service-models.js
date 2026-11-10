@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {STRING, SERVICE_PROFILE} from '../constants/index.js';
 import {RUNTIME_FIELD} from '../constants/runtime.js';
 import {
@@ -138,6 +139,12 @@ function deserializeResourceBudget(json) {
   };
 }
 
+// A record's stated status, or its named birth state when it states none.
+function statedOrBorn(status, birthStatus) {
+  const statedStatus = readStateField(status);
+  return statedStatus === STATE_ABSENT ? birthStatus : statedStatus;
+}
+
 /**
  * Serialize a ServiceDefinition object to a table row object.
  * The resource_budget field is JSON-encoded.
@@ -183,9 +190,9 @@ function serializeServiceDefinition(definition, nowMs) {
     [SD_COL.BINDING_VERSION_ID]: compat.bindingVersionId ?? null,
     [SD_COL.BINDING_DIGEST]: compat.bindingDigest ?? null,
     [SD_COL.BINDING_PROJECTION]: compat.bindingProjection ?? null,
-    [SD_COL.STATUS]:
-      compat.status ??
-      WASM_SERVICE_DEFINITION_STATUS.ACTIVE,
+    // A definition that states no status is born ACTIVE, the definition's
+    // birth state; service_definitions.status is NOT NULL.
+    [SD_COL.STATUS]: statedOrBorn(compat.status, WASM_SERVICE_DEFINITION_STATUS.ACTIVE),
     [SD_COL.CREATED_AT]: compat.createdAt ?? now,
     [SD_COL.UPDATED_AT]: compat.updatedAt ?? now,
   };
@@ -232,9 +239,8 @@ function deserializeServiceDefinition(row) {
     bindingVersionId: row[SD_COL.BINDING_VERSION_ID] ?? null,
     bindingDigest: row[SD_COL.BINDING_DIGEST] ?? null,
     bindingProjection: row[SD_COL.BINDING_PROJECTION] ?? null,
-    status:
-      row[SD_COL.STATUS] ??
-      WASM_SERVICE_DEFINITION_STATUS.ACTIVE,
+    // service_definitions.status is NOT NULL.
+    status: row[SD_COL.STATUS],
     createdAt: row[SD_COL.CREATED_AT] ?? 0,
     updatedAt: row[SD_COL.UPDATED_AT] ?? 0,
   };
@@ -254,8 +260,9 @@ function serializeTimerEntry(entry) {
     [TE_FIELD.FIRE_AT]: entry[TE_FIELD.FIRE_AT] ?? 0,
     [TE_FIELD.PAYLOAD]:
       entry[TE_FIELD.PAYLOAD] ?? {},
-    [TE_FIELD.STATUS]:
-      entry[TE_FIELD.STATUS] ?? TIMER_STATUS.ACTIVE,
+    // An entry that states no status is born ACTIVE (a scheduled timer);
+    // TimerManager stamps FIRED and CANCELLED.
+    [TE_FIELD.STATUS]: statedOrBorn(entry[TE_FIELD.STATUS], TIMER_STATUS.ACTIVE),
     [TE_FIELD.CREATED_AT]:
       entry[TE_FIELD.CREATED_AT] ?? 0,
   };
@@ -278,8 +285,8 @@ function deserializeTimerEntry(json) {
       parsed[TE_FIELD.FIRE_AT] ?? 0,
     [TE_FIELD.PAYLOAD]:
       parsed[TE_FIELD.PAYLOAD] ?? {},
-    [TE_FIELD.STATUS]:
-      parsed[TE_FIELD.STATUS] ?? TIMER_STATUS.ACTIVE,
+    // An entry without a status is not ACTIVE, so it never fires.
+    [TE_FIELD.STATUS]: parsed[TE_FIELD.STATUS],
     [TE_FIELD.CREATED_AT]:
       parsed[TE_FIELD.CREATED_AT] ?? 0,
   };

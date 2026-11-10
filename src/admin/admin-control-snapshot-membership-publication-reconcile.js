@@ -521,7 +521,8 @@ function resolveLatestMembershipPublicationRow(
       return Boolean(
         row.publicationId ||
         row.publicationEpoch ||
-        row.status ||
+        // normalizeControlPlanePublicationRow decodes status to a string.
+        row.status.length > 0 ||
         (Array.isArray(row.publishedActiveNodeIds) &&
           row.publishedActiveNodeIds.length > 0),
       );
@@ -715,9 +716,9 @@ class AdminControlSnapshotMembershipPublicationReconcile
     if (
       fallbackPublication &&
       typeof fallbackPublication === 'object' &&
-      String(
-        fallbackPublication.status || ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE,
-      ).toUpperCase() === ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED
+      // control_plane_publications.status is NOT NULL.
+      String(fallbackPublication.status).toUpperCase() ===
+        ADMIN_CONTROL_SNAPSHOT_LITERAL.PUBLISHED
     ) {
       return fallbackPublication;
     }
@@ -809,4 +810,8 @@ class AdminControlSnapshotMembershipPublicationReconcile
     );
   }
 }
-export {AdminControlSnapshotMembershipPublicationReconcile};
+export {
+  AdminControlSnapshotMembershipPublicationReconcile,
+  resolveLatestMembershipPublicationRow,
+  resolvePublicationOrderingValue,
+};

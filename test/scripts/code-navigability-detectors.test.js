@@ -314,6 +314,52 @@ test('state_read_defaults counts a default on a state field read', () => {
     'a state read in last position is the default');
 });
 
+test('state_read_defaults counts a conditional that decides on a state read inline', () => {
+  const positive = [
+    'function f(row, op, facts, x) {',
+    '  const a = typeof row.status === \'string\' ? row.status : null;',
+    '  const b = op.workflowStep.length > 0 ? op.workflowStep : UNKNOWN;',
+    '  const c = facts.status === null ? UNKNOWN : facts.status;',
+    '  const d = typeof row?.phase === \'string\' ? row?.phase : INIT;',
+    '  const e = isStated(row[COLUMN.STATUS]) ? row[COLUMN.STATUS] : x.status;',
+    '  const g = row.step ? row.step : 0;',
+    '  return [a, b, c, d, e, g];',
+    '}',
+  ].join('\n');
+  const sites = sitesOf(detectStateReadDefaults, positive);
+  assert.deepEqual(sites.map((site) => positive.slice(site.range[0], site.range[1])), [
+    'row.status', 'op.workflowStep', 'facts.status', 'row?.phase',
+    'row[COLUMN.STATUS]', 'x.status', 'row.step',
+  ], 'each state-read branch of a conditional whose test reads a state counts');
+  assertSiteShape(sites[0], 'state_read_defaults', positive);
+
+  const negative = [
+    'function g(row, x, status) {',
+    '  const a = x ? row.status : null;',
+    '  const b = typeof row.status === \'string\' ? x : null;',
+    '  const c = row.status ? 1 : 2;',
+    '  const d = status === STATE_ABSENT ? UNKNOWN : status;',
+    '  const e = typeof row.state === \'string\' ? row.state : null;',
+    '  return [a, b, c, d, e];',
+    '}',
+  ].join('\n');
+  assert.equal(countOf(detectStateReadDefaults, negative), 0,
+    'a branch that is not a state read, a test that reads no state field, and ' +
+    'a decision on a local holding the reader\'s answer do not count');
+});
+
+test('state_read_defaults counts a right-nested chain at any depth', () => {
+  const nested = [
+    'const a = (x || (y || (z || (w || row.status)))) || d;',
+    'const b = (x ?? (y ?? (z ?? (w ?? (v ?? (u ?? (t ?? (s ?? row.phase)))))))) ?? d;',
+    'const c = x || (y || (z || (w || row.status)));',
+  ].join('\n');
+  assert.deepEqual(sitesOf(detectStateReadDefaults, nested).map((site) =>
+    nested.slice(site.range[0], site.range[1])), ['row.status', 'row.phase'],
+  'the flattened chain has a term after the state read however deep the ' +
+    'parenthesised nesting; a state read in last position is the default');
+});
+
 test('two_source_fallback_reads counts one chain reading two objects', () => {
   const positive = [
     'function f(a, b, c, options) {',

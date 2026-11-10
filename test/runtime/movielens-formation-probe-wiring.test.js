@@ -41,7 +41,6 @@ const PROBE_PATH = 'examples/service-data-affinity/run-formation-probe.js';
 const QUORUM_CONCENTRATED_REASON_CODE = 'operation_ledger_quorum_concentrated';
 const QUORUM_CONCENTRATED_EMITTER_PATHS = [
   'src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js',
-  'src/query/sql-query-engine-provisioning-admission-methods.js',
 ];
 
 test('demo module exports the cluster-start helpers the probe reuses ' +

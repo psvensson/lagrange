@@ -87,7 +87,11 @@ import {
 import {RAFT_OPERATION_PORT_REQUEST} from
   '../../src/raft/raft-operation-port-request.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {createMockCache, createTestCoordinator} from './test-helpers.js';
+import {
+  createMockCache,
+  createMockPolicyService,
+  createTestCoordinator,
+} from './test-helpers.js';
 import {createRemovalSourceHandler} from
   '../node/replica-removal-consensus-exit-fixture.js';
 import {
@@ -935,8 +939,12 @@ function startCoordinator(world) {
       readNodeRows: () => world.members.map(([, nodeId]) =>
         readyNode(nodeId, Date.now() + world.clockOffsetMs)),
     },
-    tablePolicyService: {getPolicyForPartition: () =>
-      ({targetReplicaCount: 3, minReplicaCount: world.members.length - 1})},
+    tablePolicyService: createMockPolicyService({
+      getPolicyForPartition: () => ({
+        targetReplicaCount: 3,
+        minReplicaCount: world.members.length - 1,
+      }),
+    }),
     setTimeoutFn(fn, delayMs) {
       const handle = {fn, delayMs, cleared: false, fired: false, unref() {}};
       world.fallbackTimers.push(handle);

@@ -30,7 +30,6 @@ function resolveObservationRecoveryProtocolState(
 ) {
   const publicationStatus = String(
     publicationConvergence?.publicationStatus ||
-      publicationConvergence?.status ||
       publicationConvergenceGate?.publicationStatus ||
       '',
   ).toUpperCase();

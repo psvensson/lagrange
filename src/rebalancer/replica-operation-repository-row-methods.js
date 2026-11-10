@@ -1,3 +1,5 @@
+import {readStateField} from '../utils/state-field-read.js';
+import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
@@ -250,8 +252,11 @@ function assignReplicaOperationRepositoryRowMethods(
       operation?.semanticPhase ||
       resolveReplicaOperationSemanticPhase(
         operation?.type || null,
-        operation?.workflowStep || operation?.workflow_step || null,
-        operation?.status || null,
+        // Raw replica_operations rows (the dispatch replay and execution
+        // paths) and decoded operations both reach here: the one shape
+        // reader picks the step by the key the record holds.
+        readOperationRecordWorkflowStep(operation),
+        readStateField(operation?.status),
       );
       const isUnsettledReplace =
       operation?.type === OperationType.REPLACE &&

@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Message Group Service - metadata publication readiness and authoritative
  * row-mutation helper construction (raft role + leader-node id writes).
@@ -206,7 +207,8 @@ function assignMetadataPublication(serviceClass) {
             };
           }
           const targetRole = flushingValue ?? pendingValue;
-          const liveRole = this.role || null;
+          // Born FOLLOWER (message-group-service-state); unstated -> STATE_ABSENT.
+          const liveRole = readStateField(this.role);
           const staleRoleFlush = isStaleRoleFlushForLiveRole(
             targetRole,
             liveRole,
@@ -230,7 +232,7 @@ function assignMetadataPublication(serviceClass) {
             TABLES.SERVICES,
             this.replicaId,
           );
-          return cached?.raft_role || null;
+          return readStateField(cached?.raft_role);
         },
         isWriteReady: () => this.isServicesLeaderAvailable(),
         systemTableCache: this.systemTableCache,

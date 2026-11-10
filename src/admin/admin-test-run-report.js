@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Report extraction and run record merging for admin test runs.
  * Owns report JSON parsing, run record serialization, and
@@ -405,7 +406,7 @@ function serializeRun(
     gitHash: run.gitHash || null,
     startedAt: run.startedAt || null,
     endedAt: run.endedAt || null,
-    status: run.status || null,
+    status: readStateField(run.status),
     outputReportPath: run.outputReportPath || null,
     outputReportUrl: run.outputReportUrl ||
       toOutputWebPath(

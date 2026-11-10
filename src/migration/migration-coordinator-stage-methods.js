@@ -35,7 +35,6 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
     LOCAL_STR_9U4IH,
     LOCAL_STR_BEGIN,
     LOCAL_STR_COMMIT,
-    LOCAL_STR_EMPTY,
     LOCAL_STR_NUMBER,
     LOCAL_STR_ROLLBACK,
     MIGRATION_COLUMN,
@@ -69,11 +68,8 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
         return;
       }
 
-      const currentStatus = String(
-        migrationRow[MIGRATION_COLUMN.STATUS] ||
-        migrationRow[MIGRATION_COLUMN.CURRENT_STAGE] ||
-        '',
-      );
+      // schema_migrations.status is NOT NULL.
+      const currentStatus = String(migrationRow[MIGRATION_COLUMN.STATUS]);
       if (currentStatus === MIGRATION_STATUS.PENDING) {
         await this.transitionMigrationStage(
           migrationId,
@@ -96,7 +92,8 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
           continue;
         }
 
-        const partitionStatus = String(partitionRow.status || '');
+        // schema_migration_partitions.status is NOT NULL.
+        const partitionStatus = String(partitionRow.status);
         const partitionStageIndex = mapStageIndex(partitionStatus);
         const dualWriteStageIndex = mapStageIndex(MIGRATION_STATUS.DUAL_WRITE);
         if (partitionStageIndex >= dualWriteStageIndex) {
@@ -136,7 +133,7 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
 
       const refreshedPartitionRows = await this.getPartitionMigrationRows(migrationId);
       const allInDualWrite = refreshedPartitionRows.every((row) => {
-        const status = String(row.status || '');
+        const status = String(row.status);
         if (MIGRATION_TERMINAL_STATUSES.has(status)) {
           return true;
         }
@@ -160,7 +157,7 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
         return;
       }
 
-      if (String(migrationRow.status || LOCAL_STR_EMPTY) === MIGRATION_STATUS.DUAL_WRITE_COMPLETE) {
+      if (String(migrationRow.status) === MIGRATION_STATUS.DUAL_WRITE_COMPLETE) {
         await this.transitionMigrationStage(
           migrationId,
           MIGRATION_STATUS.BACKFILL,
@@ -179,7 +176,7 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
           continue;
         }
 
-        const partitionStageIndex = mapStageIndex(String(partitionRow.status || ''));
+        const partitionStageIndex = mapStageIndex(String(partitionRow.status));
         if (partitionStageIndex >= backfillCompleteStageIndex) {
           continue;
         }
@@ -201,7 +198,7 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
 
       const finalPartitionRows = await this.getPartitionMigrationRows(migrationId);
       const allBackfilled = finalPartitionRows.every((row) => {
-        const status = String(row.status || '');
+        const status = String(row.status);
         if (MIGRATION_TERMINAL_STATUSES.has(status)) {
           return true;
         }
@@ -226,7 +223,7 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
         return;
       }
 
-      if (String(migrationRow.status || LOCAL_STR_EMPTY) === MIGRATION_STATUS.BACKFILL_COMPLETE) {
+      if (String(migrationRow.status) === MIGRATION_STATUS.BACKFILL_COMPLETE) {
         await this.transitionMigrationStage(
           migrationId,
           MIGRATION_STATUS.CUTOVER_PENDING,

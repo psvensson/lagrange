@@ -73,7 +73,7 @@ function reportCommitDeadlineSpent(service, pending, deadline) {
     lastObserved: () => ({
       proposal: describeReleasedProposal(pending.proposal),
       logIndex: pending.logIndex,
-      role: service.role ?? null,
+      role: service.role, // set in the PartitionService constructor
       pendingCommitCount: service.proposalQueue?.size ?? null,
     }),
     scope: {partitionId: service.partitionId, entryId: pending.entryId},

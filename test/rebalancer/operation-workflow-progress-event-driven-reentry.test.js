@@ -1618,6 +1618,47 @@ test(TEST_SPREAD_SATISFIED_ADD_TARGET_DRAIN_TEST_NAME, async (t) => {
     coordinator.workflowOwner.repository.getObservedReplicaStatusFromCache =
       () => ReplicaStatus.ACTIVE;
 
+    const completedWithLiveOwnerAndCacheProjectionOnly =
+      await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(
+        operation,
+      );
+
+    t.equal(
+      completedWithLiveOwnerAndCacheProjectionOnly,
+      false,
+      'in-flight spread + cache-only ACTIVE with live owner must not settle',
+    );
+    t.same(
+      completedOperationIds,
+      [],
+      'live-owner in-flight ADD must not be completed by non-owner',
+    );
+
+    coordinator.workflowOwner.isPriorityRecoveryDrainOwnerUnavailable =
+      () => true;
+    coordinator.workflowOwner.repository.readAuthoritativeReplicaRowForObservation =
+      async () => ({
+        observedRow: null,
+        authoritativeReadAttempted: true,
+        authoritativeReadFailed: true,
+      });
+    t.equal(
+      await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(operation),
+      false,
+      'cache-only ACTIVE with unavailable authoritative read must not settle',
+    );
+    coordinator.workflowOwner.repository.readAuthoritativeReplicaRowForObservation =
+      async (replicaId, partitionId, targetNodeId) => ({
+        observedRow: {
+          service_id: replicaId, replica_id: replicaId, service_type: 'partition',
+          partition_id: partitionId, node_id: targetNodeId,
+          status: ReplicaStatus.ACTIVE, raft_role: 'follower', address: 'node-2:1',
+          created_at: 1, state_entered_at: 1,
+        },
+        authoritativeReadAttempted: true,
+        authoritativeReadFailed: false,
+      });
+
     const completed =
       await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(
         operation,
@@ -2569,6 +2610,7 @@ test(
         {
           action:
             TEST_OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN,
+          ownerAction: TEST_PRIORITY_DRAIN_OWNER_ACTION.ALLOW_RECONCILE,
         },
         {
           action: TEST_OPERATION_LIFECYCLE_ACTION
@@ -2630,7 +2672,7 @@ test(
 // partitions) would wait for its step timeout.
 async function runIntermediateAddDrain(
   t,
-  {ownerUnavailable, locallyOwned, authoritativeTargetRow = null},
+  {ownerUnavailable, locallyOwned, authoritativeTargetRow},
 ) {
   const deliveries = [];
   const deferredTimers = [];
@@ -2695,25 +2737,26 @@ async function runIntermediateAddDrain(
     owner.repository.isOperationLocallyOwned = () => locallyOwned;
     owner.repository.resolveOperationOwnerNodeId = () => 'node-owner';
     owner.isPriorityRecoveryDrainOwnerUnavailable = () => ownerUnavailable;
-    owner.repository.getObservedReplicaStatusFromCache =
-      () => ReplicaStatus.ACTIVE;
-    if (authoritativeTargetRow) {
-      // The real status read (authoritative row -> lifecycle normalization).
-      owner.repository.readAuthoritativeReplicaRowForObservation =
-        async (...args) => {
-          authoritativeReads.push(args.slice(0, 3));
-          return {
-            observedRow: authoritativeTargetRow,
-            authoritativeReadAttempted: true,
-            authoritativeReadFailed: false,
-          };
+    owner.repository.getObservedReplicaStatusFromCache = () => ReplicaStatus.ACTIVE;
+    const defaultVoterTargetRow = {
+      service_id: TEST_REPLICA_OPERATIONS_REPLICA_ID,
+      replica_id: TEST_REPLICA_OPERATIONS_REPLICA_ID,
+      service_type: 'partition', partition_id: TEST_REPLICA_OPERATIONS_PARTITION_ID,
+      node_id: TEST_REPLICA_OPERATIONS_TARGET_NODE_ID, status: ReplicaStatus.ACTIVE,
+      raft_role: 'follower', address: 'node-target:1', created_at: 1, state_entered_at: 1,
+    };
+    const resolvedRow = authoritativeTargetRow === undefined ?
+      defaultVoterTargetRow : authoritativeTargetRow;
+    // The real status read (authoritative row -> lifecycle normalization).
+    owner.repository.readAuthoritativeReplicaRowForObservation =
+      async (...args) => {
+        authoritativeReads.push(args.slice(0, 3));
+        return {
+          observedRow: resolvedRow,
+          authoritativeReadAttempted: true,
+          authoritativeReadFailed: false,
         };
-    } else {
-      owner.getReconciledReplicaStatus = async (...args) => {
-        authoritativeReads.push(args);
-        return ReplicaStatus.ACTIVE;
       };
-    }
     const drainSnapshot =
       await owner.buildPriorityRecoveryOperationDrainSnapshot(operation);
     const settled =

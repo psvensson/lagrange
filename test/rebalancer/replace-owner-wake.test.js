@@ -39,7 +39,10 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {
+  createMockPolicyService,
+  createTestCoordinator,
+} from './test-helpers.js';
 import {createReplaceWitness} from './replace-witness-fixture.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {ServeEligibilityOwner} from '../../src/control-plane/serve-eligibility-owner.js';
@@ -278,9 +281,9 @@ async function createDeferredReplaceHarness(profile) {
       isOutboundQueueAvailable: () => true,
     },
     controlPlaneReadinessService: readiness,
-    tablePolicyService: {
+    tablePolicyService: createMockPolicyService({
       getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-    },
+    }),
     cacheData: {
       nodes: [
         createReadyNode(SOURCE_NODE_ID),

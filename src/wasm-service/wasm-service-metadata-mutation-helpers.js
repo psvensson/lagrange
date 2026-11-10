@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 // How a WASM service replica publishes its role and its group's leader node
 // to its services row: each value flows through an authoritative row
 // mutation helper whose transport is the replica's own owner writer.
@@ -67,7 +68,7 @@ function createWasmServiceRoleMutationHelper(replica) {
     readRowFromCache: (systemTableCache) =>
       cachedServiceRow(replica, systemTableCache),
     readValueFromCache: (systemTableCache) =>
-      cachedServiceRow(replica, systemTableCache)?.[COLUMN.RAFT_ROLE] || null,
+      readStateField(cachedServiceRow(replica, systemTableCache)?.[COLUMN.RAFT_ROLE]),
     isWriteReady: () => replica.isServicesLeaderAvailable(),
     retryDelayMs: METADATA_FLUSH_RETRY_DELAY_MS,
     systemTableCache: replica.systemTableCache,

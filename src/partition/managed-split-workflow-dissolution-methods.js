@@ -1,3 +1,4 @@
+import {readParticipantCurrentStatus} from '../workflow/workflow-constants.js';
 import {assertWorkflowRecordHeld} from './managed-workflow-ownership-core.js';
 import {SERVICE_TYPE} from '../constants/index.js';
 import {
@@ -170,7 +171,7 @@ class ManagedSplitWorkflowDissolutionMethods {
     const participant = workflow?.participants instanceof Map ?
       workflow.participants.get(SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION) :
       null;
-    return String(participant?.status || '');
+    return readParticipantCurrentStatus(participant);
   }
 
   /**

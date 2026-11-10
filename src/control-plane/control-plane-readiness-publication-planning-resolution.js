@@ -1,3 +1,4 @@
+import {readPublicationRecordStatus} from './system-row-normalizers.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
 import {readWiredCollaborator} from './control-plane-readiness-collaborators.js';
 import {
@@ -344,17 +345,13 @@ function resolveMembershipPublicationPlanningSnapshot(service, context = {}) {
       null,
     publicationStatus:
       preferDirectPublicationStatus ?
-        directPlanningSnapshot.publicationStatus ??
-          directPlanningSnapshot.status ??
+        readPublicationRecordStatus(directPlanningSnapshot) ??
           publicationConvergenceGate?.publicationStatus ??
-          providedPlanningSnapshot.publicationStatus ??
-          providedPlanningSnapshot.status ??
+          readPublicationRecordStatus(providedPlanningSnapshot) ??
           null :
         publicationConvergenceGate?.publicationStatus ??
-          directPlanningSnapshot.publicationStatus ??
-          directPlanningSnapshot.status ??
-          providedPlanningSnapshot.publicationStatus ??
-          providedPlanningSnapshot.status ??
+          readPublicationRecordStatus(directPlanningSnapshot) ??
+          readPublicationRecordStatus(providedPlanningSnapshot) ??
           null,
     publicationObservationState:
       preferDirectPublicationStatus ?

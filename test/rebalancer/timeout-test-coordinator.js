@@ -10,6 +10,7 @@ import {withFixtureCommittedMembership} from
   './committed-membership-fixture.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
+  buildMockPolicyAuthorityWitness,
   createMockCache,
   createMockPolicyService,
   createMockMessageRouter,
@@ -40,6 +41,10 @@ function buildInsertedRow(sql, params) {
 
 function createTimeoutTestCoordinator(options = {}) {
   const {services = []} = options;
+  const serviceRowsByKey = options.serviceRowsByKey instanceof Map ?
+    options.serviceRowsByKey : null;
+  const readServiceRows = () => serviceRowsByKey ?
+    Array.from(serviceRowsByKey.values()) : services;
   // options.trackedOperations: share one in-memory replica_operations ledger
   // between several coordinators (multi-node DT6 witnesses where one node
   // creates an operation that another node owns and dispatches).
@@ -149,13 +154,6 @@ function createTimeoutTestCoordinator(options = {}) {
         return {success: true};
       }
 
-      if (sql.includes('FROM services') && sql.includes('service_id = ?')) {
-        const [serviceId] = params;
-        const service = services.find((row) =>
-          row.service_id === serviceId || row.replica_id === serviceId);
-        return {success: true, rows: service ? [{status: service.status}] : []};
-      }
-
       if (sql.includes('FROM storage_reservations')) {
         let rows = Array.from(trackedReservations.values());
         if (sql.includes('operation_id = ?')) {
@@ -165,16 +163,49 @@ function createTimeoutTestCoordinator(options = {}) {
           const status = params[sql.includes('operation_id = ?') ? 1 : 0];
           rows = rows.filter((row) => row.status === status);
         }
-        return {success: true, rows};
+        return {success: true, rows, rowSetComplete: true};
       }
 
-      if (sql.includes('FROM services') &&
-          sql.includes('partition_id = ?') &&
-          sql.includes('node_id = ?')) {
-        const [partitionId, nodeId] = params;
-        const service = services.find((row) =>
-          row.partition_id === partitionId && row.node_id === nodeId);
-        return {success: true, rows: service ? [{status: service.status}] : []};
+      if (sql.includes('FROM services')) {
+        let serviceRows = readServiceRows();
+        let paramIndex = 0;
+        if (sql.includes('service_id = ?')) {
+          const serviceId = params[paramIndex++];
+          serviceRows = serviceRows.filter((row) =>
+            row.service_id === serviceId || row.replica_id === serviceId);
+        }
+        if (sql.includes('service_type = ?')) {
+          const serviceType = params[paramIndex++];
+          serviceRows = serviceRows.filter((row) =>
+            !row.service_type || row.service_type === serviceType);
+        }
+        if (sql.includes('partition_id = ?')) {
+          const partitionId = params[paramIndex++];
+          serviceRows = serviceRows.filter((row) =>
+            row.partition_id === partitionId);
+        }
+        if (sql.includes('node_id = ?')) {
+          const nodeId = params[paramIndex++];
+          serviceRows = serviceRows.filter((row) => row.node_id === nodeId);
+        }
+        if (sql.includes('group_id = ?')) {
+          const groupId = params[paramIndex++];
+          serviceRows = serviceRows.filter((row) => row.group_id === groupId);
+        }
+        if (sql.includes('service_id LIKE ?')) {
+          const serviceIdPattern = String(params[paramIndex++] || '');
+          const serviceIdPrefix = serviceIdPattern.endsWith('%') ?
+            serviceIdPattern.slice(0, -1) :
+            serviceIdPattern;
+          serviceRows = serviceRows.filter((row) =>
+            String(row.service_id || '').startsWith(serviceIdPrefix));
+        }
+        return {
+          success: true,
+          rows: serviceRows.map((row) => ({...row})),
+          rowSetComplete: true,
+          readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
+        };
       }
 
       if (sql.includes('replica_operations')) {
@@ -185,7 +216,11 @@ function createTimeoutTestCoordinator(options = {}) {
         if (sql.includes('operation_id = ?')) {
           const [operationId] = params;
           const operation = trackedOperations.get(operationId);
-          return {success: true, rows: operation ? [operation] : []};
+          return {
+            success: true,
+            rows: operation ? [operation] : [],
+            rowSetComplete: true,
+          };
         }
 
         if (sql.includes('partition_id = ?') && sql.includes('target_node_id = ?')) {
@@ -194,7 +229,7 @@ function createTimeoutTestCoordinator(options = {}) {
             op.partition_id === partitionId &&
             op.target_node_id === targetNodeId &&
             !['active', 'removed', 'failed'].includes(op.status));
-          return {success: true, rows: matching};
+          return {success: true, rows: matching, rowSetComplete: true};
         }
 
         if (sql.includes('SELECT * FROM replica_operations') &&
@@ -203,6 +238,7 @@ function createTimeoutTestCoordinator(options = {}) {
           return {
             success: true,
             rows: allOps.filter((op) => op.type === type),
+            rowSetComplete: true,
           };
         }
 
@@ -212,7 +248,7 @@ function createTimeoutTestCoordinator(options = {}) {
           const [entityType, entityId] = params;
           const matching = allOps.filter((op) =>
             op.entity_type === entityType && op.entity_id === entityId);
-          return {success: true, rows: matching};
+          return {success: true, rows: matching, rowSetComplete: true};
         }
 
         if (sql.includes('source_node_id = ?') &&
@@ -243,13 +279,13 @@ function createTimeoutTestCoordinator(options = {}) {
             }
             return op.workflow_step === activeStep && op.type === replaceType;
           });
-          return {success: true, rows: incompleteOps};
+          return {success: true, rows: incompleteOps, rowSetComplete: true};
         }
 
-        return {success: true, rows: allOps};
+        return {success: true, rows: allOps, rowSetComplete: true};
       }
 
-      return {success: true, rows: []};
+      return {success: true, rows: [], rowSetComplete: true};
     },
   };
 

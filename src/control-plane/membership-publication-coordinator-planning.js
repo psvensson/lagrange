@@ -1,3 +1,4 @@
+import {readUpperStateField} from '../utils/state-field-read.js';
 import {
   TABLES,
 } from '../constants/index.js';
@@ -68,7 +69,7 @@ class MembershipPublicationCoordinatorPlanning extends
       options.latestPublicationRow || (await this.getLatestPublicationRow(planningReadOptions));
     const latestPublishedPublicationRow =
       options.latestPublishedPublicationRow ||
-      (String(latestPublicationRow?.status || '').toUpperCase() ===
+      (readUpperStateField(latestPublicationRow?.status) ===
       MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
         latestPublicationRow :
         await this.getLatestPublishedPublicationRow(planningReadOptions));
@@ -182,7 +183,7 @@ class MembershipPublicationCoordinatorPlanning extends
       options.latestPublicationRow || this.getLatestPublicationRowSync(options);
     const latestPublishedPublicationRow =
       options.latestPublishedPublicationRow ||
-      (String(latestPublicationRow?.status || '').toUpperCase() ===
+      (readUpperStateField(latestPublicationRow?.status) ===
       MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
         latestPublicationRow :
         this.getLatestPublishedPublicationRowSync(options));

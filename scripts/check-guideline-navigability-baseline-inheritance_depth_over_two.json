@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T06:33:39.106Z",
+  "generatedAt": "2026-11-09T17:56:57.106Z",
   "rawViolationCount": 58,
   "violations": [
     {
@@ -23,7 +23,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-leadership-summary.js",
-      "line": 280,
+      "line": 279,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -32,7 +32,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
-      "line": 571,
+      "line": 572,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -41,7 +41,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-node-view-projection.js",
-      "line": 473,
+      "line": 471,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -50,7 +50,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-admission-readiness.js",
-      "line": 116,
+      "line": 113,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -338,7 +338,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-execution.js",
-      "line": 34,
+      "line": 35,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -347,7 +347,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner.js",
-      "line": 62,
+      "line": 63,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -356,7 +356,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-drain.js",
-      "line": 66,
+      "line": 110,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -374,7 +374,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile.js",
-      "line": 87,
+      "line": 88,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -392,7 +392,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 134,
+      "line": 135,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -419,7 +419,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 72,
+      "line": 73,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -446,7 +446,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
-      "line": 48,
+      "line": 49,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -509,7 +509,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 70,
+      "line": 71,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",

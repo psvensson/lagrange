@@ -1,3 +1,4 @@
+import {readUpperStateField} from '../utils/state-field-read.js';
 import {PRIORITY_CONTROL_PLANE_TABLE_IDS} from '../bootstrap/system-partition-classification.js';
 import {DISPATCH_PENDING_WORKFLOW_STEPS} from '../rebalancer/replica-operation-step-policy.js';
 import {
@@ -366,10 +367,9 @@ function resolvePriorityRecoveryOperationContextFreshnessMs(operationContext) {
 }
 
 function isPriorityRecoveryDispatchPendingWorkflowStep(operationContext) {
-  const workflowStep = String(
-    operationContext?.workflowStep || LOCAL_STR_EMPTY,
-  ).toUpperCase();
-  return DISPATCH_PENDING_WORKFLOW_STEPS.has(workflowStep);
+  return DISPATCH_PENDING_WORKFLOW_STEPS.has(
+    readUpperStateField(operationContext?.workflowStep),
+  );
 }
 
 function isPriorityRecoverySupersedableInFlightOperationContext(

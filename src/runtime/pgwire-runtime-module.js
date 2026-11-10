@@ -30,7 +30,16 @@ import {
   START_STATUS,
   HEALTH_STATUS,
 } from './runtime-driver.js';
-import {classifyBindError} from './pgwire-port-allocator.js';
+import {
+  classifyBindError,
+  resolveAllocationMode,
+} from './pgwire-port-allocator.js';
+import {
+  BIND_CONFLICT_CODE,
+  PGWIRE_DYNAMIC_PORT_RANGE_END,
+  PGWIRE_DYNAMIC_PORT_RANGE_START,
+  PORT_ALLOCATION_MODE,
+} from './pgwire-port-constants.js';
 import {PostgresWireAdapter} from '../query/pg/postgres-wire-adapter.js';
 import {PgWireProtocolHandler} from './pgwire-protocol-handler.js';
 import {PgWireAuthHandler} from './pgwire-auth-handler.js';
@@ -99,6 +108,7 @@ const PGWIRE_EVENT = Object.freeze({
   CONNECTION: 'connection',
   CLOSE: 'close',
   ERROR: 'error',
+  LISTENING: 'listening',
 });
 
 const PGWIRE_CONTEXT_FIELD = Object.freeze({
@@ -145,22 +155,41 @@ function buildPgwireServiceScopedError(baseMessage, serviceId) {
  *   context (e.g. dynamic port allocation).
  * @return {{host: string, port: number, maxSessions: number}}
  */
-function resolveConfigValue(overrides, overrideKey, parsed, configKey, fallback) {
+function resolveConfigValue(
+  overrides,
+  overrideKey,
+  parsed,
+  configKey,
+  defaultValue,
+) {
   if (overrides?.[overrideKey] !== undefined) {
     return overrides[overrideKey];
   }
-  return parsed[configKey] ?? fallback;
+  return parsed[configKey] ?? defaultValue;
+}
+
+function readRawDefinitionRuntimeConfig(definition) {
+  if (!definition || typeof definition !== 'object') {
+    return undefined;
+  }
+  return definition.runtimeConfig !== undefined ?
+    definition.runtimeConfig :
+    definition.runtime_config;
+}
+
+function parseDefinitionConfig(definition) {
+  const raw = readRawDefinitionRuntimeConfig(definition);
+  if (raw && typeof raw === 'string') {
+    return JSON.parse(raw);
+  }
+  if (raw && typeof raw === 'object') {
+    return raw;
+  }
+  return {};
 }
 
 function resolveConfig(definition, overrides) {
-  const raw = definition.runtimeConfig ??
-    definition.runtime_config;
-  let parsed = {};
-  if (raw && typeof raw === 'string') {
-    parsed = JSON.parse(raw);
-  } else if (raw && typeof raw === 'object') {
-    parsed = raw;
-  }
+  const parsed = parseDefinitionConfig(definition);
   return {
     host: resolveConfigValue(
       overrides,
@@ -186,6 +215,66 @@ function resolveConfig(definition, overrides) {
     authMode: parsed[PGWIRE_CONFIG_FIELD.AUTH_MODE],
     tlsMode: parsed[PGWIRE_CONFIG_FIELD.TLS_MODE],
   };
+}
+
+function resolveCandidateBindPorts(definition, overrides, configuredPort) {
+  const parsed = parseDefinitionConfig(definition);
+  const hasExplicitOverride =
+    overrides?.[PGWIRE_CONFIG_OVERRIDE_FIELD.PORT] !== undefined;
+  if (
+    hasExplicitOverride ||
+    resolveAllocationMode(parsed) === PORT_ALLOCATION_MODE.FIXED
+  ) {
+    return [configuredPort];
+  }
+  const rangeStart =
+    parsed[PGWIRE_CONFIG_FIELD.PORT_RANGE_START] ??
+    PGWIRE_DYNAMIC_PORT_RANGE_START;
+  const rangeEnd =
+    parsed[PGWIRE_CONFIG_FIELD.PORT_RANGE_END] ??
+    PGWIRE_DYNAMIC_PORT_RANGE_END;
+  const candidates = [];
+  for (let port = rangeStart; port <= rangeEnd; port += 1) {
+    candidates.push(port);
+  }
+  return candidates.length > 0 ? candidates : [configuredPort];
+}
+
+function listenOnPort(server, host, port) {
+  return new Promise((resolve, reject) => {
+    let onListening = null;
+    const onError = (err) => {
+      server.removeListener(PGWIRE_EVENT.LISTENING, onListening);
+      reject(err);
+    };
+    onListening = () => {
+      server.removeListener(PGWIRE_EVENT.ERROR, onError);
+      resolve(server.address().port);
+    };
+    server.once(PGWIRE_EVENT.ERROR, onError);
+    server.once(PGWIRE_EVENT.LISTENING, onListening);
+    server.listen(port, host);
+  });
+}
+
+async function bindListenerServer(server, host, candidatePorts) {
+  let lastError = null;
+  let lastPort = candidatePorts[0];
+  for (let index = 0; index < candidatePorts.length; index += 1) {
+    const candidatePort = candidatePorts[index];
+    lastPort = candidatePort;
+    try {
+      return await listenOnPort(server, host, candidatePort);
+    } catch (error) {
+      lastError = error;
+      const isConflict = error?.code === BIND_CONFLICT_CODE;
+      const hasMoreCandidates = index + 1 < candidatePorts.length;
+      if (!isConflict || !hasMoreCandidates) {
+        throw classifyBindError(error, candidatePort);
+      }
+    }
+  }
+  throw classifyBindError(lastError, lastPort);
 }
 
 /**
@@ -410,16 +499,16 @@ class PostgresWireRuntimeModule {
       handler.start();
     });
 
-    const boundPort = await new Promise((resolve, reject) => {
-      server.once(PGWIRE_EVENT.ERROR, (err) => reject(err));
-      server.listen(config.port, config.host, () => {
-        server.removeAllListeners(PGWIRE_EVENT.ERROR);
-        const addr = server.address();
-        resolve(addr.port);
-      });
-    }).catch((err) => {
-      throw classifyBindError(err, config.port);
-    });
+    const candidatePorts = resolveCandidateBindPorts(
+      prepared.definition,
+      overrides,
+      config.port,
+    );
+    const boundPort = await bindListenerServer(
+      server,
+      config.host,
+      candidatePorts,
+    );
 
     const endpointIntent = {
       host: config.host,

@@ -1,3 +1,4 @@
+import {readLowerStateField, readUpperStateField} from '../utils/state-field-read.js';
 import {WORKFLOW_STEP} from '../constants/index.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
@@ -25,9 +26,8 @@ import {
 } from './priority-recovery-serial-wait-operation-contexts.js';
 
 function isPriorityRecoveryFailedOperationContext(operationContext) {
-  const status = String(operationContext?.status || '').toLowerCase();
-  const workflowStep = String(operationContext?.workflowStep || '')
-    .toUpperCase();
+  const status = readLowerStateField(operationContext?.status);
+  const workflowStep = readUpperStateField(operationContext?.workflowStep);
   const latestTimelineStatus = String(
     operationContext?.latestTimelineStatus || '',
   ).toLowerCase();

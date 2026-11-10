@@ -77,6 +77,7 @@ function executeRollingUpgradeDrill(envelope) {
 
   owner.startUpgrade({
     clusterSnapshot: {
+      hasPartitionQuorum: true,
       nodeIds: [...DEFAULT_CLUSTER_NODES],
       readyNodeIds: [...DEFAULT_CLUSTER_NODES],
       underReplicatedPartitionCount: ZERO,
@@ -91,7 +92,7 @@ function executeRollingUpgradeDrill(envelope) {
   for (let idx = ZERO; idx < DEFAULT_CLUSTER_NODES.length; idx += 1) {
     const nodeId = DEFAULT_CLUSTER_NODES[idx];
     if (idx > ZERO) {
-      owner.beginNextNodeDrain(1000 + idx * 100);
+      owner.beginNextNodeDrain(1000 + idx * 100, {quorumHealthy: true});
     }
     owner.recordNodeRestarted(nodeId, {
       nowMs: 1050 + idx * 100,
@@ -99,6 +100,7 @@ function executeRollingUpgradeDrill(envelope) {
     });
     owner.completeNodeCatchUp(nodeId, {
       nowMs: 1090 + idx * 100,
+      quorumHealthy: true,
       underReplicatedPartitionCount: ZERO,
     });
   }

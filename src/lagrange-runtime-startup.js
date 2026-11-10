@@ -256,6 +256,9 @@ async function startJoinNode(options) {
     messageGroupServices: joinResult.messageGroupServices,
     partitionServices: joinResult.partitionServices,
     replicaHandler: joinResult.replicaHandler,
+    cdcIntegrationService: nodeJoiningService.cdcIntegrationService,
+    controlPlaneReadinessService:
+      nodeJoiningService.runtimeDependencyOwner.controlPlaneReadinessService,
     epochManager: nodeJoiningService.epochManager,
     messageRouter: joinResult.messageRouter,
     startupRecoveryCoordinator:
@@ -493,6 +496,9 @@ async function startSeedNode(options) {
     messageGroupServices: bootstrapResult.messageGroupServices,
     partitionServices: bootstrapResult.partitionServices,
     replicaHandler: bootstrapResult.replicaHandler,
+    cdcIntegrationService: bootstrapService.cdcIntegrationService,
+    controlPlaneReadinessService:
+      bootstrapService.runtimeDependencyOwner.controlPlaneReadinessService,
     epochManager: bootstrapResult.epochManager,
     messageRouter: bootstrapResult.messageRouter,
     startupRecoveryCoordinator:

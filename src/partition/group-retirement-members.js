@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Owner contract:
  * Owner: WHICH replicas a whole-group retirement step must hear from before
@@ -342,7 +343,7 @@ function refusalOf(nodeId, positive, answer) {
   if (positive) {
     return GROUP_MEMBER_REFUSAL.PROGRESS_UNRECORDED;
   }
-  return IN_PROGRESS_STATUSES.has(String(answer?.status || '')) ?
+  return IN_PROGRESS_STATUSES.has(readStateField(answer?.status)) ?
     GROUP_MEMBER_REFUSAL.REMOVAL_IN_PROGRESS :
     answer?.groupRetirementRefusal ?? null;
 }
@@ -419,8 +420,7 @@ async function retireFrozenGroupMembers(owner, {workflowId, participantKey,
     const nodeId = String(nodeIdOf[replicaId] || '');
     const answer = nodeId ?
       await deliver({replicaId, nodeId}).catch(() => null) : null;
-    const positive = ACCEPTED_REMOVAL_STATUSES.has(
-      String(answer?.status || ''));
+    const positive = ACCEPTED_REMOVAL_STATUSES.has(readStateField(answer?.status));
     if (positive && await recordedProgress(owner, group, {
       [GROUP_MEMBER_CHECKPOINT_FIELD.DISSOLVED_REPLICA_IDS]:
         [...dissolved, replicaId]})) {

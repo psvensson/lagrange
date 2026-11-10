@@ -120,7 +120,7 @@ function buildContext(options = {}) {
   );
   const publicationStatus =
     normalizeOptionalString(
-      options.publicationStatus ?? options.status ?? options.publicationStatusNormalized,
+      options.publicationStatus,
     );
   const publicationStatusNormalized = publicationStatus ?
     publicationStatus.toUpperCase() :

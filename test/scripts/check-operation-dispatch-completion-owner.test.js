@@ -1,5 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  buildOperationDispatchCompletionBaseline,
   collectOperationDispatchCompletionViolations,
   loadSourceByPath,
 } from '../../scripts/check-operation-dispatch-completion-owner.js';
@@ -14,8 +15,24 @@ const TRANSITION_PATH =
   'src/rebalancer/operation-workflow-transition-persistence.js';
 const CLEANUP_RELEASE_PATH =
   'src/rebalancer/operation-workflow-terminal-transition-repair.js';
+const CLEANUP_CLAIM_PATH =
+  'src/rebalancer/operation-workflow-replace-terminal-admission.js';
 
 const CENSUS_TIMEOUT_MS = 90000;
+
+let sharedCensusFixturePromise = null;
+
+function getSharedCensusFixture() {
+  if (!sharedCensusFixturePromise) {
+    sharedCensusFixturePromise = loadSourceByPath().then((sourceByPath) =>
+      Object.freeze({
+        sourceByPath,
+        baseline: buildOperationDispatchCompletionBaseline(sourceByPath),
+      }),
+    );
+  }
+  return sharedCensusFixturePromise;
+}
 
 function mutateSource(sourceByPath, filePath, mutate) {
   const mutated = new Map(sourceByPath);
@@ -28,9 +45,9 @@ function mutateSource(sourceByPath, filePath, mutate) {
   return mutated;
 }
 
-function violationKinds(sourceByPath) {
+function violationKinds(sourceByPath, baseline = null) {
   return new Set(
-    collectOperationDispatchCompletionViolations(sourceByPath)
+    collectOperationDispatchCompletionViolations(sourceByPath, baseline)
       .map((violation) => violation.kind),
   );
 }
@@ -49,41 +66,46 @@ function violationKinds(sourceByPath) {
 test('operation dispatch completion owner census is green on source',
   {timeout: CENSUS_TIMEOUT_MS},
   async (t) => {
-    const sourceByPath = await loadSourceByPath();
+    const {sourceByPath, baseline} = await getSharedCensusFixture();
     t.same(
       collectOperationDispatchCompletionViolations(sourceByPath),
       [],
       'the checked-in owner cutover has zero structural violations',
     );
+    t.same(
+      collectOperationDispatchCompletionViolations(sourceByPath, baseline),
+      [],
+      'the cached baseline produces the same empty violation set',
+    );
   });
 
 test('census rejects a delivered success that skips owner retention',
   async (t) => {
-    const sourceByPath = await loadSourceByPath();
+    const {sourceByPath, baseline} = await getSharedCensusFixture();
     const mutated = mutateSource(sourceByPath, DISPATCH_PATH, (source) =>
       source.replace(
         'this.retainDeliveredCreateProgress',
         'this.ownerRetentionRemoved',
       ),
     );
-    const kinds = violationKinds(mutated);
+    const kinds = violationKinds(mutated, baseline);
     t.ok(kinds.has('delivered_create_owner_submission_census'));
     t.ok(kinds.has('delivered_create_owner_dominance'));
   });
 
 test('census rejects a caller-local target-progress scheduler', async (t) => {
-  const sourceByPath = await loadSourceByPath();
+  const {sourceByPath, baseline} = await getSharedCensusFixture();
   const mutated = mutateSource(sourceByPath, DISPATCH_PATH, (source) =>
     `${source}\nservice.scheduleRuntimeTargetProgressDispatchVerification();\n`,
   );
   t.ok(
-    violationKinds(mutated).has('caller_local_retention_site'),
+    violationKinds(mutated, baseline).has('caller_local_retention_site'),
     'a caller-local scheduler must increase the metric',
   );
 });
 
 test('census rejects create-success response coverage drift', async (t) => {
-  const sourceByPath = await loadSourceByPath();
+  const {sourceByPath, baseline} = await getSharedCensusFixture();
   const mutated = mutateSource(sourceByPath, OWNER_PATH, (source) =>
     source.replace(
       'ReplicaOperationResponseStatus.COMPLETED,',
@@ -91,13 +113,13 @@ test('census rejects create-success response coverage drift', async (t) => {
     ),
   );
   t.ok(
-    violationKinds(mutated).has('create_success_status_coverage'),
+    violationKinds(mutated, baseline).has('create_success_status_coverage'),
     'status-table drift must increase the metric',
   );
 });
 
 test('census rejects missing terminal cleanup', async (t) => {
-  const sourceByPath = await loadSourceByPath();
+  const {sourceByPath, baseline} = await getSharedCensusFixture();
   const mutated = mutateSource(sourceByPath, TRANSITION_PATH, (source) =>
     source.replaceAll(
       '    this.clearObservedProgressRetry(operation?.operationId, {\n' +
@@ -107,13 +129,13 @@ test('census rejects missing terminal cleanup', async (t) => {
     ),
   );
   t.ok(
-    violationKinds(mutated).has('terminal_retention_cleanup'),
+    violationKinds(mutated, baseline).has('terminal_retention_cleanup'),
     'terminal cleanup removal must increase the metric',
   );
 });
 
 test('census rejects weak terminal cleanup', async (t) => {
-  const sourceByPath = await loadSourceByPath();
+  const {sourceByPath, baseline} = await getSharedCensusFixture();
   const mutated = mutateSource(sourceByPath, TRANSITION_PATH, (source) =>
     source.replaceAll(
       'includeDeliveredCreateProgress: true',
@@ -121,13 +143,13 @@ test('census rejects weak terminal cleanup', async (t) => {
     ),
   );
   t.ok(
-    violationKinds(mutated).has('terminal_retention_cleanup'),
+    violationKinds(mutated, baseline).has('terminal_retention_cleanup'),
     'terminal cleanup must explicitly consume delivered-create retention',
   );
 });
 
 test('census rejects missing REPLACE target-active cleanup', async (t) => {
-  const sourceByPath = await loadSourceByPath();
+  const {sourceByPath, baseline} = await getSharedCensusFixture();
   const mutated = mutateSource(sourceByPath, RECOVERY_PATH, (source) =>
     source.replace(
       '        this.clearObservedProgressRetry(operation.operationId, {\n' +
@@ -137,13 +159,15 @@ test('census rejects missing REPLACE target-active cleanup', async (t) => {
     ),
   );
   t.ok(
-    violationKinds(mutated).has('replace_target_active_retention_cleanup'),
+    violationKinds(mutated, baseline).has(
+      'replace_target_active_retention_cleanup',
+    ),
     'durable REPLACE target progress must consume owner retention',
   );
 });
 
 test('census rejects weak REPLACE target-active cleanup', async (t) => {
-  const sourceByPath = await loadSourceByPath();
+  const {sourceByPath, baseline} = await getSharedCensusFixture();
   const mutated = mutateSource(sourceByPath, RECOVERY_PATH, (source) =>
     source.replace(
       'includeDeliveredCreateProgress: true',
@@ -151,25 +175,41 @@ test('census rejects weak REPLACE target-active cleanup', async (t) => {
     ),
   );
   t.ok(
-    violationKinds(mutated).has('replace_target_active_retention_cleanup'),
+    violationKinds(mutated, baseline).has(
+      'replace_target_active_retention_cleanup',
+    ),
     'REPLACE target completion must explicitly consume delivered-create retention',
   );
 });
 
-test('census rejects a second CREATE delivery sink', async (t) => {
-  const sourceByPath = await loadSourceByPath();
-  const mutated = mutateSource(sourceByPath, DISPATCH_PATH, (source) =>
+test('census rejects an unauthorized fourth delivery sink', async (t) => {
+  const {sourceByPath, baseline} = await getSharedCensusFixture();
+  const mutated = mutateSource(sourceByPath, CLEANUP_CLAIM_PATH, (source) =>
     `${source}\nowner.deliverReplicaOperationRequest();\n`,
   );
   t.ok(
-    violationKinds(mutated).has('create_delivery_sink_census'),
-    'a second transport sink must increase the metric',
+    violationKinds(mutated, baseline).has('create_delivery_sink_census'),
+    'an unauthorized transport sink must increase the metric',
+  );
+});
+
+test('census rejects cleanup release sending CREATE_REPLICA', async (t) => {
+  const {sourceByPath, baseline} = await getSharedCensusFixture();
+  const mutated = mutateSource(sourceByPath, CLEANUP_RELEASE_PATH, (source) =>
+    source.replace(
+      'ReplicaOperationMessageType.REMOVE_REPLICA',
+      'ReplicaOperationMessageType.CREATE_REPLICA',
+    ),
+  );
+  t.ok(
+    violationKinds(mutated, baseline).has('cleanup_release_delivery_shape'),
+    'a cleanup release sending CREATE_REPLICA must fail closed',
   );
 });
 
 test('census rejects cleanup release without an exact create attempt',
   async (t) => {
-    const sourceByPath = await loadSourceByPath();
+    const {sourceByPath, baseline} = await getSharedCensusFixture();
     const mutated = mutateSource(
       sourceByPath,
       CLEANUP_RELEASE_PATH,
@@ -179,18 +219,47 @@ test('census rejects cleanup release without an exact create attempt',
       ),
     );
     t.ok(
-      violationKinds(mutated).has('cleanup_release_delivery_shape'),
+      violationKinds(mutated, baseline).has('cleanup_release_delivery_shape'),
       'a release without exact attempt identity must increase the metric',
     );
   });
 
+test('census rejects cleanup claim sending CREATE_REPLICA', async (t) => {
+  const {sourceByPath, baseline} = await getSharedCensusFixture();
+  const mutated = mutateSource(sourceByPath, CLEANUP_CLAIM_PATH, (source) =>
+    source.replace(
+      'ReplicaOperationMessageType.CLAIM_FAILED_CREATE_CLEANUP',
+      'ReplicaOperationMessageType.CREATE_REPLICA',
+    ),
+  );
+  t.ok(
+    violationKinds(mutated, baseline).has('cleanup_claim_delivery_shape'),
+    'a cleanup claim sending CREATE_REPLICA must fail closed',
+  );
+});
+
+test('census rejects cleanup claim without an exact create attempt',
+  async (t) => {
+    const {sourceByPath, baseline} = await getSharedCensusFixture();
+    const mutated = mutateSource(sourceByPath, CLEANUP_CLAIM_PATH, (source) =>
+      source.replace(
+        'observation.lifecyclePrecondition.create_attempt_token !== attemptToken',
+        'observation.lifecyclePrecondition.cleanup_token !== attemptToken',
+      ),
+    );
+    t.ok(
+      violationKinds(mutated, baseline).has('cleanup_claim_delivery_shape'),
+      'a cleanup claim without exact attempt identity must fail closed',
+    );
+  });
+
 test('census rejects a parallel delivered-create registry', async (t) => {
-  const sourceByPath = await loadSourceByPath();
+  const {sourceByPath, baseline} = await getSharedCensusFixture();
   const mutated = mutateSource(sourceByPath, OWNER_PATH, (source) =>
     `${source}\nthis.operationDeliveredCreateProgress = new Map();\n`,
   );
   t.ok(
-    violationKinds(mutated).has('parallel_retention_registry'),
+    violationKinds(mutated, baseline).has('parallel_retention_registry'),
     'a parallel map must increase the metric',
   );
 });

@@ -1,8 +1,8 @@
+import {readLowerStateField} from '../../utils/state-field-read.js';
 import {
   COLUMN,
   SERVICE_STATUS,
   STATE,
-  STRING,
   TABLES,
 } from '../../constants/index.js';
 import {
@@ -157,9 +157,8 @@ const moveReplicaAssignmentVisibilityPolicyMethods = {
         TABLES.SERVICES,
         reservation?.replicaId || null,
       );
-    const existingStatus = String(
-      existingServiceRow?.[COLUMN.STATUS] || STRING.UNKNOWN,
-    ).toLowerCase();
+    // A missing services row has no status (STATE_ABSENT), never ACTIVE.
+    const existingStatus = readLowerStateField(existingServiceRow?.[COLUMN.STATUS]);
     const existingNodeId = existingServiceRow?.[COLUMN.NODE_ID] || null;
     const sourceOwnsActiveReplica =
       existingStatus === SERVICE_STATUS.ACTIVE &&

@@ -525,6 +525,10 @@ class BootstrapAPI {
           getMessageGroups: () => this.getMessageGroups(),
           getControlPlaneReadinessService: () =>
             this.getControlPlaneReadinessService(),
+          getAuthoritativeControlPlaneView: () =>
+            this.getAuthoritativeControlPlaneView(),
+          getPartitionServices: () => this.partitionServices,
+          getReplicaHandler: () => this.getReplicaHandler(),
           getEpochManager: () =>
             this.epochManager || this.bootstrapStartupAdapter?.getEpochManager?.(),
         },

@@ -597,6 +597,24 @@ P5 cannot be declared complete because P0 or the rendering checks pass.
 A blocked runtime feature goes to its existing semantic owner; it is not
 implemented inside a benchmark adapter to keep the sequence apparently green.
 
+### Registered P4 Quests
+
+The 10 November source review at `947fbe658` refines P4 into two registered,
+unsealed units. Their records hold the bounded work and proof obligations:
+
+| Quest | Existing requirement and acceptance family |
+| --- | --- |
+| [C1: Cohort-preserving dataset reset](../../quests/benchmark-cohort-preserving-dataset-reset/quest.json) | Sections 7.2-7.3 deployment identity, durability, warm-up/reset and P4 product adapters; feeds measured-comparison-coverage and reproducible-public-results. |
+| [C2: TiDB canonical case completion](../../quests/tidb-canonical-semantic-case-completion/quest.json) | Section 8 finite required coverage and P4 native adapters; feeds measured-comparison-coverage with actual executed proof IDs. |
+
+These units preserve the current deployment-binding check and required restart
+proof. Missing cases remain incomplete; neither an isolated passed gate nor a
+new deployment can inherit earlier proofs. An unavailable reset capability is
+repaired by its product owner, not emulated in the adapter. Both units are
+proposals until genuine red measurements seal them. Existing service and
+comparison seals and receipt families are unchanged, and P5 still needs actual
+GCP/lab observations. The epic's current summary owns active coordination.
+
 ## 10. Verification and completion
 
 ### 10.1 Required receipt families

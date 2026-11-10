@@ -17,6 +17,7 @@ import {
   READ_CONSISTENCY_MODE,
   WRITE_CONSISTENCY_MODE,
   WASM_SERVICE_DEFAULT,
+  WASM_SERVICE_DEFINITION_STATUS,
   WASM_SERVICE_PROTOCOL,
 } from './wasm-service-constants.js';
 
@@ -64,6 +65,7 @@ function createWasmMetaDefinition() {
     runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
     runtimeRef: META_SERVICE_RUNTIME_REF.WASM_META,
     runtimeConfig: null,
+    status: WASM_SERVICE_DEFINITION_STATUS.ACTIVE,
   };
 }
 
@@ -88,6 +90,7 @@ function createAdminMetaDefinition() {
     runtimeKind: RUNTIME_KIND.NATIVE_JS,
     runtimeRef: META_SERVICE_RUNTIME_REF.ADMIN_META,
     runtimeConfig: null,
+    status: WASM_SERVICE_DEFINITION_STATUS.ACTIVE,
   };
 }
 
@@ -116,6 +119,7 @@ function createPostgresWireDefinition() {
     runtimeRef: META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
     runtimeConfig: JSON.stringify(POSTGRES_WIRE_RUNTIME_CONFIG),
     protocol: WASM_SERVICE_PROTOCOL.POSTGRESQL,
+    status: WASM_SERVICE_DEFINITION_STATUS.ACTIVE,
   };
 }
 

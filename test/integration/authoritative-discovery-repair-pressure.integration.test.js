@@ -88,6 +88,8 @@ test('authoritative discovery repair preserves participant attribution under con
           tableName,
           rows: [],
           count: 0,
+          rowCount: 0,
+          rowSetComplete: true,
           source: 'owner_rpc_lane',
           readAuthorityWitness: {
             state: 'observed',

@@ -132,7 +132,7 @@ async function escalateStarvedStoppingObservation(owner, operation) {
       observationState: STOPPING_OBSERVATION_STARVATION_WAIT.observationState,
       deferralCount: record.deferralCount,
       deferralLimit: STOPPING_OBSERVATION_STARVATION_DEFERRAL_LIMIT,
-      workflowStep: operation.workflowStep || null,
+      workflowStep: operation.workflowStep,
       sourceNodeId: operation.sourceNodeId || null,
     },
     scope: {

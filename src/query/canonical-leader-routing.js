@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {
   COLUMN,
   SERVICE_STATUS,
@@ -50,7 +51,7 @@ function normalizeCanonicalLeaderNodeIdValue(value) {
 }
 
 function normalizeCanonicalLeaderServiceStatus(service = null) {
-  const status = service?.[COLUMN.STATUS] ?? service?.status ?? null;
+  const status = service?.[COLUMN.STATUS];
   if (typeof status !== 'string' || status.length === 0) {
     return null;
   }
@@ -76,11 +77,7 @@ function readCanonicalLeaderServiceNodeId(service = null) {
 }
 
 function readCanonicalLeaderServiceRole(service = null) {
-  const role = service?.[COLUMN.RAFT_ROLE] ?? service?.raft_role ??
-    service?.raftRole ?? null;
-  return typeof role === 'string' && role.length > 0 ?
-    role.toLowerCase() :
-    null;
+  return readLowerStateField(service?.[COLUMN.RAFT_ROLE]);
 }
 
 function isCanonicalLeaderRoleWitness(service = null) {

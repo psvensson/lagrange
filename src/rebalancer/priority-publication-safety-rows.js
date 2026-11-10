@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {PriorityPublicationSafetyTopology} from './priority-publication-safety-topology.js';
 import {policyRefusalReason} from '../policy/table-policy-validation.js';
 import {
@@ -439,14 +440,10 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return null;
     }
-    const publicationStatus =
-      typeof planningSnapshot.publicationStatus === 'string' &&
-      planningSnapshot.publicationStatus.length > 0 ?
-        planningSnapshot.publicationStatus :
-        typeof planningSnapshot.status === 'string' &&
-            planningSnapshot.status.length > 0 ?
-          planningSnapshot.status :
-          null;
+    const publicationStatus = readStateField(
+      planningSnapshot.publicationStatus,
+      planningSnapshot.status,
+    );
     return publicationStatus ? publicationStatus.trim().toUpperCase() : null;
   }
 }

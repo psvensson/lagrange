@@ -2,8 +2,11 @@ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   projectRuntimeReplicaServicesRow,
 } from './runtime-replica-state-projection.js';
-import {initializeSqlQueryEngineInstance} from
-  './sql-query-engine-instance-initializer.js';
+import {
+  attachAuthoritativeRoutingOverlayCacheApplyListener,
+  detachAuthoritativeRoutingOverlayCacheApplyListener,
+  initializeSqlQueryEngineInstance,
+} from './sql-query-engine-instance-initializer.js';
 import {releaseTransactionReservations} from
   '../partition/partition-locking-read-reservation.js';
 
@@ -27,6 +30,25 @@ function resumeDurableProvisioningWork(engine) {
       QUERY_LOG_MSG.SCHEMA_PROVISIONING_RECOVERY_DEFERRED,
       {error: error.message},
     ));
+}
+
+function rebindSystemCacheRoutingOverlayListener(engine, cache) {
+  if (engine.systemCache === cache) {
+    return;
+  }
+  detachAuthoritativeRoutingOverlayCacheApplyListener(engine);
+  engine.authoritativeRoutingOverlayEntries.clear();
+  engine.systemCache = cache;
+  if (!engine.isShutDown) {
+    attachAuthoritativeRoutingOverlayCacheApplyListener(engine, cache);
+  }
+}
+
+function resetRoutingOverlaysOnShutdown(engine) {
+  engine.isShutDown = true;
+  detachAuthoritativeRoutingOverlayCacheApplyListener(engine);
+  engine.authoritativeRoutingOverlayEntries.clear();
+  engine.bootstrapRoutingOverlayEntries.clear();
 }
 
 class SQLQueryEngineLifecycleAndCallbackDispatch {
@@ -56,7 +78,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
    * @param {Object} cache - System table cache.
    */
   setSystemCache(cache) {
-    this.systemCache = cache;
+    rebindSystemCacheRoutingOverlayListener(this, cache);
     this.partitionResolver.setSystemCache(cache);
     this.tableCreationService.setSystemCache(cache);
     this.queryExecutor.setSystemCache(cache);
@@ -233,6 +255,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
    * @return {Promise<void>}
    */
   async shutdown() {
+    resetRoutingOverlaysOnShutdown(this);
     // Abort in-flight query retry loops so they stop re-arming backoff timers
     // (otherwise a query retrying a torn-down cluster keeps the loop alive).
     if (

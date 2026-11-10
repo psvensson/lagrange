@@ -11,6 +11,7 @@ import {buildControlPlaneReadAuthority} from
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {isPartitionCleanupServiceRow} from '../constants/service.js';
+import {readStateField} from '../utils/state-field-read.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
@@ -54,6 +55,139 @@ const AUTHORITATIVE_ROUTING_OVERLAY_SERVICE_COVERAGE_STATE = Object.freeze({
   INCOMPLETE: 'incomplete',
   UNKNOWN: 'unknown',
 });
+
+const PARTITION_VERSION_COL = 'partition_version';
+const REPLICA_COUNT_COL = 'replica_count';
+const PARTITION_COMPARE_FIELDS = Object.freeze([
+  PARTITION_VERSION_COL, REPLICA_COUNT_COL, COLUMN.LEADER_NODE_ID, COLUMN.STATE,
+]);
+const SERVICE_COMPARE_FIELDS = Object.freeze([
+  COLUMN.NODE_ID, COLUMN.STATUS, COLUMN.RAFT_ROLE, COLUMN.ADDRESS,
+]);
+const normalizeText = (v) => (typeof v === 'string' && v.length > 0 ? v : null);
+const normalizeNumber = (v) =>
+  v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v);
+const isRegressiveTs = (cand, ref) => cand !== null && ref !== null && cand < ref;
+const isNewerTs = (cand, ref) => cand !== null && ref !== null && cand > ref;
+const resolveOverlayServiceKey = (svc) => !svc || typeof svc !== 'object' ? null :
+  normalizeText(svc[COLUMN.SERVICE_ID]) ?? normalizeText(svc[COLUMN.REPLICA_ID]) ??
+  normalizeText(svc[COLUMN.ADDRESS]);
+const snapshotPartitionBaseline = (row) => !row || typeof row !== 'object' ? null : Object.freeze({
+  [PARTITION_VERSION_COL]: normalizeNumber(row[PARTITION_VERSION_COL]),
+  [REPLICA_COUNT_COL]: normalizeNumber(row[REPLICA_COUNT_COL]),
+  [COLUMN.LEADER_NODE_ID]: normalizeText(row[COLUMN.LEADER_NODE_ID]),
+  [COLUMN.STATE]: normalizeText(row[COLUMN.STATE]),
+  [COLUMN.UPDATED_AT]: normalizeNumber(row[COLUMN.UPDATED_AT]),
+});
+const snapshotServicesBaseline = (rows) => !Array.isArray(rows) ? Object.freeze({}) :
+  Object.freeze(Object.fromEntries(rows.flatMap((row) => {
+    const key = resolveOverlayServiceKey(row);
+    return key === null ? [] : [[key, Object.freeze({
+      [COLUMN.NODE_ID]: normalizeText(row[COLUMN.NODE_ID]),
+      [COLUMN.STATUS]: readStateField(row[COLUMN.STATUS]),
+      [COLUMN.RAFT_ROLE]: readStateField(row[COLUMN.RAFT_ROLE]),
+      [COLUMN.ADDRESS]: normalizeText(row[COLUMN.ADDRESS]),
+      [COLUMN.UPDATED_AT]: normalizeNumber(row[COLUMN.UPDATED_AT]),
+    })]];
+  })));
+const isPartitionRegressive = (cand, ref) => Boolean(cand && ref) && (
+  (cand[PARTITION_VERSION_COL] !== null && ref[PARTITION_VERSION_COL] !== null &&
+    cand[PARTITION_VERSION_COL] < ref[PARTITION_VERSION_COL]) ||
+  isRegressiveTs(cand[COLUMN.UPDATED_AT], ref[COLUMN.UPDATED_AT]));
+const hasSnapshotChanged = (left, right, fields) => left !== right &&
+  (!left || !right || fields.some((f) => left[f] !== right[f]) ||
+    left[COLUMN.UPDATED_AT] !== right[COLUMN.UPDATED_AT]);
+const haveServicesMapChanged = (leftMap, rightMap) => {
+  const leftKeys = Object.keys(leftMap);
+  return leftKeys.length !== Object.keys(rightMap).length || leftKeys.some((k) =>
+    !Object.hasOwn(rightMap, k) ||
+    hasSnapshotChanged(leftMap[k], rightMap[k], SERVICE_COMPARE_FIELDS));
+};
+const resolveOverlayRefTs = (overPart, overServices) =>
+  Object.values(overServices).reduce((maxTs, svc) =>
+    svc[COLUMN.UPDATED_AT] !== null && (maxTs === null || svc[COLUMN.UPDATED_AT] > maxTs) ?
+      svc[COLUMN.UPDATED_AT] : maxTs, overPart ? overPart[COLUMN.UPDATED_AT] : null);
+function hasPartitionAdvanced(basePart, currPart, overPart) {
+  if (!currPart || !hasSnapshotChanged(basePart, currPart, PARTITION_COMPARE_FIELDS) ||
+      isPartitionRegressive(currPart, basePart) || isPartitionRegressive(currPart, overPart)) {
+    return false;
+  }
+  if (!overPart) return true;
+  const cv = currPart[PARTITION_VERSION_COL];
+  const ov = overPart[PARTITION_VERSION_COL];
+  return (cv !== null && ov !== null && cv > ov) ||
+    isNewerTs(currPart[COLUMN.UPDATED_AT], overPart[COLUMN.UPDATED_AT]) ||
+    PARTITION_COMPARE_FIELDS.some((f) =>
+      currPart[f] !== (basePart ? basePart[f] : null) && currPart[f] !== overPart[f]);
+}
+
+function isCurrentServiceEntryAdvanced(key, currSvc, baseServices, overServices, overRefTs) {
+  const ts = currSvc[COLUMN.UPDATED_AT];
+  if (Object.hasOwn(baseServices, key)) {
+    const baseSvc = baseServices[key];
+    if (!hasSnapshotChanged(baseSvc, currSvc, SERVICE_COMPARE_FIELDS) ||
+        isRegressiveTs(ts, baseSvc[COLUMN.UPDATED_AT])) return false;
+    if (!Object.hasOwn(overServices, key)) {
+      return !isRegressiveTs(ts, overRefTs) && (overRefTs === null || isNewerTs(ts, overRefTs));
+    }
+    const overSvc = overServices[key];
+    return !isRegressiveTs(ts, overSvc[COLUMN.UPDATED_AT]) &&
+      (isNewerTs(ts, overSvc[COLUMN.UPDATED_AT]) ||
+        SERVICE_COMPARE_FIELDS.some((f) => currSvc[f] !== baseSvc[f] && currSvc[f] !== overSvc[f]));
+  }
+  if (!Object.hasOwn(overServices, key)) return !isRegressiveTs(ts, overRefTs);
+  const overSvc = overServices[key];
+  return !isRegressiveTs(ts, overSvc[COLUMN.UPDATED_AT]) &&
+    (isNewerTs(ts, overSvc[COLUMN.UPDATED_AT]) ||
+      SERVICE_COMPARE_FIELDS.some((f) => overSvc[f] !== null && currSvc[f] !== overSvc[f]));
+}
+const haveServicesAdvanced = (baseServices, currServices, overServices, overRefTs) =>
+  Object.entries(currServices).some(([key, currSvc]) =>
+    isCurrentServiceEntryAdvanced(key, currSvc, baseServices, overServices, overRefTs)) ||
+  Object.keys(overServices).some((k) =>
+    Object.hasOwn(baseServices, k) && !Object.hasOwn(currServices, k));
+function isCacheConvergedWithOverlay(entry, currPart, currServices, overPart, overServices) {
+  const masksCache = entry.cacheServiceState !==
+    AUTHORITATIVE_ROUTING_OVERLAY_CACHE_SERVICE_STATE.ELIGIBLE;
+  if (masksCache && Object.keys(currServices).some((k) => !Object.hasOwn(overServices, k))) {
+    return false;
+  }
+  if (overPart && (!currPart || isPartitionRegressive(currPart, overPart) ||
+      PARTITION_COMPARE_FIELDS.some((f) => overPart[f] !== null && currPart[f] !== overPart[f]))) {
+    return false;
+  }
+  return Object.entries(overServices).every(([k, overSvc]) => Object.hasOwn(currServices, k) &&
+    !isRegressiveTs(currServices[k][COLUMN.UPDATED_AT], overSvc[COLUMN.UPDATED_AT]) &&
+    SERVICE_COMPARE_FIELDS.every((f) => overSvc[f] === null || currServices[k][f] === overSvc[f]));
+}
+const isAuthoritativeMissingSuperseded = (basePart, baseServices, currPart, currServices) =>
+  (currPart !== null && hasSnapshotChanged(basePart, currPart, PARTITION_COMPARE_FIELDS) &&
+    !isPartitionRegressive(currPart, basePart)) ||
+  Object.entries(currServices).some(([k, currSvc]) => !Object.hasOwn(baseServices, k) ||
+    (hasSnapshotChanged(baseServices[k], currSvc, SERVICE_COMPARE_FIELDS) &&
+      !isRegressiveTs(currSvc[COLUMN.UPDATED_AT], baseServices[k][COLUMN.UPDATED_AT]))) ||
+  (currPart === null && Object.keys(currServices).length === 0);
+const isAvailableOverlayOutdated = (entry, base, curr, partChanged, svcsChanged) => {
+  const overPart = snapshotPartitionBaseline(entry.partition);
+  const overServices = snapshotServicesBaseline(entry.services);
+  const overRefTs = resolveOverlayRefTs(overPart, overServices);
+  return (partChanged && hasPartitionAdvanced(base.part, curr.part, overPart)) ||
+    (svcsChanged && haveServicesAdvanced(base.svcs, curr.svcs, overServices, overRefTs)) ||
+    isCacheConvergedWithOverlay(entry, curr.part, curr.svcs, overPart, overServices);
+};
+function isAuthoritativeOverlayOutdated(entry, currPartitionRow, currServiceRows) {
+  const baseline = entry?.capturedCacheBaseline;
+  if (!baseline || typeof baseline !== 'object') return false;
+  const base = {part: baseline.partition ?? null, svcs: baseline.services ?? {}};
+  const curr = {part: snapshotPartitionBaseline(currPartitionRow),
+    svcs: snapshotServicesBaseline(currServiceRows)};
+  const partChanged = hasSnapshotChanged(base.part, curr.part, PARTITION_COMPARE_FIELDS);
+  const svcsChanged = haveServicesMapChanged(base.svcs, curr.svcs);
+  if (!partChanged && !svcsChanged) return false;
+  return entry.state === AUTHORITATIVE_ROUTING_OVERLAY_STATE.AUTHORITATIVE_MISSING ?
+    isAuthoritativeMissingSuperseded(base.part, base.svcs, curr.part, curr.svcs) :
+    isAvailableOverlayOutdated(entry, base, curr, partChanged, svcsChanged);
+}
 
 
 class SQLQueryEngineRoutingMetadataMethods {
@@ -409,6 +543,26 @@ class SQLQueryEngineRoutingMetadataMethods {
     );
   }
 
+  evictOutdatedAuthoritativeRoutingOverlayEntry(partitionId) {
+    const entry = this.authoritativeRoutingOverlayEntries.get(partitionId);
+    if (entry && typeof entry === LOCAL_STR_OBJECT && isAuthoritativeOverlayOutdated(
+      entry, this.getCachedPartitionRecord(partitionId), this.getPartitionServiceRows(partitionId),
+    )) this.authoritativeRoutingOverlayEntries.delete(partitionId);
+  }
+
+  handleAuthoritativeRoutingOverlayCacheApplyChange(tableName, _operation, record) {
+    if ((tableName !== TABLES.PARTITIONS && tableName !== TABLES.SERVICES) ||
+        this.authoritativeRoutingOverlayEntries.size === 0) return;
+    const partitionId = normalizeText(record?.[COLUMN.PARTITION_ID]);
+    if (partitionId !== null && this.authoritativeRoutingOverlayEntries.has(partitionId)) {
+      this.evictOutdatedAuthoritativeRoutingOverlayEntry(partitionId);
+      return;
+    }
+    for (const id of this.authoritativeRoutingOverlayEntries.keys()) {
+      this.evictOutdatedAuthoritativeRoutingOverlayEntry(id);
+    }
+  }
+
   /**
    * Resolve one explicit authoritative overlay entry state.
    * @param {string} partitionId
@@ -416,6 +570,7 @@ class SQLQueryEngineRoutingMetadataMethods {
    * @private
    */
   getAuthoritativeRoutingOverlayEntryState(partitionId) {
+    this.evictOutdatedAuthoritativeRoutingOverlayEntry(partitionId);
     const entry = this.authoritativeRoutingOverlayEntries.get(partitionId);
     if (!entry || typeof entry !== LOCAL_STR_OBJECT) {
       return Object.freeze({
@@ -554,6 +709,11 @@ class SQLQueryEngineRoutingMetadataMethods {
         options.queryTimeoutMs :
         this.queryTimeoutMs;
 
+    const capturedCacheBaseline = Object.freeze({
+      partition: snapshotPartitionBaseline(this.getCachedPartitionRecord(partitionId)),
+      services: snapshotServicesBaseline(this.getPartitionServiceRows(partitionId)),
+    });
+
     const [partitionResult, serviceResult] = await Promise.all([
       authoritativeControlPlaneView.readRows(
         TABLES.PARTITIONS,
@@ -598,6 +758,7 @@ class SQLQueryEngineRoutingMetadataMethods {
               AUTHORITATIVE_ROUTING_OVERLAY_STATE.AUTHORITATIVE_MISSING,
           partition: null,
           services: Object.freeze([]),
+          capturedCacheBaseline,
         } :
         {
           state: AUTHORITATIVE_ROUTING_OVERLAY_STATE.AVAILABLE,
@@ -608,9 +769,18 @@ class SQLQueryEngineRoutingMetadataMethods {
               partitionRows[0] || null,
               serviceRows,
             ),
+          capturedCacheBaseline,
         };
 
-    this.authoritativeRoutingOverlayEntries.set(partitionId, overlayEntry);
+    if (isAuthoritativeOverlayOutdated(
+      overlayEntry,
+      this.getCachedPartitionRecord(partitionId),
+      this.getPartitionServiceRows(partitionId),
+    )) {
+      this.authoritativeRoutingOverlayEntries.delete(partitionId);
+    } else {
+      this.authoritativeRoutingOverlayEntries.set(partitionId, overlayEntry);
+    }
 
     return true;
   }

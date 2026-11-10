@@ -19,6 +19,7 @@ import {test} from 'node:test';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -177,6 +178,7 @@ async function runCreate(t, {label, refusals}) {
   });
   handler.initialize();
   await handler.awaitReplicaCreateAdmissionRecoveryBarrier();
+  await runtimeBuildProvenance();
   const workflowUpdatedAt = operationRow.updated_at;
   const admissionToken = buildReplicaCreateAdmissionToken({operationId, replicaId,
     targetNodeId: NODE_ID, workflowUpdatedAt});

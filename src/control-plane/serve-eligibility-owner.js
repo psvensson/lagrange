@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 // Per-node serve eligibility: one fact, one owner (quest
 // serve-eligibility-committed-epoch-read). The answer is derived from a
 // committed read of the nodes rows and the latest published
@@ -528,8 +529,11 @@ class ServeEligibilityOwner {
   notePublicationSourceChange(row) {
     const pub = normalizeControlPlanePublicationRow(row);
     if (!isMembershipPublication(pub)) return;
-    const isPublished = !pub.status ||
-      pub.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
+    // A membership publication row without a stated status is counted as
+    // published (the PR's decision, now explicit on STATE_ABSENT).
+    const publicationStatus = readStateField(pub.status);
+    const isPublished = publicationStatus === STATE_ABSENT ||
+      publicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
     if (isPublished) this.recordObservedPublicationEpoch(pub.publicationEpoch);
     if (shouldSupersedeOnPublicationChange(this.record, pub, isPublished)) {
       this.markSuperseded();

@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readLowerStateField} from '../../utils/state-field-read.js';
 import {
   COLUMN,
   SERVICE_TYPE,
@@ -237,7 +238,8 @@ const moveReplicaAssignmentReservationPersistenceMethods = {
     const sourceNodeId =
       row.source_node_id || row.sourceNodeId || row.sourceNode || row.sourceNodeId || null;
     const groupId = row[COLUMN.PARTITION_ID] || row.partition_id || row.partitionId || null;
-    const status = String(row[COLUMN.STATUS] || row.status || STRING.UNKNOWN).toLowerCase();
+    const rowStatus = readLowerStateField(row[COLUMN.STATUS]);
+    const status = rowStatus === STATE_ABSENT ? STRING.UNKNOWN : rowStatus;
     const leaseRaw =
       row.lease_expires_at ??
       row.leaseExpiresAt ??

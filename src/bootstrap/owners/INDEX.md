@@ -42,6 +42,7 @@ documentClass: generated
 - [move-replica-assignment-reservation-persistence.js](move-replica-assignment-reservation-persistence.js) - No leading comment; first export: moveReplicaAssignmentReservationPersistenceMethods. (importers: one)
 - [move-replica-assignment-visibility-policy.js](move-replica-assignment-visibility-policy.js) - No leading comment; first export: moveReplicaAssignmentVisibilityPolicyMethods. (importers: one)
 - [move-replica-handoff-owner.js](move-replica-handoff-owner.js) - No leading comment; first export: MoveReplicaHandoffOwner. (importers: one)
+- [partition-quorum-authority.js](partition-quorum-authority.js) - Canonical partition quorum and management cluster snapshot authority. (importers: few)
 - [rolling-upgrade-owner.js](rolling-upgrade-owner.js) - An absent or incomplete snapshot is never read as a ready cluster. (importers: few)
 - [seed-phase-owners.js](seed-phase-owners.js) - Seed phase owner registry. (importers: one)
 - [seed-registration-runtime-owner.js](seed-registration-runtime-owner.js) - No leading comment; first export: SeedRegistrationRuntimeOwner. (importers: few)

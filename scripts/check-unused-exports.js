@@ -72,7 +72,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-11-06 runtime-definition-create-authority removes the retired CREATE resolver.
 // 2026-11-08 (composed-05-comparison-readiness): tightened 1387 -> 1386
 // on the checker hint after consuming noteReplaceOwnerObservedReplicaRows.
-const BASELINE_UNUSED_EXPORT_COUNT = 1386;
+// 2026-11-09 (candidate-integration): tightened 1386 -> 1381 on the checker
+// hint after de-exporting internal runtime-admin composition and policy helpers.
+const BASELINE_UNUSED_EXPORT_COUNT = 1381;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

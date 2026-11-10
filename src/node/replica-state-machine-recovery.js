@@ -62,7 +62,7 @@ function removalAuthority(
     revision,
     durableVersionColumn: version?.column || null,
     durableVersion: version?.value ?? null,
-    status: row?.status || null,
+    status: row === null ? null : row.status, // services.status is NOT NULL
   });
 }
 

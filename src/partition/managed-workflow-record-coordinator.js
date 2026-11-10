@@ -1,3 +1,5 @@
+import {readParticipantCurrentStatus} from '../workflow/workflow-constants.js';
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Owner contract:
  * Owner: the in-memory registry of the split and merge workflows - a
@@ -280,14 +282,17 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
   async recordExecutionOutcome(workflowId, {status, delta, incident}) {
     const workflow = await this.updateWorkflow(workflowId,
       executionOutcomeChange(status, delta, incident));
-    const postCutoverIncident = isCutoverOrLater(workflow?.status ?? null);
+    const postCutoverIncident = isCutoverOrLater(readStateField(workflow?.status));
     if (postCutoverIncident) {
       this.recordOwner.logger?.error?.(COORDINATOR_ERROR_MSG.POST_CUTOVER_INCIDENT,
         {workflowId, attempt: workflowAttemptOf(workflow.metadata),
           phase: workflow.status, outcome: status,
           reason: incident?.reason ?? null});
     }
-    return {workflow, postCutoverIncident, state: workflow?.status ?? status};
+    // The record owns its phase after the outcome; a record that is gone has
+    // none (STATE_ABSENT), never the outcome the caller asked to record.
+    return {workflow, postCutoverIncident,
+      state: readStateField(workflow?.status)};
   }
 
   /**
@@ -466,7 +471,7 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
       return {result: PARTICIPANT_ACK_RESULT.INVALID_TRANSITION,
         participantKey: key,
         reason: WORKFLOW_ERROR_MSG.PARTICIPANT_INVALID_TRANSITION,
-        currentStatus: participant?.status ?? null,
+        currentStatus: readParticipantCurrentStatus(participant),
         receivedStatus: status};
     default:
       return this.validateParticipantTransitionGraph(workflowId,

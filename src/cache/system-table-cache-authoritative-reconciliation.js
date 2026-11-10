@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {
   areCanonicalSystemTableRowsEqual,
   stableSerialize,
@@ -224,9 +225,7 @@ function isNonLeaderVoterRole(role) {
 }
 
 function isActiveServiceStatus(row) {
-  const status = row?.status;
-  return typeof status === 'string' &&
-    status.toLowerCase() === SERVICE_STATUS.ACTIVE;
+  return readLowerStateField(row?.status) === SERVICE_STATUS.ACTIVE;
 }
 
 function shouldPreserveActiveNonLeaderVoterRaftRole(

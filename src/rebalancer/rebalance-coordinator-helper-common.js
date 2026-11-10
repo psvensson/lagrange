@@ -7,8 +7,6 @@ const REBALANCE_COORDINATOR_OPERATION_FIELD = Object.freeze({
   PARTITION_ID_SNAKE: 'partition_id',
   UPDATED_AT: 'updatedAt',
   UPDATED_AT_SNAKE: 'updated_at',
-  WORKFLOW_STEP: 'workflowStep',
-  WORKFLOW_STEP_SNAKE: 'workflow_step',
 });
 
 const PRIORITY_RECOVERY_ADMISSION_PLAN_FIELD = Object.freeze({

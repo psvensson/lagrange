@@ -102,7 +102,8 @@ function selectLatestActiveGateMembershipPublicationRow(rows = [], options = {})
       (
         row.publicationId ||
         row.publicationEpoch ||
-        row.status ||
+        // normalizeControlPlanePublicationRow decodes status to a string.
+        row.status.length > 0 ||
         normalizeNodeIdList(row.publishedActiveNodeIds).length > 0
       ),
     );

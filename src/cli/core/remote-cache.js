@@ -307,13 +307,12 @@ export class RemoteCache {
   }
 
   /**
-   * Resolve runtime service status from endpoint health or definition status.
-   * @param {Object} definition
+   * Resolve a runtime service row's status from its endpoint's health.
    * @param {Object|null|undefined} endpoint
    * @return {string}
    */
-  resolveRuntimeStatus(definition, endpoint) {
-    return resolveRuntimeStatus(definition, endpoint);
+  resolveRuntimeStatus(endpoint) {
+    return resolveRuntimeStatus(endpoint);
   }
 
   /**

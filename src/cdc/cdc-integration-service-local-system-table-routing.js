@@ -173,11 +173,136 @@ export function buildLocalAuthoritativeObservation(
   });
 }
 
+const NORMAL_PARTITION_STATE = 'NORMAL';
+const CACHED_ROW_FIELD = Object.freeze({
+  TABLE_NAME: 'table_name',
+  TABLE_NAME_CAMEL: 'tableName',
+  TABLE_ID: 'table_id',
+  TABLE_ID_CAMEL: 'tableId',
+  ACTIVE_PARTITION_VERSION: 'active_partition_version',
+  ACTIVE_PARTITION_VERSION_CAMEL: 'activePartitionVersion',
+  PARTITION_ID: 'partition_id',
+  PARTITION_ID_CAMEL: 'partitionId',
+  PARTITION_VERSION: 'partition_version',
+  PARTITION_VERSION_CAMEL: 'partitionVersion',
+});
+
+function readCachedRowField(row, primaryKey, secondaryKey) {
+  if (!row || typeof row !== 'object') {
+    return null;
+  }
+  if (row[primaryKey] !== undefined && row[primaryKey] !== null) {
+    return row[primaryKey];
+  }
+  if (row[secondaryKey] !== undefined && row[secondaryKey] !== null) {
+    return row[secondaryKey];
+  }
+  return null;
+}
+
+function decodeCachedTableRow(row) {
+  return {
+    tableName: readCachedRowField(
+      row,
+      CACHED_ROW_FIELD.TABLE_NAME,
+      CACHED_ROW_FIELD.TABLE_NAME_CAMEL,
+    ),
+    tableId: readCachedRowField(
+      row,
+      CACHED_ROW_FIELD.TABLE_ID,
+      CACHED_ROW_FIELD.TABLE_ID_CAMEL,
+    ),
+    activePartitionVersion: Number(
+      readCachedRowField(
+        row,
+        CACHED_ROW_FIELD.ACTIVE_PARTITION_VERSION,
+        CACHED_ROW_FIELD.ACTIVE_PARTITION_VERSION_CAMEL,
+      ),
+    ),
+  };
+}
+
+function decodeCachedPartitionRow(row) {
+  const explicitId = readCachedRowField(
+    row,
+    CACHED_ROW_FIELD.PARTITION_ID,
+    CACHED_ROW_FIELD.PARTITION_ID_CAMEL,
+  );
+  return {
+    partitionId: explicitId ?? (row?.id ?? null),
+    tableName: readCachedRowField(
+      row,
+      CACHED_ROW_FIELD.TABLE_NAME,
+      CACHED_ROW_FIELD.TABLE_NAME_CAMEL,
+    ),
+    tableId: readCachedRowField(
+      row,
+      CACHED_ROW_FIELD.TABLE_ID,
+      CACHED_ROW_FIELD.TABLE_ID_CAMEL,
+    ),
+    state: row?.state ?? null,
+    partitionVersion: Number(
+      readCachedRowField(
+        row,
+        CACHED_ROW_FIELD.PARTITION_VERSION,
+        CACHED_ROW_FIELD.PARTITION_VERSION_CAMEL,
+      ),
+    ),
+  };
+}
+
+function findCachedTableRow(cache, tableName) {
+  const directRow = cache.get?.(SYSTEM_TABLE_NAME.TABLES, tableName) || null;
+  if (directRow) {
+    return directRow;
+  }
+  const allRows = cache.getAll?.(SYSTEM_TABLE_NAME.TABLES) || [];
+  return allRows.find((row) => {
+    const decoded = decodeCachedTableRow(row);
+    return decoded.tableName === tableName || decoded.tableId === tableName;
+  }) || null;
+}
+
+function resolveActiveTableVersionFromCache(cache, tableName) {
+  if (!cache || !tableName) {
+    return null;
+  }
+  const tableRow = findCachedTableRow(cache, tableName);
+  if (!tableRow) {
+    return null;
+  }
+  const {activePartitionVersion} = decodeCachedTableRow(tableRow);
+  return Number.isInteger(activePartitionVersion) && activePartitionVersion > 0 ?
+    activePartitionVersion :
+    null;
+}
+
+function isMatchingNormalPartitionVersion(decoded, activeVersion) {
+  if (
+    decoded.state !== null &&
+    String(decoded.state).toUpperCase() !== NORMAL_PARTITION_STATE
+  ) {
+    return false;
+  }
+  if (
+    activeVersion !== null &&
+    Number.isInteger(decoded.partitionVersion) &&
+    decoded.partitionVersion > 0 &&
+    decoded.partitionVersion !== activeVersion
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function resolvePartitionRowsFromCache(cache, tableName) {
+  const activeVersion = resolveActiveTableVersionFromCache(cache, tableName);
   const partitionPredicate = (row) => {
-    const rowTableName = row?.table_name ?? row?.tableName ?? null;
-    const rowTableId = row?.table_id ?? row?.tableId ?? null;
-    return rowTableName === tableName || rowTableId === tableName;
+    const decoded = decodeCachedPartitionRow(row);
+    if (decoded.tableName !== tableName && decoded.tableId !== tableName) {
+      return false;
+    }
+    return isMatchingNormalPartitionVersion(decoded, activeVersion);
   };
   return typeof cache.filter === 'function' ?
     cache.filter(SYSTEM_TABLE_NAME.PARTITIONS, partitionPredicate) :
@@ -228,6 +353,22 @@ function isUsablePartitionService(partitionService) {
   );
 }
 
+function hasMatchingLeaderReplicaIdentity(partitionService) {
+  const leaderId = partitionService.getLeaderId ?
+    partitionService.getLeaderId() :
+    partitionService.leaderId;
+  const replicaId =
+    partitionService.replicaId !== undefined ?
+      partitionService.replicaId :
+      partitionService.replica_id;
+  return (
+    typeof leaderId === 'string' &&
+    typeof replicaId === 'string' &&
+    leaderId.length > 0 &&
+    leaderId === replicaId
+  );
+}
+
 function resolveLeaderRole(partitionService) {
   if (!isUsablePartitionService(partitionService)) {
     return false;
@@ -252,25 +393,13 @@ function resolveLeaderRole(partitionService) {
   ) {
     return true;
   }
-  const role = String(
-    partitionService.role ||
-      partitionService.raftRole ||
-      '',
-  ).toLowerCase();
+  // PartitionService constructs its role (FOLLOWER) and keeps it current; no
+  // live service exposes a separate raftRole spelling.
+  const role = String(partitionService.role).toLowerCase();
   if (role === CDC_INTEGRATION_SERVICE_LITERAL.LEADER) {
     return true;
   }
-  const leaderId =
-    typeof partitionService.getLeaderId === 'function' ?
-      partitionService.getLeaderId() :
-      partitionService.leaderId;
-  const replicaId = partitionService.replicaId || partitionService.replica_id;
-  return (
-    typeof leaderId === 'string' &&
-    typeof replicaId === 'string' &&
-    leaderId.length > 0 &&
-    leaderId === replicaId
-  );
+  return hasMatchingLeaderReplicaIdentity(partitionService);
 }
 
 function resolvePartitionServicesForSegment(service) {
@@ -297,7 +426,7 @@ function resolveSystemTablePartitionIdsForSegment(service, tableName) {
       [
         canonicalPartitionId,
         ...partitionRows.map(
-          (row) => row?.partition_id ?? row?.partitionId ?? row?.id ?? null,
+          (row) => decodeCachedPartitionRow(row).partitionId,
         ),
       ].filter(Boolean),
     ),

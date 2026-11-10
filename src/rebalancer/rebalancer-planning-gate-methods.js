@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {reportClusterReadinessSpent} from './cluster-readiness-wait-report.js';
 import {
@@ -464,7 +465,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
         entityType: this.entityType,
         nodeId: this.nodeId,
         delayMs,
-        readinessPhase: trafficReadinessBlocker.phase || null,
+        readinessPhase: readStateField(trafficReadinessBlocker.phase),
         readinessReady: trafficReadinessBlocker.ready === true,
         reasonCodes: Array.isArray(trafficReadinessBlocker.reasons) ?
           [...trafficReadinessBlocker.reasons] :

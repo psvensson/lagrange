@@ -7,7 +7,12 @@
  * Requirements: 6.1, 6.2, 6.3, 6.4, 6.5
  */
 
-import {BaseView, ROW_STATUS} from '../core/base-view.js';
+import {
+  BaseView,
+  DISPLAY_STATE,
+  ROW_STATUS,
+  displayState,
+} from '../core/base-view.js';
 
 const LOCAL_STR_MESSAGE_GROUPS = 'message_groups';
 const LOCAL_STR_GROUP_ID = 'group_id';
@@ -23,7 +28,6 @@ const LOCAL_STR_STATUS = 'status';
 const LOCAL_STR_STATUS_2 = 'Status';
 const LOCAL_NUM_TWELVE = 12;
 const LOCAL_STR_N_A = 'N/A';
-const LOCAL_STR_UNKNOWN = 'unknown';
 const LOCAL_STR_NONE = 'None';
 const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_FAILED = 'failed';
@@ -86,7 +90,7 @@ export class MessageGroupsView extends BaseView {
       messageGroup.group_id || LOCAL_STR_N_A,
       this.formatReplicaCount(messageGroup.replica_count),
       this.formatNodesCovered(messageGroup.nodes_covered),
-      messageGroup.status || LOCAL_STR_UNKNOWN,
+      displayState(messageGroup.status, DISPLAY_STATE.UNKNOWN),
     ];
   }
 
@@ -256,7 +260,7 @@ export class MessageGroupsView extends BaseView {
         title: 'Basic Information',
         fields: [
           {label: 'Group ID', value: group.group_id},
-          {label: 'Status', value: group.status || 'unknown'},
+          {label: 'Status', value: displayState(group.status, DISPLAY_STATE.UNKNOWN)},
         ],
       },
       {

@@ -1,3 +1,4 @@
+import {readLowerStateField, readStateField} from '../../utils/state-field-read.js';
 import {
   COLUMN,
   NUM,
@@ -130,26 +131,11 @@ function readBootstrapTopologySnapshotServiceType(row) {
 }
 
 function readBootstrapTopologySnapshotServiceStatus(row) {
-  const status =
-    row?.[COLUMN.STATUS] ??
-    row?.status ??
-    null;
-  return typeof status === 'string' &&
-    status.length > 0 ?
-    status :
-    null;
+  return readStateField(row?.[COLUMN.STATUS]);
 }
 
 function readBootstrapTopologySnapshotServiceRaftRole(row) {
-  const raftRole =
-    row?.[COLUMN.RAFT_ROLE] ??
-    row?.raft_role ??
-    row?.raftRole ??
-    null;
-  return typeof raftRole === 'string' &&
-    raftRole.length > 0 ?
-    raftRole.toLowerCase() :
-    null;
+  return readLowerStateField(row?.[COLUMN.RAFT_ROLE]);
 }
 
 function resolveAuthoritativeSystemTableRowSourceSelection(options = {}) {

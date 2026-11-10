@@ -1,3 +1,4 @@
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 import {NODE_LIVENESS_SEMANTIC_STATE} from
   './node-liveness-semantic-projection.js';
@@ -388,7 +389,7 @@ function buildNodeTrustState(readiness, options = {}) {
     dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true;
   const canonicalServe =
     dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] === true;
-  const status = String(readiness?.nodeEvidence?.status || '').toLowerCase();
+  const status = readLowerStateField(readiness?.nodeEvidence?.status);
   const selfRuntimeGrace = options.selfRuntimeGrace === true;
   const decisionContext = {
     membership,

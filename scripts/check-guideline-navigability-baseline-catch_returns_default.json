@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T06:33:39.121Z",
-  "rawViolationCount": 387,
+  "generatedAt": "2026-11-09T17:56:57.238Z",
+  "rawViolationCount": 386,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-diagnostic-loss-accounting.js",
@@ -149,7 +149,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 130,
+      "line": 169,
       "column": 6,
       "functionName": "resolveLoadLaneQueryTargetTableName",
       "kind": "catch_returns_default",
@@ -158,7 +158,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-local-observation-methods.js",
-      "line": 53,
+      "line": 55,
       "column": 6,
       "functionName": "tryExecuteLocalSystemTableObservationQuery",
       "kind": "catch_returns_default",
@@ -167,7 +167,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-local-observation-methods.js",
-      "line": 111,
+      "line": 113,
       "column": 6,
       "functionName": "tryExecuteLocalSystemTableObservationQuery",
       "kind": "catch_returns_default",
@@ -275,7 +275,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-cluster-view-owner.js",
-      "line": 95,
+      "line": 110,
       "column": 6,
       "functionName": "getStartupAuthorityReadyNodeIds",
       "kind": "catch_returns_default",
@@ -284,7 +284,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-control-plane-recovery-health.js",
-      "line": 303,
+      "line": 302,
       "column": 6,
       "functionName": "getControlPlaneWriteHealth",
       "kind": "catch_returns_default",
@@ -293,7 +293,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-join-admission-owner.js",
-      "line": 463,
+      "line": 464,
       "column": 6,
       "functionName": "readAuthoritativeNodeRow",
       "kind": "catch_returns_default",
@@ -311,7 +311,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
-      "line": 571,
+      "line": 572,
       "column": 6,
       "functionName": "getControlPlanePublicationStory",
       "kind": "catch_returns_default",
@@ -320,7 +320,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js",
-      "line": 597,
+      "line": 598,
       "column": 6,
       "functionName": "getMembershipPublicationDiagnostics",
       "kind": "catch_returns_default",
@@ -329,7 +329,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-owner.js",
-      "line": 145,
+      "line": 146,
       "column": 6,
       "functionName": "applyOriginalSeedAdmission",
       "kind": "catch_returns_default",
@@ -338,7 +338,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/move-replica-assignment-reservation-persistence.js",
-      "line": 150,
+      "line": 151,
       "column": 6,
       "functionName": "collectMoveReplicaAssignmentReservations",
       "kind": "catch_returns_default",
@@ -347,7 +347,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/move-replica-assignment-reservation-persistence.js",
-      "line": 196,
+      "line": 197,
       "column": 6,
       "functionName": "getMoveReplicaAssignmentReservationById",
       "kind": "catch_returns_default",
@@ -356,7 +356,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/move-replica-handoff-owner.js",
-      "line": 442,
+      "line": 440,
       "column": 6,
       "functionName": "failMoveReplicaHandoff",
       "kind": "catch_returns_default",
@@ -716,7 +716,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-diagnostics-eligibility.js",
-      "line": 174,
+      "line": 176,
       "column": 4,
       "functionName": "getHeartbeatPublicationDiagnostics",
       "kind": "catch_returns_default",
@@ -797,7 +797,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile-helpers.js",
-      "line": 277,
+      "line": 272,
       "column": 4,
       "functionName": "shouldDeferMembershipReconcileToWriteLeader",
       "kind": "catch_returns_default",
@@ -815,7 +815,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 539,
+      "line": 538,
       "column": 6,
       "functionName": "driveOwnerMembershipReconcile",
       "kind": "catch_returns_default",
@@ -824,7 +824,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-planning-evidence.js",
-      "line": 200,
+      "line": 201,
       "column": 6,
       "functionName": "normalizeReplicaOperationView",
       "kind": "catch_returns_default",
@@ -833,7 +833,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-planning-evidence.js",
-      "line": 230,
+      "line": 231,
       "column": 4,
       "functionName": "normalizeReplicaOperationView",
       "kind": "catch_returns_default",
@@ -851,7 +851,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 410,
+      "line": 409,
       "column": 4,
       "functionName": "safelyGetLatestMembershipPublicationRow",
       "kind": "catch_returns_default",
@@ -959,7 +959,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-global-projection.js",
-      "line": 81,
+      "line": 82,
       "column": 4,
       "functionName": "isPriorityPartitionRecord",
       "kind": "catch_returns_default",
@@ -968,7 +968,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-global-projection.js",
-      "line": 107,
+      "line": 108,
       "column": 4,
       "functionName": "isPriorityPartitionId",
       "kind": "catch_returns_default",
@@ -977,7 +977,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-global-projection.js",
-      "line": 283,
+      "line": 284,
       "column": 4,
       "functionName": "isPriorityPartitionFromProjection",
       "kind": "catch_returns_default",
@@ -1175,7 +1175,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-shutdown-lifecycle.js",
-      "line": 83,
+      "line": 84,
       "column": 4,
       "functionName": "connectLogsTablePersistence",
       "kind": "catch_returns_default",
@@ -1184,7 +1184,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-shutdown-lifecycle.js",
-      "line": 168,
+      "line": 169,
       "column": 4,
       "functionName": "startDynamicConfigWiring",
       "kind": "catch_returns_default",
@@ -1193,7 +1193,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-shutdown-lifecycle.js",
-      "line": 431,
+      "line": 432,
       "column": 6,
       "functionName": "resolveContext",
       "kind": "catch_returns_default",
@@ -1436,7 +1436,7 @@
     },
     {
       "filePath": "src/node/replica-handler-participant-release.js",
-      "line": 354,
+      "line": 352,
       "column": 4,
       "functionName": "canFastPathPausedResume",
       "kind": "catch_returns_default",
@@ -1445,7 +1445,7 @@
     },
     {
       "filePath": "src/node/replica-handler-remove-execution-methods.js",
-      "line": 570,
+      "line": 565,
       "column": 8,
       "functionName": "publishReplicaRetiringRow",
       "kind": "catch_returns_default",
@@ -1526,7 +1526,7 @@
     },
     {
       "filePath": "src/partition/group-retirement-evidence.js",
-      "line": 222,
+      "line": 223,
       "column": 4,
       "functionName": "parseTransitionMetadata",
       "kind": "catch_returns_default",
@@ -2174,7 +2174,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 302,
+      "line": 303,
       "column": 4,
       "functionName": "readOpeningRecord",
       "kind": "catch_returns_default",
@@ -2183,7 +2183,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 536,
+      "line": 537,
       "column": 4,
       "functionName": "persistInitialBootstrapState",
       "kind": "catch_returns_default",
@@ -2192,7 +2192,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1166,
+      "line": 1168,
       "column": 4,
       "functionName": "resolveEntryConfStateOrFailure",
       "kind": "catch_returns_default",
@@ -2201,7 +2201,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1190,
+      "line": 1192,
       "column": 4,
       "functionName": "applyEntryDurablyOrFailure",
       "kind": "catch_returns_default",
@@ -2210,7 +2210,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1334,
+      "line": 1336,
       "column": 4,
       "functionName": "processReadyCycle",
       "kind": "catch_returns_default",
@@ -2219,7 +2219,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1394,
+      "line": 1396,
       "column": 4,
       "functionName": "semanticLeaderIdentity",
       "kind": "catch_returns_default",
@@ -2444,7 +2444,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js",
-      "line": 119,
+      "line": 120,
       "column": 4,
       "functionName": "readHandoffStepBound",
       "kind": "catch_returns_default",
@@ -2462,7 +2462,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
-      "line": 153,
+      "line": 154,
       "column": 10,
       "functionName": "redriveExecutorOutcomeReconcile",
       "kind": "catch_returns_default",
@@ -2480,7 +2480,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-execution-lane.js",
-      "line": 620,
+      "line": 634,
       "column": 6,
       "functionName": "confirmCommittedTransitionPersistence",
       "kind": "catch_returns_default",
@@ -2489,7 +2489,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-persistence.js",
-      "line": 75,
+      "line": 77,
       "column": 4,
       "functionName": "readOperationWorkflowDurableStepsHistory",
       "kind": "catch_returns_default",
@@ -2497,17 +2497,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/operation-workflow-recovery-drain.js",
-      "line": 250,
-      "column": 6,
-      "functionName": "isPriorityRecoveryAddSettledByOperationFact",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile.js",
-      "line": 578,
+      "line": 579,
       "column": 6,
       "functionName": "persistReplaceRemovalIntent",
       "kind": "catch_returns_default",
@@ -2516,7 +2507,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 526,
+      "line": 527,
       "column": 6,
       "functionName": "shouldReconcileOrphanedOperation",
       "kind": "catch_returns_default",
@@ -2525,7 +2516,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-terminal-admission.js",
-      "line": 293,
+      "line": 295,
       "column": 4,
       "functionName": "deliverClaimFailedCreateCleanup",
       "kind": "catch_returns_default",
@@ -2534,7 +2525,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-witness.js",
-      "line": 86,
+      "line": 87,
       "column": 4,
       "functionName": "replaceWitnessHandlerType",
       "kind": "catch_returns_default",
@@ -2543,7 +2534,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-terminal-transition-repair.js",
-      "line": 97,
+      "line": 98,
       "column": 4,
       "functionName": "deliverFailedCreateCleanupRelease",
       "kind": "catch_returns_default",
@@ -2570,7 +2561,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 294,
+      "line": 295,
       "column": 6,
       "functionName": "getCriticalPartitionRowForSafety",
       "kind": "catch_returns_default",
@@ -2822,7 +2813,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 317,
+      "line": 316,
       "column": 6,
       "functionName": "getStartupAuthorityNodeIdSet",
       "kind": "catch_returns_default",
@@ -2849,7 +2840,7 @@
     },
     {
       "filePath": "src/rebalancer/user-table-leader-placement-cure.js",
-      "line": 409,
+      "line": 410,
       "column": 4,
       "functionName": "demoteLocalSourceLeader",
       "kind": "catch_returns_default",
@@ -2858,7 +2849,7 @@
     },
     {
       "filePath": "src/rebalancer/user-table-leader-placement-cure.js",
-      "line": 446,
+      "line": 447,
       "column": 4,
       "functionName": "dispatchLeaderHandoff",
       "kind": "catch_returns_default",

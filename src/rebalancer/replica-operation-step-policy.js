@@ -1,3 +1,4 @@
+import {readUpperStateField} from '../utils/state-field-read.js';
 /**
  * Single owner of replica-operation STEP-COVERAGE policy (quest
  * step-coverage-single-owner-table; epic self-hosting-circularity-
@@ -138,7 +139,7 @@ function isPartitionReplaceOwnerPhase(operation) {
     (entityType === undefined || entityType === null ||
       entityType === SERVICE_TYPE.PARTITION) &&
     REPLACE_OWNER_PHASE_WORKFLOW_STEPS.has(
-      String(operation?.workflowStep || '').toUpperCase());
+      readUpperStateField(operation?.workflowStep));
 }
 
 // Type-agnostic terminal markers used by remove-like in-flight gate checks

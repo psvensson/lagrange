@@ -96,7 +96,7 @@ function expectedPeersFromServicesCache(service, onlyReplicaIds) {
     const replicaId = replicaIdOfServiceRow(row);
     // The partition's peer-admission rule (F1): neither a retiring row nor
     // one that has not recorded its replica's identity fact names a peer.
-    const status = row?.[COLUMN.STATUS] || row?.status;
+    const status = row?.[COLUMN.STATUS];
     if (!replicaId || replicaId === service.replicaId ||
         !isPeerRowStatusAdmissible(status) ||
         (onlyReplicaIds !== null && !onlyReplicaIds.has(replicaId))) {

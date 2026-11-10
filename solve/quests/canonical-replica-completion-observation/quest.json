@@ -1,0 +1,62 @@
+{
+  "schema": "solve-quest/2",
+  "id": "canonical-replica-completion-observation",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Give replica completion one canonical observation. absent, unavailable, contradictory identity, old generation and a different replica on the same node never falsely settle the operation. Valid authoritative evidence settles it through the real workflow and discharges or transfers reservations/cleanup correctly. Restart and lost-answer cases retain obligations. No caller can reactivate the deleted fallback.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/canonical-replica-completion-observation/evidence/receipt.json",
+      "requiredReceipts": [
+        "canonical-caller-closure",
+        "unavailable-and-wrong-identity-refused",
+        "exact-generation-completion",
+        "restart-and-lost-answer-obligations",
+        "deleted-fallback-cannot-be-reactivated",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "owner-and-sequence",
+      "statement": "Owner: replica-operation repository and completion workflow interaction. Difficulty: high. Dependency: P0 and Q1; Q2 governs landing. Admission dependencies: Q1 (contract-first-authoring-and-producer-fidelity). P0 reconciliation is recorded in the epic. Dependencies are coordination instructions, not an implemented Solver scheduler; diagnosis need not wait for every tooling change."
+    },
+    {
+      "id": "owned-work-1",
+      "statement": "Trace every caller, including recovery, status/diagnostics, runtime-service and message-group consumers. Replace alias probing and default-enabled cache or partition/node fallback with one canonical decoder and owner-defined outcomes. Preserve each entity type's real identity contract rather than forcing every service into a partition-shaped record."
+    },
+    {
+      "id": "owned-work-2",
+      "statement": "Completion consumes authoritative evidence for the exact replica, entity, node and relevant operation/lifecycle generation. Unknown authority remains unavailable and leaves the obligation owned. A projection may trigger the same reconciliation path but cannot answer the completion question. Delete the old options, readers and duplicate decision logic once callers move."
+    },
+    {
+      "id": "existing-owners-and-evidence",
+      "statement": "Preserve required-entity-operation-observation: its seal excludes ordinary cache and per-operation visibility APIs. This Quest owns canonical completion and remaining caller closure, not another entity-read implementation. Coordinate system-table-row-decoders and system-table-decoded-reads-* before changing a shared decoder; do not duplicate its owner."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

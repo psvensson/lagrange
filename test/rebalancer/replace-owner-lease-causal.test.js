@@ -109,7 +109,13 @@ function createCausalCluster(seedOwnerRoutingReady) {
       readNodeRows: () => Object.values(LEASE_VERDICT_NODE).map((nodeId) => ({
         node_id: nodeId, status: 'active', ready_lease_expires_at: clock.now() + 60000,
       })),
-      callbacks: buildPriorityDrainReadinessService(LEASE_VERDICT_PARTITION_ID),
+      callbacks: buildPriorityDrainReadinessService(
+        LEASE_VERDICT_PARTITION_ID,
+        {
+          readyNodeIds: Object.values(LEASE_VERDICT_NODE),
+          now: clock.now,
+        },
+      ),
     },
     cacheData: {
       services: buildLeaseVerdictServiceRows(ReplicaStatus.ACTIVE),
@@ -140,7 +146,10 @@ function createCausalCluster(seedOwnerRoutingReady) {
       now: clock.now,
       readNodeRows: () => owner.controlPlaneReadinessService.answerCommittedNodes().nodeRows,
       callbacks: buildLeaseVerdictReadinessService(
-        seedOwnerRoutingReady, LEASE_VERDICT_NODE.TARGET),
+        seedOwnerRoutingReady,
+        LEASE_VERDICT_NODE.TARGET,
+        {now: clock.now},
+      ),
     },
   });
   for (const coordinator of [owner, seed]) {

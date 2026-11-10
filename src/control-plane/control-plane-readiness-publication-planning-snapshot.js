@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
 import {readPublishedMembershipEpoch} from './published-membership-epoch-reading.js';
 import {
@@ -114,27 +115,28 @@ function buildRetainedPriorityRecoveryPlanningGate(
           retainedSnapshot.recoveryProtocolState.length > 0 ?
         retainedSnapshot.recoveryProtocolState :
         null;
+  // Each snapshot names its publication status publicationStatus or
+  // status; the planning snapshot answers first, then the retained one, and
+  // the gates only when neither states one.
+  const planningPublicationStatus = readStateField(
+    planningSnapshot?.publicationStatus,
+    planningSnapshot?.status,
+  );
+  const retainedPublicationStatus = readStateField(
+    retainedSnapshot?.publicationStatus,
+    retainedSnapshot?.status,
+  );
   return buildPublicationRecoveryGateSnapshot({
     publicationEpoch: Number.isFinite(planningSnapshot?.publicationEpoch) ?
       planningSnapshot.publicationEpoch :
       Number.isFinite(retainedSnapshot?.publicationEpoch) ?
         retainedSnapshot.publicationEpoch :
         (planningGate?.publicationEpoch ?? retainedGate?.publicationEpoch),
-    publicationStatus:
-      typeof planningSnapshot?.publicationStatus === 'string' &&
-      planningSnapshot.publicationStatus.length > 0 ?
-        planningSnapshot.publicationStatus :
-        typeof planningSnapshot?.status === 'string' &&
-            planningSnapshot.status.length > 0 ?
-          planningSnapshot.status :
-          typeof retainedSnapshot?.publicationStatus === 'string' &&
-              retainedSnapshot.publicationStatus.length > 0 ?
-            retainedSnapshot.publicationStatus :
-            typeof retainedSnapshot?.status === 'string' &&
-                retainedSnapshot.status.length > 0 ?
-              retainedSnapshot.status :
-              planningGate?.publicationStatus ||
-                retainedGate?.publicationStatus,
+    publicationStatus: planningPublicationStatus !== STATE_ABSENT ?
+      planningPublicationStatus :
+      retainedPublicationStatus !== STATE_ABSENT ?
+        retainedPublicationStatus :
+        planningGate?.publicationStatus || retainedGate?.publicationStatus,
     publicationObservationState:
       typeof planningSnapshot?.publicationObservationState ===
         'string' &&
@@ -284,7 +286,7 @@ function readLatestMembershipPublicationEpochStatusProbe(service, nodeId) {
     epoch: latestPub ?
       (latestPub.publicationEpoch ?? latestPub.publication_epoch ?? null) :
       null,
-    status: latestPub ? (latestPub.status ?? null) : null,
+    status: latestPub ? latestPub.status : null,
   });
 }
 
@@ -300,9 +302,10 @@ function buildMembershipPublicationPlanningMemoKeyComponent(service, nodeId) {
   if (probe === PUBLICATION_EPOCH_STATUS_PROBE_UNAVAILABLE) {
     return PLANNING_MEMO_VERSION_KEY_PROBE_UNAVAILABLE;
   }
+  const status = readStateField(probe.status);
   return (probe.epoch ?? PLANNING_MEMO_VERSION_KEY_ABSENT) +
     PLANNING_MEMO_VERSION_KEY_SEPARATOR +
-    (probe.status ?? PLANNING_MEMO_VERSION_KEY_ABSENT);
+    (status === STATE_ABSENT ? PLANNING_MEMO_VERSION_KEY_ABSENT : status);
 }
 
 // ONE version key for the readiness planning memos, replacing the previous

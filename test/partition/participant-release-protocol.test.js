@@ -6,9 +6,12 @@ import os from 'node:os';
 import path from 'node:path';
 import {afterEach, beforeEach, test} from 'node:test';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
+import {PartitionService} from '../../src/partition/partition-service.js';
 import {requestParticipantRelease} from '../../src/node/participant-release-client.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {SERVICES_SCHEMA} from
+  '../../src/bootstrap/system-table-core-schema-definitions.js';
 import {SQL_TRANSACTIONS_SCHEMA} from
   '../../src/bootstrap/system-table-workflow-schema-definitions.js';
 import {readTransactionSchemaEnforcement} from
@@ -19,12 +22,19 @@ import {participantCutoverPauseOf, participantReleaseAdmissionOf,
 import {readPartitionWriteOrigin} from '../../src/partition/partition-participant-transaction-store.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
+import {PARTITION_SERVICE_EVENT} from
+  '../../src/partition/partition-service-constants.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
   '../../src/raft/raft-committed-membership-constants.js';
+import {RAFT_EVENT, RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {
   PARTICIPANT_CUTOVER_BOUND as RELEASE_BOUND,
+  PARTICIPANT_RELEASE_LOG,
   PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT,
   PARTICIPANT_RELEASE_ACTION as RELEASE_ACTION,
   PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
@@ -55,6 +65,7 @@ import {
   replacePrototypeProperty,
 } from '../helpers/hostile-intrinsics.js';
 import {observeParticipantReleaseDelivery} from './participant-release-delivery-recorder.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 import {waitForCondition} from './partition-service-test-support.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {CONTROL_PARTITION, NODE, PARTITION, SQL, cache,
@@ -895,3 +906,462 @@ test('registered dependent release retains delivered control refusal after curre
       assert.equal(answer.controlReason, null);
     });
   }, undefined, {remoteControl: true}));
+
+const SERVICES_PARTITION = 'services-p1';
+const SERVICES_REPLICA = 'services-p1-r1';
+const CONTROL_SERVICE_REPLICA = 'sql_transactions-p1-r1';
+const ABSENT_RETIRED_PEER_ID = '607135468826016972';
+const SECOND_ABSENT_PEER_ID = '607135468826016973';
+const SERVICES_INSERT_SQL =
+  'INSERT INTO services (service_id, service_type, node_id, partition_id, ' +
+  'replica_id, status, cleanup_token, created_at, updated_at) ' +
+  'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+const SERVICES_DELETE_CUSTODY_SQL =
+  'DELETE FROM services WHERE service_id = ? AND cleanup_token = ?';
+
+function captureConfChangeAppliedRelaySubscription(service) {
+  let detachRelay = null;
+  const originalRefuseHeld = service.refuseConsensusHeldAtOpen.bind(service);
+  service.refuseConsensusHeldAtOpen = async () => {
+    await originalRefuseHeld();
+    const rawPort = service.raft;
+    let confChangeSubscriptions = 0;
+    service.raft = Object.freeze({
+      ...rawPort,
+      subscribe(eventName, listener) {
+        const unsubscribe = rawPort.subscribe(eventName, listener);
+        if (eventName === RAFT_EVENT.CONF_CHANGE_APPLIED) {
+          confChangeSubscriptions += 1;
+          if (confChangeSubscriptions === 1) {
+            detachRelay = unsubscribe;
+            service.raft = rawPort;
+          }
+        }
+        return unsubscribe;
+      },
+    });
+  };
+  return () => detachRelay;
+}
+
+async function seedDurableServicesAndControlOrigin(directory) {
+  const seedTransport = createInProcessMockTransport();
+  const controlDbPath = path.join(directory, 'sql-transactions.db');
+  const servicesDbPath = path.join(directory, 'services.db');
+  const seedControl = new PartitionService(withFoundingStamp({
+    nodeId: NODE, partitionId: CONTROL_PARTITION,
+    replicaId: CONTROL_SERVICE_REPLICA, replicaIds: [CONTROL_SERVICE_REPLICA],
+    tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
+    tableName: SQL_TRANSACTIONS_SCHEMA.tableName,
+    schema: SQL_TRANSACTIONS_SCHEMA, dbPath: controlDbPath,
+    systemTableCache: cache, deferElection: true,
+  }));
+  const seedServices = new PartitionService(withFoundingStamp({
+    nodeId: NODE, partitionId: SERVICES_PARTITION,
+    replicaId: SERVICES_REPLICA, replicaIds: [SERVICES_REPLICA],
+    tableId: SERVICES_SCHEMA.tableName, tableName: SERVICES_SCHEMA.tableName,
+    schema: SERVICES_SCHEMA, dbPath: servicesDbPath,
+    systemTableCache: cache, deferElection: true,
+  }));
+  const seedHandler = new ReplicaHandler({
+    nodeId: NODE, ownerIncarnation: 1, systemTableCache: cache,
+    cdcIntegrationService: {}, createPartitionService: () => null,
+    messageRouter: seedTransport, dataDir: directory,
+  });
+  seedHandler.registerWithRouter(seedTransport);
+  let failure = null;
+  try {
+    await seedControl.initialize();
+    await seedServices.initialize();
+    seedHandler.localServices.set(CONTROL_SERVICE_REPLICA, seedControl);
+    seedHandler.localServices.set(SERVICES_REPLICA, seedServices);
+    await turnChainValue(seedControl.raft.campaign());
+    await turnChainValue(seedServices.raft.campaign());
+    const build = await runtimeBuildProvenance();
+    assert.equal(build.state, 'measured', build.reason);
+    for (const partitionId of [CONTROL_PARTITION, SERVICES_PARTITION]) {
+      const seeded = await seedHandler.participantReleaseRecovery.releaseOperator({
+        partitionId, targetBuildDigest: build.digest,
+        deadlineAtMs: seedHandler.timeSource.now() + 30000,
+      });
+      assert.equal(seeded.outcome, OUTCOME.CUT_OVER, JSON.stringify(seeded));
+    }
+  } catch (error) {
+    failure = error;
+  } finally {
+    for (const [label, close] of [
+      ['seed handler', () => seedHandler.shutdown()],
+      ['seed services', () => seedServices.shutdown()],
+      ['seed control', () => seedControl.shutdown()],
+    ]) {
+      try {
+        await close();
+      } catch (error) {
+        failure = retainFailure(failure, error, `${label} shutdown failed`);
+      }
+    }
+  }
+  if (failure !== null) throw failure;
+  return {controlDbPath, servicesDbPath};
+}
+
+function waitWallMs(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function runIdempotentConfChangeAutonomousRecoveryCase({
+  suppressConfChangeAppliedWake,
+  minClosedObserveMs = 300,
+}) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tx1-idempotent-conf-pair-'));
+  let handler = null;
+  let controlService = null;
+  let service = null;
+  let failure = null;
+  let result = null;
+  try {
+    const {controlDbPath, servicesDbPath} =
+      await seedDurableServicesAndControlOrigin(directory);
+    const transport = createInProcessMockTransport();
+    handler = new ReplicaHandler({
+      nodeId: NODE, ownerIncarnation: 2, systemTableCache: cache,
+      cdcIntegrationService: {}, createPartitionService: () => null,
+      messageRouter: transport, dataDir: directory,
+    });
+    handler.registerWithRouter(transport);
+    controlService = new PartitionService(withFoundingStamp({
+      nodeId: NODE, partitionId: CONTROL_PARTITION,
+      replicaId: CONTROL_SERVICE_REPLICA, replicaIds: [CONTROL_SERVICE_REPLICA],
+      tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
+      tableName: SQL_TRANSACTIONS_SCHEMA.tableName,
+      schema: SQL_TRANSACTIONS_SCHEMA, dbPath: controlDbPath,
+      bootstrapMembership: durableRecordBootstrap(),
+      systemTableCache: cache, deferElection: true,
+    }));
+    service = new PartitionService(withFoundingStamp({
+      nodeId: NODE, partitionId: SERVICES_PARTITION,
+      replicaId: SERVICES_REPLICA, replicaIds: [SERVICES_REPLICA],
+      tableId: SERVICES_SCHEMA.tableName, tableName: SERVICES_SCHEMA.tableName,
+      schema: SERVICES_SCHEMA, dbPath: servicesDbPath,
+      bootstrapMembership: durableRecordBootstrap(),
+      systemTableCache: cache, deferElection: true,
+    }));
+    const readRelayDetacher = captureConfChangeAppliedRelaySubscription(service);
+    await controlService.initialize();
+    await service.initialize();
+    assert.equal(participantReleaseAdmissionOf(controlService).state, ADMISSION.CLOSED);
+    assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED);
+
+    // Register both services and campaign; participantReleaseRecovery must open
+    // both autonomously with zero manual release or resume calls on handler.
+    handler.localServices.set(CONTROL_SERVICE_REPLICA, controlService);
+    handler.localServices.set(SERVICES_REPLICA, service);
+    await turnChainValue(controlService.raft.campaign());
+    await turnChainValue(service.raft.campaign());
+    controlService.raft.startScheduling();
+    service.raft.startScheduling();
+    assert.equal(await waitForCondition(() =>
+      participantCutoverPauseOf(controlService) === null &&
+      participantCutoverPauseOf(service) === null, 5000, 10), true,
+    'autonomous participantReleaseRecovery opens both control and services partitions on boot');
+
+    const custodyInsert = await service.executeQuery(SERVICES_INSERT_SQL, [
+      'services-p1-r2', 'partition', NODE, SERVICES_PARTITION, 'services-p1-r2',
+      'removing', 'cleanup_owned', 1, 1,
+    ]);
+    assert.equal(custodyInsert.success, true, JSON.stringify(custodyInsert));
+
+    const statusBefore = service.raft.readStatus();
+    const proofBefore = participantReleaseAdmissionOf(service).proof;
+    assert.equal(proofBefore.membershipGenerationIndex, statusBefore.membershipGenerationIndex);
+    assert.equal(proofBefore.configurationKey, statusBefore.configurationKey);
+
+    const consensusObservedEvents = [];
+    service.on(PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED, (event) => {
+      consensusObservedEvents.push(event);
+    });
+    const detachRelay = readRelayDetacher();
+    assert.equal(typeof detachRelay, 'function');
+    if (suppressConfChangeAppliedWake) {
+      assert.equal(detachRelay(), true,
+        'negative control detaches only the CONF_CHANGE_APPLIED consensus relay listener');
+    }
+
+    const confStartedAt = Date.now();
+    const confAnswer = await turnChainValue(service.raft.proposeConfChange({
+      transition: 0,
+      changes: [{changeType: 1, nodeId: ABSENT_RETIRED_PEER_ID}],
+    }));
+    assert.equal(confAnswer?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      JSON.stringify(confAnswer));
+    assert.equal(await waitForCondition(() =>
+      service.raft.readStatus().membershipGenerationIndex >
+        statusBefore.membershipGenerationIndex, 5000, 10), true,
+    'applied idempotent conf-change advances membershipGenerationIndex');
+
+    const statusAfter = service.raft.readStatus();
+    assert.equal(statusAfter.configurationKey, statusBefore.configurationKey,
+      'idempotent RemoveNode leaves configurationKey unchanged');
+
+    if (suppressConfChangeAppliedWake) {
+      const firstWrite = await service.executeQuery(SERVICES_DELETE_CUSTODY_SQL,
+        ['services-p1-r2', 'cleanup_owned']);
+      assert.equal(firstWrite.success, false);
+      assert.equal(firstWrite.failureCode,
+        PARTITION_WRITE_LEADERSHIP_REFUSAL.CUTOVER_PAUSED);
+      assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED);
+
+      const slices = 4;
+      const sliceMs = Math.max(50, Math.ceil(minClosedObserveMs / slices));
+      for (let index = 0; index < slices; index += 1) {
+        await turnChainValue(service.raft.tick());
+        await waitWallMs(sliceMs);
+        assert.notEqual(participantCutoverPauseOf(service), null);
+        assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED,
+          `admission stays CLOSED across autonomous slice ${index + 1} without the wake`);
+        const retryWrite = await service.executeQuery(SERVICES_DELETE_CUSTODY_SQL,
+          ['services-p1-r2', 'cleanup_owned']);
+        assert.equal(retryWrite.success, false);
+        assert.equal(retryWrite.failureCode,
+          PARTITION_WRITE_LEADERSHIP_REFUSAL.CUTOVER_PAUSED);
+      }
+      assert.equal(consensusObservedEvents.length, 0,
+        'neither MEMBERSHIP_CHANGED nor role/term changes fire on idempotent RemoveNode');
+      assert.equal(service.db.prepare(
+        'SELECT cleanup_token FROM services WHERE service_id = ?',
+      ).get('services-p1-r2')?.cleanup_token, 'cleanup_owned');
+      result = {recoveryLatencyMs: null, statusBefore, statusAfter, consensusObservedEvents};
+    } else {
+      assert.equal(await waitForCondition(() =>
+        participantCutoverPauseOf(service) === null &&
+        participantReleaseAdmissionOf(service).proof?.membershipGenerationIndex ===
+          statusAfter.membershipGenerationIndex, 5000, 10), true,
+      'CONF_CHANGE_APPLIED autonomously wakes recovery to re-open at the new generation');
+      const recoveryLatencyMs = Math.max(1, Date.now() - confStartedAt);
+      assert.equal(consensusObservedEvents.some((event) =>
+        event.confChangeEntries === 1 &&
+        event.appliedIndex === statusAfter.membershipGenerationIndex), true);
+      assert.equal(consensusObservedEvents.some((event) =>
+        Object.hasOwn(event, 'confState')), false,
+      'MEMBERSHIP_CHANGED did not fire; CONF_CHANGE_APPLIED was the sole wake');
+      assert.equal(participantReleaseAdmissionOf(service).proof.configurationKey,
+        statusBefore.configurationKey);
+
+      // Cleanup custody row survived recutover intact and can now be discharged,
+      // and subsequent writes commit.
+      assert.equal(service.db.prepare(
+        'SELECT cleanup_token FROM services WHERE service_id = ?',
+      ).get('services-p1-r2')?.cleanup_token, 'cleanup_owned');
+      const discharged = await service.executeQuery(SERVICES_DELETE_CUSTODY_SQL,
+        ['services-p1-r2', 'cleanup_owned']);
+      assert.equal(discharged.success, true, JSON.stringify(discharged));
+      assert.equal(service.db.prepare(
+        'SELECT cleanup_token FROM services WHERE service_id = ?',
+      ).get('services-p1-r2'), undefined);
+      const followUpInsert = await service.executeQuery(SERVICES_INSERT_SQL, [
+        'services-p1-r3', 'partition', NODE, SERVICES_PARTITION, 'services-p1-r3',
+        'active', null, 2, 2,
+      ]);
+      assert.equal(followUpInsert.success, true, JSON.stringify(followUpInsert));
+      result = {recoveryLatencyMs, statusBefore, statusAfter, consensusObservedEvents};
+    }
+  } catch (error) {
+    failure = error;
+  }
+  failure = await cleanOwnedFixture({directory, failure,
+    label: 'idempotent conf-change pair', operations: [
+      ['handler', () => handler?.shutdown()],
+      ['services partition', () => service?.shutdown()],
+      ['control partition', () => controlService?.shutdown()],
+    ]});
+  if (failure !== null) throw failure;
+  return result;
+}
+
+test('controlled native-Raft pair: idempotent conf-change stays CLOSED without ' +
+  'CONF_CHANGE_APPLIED wake and recovers autonomously to OPEN with it', async () => {
+  const treatment = await runIdempotentConfChangeAutonomousRecoveryCase({
+    suppressConfChangeAppliedWake: false,
+  });
+  assert.equal(Number.isSafeInteger(treatment.recoveryLatencyMs) &&
+    treatment.recoveryLatencyMs > 0, true);
+  const controlWindowMs = Math.max(300, treatment.recoveryLatencyMs * 4);
+  assert.equal(controlWindowMs > treatment.recoveryLatencyMs, true);
+  const control = await runIdempotentConfChangeAutonomousRecoveryCase({
+    suppressConfChangeAppliedWake: true,
+    minClosedObserveMs: controlWindowMs,
+  });
+  assert.equal(control.recoveryLatencyMs, null);
+  assert.equal(control.statusAfter.configurationKey,
+    treatment.statusAfter.configurationKey);
+  assert.equal(control.statusAfter.membershipGenerationIndex >
+    control.statusBefore.membershipGenerationIndex, true);
+});
+
+test('idempotent add-peer conf-change, restart and stale-service rejection preserve ' +
+  'cleanup custody and exact membershipGenerationIndex fences', () =>
+  fixture(async ({service, release, create, replace}) => {
+    const initial = await release();
+    assert.equal(initial.outcome, OUTCOME.CUT_OVER, JSON.stringify(initial));
+    const origin = readPartitionWriteOrigin(service.db);
+    assert.notEqual(origin, null);
+    assert.equal(participantCutoverPauseOf(service), null);
+    assert.equal((await service.executeQuery(SQL, ['cleanup-r2', 'cleanup_owned'])).success, true);
+
+    const statusBefore = service.raft.readStatus();
+    const addAnswer = await turnChainValue(service.raft.proposeConfChange({
+      type: 'add-peer',
+      replicaIdentity: service.replicaId,
+      nodeId: service.nodeId,
+    }));
+    assert.equal(addAnswer?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      JSON.stringify(addAnswer));
+    assert.equal(await waitForCondition(() =>
+      service.raft.readStatus().membershipGenerationIndex >
+        statusBefore.membershipGenerationIndex &&
+      participantCutoverPauseOf(service) === null &&
+      participantReleaseAdmissionOf(service).proof?.membershipGenerationIndex ===
+        service.raft.readStatus().membershipGenerationIndex, 5000, 20), true,
+    'idempotent AddNode wakes recovery and re-opens at the latest generation');
+
+    await service.shutdown();
+    const restarted = create({bootstrapMembership: durableRecordBootstrap()});
+    replace(restarted);
+    await restarted.initialize();
+    await turnChainValue(restarted.raft.campaign());
+    assert.equal(await waitForCondition(() => participantCutoverPauseOf(restarted) === null,
+      5000, 20), true, 'restarted service recovers valid OPEN admission');
+    assert.notEqual(participantCutoverPauseOf(service), null,
+      'retired service object closes on inspection');
+    assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED,
+      'retired service object remains closed');
+    assert.deepEqual(readPartitionWriteOrigin(restarted.db), origin);
+    assert.equal((await restarted.executeQuery(SQL, ['post-restart', 'ok'])).success, true);
+  }));
+
+test('concurrent membershipGenerationIndex advance right after RESUME invalidates ' +
+  'superseded CUT_OVER in reconcile and autonomously re-runs to OPEN', () =>
+  fixture(async ({handler, service, transport, release}) => {
+    const initial = await release();
+    assert.equal(initial.outcome, OUTCOME.CUT_OVER, JSON.stringify(initial));
+    assert.equal(participantCutoverPauseOf(service), null);
+
+    const deliverDescriptor = Object.getOwnPropertyDescriptor(transport, 'deliver');
+    const originalDeliver = transport.deliver;
+    const loggerDescriptor = Object.getOwnPropertyDescriptor(handler, 'logger');
+    const originalLogger = handler.logger;
+    const emitDescriptor = Object.getOwnPropertyDescriptor(service, 'emit');
+    const originalEmit = service.emit;
+    const recordedReports = [];
+    let resumeDeliveries = 0;
+    let firstGeneration = null;
+    let secondGeneration = null;
+    let suppressConsensusObserved = false;
+    let failure = null;
+
+    service.emit = function(eventName, ...args) {
+      if (suppressConsensusObserved &&
+          eventName === PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED) {
+        return false;
+      }
+      return Reflect.apply(originalEmit, this, [eventName, ...args]);
+    };
+    handler.logger = {
+      debug: (...args) => originalLogger.debug(...args),
+      warn: (...args) => originalLogger.warn(...args),
+      error: (...args) => originalLogger.error(...args),
+      info(message, fields) {
+        if (message === PARTICIPANT_RELEASE_LOG && fields?.partitionId === PARTITION) {
+          recordedReports.push({
+            fields,
+            pausedAtReport: participantCutoverPauseOf(service) !== null,
+            proofGenerationAtReport:
+              participantReleaseAdmissionOf(service).proof?.membershipGenerationIndex ?? null,
+            statusGenerationAtReport: service.raft.readStatus().membershipGenerationIndex,
+          });
+        }
+        return originalLogger.info(message, fields);
+      },
+    };
+    transport.deliver = async (address, payload, options) => {
+      const response = await Reflect.apply(originalDeliver, transport,
+        [address, payload, options]);
+      if (payload?.type === PARTICIPANT_RELEASE_TYPE &&
+          payload.partitionId === PARTITION &&
+          payload.action === RELEASE_ACTION.RESUME &&
+          response.answer?.[PARTICIPANT_RELEASE_RESULT_FIELD]?.outcome === OUTCOME.RESUMED) {
+        resumeDeliveries += 1;
+        if (resumeDeliveries === 1) {
+          firstGeneration = service.raft.readStatus().membershipGenerationIndex;
+          assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.OPEN);
+          assert.equal(participantReleaseAdmissionOf(service).proof.membershipGenerationIndex,
+            firstGeneration);
+          // Advance membershipGenerationIndex before runParticipantCutover returns
+          // to reconcile, suppressing the external CONSENSUS_OBSERVED wake so only
+          // reconcile's own post-cutover pause re-check can schedule re-reconciliation.
+          suppressConsensusObserved = true;
+          try {
+            const concurrentConf = await turnChainValue(service.raft.proposeConfChange({
+              transition: 0,
+              changes: [{changeType: 1, nodeId: SECOND_ABSENT_PEER_ID}],
+            }));
+            assert.equal(concurrentConf?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+            assert.equal(await waitForCondition(() =>
+              service.raft.readStatus().membershipGenerationIndex > firstGeneration,
+            5000, 10), true);
+            secondGeneration = service.raft.readStatus().membershipGenerationIndex;
+          } finally {
+            suppressConsensusObserved = false;
+          }
+        }
+      }
+      return response;
+    };
+
+    try {
+      const firstConf = await turnChainValue(service.raft.proposeConfChange({
+        transition: 0,
+        changes: [{changeType: 1, nodeId: ABSENT_RETIRED_PEER_ID}],
+      }));
+      assert.equal(firstConf?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+
+      assert.equal(await waitForCondition(() =>
+        secondGeneration !== null &&
+        participantCutoverPauseOf(service) === null &&
+        participantReleaseAdmissionOf(service).proof?.membershipGenerationIndex ===
+          secondGeneration, 5000, 10), true,
+      'reconcile post-cutover pause re-check autonomously re-runs to OPEN at secondGeneration');
+
+      assert.equal(resumeDeliveries, 2,
+        'reconcile ran a second cutover after invalidating the superseded first RESUME');
+      assert.equal(secondGeneration > firstGeneration, true);
+      assert.equal(recordedReports.length, 1,
+        'reconcile emits no premature report for the superseded CUT_OVER and no bogus refusal');
+      assert.equal(recordedReports[0].fields.outcome, OUTCOME.CUT_OVER);
+      assert.equal(recordedReports[0].pausedAtReport, false);
+      assert.equal(recordedReports[0].proofGenerationAtReport, secondGeneration);
+      assert.equal(recordedReports[0].statusGenerationAtReport, secondGeneration);
+      assert.equal((await service.executeQuery(SQL, ['race-recovered', 'ok'])).success, true);
+    } catch (error) {
+      failure = error;
+    } finally {
+      for (const [owner, field, descriptor] of [
+        [transport, 'deliver', deliverDescriptor],
+        [handler, 'logger', loggerDescriptor],
+        [service, 'emit', emitDescriptor],
+      ]) {
+        try {
+          if (descriptor === undefined) {
+            delete owner[field];
+          } else {
+            Object.defineProperty(owner, field, descriptor);
+          }
+        } catch (error) {
+          failure = retainFailure(failure, error, `${field} restoration failed`);
+        }
+      }
+    }
+    if (failure !== null) throw failure;
+  }));

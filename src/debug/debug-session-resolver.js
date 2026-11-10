@@ -240,9 +240,9 @@ function normalizeSessionRow(row) {
     row[SESSION_FIELD.UPDATED_AT] ?? row.updatedAt ??
       row[SESSION_FIELD.CREATED_AT] ?? row.createdAt,
   );
-  const status = normalizeNullableString(
-    row[SESSION_FIELD.STATUS] ?? row.status ?? DEBUG_SESSION_STATUS.ACTIVE,
-  ) || DEBUG_SESSION_STATUS.ACTIVE;
+  // debug_sessions.status is NOT NULL; a row without one normalizes to null,
+  // which the resolver never reads as an ACTIVE session.
+  const status = normalizeNullableString(row[SESSION_FIELD.STATUS]);
 
   return {
     sessionId,

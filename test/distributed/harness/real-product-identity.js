@@ -235,7 +235,9 @@ async function observeProductsAfterWindow({sshRun, opts, products}) {
       // where it answered none, the reason travel together (D33).
       observed.push({...now, reportedVersion: product.reportedVersion,
         ...(product.reportedVersion === null ?
-          {reportedVersionError: product.reportedVersionError ?? null} : {})});
+          {reportedVersionError: product.reportedVersionError ?? null} : {}),
+        ...(product.bootProvenance !== undefined ?
+          {bootProvenance: product.bootProvenance} : {})});
     } catch (error) {
       if (error?.code !== DEPLOYMENT_FAILURE.CONTAINER_ABSENT) throw error;
     }
@@ -261,6 +263,41 @@ function pinnedVersionPattern(imageRef, tagPattern, toPattern) {
   return toPattern(match[1]);
 }
 
+function expectedFingerprintOf(expectation) {
+  return expectation.expectedSrcFingerprint || expectation.bootedSrcFingerprint || null;
+}
+
+function actualGitCommitOf(product) {
+  return product.bootProvenance?.gitCommit ??
+    product.imageLabels?.['org.opencontainers.image.revision'] ?? null;
+}
+
+function hasBootVersionMismatch(product) {
+  const bootVersion = product.bootProvenance?.version;
+  return typeof bootVersion === 'string' && typeof product.reportedVersion === 'string' &&
+    bootVersion !== product.reportedVersion;
+}
+
+function bootProvenanceProblems(product, expectation) {
+  const problems = [];
+  const expectedFingerprint = expectedFingerprintOf(expectation);
+  const actualFingerprint = product.bootProvenance?.bootedSrcFingerprint ?? null;
+  if (expectedFingerprint && actualFingerprint !== expectedFingerprint) {
+    problems.push(`${product.role}: bootedSrcFingerprint ${JSON.stringify(actualFingerprint)} ` +
+      `does not match expected ${expectedFingerprint}`);
+  }
+  const actualCommit = actualGitCommitOf(product);
+  if (expectation.expectedGitCommit && actualCommit !== expectation.expectedGitCommit) {
+    problems.push(`${product.role}: gitCommit/revision ${JSON.stringify(actualCommit)} ` +
+      `does not match expected ${expectation.expectedGitCommit}`);
+  }
+  if (hasBootVersionMismatch(product)) {
+    problems.push(`${product.role}: bootProvenance version ${product.bootProvenance.version} ` +
+      `differs from reportedVersion ${product.reportedVersion}`);
+  }
+  return problems;
+}
+
 function identityProblems(product, expectation) {
   const problems = [];
   if (!expectation) return [`${product.role}: no identity expectation`];
@@ -281,6 +318,7 @@ function identityProblems(product, expectation) {
     problems.push(`${product.role}: reported version ${JSON.stringify(product.reportedVersion)}` +
       ` does not match ${expectation.versionPattern}`);
   }
+  problems.push(...bootProvenanceProblems(product, expectation));
   return problems;
 }
 
@@ -298,6 +336,11 @@ function verifyProductIdentity(products, expectations) {
     if (!product.contentIdentity ||
         arraySome(sameRole, (other) => other.contentIdentity !== product.contentIdentity)) {
       problems.push(`${product.role}: hosts run different image content`);
+    }
+    const firstFingerprint = product.bootProvenance?.bootedSrcFingerprint ?? null;
+    if (arraySome(sameRole,
+      (other) => (other.bootProvenance?.bootedSrcFingerprint ?? null) !== firstFingerprint)) {
+      problems.push(`${product.role}: hosts run different bootedSrcFingerprint`);
     }
   }
   if (products.length === 0) problems.push('no product container inspected');

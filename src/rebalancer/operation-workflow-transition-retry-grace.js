@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {PROTECTED_PRIORITY_BUDGET_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
@@ -61,11 +62,12 @@ class OperationWorkflowTransitionRetryGrace {
     if (!operationId) {
       return;
     }
-    const workflowStep =
-      typeof context.workflowStep === 'string' &&
-      context.workflowStep.length > 0 ?
-        context.workflowStep :
-        WORKFLOW_STEP.PENDING;
+    // A deferral that recorded no step is timed as a not-yet-dispatched
+    // (PENDING) operation.
+    const recordedStep = readStateField(context.workflowStep);
+    const workflowStep = recordedStep === STATE_ABSENT ?
+      WORKFLOW_STEP.PENDING :
+      recordedStep;
     const partitionId = context.partitionId || null;
     const stepTimeout = this.getTimeoutForStep(
       workflowStep,

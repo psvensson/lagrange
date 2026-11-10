@@ -7,7 +7,12 @@
  * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6
  */
 
-import {BaseView, ROW_STATUS} from '../core/base-view.js';
+import {
+  BaseView,
+  DISPLAY_STATE,
+  ROW_STATUS,
+  displayState,
+} from '../core/base-view.js';
 
 const LOCAL_NUM_EIGHTY = 80;
 const LOCAL_NUM_EIGHTY_FIVE = 85;
@@ -30,7 +35,6 @@ const LOCAL_STR_DISK = 'Disk%';
 const LOCAL_STR_SERVICES_COUNT = 'services_count';
 const LOCAL_STR_REPLICAS = 'Replicas';
 const LOCAL_STR_N_A = 'N/A';
-const LOCAL_STR_UNKNOWN = 'unknown';
 const LOCAL_STR_FAILED = 'failed';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_DRILLDOWN = 'drillDown';
@@ -98,7 +102,7 @@ export class NodesView extends BaseView {
     return [
       node.node_id || LOCAL_STR_N_A,
       node.node_address || LOCAL_STR_N_A,
-      node.status || LOCAL_STR_UNKNOWN,
+      displayState(node.status, DISPLAY_STATE.UNKNOWN),
       this.formatPercent(node.cpu_usage_percent),
       this.formatPercent(node.memory_usage_percent),
       this.formatPercent(node.disk_usage_percent),

@@ -29,6 +29,7 @@ import {participantIdOf} from './distributed-transaction-identity.js';
 const TRANSACTION_RECOVERY_DIMENSION = Object.freeze({
   DECISION_RECORD: 'decision_record',
   DECISION_PARTICIPANTS: 'decision_participants',
+  STATUS: 'status',
 });
 
 const LOCAL_STR_TRANSACTION_MODE = 'transaction_mode';
@@ -108,6 +109,24 @@ function buildTransactionRecoveryIncompleteError({decisionDimension, row}) {
     }
   }
   return error;
+}
+
+/**
+ * Read a recovered row's status. sql_transactions,
+ * sql_transaction_participants and sql_write_operations declare status NOT
+ * NULL: a row without one is incomplete recovery, never a default status.
+ * @param {Object} row - Recovered durable row.
+ * @return {string}
+ */
+function readRecoveredRowStatus(row) {
+  const status = row?.status;
+  if (typeof status !== 'string' || status.length === 0) {
+    throw buildTransactionRecoveryIncompleteError({
+      decisionDimension: TRANSACTION_RECOVERY_DIMENSION.STATUS,
+      row,
+    });
+  }
+  return status;
 }
 
 function hasExactDecisionParticipants(tx, decision) {
@@ -193,7 +212,7 @@ function validateRecoveryRowsBeforeMutation(
   const participantKeysByTransaction =
     buildRecoveredParticipantKeysByTransaction(participantRows);
   for (const row of transactionRows) {
-    const status = row.status || TRANSACTION_STATUS.FAILED;
+    const status = readRecoveredRowStatus(row);
     if (TERMINAL_TRANSACTION_STATUS.has(status)) {
       continue;
     }
@@ -229,6 +248,7 @@ export {
   TRANSACTION_RECOVERY_DIMENSION,
   hasExactDecisionParticipants,
   buildTransactionRecoveryIncompleteError,
+  readRecoveredRowStatus,
   buildRecoveredTransactionDecisionState,
   validateRecoveredTransactionDecision,
   validateRecoveryRowsBeforeMutation,

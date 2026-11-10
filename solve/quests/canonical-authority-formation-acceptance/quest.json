@@ -1,0 +1,84 @@
+{
+  "schema": "solve-quest/2",
+  "id": "canonical-authority-formation-acceptance",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Prove the frozen composition and hand off to comparisons. all required bounded Quests have current independent approval and retained evidence; the unchanged formation receipt passes on the frozen candidate; teardown and final proof collection pass; no unresolved material safety/progress/resource finding is waived. Publication and release requirements keep their exact-source gates and authority.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/canonical-authority-formation-acceptance/evidence/receipt.json",
+      "requiredReceipts": [
+        "contract-first-authoring-verified",
+        "content-bound-review-and-interaction-proof-verified",
+        "report-classification-verified",
+        "management-authority-verified",
+        "canonical-completion-observation-verified",
+        "policy-currency-verified",
+        "routing-freshness-verified",
+        "formation-progress-verified",
+        "natural-shutdown-verified",
+        "lab-and-evidence-custody-verified",
+        "repository-legacy-fallback-closure-verified",
+        "original-formation-receipt-admitted",
+        "frozen-composition-required-gates",
+        "all-material-findings-discharged",
+        "comparison-handoff-bound",
+        "catalog-authority-and-visible-reconciliation-verified",
+        "cdc-recipient-domain-and-retained-debt-verified",
+        "cache-replica-incarnation-coherence-verified",
+        "load-admission-ingress-identity-verified",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "owner-and-sequence",
+      "statement": "Owners: integration owner and existing acceptance Quest owners. Difficulty: integration. Dependency: all required repairs/proof infrastructure and independent approvals; Q11 for the global cleanup claim. Admission dependencies: Q1 (contract-first-authoring-and-producer-fidelity), Q2 (content-bound-review-and-interaction-proof), Q3 (canonical-report-outcome-classification), Q4 (management-action-authority), Q5 (canonical-replica-completion-observation), Q6 (table-policy-outstanding-read-currency), Q7 (routing-overlay-complete-state-retirement), Q8 (formation-spread-progress-at-cause), Q9 (node-startup-natural-shutdown), Q10 (lab-census-benchmark-evidence-custody), Q11 (repository-legacy-fallback-closure). P0 reconciliation is recorded in the epic. Dependencies are coordination instructions, not an implemented Solver scheduler; diagnosis need not wait for every tooling change."
+    },
+    {
+      "id": "owned-work-1",
+      "statement": "Use the existing fresh-formation-user-table-routability predicates unchanged: all three nodes' serving lanes open, all six priority partitions meet spread, in-flight operations reach zero for the quiet window, CREATE becomes routable, COUNT succeeds, INSERT/readback succeeds from every node, and the specified learner-address invariant holds. Obtain the existing required three consecutive successes on the frozen candidate, with real declared topology and the Quest's lab execution constraints. Do not substitute the five-process controller probe."
+    },
+    {
+      "id": "owned-work-2",
+      "statement": "Retain Q9 natural-exit proof as an additional explicit epic obligation; do not silently pretend it was part of the old scenario seal. Run affected integration and required final candidate/static/census gates through their existing owners. A failed later gate preserves the completed bounded repairs and names the remaining blocker; it does not turn the whole epic green."
+    },
+    {
+      "id": "owned-work-3",
+      "statement": "Hand the resulting source and service evidence to developer-journey-and-measured-comparisons for its separate five-node qualification and actual GCP/lab campaign. Validate that epic's own workload, public entrypoint, deployment and semantic requirements. Successful three-node formation is a prerequisite, not comparative acceptance. No merge, release or performance claim is created by this proposal."
+    },
+    {
+      "id": "existing-owners-and-evidence",
+      "statement": "Before sealing, produce the aggregate receipt reproducibly through existing receipt/provenance owners. Verify each input, candidate SHA/content scope, original failure, disposition, executed proof, independent review and applicability. Missing or contradictory input cannot pass; do not hand-author passed booleans or copy Quest status as proof. original-formation-receipt-admitted consumes the existing fresh-formation-user-table-routability receipt and its original four required IDs unchanged on the frozen candidate. Do not reimplement its predicates or substitute five local processes for declared physical topology. Natural exit is additional. This receipt is also the explicitly amended epic doneWhen. Hand off only to developer-journey-and-measured-comparisons; its acceptance, publication and release remain separate."
+    },
+    {
+      "id": "additional-material-repairs",
+      "statement": "Q13 catalog-authority-and-visible-reconciliation, Q14 cdc-recipient-domain-and-retained-debt, Q15 cache-replica-incarnation-coherence and Q16 load-admission-ingress-identity are required bounded repair/proof dependencies before frozen composition closure. Coordinate shared cache/gateway writers and retain Q6 policy behavior through composition. C1/C2 remain in the comparison epic; they do not silently broaden the sealed three-node service predicate. Any later comparison-source change needs current evidence applicability, not automatic reuse of a prior formation pass."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawn, spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {flushCoverageBeforeKill} from '../test-helpers/census-pre-kill-flush.js';
+import {flushCoverageBeforeKill} from '../../scripts/checks/census-pre-kill-flush.js';
 
 import {
   POST_MERGE_REFUSAL,

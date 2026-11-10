@@ -32,7 +32,7 @@ import {
   managedTimeout,
 } from '../../../src/test-helpers/managed-timers.js';
 import {refuseUnderProbe} from '../../../src/test-helpers/probe-guard.js';
-import {flushCoverageBeforeKill} from '../../test-helpers/census-pre-kill-flush.js';
+import {flushCoverageBeforeKill} from '../../../scripts/checks/census-pre-kill-flush.js';
 import {getUniqueListenerPorts} from './cluster-test-helpers.js';
 import {
   EMBEDDED_STEP_OUTCOME,

@@ -81,10 +81,8 @@ function buildControlPlanePublicationStory(options = {}) {
     Math.floor(membershipPublication.publicationEpoch) :
     null;
   const publishedControlPlaneStatus =
-    normalizeOptionalString(
-      membershipPublication?.status ??
-        membershipPublication?.publicationStatus,
-    );
+    // buildMembershipPublicationDiagnostics, its only producer, names it status.
+    normalizeOptionalString(membershipPublication?.status);
   const publishedControlPlaneObservationState =
     normalizeOptionalString(
       membershipPublication?.publicationObservationState,

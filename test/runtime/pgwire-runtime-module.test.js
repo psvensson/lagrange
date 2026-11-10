@@ -344,6 +344,39 @@ describe('pgwire-runtime-module', () => {
 
       await new Promise((resolve) => blocker.close(resolve));
     });
+
+    it('should advance to next free port in dynamic range when initial port conflicts',
+      async () => {
+        const blocker = net.createServer();
+        const blockerPort = await new Promise((resolve) => {
+          blocker.listen(0, '127.0.0.1', () => {
+            resolve(blocker.address().port);
+          });
+        });
+        const mod = new PostgresWireRuntimeModule();
+        modules.push(mod);
+        try {
+          await mod.prepare(makeDefinition({
+            runtimeConfig: JSON.stringify({
+              host: '127.0.0.1',
+              portRangeStart: blockerPort,
+              portRangeEnd: blockerPort + 10,
+              authMode: 'trust',
+              tlsMode: 'disable',
+            }),
+          }));
+          const result = await mod.start({
+            serviceId: META_SERVICE_ID.POSTGRES_WIRE,
+            host: '127.0.0.1',
+            sqlRequestExecutor: async () => ({success: true, rows: []}),
+          });
+          assert.equal(result.status, START_STATUS.RUNNING);
+          assert.ok(result.endpointIntent.port > blockerPort);
+          assert.ok(result.endpointIntent.port <= blockerPort + 10);
+        } finally {
+          await new Promise((resolve) => blocker.close(resolve));
+        }
+      });
   });
 
   describe('stop', () => {

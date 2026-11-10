@@ -1,3 +1,5 @@
+import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {readStateField} from '../utils/state-field-read.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_WORKFLOW_STEPS,
@@ -407,9 +409,7 @@ class RebalanceCoordinatorOperationIntentMethods {
     if (!operation) {
       return operation;
     }
-    const workflowStep = String(
-      operation?.workflowStep || operation?.workflow_step || '',
-    ).trim();
+    const workflowStep = readOperationRecordWorkflowStep(operation);
     const rearmAction = this.resolveReusedOperationRearmAction(
       operation,
       workflowStep,
@@ -555,9 +555,7 @@ class RebalanceCoordinatorOperationIntentMethods {
     const partitionId = String(
       operation?.partitionId || operation?.entityId || STRING.EMPTY,
     ).trim();
-    const workflowStep = String(
-      operation?.workflowStep || STRING.EMPTY,
-    ).trim();
+    const workflowStep = readStateField(operation?.workflowStep);
     const operationType = this.normalizeMoveType(operation?.type);
     const priorityPartition =
       partitionId.length > 0 &&

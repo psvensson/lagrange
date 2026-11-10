@@ -1,0 +1,63 @@
+{
+  "schema": "solve-quest/2",
+  "id": "repository-legacy-fallback-closure",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Close legacy and fallback removal by semantic owner. zero unresolved classified legacy/fallback violations and zero unclassified candidate sites in the declared repository-wide inventory; removed paths are absent from exports and callers, and affected owner proofs pass. Static and runtime evidence state their coverage limits. Historical immutable records remain history, not executable alternatives. A boundary repair can land while this broader work remains open, but the epic cannot claim repository-wide cleanup or complete this obligation merely by routing debt elsewhere.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/repository-legacy-fallback-closure/evidence/receipt.json",
+      "requiredReceipts": [
+        "repository-wide-candidate-inventory",
+        "zero-unclassified-candidates",
+        "zero-unresolved-legacy-fallback-violations",
+        "canonical-caller-and-export-closure",
+        "affected-owner-proofs",
+        "reintroduction-guard-and-coverage-limits",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "owner-and-sequence",
+      "statement": "Owner: each canonical runtime/tooling owner; the integration owner maintains the existing inventory. Difficulty: scope-dependent and potentially large. Dependency: begins at P0; affected-boundary removals occur within Q4–Q10 rather than waiting for this final audit. P0 reconciliation is recorded in the epic. Dependencies are coordination instructions, not an implemented Solver scheduler; diagnosis need not wait for every tooling change."
+    },
+    {
+      "id": "owned-work-1",
+      "statement": "Reconcile the existing census with source, actual callers, exported boundaries, dynamic entrypoints and test fixtures across maintained executable code. The 2,685 census sites are candidates, not 2,685 proven defects. Classify each with a concrete owner and semantic reason; do not equate every language default or representation conversion with a second algorithm. Unobserved execution is not proof that an alternate path is dead."
+    },
+    {
+      "id": "owned-work-2",
+      "statement": "For each genuine legacy/fallback implementation, migrate the full caller closure to the canonical path, preserve explicit unavailability and recovery, delete the alternate logic and add the relevant regression. Use separate bounded Quests for independent owners. The census and source checks must make new or reintroduced alternate paths fail; do not raise baselines or exempt renamed branches."
+    },
+    {
+      "id": "existing-owners-and-evidence",
+      "statement": "Coordinate code-navigability-and-mistake-resistance, dead-fallback-retirement, live-dual-path-classification, system-table-row-decoders and its caller Quests. This Quest owns inventory reconciliation and global closure; existing owner Quests retain their bounded implementation. Register additional independent owner repairs and carry them into Q12 prerequisites. Include never, primary-only, fallback-only, both, unloaded and maintained executable paths outside the detector: callers, exports, dynamic entrypoints and fixtures. Coverage is candidate evidence, not proof of death or semantic redundancy. Budget caps and routing debt cannot satisfy global removal."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

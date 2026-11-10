@@ -1,0 +1,67 @@
+{
+  "schema": "solve-quest/2",
+  "id": "benchmark-cohort-preserving-dataset-reset",
+  "epic": "developer-journey-and-measured-comparisons",
+  "statement": "Lagrange semantic proofs and measurement run on the same declared deployed cohort with a verified canonical dataset reset between cases and before measurement. Required durability restart evidence remains valid. The complete journey reaches valid-observed claim admission, while cross-deployment evidence remains rejected; passing isolated gate cases cannot substitute for admissible measurement.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/benchmark-cohort-preserving-dataset-reset/evidence/receipt.json",
+      "requiredReceipts": [
+        "supported-reset-capability",
+        "repeatable-clean-dataset-without-reformation",
+        "durability-restart-retained",
+        "same-cohort-journey-to-valid-observed",
+        "cross-deployment-rejection",
+        "actual-product-reset-and-state-evidence",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "responsible-interaction",
+      "statement": "C1; priority comparison blocker; Canonical Lagrange product reset capability, OLTP adapter, semantic-gate lifecycle and claim admission. Apply P0 composition reconciliation and Q1 contract discipline immediately; Q2 governs review. Planning only, not an assigned runtime writer or queued run."
+    },
+    {
+      "id": "preserve-proof-binding",
+      "statement": "Keep the deployment binding captured when each proof executed. createSemanticGateStage currently reforms Lagrange between cases and unconditionally before measurement, while benchmark-claim-admission correctly rejects a different deployment. Never rebind old proofs to the final deployment or weaken that guard."
+    },
+    {
+      "id": "real-reset-design",
+      "statement": "The adapter currently relies on fresh formation because DROP TABLE execution is unsupported. Before implementation, choose and verify a supported reset through canonical public product APIs; if a capability is missing, route a bounded product repair to its actual owner and record the dependency before dependent adapter work. Do not merely remove reform, mutate internal storage, load over stale state or implement product semantics in the adapter. No prescribed full DROP TABLE project if a smaller correct supported reset exists."
+    },
+    {
+      "id": "full-journey",
+      "statement": "Prove clean schema/data and repeated reset across all required proof cases and measurement, including cancellation/retry as the chosen reset contract requires. Preserve the deployed cohort while performing the required product restart and observing its actual effect. Feed the actual gate-stage output and resulting deployment to claim admission; include same-cohort positive and changed-cohort negative controls."
+    },
+    {
+      "id": "sequence-and-history",
+      "statement": "This implements P4 under developer-journey-and-measured-comparisons, with final P5 acceptance still requiring real GCP/lab evidence and the unchanged formation service proof at an applicable candidate. Coordinate shared semantic-gate code with C2 under one writer. Q13/Q16 may be prerequisites for the public query path; establish actual causal dependencies. Preserve comparative-benchmark-evidence-repair and the 947fbe658 binding repair."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

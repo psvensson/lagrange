@@ -1,3 +1,4 @@
+import {readStateField} from '../utils/state-field-read.js';
 /**
  * Owner contract:
  * Owner: OperationWorkflowOwner owns replica-operation workflow lifecycle progress.
@@ -244,7 +245,7 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
       this.buildCoordinatorCreatedLocalInitializationRetryError(),
       {
         boundary: OPERATION_WORKFLOW_OWNER_LOCAL_INITIALIZATION_RETRY_BOUNDARY,
-        workflowStep: operationInput?.workflowStep || null,
+        workflowStep: readStateField(operationInput?.workflowStep),
         partitionId: operationInput?.partitionId || null,
         updatedAt: operationInput?.updatedAt,
         createdAt: operationInput?.createdAt,

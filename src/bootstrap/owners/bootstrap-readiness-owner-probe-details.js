@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../../utils/state-field-read.js';
 import {buildPublicationRecoveryProtocolSnapshot} from '../../control-plane/recovery-protocol-snapshot.js';
 import {buildBootstrapReadinessStage} from '../bootstrap-readiness-ladder.js';
 import {
@@ -135,12 +136,12 @@ function buildStartupRuntimeHandoffProbeFields({
 
 const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
   buildReadinessProbeResponse(snapshot, options = {}) {
+    // A snapshot that states no phase has not left the lifecycle's birth
+    // phase.
+    const phase = readStateField(snapshot.phase);
     const response = {
       ready: snapshot.ready === true,
-      phase:
-        typeof snapshot.phase === 'string' ?
-          snapshot.phase :
-          LIFECYCLE_PHASE.INIT,
+      phase: phase === STATE_ABSENT ? LIFECYCLE_PHASE.INIT : phase,
       state: snapshot.state,
       reasons: Array.isArray(snapshot.reasons) ? snapshot.reasons : [],
       timestamp: snapshot.timestamp,
@@ -178,7 +179,7 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
       return response;
     }
     response[BOOTSTRAP_API_READINESS_FIELD.SEED_CONTACT] = {
-      phase: diagnostics.phase || null,
+      phase: diagnostics.phase, // ContactSeedPhase freezes phase CONTACTING_SEED on every snapshot
       candidateSet: Array.isArray(diagnostics.candidateSet) ?
         [...diagnostics.candidateSet] :
         [],
@@ -670,10 +671,10 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
       this.getMessageRouter() || bootstrapService?.messageRouter || null;
     const logPayload = {
       nodeId: this.getSeedNodeId(),
-      phase: response?.phase || null,
+      phase: readStateField(response?.phase),
       state: response?.state || null,
       reasons: Array.isArray(response?.reasons) ? response.reasons : [],
-      bootstrapServicePhase: bootstrapService?.phase || null,
+      bootstrapServicePhase: readStateField(bootstrapService?.phase),
       hasSqlQueryEngine: Boolean(this.getSqlQueryEngine()),
       hasMessageRouter: Boolean(messageRouter),
       leaderStatus,
@@ -681,7 +682,7 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
       controlPlaneWriteHealth,
       publishedControlPlaneEpoch:
         membershipPublication?.publicationEpoch ?? null,
-      publishedControlPlaneStatus: membershipPublication?.status ?? null,
+      publishedControlPlaneStatus: readStateField(membershipPublication?.status),
       projectionEvaluation,
     };
     const signature = JSON.stringify({

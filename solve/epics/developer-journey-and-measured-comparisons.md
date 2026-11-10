@@ -9,6 +9,8 @@ doneWhen:
   args:
     file: solve/quests/developer-journey-and-measured-comparisons-acceptance/evidence/receipt.json
 quests:
+  - benchmark-cohort-preserving-dataset-reset
+  - tidb-canonical-semantic-case-completion
   - developer-journey-and-measured-comparisons-acceptance
   - comparative-benchmark-evidence-repair
 authorizes:
@@ -80,9 +82,11 @@ records remain intact; successor work records the correction explicitly.
 
 ## Current summary
 
-- Governing source: 07206ba1c8bb396f4eb097a753915bb34580d824 (v0.4.0).
+- Reviewed implementation source: `947fbe658ebb2efe993900b672ded51d5610dbcb`.
+  Published v0.4.0 remains the earlier release baseline, not acceptance of this
+  candidate.
 - Steering basis: rule-set revision 5; rules/router reviewed 2026-10-30.
-- Last checked: 2026-10-31.
+- Last checked: 2026-11-10, source/planning review only; no new product run.
 - Published release: GitHub v0.4.0, 2026-10-31 at 14:16:56 UTC.
 - Delivered source: canonical artifact ingestion/identity-only deployment,
   required payload storage, stable binding revisions and JSON-object body repair;
@@ -90,15 +94,36 @@ records remain intact; successor work records the correction explicitly.
 - Evidence limit: the retained J1/J2 composition test builds a component but
   executes imported JavaScript under Node and simulates restart with shared
   in-process storage. Its summary does not establish a real WASM/remote journey.
-- First remaining blocker: composed public runtime/remote fault evidence and
-  complete original physical comparison measurements are not established by the
-  inspected composition receipt; some publication/guard claims still disagree.
-- Next action: refresh P0's claim inventory; preserve P1/P2 implementation and
-  acquire missing J1/J2 evidence with the Hono successor; continue P4-P7 through
-  the existing measurement owners. Do not restart already delivered work.
+- Current comparison blockers: Lagrange reformation between semantic cases and
+  before measurement conflicts with the correctly retained deployment binding;
+  a supported cohort-preserving dataset reset is missing. TiDB executes only
+  four canonical cases and records the rest as not-executed. Full public
+  runtime/remote fault and original physical comparison evidence also remains
+  unproved.
+- Next action: P4 admits the unsealed C1/C2 Quests below. Design the supported
+  product reset before removing reformation, complete the native TiDB case
+  set and prove actual journey-to-claim admission. Preserve P1/P2 implementation
+  and acquire missing J1/J2 evidence with the Hono successor. P5 consumes the
+  applicable frozen formation proof; no campaign or reviewer is queued here.
 - Continuation owner: the agent assigned this epic's integration role.
 - The existing acceptance Quest/receipt remains evidence of its recorded scope;
   this amendment neither rewrites its seal nor certifies stronger acceptance.
+
+## Registered P4 continuation
+
+- **C1:** [benchmark-cohort-preserving-dataset-reset](../quests/benchmark-cohort-preserving-dataset-reset/quest.json)
+  owns the real product/adapter reset and same-cohort journey-to-admission proof.
+- **C2:** [tidb-canonical-semantic-case-completion](../quests/tidb-canonical-semantic-case-completion/quest.json)
+  owns the missing canonical native-client cases and truthful proof credit.
+
+The [requirements](../specs/developer-journey-and-measured-comparisons/requirements.md#registered-p4-quests)
+map these to P4 and the existing receipt families. Shared semantic-gate changes
+have one writer. Both records remain unsealed with absent receipts, so their
+probes are unmeasured, never passed. Existing comparison acceptance is unchanged.
+The [formation epic](operation-integrity-and-reliable-formation.md) owns the
+current catalog/CDC/incarnation/ingress repairs and the frozen service gate;
+source changes after its proof require renewed evidence applicability. Successful
+three-node formation does not certify this epic's five-node comparisons.
 
 ## Decision log
 
@@ -146,3 +171,12 @@ records remain intact; successor work records the correction explicitly.
   target 0.4.1. Existing logs, sealed acceptance and old receipt claims are not
   rewritten or promoted to real compiled/multi-host observations.
 
+
+- 2026-11-10: Registered C1/C2 as bounded P4 continuations after source review of
+  `947fbe658ebb2efe993900b672ded51d5610dbcb` and the supplied independent report.
+  Preserve deployment-bound refusal, required durability restart and unexecuted
+  TiDB case status. A real reset/product capability and full journey positive
+  proof are required; relabeling proofs or deleting reform without equivalent
+  reset is not a repair. Original receipt families, seals, historical evidence
+  and publication authority remain unchanged. The linked Library evidence was
+  not retrieved and no reproduction or physical acceptance ran in this session.

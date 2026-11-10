@@ -13,7 +13,19 @@ import {
   CONTROL_PLANE_READ_STRATEGY,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {
+  MAX_COMMITTED_POLICY_FENCES,
+  MAX_SUPERSEDED_POLICY_SNAPSHOTS,
+  applyCommittedPolicyFence as applyCommittedPolicyFenceRow,
+  clearAllTablePolicyCurrency,
+  clearTablePolicyCurrencyForTable,
+  commitPolicyFenceAfterWrite,
+  hasKnownTablePolicyCurrency,
+  initializeTablePolicyCurrencyState,
+  isStaleAgainstCommittedPolicyFence as checkStaleAgainstCommittedPolicyFence,
+  isSupersededByCommittedPolicyFence as checkSupersededByCommittedPolicyFence,
   readCommittedPolicyBase,
+  recordCommittedPolicyFence as storeCommittedPolicyFence,
+  retireCommittedPolicyFence as clearCommittedPolicyFence,
   writePolicyConditionally,
 } from './table-policy-committed-base.js';
 import {createControlPlaneRuntimeBundle} from
@@ -57,6 +69,10 @@ const LOCAL_STR_PLACEMENTCONSTRAINTS = 'placementConstraints';
 const LOCAL_STR_OBJECT = 'object';
 const TABLE_POLICY_FUNCTION_TYPE = 'function';
 
+function resolvePositiveIntegerLimit(value, defaultLimit) {
+  return Number.isInteger(value) && value > 0 ? value : defaultLimit;
+}
+
 /**
  * TablePolicyService manages table policies for partition behavior.
  * Table policies control thresholds, placement constraints and safety limits.
@@ -80,10 +96,10 @@ class TablePolicyService extends EventEmitter {
     this.hasExplicitControlPlaneSystemTableGateway = Boolean(
       options.controlPlaneSystemTableGateway,
     );
-    // The clock the policy cache's TTL is measured on: injectable so a
-    // virtual clock drives expiry (formation-sim); the default is the
-    // ambient clock, byte-identical in production. Row stamps written to
-    // the tables stay on the wall clock: they are data, not scheduling.
+    // The clock the policy cache's TTL and committed policy mutation stamps
+    // are measured on: injectable so a virtual clock drives expiry and
+    // mutation timestamps (formation-sim); the default is the ambient clock,
+    // byte-identical in production.
     this.now = typeof options.now === TABLE_POLICY_FUNCTION_TYPE ? options.now : Date.now;
 
     // Configuration
@@ -98,6 +114,16 @@ class TablePolicyService extends EventEmitter {
     // Local policy cache for performance
     this.policyCache = new Map();
     this.committedPolicyFences = new Map();
+    this.supersededSnapshots = new Map();
+    initializeTablePolicyCurrencyState(this);
+    this.maxCommittedPolicyFences = resolvePositiveIntegerLimit(
+      options.maxCommittedPolicyFences,
+      MAX_COMMITTED_POLICY_FENCES,
+    );
+    this.maxSupersededPolicySnapshots = resolvePositiveIntegerLimit(
+      options.maxSupersededPolicySnapshots,
+      MAX_SUPERSEDED_POLICY_SNAPSHOTS,
+    );
     this.cacheTTLMs = config.get(CONFIG_KEY.POLICY_CACHE_TTL_MS) || POLICY_DEFAULT.CACHE_TTL_MS;
 
     this.initialized = false;
@@ -115,7 +141,6 @@ class TablePolicyService extends EventEmitter {
     this.initialized = true;
   }
 
-
   /**
    * Get the default table policy.
    * @return {Object} Default policy object.
@@ -129,61 +154,28 @@ class TablePolicyService extends EventEmitter {
     };
   }
 
-  isSupersededByCommittedPolicyFence(fence, row) {
-    if (!row) {
-      return true;
-    }
-    const rowPolicies = row.table_policies ?? null;
-    const rowUpdatedAt = row.updated_at ?? null;
-    if (
-      rowPolicies === fence.table_policies &&
-      rowUpdatedAt === fence.updated_at
-    ) {
-      return false;
-    }
-    if (
-      Array.isArray(fence.supersededSnapshots) &&
-      fence.supersededSnapshots.some(
-        (snapshot) =>
-          snapshot.table_policies === rowPolicies &&
-          snapshot.updated_at === rowUpdatedAt,
-      )
-    ) {
-      return true;
-    }
-    return (
-      Number.isFinite(rowUpdatedAt) &&
-      Number.isFinite(fence.updated_at) &&
-      rowUpdatedAt < fence.updated_at
-    );
+  retireCommittedPolicyFence(tableId) {
+    clearCommittedPolicyFence(this, tableId);
   }
 
-  isStaleAgainstCommittedPolicyFence(tableId, row) {
-    const fence = this.committedPolicyFences.get(tableId);
-    if (!fence) {
-      return false;
-    }
-    if (this.isSupersededByCommittedPolicyFence(fence, row)) {
-      return true;
-    }
-    this.committedPolicyFences.delete(tableId);
-    return false;
+  recordCommittedPolicyFence(tableId, fenceEntry, snapshots = []) {
+    storeCommittedPolicyFence(this, tableId, fenceEntry, snapshots);
+  }
+
+  isSupersededByCommittedPolicyFence(fence, row, tableId = null) {
+    return checkSupersededByCommittedPolicyFence(this, fence, row, tableId);
+  }
+
+  isStaleAgainstCommittedPolicyFence(tableId, row, witness = null, token = null) {
+    return checkStaleAgainstCommittedPolicyFence(this, tableId, row, witness, token);
+  }
+
+  hasKnownPolicyCurrency(tableId) {
+    return hasKnownTablePolicyCurrency(this, tableId);
   }
 
   applyCommittedPolicyFence(tableId, row) {
-    const fence = this.committedPolicyFences.get(tableId);
-    if (!fence || !row) {
-      return row;
-    }
-    if (this.isSupersededByCommittedPolicyFence(fence, row)) {
-      return {
-        ...row,
-        table_policies: fence.table_policies,
-        updated_at: fence.updated_at,
-      };
-    }
-    this.committedPolicyFences.delete(tableId);
-    return row;
+    return applyCommittedPolicyFenceRow(this, tableId, row);
   }
 
   /**
@@ -403,6 +395,13 @@ class TablePolicyService extends EventEmitter {
       throw new Error(POLICY_ERROR_MSG.CDC_REQUIRED_FOR_UPDATE);
     }
 
+    const existingFenceBeforeRead = this.committedPolicyFences.get(tableId);
+    const priorSupersededSnapshots = [
+      ...(this.supersededSnapshots.get(tableId) ||
+        existingFenceBeforeRead?.supersededSnapshots ||
+        []),
+    ];
+    const priorFenceVersion = Number(existingFenceBeforeRead?.version ?? 0);
     const table = await readCommittedPolicyBase(this, tableId);
     const storedPolicy = this.parseStoredTablePolicy(table, tableId);
     const currentPolicy = this.mergeWithDefaults(storedPolicy);
@@ -419,31 +418,24 @@ class TablePolicyService extends EventEmitter {
 
     try {
       const serializedPolicy = JSON.stringify(updatedStoredPolicy);
-      const updatedAt = Date.now();
+      const nowMs = this.now();
+      const baseUpdatedAt = Number(table?.updated_at);
+      const updatedAt = Number.isFinite(baseUpdatedAt) ?
+        Math.max(nowMs, baseUpdatedAt + 1) :
+        nowMs;
       // Update via CDC integration service
       await writePolicyConditionally(this, tableId, table, serializedPolicy,
         updatedAt);
-
-      const existingFence = this.committedPolicyFences.get(tableId);
-      const priorSnapshot = {
-        table_policies: table?.table_policies ?? null,
-        updated_at: table?.updated_at ?? null,
-      };
-      const supersededSnapshots = existingFence ?
-        [
-          ...(existingFence.supersededSnapshots || []),
-          {
-            table_policies: existingFence.table_policies,
-            updated_at: existingFence.updated_at,
-          },
-          priorSnapshot,
-        ] :
-        [priorSnapshot];
-      this.committedPolicyFences.set(tableId, {
-        supersededSnapshots,
-        table_policies: serializedPolicy,
-        updated_at: updatedAt,
-      });
+      commitPolicyFenceAfterWrite(
+        this,
+        tableId,
+        table,
+        serializedPolicy,
+        updatedAt,
+        updatedStoredPolicy,
+        priorSupersededSnapshots,
+        priorFenceVersion,
+      );
 
       // Invalidate cache
       this.policyCache.delete(tableId);
@@ -650,11 +642,25 @@ class TablePolicyService extends EventEmitter {
   }
 
   /**
+   * Delete cached and fenced policy state for a table.
+   * @param {string} tableId - Table ID.
+   * @return {boolean} Whether a tableId was supplied.
+   */
+  deleteTablePolicy(tableId) {
+    if (!tableId) {
+      return false;
+    }
+    this.policyCache.delete(tableId);
+    clearTablePolicyCurrencyForTable(this, tableId);
+    return true;
+  }
+
+  /**
    * Clear the policy cache.
    */
   clearCache() {
     this.policyCache.clear();
-    this.committedPolicyFences.clear();
+    clearAllTablePolicyCurrency(this);
     this.logger.debug(POLICY_LOG_MSG.POLICY_CACHE_CLEARED);
   }
 
@@ -664,7 +670,7 @@ class TablePolicyService extends EventEmitter {
    */
   invalidateCache(tableId) {
     this.policyCache.delete(tableId);
-    this.committedPolicyFences.delete(tableId);
+    clearTablePolicyCurrencyForTable(this, tableId);
     this.logger.debug(POLICY_LOG_MSG.POLICY_CACHE_INVALIDATED, {tableId});
   }
 
@@ -772,4 +778,8 @@ class TablePolicyService extends EventEmitter {
   }
 }
 
-export {TablePolicyService};
+export {
+  MAX_COMMITTED_POLICY_FENCES,
+  MAX_SUPERSEDED_POLICY_SNAPSHOTS,
+  TablePolicyService,
+};

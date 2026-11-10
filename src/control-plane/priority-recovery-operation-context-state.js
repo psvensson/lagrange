@@ -90,10 +90,12 @@ function isPriorityRecoveryOperationContextTerminal(operationContext) {
   if (operationContext.latestTimelineInFlight === true) {
     return false;
   }
-  const status = String(operationContext.status || '').toLowerCase();
-  if (status.length === 0) {
+  // An operation context without a status has no terminal evidence.
+  if (typeof operationContext.status !== 'string' ||
+      operationContext.status.length === 0) {
     return false;
   }
+  const status = operationContext.status.toLowerCase();
   if (status === STATUS_ACTIVE) {
     return operationType !== OperationType.REPLACE;
   }
@@ -108,15 +110,14 @@ function isPriorityRecoveryCompletedAddOperationContext(operationContext) {
   if (operationType !== OperationType.ADD) {
     return false;
   }
-  const workflowStep = String(
-    operationContext.workflowStep || '',
-  ).toUpperCase();
+  // An absent step resolves to the UNKNOWN terminal state, never true.
   if (
-    workflowStep === PRIORITY_RECOVERY_SNAPSHOT_LITERAL.ACTIVE &&
     resolvePriorityRecoveryOperationStepTerminalState(
       operationType,
-      workflowStep,
-    ) === true
+      operationContext.workflowStep,
+    ) === true &&
+    String(operationContext.workflowStep).toUpperCase() ===
+      PRIORITY_RECOVERY_SNAPSHOT_LITERAL.ACTIVE
   ) {
     return true;
   }
@@ -150,14 +151,10 @@ function isPriorityRecoveryCompletedReplaceOperationContext(operationContext) {
   if (isPriorityRecoveryOperationContextTerminal(operationContext)) {
     return true;
   }
-  const workflowStep = String(
-    operationContext.workflowStep || '',
-  ).toUpperCase();
   if (
-    workflowStep.length > 0 &&
     resolvePriorityRecoveryOperationStepTerminalState(
       operationType,
-      workflowStep,
+      operationContext.workflowStep,
     ) === true
   ) {
     return true;

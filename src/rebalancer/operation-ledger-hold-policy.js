@@ -1,3 +1,4 @@
+import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
 /**
  * Single owner of the operation-ledger HOLD-ENGAGEMENT relation (quest
  * hold-engagement-single-owner-table; epic self-hosting-circularity-
@@ -325,8 +326,7 @@ function resolveOperationLedgerHoldEngagement(holdKind, moveClass) {
  * @return {boolean}
  */
 function isOperationLedgerSelfMoveDispatchClaimed(operation) {
-  const workflowStep =
-    operation?.workflowStep ?? operation?.workflow_step ?? null;
+  const workflowStep = readOperationRecordWorkflowStep(operation);
   return workflowStep !== null && workflowStep !== WORKFLOW_STEP.PENDING;
 }
 

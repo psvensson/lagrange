@@ -214,6 +214,11 @@ test('executeSelect threads the issuing service readLocality into ' +
     true,
     'same_group policy turns on preferSameLatencyGroup',
   );
+  t.equal(
+    capturedOptions[0].preferLeader,
+    false,
+    'same_group policy disables default user-table leader preference',
+  );
 
   await engine.executeQuery('SELECT * FROM orders', [], {
     issuingServiceId: 'svc-without-definition',
@@ -223,12 +228,22 @@ test('executeSelect threads the issuing service readLocality into ' +
     false,
     'unknown issuing service keeps uniform routing',
   );
+  t.equal(
+    capturedOptions[1].preferLeader,
+    true,
+    'uniform routing preserves user-table leader preference',
+  );
 
   await engine.executeQuery('SELECT * FROM orders', []);
   t.equal(
     capturedOptions[2].preferSameLatencyGroup,
     false,
     'no issuing service keeps uniform routing',
+  );
+  t.equal(
+    capturedOptions[2].preferLeader,
+    true,
+    'no issuing service preserves user-table leader preference',
   );
 
   t.end();

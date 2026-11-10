@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
-import {flushCoverageBeforeKill} from '../test-helpers/census-pre-kill-flush.js';
+import {flushCoverageBeforeKill} from '../../scripts/checks/census-pre-kill-flush.js';
 
 const M1 = fileURLToPath(new URL('./seed-migration-cutover-persisted.integration.test.js',
   import.meta.url));

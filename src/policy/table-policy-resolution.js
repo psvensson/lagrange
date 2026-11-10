@@ -13,19 +13,16 @@ import {
   CONTROL_PLANE_READ_STRATEGY,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {
-  POLICY_AUTHORITY_STATE,
-  POLICY_ERROR_CODE,
-  POLICY_READ_REASON,
+  POLICY_AUTHORITY_STATE, POLICY_ERROR_CODE, POLICY_READ_REASON,
 } from './policy-constants.js';
 import {
-  assertValidMessageGroupPolicy,
-  assertValidTablePolicy,
-  buildPolicyAuthorityDecision,
-  buildPolicyRefusal,
-  evaluateMessageGroupTargetDeclaration,
-  hasOwnRawReplicaCount,
-  mergeStoredTablePolicyOverrides,
-  resolveConfiguredTablePolicyDefaults,
+  advanceTablePolicyCurrencyFromObservation, beginTablePolicyRead,
+  clearTablePolicyCurrencyForTable, endTablePolicyRead, isConfiguredPolicyRowStale,
+} from './table-policy-committed-base.js';
+import {
+  assertValidMessageGroupPolicy, assertValidTablePolicy, buildPolicyAuthorityDecision,
+  buildPolicyRefusal, evaluateMessageGroupTargetDeclaration, hasOwnRawReplicaCount,
+  mergeStoredTablePolicyOverrides, resolveConfiguredTablePolicyDefaults,
   policyRefusalReason,
 } from './table-policy-validation.js';
 
@@ -94,39 +91,49 @@ const UNAVAILABLE_OR_STALE_POLICY_ROW_OBSERVATION = Object.freeze({
   state: POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE,
   row: null,
 });
+const STALE_EVIDENCE_POLICY_ROW_OBSERVATION = Object.freeze({
+  ...UNAVAILABLE_OR_STALE_POLICY_ROW_OBSERVATION,
+  staleEvidence: true,
+});
 
 // A policy row read that threw: unavailable or stale, its cause attached.
 function failedPolicyRowObservation(cause) {
   return {...UNAVAILABLE_OR_STALE_POLICY_ROW_OBSERVATION, cause};
 }
 
+function classifyAuthoritativeGatewayReadResult(result, spec, readToken) {
+  if (readToken?.currencyEvicted === true) {
+    return STALE_EVIDENCE_POLICY_ROW_OBSERVATION;
+  }
+  if (!isCompleteAuthoritativePolicyReadResult(result, spec.tableName)) {
+    return UNAVAILABLE_OR_STALE_POLICY_ROW_OBSERVATION;
+  }
+  const rawRow = result?.rows?.[0] || null;
+  if (spec.isStaleRow?.(rawRow, result.readAuthorityWitness, readToken) === true) {
+    return STALE_EVIDENCE_POLICY_ROW_OBSERVATION;
+  }
+  const row = spec.transformRow ? spec.transformRow(rawRow) : rawRow;
+  return {
+    state: row ?
+      POLICY_AUTHORITY_STATE.AUTHORITATIVE_POLICY :
+      POLICY_AUTHORITY_STATE.AUTHORITATIVE_ABSENCE,
+    row: row || null,
+    rowSetComplete: true,
+    readAuthorityWitness: result.readAuthorityWitness,
+  };
+}
+
 async function observeAuthoritativeGatewayRow(service, id, spec) {
+  const readToken = spec.beginRead ? spec.beginRead() : null;
   try {
     const gateway = service.getControlPlaneSystemTableGateway();
     const result = await gateway.readAuthoritativeRows(
-      spec.tableName,
-      spec.sql,
-      [id],
-      AUTHORITATIVE_POLICY_READ_OPTIONS,
-    );
-    const rawRow = result?.rows?.[0] || null;
-    if (
-      !isCompleteAuthoritativePolicyReadResult(result, spec.tableName) ||
-      spec.isStaleRow?.(rawRow) === true
-    ) {
-      return UNAVAILABLE_OR_STALE_POLICY_ROW_OBSERVATION;
-    }
-    const row = spec.transformRow ? spec.transformRow(rawRow) : rawRow;
-    return {
-      state: row ?
-        POLICY_AUTHORITY_STATE.AUTHORITATIVE_POLICY :
-        POLICY_AUTHORITY_STATE.AUTHORITATIVE_ABSENCE,
-      row: row || null,
-      rowSetComplete: true,
-      readAuthorityWitness: result.readAuthorityWitness,
-    };
+      spec.tableName, spec.sql, [id], AUTHORITATIVE_POLICY_READ_OPTIONS);
+    return classifyAuthoritativeGatewayReadResult(result, spec, readToken);
   } catch (cause) {
     return failedPolicyRowObservation(cause);
+  } finally {
+    spec.endRead?.(readToken);
   }
 }
 
@@ -143,8 +150,10 @@ function observeTablePolicyRow(service, tableId) {
   return observeAuthoritativePolicyRow(service, tableId, {
     tableName: TABLES.TABLES,
     sql: LOCAL_STR_SELECT_TABLE_BY_ID,
-    isStaleRow: (row) =>
-      service?.isStaleAgainstCommittedPolicyFence?.(tableId, row) === true,
+    beginRead: () => beginTablePolicyRead(service, tableId),
+    endRead: (token) => endTablePolicyRead(service, token),
+    isStaleRow: (row, witness, token) =>
+      service?.isStaleAgainstCommittedPolicyFence?.(tableId, row, witness, token) === true,
   });
 }
 
@@ -165,10 +174,12 @@ function observeMessageGroupPolicyRow(service, groupId) {
 function parseAndCacheTablePolicyDecision(service, tableId, table, prov = {}) {
   try {
     const storedPolicy = service.parseStoredTablePolicy(table, tableId);
-    const mergedPolicy = assertValidTablePolicy(
-      service.mergeWithDefaults(storedPolicy),
-    );
+    const mergedPolicy = assertValidTablePolicy(service.mergeWithDefaults(storedPolicy));
     const minReplicaCount = requirePolicyMinimumReplicaCount(mergedPolicy);
+    if (prov.readAuthorityWitness) {
+      advanceTablePolicyCurrencyFromObservation(
+        service, tableId, table, prov.readAuthorityWitness);
+    }
     service.policyCache.set(tableId, {
       policy: mergedPolicy,
       rawTablePolicies: table.table_policies ?? null,
@@ -199,8 +210,9 @@ async function resolveServiceTablePolicyFact(service, tableId) {
   const observation = await observeTablePolicyRow(service, tableId);
   if (observation.state === POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE) {
     const hasStale = Boolean(
+      observation.staleEvidence === true ||
       (tableId && service.policyCache.has(tableId)) ||
-      (tableId && service.committedPolicyFences?.has(tableId)) ||
+      service.hasKnownPolicyCurrency?.(tableId) ||
       service.lookupCachedTable(tableId),
     );
     return buildPolicyAuthorityDecision(
@@ -217,6 +229,7 @@ async function resolveServiceTablePolicyFact(service, tableId) {
   if (!table) {
     if (tableId) {
       service.policyCache.delete(tableId);
+      clearTablePolicyCurrencyForTable(service, tableId);
     }
     return buildPolicyAuthorityDecision(
       POLICY_AUTHORITY_STATE.AUTHORITATIVE_ABSENCE,
@@ -423,22 +436,30 @@ async function resolveServiceMessageGroupPolicyFact(service, groupId) {
 }
 
 async function readConfiguredTablePolicy(service, tableId) {
-  const table = tableId ? await service.readTableRow(tableId) : null;
+  const readToken = beginTablePolicyRead(service, tableId);
+  let table = null;
+  try {
+    table = tableId ? await service.readTableRow(tableId) : null;
+  } finally {
+    endTablePolicyRead(service, readToken);
+  }
+  if (tableId && isConfiguredPolicyRowStale(service, tableId, table, readToken)) {
+    throw policyReadUnavailable(POLICY_READ_REASON.STALE_EVIDENCE, {
+      tableId, authorityState: POLICY_AUTHORITY_STATE.UNAVAILABLE_OR_STALE,
+    });
+  }
   if (!table) {
     if (tableId) {
       service.policyCache.delete(tableId);
+      clearTablePolicyCurrencyForTable(service, tableId);
     }
     throw policyReadUnavailable(POLICY_READ_REASON.TABLE_ABSENT, {
-      tableId,
-      authorityState: POLICY_AUTHORITY_STATE.AUTHORITATIVE_ABSENCE,
+      tableId, authorityState: POLICY_AUTHORITY_STATE.AUTHORITATIVE_ABSENCE,
     });
   }
   const cached = service.policyCache.get(tableId);
-  if (
-    cached &&
-    service.now() - cached.timestamp < service.cacheTTLMs &&
-    (table.table_policies ?? null) === cached.rawTablePolicies
-  ) {
+  if (cached && service.now() - cached.timestamp < service.cacheTTLMs &&
+      (table.table_policies ?? null) === cached.rawTablePolicies) {
     return cached.policy;
   }
   const decision = parseAndCacheTablePolicyDecision(service, tableId, table);
@@ -452,9 +473,7 @@ async function readConfiguredTablePolicy(service, tableId) {
 }
 
 async function readConfiguredPartitionPolicy(service, partitionId) {
-  const partition = partitionId ?
-    await service.readPartitionRow(partitionId) :
-    null;
+  const partition = partitionId ? await service.readPartitionRow(partitionId) : null;
   if (!partition) {
     throw policyReadUnavailable(POLICY_READ_REASON.PARTITION_ABSENT, {
       partitionId,
@@ -722,21 +741,6 @@ async function readPolicyForPartition(owner, partitionId, options = {}) {
   }
 }
 
-async function readPolicyForMessageGroup(owner, groupId, options = {}) {
-  const decision = await resolveMessageGroupPolicyFactFromOwner(
-    owner,
-    groupId,
-    options,
-  );
-  if (decision.state !== POLICY_AUTHORITY_STATE.AUTHORITATIVE_POLICY) {
-    throw policyReadUnavailable(
-      policyRefusalReason(decision, POLICY_READ_REASON.READ_FAILED),
-      {cause: decision.cause, groupId, authorityState: decision.state},
-    );
-  }
-  return decision.policy;
-}
-
 function requirePolicyTargetReplicaCount(policy, allowZero = false) {
   const target = policy?.targetReplicaCount;
   if (!Number.isSafeInteger(target) || target < (allowZero ? 0 : 1)) {
@@ -754,15 +758,12 @@ function requirePolicyMinimumReplicaCount(policy) {
 }
 
 export {
-  buildPolicyAuthorityDecision,
   buildPolicyRefusal,
-  isValidPolicyReadAuthorityWitness,
   mergeStoredTablePolicyOverrides,
   policyReadUnavailable,
   readConfiguredMessageGroupPolicy,
   readConfiguredPartitionPolicy,
   readConfiguredTablePolicy,
-  readPolicyForMessageGroup,
   readPolicyForPartition,
   requirePolicyMinimumReplicaCount,
   requirePolicyTargetReplicaCount,

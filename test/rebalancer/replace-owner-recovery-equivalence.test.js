@@ -55,7 +55,11 @@ import {
   readReplaceOwnerDiagnostic,
   readReplaceOwnerPhase,
 } from '../../src/rebalancer/operation-workflow-replace-owner.js';
-import {createMockCache, createTestCoordinator} from './test-helpers.js';
+import {
+  createMockCache,
+  createMockPolicyService,
+  createTestCoordinator,
+} from './test-helpers.js';
 import {
   createReplaceWitness,
   deliveredReplaceWitnessResponse,
@@ -308,9 +312,12 @@ function startCoordinator(world) {
       now: () => Date.now() + world.clockOffsetMs,
       readNodeRows: () => NODE_IDS.map((id) => readyNode(id, Date.now() + world.clockOffsetMs)),
     },
-    tablePolicyService: {getPolicyForPartition: () => ({
-      targetReplicaCount: 3, minReplicaCount: 3,
-    })},
+    tablePolicyService: createMockPolicyService({
+      getPolicyForPartition: () => ({
+        targetReplicaCount: 3,
+        minReplicaCount: 3,
+      }),
+    }),
     setTimeoutFn(fn, delayMs) {
       const handle = {fn, delayMs, cleared: false, unref() {}};
       world.fallbackTimers.push(handle);

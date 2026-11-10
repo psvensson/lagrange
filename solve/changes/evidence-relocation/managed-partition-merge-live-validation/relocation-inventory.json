@@ -1,0 +1,23 @@
+{
+  "schema": "solve-relocation-inventory/1",
+  "bundles": [
+    {
+      "bundle": "managed-partition-merge-live-validation--raft-cutover-stop-2026-10-25-7532b3ca6-2026-11-09.tar.gz",
+      "bundleSha256": "366e5342340ac1c971099aeb333f2f64d5aae0839c76bd7749028061f417c836",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/managed-partition-merge-live-validation--raft-cutover-stop-2026-10-25-7532b3ca6-2026-11-09.tar.gz",
+      "sourceCommit": "7532b3ca6333ec063ae0c9db04a160ddc6f65038",
+      "root": "solve/epics/raft-rs-full-cutover/evidence/stop-2026-10-25/",
+      "files": 27,
+      "shard": "relocation-inventory/managed-partition-merge-live-validation--raft-cutover-stop-2026-10-25-7532b3ca6-2026-11-09.json"
+    },
+    {
+      "bundle": "managed-partition-merge-live-validation--merge-live-validation-changes-7532b3ca6-2026-11-09.tar.gz",
+      "bundleSha256": "9556775ad357382bc42223c1732e2ba85d300bcc4188c7355d37198b9863bd8f",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/managed-partition-merge-live-validation--merge-live-validation-changes-7532b3ca6-2026-11-09.tar.gz",
+      "sourceCommit": "7532b3ca6333ec063ae0c9db04a160ddc6f65038",
+      "root": "solve/quests/managed-partition-merge-live-validation/evidence/changes/",
+      "files": 17,
+      "shard": "relocation-inventory/managed-partition-merge-live-validation--merge-live-validation-changes-7532b3ca6-2026-11-09.json"
+    }
+  ]
+}

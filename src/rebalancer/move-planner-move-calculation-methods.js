@@ -217,8 +217,8 @@ class MovePlannerMoveCalculationMethods {
       },
     };
     const activePlacementReplicas = currentReplicas.filter((replica) => {
-      const status = replica?.status || ReplicaStatus.ACTIVE;
-      return status === ReplicaStatus.ACTIVE && !!replica?.node_id;
+      // services.status is NOT NULL: only an explicit ACTIVE places.
+      return replica?.status === ReplicaStatus.ACTIVE && !!replica?.node_id;
     });
     // Read only when a REMOVE is contemplated: a plan that removes nothing
     // costs exactly the reads it cost before the exclusion existed.
@@ -300,7 +300,7 @@ class MovePlannerMoveCalculationMethods {
 
     // Handle failed/inactive replicas - always remove them
     for (const replica of currentReplicas) {
-      const status = replica.status || ReplicaStatus.ACTIVE;
+      const status = replica.status;
       const replicaId = replica.replica_id || replica.service_id;
       if (this.moveStateProvider.hasPendingMove(replicaId)) {
         continue;

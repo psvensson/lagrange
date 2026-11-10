@@ -14,6 +14,11 @@ import {
 } from '../bootstrap-api-constants.js';
 import {readCurrentEndpointRows} from
   '../../control-plane/owners/endpoint-incarnation-currentness.js';
+import {
+  readAuthoritativeManagementClusterSnapshot,
+} from './partition-quorum-authority.js';
+
+const EMPTY_READY_NODE_IDS = Object.freeze([]);
 
 function canTreatSeedAsBootstrapReady(readiness) {
   return !!readiness &&
@@ -26,12 +31,48 @@ function extractCandidateNodeId(row) {
 }
 
 function addCandidateNodeIds(candidateNodeIds, rows) {
+  if (!Array.isArray(rows)) {
+    return;
+  }
   for (const row of rows) {
     const nodeId = extractCandidateNodeId(row);
     if (nodeId) {
       candidateNodeIds.add(nodeId);
     }
   }
+}
+
+function addCandidateNodeIdValues(candidateNodeIds, nodeIds) {
+  if (!Array.isArray(nodeIds)) {
+    return;
+  }
+  for (const nodeId of nodeIds) {
+    if (typeof nodeId === 'string' && nodeId.length > 0) {
+      candidateNodeIds.add(nodeId);
+    }
+  }
+}
+
+function buildCandidateNodeIdSet(options) {
+  const candidateNodeIds = new Set();
+  addCandidateNodeIdValues(candidateNodeIds, options.extraCandidateNodeIds);
+  addCandidateNodeIds(candidateNodeIds, options.nodeRows);
+  addCandidateNodeIds(candidateNodeIds, options.serviceRows);
+  addCandidateNodeIds(candidateNodeIds, options.nodeEndpointRows);
+  return candidateNodeIds;
+}
+
+function shouldAppendBootstrapSeedNode(
+  requirePublishedMembership,
+  seedNodeId,
+  readyNodes,
+  readinessByNodeId,
+) {
+  if (requirePublishedMembership || !seedNodeId) {
+    return false;
+  }
+  return !readyNodes.includes(seedNodeId) &&
+    canTreatSeedAsBootstrapReady(readinessByNodeId[seedNodeId]);
 }
 
 function filterReadyNodeIds(candidateNodeIds, nodeIds) {
@@ -47,6 +88,18 @@ class BootstrapClusterViewOwner {
 
   getSystemTableCache() {
     return this.delegates.getSystemTableCache?.() || null;
+  }
+
+  getAuthoritativeControlPlaneView() {
+    return this.delegates.getAuthoritativeControlPlaneView?.() ?? null;
+  }
+
+  getPartitionServices() {
+    return this.delegates.getPartitionServices?.() ?? null;
+  }
+
+  getReplicaHandler() {
+    return this.delegates.getReplicaHandler?.() ?? null;
   }
 
   getSeedNodeId() {
@@ -97,6 +150,53 @@ class BootstrapClusterViewOwner {
     }
   }
 
+  resolveStartupReadyNodeIds(
+    seedNodeId,
+    candidateNodeIds,
+    requirePublishedMembership,
+  ) {
+    const startupAuthorityReadyNodeIds = requirePublishedMembership ?
+      EMPTY_READY_NODE_IDS :
+      this.getStartupAuthorityReadyNodeIds(seedNodeId);
+    return filterReadyNodeIds(candidateNodeIds, startupAuthorityReadyNodeIds);
+  }
+
+  resolveReadyNodeIdsFromRows(options = {}) {
+    const requirePublishedMembership =
+      options.requirePublishedMembership === true;
+    const candidateNodeIds = buildCandidateNodeIdSet(options);
+    const readinessByNodeId = this.buildReadinessByNodeId(
+      this.getControlPlaneReadinessService(),
+      candidateNodeIds,
+    );
+    const readyNodes = resolveCanonicalActiveNodeIds({
+      nodeRows: options.nodeRows,
+      serviceRows: options.serviceRows,
+      nodeEndpointRows: options.nodeEndpointRows,
+      publicationRows: options.publicationRows,
+      requirePublishedMembership,
+      readinessByNodeId,
+    });
+    const seedNodeId = this.getSeedNodeId();
+    const startupReadyNodeIds = this.resolveStartupReadyNodeIds(
+      seedNodeId,
+      candidateNodeIds,
+      requirePublishedMembership,
+    );
+    if (startupReadyNodeIds.length > 0) {
+      return startupReadyNodeIds;
+    }
+    if (shouldAppendBootstrapSeedNode(
+      requirePublishedMembership,
+      seedNodeId,
+      readyNodes,
+      readinessByNodeId,
+    )) {
+      readyNodes.push(seedNodeId);
+    }
+    return readyNodes;
+  }
+
   getReadyNodes(options = {}) {
     const systemTableCache = assertCritical(
       this.getSystemTableCache(),
@@ -106,46 +206,13 @@ class BootstrapClusterViewOwner {
     const serviceRows = systemTableCache.getAll(TABLES.SERVICES) || [];
     const nodeEndpointRows =
       readCurrentEndpointRows(systemTableCache, TABLES.NODE_ENDPOINTS);
-    const readinessService = this.getControlPlaneReadinessService();
-    const candidateNodeIds = new Set();
-    addCandidateNodeIds(candidateNodeIds, nodeRows);
-    addCandidateNodeIds(candidateNodeIds, serviceRows);
-    addCandidateNodeIds(candidateNodeIds, nodeEndpointRows);
-    const readinessByNodeId = this.buildReadinessByNodeId(
-      readinessService,
-      candidateNodeIds,
-    );
-    const readyNodes = resolveCanonicalActiveNodeIds({
+    return this.resolveReadyNodeIdsFromRows({
       nodeRows,
       serviceRows,
       nodeEndpointRows,
       publicationRows: this.getPublicationRows(),
       requirePublishedMembership: options.requirePublishedMembership === true,
-      readinessByNodeId,
     });
-
-    const seedNodeId = this.getSeedNodeId();
-    const startupAuthorityReadyNodeIds =
-      options.requirePublishedMembership === true ?
-        [] :
-        this.getStartupAuthorityReadyNodeIds(seedNodeId);
-    if (startupAuthorityReadyNodeIds.length > 0) {
-      const filteredReadyNodeIds = filterReadyNodeIds(
-        candidateNodeIds,
-        startupAuthorityReadyNodeIds,
-      );
-      if (filteredReadyNodeIds.length > 0) {
-        return filteredReadyNodeIds;
-      }
-    }
-    if (options.requirePublishedMembership !== true &&
-        seedNodeId &&
-        !readyNodes.includes(seedNodeId) &&
-        canTreatSeedAsBootstrapReady(readinessByNodeId[seedNodeId])) {
-      readyNodes.push(seedNodeId);
-    }
-
-    return readyNodes;
   }
 
   buildReadinessByNodeId(readinessService, candidateNodeIds) {
@@ -245,7 +312,7 @@ class BootstrapClusterViewOwner {
         nodeAddress: node.node_address,
         status: activeNodeIds.has(node.node_id) ?
           SERVICE_STATUS.ACTIVE :
-          (node.status || BOOTSTRAP_API_CLUSTER_STATE.UNKNOWN),
+          node.status, // nodes.status is NOT NULL DEFAULT 'active'
         isSeed: false,
       });
     }
@@ -267,6 +334,10 @@ class BootstrapClusterViewOwner {
       messageGroups,
       timestamp: Date.now(),
     };
+  }
+
+  async getManagementClusterSnapshot() {
+    return readAuthoritativeManagementClusterSnapshot(this);
   }
 }
 

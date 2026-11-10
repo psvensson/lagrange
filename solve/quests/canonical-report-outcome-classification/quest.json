@@ -1,0 +1,57 @@
+{
+  "schema": "solve-quest/2",
+  "id": "canonical-report-outcome-classification",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Make report classification refuse unsupported evidence. the retained failed formation is classified as a failure; valid success is recognized; missing, malformed and conflicting reports cannot print healthy or produce a pass receipt. Existing correctly classified report families retain their meaning. Test the public triage/receipt path, not only a normalization helper.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/canonical-report-outcome-classification/evidence/receipt.json",
+      "requiredReceipts": [
+        "retained-formation-failure-classified",
+        "supported-success-classified",
+        "unknown-missing-conflicting-evidence-refused",
+        "public-triage-and-receipt-composition",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "owner-and-sequence",
+      "statement": "Owner: existing report producers, classifier and triage adapter. Difficulty: small to medium. Dependency: P0; applies Q1. P0 reconciliation is recorded in the epic. Dependencies are coordination instructions, not an implemented Solver scheduler; diagnosis need not wait for every tooling change."
+    },
+    {
+      "id": "owned-work-1",
+      "statement": "Define the canonical outcome contract for the supported report families and make their boundary conversion explicit. The retained formation FAIL must not enter the rolling-restart classifier as an empty object and become healthy SLOW. Unknown schema, missing verdict and contradictory evidence produce an unjudgeable/error result. Product failure, fixture failure, verifier error, refused execution and missing observations remain distinct."
+    },
+    {
+      "id": "existing-owners-and-evidence",
+      "statement": "The retained v5 formation report at 947fbe658ebb2efe993900b672ded51d5610dbcb carries formationVerdict and standardSummary.scenarios. Trace the actual producer through scripts/triage-distributed-failure.js and its classifier. The scenarios[0]-only interpretation is source evidence; prove the public triage and receipt outcome."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

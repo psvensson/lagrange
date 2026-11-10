@@ -95,7 +95,8 @@ function snapshotTransactionTelemetry(tx, outcome = null) {
     prepareConcurrency: telemetry.prepareConcurrency,
     commitConcurrency: telemetry.commitConcurrency,
     statementCount: telemetry.statementCount,
-    outcome: outcome || telemetry.outcome || tx.status || OUTCOME_ACTIVE,
+    // createTransactionTelemetry starts outcome at ACTIVE; finalize replaces it.
+    outcome: outcome || telemetry.outcome,
   });
 }
 
@@ -107,7 +108,9 @@ function finalizeTransactionTelemetry(coordinator, tx, outcome) {
   tx.telemetry.participantCount = tx.participants instanceof Map ?
     tx.participants.size :
     tx.telemetry.participantCount;
-  tx.telemetry.outcome = outcome || tx.status || OUTCOME_ACTIVE;
+  // The one caller (distributed-transaction-decision-protocol.js) passes the
+  // transaction's status, which the coordinator sets at construction.
+  tx.telemetry.outcome = outcome;
   const snapshot = snapshotTransactionTelemetry(tx, tx.telemetry.outcome);
   const store = ensureTelemetryStore(coordinator);
   store.set(snapshot.transactionId, snapshot);

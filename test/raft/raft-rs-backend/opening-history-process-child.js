@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import {historyDb, openHistory, applicationRows, lifecycle} from './opening-history-native-fixture.js';
 import {setActualCoreEntryObserver} from '../../../src/raft/raft-rs-runtime-owner.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
-import {flushCoverageBeforeKill} from '../../test-helpers/census-pre-kill-flush.js';
+import {flushCoverageBeforeKill} from '../../../scripts/checks/census-pre-kill-flush.js';
 const [file, marker, crashAt] = process.argv.slice(2);
 const db = historyDb(file); let port; const entries = [];
 const receipt = {pid: process.pid, entries, marker};

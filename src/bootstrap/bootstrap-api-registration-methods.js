@@ -1,3 +1,4 @@
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {
   COLUMN,
   HTTP_STATUS,
@@ -6,8 +7,20 @@ import {
 import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from './bootstrap-constants.js';
-import {RAFT_ROLE} from '../raft/constants.js';
 import {installBootstrapApiMethods} from './bootstrap-api-method-installer.js';
+
+// services.raft_role is nullable: a registration without a role records none
+// (null), never an invented FOLLOWER.
+function readRegisteredRaftRole(serviceData) {
+  return readStateField(serviceData[COLUMN.RAFT_ROLE]);
+}
+
+// A registration that states no status is born ACTIVE: the birth state the
+// services.status column declares (NOT NULL DEFAULT 'active').
+function readRegisteredServiceStatus(serviceData) {
+  const status = readStateField(serviceData[COLUMN.STATUS]);
+  return status === STATE_ABSENT ? SERVICE_STATUS.ACTIVE : status;
+}
 
 const bootstrapApiRegistrationMethods = {
   /**
@@ -91,8 +104,8 @@ const bootstrapApiRegistrationMethods = {
       [COLUMN.NODE_ID]: serviceData[COLUMN.NODE_ID],
       [COLUMN.GROUP_ID]: serviceData[COLUMN.GROUP_ID] || null,
       [COLUMN.REPLICA_ID]: serviceData[COLUMN.REPLICA_ID] || serviceId,
-      [COLUMN.RAFT_ROLE]: serviceData[COLUMN.RAFT_ROLE] || RAFT_ROLE.FOLLOWER,
-      [COLUMN.STATUS]: serviceData[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE,
+      [COLUMN.RAFT_ROLE]: readRegisteredRaftRole(serviceData),
+      [COLUMN.STATUS]: readRegisteredServiceStatus(serviceData),
       [COLUMN.ADDRESS]: serviceData[COLUMN.ADDRESS] || null,
     };
   },
@@ -112,8 +125,8 @@ const bootstrapApiRegistrationMethods = {
       [COLUMN.PARTITION_ID]: serviceData[COLUMN.PARTITION_ID] || null,
       [COLUMN.GROUP_ID]: serviceData[COLUMN.GROUP_ID] || null,
       [COLUMN.REPLICA_ID]: serviceData[COLUMN.REPLICA_ID] || serviceId,
-      [COLUMN.RAFT_ROLE]: serviceData[COLUMN.RAFT_ROLE] || RAFT_ROLE.FOLLOWER,
-      [COLUMN.STATUS]: serviceData[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE,
+      [COLUMN.RAFT_ROLE]: readRegisteredRaftRole(serviceData),
+      [COLUMN.STATUS]: readRegisteredServiceStatus(serviceData),
       [COLUMN.ADDRESS]: serviceData[COLUMN.ADDRESS] || null,
       [COLUMN.CREATED_AT]: serviceData[COLUMN.CREATED_AT] || Date.now(),
       // The registrant's canonical lifecycle generation travels with the

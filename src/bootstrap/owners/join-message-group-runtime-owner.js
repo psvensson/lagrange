@@ -4,7 +4,6 @@ import {
   COLUMN,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  STRING,
   TABLES,
 } from '../../constants/index.js';
 
@@ -42,9 +41,8 @@ class JoinMessageGroupRuntimeOwner {
 
     const existingNodeId =
       existingService[COLUMN.NODE_ID] || null;
-    const existingStatus =
-      String(existingService[COLUMN.STATUS] || STRING.UNKNOWN)
-        .toLowerCase();
+    // services.status is NOT NULL on every cache row.
+    const existingStatus = String(existingService[COLUMN.STATUS]).toLowerCase();
     if (!existingNodeId ||
         existingNodeId === this.nodeId ||
         existingStatus !== SERVICE_STATUS.ACTIVE) {

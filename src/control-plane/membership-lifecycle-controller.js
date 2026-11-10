@@ -49,11 +49,12 @@ function normalizeString(value, fallback = '') {
   return typeof value === 'string' ? value.trim() || fallback : fallback;
 }
 
-function normalizeTimestamp(value, fallback) {
+function resolveIntentTimestamp(value, now = Date.now) {
   if (Number.isFinite(value)) {
     return Math.floor(value);
   }
-  return fallback;
+  const clockValue = now();
+  return Number.isFinite(clockValue) ? Math.floor(clockValue) : Date.now();
 }
 
 function normalizeJoinStartupMode(startupMode) {
@@ -138,7 +139,7 @@ export function resolveMembershipJoinIntentType(options = {}) {
     MEMBERSHIP_LIFECYCLE_INTENT.JOIN_ADMISSION;
 }
 
-function buildJoinIntent(options = {}) {
+function buildJoinIntent(options = {}, now = Date.now) {
   const startupMode = normalizeJoinStartupMode(options.startupMode);
   const membershipOwnerOutcome = buildMembershipOwnerOutcome({
     membershipOwnerOutcome: options.membershipOwnerOutcome,
@@ -156,7 +157,7 @@ function buildJoinIntent(options = {}) {
     joinSessionId: normalizeString(options.joinSessionId),
     nodeAddress: normalizeString(options.nodeAddress),
     seedNodeAddress: normalizeString(options.seedNodeAddress),
-    requestedAt: normalizeTimestamp(options.requestedAt, Date.now()),
+    requestedAt: resolveIntentTimestamp(options.requestedAt, now),
     reasonCode: normalizeString(
       options.reasonCode,
       intentType === MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY ?
@@ -183,12 +184,12 @@ function buildJoinIntent(options = {}) {
   };
 }
 
-function buildDrainIntent(options = {}) {
+function buildDrainIntent(options = {}, now = Date.now) {
   const reasonCode = normalizeString(options.reasonCode, 'node_draining');
   return {
     intentType: MEMBERSHIP_LIFECYCLE_INTENT.DRAIN,
     nodeId: normalizeString(options.nodeId),
-    requestedAt: normalizeTimestamp(options.requestedAt, Date.now()),
+    requestedAt: resolveIntentTimestamp(options.requestedAt, now),
     drainDeadlineMs: Number.isFinite(options.drainDeadlineMs) ?
       Math.floor(options.drainDeadlineMs) :
       null,
@@ -232,8 +233,7 @@ export class MembershipLifecycleController {
       startupMode: options.startupMode || this.startupMode,
       membershipOwnerOutcome:
         options.membershipOwnerOutcome || this.membershipOwnerOutcome,
-      requestedAt: options.requestedAt ?? this.now(),
-    });
+    }, this.now);
     if (this.delegates.onJoinIntent) {
       return this.delegates.onJoinIntent({intent, controller: this});
     }
@@ -244,8 +244,7 @@ export class MembershipLifecycleController {
     const intent = buildDrainIntent({
       ...options,
       nodeId: options.nodeId || this.nodeId,
-      requestedAt: options.requestedAt ?? this.now(),
-    });
+    }, this.now);
     if (this.delegates.onDrainIntent) {
       return this.delegates.onDrainIntent({intent, controller: this});
     }

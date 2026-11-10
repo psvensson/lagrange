@@ -56,16 +56,12 @@ function collectNodeIds(rows, fieldCandidates, predicate = null) {
 }
 
 function isActiveServiceRow(row) {
-  const status = normalizeLowerString(
-    row?.[COLUMN.STATUS] ?? row?.status,
-  );
+  const status = normalizeLowerString(row?.[COLUMN.STATUS]);
   return status === LOCAL_STR_ACTIVE;
 }
 
 function isActiveEndpointRow(row) {
-  const status = normalizeLowerString(
-    row?.[COLUMN.STATUS] ?? row?.status,
-  );
+  const status = normalizeLowerString(row?.[COLUMN.STATUS]);
   return status === LOCAL_STR_ACTIVE || status === null;
 }
 
@@ -136,9 +132,7 @@ function evaluatePartitionReplicaTopology(options = {}) {
         if (requiresAddress && hasUsableAddress(row) !== true) {
           return false;
         }
-        return normalizeLowerString(
-          row?.[COLUMN.RAFT_ROLE] ?? row?.raft_role ?? row?.raftRole,
-        ) === 'leader';
+        return normalizeLowerString(row?.[COLUMN.RAFT_ROLE]) === 'leader';
       },
     ),
   );

@@ -1,3 +1,5 @@
+import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {readUpperStateField} from '../utils/state-field-read.js';
 import {
   REPLICA_INVENTORY_EFFECTIVE_VIEW,
   effectiveReplicaCountAfterOperations,
@@ -68,11 +70,7 @@ function operationType(operation) {
 }
 
 function operationStep(operation) {
-  return String(
-    operation?.workflowStep ||
-    operation?.workflow_step ||
-    '',
-  ).trim().toUpperCase();
+  return readUpperStateField(readOperationRecordWorkflowStep(operation));
 }
 
 function requiresExclusiveProgress(operation) {

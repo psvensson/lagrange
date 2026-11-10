@@ -1,3 +1,4 @@
+import {readStateField} from './utils/state-field-read.js';
 import {AdminWebSocketAPI} from './admin/admin-websocket-api.js';
 import {ADMIN_DEFAULT} from './admin/admin-constants.js';
 import {ConfigurationManager} from './config/configuration-manager.js';
@@ -243,10 +244,9 @@ function reportStartupRuntimeHandoff(options) {
   options.logger.info(ENTRYPOINT_LOG_MSG.STARTUP_RUNTIME_HANDOFF, {
     nodeId: options.nodeId,
     startupBranch: options.startupBranch,
-    startupPhase:
-      options.startupOwner?.phase ||
-      options.bootstrapAPI?.bootstrapService?.phase ||
-      null,
+    // The startup branch's owner (nodeJoiningService or bootstrapService,
+    // lagrange-runtime-startup.js) owns the phase; no owner is STATE_ABSENT.
+    startupPhase: readStateField(options.startupOwner?.phase),
     bootstrapApiHasSqlQueryEngine:
       Boolean(options.bootstrapAPI?.sqlQueryEngine),
     bootstrapApiHasMessageRouter:
@@ -269,6 +269,15 @@ function hydrateBootstrapApiRuntime(options) {
   options.bootstrapAPI.replicaHandler = options.replicaHandler;
   options.bootstrapAPI.epochManager = options.epochManager;
   options.bootstrapAPI.messageRouter = options.messageRouter;
+  if (options.cdcIntegrationService) {
+    options.bootstrapAPI.setCdcIntegrationService(
+      options.cdcIntegrationService,
+    );
+  }
+  if (options.controlPlaneReadinessService) {
+    options.bootstrapAPI.controlPlaneReadinessService =
+      options.controlPlaneReadinessService;
+  }
   if (Object.hasOwn(options, LOCAL_STR_STARTUPRECOVERYCOORDINATOR)) {
     options.bootstrapAPI.startupRecoveryCoordinator =
       options.startupRecoveryCoordinator || null;
@@ -669,14 +678,10 @@ async function shutdownAdminRuntimeComposition(adminRuntime) {
 }
 
 export {
-  createAdminAPIWithLiveQuery,
   createReadinessStateWithDiagnostics,
-  createServiceDiagnosticsProvider,
-  createSqlCallbackWasmExecutor,
   createSqlRuntimeComposition,
   hydrateBootstrapApiRuntime,
   isEarlyAdminSqlEngineEnabled,
-  resolvePartitionServiceByPartitionId,
   resolveSystemCacheHandles,
   reportStartupRuntimeHandoff,
   shutdownAdminRuntimeComposition,
