@@ -2,6 +2,7 @@
 // answers {metric, target, done, measuring, evidence, reason}; a probe that
 // cannot measure says so (measuring: false) and is never done.
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -28,6 +29,13 @@ const LOG_LINE_SEPARATOR = '\n';
 const REPORT_SUFFIX = '.report.json';
 const RECEIPT_SCHEMA = 'test-receipt/1';
 const RECEIPT_PASS = 'pass';
+const HASH_ALGORITHM = 'sha256';
+const HASH_ENCODING = 'hex';
+const LIST_SEPARATOR = ', ';
+const STATUS_APPROVED = 'approved';
+const STATUS_VALID = 'valid';
+const RECEIPT_DATA_MISSING = 'receipt data missing';
+const REASON_VALID = 'valid';
 const DEFAULT_CONSECUTIVE = 1;
 const NON_MEASURING_SKIP_BUFFER = 6;
 const METRIC_PRIORITY = 'priority';
@@ -89,6 +97,59 @@ function safeReadJson(file) {
 
 // --- test-receipt -----------------------------------------------------------
 
+function fileDigestMismatch(root, testFile, expectedDigest) {
+  const fullPath = path.resolve(root, testFile);
+  try {
+    if (!fs.existsSync(fullPath)) {
+      return `${testFile} (missing)`;
+    }
+    const currentDigest = crypto.createHash(HASH_ALGORITHM)
+      .update(fs.readFileSync(fullPath)).digest(HASH_ENCODING);
+    if (currentDigest !== expectedDigest) {
+      return `${testFile} (digest mismatch: expected ${expectedDigest}, got ${currentDigest})`;
+    }
+  } catch (err) {
+    return `${testFile} (unreadable: ${err.message})`;
+  }
+  return null;
+}
+
+function checkApplicabilityApproval(applicability, diverged) {
+  if (!applicability || typeof applicability !== 'object') {
+    return `witness files diverged without applicability record: ${diverged.join(LIST_SEPARATOR)}`;
+  }
+  const status = applicability.status || applicability.verdict;
+  const isApproved = status === STATUS_APPROVED || status === STATUS_VALID;
+  const hasReason = typeof applicability.reason === 'string' && applicability.reason.trim().length > 0;
+  if (!isApproved || !hasReason) {
+    return `witness files diverged and applicability record is not approved: ${diverged.join(LIST_SEPARATOR)}`;
+  }
+  return null;
+}
+
+function evidenceApplicabilityProblems(root, data) {
+  if (!data || typeof data !== 'object') return [RECEIPT_DATA_MISSING];
+  if (!data.testFileDigests || typeof data.testFileDigests !== 'object') return [];
+
+  const diverged = Object.entries(data.testFileDigests)
+    .map(([testFile, expectedDigest]) => fileDigestMismatch(root, testFile, expectedDigest))
+    .filter(Boolean);
+
+  if (diverged.length === 0) return [];
+  const applicability = data.applicability || data.evidenceApplicability;
+  const problem = checkApplicabilityApproval(applicability, diverged);
+  return problem ? [problem] : [];
+}
+
+function validateEvidenceApplicability(root, data) {
+  const problems = evidenceApplicabilityProblems(root, data);
+  const valid = problems.length === 0;
+  return {
+    valid,
+    reason: valid ? REASON_VALID : problems.join(LIST_SEPARATOR),
+  };
+}
+
 function measureTestReceipt(root, args) {
   const file = path.resolve(root, String(args.file || ''));
   const data = safeReadJson(file);
@@ -97,6 +158,10 @@ function measureTestReceipt(root, args) {
   }
   if (!Array.isArray(data.receipts) || data.receipts.length === 0) {
     return notMeasuring(REASON.RECEIPT_EMPTY, args.file);
+  }
+  const problems = evidenceApplicabilityProblems(root, data);
+  if (problems.length > 0) {
+    return notMeasuring(problems.join(LIST_SEPARATOR), args.file);
   }
   const required = Array.isArray(args.requiredReceipts) ? args.requiredReceipts : [];
   if (required.length === 0) return notMeasuring(REASON.REQUIRED_MISSING, args.file);
@@ -432,5 +497,6 @@ function measure(root, doneWhen) {
 
 export {
   NON_MEASURING_VERDICT_REASONS, REASON as PROBE_REASON, measure,
-  reportSampleIsNonMeasuring, requiredProofArtifacts, scenarioHarnessProbe,
+  measureTestReceipt, reportSampleIsNonMeasuring, requiredProofArtifacts,
+  scenarioHarnessProbe, validateEvidenceApplicability,
 };

@@ -64,5 +64,6 @@
   "verificationTemplates": [
     "owner-interaction",
     "harness-fidelity"
-  ]
+  ],
+  "sealedAt": "2c3600351d85f4eef2d732f027d22aa5f368b789"
 }

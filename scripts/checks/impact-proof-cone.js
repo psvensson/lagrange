@@ -77,6 +77,7 @@ import {
 import {
   buildImpactContractRegistry,
   contractsForChangedPath,
+  evaluateCoupledPairGuards,
   expandContractTests,
 } from './impact-contract-registry.js';
 import {
@@ -422,6 +423,8 @@ function buildBoundedCone(root, args) {
   }
   collectContractEdges(contractIndexes, changedContracts, classified,
     classifiedTests, selected, rationale, addReason);
+  collectCoupledPairWitnesses(contractIndexes, sortedChanged, classified,
+    selected, rationale, addReason);
   const changedTestCount = collectChangedTests(sortedChanged, classified, selected, addReason);
   const safetyFloorCount = collectSafetyFloor(root, classified, selected, addReason);
 
@@ -478,6 +481,22 @@ function collectContractEdges(contractIndexes, changedContracts, classified,
         }
         addReason(testPath, `${REASON_SEMANTIC_CONTRACT}:${contract}`);
       }
+    }
+  }
+}
+
+function collectCoupledPairWitnesses(contractIndexes, sortedChanged, classified,
+  selected, rationale, addReason) {
+  if (!contractIndexes?.coupledPairs) return;
+  const evaluated = evaluateCoupledPairGuards(contractIndexes, sortedChanged);
+  if (!evaluated?.selectedWitnessTests) return;
+  for (const testPath of evaluated.selectedWitnessTests) {
+    if (classified[testPath]) {
+      selected.add(testPath);
+      if (!arrayIncludes(rationale[SELECTION_CONTRACT], testPath)) {
+        rationale[SELECTION_CONTRACT].push(testPath);
+      }
+      addReason(testPath, `${REASON_SEMANTIC_CONTRACT}:coupled-pair`);
     }
   }
 }

@@ -1,0 +1,67 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "content-bound-review-and-interaction-proof",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/content-bound-review-and-interaction-proof.test.js": "973a3966a04c127659fb90d17523839b66a05dc5990155e42d23431ee3a451a7"
+  },
+  "generatedAt": "2026-11-10T07:38:51.603Z",
+  "receipts": [
+    {
+      "id": "reviewed-content-mutation-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^mutating a reviewed src/ file after note --verification --verdict approve is refused by land$\" test/scripts/content-bound-review-and-interaction-proof.test.js",
+      "detail": "A post-review modification to src/ causes land to refuse with a content-binding digest mismatch.",
+      "testFile": "test/scripts/content-bound-review-and-interaction-proof.test.js"
+    },
+    {
+      "id": "proof-input-mutation-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^mutating a witness test, fixture, contract registry, or proof script after note --verification --verdict approve is refused by land$\" test/scripts/content-bound-review-and-interaction-proof.test.js",
+      "detail": "A post-review modification to proof inputs causes land to refuse with a content-binding digest mismatch.",
+      "testFile": "test/scripts/content-bound-review-and-interaction-proof.test.js"
+    },
+    {
+      "id": "matching-candidate-accepted",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an unmutated candidate whose digest matches the review binding is accepted by land$\" test/scripts/content-bound-review-and-interaction-proof.test.js",
+      "detail": "An unmutated candidate matching the reviewed candidate digest is accepted by land.",
+      "testFile": "test/scripts/content-bound-review-and-interaction-proof.test.js"
+    },
+    {
+      "id": "append-only-review-binding-stable",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^appending the verification entry to log.ndjson does not invalidate the candidate digest$\" test/scripts/content-bound-review-and-interaction-proof.test.js",
+      "detail": "Appending the verification entry to log.ndjson and writing receipt.json does not alter the candidate digest.",
+      "testFile": "test/scripts/content-bound-review-and-interaction-proof.test.js"
+    },
+    {
+      "id": "one-sided-interaction-witness-selected",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^changing only the producer OR only the consumer of a registered coupled pair selects the paired witnessTests$\" test/scripts/content-bound-review-and-interaction-proof.test.js",
+      "detail": "Modifying either the producer or the consumer of a coupled pair selects its witness tests in proof cone.",
+      "testFile": "test/scripts/content-bound-review-and-interaction-proof.test.js"
+    },
+    {
+      "id": "missing-registration-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^touching an endpoint of a coupled pair with missing witnessTests or incomplete contract edges fails closed even on a single-file change$\" test/scripts/content-bound-review-and-interaction-proof.test.js",
+      "detail": "Touching an endpoint of a coupled pair with missing registration fails closed even on a single-file change.",
+      "testFile": "test/scripts/content-bound-review-and-interaction-proof.test.js"
+    },
+    {
+      "id": "evidence-reuse-applicability",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^reusing a receipt whose testFileDigests or applicability record does not match the current witness file is refused, while a valid applicability record / matching digest is accepted$\" test/scripts/content-bound-review-and-interaction-proof.test.js",
+      "detail": "Receipt reuse with diverged witness files is refused without a valid applicability record, and accepted with one.",
+      "testFile": "test/scripts/content-bound-review-and-interaction-proof.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/content-bound-review-and-interaction-proof.js --check-verification",
+      "detail": "An approving subagent verification binding the reviewed candidate, verified through the solve store owner.",
+      "testFile": null
+    }
+  ]
+}

@@ -190,7 +190,7 @@ function untriggeredPairProblems(loaded, paths, triggeredPrefixes) {
       prefix.startsWith(`${TRIGGERED_PAIR_PREFIX}${pair.id} `))) continue;
     const contracted = paths.filter((changedPath) =>
       contractsForChangedPath(loaded.registry, changedPath).includes(pair.contract));
-    if (contracted.length < 2) continue;
+    if (contracted.length < 1) continue;
     problems.push(`${TRIGGERED_PAIR_PREFIX}${pair.id}${INCOMPLETE_EDGE}` +
       pair.problems.join(PROBLEM_JOIN_SEPARATOR));
   }
@@ -199,7 +199,7 @@ function untriggeredPairProblems(loaded, paths, triggeredPrefixes) {
 
 function coupledPairProblems(root, paths) {
   const registryChanged = paths.includes(PROOF_CONE_CONTRACTS_PATH);
-  if (paths.length < 2 && !registryChanged) return [];
+  if (paths.length < 1 && !registryChanged) return [];
   if (!fs.existsSync(path.join(root, PROOF_CONE_CONTRACTS_PATH))) return [];
   const loaded = loadImpactContractRegistry(root);
   if (!loaded.registry) {
@@ -210,11 +210,9 @@ function coupledPairProblems(root, paths) {
     return [loaded.problems.join(PROBLEM_JOIN_SEPARATOR)];
   }
   const evaluated = evaluateCoupledPairGuards(loaded.registry, paths);
-  const triggeredPrefixes = evaluated.triggeredPairs.map((pair) =>
-    `${TRIGGERED_PAIR_PREFIX}${pair.id} is triggered `);
-  const problems = evaluated.problems.filter((message) =>
-    triggeredPrefixes.some((prefix) => message.startsWith(prefix)));
-  return [...new Set([...problems, ...untriggeredPairProblems(loaded, paths, triggeredPrefixes)])];
+  const touchedPairProblems = evaluated.problems.filter((message) =>
+    message.startsWith(TRIGGERED_PAIR_PREFIX) && message.includes(INCOMPLETE_EDGE));
+  return [...new Set([...touchedPairProblems, ...untriggeredPairProblems(loaded, paths, [])])];
 }
 
 // --- epic scope -------------------------------------------------------------------

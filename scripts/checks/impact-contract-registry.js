@@ -541,10 +541,10 @@ function loadPrimaryTests(root, problems) {
     for (let index = 0; index < manifestProblems.length; index += 1) {
       appendProblem(problems, manifestProblems[index]);
     }
-    return new SetConstructor();
   }
   const primaryTests = new SetConstructor();
-  const testPaths = objectKeys(loaded.manifest.classes || {});
+  const testPaths = isRecord(loaded.manifest?.classes) ?
+    objectKeys(loaded.manifest.classes) : [];
   for (let index = 0; index < testPaths.length; index += 1) {
     setAdd(primaryTests, testPaths[index]);
   }
@@ -673,6 +673,7 @@ export function evaluateCoupledPairGuards(registry, changedPaths) {
   }
   const problems = copyArrayByIndex(registry.problems);
   const triggeredPairs = [];
+  const selectedWitnessTests = new SetConstructor();
   for (let pairIndex = 0;
     pairIndex < registry.coupledPairs.length;
     pairIndex += 1) {
@@ -692,27 +693,45 @@ export function evaluateCoupledPairGuards(registry, changedPaths) {
             impactPathSpecMatches(owner, changedPath))),
       });
     }
-    if (!arrayEvery(pair.endpoints, (endpoint) =>
-      matchedPaths[endpoint.id].length > 0)) continue;
-    const triggered = {
-      id: pair.id,
-      leftEndpointId: pair.endpoints[0].id,
-      rightEndpointId: pair.endpoints[1].id,
-      endpointIds: arrayMap(pair.endpoints, (endpoint) => endpoint.id),
-      matchedPaths,
-      contract: pair.contract,
-      witnessTests: copyArrayByIndex(pair.witnessTests),
-    };
-    appendOwnArrayValue(triggeredPairs, triggered);
+    const anyEndpointTouched = arraySome(pair.endpoints, (endpoint) =>
+      matchedPaths[endpoint.id].length > 0);
+    if (!anyEndpointTouched) continue;
+
+    if (arrayIsArray(pair.witnessTests)) {
+      for (let wIndex = 0; wIndex < pair.witnessTests.length; wIndex += 1) {
+        setAdd(selectedWitnessTests, pair.witnessTests[wIndex]);
+      }
+    }
+
     if (pair.problems.length > 0) {
       appendProblem(
         problems,
-        `coupled pair ${pair.id} is triggered without a complete contract ` +
-        `edge: ${joinArrayByIndex(pair.problems, PROBLEM_JOIN_SEPARATOR)}`,
+        `coupled pair ${pair.id} has an incomplete contract edge: ` +
+        `${joinArrayByIndex(pair.problems, PROBLEM_JOIN_SEPARATOR)}`,
       );
     }
+
+    const allEndpointsTouched = arrayEvery(pair.endpoints, (endpoint) =>
+      matchedPaths[endpoint.id].length > 0);
+    if (allEndpointsTouched) {
+      const triggered = {
+        id: pair.id,
+        leftEndpointId: pair.endpoints[0].id,
+        rightEndpointId: pair.endpoints[1].id,
+        endpointIds: arrayMap(pair.endpoints, (endpoint) => endpoint.id),
+        matchedPaths,
+        contract: pair.contract,
+        witnessTests: copyArrayByIndex(pair.witnessTests),
+      };
+      appendOwnArrayValue(triggeredPairs, triggered);
+    }
   }
-  return {problems, triggeredPairs};
+  const sortedWitnessTests = [];
+  setForEach(selectedWitnessTests, (testPath) =>
+    appendOwnArrayValue(sortedWitnessTests, testPath));
+  arraySort(sortedWitnessTests);
+
+  return {problems, triggeredPairs, selectedWitnessTests: sortedWitnessTests};
 }
 
 function main() {

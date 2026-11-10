@@ -3,6 +3,7 @@
 // the CLI prints it. Nothing here writes outside solve/quests/<id>/ except
 // `land`, which commits.
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -162,6 +163,8 @@ const MESSAGE = Object.freeze({
   VERIFICATION_MISSING: 'src/ changes need a verification entry (verifier subagent:<id>)',
   VERIFICATION_STALE: 'src/ changes need a verification entry newer than the last attempt',
   VERIFICATION_NOT_APPROVED: 'src/ changes need an approving verification',
+  VERIFICATION_CONTENT_MISMATCH:
+    'verification candidate digest does not match the reviewed candidate (reviewed content or proof input was mutated after verification)',
   LAND_REFUSED: 'land refused:',
   PRE_COMMIT_REFUSED:
     'land: the commit-time checks refused the staged tree before any test ran:',
@@ -178,6 +181,8 @@ const VERIFICATION_PROBLEMS = Object.freeze({
   [VERDICT_STATE.REJECTED]: MESSAGE.VERIFICATION_NOT_APPROVED,
   [VERDICT_STATE.APPROVED]: null,
 });
+const CANDIDATE_HASH_ALGORITHM = 'sha256';
+const CANDIDATE_HASH_ENCODING = 'hex';
 
 class SolveError extends Error {}
 
@@ -270,6 +275,70 @@ function pathsOutsideQuest(root, id) {
     !filePath.startsWith(`${SOLVE_PREFIX}${QUESTS_SUBDIR}/${id}/`));
 }
 
+function computeCandidateDigest(root, quest) {
+  const hash = crypto.createHash(CANDIDATE_HASH_ALGORITHM);
+  const head = headSha(root);
+  hash.update(`head:${head}\n`);
+
+  const changed = pathsOutsideQuest(root, quest.id);
+  for (const filePath of changed) {
+    const fullPath = path.resolve(root, filePath);
+    try {
+      if (fs.existsSync(fullPath) && fs.lstatSync(fullPath).isFile()) {
+        const fileBytes = fs.readFileSync(fullPath);
+        const fileHash = crypto.createHash(CANDIDATE_HASH_ALGORITHM)
+          .update(fileBytes).digest(CANDIDATE_HASH_ENCODING);
+        hash.update(`file:${filePath}:${fileHash}\n`);
+      } else {
+        hash.update(`deleted:${filePath}\n`);
+      }
+    } catch {
+      hash.update(`unreadable:${filePath}\n`);
+    }
+  }
+
+  const receiptRelative = quest?.doneWhen?.args?.file;
+  if (receiptRelative) {
+    const receiptPath = path.resolve(root, receiptRelative);
+    try {
+      if (fs.existsSync(receiptPath)) {
+        const data = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
+        const witnessFiles = new Set();
+        if (data.testFileDigests && typeof data.testFileDigests === 'object') {
+          for (const testFile of Object.keys(data.testFileDigests)) {
+            witnessFiles.add(testFile);
+          }
+        }
+        if (Array.isArray(data.receipts)) {
+          for (const r of data.receipts) {
+            if (r.testFile) witnessFiles.add(r.testFile);
+          }
+        }
+        for (const witnessFile of [...witnessFiles].sort()) {
+          const fullWitnessPath = path.resolve(root, witnessFile);
+          try {
+            if (fs.existsSync(fullWitnessPath) && fs.lstatSync(fullWitnessPath).isFile()) {
+              const fileBytes = fs.readFileSync(fullWitnessPath);
+              const fileHash = crypto.createHash(CANDIDATE_HASH_ALGORITHM)
+                .update(fileBytes).digest(CANDIDATE_HASH_ENCODING);
+              hash.update(`witness:${witnessFile}:${fileHash}\n`);
+            } else {
+              hash.update(`witness-missing:${witnessFile}\n`);
+            }
+          } catch {
+            hash.update(`witness-unreadable:${witnessFile}\n`);
+          }
+        }
+      }
+    } catch {
+      // receipt not readable yet
+    }
+  }
+
+  hash.update(`doneWhen:${JSON.stringify(quest?.doneWhen || {})}\n`);
+  return hash.digest(CANDIDATE_HASH_ENCODING);
+}
+
 function defined(fields) {
   return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined));
 }
@@ -310,6 +379,10 @@ function note(root, options) {
   if (entry.type === ENTRY_TYPE.ATTEMPT) {
     entry.at = headSha(root);
     Object.assign(entry, changeSetRecord(pathsOutsideQuest(root, quest.id)));
+  }
+  if (entry.type === ENTRY_TYPE.VERIFICATION) {
+    entry.at = headSha(root);
+    entry.candidateDigest = computeCandidateDigest(root, quest);
   }
   return {id: quest.id, entry: appendEntry(root, quest.id, entry)};
 }
@@ -367,12 +440,19 @@ function verdictState(state) {
   return verdictOf(last) === VERDICT.APPROVE ? VERDICT_STATE.APPROVED : VERDICT_STATE.REJECTED;
 }
 
-function verificationProblems(state, paths) {
+function verificationProblems(state, paths, currentCandidateDigest) {
+  const last = state.lastVerification;
   const verdict = verdictState(state);
   const problems = [];
   if (verdict === VERDICT_STATE.REJECTED) problems.push(MESSAGE.REJECTION_STANDS);
   const required = requiresVerification(paths) ? VERIFICATION_PROBLEMS[verdict] : null;
   if (required) problems.push(required);
+  if (last?.candidateDigest && currentCandidateDigest &&
+      last.candidateDigest !== currentCandidateDigest) {
+    problems.push(
+      `${MESSAGE.VERIFICATION_CONTENT_MISMATCH}: expected ${last.candidateDigest}, got ${currentCandidateDigest}`,
+    );
+  }
   return problems;
 }
 
@@ -817,7 +897,8 @@ function land(root, options) {
       `${measured.target} (${measured.reason})`);
   }
   const paths = pathsOutsideQuest(root, quest.id);
-  problems.push(...verificationProblems(state, paths));
+  const currentCandidateDigest = computeCandidateDigest(root, quest);
+  problems.push(...verificationProblems(state, paths, currentCandidateDigest));
   problems.push(...altitudeProblems(state));
   problems.push(...epicScopeProblems(quest, epic, paths));
   problems.push(...coupledPairProblems(root, paths));
@@ -1051,8 +1132,9 @@ function board(root) {
 export {
   ALTITUDE_BUDGET, LAND_LOCK_FILENAME, LAND_LOCK_STALE_MS, LAND_LOCK_TIMEOUT_REFUSAL,
   LANDING_MARKER_ENV, LANDING_MARKER_VALUE, NEXT_OWNER,
-  SolveError, acquireLandingLock, board, evidenceAdd, evidenceDelete, evidenceRelocate,
-  inspectPidIdentity, isKernelThreadPid, isLockStale, isPidAlive, land, landChangeProofEnvironment,
-  note, probe, readPidNamespace, readPidStartTime, requiresInventoryRefresh, runChangeProof,
-  stageGeneratedArtifacts, start, tryCreateLandingLock,
+  SolveError, acquireLandingLock, board, computeCandidateDigest, evidenceAdd,
+  evidenceDelete, evidenceRelocate, inspectPidIdentity, isKernelThreadPid, isLockStale,
+  isPidAlive, land, landChangeProofEnvironment, note, probe, readPidNamespace,
+  readPidStartTime, requiresInventoryRefresh, runChangeProof, stageGeneratedArtifacts,
+  start, tryCreateLandingLock, verificationProblems,
 };

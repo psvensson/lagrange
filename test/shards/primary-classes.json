@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2274,
+    "unit": 2275,
     "integration": 124,
     "bootstrap": 222,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2627,
-  "digest": "fnv1a32-befa720b",
+  "censusSize": 2628,
+  "digest": "fnv1a32-269c60ed",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2278,6 +2278,7 @@
     "test/scripts/code-navigability-budget.test.js": "unit",
     "test/scripts/code-navigability-detectors.test.js": "unit",
     "test/scripts/complexity-ratchet-closure.test.js": "unit",
+    "test/scripts/content-bound-review-and-interaction-proof.test.js": "unit",
     "test/scripts/dependency-policy-authority.test.js": "unit",
     "test/scripts/dependency-policy-classification.test.js": "unit",
     "test/scripts/dependency-policy-producer-binding.test.js": "unit",
