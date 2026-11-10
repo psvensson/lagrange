@@ -12,7 +12,7 @@
     "distributed-harness": 214,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 279,
+    "placement-rebalance": 280,
     "query-sql": 193,
     "release-packaging": 15,
     "runtime-primitives": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2633,
-  "digest": "fnv1a32-edacc54b",
+  "censusSize": 2634,
+  "digest": "fnv1a32-08b93d2d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b068d7c8",
+  "observationDigest": "fnv1a32-f09f52f3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1913,6 +1913,7 @@
     "test/rebalancer/formation-liveness-dependency-serial-planner.test.js": "placement-rebalance",
     "test/rebalancer/formation-placement-target-evidence-absent.test.js": "placement-rebalance",
     "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js": "placement-rebalance",
+    "test/rebalancer/formation-spread-progress-at-cause.test.js": "placement-rebalance",
     "test/rebalancer/in-flight-aware-drain-phase-replace-credit.test.js": "placement-rebalance",
     "test/rebalancer/in-flight-aware-replica-count.test.js": "placement-rebalance",
     "test/rebalancer/interlock-skip-label-fidelity.test.js": "placement-rebalance",
@@ -16583,6 +16584,14 @@
         "scripts",
         "scripts/checks",
         "test"
+      ]
+    },
+    "test/rebalancer/formation-spread-progress-at-cause.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/rebalancer/interlock-skip-label-fidelity.test.js": {

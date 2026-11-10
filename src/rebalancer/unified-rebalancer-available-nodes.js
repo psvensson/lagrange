@@ -379,8 +379,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       priorityRecoveryActive:
         this.isGlobalPriorityControlPlaneRecoveryActive(),
       formationReleaseHandoffActive:
-        startupAuthority?.formationReleaseHandoff?.active === true &&
-        startupAuthority?.formationReleaseHandoff?.releaseAuthorized === true,
+        startupAuthority?.formationReleaseHandoff?.active === true,
     }) === FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION.CURE_TARGET;
   }
 

@@ -797,13 +797,15 @@ class MovePlannerMoveCalculationMethods {
       // over-creation cap, which consults the same serialized-REPLACE state.
       // Non-critical partitions and genuine provisioning (count-increasing
       // ADD) are untouched.
-      let replaceCount = serializeCriticalReplace ?
+      const replaceCountBeforeSpreadCure = serializeCriticalReplace ?
         Math.min(
           naturalReplaceCount,
           Math.max(0, 1 - inFlightReplaceCount),
         ) :
         naturalReplaceCount;
-      replaceCount = applyPrioritySpreadExpandCure({
+      const replaceSerializationCapActive =
+        Boolean(serializeCriticalReplace && replaceCountBeforeSpreadCure < naturalReplaceCount);
+      const replaceCount = applyPrioritySpreadExpandCure({
         partitionId: this.entityId,
         inventory,
         surplusVoterCount,
@@ -813,7 +815,7 @@ class MovePlannerMoveCalculationMethods {
         deficitEffectiveCount,
         inFlightReplaceCount,
         naturalReplaceCount,
-        replaceCount,
+        replaceCount: replaceCountBeforeSpreadCure,
         addMoves,
         candidateRemoves,
         resolvePartitionRow,
@@ -842,8 +844,7 @@ class MovePlannerMoveCalculationMethods {
       // (only suppress when not under count target) so genuine deficit fill
       // (active < target) is never blocked by an in-flight REPLACE.
       if (
-        serializeCriticalReplace &&
-        replaceCount < naturalReplaceCount &&
+        replaceSerializationCapActive &&
         deficitEffectiveCount >= targetReplicaCount
       ) {
         const retainedAddMoves = addMoves.filter(
@@ -856,7 +857,7 @@ class MovePlannerMoveCalculationMethods {
             targetReplicaCount,
             inFlightReplaceCount,
             naturalReplaceCount,
-            replaceCount,
+            replaceCount: replaceCountBeforeSpreadCure,
             deferredAddCount,
             replaceSerializationCap: true,
           });

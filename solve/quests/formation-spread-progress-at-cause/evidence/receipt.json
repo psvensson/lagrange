@@ -1,0 +1,53 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "formation-spread-progress-at-cause",
+  "status": "pass",
+  "testFileDigests": {
+    "test/rebalancer/formation-spread-progress-at-cause.test.js": "dc8cdc53f613b0cdc9267f24d74df46d7b23df7487f6b058caf83216e8159eca"
+  },
+  "generatedAt": "2026-11-10T10:36:33.461Z",
+  "receipts": [
+    {
+      "id": "first-causal-divergence",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^first-causal-divergence: .*$\" test/rebalancer/formation-spread-progress-at-cause.test.js",
+      "detail": "Reproduces the exact first causal divergence where 4 joining nodes stall on node_ready_lease_incomplete / incomplete priority spread (spreadGap > 0) and proves the causal mechanism.",
+      "testFile": "test/rebalancer/formation-spread-progress-at-cause.test.js"
+    },
+    {
+      "id": "historical-failure-family-witnesses",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^historical-failure-family-witnesses: .*$\" test/rebalancer/formation-spread-progress-at-cause.test.js",
+      "detail": "Covers the 4 historical failure families (formation-voter-surplus-promotion-deferral-livelock, formation-ledger-spread-completion-self-move-interlock-deadlock, over-target-cap-spread-cure-wipe, formation-release-handoff-closure-v4).",
+      "testFile": "test/rebalancer/formation-spread-progress-at-cause.test.js"
+    },
+    {
+      "id": "composed-safety-and-finite-failure-progress",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^composed-safety-and-finite-failure-progress: .*$\" test/rebalancer/formation-spread-progress-at-cause.test.js",
+      "detail": "The same composed witness preserves surplus/concurrent-operation safety (never exceeding over-target cap or dropping below quorum) and progresses after finite failure clears.",
+      "testFile": "test/rebalancer/formation-spread-progress-at-cause.test.js"
+    },
+    {
+      "id": "meaningful-negative-control",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^meaningful-negative-control: .*$\" test/rebalancer/formation-spread-progress-at-cause.test.js",
+      "detail": "Proves that when the blocking condition genuinely persists (e.g. target node remains unreachable or voter surplus cannot be safely promoted), safety holds and premature release/unsafe move is refused.",
+      "testFile": "test/rebalancer/formation-spread-progress-at-cause.test.js"
+    },
+    {
+      "id": "unchanged-bounds-and-owned-wake",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^unchanged-bounds-and-owned-wake: .*$\" test/rebalancer/formation-spread-progress-at-cause.test.js",
+      "detail": "Proves that progress occurs within unchanged timeout/deadline bounds via an owned canonical wake (no widened deadlines, no polling fallback, no harness state injection).",
+      "testFile": "test/rebalancer/formation-spread-progress-at-cause.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/formation-spread-progress-at-cause.js --check-verification",
+      "detail": "An approving subagent verification newer than the last attempt, read through the solve store owner.",
+      "testFile": null
+    }
+  ]
+}

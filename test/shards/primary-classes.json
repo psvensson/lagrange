@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2279,
+    "unit": 2280,
     "integration": 124,
     "bootstrap": 223,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2633,
-  "digest": "fnv1a32-7457080c",
+  "censusSize": 2634,
+  "digest": "fnv1a32-05eef723",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1894,6 +1894,7 @@
     "test/rebalancer/formation-liveness-dependency-serial-planner.test.js": "unit",
     "test/rebalancer/formation-placement-target-evidence-absent.test.js": "unit",
     "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js": "unit",
+    "test/rebalancer/formation-spread-progress-at-cause.test.js": "unit",
     "test/rebalancer/in-flight-aware-drain-phase-replace-credit.test.js": "unit",
     "test/rebalancer/in-flight-aware-replica-count.test.js": "unit",
     "test/rebalancer/interlock-skip-label-fidelity.test.js": "unit",
