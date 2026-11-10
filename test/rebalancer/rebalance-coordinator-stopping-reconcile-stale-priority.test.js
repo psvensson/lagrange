@@ -475,7 +475,10 @@ test('RebalanceCoordinator retires remote-owned stale priority ADD ' +
     enableTimeouts: false,
     messageRouter: initiatedDeliveryRouter(deliveries),
     controlPlaneReadinessService:
-      buildPriorityDrainReadinessService(TEST_PARTITION_ID),
+      buildPriorityDrainOwnerUnavailableReadinessService(
+        TEST_PARTITION_ID,
+        PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+      ),
     cacheData: {
       services: [
         {

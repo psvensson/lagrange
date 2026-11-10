@@ -28,7 +28,7 @@
   "censusSize": 2605,
   "digest": "fnv1a32-6ddfcebd",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c1b5abd3",
+  "observationDigest": "fnv1a32-a38ac8f6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -5089,7 +5089,8 @@
     "test/control-plane/read-model-contract.test.js": {
       "files": [
         "src/rebalancer/rebalance-coordinator.js",
-        "src/rebalancer/rebalancer-constants.js"
+        "src/rebalancer/rebalancer-constants.js",
+        "src/rebalancer/storage-admission-constants.js"
       ]
     },
     "test/control-plane/readiness-admission-transitions-observed.test.js": {
@@ -7724,8 +7725,14 @@
       "files": [
         "Dockerfile",
         "docs/benchmarks/cloud-reproduction-guide.md",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js"
+      ],
+      "directories": [
+        "src"
       ],
       "env": [
         "PATH"

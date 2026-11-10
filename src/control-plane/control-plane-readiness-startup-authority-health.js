@@ -1,4 +1,5 @@
 import {ControlPlaneReadinessPublicationPlanningResolution} from './control-plane-readiness-publication-planning-resolution.js';
+import {CONTROL_PLANE_READ_PURPOSE} from './control-plane-readiness-constants.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
 import {installControlPlaneReadinessFormationReleaseMethods} from
   './control-plane-readiness-formation-release-methods.js';
@@ -637,7 +638,11 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
       // The single-row owner read's unavailability outcome is its typed
       // throw (NodesOwner.getNode), which the caller receives: the dispatch
       // path defers on it. Its answer is a row or null, never a failure.
-      const result = await this.nodesOwner.getNode(nodeId, options);
+      const result = await this.nodesOwner.getNode(nodeId, {
+        ...options,
+        purpose:
+          options.purpose || CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
+      });
       return unwrapRowReadResult(result);
     }
     if (

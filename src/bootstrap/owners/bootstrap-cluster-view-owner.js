@@ -2,8 +2,10 @@ import {ConfigurationManager} from '../../config/configuration-manager.js';
 import {assertCritical} from '../../utils/assert.js';
 import {
   SERVICE_STATUS,
+  SERVICE_TYPE,
   TABLES,
 } from '../../constants/index.js';
+import {RAFT_ROLE} from '../../raft/constants.js';
 import {CONFIG_CATEGORY} from '../../config/config-constants.js';
 import {
   resolveCanonicalActiveNodeIds,
@@ -40,9 +42,157 @@ function filterReadyNodeIds(candidateNodeIds, nodeIds) {
   );
 }
 
+function isServingNodeRow(node) {
+  const rawStatus = node?.status ?? node?.node_state ?? null;
+  return rawStatus === null ||
+    String(rawStatus).toLowerCase() === SERVICE_STATUS.ACTIVE;
+}
+
+function resolveLocalPartitionService(owner, partitionId) {
+  const partitionServices =
+    owner.delegates.getPartitionServices?.() ||
+    owner.api?.partitionServices ||
+    null;
+  if (partitionServices instanceof Map && partitionServices.has(partitionId)) {
+    return partitionServices.get(partitionId);
+  }
+  const handler =
+    owner.api?.partitionHandler ||
+    owner.api?.replicaHandler ||
+    owner.delegates.getPartitionHandler?.() ||
+    owner.delegates.getReplicaHandler?.() ||
+    null;
+  if (!handler) {
+    return null;
+  }
+  if (typeof handler.getPartitionService === 'function') {
+    return handler.getPartitionService(partitionId);
+  }
+  if (handler.partitionServices instanceof Map) {
+    return handler.partitionServices.get(partitionId) || null;
+  }
+  return null;
+}
+
+function evaluateLocalPartitionStatus(owner, partitionId, majorityCount) {
+  const localService = resolveLocalPartitionService(owner, partitionId);
+  if (!localService) {
+    return {hosted: false, quorumOk: true, isLeader: false};
+  }
+  const role = typeof localService.getRole === 'function' ?
+    localService.getRole() :
+    localService.role;
+  const isLeader = localService.isLeader === true ||
+    String(role || '').toLowerCase() === RAFT_ROLE.LEADER ||
+    (typeof localService.isLeaderReplica === 'function' &&
+      localService.isLeaderReplica());
+  const status = typeof localService.getStatus === 'function' ?
+    localService.getStatus() :
+    localService.status;
+  if (status && typeof status === 'object') {
+    if (status.hasQuorum === false || status.quorum === false) {
+      return {hosted: true, quorumOk: false, isLeader};
+    }
+    if (
+      Number.isFinite(status.activeReplicaCount) &&
+      status.activeReplicaCount < majorityCount
+    ) {
+      return {hosted: true, quorumOk: false, isLeader};
+    }
+  }
+  return {hosted: true, quorumOk: true, isLeader};
+}
+
+function collectPartitionServiceInventory(services, nodeRowById, nonServingNodeIds) {
+  const activeServicesByPartition = new Map();
+  const activeLeaderByPartition = new Map();
+  const partitionHasRoleMetadata = new Set();
+  for (const service of services) {
+    const partitionId = service?.partition_id || service?.partitionId || null;
+    if (!partitionId) {
+      continue;
+    }
+    const serviceType = service?.service_type || service?.serviceType || null;
+    if (
+      serviceType !== null &&
+      String(serviceType).toLowerCase() !== SERVICE_TYPE.PARTITION
+    ) {
+      continue;
+    }
+    const rawRole = service?.raft_role ?? service?.raftRole ?? service?.role;
+    if (
+      rawRole !== undefined ||
+      service?.is_leader !== undefined ||
+      service?.isLeader !== undefined
+    ) {
+      partitionHasRoleMetadata.add(partitionId);
+    }
+    const isActiveStatus =
+      String(service?.status || '').toLowerCase() === SERVICE_STATUS.ACTIVE;
+    const serviceNodeId = extractCandidateNodeId(service);
+    const isNodeServing = !serviceNodeId ?
+      nodeRowById.size === 0 :
+      (nodeRowById.size === 0 ||
+        (nodeRowById.has(serviceNodeId) &&
+          !nonServingNodeIds.has(serviceNodeId)));
+    if (!isActiveStatus || !isNodeServing) {
+      continue;
+    }
+    activeServicesByPartition.set(
+      partitionId,
+      (activeServicesByPartition.get(partitionId) || 0) + 1,
+    );
+    if (
+      String(rawRole || '').toLowerCase() === RAFT_ROLE.LEADER ||
+      service?.is_leader === true ||
+      service?.isLeader === true
+    ) {
+      activeLeaderByPartition.set(partitionId, serviceNodeId || true);
+    }
+  }
+  return {
+    activeServicesByPartition,
+    activeLeaderByPartition,
+    partitionHasRoleMetadata,
+  };
+}
+
+function hasPartitionLeaderAuthority(
+  partition,
+  partitionId,
+  nodeRowById,
+  nonServingNodeIds,
+  inventory,
+  localStatus,
+) {
+  const hasLeaderField =
+    Object.hasOwn(partition, 'leader_node_id') ||
+    Object.hasOwn(partition, 'leaderNodeId');
+  const rawLeaderNodeId =
+    partition.leader_node_id ?? partition.leaderNodeId ?? null;
+  const hasValidPartitionLeader =
+    typeof rawLeaderNodeId === 'string' &&
+    rawLeaderNodeId.length > 0 &&
+    (nodeRowById.size === 0 ||
+      (nodeRowById.has(rawLeaderNodeId) &&
+        !nonServingNodeIds.has(rawLeaderNodeId)));
+  const hasActiveServiceLeader = Boolean(
+    inventory.activeLeaderByPartition.get(partitionId) ||
+    localStatus.isLeader,
+  );
+  const requiresExplicitLeader =
+    hasLeaderField ||
+    inventory.partitionHasRoleMetadata.has(partitionId) ||
+    localStatus.hosted;
+  return requiresExplicitLeader ?
+    (hasValidPartitionLeader || hasActiveServiceLeader) :
+    true;
+}
+
 class BootstrapClusterViewOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
+    this.api = options.api || null;
   }
 
   getSystemTableCache() {
@@ -122,6 +272,7 @@ class BootstrapClusterViewOwner {
       publicationRows: this.getPublicationRows(),
       requirePublishedMembership: options.requirePublishedMembership === true,
       readinessByNodeId,
+      nowMs: Date.now(),
     });
 
     const seedNodeId = this.getSeedNodeId();
@@ -266,6 +417,100 @@ class BootstrapClusterViewOwner {
       messageGroupCount: messageGroups.length,
       messageGroups,
       timestamp: Date.now(),
+    };
+  }
+
+  getManagementClusterSnapshot() {
+    const systemTableCache = this.getSystemTableCache();
+    if (!systemTableCache || typeof systemTableCache.getAll !== 'function') {
+      return null;
+    }
+    const allNodes = systemTableCache.getAll(TABLES.NODES) || [];
+    const nodeIds = [];
+    const nodeRowById = new Map();
+    const nonServingNodeIds = new Set();
+    for (const node of allNodes) {
+      const nodeId = extractCandidateNodeId(node);
+      if (typeof nodeId !== 'string' || nodeId.length === 0) {
+        continue;
+      }
+      if (!nodeRowById.has(nodeId)) {
+        nodeIds.push(nodeId);
+      }
+      nodeRowById.set(nodeId, node);
+      if (!isServingNodeRow(node)) {
+        nonServingNodeIds.add(nodeId);
+      }
+    }
+    if (nodeIds.length === 0) {
+      return null;
+    }
+    const readyNodeIdSet = new Set(this.getReadyNodes());
+    const readyNodeCount = nodeIds.filter(
+      (nodeId) => readyNodeIdSet.has(nodeId),
+    ).length;
+    const partitions = systemTableCache.getAll(TABLES.PARTITIONS) || [];
+    const services = systemTableCache.getAll(TABLES.SERVICES) || [];
+    const inventory = collectPartitionServiceInventory(
+      services,
+      nodeRowById,
+      nonServingNodeIds,
+    );
+    let underReplicatedPartitionCount = 0;
+    let hasPartitionQuorum = Array.isArray(partitions) && partitions.length > 0;
+    let validPartitionCount = 0;
+    for (const partition of partitions) {
+      const partitionId =
+        partition?.partition_id || partition?.partitionId || null;
+      const targetCount = Number(
+        partition?.replica_count ?? partition?.replicaCount ?? 0,
+      );
+      if (!partitionId || !Number.isFinite(targetCount) || targetCount <= 0) {
+        hasPartitionQuorum = false;
+        underReplicatedPartitionCount += 1;
+        continue;
+      }
+      validPartitionCount += 1;
+      const activeCount =
+        inventory.activeServicesByPartition.get(partitionId) || 0;
+      if (activeCount < targetCount) {
+        underReplicatedPartitionCount += 1;
+      }
+      const majorityCount = Math.floor(targetCount / 2) + 1;
+      const localStatus = evaluateLocalPartitionStatus(
+        this,
+        partitionId,
+        majorityCount,
+      );
+      const hasLeader = hasPartitionLeaderAuthority(
+        partition,
+        partitionId,
+        nodeRowById,
+        nonServingNodeIds,
+        inventory,
+        localStatus,
+      );
+      if (
+        activeCount < majorityCount ||
+        !localStatus.quorumOk ||
+        !hasLeader
+      ) {
+        hasPartitionQuorum = false;
+      }
+    }
+    if (validPartitionCount === 0) {
+      hasPartitionQuorum = false;
+    }
+    return {
+      nodeCount: nodeIds.length,
+      readyNodeCount,
+      underReplicatedPartitionCount,
+      nodeIds,
+      ready:
+        readyNodeCount === nodeIds.length &&
+        underReplicatedPartitionCount === 0 &&
+        hasPartitionQuorum,
+      hasPartitionQuorum,
     };
   }
 }

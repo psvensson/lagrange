@@ -173,11 +173,49 @@ export function buildLocalAuthoritativeObservation(
   });
 }
 
+function resolveActiveTableVersionFromCache(cache, tableName) {
+  if (!cache || !tableName) {
+    return null;
+  }
+  const directRow = typeof cache.get === 'function' ?
+    cache.get(SYSTEM_TABLE_NAME.TABLES, tableName) :
+    null;
+  const tableRow = directRow || (typeof cache.getAll === 'function' ?
+    (cache.getAll(SYSTEM_TABLE_NAME.TABLES) || []).find((row) =>
+      (row?.table_name ?? row?.tableName) === tableName ||
+      (row?.table_id ?? row?.tableId) === tableName) :
+    null);
+  const activeVersion = Number(
+    tableRow?.active_partition_version ?? tableRow?.activePartitionVersion,
+  );
+  return Number.isInteger(activeVersion) && activeVersion > 0 ?
+    activeVersion :
+    null;
+}
+
 function resolvePartitionRowsFromCache(cache, tableName) {
+  const activeVersion = resolveActiveTableVersionFromCache(cache, tableName);
   const partitionPredicate = (row) => {
     const rowTableName = row?.table_name ?? row?.tableName ?? null;
     const rowTableId = row?.table_id ?? row?.tableId ?? null;
-    return rowTableName === tableName || rowTableId === tableName;
+    if (rowTableName !== tableName && rowTableId !== tableName) {
+      return false;
+    }
+    if (row?.state != null && String(row.state).toUpperCase() !== 'NORMAL') {
+      return false;
+    }
+    const rowVersion = Number(
+      row?.partition_version ?? row?.partitionVersion,
+    );
+    if (
+      activeVersion !== null &&
+      Number.isInteger(rowVersion) &&
+      rowVersion > 0 &&
+      rowVersion !== activeVersion
+    ) {
+      return false;
+    }
+    return true;
   };
   return typeof cache.filter === 'function' ?
     cache.filter(SYSTEM_TABLE_NAME.PARTITIONS, partitionPredicate) :

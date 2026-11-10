@@ -1,7 +1,9 @@
 import {ControlPlaneReadinessStartupAuthorityHealth} from './control-plane-readiness-startup-authority-health.js';
+import {CONTROL_PLANE_READ_PURPOSE} from './control-plane-readiness-constants.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
-import {isAuthoritativeControlPlaneRowReadSuccessful} from
-  './control-plane-system-table-gateway.js';
+import {
+  isAuthoritativeControlPlaneRowReadSuccessful,
+} from './control-plane-system-table-gateway.js';
 import {NODE_LIVENESS_SEMANTIC_STATE} from
   './node-liveness-semantic-projection-owner.js';
 
@@ -37,7 +39,11 @@ class ControlPlaneReadinessNodeServiceRows extends
       // rows" - collapsed to [], it made every node look missing to the
       // publication-planning evaluation and alternated the shared liveness
       // projection and the readiness feedback (fix-f4).
-      const result = await this.nodesOwner.listNodes(options);
+      const result = await this.nodesOwner.listNodes({
+        ...options,
+        purpose:
+          options.purpose || CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
+      });
       if (isAuthoritativeControlPlaneRowReadSuccessful(result)) {
         return Array.isArray(result?.rows) ? result.rows : [];
       }
@@ -87,7 +93,11 @@ class ControlPlaneReadinessNodeServiceRows extends
     ) {
       return null;
     }
-    const result = await this.servicesOwner.listServices(options);
+    const result = await this.servicesOwner.listServices({
+      ...options,
+      purpose:
+        options.purpose || CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
+    });
     if (!isAuthoritativeControlPlaneRowReadSuccessful(result)) return null;
     return Array.isArray(result?.rows) ? result.rows : [];
   }

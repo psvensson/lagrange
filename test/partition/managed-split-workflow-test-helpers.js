@@ -212,6 +212,8 @@ function buildWorkflow(options = {}) {
     resolveSplitChildLeaderRoutingEvidence:
       options.resolveSplitChildLeaderRoutingEvidence ||
       (() => ({leaderNodeId: 'node-a', routableNodeIds: ['node-a', 'node-b']})),
+    repairSplitChildLeaderRoutingEvidence:
+      options.repairSplitChildLeaderRoutingEvidence || null,
     resolveRoutingWaitPollIntervalMs:
       options.resolveRoutingWaitPollIntervalMs || null,
     delay: options.delay || null,

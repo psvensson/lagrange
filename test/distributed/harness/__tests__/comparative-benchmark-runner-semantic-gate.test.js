@@ -7,7 +7,10 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {createSemanticGateStage} from '../comparative-benchmark-semantic-gate.js';
+import {
+  createSemanticGateStage,
+  runTiDbSemanticGate,
+} from '../comparative-benchmark-semantic-gate.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
 import {
   createContainerLedger,
@@ -16,6 +19,7 @@ import {
 import {
   arrayFilter,
   arrayMap,
+  stringIncludes,
   stringTrim,
 } from '../real-product-captured-intrinsics.js';
 
@@ -70,28 +74,133 @@ test('Lagrange: fresh formation per case, restart of the endpoint container only
   assert.equal(result.gate.status, 'passed');
 });
 
-test('PostgreSQL resets through its adapter; TiDB keeps its own proof harness', async () => {
+test('PostgreSQL resets through its adapter; unknown systems record semantic-gate-not-run',
+  async () => {
+    const ledger = createContainerLedger();
+    const {sshRun} = createScriptedSsh([[/docker image inspect/u,
+      JSON.stringify({RepoDigests: [], Created: '2026-10-30T10:00:00Z',
+        Config: {Labels: null}, RootFS: {Layers: ['sha256:' + '7'.repeat(64)]}})],
+    ...dockerRules(ledger)]);
+    let redeploys = 0;
+    const stage = createSemanticGateStage({journey: async ({beforeCase}) => {
+      await beforeCase({caseId: 'a'});
+      await beforeCase({caseId: 'b'});
+      return {status: 'incomplete'};
+    }, sshRun, opts: {}, evidenceDirOf: () => '/tmp/ev', now: () => 0,
+    redeploy: async () => {
+      redeploys += 1;
+    }});
+    const pg = await stage({run: {runId: 'r', system: 'postgresql'}, manifest: {campaignId: 'c'},
+      deployment: armOf(ledger, 0)});
+    assert.equal(redeploys, 0);
+    assert.deepEqual(arrayMap(pg.events, (event) => event.kind), ['dataset-reset']);
+    const unknown = await stage({run: {runId: 'r', system: 'cockroachdb'},
+      manifest: {campaignId: 'c'}, deployment: armOf(ledger, 0)});
+    assert.equal(unknown.gate, null);
+    assert.equal(unknown.events[0].kind, 'semantic-gate-not-run');
+  });
+
+function applyFakeTiDbUpdate(state, sql) {
+  const target = state.staged || state.rows;
+  const updates = [
+    [/UPDATE semantic_gate_probe SET balance = 850/iu, 1, {id: 1, balance: 850, note: 'paid'}],
+    [/UPDATE semantic_gate_probe SET balance = 1150/iu, 2, {id: 2, balance: 1150, note: 'credited'}],
+    [/UPDATE semantic_gate_probe SET balance = 0/iu, 1, {id: 1, balance: 0, note: 'zero'}],
+  ];
+  for (const [pattern, id, row] of updates) {
+    if (pattern.test(sql)) {
+      target.set(id, row);
+      state.dirty = true;
+      return true;
+    }
+  }
+  return false;
+}
+
+function createFakeTiDbFactory({violateIsolation = false} = {}) {
+  const rows = new Map([[1, {id: 1, balance: 1000, note: 'seed-1'}],
+    [2, {id: 2, balance: 1000, note: 'seed-2'}]]);
+  return async () => {
+    const state = {rows, snapshot: null, staged: null, dirty: false};
+    return {
+      query: async (sql) => {
+        if (/^BEGIN$/iu.test(sql)) {
+          state.snapshot = new Map(arrayMap([...rows.entries()], ([k, v]) => [k, {...v}]));
+          state.staged = new Map(arrayMap([...rows.entries()], ([k, v]) => [k, {...v}]));
+          state.dirty = false;
+          return [[]];
+        }
+        if (/^COMMIT$/iu.test(sql)) {
+          if (state.staged && state.dirty) {
+            for (const [k, v] of state.staged.entries()) rows.set(k, {...v});
+          }
+          state.snapshot = null;
+          state.staged = null;
+          state.dirty = false;
+          return [[]];
+        }
+        if (/^ROLLBACK$/iu.test(sql)) {
+          state.snapshot = null;
+          state.staged = null;
+          state.dirty = false;
+          return [[]];
+        }
+        if (applyFakeTiDbUpdate(state, sql)) return [[]];
+        if (/SELECT balance FROM semantic_gate_probe WHERE id = 1/iu.test(sql)) {
+          const view = !violateIsolation && state.snapshot ? state.snapshot : rows;
+          return [[{balance: view.get(1).balance}]];
+        }
+        if (/SELECT id, balance/iu.test(sql)) {
+          return [[{...rows.get(1)}, {...rows.get(2)}]];
+        }
+        return [[]];
+      },
+      end: async () => {},
+    };
+  };
+}
+
+test('TiDB semantic gate verifies repeatable-read isolation, rollback atomicity, and remote ' +
+  'loadGeneratorHost execution', async () => {
   const ledger = createContainerLedger();
   const {sshRun} = createScriptedSsh([[/docker image inspect/u,
     JSON.stringify({RepoDigests: [], Created: '2026-10-30T10:00:00Z',
-      Config: {Labels: null}, RootFS: {Layers: ['sha256:' + '7'.repeat(64)]}})], ...dockerRules(ledger)]);
-  let redeploys = 0;
-  const stage = createSemanticGateStage({journey: async ({beforeCase}) => {
-    await beforeCase({caseId: 'a'});
-    await beforeCase({caseId: 'b'});
-    return {status: 'incomplete'};
-  }, sshRun, opts: {}, evidenceDirOf: () => '/tmp/ev', now: () => 0,
-  redeploy: async () => {
-    redeploys += 1;
-  }});
-  const pg = await stage({run: {runId: 'r', system: 'postgresql'}, manifest: {campaignId: 'c'},
-    deployment: armOf(ledger, 0)});
-  assert.equal(redeploys, 0);
-  assert.deepEqual(arrayMap(pg.events, (event) => event.kind), ['dataset-reset']);
-  const tidb = await stage({run: {runId: 'r', system: 'tidb-tikv'}, manifest: {campaignId: 'c'},
-    deployment: armOf(ledger, 0)});
-  assert.equal(tidb.gate, null);
-  assert.equal(tidb.events[0].kind, 'semantic-gate-not-run');
+      Config: {Labels: null}, RootFS: {Layers: ['sha256:' + '7'.repeat(64)]}})],
+  ...dockerRules(ledger)]);
+  const deployment = armOf(ledger, 0);
+  const passingStage = createSemanticGateStage({journey: async () => ({status: 'passed'}),
+    sshRun, opts: {}, createMysqlConnection: createFakeTiDbFactory(),
+    evidenceDirOf: () => null, now: () => 0, redeploy: async () => deployment});
+  const passed = await passingStage({run: {runId: 'r-tidb', system: 'tidb-tikv'},
+    manifest: {campaignId: 'c'}, deployment});
+  assert.equal(passed.gate.status, 'passed');
+  assert.equal(passed.gate.binding.containerId, deployment.endpoint.containerId);
+  assert.equal(passed.gate.failed.length, 0);
+  assert.equal(passed.gate.missing.length, 0);
+  assert.ok(passed.gate.passed.length > 0);
+
+  const failingGate = await runTiDbSemanticGate({
+    connection: {endpoint: {host: '10.0.0.1', port: 4000}, credentials: {user: 'root'}},
+    binding: passed.gate.binding, evidenceDir: null, persistentStorage: false,
+    restartProduct: null, sshRun, opts: {}, loadGeneratorHost: null,
+    createMysqlConnection: createFakeTiDbFactory({violateIsolation: true}),
+  });
+  assert.equal(failingGate.status, 'failed');
+
+  const remoteSsh = createScriptedSsh([
+    [(command, host) => host === '10.0.0.9' && stringIncludes(command, '--input-type=module'),
+      JSON.stringify({snapshotBefore: 1000, snapshotDuring: 1000,
+        committedBalances: [850, 1150], afterRollbackBalance: 850})],
+    ...dockerRules(ledger),
+  ]);
+  const remoteStage = createSemanticGateStage({journey: async () => ({status: 'passed'}),
+    sshRun: remoteSsh.sshRun, opts: {},
+    loadGeneratorHost: {ip: '10.0.0.9', repoPath: '/srv/repo', nodePath: '/usr/bin/node'},
+    evidenceDirOf: () => null, now: () => 0, redeploy: async () => deployment});
+  const remoteResult = await remoteStage({run: {runId: 'r-tidb-remote', system: 'tidb-tikv'},
+    manifest: {campaignId: 'c'}, deployment});
+  assert.equal(remoteResult.gate.status, 'passed');
+  assert.equal(arrayFilter(remoteSsh.calls, (call) => call.host === '10.0.0.9').length, 1);
 });
 
 // Coordinator decision 4 (2026-11-02): the journey learns whether the arm's

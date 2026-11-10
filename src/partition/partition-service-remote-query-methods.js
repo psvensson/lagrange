@@ -132,11 +132,11 @@ async function executeRemoteQuery(service, payload) {
 }
 
 function remoteQueryAnswer(service, result, readAuthorityWitness) {
-  const success = result?.success !== false;
+  const success = result?.success === true;
   const rowSetComplete = success &&
     Array.isArray(result?.rows) &&
     result?.partial !== true &&
-    result?.rowSetComplete !== false;
+    result?.rowSetComplete === true;
   const answer = {
     success, rows: result.rows, changes: result.changes,
     count: result.count, partitionId: service.partitionId,

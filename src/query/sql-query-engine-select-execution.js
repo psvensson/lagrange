@@ -444,7 +444,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE
             .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC ||
         queryOptions.readAuthority.authoritativeReadMode ===
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_ONLY) ?
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED) ?
         queryOptions.readAuthority :
         null;
     const readAuthority = suppliedReadAuthority ||

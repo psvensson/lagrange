@@ -741,4 +741,78 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
       ws.close();
       await api.shutdown();
     });
+
+  test('AdminWebSocketAPI - load lane awaits readServeEligibility when serveEligibility is unavailable_stale and surfaces committed reason on denial',
+    async (t) => {
+      let readServeEligibilityCount = 0;
+      let serveEligibilityState = {
+        state: 'unavailable',
+        reason: 'unavailable_stale',
+      };
+      let lastMaxCachedAgeMs = null;
+      const cache = createPopulatedCache();
+      const api = new AdminWebSocketAPI({
+        nodeId: 'node-2',
+        systemTableCache: cache,
+        controlPlaneReadinessService: {
+          answerServeEligibility() {
+            return serveEligibilityState;
+          },
+          async readServeEligibility() {
+            readServeEligibilityCount += 1;
+            if (readServeEligibilityCount === 1) {
+              serveEligibilityState = {
+                state: 'ready',
+                decision: 'eligible',
+                reasons: [],
+              };
+            }
+            return serveEligibilityState;
+          },
+          async getNodeReadiness(_nodeId, options = {}) {
+            lastMaxCachedAgeMs = options.maxCachedAgeMs;
+            const eligible =
+              serveEligibilityState?.state === 'ready' &&
+              serveEligibilityState?.decision === 'eligible';
+            return {
+              dimensions: {
+                serveEligible: eligible,
+              },
+              reasons: [],
+              serveEligibility: serveEligibilityState,
+            };
+          },
+        },
+        sqlQueryEngine: {
+          executeRequest: async () => ({
+            success: true,
+            rows: [{count: 1}],
+            count: 1,
+            tableName: 'benchmark_events',
+          }),
+        },
+      });
+
+      await api.assertLoadLaneQueryAdmitted({lane: 'load'});
+      t.equal(
+        readServeEligibilityCount,
+        1,
+        'load lane admission should await readServeEligibility when answerServeEligibility is unavailable_stale',
+      );
+      t.equal(
+        lastMaxCachedAgeMs,
+        0,
+        'post-refresh readiness lookup should bypass cached snapshots via maxCachedAgeMs=0',
+      );
+
+      serveEligibilityState = {
+        state: 'unavailable',
+        reason: 'committed_read_failed',
+      };
+      await t.rejects(
+        () => api.assertLoadLaneQueryAdmitted({lane: 'load'}),
+        /reasons=committed_read_failed/,
+        'blocked load lane admission should surface committed serveEligibility reason when projection reasons are empty',
+      );
+    });
 }

@@ -894,3 +894,81 @@ test('registered dependent release retains delivered control refusal after curre
       assert.equal(answer.controlReason, null);
     });
   }, undefined, {remoteControl: true}));
+
+test('idempotent conf-change advancing membershipGenerationIndex without ConfState change ' +
+  'wakes release recovery, preserves cleanup custody while paused, and re-opens admission', () =>
+  fixture(async ({service, release, create, replace}) => {
+    const initial = await release();
+    assert.equal(initial.outcome, OUTCOME.CUT_OVER, JSON.stringify(initial));
+    const origin = readPartitionWriteOrigin(service.db);
+    assert.notEqual(origin, null);
+    assert.equal(participantCutoverPauseOf(service), null);
+    assert.equal((await service.executeQuery(SQL, ['cleanup-r2', 'cleanup_owned'])).success, true);
+
+    const statusBefore = service.raft.readStatus();
+    const proofBefore = participantReleaseAdmissionOf(service).proof;
+    assert.equal(proofBefore.membershipGenerationIndex, statusBefore.membershipGenerationIndex);
+
+    // Propose an idempotent RemoveNode for an already-absent replica (matching
+    // redriveReplaceSourceRetirement after CDC already removed the replica):
+    // ConfState key stays identical while membershipGenerationIndex advances.
+    const confAnswer = await service.raft.proposeConfChange({
+      transition: 0,
+      changes: [{changeType: 1, nodeId: '607135468826016972'}],
+    });
+    assert.equal(confAnswer?.outcome, 'CORE_OK', JSON.stringify(confAnswer));
+    assert.equal(await waitForCondition(() =>
+      service.raft.readStatus().membershipGenerationIndex >
+        statusBefore.membershipGenerationIndex, 5000, 20), true,
+    'applied idempotent conf-change advances membershipGenerationIndex');
+
+    const statusAfter = service.raft.readStatus();
+    assert.equal(statusAfter.configurationKey, statusBefore.configurationKey,
+      'idempotent RemoveNode leaves configurationKey unchanged');
+    assert.equal(await waitForCondition(() =>
+      participantCutoverPauseOf(service) === null &&
+      participantReleaseAdmissionOf(service).proof?.membershipGenerationIndex ===
+        statusAfter.membershipGenerationIndex, 5000, 20), true,
+    'CONF_CHANGE_APPLIED consensus relay wakes recovery to re-open at the new generation');
+
+    // Also verify an idempotent AddNode for the already-present voter advances
+    // membershipGenerationIndex and wakes recovery to re-open admission.
+    const addAnswer = await service.raft.proposeConfChange({
+      type: 'add-peer',
+      replicaIdentity: service.replicaId,
+      nodeId: service.nodeId,
+    });
+    assert.equal(addAnswer?.outcome, 'CORE_OK', JSON.stringify(addAnswer));
+    assert.equal(await waitForCondition(() =>
+      service.raft.readStatus().membershipGenerationIndex >
+        statusAfter.membershipGenerationIndex &&
+      participantCutoverPauseOf(service) === null &&
+      participantReleaseAdmissionOf(service).proof?.membershipGenerationIndex ===
+        service.raft.readStatus().membershipGenerationIndex, 5000, 20), true,
+    'second idempotent conf-change also wakes recovery and re-opens at the latest generation');
+
+    // Cleanup debt row remains owned across the recutover and can now be released.
+    const cleanupRow = service.db.prepare('SELECT value FROM release_table WHERE id = ?')
+      .get('cleanup-r2');
+    assert.equal(cleanupRow?.value, 'cleanup_owned');
+    assert.equal((await service.executeQuery(
+      'DELETE FROM release_table WHERE id = ? AND value = ?',
+      ['cleanup-r2', 'cleanup_owned'])).success, true);
+    assert.equal(service.db.prepare('SELECT value FROM release_table WHERE id = ?')
+      .get('cleanup-r2'), undefined);
+
+    // Restart and stale-service rejection after the generation advance.
+    await service.shutdown();
+    const restarted = create({bootstrapMembership: durableRecordBootstrap()});
+    replace(restarted);
+    await restarted.initialize();
+    await restarted.raft.campaign();
+    assert.equal(await waitForCondition(() => participantCutoverPauseOf(restarted) === null,
+      5000, 20), true, 'restarted service recovers valid OPEN admission');
+    assert.notEqual(participantCutoverPauseOf(service), null,
+      'retired service object closes on inspection');
+    assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED,
+      'retired service object remains closed');
+    assert.deepEqual(readPartitionWriteOrigin(restarted.db), origin);
+    assert.equal((await restarted.executeQuery(SQL, ['post-restart', 'ok'])).success, true);
+  }));

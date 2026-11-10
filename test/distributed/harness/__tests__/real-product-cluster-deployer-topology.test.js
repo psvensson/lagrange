@@ -199,4 +199,11 @@ test('Lagrange: starts all joining nodes before polling joiner /readyz so 3-node
     assert.ok(thirdNodeStartIndex > 0, 'third lagrange-node container must be started');
     assert.ok(firstJoinerReadyPollIndex > thirdNodeStartIndex,
       'joiner /readyz must not be polled before all joining node containers are started');
+    const factsCalls = calls.filter((call) =>
+      stringIncludes(call.command, ':8080/management/v1/facts'));
+    assert.ok(factsCalls.length > 0, 'must poll /management/v1/facts');
+    for (const call of factsCalls) {
+      assert.match(call.command, /-u 'lagrange-harness-user:lagrange-harness-password'/u,
+        'facts endpoint requires HTTP Basic auth');
+    }
   });

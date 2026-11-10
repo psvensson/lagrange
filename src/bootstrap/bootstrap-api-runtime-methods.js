@@ -570,6 +570,10 @@ function createBootstrapApiRuntimeMethods(options = {}) {
       return this.bootstrapClusterViewOwner.getClusterState();
     },
 
+    getManagementClusterSnapshot() {
+      return this.bootstrapClusterViewOwner.getManagementClusterSnapshot();
+    },
+
     updateNodeStatus(_nodeId, _status) {
       this.logger.error(bootstrapApiLogMsg.UPDATE_NODE_STATUS_UNSUPPORTED);
       throw new Error(bootstrapApiError.UPDATE_NODE_STATUS_UNSUPPORTED);

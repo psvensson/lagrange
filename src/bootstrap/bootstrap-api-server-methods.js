@@ -323,6 +323,7 @@ const bootstrapApiServerMethods = {
   getManagementV1Owner() {
     if (!this.managementV1Owner) {
       this.managementV1Owner = new ManagementV1Owner({
+        getClusterSnapshot: () => this.getManagementClusterSnapshot?.() ?? null,
         ...this.managementAdapters,
         getClusterId: () => this.getClusterId(),
       });

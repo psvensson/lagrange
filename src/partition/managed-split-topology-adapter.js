@@ -66,8 +66,7 @@ class ManagedSplitTopologyAdapter {
   }
 
   isSystemTablePartitionId(partitionId) {
-    return typeof this.sqlQueryEngine?.rebalanceCoordinator
-      ?.isCriticalSystemPartition === LOCAL_STR_FUNCTION &&
+    return Boolean(this.sqlQueryEngine?.rebalanceCoordinator) &&
       classifySystemPartition({partitionId}).systemTable;
   }
 
@@ -230,6 +229,27 @@ class ManagedSplitTopologyAdapter {
         .map((service) => String(service?.node_id ?? service?.nodeId ?? ''))
         .filter((nodeId) => nodeId.length > 0),
     };
+  }
+
+  /**
+   * Request one canonical routing-owner repair when a split child's
+   * leader or serve-routable services are not yet visible locally.
+   * @param {string} partitionId - Child partition ID.
+   * @param {Object} [options] - Repair options.
+   * @return {Promise<boolean>}
+   */
+  repairSplitChildLeaderRoutingEvidence(partitionId, options = {}) {
+    if (
+      typeof this.sqlQueryEngine?.maybeAwaitPartitionRoutingRepair !==
+      LOCAL_STR_FUNCTION
+    ) {
+      return Promise.resolve(false);
+    }
+    return this.sqlQueryEngine.maybeAwaitPartitionRoutingRepair(
+      partitionId,
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      options,
+    );
   }
 
   /**

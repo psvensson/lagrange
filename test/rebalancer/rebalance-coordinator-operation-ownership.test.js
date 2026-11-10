@@ -152,10 +152,18 @@ function withAuthoritativeOperationRows(sqlQueryEngine) {
           sql.includes('operation_id = ?')) {
         const row = trackedOperations.get(params[0]);
         if (row) {
-          return {success: true, rows: [row]};
+          return {success: true, rowSetComplete: true, rows: [row]};
         }
       }
-      const result = await sqlQueryEngine.executeQuery(sql, params, options);
+      const rawResult = await sqlQueryEngine.executeQuery(sql, params, options);
+      const result =
+        rawResult &&
+          rawResult.success === true &&
+          Array.isArray(rawResult.rows) &&
+          rawResult.rowSetComplete === undefined &&
+          rawResult.partial !== true ?
+          {...rawResult, rowSetComplete: true} :
+          rawResult;
       if (result?.success !== false &&
           sql.includes('INSERT INTO replica_operations')) {
         const [

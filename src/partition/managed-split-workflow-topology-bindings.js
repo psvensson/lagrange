@@ -32,6 +32,8 @@ const LOCAL_STR_READCOMMITTEDGROUPMEMBERS = 'readCommittedGroupMembers';
 const LOCAL_STR_OBSERVESYSTEMROWS = 'observeSystemRows';
 const LOCAL_STR_RESOLVESPLITCHILDLEADERROUTINGEVIDENCE =
   'resolveSplitChildLeaderRoutingEvidence';
+const LOCAL_STR_REPAIRSPLITCHILDLEADERROUTINGEVIDENCE =
+  'repairSplitChildLeaderRoutingEvidence';
 const LOCAL_STR_RESOLVEROUTINGWAITPOLLINTERVALMS =
   'resolveRoutingWaitPollIntervalMs';
 const LOCAL_STR_DELAY = 'delay';
@@ -103,6 +105,10 @@ const TOPOLOGY_METHOD_BINDINGS = Object.freeze([
   {
     property: LOCAL_STR_RESOLVESPLITCHILDLEADERROUTINGEVIDENCE,
     fallback: () => () => ({leaderNodeId: '', routableNodeIds: []}),
+  },
+  {
+    property: LOCAL_STR_REPAIRSPLITCHILDLEADERROUTINGEVIDENCE,
+    fallback: () => async () => false,
   },
   {
     property: LOCAL_STR_RESOLVEROUTINGWAITPOLLINTERVALMS,

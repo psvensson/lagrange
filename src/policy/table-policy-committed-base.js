@@ -16,6 +16,8 @@ import {requireConfirmedSingleRowMutation} from
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {POLICY_ERROR_CODE, POLICY_SUBSYSTEM} from './policy-constants.js';
 
+const MAX_COMMITTED_POLICY_FENCES = 256;
+const MAX_SUPERSEDED_POLICY_SNAPSHOTS = 64;
 const TABLE_POLICY_BASE_READ_SQL = 'SELECT * FROM tables WHERE table_id = ?';
 const TABLE_POLICY_BASE_UNAVAILABLE_MESSAGE =
   'The committed table row could not be read as the policy write base';
@@ -29,6 +31,208 @@ const POLICY_MUTATION_CONFIRMATION = Object.freeze({
     message: 'The table policy mutation application is not confirmed'}),
 });
 
+function retireCommittedPolicyFence(service, tableId) {
+  if (!tableId) {
+    return;
+  }
+  service.committedPolicyFences?.delete(tableId);
+  service.supersededSnapshots?.delete(tableId);
+}
+
+function recordCommittedPolicyFence(service, tableId, fenceEntry, snapshots = []) {
+  if (!tableId) {
+    return;
+  }
+  const maxSnapshots = service.maxSupersededPolicySnapshots ||
+    MAX_SUPERSEDED_POLICY_SNAPSHOTS;
+  const maxFences = service.maxCommittedPolicyFences ||
+    MAX_COMMITTED_POLICY_FENCES;
+  const boundedSnapshots = Array.isArray(snapshots) ?
+    snapshots.slice(-maxSnapshots) :
+    [];
+  if (service.supersededSnapshots.has(tableId)) {
+    service.supersededSnapshots.delete(tableId);
+  }
+  while (
+    service.supersededSnapshots.size >= maxSnapshots &&
+    service.supersededSnapshots.size > 0
+  ) {
+    const oldestSnapshotKey = service.supersededSnapshots.keys().next().value;
+    service.supersededSnapshots.delete(oldestSnapshotKey);
+  }
+  service.supersededSnapshots.set(tableId, boundedSnapshots);
+
+  if (service.committedPolicyFences.has(tableId)) {
+    service.committedPolicyFences.delete(tableId);
+  }
+  while (
+    service.committedPolicyFences.size >= maxFences &&
+    service.committedPolicyFences.size > 0
+  ) {
+    const oldestFenceKey = service.committedPolicyFences.keys().next().value;
+    service.committedPolicyFences.delete(oldestFenceKey);
+    service.supersededSnapshots.delete(oldestFenceKey);
+  }
+  service.committedPolicyFences.set(tableId, {
+    ...fenceEntry,
+    supersededSnapshots: boundedSnapshots,
+  });
+}
+
+function isSupersededByCommittedPolicyFence(service, fence, row, tableId = null) {
+  if (!row) {
+    return true;
+  }
+  const rowPolicies = row.table_policies ?? null;
+  const rowUpdatedAt = row.updated_at ?? null;
+  const rowVersion = row.version ?? null;
+  const fenceVersion = fence.version ?? null;
+  if (
+    rowVersion !== null &&
+    fenceVersion !== null &&
+    Number.isFinite(Number(rowVersion)) &&
+    Number.isFinite(Number(fenceVersion))
+  ) {
+    if (Number(rowVersion) < Number(fenceVersion)) {
+      return true;
+    }
+    if (
+      Number(rowVersion) > Number(fenceVersion) ||
+      (rowPolicies === (fence.table_policies ?? null) &&
+        rowUpdatedAt === (fence.updated_at ?? null))
+    ) {
+      return false;
+    }
+  }
+  if (
+    fence.table_policies !== undefined &&
+    rowPolicies === fence.table_policies &&
+    rowUpdatedAt === (fence.updated_at ?? null)
+  ) {
+    return false;
+  }
+  const snapshots =
+    (tableId ? service.supersededSnapshots?.get(tableId) : null) ||
+    fence.supersededSnapshots;
+  if (
+    Array.isArray(snapshots) &&
+    snapshots.some(
+      (snapshot) =>
+        snapshot.table_policies === rowPolicies &&
+        snapshot.updated_at === rowUpdatedAt,
+    )
+  ) {
+    return true;
+  }
+  if (
+    rowVersion !== null &&
+    fenceVersion !== null &&
+    Number.isFinite(Number(rowVersion)) &&
+    Number.isFinite(Number(fenceVersion))
+  ) {
+    return Number(rowVersion) < Number(fenceVersion);
+  }
+  return (
+    Number.isFinite(rowUpdatedAt) &&
+    Number.isFinite(fence.updated_at) &&
+    rowUpdatedAt < fence.updated_at
+  );
+}
+
+function isStaleAgainstCommittedPolicyFence(service, tableId, row) {
+  const fence = service.committedPolicyFences?.get(tableId);
+  if (!fence) {
+    return false;
+  }
+  if (service.isSupersededByCommittedPolicyFence(fence, row, tableId)) {
+    return true;
+  }
+  retireCommittedPolicyFence(service, tableId);
+  return false;
+}
+
+function applyCommittedPolicyFence(service, tableId, row) {
+  const fence = service.committedPolicyFences?.get(tableId);
+  if (!fence || !row) {
+    return row;
+  }
+  const rowVersion = Number(row.version ?? NaN);
+  const fenceVersion = Number(fence.version ?? NaN);
+  if (
+    Number.isFinite(rowVersion) &&
+    Number.isFinite(fenceVersion) &&
+    fenceVersion <= rowVersion &&
+    row.table_policies === undefined
+  ) {
+    retireCommittedPolicyFence(service, tableId);
+    return row;
+  }
+  if (service.isSupersededByCommittedPolicyFence(fence, row, tableId)) {
+    return {
+      ...row,
+      table_policies: fence.table_policies,
+      updated_at: fence.updated_at,
+      ...(fence.version !== undefined ? {version: fence.version} : {}),
+    };
+  }
+  retireCommittedPolicyFence(service, tableId);
+  return row;
+}
+
+function commitPolicyFenceAfterWrite(
+  service,
+  tableId,
+  table,
+  serializedPolicy,
+  updatedAt,
+  updatedStoredPolicy,
+  priorSupersededSnapshots,
+  priorFenceVersion,
+) {
+  const existingFence = service.committedPolicyFences.get(tableId);
+  const priorSnapshot = {
+    table_policies: table?.table_policies ?? null,
+    updated_at: table?.updated_at ?? null,
+  };
+  const supersededSnapshots = existingFence ?
+    [
+      ...priorSupersededSnapshots,
+      {
+        table_policies: existingFence.table_policies,
+        updated_at: existingFence.updated_at,
+      },
+      priorSnapshot,
+    ] :
+    [...priorSupersededSnapshots, priorSnapshot];
+  const nextVersion = Math.max(
+    priorFenceVersion,
+    Number(table?.version ?? 0),
+  ) + 1;
+  service.recordCommittedPolicyFence(
+    tableId,
+    {
+      table_policies: serializedPolicy,
+      updated_at: updatedAt,
+      version: updatedStoredPolicy.version ?? nextVersion,
+    },
+    supersededSnapshots,
+  );
+}
+
+function hasCommittedRowCaughtUpToFence(service, tableId, fence, committed) {
+  if (!committed) {
+    return false;
+  }
+  if (typeof service?.isSupersededByCommittedPolicyFence === 'function') {
+    return !service.isSupersededByCommittedPolicyFence(
+      fence,
+      committed,
+      tableId,
+    );
+  }
+  return !isSupersededByCommittedPolicyFence(service, fence, committed, tableId);
+}
+
 /**
  * @param {Object} service - The TablePolicyService.
  * @param {string} tableId - Table ID.
@@ -37,17 +241,12 @@ const POLICY_MUTATION_CONFIRMATION = Object.freeze({
  *   authority's retryAfterMs.
  */
 async function readCommittedPolicyBase(service, tableId) {
-  const fence = service.committedPolicyFences.get(tableId);
-  if (fence) {
-    return {
-      table_id: tableId,
-      table_policies: fence.table_policies,
-      updated_at: fence.updated_at,
-    };
-  }
+  const fence = service.committedPolicyFences?.get(tableId) ?? null;
   const read = await service.getControlPlaneSystemTableGateway()
     .readAuthoritativeRows(TABLES.TABLES, TABLE_POLICY_BASE_READ_SQL,
-      [tableId], {workClass: PRESSURE_WORK_CLASS.INTERACTIVE});
+      [tableId], {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      });
   if (read?.success !== true || !Array.isArray(read.rows)) {
     const refusal = new Error(TABLE_POLICY_BASE_UNAVAILABLE_MESSAGE);
     refusal.code = POLICY_ERROR_CODE.BASE_UNAVAILABLE;
@@ -55,7 +254,21 @@ async function readCommittedPolicyBase(service, tableId) {
       read.retryAfterMs : null;
     throw refusal;
   }
-  return read.rows[0] ?? null;
+  const committed = read.rows[0] ?? null;
+  if (!fence) {
+    return committed;
+  }
+  if (hasCommittedRowCaughtUpToFence(service, tableId, fence, committed)) {
+    retireCommittedPolicyFence(service, tableId);
+    return committed;
+  }
+  return {
+    ...(committed || {}),
+    table_id: tableId,
+    table_policies: fence.table_policies,
+    updated_at: fence.updated_at,
+    ...(fence.version !== undefined ? {version: fence.version} : {}),
+  };
 }
 
 /**
@@ -90,9 +303,20 @@ async function writePolicyConditionally(service, tableId, base,
     requireConfirmedSingleRowMutation(mutationResult,
       POLICY_MUTATION_CONFIRMATION);
   } catch (refusal) {
-    service.committedPolicyFences.delete(tableId);
+    retireCommittedPolicyFence(service, tableId);
     throw refusal;
   }
 }
 
-export {readCommittedPolicyBase, writePolicyConditionally};
+export {
+  MAX_COMMITTED_POLICY_FENCES,
+  MAX_SUPERSEDED_POLICY_SNAPSHOTS,
+  applyCommittedPolicyFence,
+  commitPolicyFenceAfterWrite,
+  isStaleAgainstCommittedPolicyFence,
+  isSupersededByCommittedPolicyFence,
+  readCommittedPolicyBase,
+  recordCommittedPolicyFence,
+  retireCommittedPolicyFence,
+  writePolicyConditionally,
+};

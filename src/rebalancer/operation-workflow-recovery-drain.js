@@ -22,6 +22,7 @@ const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   PRIORITY_RECOVERY_BLOCKER_REASON,
+  PRIORITY_RECOVERY_COMPLETION_STATE,
   PRIORITY_RECOVERY_OPERATION_DRAIN_ABSENT_SOURCE_STATE_BY_WORKFLOW_STEP,
   PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE,
   PRIORITY_RECOVERY_OPERATION_DRAIN_ADD_TARGET_STATUSES,
@@ -50,12 +51,15 @@ const {
 
 const HAND_BACK_VERDICT_SEPARATOR = '|';
 
-// The drain actions a non-owner may settle: a superseded target, and a
-// completion - except a partition REPLACE's, which its owner completes from
-// committed membership (R-1b hands it back).
-function isRemoteSettleDrainAction(operation, drainAction) {
-  if (drainAction ===
-      OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET) {
+// The drain actions a non-owner may settle only when the recorded owner is
+// unavailable (or excluded from the recovery-eligible cohort for superseded
+// targets): a completion (except a partition REPLACE's, which its owner
+// completes from committed membership via R-1b hand-back) and a stale fail.
+function isOwnerUnavailableRemoteSettleDrainAction(operation, drainAction) {
+  if (
+    drainAction ===
+    OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_DRAIN_STALE
+  ) {
     return true;
   }
   return drainAction ===
@@ -168,40 +172,39 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     );
   }
 
-  isPriorityRecoveryAddOperationDrainTargetSatisfied(operation) {
+  async isPriorityRecoveryAddOperationDrainTargetSatisfied(operation) {
     if (operation?.type !== OperationType.ADD) {
       return false;
     }
     if (
       !this.repository ||
-      typeof this.repository.getObservedReplicaStatusFromCache !==
-        'function'
+      typeof this.repository.getActualReplicaObservation !== 'function'
     ) {
       return false;
     }
-    const observedTargetStatus =
-      this.repository.getObservedReplicaStatusFromCache(
-        operation.replicaId,
-        operation.partitionId,
-        operation.targetNodeId,
-        this.buildObservedTargetReplicaObservationOptions(operation),
-      );
-    return PRIORITY_RECOVERY_OPERATION_DRAIN_ADD_TARGET_STATUSES.has(
-      observedTargetStatus,
+    const observation = await this.repository.getActualReplicaObservation(
+      operation.replicaId,
+      operation.partitionId,
+      operation.targetNodeId,
+      this.buildObservedTargetReplicaObservationOptions(operation),
+    );
+    return (
+      observation?.state === STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED &&
+      PRIORITY_RECOVERY_OPERATION_DRAIN_ADD_TARGET_STATUSES.has(
+        observation?.lifecycleStatus,
+      )
     );
   }
 
-  buildPriorityRecoveryAddOperationDrainSourceSnapshot(
+  async buildPriorityRecoveryAddOperationDrainSourceSnapshot(
     operation,
     completionState,
   ) {
     const completionAccepted =
-      PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATES.has(
-        completionState,
-      );
+      completionState === PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED;
     const targetSatisfied =
       completionAccepted &&
-      this.isPriorityRecoveryAddOperationDrainTargetSatisfied(operation);
+      await this.isPriorityRecoveryAddOperationDrainTargetSatisfied(operation);
     return Object.freeze({
       state: targetSatisfied ?
         PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.NOT_REQUIRED :
@@ -216,8 +219,9 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
    * A remote non-owner settles an intermediate priority ADD whose owner is
    * unavailable when the operation's OWN target replica is read ACTIVE from
    * the authoritative status (the orphan reconciler's evidence): an operation
-   * fact, decided without reading spread. Spread-accepted completions keep
-   * the cache-observed arm above; an available owner completes its own ADD.
+   * fact, decided without reading spread. Converged completions use the
+   * authoritative observation arm above; an available owner completes its own
+   * ADD.
    * @param {Object} operation
    * @param {string} completionState
    * @return {Promise<boolean>}
@@ -228,9 +232,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
   ) {
     if (
       operation?.type !== OperationType.ADD ||
-      PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATES.has(
-        completionState,
-      ) ||
+      completionState === PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED ||
       this.repository.isOperationLocallyOwned(operation) ||
       !this.isPriorityRecoveryDrainOwnerUnavailable(
         this.repository.resolveOperationOwnerNodeId(operation) || null,
@@ -435,18 +437,18 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_LANE_PARKED :
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_OWNER;
     }
-    if (isRemoteSettleDrainAction(operation, drainAction)) {
+    if (
+      drainAction ===
+      OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET
+    ) {
       return (
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_SETTLE_ALLOWED
       );
     }
-    if (
-      drainAction ===
-      OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_DRAIN_STALE
-    ) {
-      // Stale-FAIL settles remotely only against an unavailable owner: an
-      // available owner may merely have deferred visibility (its progress not
-      // yet readable here) and must be woken, not have its work killed.
+    if (isOwnerUnavailableRemoteSettleDrainAction(operation, drainAction)) {
+      // Non-owner drain settlement (completion or stale-FAIL) is permitted
+      // only against an unavailable owner: an available owner owns its
+      // workflow completion and may merely have deferred visibility.
       const ownerNodeId =
         this.repository.resolveOperationOwnerNodeId(operation) || null;
       if (this.isPriorityRecoveryDrainOwnerUnavailable(ownerNodeId, operation)) {
@@ -454,15 +456,6 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
           PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_SETTLE_ALLOWED
         );
       }
-      if (
-        this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) &&
-        this.isDispatchRetryableWorkflowStep(operation)
-      ) {
-        return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE
-          .REMOTE_REARM_REQUIRED;
-      }
-      return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE
-        .REMOTE_OWNER_REQUIRED;
     }
     if (
       this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) &&
@@ -732,7 +725,10 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     }
     if (
       resolvedDrainSnapshot.action !==
-      OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN
+      OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN ||
+      (resolvedDrainSnapshot.ownerAction &&
+        resolvedDrainSnapshot.ownerAction !==
+          PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION.ALLOW_RECONCILE)
     ) {
       return false;
     }

@@ -4,7 +4,14 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {TablePolicyService} from '../../src/policy/table-policy-service.js';
+import {
+  MAX_COMMITTED_POLICY_FENCES,
+  MAX_SUPERSEDED_POLICY_SNAPSHOTS,
+  TablePolicyService,
+} from '../../src/policy/table-policy-service.js';
+import {
+  readCommittedPolicyBase,
+} from '../../src/policy/table-policy-committed-base.js';
 import {NUM, STRING, TYPEOF} from '../../src/constants/index.js';
 import {
   POLICY_AUTHORITY_STATE,
@@ -1042,6 +1049,7 @@ test('TablePolicyService - updateTablePolicy enforces read-your-writes fence ' +
 function committedPolicyGateway(row) {
   const gateway = {
     row: {...row},
+    readOverrideRow: null,
     writes: [],
     committedReads: 0,
     projectionReads: 0,
@@ -1052,8 +1060,9 @@ function committedPolicyGateway(row) {
         return {success: false, error: 'authoritative_row_source_unavailable',
           retryAfterMs: 250};
       }
+      const sourceRow = gateway.readOverrideRow ?? gateway.row;
       return {success: true,
-        rows: params[0] === gateway.row.table_id ? [{...gateway.row}] : []};
+        rows: params[0] === sourceRow.table_id ? [{...sourceRow}] : []};
     },
     async executeRead() {
       gateway.projectionReads += 1;
@@ -1084,18 +1093,26 @@ function policyServiceOver(gateway) {
 }
 
 test('site 6: with the projection paused, consecutive policy updates keep ' +
-  'the committed policy as their base - one committed read, no projection ' +
-  'read, each write conditional on its base', async (t) => {
-  const gateway = committedPolicyGateway(
-    {table_id: 'table-site6', table_policies: null, updated_at: 1000});
+  'the committed policy as their base - reading the committed row each time, ' +
+  'no projection read, each write conditional on its base', async (t) => {
+  const initialRow = {
+    table_id: 'table-site6',
+    table_policies: null,
+    updated_at: 1000,
+  };
+  const gateway = committedPolicyGateway(initialRow);
   const service = policyServiceOver(gateway);
 
   await service.updateTablePolicy('table-site6', {splitTrafficThreshold: 5});
   const afterFirst = {...gateway.row};
+  // Simulate a lagging tables read on the second update so the fence supplies
+  // the committed base until the tables row catches up.
+  gateway.readOverrideRow = {...initialRow};
   await service.updateTablePolicy('table-site6', {mergeStorageThreshold: 1});
+  gateway.readOverrideRow = null;
 
-  t.equal(gateway.committedReads, 1,
-    'only the first update (unknown position) reads the committed row');
+  t.equal(gateway.committedReads, 2,
+    'every update reads the tables row before consulting the fence');
   t.equal(gateway.projectionReads, 0, 'no projection read');
   t.same(gateway.writes[0].whereClause,
     {table_id: 'table-site6', table_policies: null, updated_at: 1000},
@@ -1113,11 +1130,17 @@ test('site 6: with the projection paused, consecutive policy updates keep ' +
 test('site 6: a second writer between policy updates answers a typed ' +
   'conflict, loses no update, and the next update re-reads the committed row',
 async (t) => {
-  const gateway = committedPolicyGateway(
-    {table_id: 'table-site6', table_policies: null, updated_at: 1000});
+  const initialRow = {
+    table_id: 'table-site6',
+    table_policies: null,
+    updated_at: 1000,
+  };
+  const gateway = committedPolicyGateway(initialRow);
   const service = policyServiceOver(gateway);
   await service.updateTablePolicy('table-site6', {splitTrafficThreshold: 5});
-  // Another writer of the shared TABLES row (another node's policy update).
+  // Another writer of the shared TABLES row (another node's policy update)
+  // commits while this node's base read has not yet observed the other write.
+  gateway.readOverrideRow = {...initialRow};
   gateway.row.table_policies = JSON.stringify({splitTrafficThreshold: 7});
   gateway.row.updated_at += 1;
   const otherWriter = {...gateway.row};
@@ -1128,7 +1151,10 @@ async (t) => {
     'the conditional write answers a typed conflict');
   t.same(gateway.row, otherWriter,
     'the other writer\'s committed policy is not overwritten');
+  t.equal(service.committedPolicyFences.has('table-site6'), false,
+    'conflict retires the stale fence');
 
+  gateway.readOverrideRow = null;
   const readsBefore = gateway.committedReads;
   await service.updateTablePolicy('table-site6', {mergeStorageThreshold: 1});
   t.equal(gateway.committedReads, readsBefore + 1,
@@ -1260,3 +1286,170 @@ test('strict policy fact resolution rejects in-flight stale reads across ' +
   );
   t.end();
 });
+
+test('readCommittedPolicyBase reads the tables row first and retires ' +
+  'committedPolicyFences once the tables row catches up to the fenced version',
+async (t) => {
+  const initialRow = {
+    table_id: 'table-retire',
+    table_policies: JSON.stringify({splitTrafficThreshold: 3, version: 1}),
+    updated_at: 1000,
+    version: 1,
+  };
+  const gateway = committedPolicyGateway(initialRow);
+  const service = policyServiceOver(gateway);
+
+  await service.updateTablePolicy('table-retire', {splitTrafficThreshold: 5});
+  const fenced = service.committedPolicyFences.get('table-retire');
+  t.ok(fenced, 'updateTablePolicy records a committed policy fence');
+  t.equal(service.supersededSnapshots.has('table-retire'), true,
+    'updateTablePolicy records superseded snapshots');
+
+  // While the tables read still returns the lagging v1 row, readCommittedPolicyBase
+  // reads the tables row first, preserves the fence, and returns the fenced policy.
+  gateway.readOverrideRow = {...initialRow};
+  const readsBeforeLag = gateway.committedReads;
+  const baseWhileLagging = await readCommittedPolicyBase(
+    service,
+    'table-retire',
+  );
+  t.equal(gateway.committedReads, readsBeforeLag + 1,
+    'readCommittedPolicyBase reads the tables row instead of short-circuiting');
+  t.equal(baseWhileLagging.table_policies, fenced.table_policies,
+    'fenced policy is returned while the tables row lags behind the fence');
+  t.equal(service.committedPolicyFences.has('table-retire'), true,
+    'fence remains active while the tables row lags');
+
+  // Once the tables row catches up to the fenced version/timestamp,
+  // readCommittedPolicyBase retires the fence and returns the committed row.
+  gateway.readOverrideRow = null;
+  const readsBeforeCatchup = gateway.committedReads;
+  const baseAfterCatchup = await readCommittedPolicyBase(
+    service,
+    'table-retire',
+  );
+  t.equal(gateway.committedReads, readsBeforeCatchup + 1,
+    'readCommittedPolicyBase reads the caught-up tables row');
+  t.equal(baseAfterCatchup.table_policies, gateway.row.table_policies,
+    'committed policy from tables row is returned once caught up');
+  t.equal(service.committedPolicyFences.has('table-retire'), false,
+    'committedPolicyFences entry is retired once tables row catches up');
+  t.equal(service.supersededSnapshots.has('table-retire'), false,
+    'supersededSnapshots entry is retired alongside the fence');
+  t.end();
+});
+
+test('applyCommittedPolicyFence, deleteTablePolicy, and clearCache retire ' +
+  'and clean up committedPolicyFences and supersededSnapshots', async (t) => {
+  const gateway = committedPolicyGateway({
+    table_id: 'table-cleanup-1',
+    table_policies: JSON.stringify({splitTrafficThreshold: 3}),
+    updated_at: 1000,
+    version: 1,
+  });
+  const service = policyServiceOver(gateway);
+
+  await service.updateTablePolicy('table-cleanup-1', {splitTrafficThreshold: 5});
+  const fence1 = service.committedPolicyFences.get('table-cleanup-1');
+  t.ok(fence1, 'fence recorded for table-cleanup-1');
+
+  // applyCommittedPolicyFence retires the fence when the row version/timestamp catches up
+  const caughtUpRow = {
+    table_id: 'table-cleanup-1',
+    table_policies: fence1.table_policies,
+    updated_at: fence1.updated_at,
+    version: fence1.version,
+  };
+  const applied = service.applyCommittedPolicyFence(
+    'table-cleanup-1',
+    caughtUpRow,
+  );
+  t.equal(applied, caughtUpRow, 'caught-up row is returned unchanged');
+  t.equal(service.committedPolicyFences.has('table-cleanup-1'), false,
+    'applyCommittedPolicyFence retires fence at caught-up version');
+  t.equal(service.supersededSnapshots.has('table-cleanup-1'), false,
+    'applyCommittedPolicyFence retires supersededSnapshots at caught-up version');
+
+  // deleteTablePolicy removes fence, supersededSnapshots, and cache entries for that table
+  await service.updateTablePolicy('table-cleanup-1', {splitTrafficThreshold: 9});
+  t.equal(service.committedPolicyFences.has('table-cleanup-1'), true);
+  t.equal(service.supersededSnapshots.has('table-cleanup-1'), true);
+  await service.deleteTablePolicy('table-cleanup-1');
+  t.equal(service.committedPolicyFences.has('table-cleanup-1'), false,
+    'deleteTablePolicy deletes committedPolicyFences entry');
+  t.equal(service.supersededSnapshots.has('table-cleanup-1'), false,
+    'deleteTablePolicy deletes supersededSnapshots entry');
+
+  // clearCache clears all fences and supersededSnapshots
+  await service.updateTablePolicy('table-cleanup-1', {splitTrafficThreshold: 11});
+  t.equal(service.committedPolicyFences.size, 1);
+  t.equal(service.supersededSnapshots.size, 1);
+  service.clearCache();
+  t.equal(service.committedPolicyFences.size, 0,
+    'clearCache clears committedPolicyFences');
+  t.equal(service.supersededSnapshots.size, 0,
+    'clearCache clears supersededSnapshots');
+  t.end();
+});
+
+test('committedPolicyFences and supersededSnapshots enforce bounded capacity',
+  async (t) => {
+    const service = new TablePolicyService();
+    const totalTables = MAX_COMMITTED_POLICY_FENCES + 16;
+    const totalSnapshotsPerTable = MAX_SUPERSEDED_POLICY_SNAPSHOTS + 10;
+
+    for (let i = 0; i < totalTables; i += 1) {
+      const tableId = `table-bound-${i}`;
+      const snapshots = [];
+      for (let s = 0; s < totalSnapshotsPerTable; s += 1) {
+        snapshots.push({
+          table_policies: JSON.stringify({splitTrafficThreshold: s}),
+          updated_at: 1000 + s,
+          version: s + 1,
+        });
+      }
+      service.recordCommittedPolicyFence(
+        tableId,
+        {
+          table_policies: JSON.stringify({splitTrafficThreshold: i}),
+          updated_at: 5000 + i,
+          version: totalSnapshotsPerTable + 1,
+        },
+        snapshots,
+      );
+    }
+
+    t.equal(
+      service.committedPolicyFences.size,
+      MAX_COMMITTED_POLICY_FENCES,
+      'committedPolicyFences is bounded to MAX_COMMITTED_POLICY_FENCES',
+    );
+    t.equal(
+      service.supersededSnapshots.size,
+      MAX_SUPERSEDED_POLICY_SNAPSHOTS,
+      'supersededSnapshots map is bounded to MAX_SUPERSEDED_POLICY_SNAPSHOTS',
+    );
+    t.equal(
+      service.committedPolicyFences.has('table-bound-0'),
+      false,
+      'oldest committedPolicyFences entry is evicted when full',
+    );
+    const newestTableId = `table-bound-${totalTables - 1}`;
+    t.equal(
+      service.committedPolicyFences.has(newestTableId),
+      true,
+      'newest committedPolicyFences entry is retained',
+    );
+    const retainedSnapshots = service.supersededSnapshots.get(newestTableId);
+    t.equal(
+      retainedSnapshots.length,
+      MAX_SUPERSEDED_POLICY_SNAPSHOTS,
+      'per-table supersededSnapshots list is bounded to MAX_SUPERSEDED_POLICY_SNAPSHOTS',
+    );
+    t.equal(
+      retainedSnapshots[0].updated_at,
+      1000 + (totalSnapshotsPerTable - MAX_SUPERSEDED_POLICY_SNAPSHOTS),
+      'oldest per-table superseded snapshots are evicted first',
+    );
+    t.end();
+  });

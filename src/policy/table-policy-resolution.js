@@ -214,6 +214,8 @@ async function resolveServiceTablePolicyFact(service, tableId) {
   if (!table) {
     if (tableId) {
       service.policyCache.delete(tableId);
+      service.committedPolicyFences?.delete(tableId);
+      service.supersededSnapshots?.delete(tableId);
     }
     return buildPolicyAuthorityDecision(
       POLICY_AUTHORITY_STATE.AUTHORITATIVE_ABSENCE,
@@ -424,6 +426,8 @@ async function readConfiguredTablePolicy(service, tableId) {
   if (!table) {
     if (tableId) {
       service.policyCache.delete(tableId);
+      service.committedPolicyFences?.delete(tableId);
+      service.supersededSnapshots?.delete(tableId);
     }
     throw policyReadUnavailable(POLICY_READ_REASON.TABLE_ABSENT, {
       tableId,

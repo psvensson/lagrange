@@ -223,11 +223,23 @@ function buildLoadLaneQueryAdmissionSnapshot(readiness) {
     readiness.dimensions &&
     typeof readiness.dimensions === 'object',
   );
-  const reasonCodes = Array.isArray(readiness?.reasons) ?
+  const projectionReasonCodes = Array.isArray(readiness?.reasons) ?
     readiness.reasons
       .map((reason) => String(reason?.code || EMPTY_STRING).trim())
       .filter((code) => code.length > 0) :
     [];
+  const serveEligibility = readiness?.serveEligibility;
+  const serveEligibilityReasonCodes = Array.isArray(serveEligibility?.reasons) ?
+    serveEligibility.reasons
+      .map((code) => String(code || EMPTY_STRING).trim())
+      .filter((code) => code.length > 0) :
+    typeof serveEligibility?.reason === 'string' &&
+      serveEligibility.reason.trim().length > 0 ?
+      [serveEligibility.reason.trim()] :
+      [];
+  const reasonCodes = projectionReasonCodes.length > 0 ?
+    projectionReasonCodes :
+    serveEligibilityReasonCodes;
   return Object.freeze({
     serveEligible:
       hasDimensions &&

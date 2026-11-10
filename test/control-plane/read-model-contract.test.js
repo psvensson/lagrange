@@ -12,6 +12,16 @@ import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {REBALANCE_COORDINATOR_EVENT} from
   '../../src/rebalancer/rebalancer-constants.js';
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  isRetryableManagedSplitExecutionFailure,
+  resolveRetryableManagedSplitExecutionDecisionType,
+} from '../../src/partition/managed-split-retry-policy.js';
+import {STORAGE_ADMISSION_DECISION_TYPE} from
+  '../../src/rebalancer/storage-admission-constants.js';
 
 // ── Suite-local fixture constants ──────────────────────────────────
 const FIXTURE_REPLICA_ID = 'partition-1-r1';
@@ -515,6 +525,125 @@ test('emitReplicaStatusDivergence does not emit when replicaId ' +
       emittedEvents.length,
       0,
       'no event when replicaId is null',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('getEntityInFlightReplicaIds and queryTerminalFailedCreateCleanupOperations ' +
+  'allow owner-RPC fallback when the node does not host replica_operations-p1 locally',
+async (t) => {
+  const capturedReadOptions = [];
+  const coordinator = new RebalanceCoordinator({
+    nodeId: FIXTURE_NODE_ID,
+    systemTableCache: {
+      get() {
+        return null;
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: {
+      async readAuthoritativeRows(_tableName, _sql, _params, options = {}) {
+        capturedReadOptions.push(options);
+        if (
+          options.authoritativeReadMode ===
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY
+        ) {
+          return {
+            success: false,
+            error: 'authoritative_row_source_unavailable',
+            rows: [],
+          };
+        }
+        return {
+          success: true,
+          rows: [
+            {
+              operation_id: 'op-non-local-1',
+              type: 'ADD',
+              partition_id: FIXTURE_ENTITY_ID,
+              replica_id: `${FIXTURE_ENTITY_ID}-r1`,
+              source_node_id: 'node-seed',
+              target_node_id: FIXTURE_NODE_ID,
+              status: 'creating',
+              workflow_step: 'CREATING',
+              created_at: 100,
+              updated_at: 100,
+              completed_at: null,
+              error_message: null,
+              steps_history: '[]',
+              entity_type: FIXTURE_ENTITY_TYPE,
+              entity_id: FIXTURE_ENTITY_ID,
+            },
+          ],
+        };
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {targetReplicaCount: 3, minReplicaCount: 1};
+      },
+    },
+    messageRouter: {
+      async deliver() {
+        return buildDeliveryEnvelope({acknowledged: true});
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        return {success: true, rows: []};
+      },
+    },
+    enableTimeouts: false,
+  });
+  coordinator.initialize();
+
+  try {
+    capturedReadOptions.length = 0;
+    const inFlightIds = await coordinator.getEntityInFlightReplicaIds({
+      entityType: FIXTURE_ENTITY_TYPE,
+      entityId: FIXTURE_ENTITY_ID,
+    });
+    t.same(
+      [...inFlightIds],
+      [`${FIXTURE_ENTITY_ID}-r1`],
+      'non-hosting node must read in-flight replica IDs via owner-RPC fallback',
+    );
+    t.not(
+      capturedReadOptions[0]?.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+      'getEntityInFlightReplicaIds must not pin OWNER_LOCAL_ONLY on non-hosting nodes',
+    );
+    t.equal(
+      capturedReadOptions[0]?.leaderMode,
+      CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+      'getEntityInFlightReplicaIds must prefer the replica_operations leader',
+    );
+
+    capturedReadOptions.length = 0;
+    const cleanupOps =
+      await coordinator.repository.queryTerminalFailedCreateCleanupOperations();
+    t.same(cleanupOps, [], 'cleanup query succeeds on non-hosting node');
+    t.not(
+      capturedReadOptions[0]?.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+      'queryTerminalFailedCreateCleanupOperations must not pin OWNER_LOCAL_ONLY on non-hosting nodes',
+    );
+
+    const transientOwnerError = new Error('authoritative_row_source_unavailable');
+    t.equal(
+      isRetryableManagedSplitExecutionFailure(transientOwnerError),
+      true,
+      'managed split retry policy must treat authoritative_row_source_unavailable as retryable',
+    );
+    t.equal(
+      resolveRetryableManagedSplitExecutionDecisionType(transientOwnerError),
+      STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
+      'managed split retry policy must defer on authoritative_row_source_unavailable',
     );
   } finally {
     await coordinator.shutdown();

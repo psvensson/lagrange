@@ -1618,6 +1618,27 @@ test(TEST_SPREAD_SATISFIED_ADD_TARGET_DRAIN_TEST_NAME, async (t) => {
     coordinator.workflowOwner.repository.getObservedReplicaStatusFromCache =
       () => ReplicaStatus.ACTIVE;
 
+    const completedWithLiveOwnerAndCacheProjectionOnly =
+      await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(
+        operation,
+      );
+
+    t.equal(
+      completedWithLiveOwnerAndCacheProjectionOnly,
+      false,
+      'in-flight spread + cache-only ACTIVE with live owner must not settle',
+    );
+    t.same(
+      completedOperationIds,
+      [],
+      'live-owner in-flight ADD must not be completed by non-owner',
+    );
+
+    coordinator.workflowOwner.isPriorityRecoveryDrainOwnerUnavailable =
+      () => true;
+    coordinator.workflowOwner.getReconciledReplicaStatus =
+      async () => ReplicaStatus.ACTIVE;
+
     const completed =
       await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(
         operation,
@@ -2569,6 +2590,7 @@ test(
         {
           action:
             TEST_OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN,
+          ownerAction: TEST_PRIORITY_DRAIN_OWNER_ACTION.ALLOW_RECONCILE,
         },
         {
           action: TEST_OPERATION_LIFECYCLE_ACTION

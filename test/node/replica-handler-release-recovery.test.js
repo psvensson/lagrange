@@ -2,16 +2,11 @@
 // tracked-service registry, participant facts owner and pause/resume owner.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import {afterEach, beforeEach, test} from 'node:test';
-import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RAFT_EVENT, RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-constants.js';
-import {releaseIdentityOf} from
-  '../../src/partition/partition-participant-release-contract.js';
 import {COMMITTED_MEMBERSHIP_ANSWER_KIND, COMMITTED_MEMBERSHIP_REFUSAL} from
   '../../src/raft/raft-committed-membership-constants.js';
 import {
@@ -27,14 +22,13 @@ import {
   PARTICIPANT_RELEASE_REASON,
 } from '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
-import {createInProcessMockTransport} from
-  '../test-helpers/replica-handler-identity-fixture.js';
 import {replacePrototypeProperty} from '../helpers/hostile-intrinsics.js';
-import {captureParticipantReleaseObservationTimer, lastObservationTimerHandle,
-  observationTimerOwnedCount} from
+import {lastObservationTimerHandle, observationTimerOwnedCount} from
   '../test-helpers/participant-release-observer-resource-fixture.js';
-import {coreStatus, heldStatus, leaderWithoutOriginDb, recoveryService,
-  retainDescriptorRestorations, retainFailure, settleOwnerTurns, withRecoveryHandler} from
+import {coreStatus, currentReleaseOf, currentResumeRequest, flattenedErrors,
+  heldStatus, leaderWithoutOriginDb, recoveryService,
+  retainDescriptorRestorations, retainFailure, settleOwnerTurns,
+  withActualHandler, withRecoveryHandler} from
   '../test-helpers/participant-release-recovery-harness.js';
 import {
   changeFixtureParticipantMembership,
@@ -51,99 +45,6 @@ import {
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
-
-function currentReleaseOf(facts) {
-  return releaseIdentityOf({
-    partitionId: facts.partitionId,
-    targetBuildDigest: facts.buildDigest,
-    configurationKey: facts.membership.configurationKey,
-    membershipGenerationIndex: facts.membership.membershipGenerationIndex,
-  });
-}
-
-function flattenedErrors(error) {
-  return error instanceof AggregateError ?
-    error.errors.flatMap((nested) => flattenedErrors(nested)) : [error];
-}
-
-async function currentResumeRequest(handler, service) {
-  raiseParticipantCutoverPause(service);
-  const facts = await readParticipantReleaseFacts(handler, service);
-  assert.equal(facts.outcome, OUTCOME.OBSERVED, JSON.stringify(facts));
-  const release = currentReleaseOf(facts);
-  assert.notEqual(release, null);
-  return {release, census: [facts]};
-}
-
-// Releases what withActualHandler acquired, in order, retaining every failure
-// on the primary one; a directory whose owner failed to close is retained.
-async function releaseActualHandler({directory, leader, handler, timerCapture}, failure) {
-  let retained = failure;
-  if (timerCapture !== null) {
-    try {
-      timerCapture.restore();
-    } catch (error) {
-      retained = retainFailure(retained, error,
-        'observation timer capture and assertion cleanup failed');
-    }
-  }
-  let shutdownFailed = false;
-  for (const [owner, message] of [
-    [handler, 'release lifecycle assertion and handler cleanup failed'],
-    [leader, 'release lifecycle assertion and service cleanup failed'],
-  ]) {
-    if (owner === null) continue;
-    try {
-      await owner.shutdown();
-    } catch (error) {
-      shutdownFailed = true;
-      retained = retainFailure(retained, error, message);
-    }
-  }
-  if (!shutdownFailed) {
-    try {
-      fs.rmSync(directory, {recursive: true, force: true});
-    } catch (error) {
-      retained = retainFailure(retained, error,
-        'release lifecycle assertion and artifact cleanup failed');
-    }
-  } else if (retained !== null) {
-    retained.retainedDirectory = directory;
-  }
-  return retained;
-}
-
-async function withActualHandler(measure, options = {}) {
-  const acquired = {directory: fs.mkdtempSync(path.join(os.tmpdir(), 'release-recovery-owner-')),
-    leader: null, handler: null, timerCapture: null};
-  const transport = createInProcessMockTransport();
-  let failure = null;
-  try {
-    const {leader} = await startLeader(options.leader);
-    acquired.leader = leader;
-    const handlerTimeSource = options.timeSource ??
-      new VirtualTimeSource({startMs: leader.timeSource.now()});
-    const handler = new ReplicaHandler({
-      nodeId: leader.nodeId,
-      ownerIncarnation: 1,
-      systemTableCache: leader.systemTableCache,
-      cdcIntegrationService: {},
-      createPartitionService: () => leader,
-      messageRouter: transport,
-      dataDir: acquired.directory,
-      timeSource: handlerTimeSource,
-    });
-    acquired.handler = handler;
-    handler.registerWithRouter(transport);
-    handler.localServices.set(leader.replicaId, leader);
-    acquired.timerCapture = captureParticipantReleaseObservationTimer(leader, handlerTimeSource);
-    await measure({handler, leader, transport, timeSource: handlerTimeSource});
-  } catch (error) {
-    failure = error;
-  }
-  failure = await releaseActualHandler(acquired, failure);
-  if (failure !== null) throw failure;
-}
 
 test('current live resume opens once and a wrong release ID preserves that OPEN proof',
   async () => withActualHandler(async ({handler, leader}) => {
@@ -1485,3 +1386,78 @@ test('service replacement during awaited facts cannot reopen the stale object',
     }
     if (failure !== null) throw failure;
   }));
+
+test('delayed membership notification, leader change and stale-service rejection preserve ' +
+  'cleanup custody while current members regain admission',
+async () => withActualHandler(async ({handler, leader}) => {
+  const initialRequest = await currentResumeRequest(handler, leader);
+  assert.equal(await resumeParticipantCutoverAdmission(handler, leader, initialRequest),
+    OUTCOME.RESUMED);
+  assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.OPEN);
+
+  // Record owned cleanup debt before membership changes.
+  leader.db.prepare('INSERT INTO test_table (id, value) VALUES (?, ?)')
+    .run('services-p1-r2', 'cleanup_owned');
+
+  // 1. Committed membership change + idempotent generation advance with delayed notification:
+  // synchronously invalidates old proof on write inspection before the event arrives.
+  const added = changeFixtureParticipantMembership(leader, 'tx1-v3-r2');
+  const refusedWhileDelayed = await leader.executeQuery(
+    'DELETE FROM test_table WHERE id = ? AND value = ?',
+    ['services-p1-r2', 'cleanup_owned']);
+  assert.equal(refusedWhileDelayed.success, false);
+  assert.equal(refusedWhileDelayed.failureCode, 'partition_write_cutover_paused',
+    'writes and tombstone release fail closed while membership notification is delayed');
+  assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
+  assert.equal(leader.db.prepare('SELECT value FROM test_table WHERE id = ?')
+    .get('services-p1-r2')?.value, 'cleanup_owned',
+  'cleanup debt remains durably owned while cutover is paused');
+
+  // Incomplete census while tx1-v3-r2 is still a voter is refused.
+  const incompleteRequest = await currentResumeRequest(handler, leader);
+  assert.equal(await resumeParticipantCutoverAdmission(handler, leader, incompleteRequest),
+    OUTCOME.CENSUS_REFUSED);
+  assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
+
+  // Commit removal of tx1-v3-r2 plus an idempotent conf-change advancing membershipGenerationIndex.
+  const current = leader.controllablePort.fixtureParticipantMembership;
+  const singleVoterIds = current.confState.voters.slice(0, 1);
+  leader.controllablePort.fixtureParticipantMembership = Object.freeze({
+    confState: Object.freeze({...current.confState, voters: singleVoterIds}),
+    identities: Object.freeze({[singleVoterIds[0]]: leader.replicaId}),
+  });
+  leader.controllablePort.configurationKey = initialRequest.release.configurationKey;
+  leader.controllablePort.membershipGenerationIndex = added.membershipGenerationIndex + 2;
+  leader.controllablePort.committedIndex = leader.controllablePort.membershipGenerationIndex;
+
+  // Stale resume carrying the pre-change release identity (same configurationKey, old
+  // membershipGenerationIndex) is refused.
+  assert.equal(await resumeParticipantCutoverAdmission(handler, leader, initialRequest),
+    OUTCOME.STALE);
+  assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
+
+  // Current members regain valid OPEN admission at the new membershipGenerationIndex
+  // while cleanup debt remains owned.
+  const postChangeRequest = await currentResumeRequest(handler, leader);
+  assert.equal(await resumeParticipantCutoverAdmission(handler, leader, postChangeRequest),
+    OUTCOME.RESUMED);
+  assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.OPEN);
+  assert.equal(participantReleaseAdmissionOf(leader).proof.membershipGenerationIndex,
+    leader.controllablePort.membershipGenerationIndex);
+  assert.equal(leader.db.prepare('SELECT value FROM test_table WHERE id = ?')
+    .get('services-p1-r2')?.value, 'cleanup_owned');
+
+  // 2. Leader / term change invalidates proof until re-verified at the new term.
+  leader.controllablePort.term += 1;
+  const refusedAfterTermChange = await leader.executeQuery(
+    'DELETE FROM test_table WHERE id = ? AND value = ?',
+    ['services-p1-r2', 'cleanup_owned']);
+  assert.equal(refusedAfterTermChange.success, false);
+  assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
+  const postLeaderChangeRequest = await currentResumeRequest(handler, leader);
+  assert.equal(await resumeParticipantCutoverAdmission(handler, leader, postLeaderChangeRequest),
+    OUTCOME.RESUMED);
+  assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.OPEN);
+  assert.equal(participantReleaseAdmissionOf(leader).proof.term,
+    leader.controllablePort.term);
+}));

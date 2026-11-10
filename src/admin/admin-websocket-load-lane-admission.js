@@ -53,6 +53,27 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
     ) {
       return null;
     }
+    let refreshedServeEligibility = false;
+    if (
+      typeof this.controlPlaneReadinessService.answerServeEligibility ===
+        'function' &&
+      typeof this.controlPlaneReadinessService.readServeEligibility ===
+        'function'
+    ) {
+      const serveAnswer =
+        this.controlPlaneReadinessService.answerServeEligibility(this.nodeId);
+      if (
+        serveAnswer?.state !== 'ready' ||
+        serveAnswer?.decision !== 'eligible'
+      ) {
+        refreshedServeEligibility = true;
+        try {
+          await this.controlPlaneReadinessService.readServeEligibility();
+        } catch (_error) {
+          // Proceed to snapshot evaluation; committed unavailability will be surfaced.
+        }
+      }
+    }
     if (
       typeof this.controlPlaneReadinessService.getNodeReadiness ===
       'function'
@@ -61,7 +82,9 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
         allowAuthoritativeRefresh: true,
         requireFreshOnIneligible: true,
         decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
-        maxCachedAgeMs: this.loadLaneReadinessCacheMaxAgeMs,
+        maxCachedAgeMs: refreshedServeEligibility ?
+          0 :
+          this.loadLaneReadinessCacheMaxAgeMs,
       });
     }
     if (

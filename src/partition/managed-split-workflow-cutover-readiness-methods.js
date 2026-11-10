@@ -160,7 +160,19 @@ class ManagedSplitWorkflowCutoverReadinessMethods {
           remainingBudgetMs: remainingMs,
         });
       }
-      await this.delay(Math.min(pollIntervalMs, remainingMs));
+      const repaired =
+        typeof this.repairSplitChildLeaderRoutingEvidence ===
+          LOCAL_STR_FUNCTION &&
+        typeof decision.childPartitionId === 'string' &&
+        decision.childPartitionId.length > 0 ?
+          await this.repairSplitChildLeaderRoutingEvidence(
+            decision.childPartitionId,
+            {timeoutBudget: budget},
+          ) :
+          false;
+      if (!repaired) {
+        await this.delay(Math.min(pollIntervalMs, remainingMs));
+      }
     }
   }
 

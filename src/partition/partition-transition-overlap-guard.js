@@ -158,6 +158,20 @@ function resolveConflictWitnessRanges(transition, getPartitionInfo) {
   return persistedRanges;
 }
 
+function isDifferentTableTransitionRow(tableInfo, targetTableId) {
+  if (!targetTableId) {
+    return false;
+  }
+  const rowTableId = String(tableInfo?.table_id ?? tableInfo?.tableId ?? '');
+  const rowTableName = String(
+    tableInfo?.table_name ?? tableInfo?.tableName ?? '',
+  );
+  if (!rowTableId && !rowTableName) {
+    return false;
+  }
+  return rowTableId !== targetTableId && rowTableName !== targetTableId;
+}
+
 /**
  * Check one persisted table row's transition against the candidate
  * ranges. Returns the conflict descriptor or null.
@@ -172,6 +186,9 @@ function checkTableInfoTransitionOverlap(
   options,
   candidateRanges,
 ) {
+  if (isDifferentTableTransitionRow(tableInfo, String(options.tableId || ''))) {
+    return null;
+  }
   const transition = options.parsePartitionTransition(tableInfo);
   if (isIneligibleConflictTransition(
     transition,
@@ -246,28 +263,58 @@ function findPersistedTransitionOverlap(options) {
 }
 
 /**
+ * Check whether any durable tables row for the same table carries an
+ * active (non-retryable, non-self) transition. Because `tables` has a
+ * single `partition_transition` column per `table_id`, at most one
+ * active transition can be persisted per table at a time.
+ * @param {Object} options
+ * @return {boolean}
+ */
+function hasActiveSameTableTransition(options) {
+  if (typeof options.listTableInfos !== LOCAL_STR_FUNCTION ||
+      typeof options.parsePartitionTransition !== LOCAL_STR_FUNCTION) {
+    return false;
+  }
+  const targetTableId = String(options.tableId || '');
+  const registeringWorkflowId = String(options.workflowId || '');
+  for (const tableInfo of options.listTableInfos() || []) {
+    if (isDifferentTableTransitionRow(tableInfo, targetTableId)) {
+      continue;
+    }
+    const transition = options.parsePartitionTransition(tableInfo);
+    if (!isIneligibleConflictTransition(transition, registeringWorkflowId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Run the durable overlap guard for one candidate source range and
  * throw the qualified refusal on a conflict. When the registering
- * workflow id is null (same-table admission), a clear guard keeps the
- * plain already-in-progress refusal.
+ * workflow id is null (same-table admission) or another active
+ * transition is already persisted on the same table, a clear overlap
+ * guard keeps the plain already-in-progress refusal.
  * @param {Object} owner - Workflow owner (durable-row lookups, logger).
  * @param {Object} partitionInfo - Source partition row.
  * @param {Object} options - {partitionId?, tableId, workflowId}.
  * @return {void}
  */
 function assertSplitOverlapRefusal(owner, partitionInfo, options) {
-  const persistedOverlap = findPersistedTransitionOverlap({
+  const guardOptions = {
     candidateRanges: [resolvePartitionRowKeyRange(partitionInfo)],
     tableId: options.tableId,
     workflowId: options.workflowId,
     listTableInfos: owner.listTableInfos,
     parsePartitionTransition: owner.parsePartitionTransition,
     getPartitionInfo: owner.getPartitionInfo,
-  });
-  if (options.workflowId === null && !persistedOverlap) {
-    throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_ALREADY_IN_PROGRESS);
-  }
+  };
+  const persistedOverlap = findPersistedTransitionOverlap(guardOptions);
   if (!persistedOverlap) {
+    if (options.workflowId === null ||
+        hasActiveSameTableTransition(guardOptions)) {
+      throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_ALREADY_IN_PROGRESS);
+    }
     return;
   }
   if (options.workflowId !== null) {
@@ -322,22 +369,27 @@ function assertSplitRegistrationOverlapGuardClear(owner, options) {
 /**
  * Durable overlap guard (F23) at merge registration: refuse when
  * either source key range overlaps an already-persisted in-flight
- * transition's ranges.
+ * transition's ranges, or with the plain already-in-progress refusal
+ * when a non-overlapping transition is active on the same table.
  * @param {Object} owner - Workflow owner (durable-row lookups, logger).
  * @param {Object} options - {sourcePartitionIds, tableId, workflowId,
  *   leftRange, rightRange}.
  * @return {void}
  */
 function assertMergeRegistrationOverlapGuardClear(owner, options) {
-  const persistedOverlap = findPersistedTransitionOverlap({
+  const guardOptions = {
     candidateRanges: [options.leftRange, options.rightRange],
     tableId: options.tableId,
     workflowId: options.workflowId,
     listTableInfos: owner.listTableInfos,
     parsePartitionTransition: owner.parsePartitionTransition,
     getPartitionInfo: owner.getPartitionInfo,
-  });
+  };
+  const persistedOverlap = findPersistedTransitionOverlap(guardOptions);
   if (!persistedOverlap) {
+    if (hasActiveSameTableTransition(guardOptions)) {
+      throw new Error(MANAGED_MERGE_ERROR_MSG.ALREADY_IN_PROGRESS);
+    }
     return;
   }
   owner.logger.info(MANAGED_MERGE_LOG_MSG.OVERLAP_REFUSED, {

@@ -354,3 +354,81 @@ test('the genuine cluster identity survives restart and restore', async (t) => {
   t.equal(durableIdentityOwner(clean, rec).getClusterId(), restored.clusterIdentity,
     'a clean-cluster identity is durable across restart');
 });
+
+test('runtime topology snapshot reports readyNodeCount and truthful hasPartitionQuorum ' +
+  'from established systemTableCache without installing capability adapters', async (t) => {
+  const now = Date.now();
+  const nodeRows = NODE_IDS.map((nodeId) => ({
+    node_id: nodeId,
+    node_address: `ws://${nodeId}:8082`,
+    status: 'active',
+    connection_state: 'ready',
+    ready_lease_expires_at: now + 60000,
+    last_heartbeat: now,
+  }));
+  let partitionRows = [{
+    partition_id: 'p1',
+    table_name: 't1',
+    replica_count: 3,
+    leader_node_id: NODE_IDS[0],
+  }];
+  let serviceRows = NODE_IDS.map((nodeId, idx) => ({
+    service_id: `p1-${nodeId}`,
+    service_type: 'partition',
+    partition_id: 'p1',
+    node_id: nodeId,
+    status: 'active',
+    raft_role: idx === 0 ? 'leader' : 'follower',
+  }));
+  const populatedCache = {
+    get: (table, key) => (table === TABLES.CONFIG && key === CLUSTER_ID_CONFIG_KEY ?
+      {config_key: CLUSTER_ID_CONFIG_KEY, config_value: GENUINE_CLUSTER_ID} : null),
+    getAll: (table) => {
+      if (table === TABLES.NODES) return nodeRows;
+      if (table === TABLES.PARTITIONS) return partitionRows;
+      if (table === TABLES.SERVICES) return serviceRows;
+      return [];
+    },
+    filter: () => [],
+    find: () => null,
+  };
+  const {api, call} = await startApi(t, {
+    systemTableCache: populatedCache,
+    requestCellEnv: {...CREDS},
+    controlPlaneReadinessService: {
+      getNodeReadinessSync: () => ({
+        ready: true,
+        serveEligible: true,
+        clusterMemberHealthy: true,
+      }),
+    },
+  });
+  const facts = await call('GET', FACTS_URL, {authorization: GOOD_AUTH});
+  t.equal(facts.status, 200);
+  t.equal(facts.json.facts.topology.state, CLUSTER_FACTS_CONSTANTS.TOPOLOGY_OBSERVED);
+  t.equal(facts.json.facts.topology.nodeCount, 3);
+  t.equal(facts.json.facts.topology.readyNodeCount, 3);
+  t.equal(facts.json.facts.topology.underReplicatedPartitionCount, 0);
+  for (const cap of Object.values(facts.json.facts.capabilities)) {
+    t.equal(cap, CLUSTER_FACTS_CONSTANTS.CAPABILITY_UNSUPPORTED);
+  }
+  const fullQuorumSnap = api.getManagementV1Owner().getClusterSnapshot();
+  t.equal(fullQuorumSnap.hasPartitionQuorum, true, '3/3 active replicas satisfy quorum');
+  t.equal(fullQuorumSnap.ready, true);
+
+  serviceRows = serviceRows.slice(0, 2);
+  const majoritySnap = api.getManagementV1Owner().getClusterSnapshot();
+  t.equal(majoritySnap.hasPartitionQuorum, true, '2/3 active replicas still satisfy majority quorum');
+  t.equal(majoritySnap.underReplicatedPartitionCount, 1);
+
+  serviceRows = serviceRows.slice(0, 1);
+  const minoritySnap = api.getManagementV1Owner().getClusterSnapshot();
+  t.equal(minoritySnap.hasPartitionQuorum, false, '1/3 active replicas fails majority quorum');
+  t.equal(minoritySnap.ready, false);
+
+  partitionRows = [];
+  const emptyPartitionsSnap = api.getManagementV1Owner().getClusterSnapshot();
+  t.equal(emptyPartitionsSnap.hasPartitionQuorum, false,
+    'empty partition inventory never fabricates quorum');
+  t.equal(emptyPartitionsSnap.ready, false);
+});

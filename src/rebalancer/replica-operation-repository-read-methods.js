@@ -121,6 +121,9 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       }
 
       delete queryOptions.retryOnRetryableFailure;
+      if (queryOptions.authoritativeReadMode === undefined) {
+        delete queryOptions.authoritativeReadMode;
+      }
 
       const executeRead = async () => {
         return readAuthoritativeControlPlaneRows(
@@ -321,6 +324,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_OPERATION_BY_ID,
         [operationId],
+        REPLICA_OPERATION_VISIBILITY_READ_QUERY_OPTIONS,
       );
       if (!result.success || !result.rows || result.rows.length === 0) {
         return null;
@@ -374,7 +378,9 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         {
           ...readQueryOptions,
           leaderMode: options?.leaderMode,
-          retryOnRetryableFailure: true,
+          retryOnRetryableFailure:
+            options?.authoritativeReadMode !==
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
           timeoutBudget: options?.timeoutBudget,
         },
       );
