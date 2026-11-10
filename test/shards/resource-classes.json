@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2606,
+    "ordinary": 2607,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2632,
-  "digest": "fnv1a32-192c4a51",
+  "censusSize": 2633,
+  "digest": "fnv1a32-aa868cab",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1617,6 +1617,7 @@
     "test/query/retry-continuation-flow.test.js": "ordinary",
     "test/query/retry-idempotency.test.js": "ordinary",
     "test/query/router-envelope-lost-write-answer.test.js": "ordinary",
+    "test/query/routing-overlay-complete-state-retirement.test.js": "ordinary",
     "test/query/runtime-access-policy-enforcement.test.js": "ordinary",
     "test/query/runtime-api-exports.test.js": "ordinary",
     "test/query/runtime-integration.test.js": "ordinary",

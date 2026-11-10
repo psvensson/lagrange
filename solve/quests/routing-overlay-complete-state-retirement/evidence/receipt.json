@@ -1,0 +1,53 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "routing-overlay-complete-state-retirement",
+  "status": "pass",
+  "testFileDigests": {
+    "test/query/routing-overlay-complete-state-retirement.test.js": "3b997ffe454ac3c72e2a3758dfd723fba2ce9ba5367c49760292e0e4aefb35e8"
+  },
+  "generatedAt": "2026-11-10T10:23:52.054Z",
+  "receipts": [
+    {
+      "id": "mixed-age-counterexample-resolved",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^mixed-age-counterexample-resolved: .*$\" test/query/routing-overlay-complete-state-retirement.test.js",
+      "detail": "Surviving service advance with delayed deletion of excluded stale cached service does not retire the routing overlay prematurely.",
+      "testFile": "test/query/routing-overlay-complete-state-retirement.test.js"
+    },
+    {
+      "id": "real-engine-cache-executor-composition",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^real-engine-cache-executor-composition: .*$\" test/query/routing-overlay-complete-state-retirement.test.js",
+      "detail": "Real QueryExecutor, SystemTableCache, and SQLQueryEngine composition routes only to valid authoritative services and never resurrects stale route.",
+      "testFile": "test/query/routing-overlay-complete-state-retirement.test.js"
+    },
+    {
+      "id": "newer-complete-authority-progress",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^newer-complete-authority-progress: .*$\" test/query/routing-overlay-complete-state-retirement.test.js",
+      "detail": "Genuine cache convergence or complete newer authority cleanly retires the overlay and transparently restores direct cache routing.",
+      "testFile": "test/query/routing-overlay-complete-state-retirement.test.js"
+    },
+    {
+      "id": "deletion-recreation-and-cache-replacement",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^deletion-recreation-and-cache-replacement: .*$\" test/query/routing-overlay-complete-state-retirement.test.js",
+      "detail": "Partition drop evicts lingering overlays, recreated partition starts clean, and setSystemCache cleanly switches listeners and resets overlay state.",
+      "testFile": "test/query/routing-overlay-complete-state-retirement.test.js"
+    },
+    {
+      "id": "subscription-and-refresh-cleanup",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^subscription-and-refresh-cleanup: .*$\" test/query/routing-overlay-complete-state-retirement.test.js",
+      "detail": "Engine shutdown detaches cache apply listeners and cleans up in-flight refreshes without post-shutdown state leaks.",
+      "testFile": "test/query/routing-overlay-complete-state-retirement.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/routing-overlay-complete-state-retirement.js --check-verification",
+      "detail": "An approving subagent verification newer than the last attempt, read through the solve store owner.",
+      "testFile": null
+    }
+  ]
+}

@@ -81,6 +81,7 @@ function detachAuthoritativeRoutingOverlayCacheApplyListener(engine) {
   const unsubscribe = engine.authoritativeRoutingOverlayCacheApplyUnsubscribe;
   engine.authoritativeRoutingOverlayCacheApplyUnsubscribe = null;
   engine.authoritativeRoutingOverlayCacheApplyListener = null;
+  engine.inFlightAuthoritativeRoutingRefreshes?.clear();
   if (unsubscribe) {
     unsubscribe();
   }
@@ -135,6 +136,7 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
       null;
   engine.isShutDown = false;
   engine.authoritativeRoutingOverlayEntries = new Map();
+  engine.inFlightAuthoritativeRoutingRefreshes = new Map();
   engine.bootstrapRoutingOverlayEntries = new Map();
   attachAuthoritativeRoutingOverlayCacheApplyListener(
     engine,

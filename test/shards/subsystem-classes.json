@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 279,
-    "query-sql": 192,
+    "query-sql": 193,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2632,
-  "digest": "fnv1a32-c0ee4172",
+  "censusSize": 2633,
+  "digest": "fnv1a32-edacc54b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4cc628dc",
+  "observationDigest": "fnv1a32-b068d7c8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1637,6 +1637,7 @@
     "test/query/retry-continuation-flow.test.js": "query-sql",
     "test/query/retry-idempotency.test.js": "query-sql",
     "test/query/router-envelope-lost-write-answer.test.js": "query-sql",
+    "test/query/routing-overlay-complete-state-retirement.test.js": "query-sql",
     "test/query/runtime-access-policy-enforcement.test.js": "query-sql",
     "test/query/runtime-api-exports.test.js": "query-sql",
     "test/query/runtime-integration.test.js": "query-sql",
@@ -13884,6 +13885,15 @@
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-write-kernel.js",
         "src/transport/transport-error-codes.js"
+      ]
+    },
+    "test/query/routing-overlay-complete-state-retirement.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/query/runtime-access-policy-enforcement.test.js": {
