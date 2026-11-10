@@ -70,10 +70,7 @@ const CREATE_TARGET_LIFECYCLE_PRECONDITION_FIELDS = Object.freeze([
 // The ADD target's lifecycle is read from the authority only: a cache row
 // that lags is no evidence either way. A positive live row completes instead;
 // absent, unavailable and non-live evidence preserve ordinary settlement.
-const ADD_TARGET_LIVENESS_READ = Object.freeze({
-  ...EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
-  allowCacheFallback: false,
-});
+const ADD_TARGET_LIVENESS_READ = EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS;
 
 // A failure no post-intent boundary applies to (not a partition create).
 const NO_INTENT_FAILURE_ADMISSION = Object.freeze({

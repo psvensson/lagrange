@@ -40,7 +40,6 @@ const LOCAL_PRIORITY_EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS =
     ...EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
     authoritativeReadMode:
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-    allowCacheFallback: false,
   });
 
 // The step a deferred transition retry records: the caller's explicit step,

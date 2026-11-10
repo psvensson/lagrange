@@ -45,7 +45,6 @@ const {
 
 const HAND_BACK_VERDICT_SEPARATOR = '|';
 const AUTHORITATIVE_REPLICA_OBSERVATION_SOURCE = 'authoritative';
-const AUTHORITATIVE_TARGET_CACHE_BYPASS_OPTION = 'allowCacheFallback';
 const UNAVAILABLE_ADD_TARGET_OBSERVATION = Object.freeze({
   state: STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
   source: STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
@@ -257,10 +256,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         identity.replicaId,
         identity.partitionId,
         identity.targetNodeId,
-        {
-          ...this.buildObservedTargetReplicaObservationOptions(operation),
-          [AUTHORITATIVE_TARGET_CACHE_BYPASS_OPTION]: false,
-        },
+        this.buildObservedTargetReplicaObservationOptions(operation),
       );
       return this.validateAuthoritativeAddTargetObservation(
         observation,

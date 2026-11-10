@@ -290,7 +290,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
     });
 
   test(
-    'getActualReplicaStatus falls back to exact services cache observation ' +
+    'getActualReplicaStatus returns null and refuses cache observation ' +
       'when authoritative reads fail',
     async (t) => {
       const gatewayCalls = [];
@@ -374,13 +374,13 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
 
         t.equal(
           actualStatus,
-          'active',
-          'exact observed services row should satisfy replica status when authoritative reads fail',
+          null,
+          'authoritative read failure must return null and never fall back to cache',
         );
         t.equal(
           gatewayCalls.length,
-          2,
-          'coordinator should still attempt authoritative service status reads before using observed cache state',
+          1,
+          'coordinator should attempt canonical authoritative read and not perform fallback queries',
         );
       } finally {
         await coordinator.shutdown();

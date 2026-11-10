@@ -181,7 +181,7 @@ function createConvergenceCoordinator(options = {}) {
         return {
           success: true,
           rows: matching.length > 0 ?
-            [{status: matching[0].status}] : [],
+            [{...matching[0]}] : [],
         };
       }
       if (sql.includes('services') &&

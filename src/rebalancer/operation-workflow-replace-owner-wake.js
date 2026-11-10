@@ -187,8 +187,8 @@ function sourceRowLevel(owner, operation) {
     return NO_CONSENSUS_OBSERVATION;
   }
   return String(owner.repository.getObservedReplicaStatusFromCache(
-    sourceReplicaId, operation.partitionId, operation.sourceNodeId,
-    {allowPartitionNodeFallback: false}) ?? NO_CONSENSUS_OBSERVATION);
+    sourceReplicaId, operation.partitionId, operation.sourceNodeId) ??
+      NO_CONSENSUS_OBSERVATION);
 }
 
 /**

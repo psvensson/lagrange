@@ -89,7 +89,7 @@ async (t) => {
   );
 });
 
-test('ReplicaOperationRepository exposes cache fallback after authoritative failure explicitly',
+test('ReplicaOperationRepository refuses cache fallback after authoritative failure',
   async (t) => {
     const repository = createRepository({
       controlPlaneSystemTableGateway: {
@@ -114,11 +114,10 @@ test('ReplicaOperationRepository exposes cache fallback after authoritative fail
     t.same(
       observation,
       {
-        state: 'observed',
-        source: 'cache_fallback_after_authoritative_failure',
-        lifecycleStatus: 'stopping',
+        state: 'unavailable',
+        source: 'unavailable',
       },
-      'cache fallback should remain explicit when authoritative reads fail',
+      'authoritative read failure must remain unavailable and never fall back to cache',
     );
   });
 
@@ -254,7 +253,7 @@ test(
 );
 
 test(
-  'ReplicaOperationRepository can disable authoritative partition-node fallback ' +
+  'ReplicaOperationRepository deletes authoritative partition-node fallback ' +
     'for exact-target observation',
   async (t) => {
     const repository = createRepository({
@@ -296,33 +295,22 @@ test(
       TEST_REPLICA_ID,
       TEST_PARTITION_ID,
       TEST_NODE_ID,
+      {allowPartitionNodeFallback: true},
     );
     const observedWithoutFallback =
       await repository.getActualReplicaObservation(
         TEST_REPLICA_ID,
         TEST_PARTITION_ID,
         TEST_NODE_ID,
-        {allowPartitionNodeFallback: false},
       );
 
     t.same(
       observedWithFallback,
       {
-        state: TEST_OBSERVED_STATE,
+        state: 'absent',
         source: TEST_AUTHORITATIVE_SOURCE,
-        lifecycleStatus: ReplicaStatus.ACTIVE,
-        observedTargetIdentity: {
-          replicaId: TEST_PARTITION_NODE_FALLBACK_REPLICA_ID,
-          serviceId: TEST_PARTITION_NODE_FALLBACK_REPLICA_ID,
-          partitionId: TEST_PARTITION_ID,
-          nodeId: TEST_NODE_ID,
-          serviceType: TEST_PARTITION_SERVICE_TYPE,
-          status: ReplicaStatus.ACTIVE,
-        },
-        lifecyclePrecondition: {},
-        previousState: null,
       },
-      'default partition-node fallback should still surface sibling visibility',
+      'passing allowPartitionNodeFallback: true must not surface sibling visibility',
     );
     t.same(
       observedWithoutFallback,
@@ -336,7 +324,7 @@ test(
 );
 
 test(
-  'ReplicaOperationRepository can disable cache partition-node fallback for ' +
+  'ReplicaOperationRepository deletes cache partition-node fallback for ' +
     'exact-target observation',
   (t) => {
     const repository = createRepository({
@@ -364,19 +352,19 @@ test(
         TEST_REPLICA_ID,
         TEST_PARTITION_ID,
         TEST_NODE_ID,
+        {allowPartitionNodeFallback: true},
       ),
-      ReplicaStatus.ACTIVE,
-      'default cache fallback should still surface sibling visibility',
+      null,
+      'passing allowPartitionNodeFallback: true must not surface sibling visibility in cache',
     );
     t.equal(
       repository.getObservedReplicaStatusFromCache(
         TEST_REPLICA_ID,
         TEST_PARTITION_ID,
         TEST_NODE_ID,
-        {allowPartitionNodeFallback: false},
       ),
       null,
-      'exact-target cache status should stay absent when fallback is disabled',
+      'exact-target cache status should stay absent',
     );
     t.end();
   },

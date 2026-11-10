@@ -129,9 +129,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       operation.replicaId,
       operation.partitionId,
       operation.targetNodeId,
-      {
-        allowPartitionNodeFallback: false,
-      },
     ) === ReplicaStatus.ACTIVE;
   }
 
@@ -235,9 +232,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       sourceReplicaId,
       operation.partitionId,
       operation.sourceNodeId,
-      {
-        allowPartitionNodeFallback: false,
-      },
     );
     if (!sourceReplicaRow) {
       return false;

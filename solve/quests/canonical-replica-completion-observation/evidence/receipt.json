@@ -1,0 +1,53 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "canonical-replica-completion-observation",
+  "status": "pass",
+  "testFileDigests": {
+    "test/rebalancer/canonical-replica-completion-observation.test.js": "e8bfba6758414e377a6bfbedb803f54e82f67d6f2ca080707c49154839e10485"
+  },
+  "generatedAt": "2026-11-10T11:25:50.474Z",
+  "receipts": [
+    {
+      "id": "canonical-caller-closure",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^canonical-caller-closure$\" test/rebalancer/canonical-replica-completion-observation.test.js",
+      "detail": "All callers in src/rebalancer use canonical observation without fallback options, and canonical normalization preserves each entity type's identity contract.",
+      "testFile": "test/rebalancer/canonical-replica-completion-observation.test.js"
+    },
+    {
+      "id": "unavailable-and-wrong-identity-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^unavailable-and-wrong-identity-refused$\" test/rebalancer/canonical-replica-completion-observation.test.js",
+      "detail": "Unavailable authoritative reads and contradictory entity, sibling replica, or node identities are refused and never falsely settle operations.",
+      "testFile": "test/rebalancer/canonical-replica-completion-observation.test.js"
+    },
+    {
+      "id": "exact-generation-completion",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^exact-generation-completion$\" test/rebalancer/canonical-replica-completion-observation.test.js",
+      "detail": "Older generation timestamps and mismatched attempt tokens are refused; exact generation evidence settles the operation and discharges reservations/cleanup custody.",
+      "testFile": "test/rebalancer/canonical-replica-completion-observation.test.js"
+    },
+    {
+      "id": "restart-and-lost-answer-obligations",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^restart-and-lost-answer-obligations$\" test/rebalancer/canonical-replica-completion-observation.test.js",
+      "detail": "Authoritative unavailability across node-restart and lost-answer boundaries preserves owned operation obligations for retry.",
+      "testFile": "test/rebalancer/canonical-replica-completion-observation.test.js"
+    },
+    {
+      "id": "deleted-fallback-cannot-be-reactivated",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^deleted-fallback-cannot-be-reactivated$\" test/rebalancer/canonical-replica-completion-observation.test.js",
+      "detail": "Passing deleted fallback options (allowPartitionNodeFallback, allowCacheFallback) is ignored and cannot reactivate secondary queries or cache fallbacks.",
+      "testFile": "test/rebalancer/canonical-replica-completion-observation.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/canonical-replica-completion-observation.js --check-verification",
+      "detail": "An approving subagent verification newer than the last attempt, read through the solve store owner.",
+      "testFile": null
+    }
+  ]
+}

@@ -259,9 +259,7 @@ const OPERATION_OWNER_ACTION = Object.freeze({
   FAIL: 'fail',
 });
 
-const EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS = Object.freeze({
-  allowPartitionNodeFallback: false,
-});
+const EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS = Object.freeze({});
 const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES =
   Object.freeze(
     new Set([

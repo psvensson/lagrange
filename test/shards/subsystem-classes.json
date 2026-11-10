@@ -12,7 +12,7 @@
     "distributed-harness": 214,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 280,
+    "placement-rebalance": 281,
     "query-sql": 193,
     "release-packaging": 15,
     "runtime-primitives": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2634,
-  "digest": "fnv1a32-08b93d2d",
+  "censusSize": 2635,
+  "digest": "fnv1a32-484822c1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f09f52f3",
+  "observationDigest": "fnv1a32-2a9b7a2d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1866,6 +1866,7 @@
     "test/rebalancer/batching-concurrency.property.test.js": "placement-rebalance",
     "test/rebalancer/blocked-spread-release-event-wake.test.js": "placement-rebalance",
     "test/rebalancer/call-activation-pin-planning.test.js": "placement-rebalance",
+    "test/rebalancer/canonical-replica-completion-observation.test.js": "placement-rebalance",
     "test/rebalancer/canonical-replica-inventory-cutover-guard.test.js": "placement-rebalance",
     "test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js": "placement-rebalance",
     "test/rebalancer/cl-036-publications-quorum-escape.test.js": "placement-rebalance",
@@ -16237,6 +16238,16 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/unified-rebalancer.js"
+      ]
+    },
+    "test/rebalancer/canonical-replica-completion-observation.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
+      ],
+      "directories": [
+        "src/rebalancer"
       ]
     },
     "test/rebalancer/canonical-replica-inventory-cutover-guard.test.js": {

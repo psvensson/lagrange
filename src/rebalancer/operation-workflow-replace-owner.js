@@ -267,7 +267,6 @@ function isTargetFailureDetectorDead(owner, operation) {
     targetReplicaId,
     operation.partitionId,
     operation.targetNodeId,
-    {allowPartitionNodeFallback: false},
   ) === ReplicaStatus.FAILED;
 }
 

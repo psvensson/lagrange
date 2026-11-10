@@ -1,3 +1,4 @@
+import {SERVICE_TYPE} from '../constants/service.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
@@ -8,64 +9,110 @@ import {runtimeServiceReplicaBelongsToEntity} from
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
-const OBSERVED_REPLICA_ROW_FIELD = Object.freeze({
-  ADDRESS: 'address',
-  GROUP_ID: 'group_id',
-  GROUP_ID_CAMEL: 'groupId',
-  NODE_ID: 'node_id',
-  NODE_ID_CAMEL: 'nodeId',
-  PARTITION_ID: 'partition_id',
-  PARTITION_ID_CAMEL: 'partitionId',
-  PREVIOUS_STATE: 'previous_state',
-  PREVIOUS_STATE_CAMEL: 'previousState',
-  RAFT_ROLE: 'raft_role',
-  RAFT_ROLE_CAMEL: 'raftRole',
-  REPLICA_ID: 'replica_id',
-  REPLICA_ID_CAMEL: 'replicaId',
-  SERVICE_ID: 'service_id',
-  SERVICE_ID_CAMEL: 'serviceId',
-  SERVICE_TYPE: 'service_type',
-  SERVICE_TYPE_CAMEL: 'serviceType',
-  STATUS: 'status',
-});
-const LIFECYCLE_PRECONDITION_STRING_FIELDS = Object.freeze([
-  'service_id',
-  'replica_id',
-  'partition_id',
-  'node_id',
-  'service_type',
-  'status',
-]);
-const LIFECYCLE_PRECONDITION_NUMBER_FIELDS = Object.freeze([
-  'created_at',
-  'state_entered_at',
-]);
 const NO_REPLICA_LIFECYCLE_PRECONDITION = Object.freeze({});
 
+function readCanonicalRowString(row, primaryField, aliasField) {
+  const primary = row?.[primaryField];
+  if (typeof primary === 'string' && primary.trim().length > 0) {
+    return primary.trim();
+  }
+  if (aliasField) {
+    const alias = row?.[aliasField];
+    if (typeof alias === 'string' && alias.trim().length > 0) {
+      return alias.trim();
+    }
+  }
+  return null;
+}
+
+function readCanonicalRowLower(row, primaryField, aliasField) {
+  const val = readCanonicalRowString(row, primaryField, aliasField);
+  return val ? val.toLowerCase() : null;
+}
+
+function decodeCanonicalObservedReplicaRow(row) {
+  if (!row || typeof row !== 'object') {
+    return null;
+  }
+  const serviceId = readCanonicalRowString(row, 'service_id', 'serviceId');
+  const replicaId = readCanonicalRowString(row, 'replica_id', 'replicaId');
+  const serviceType = readCanonicalRowLower(row, 'service_type', 'serviceType');
+  const nodeId = readCanonicalRowString(row, 'node_id', 'nodeId');
+  const partitionId = readCanonicalRowString(row, 'partition_id', 'partitionId');
+  const groupId = readCanonicalRowString(row, 'group_id', 'groupId');
+  const status = readCanonicalRowLower(row, 'status');
+  const raftRole = readCanonicalRowLower(row, 'raft_role', 'raftRole');
+  const address = readCanonicalRowString(row, 'address');
+  const previousState = readCanonicalRowLower(row, 'previous_state', 'previousState');
+  const cleanupToken = readCanonicalRowString(row, 'cleanup_token', 'cleanupToken');
+  const createAttemptToken = readCanonicalRowString(
+    row,
+    'create_attempt_token',
+    'createAttemptToken',
+  );
+  const createdAt = Number.isFinite(row.created_at) ?
+    row.created_at :
+    Number.isFinite(row.createdAt) ?
+      row.createdAt :
+      null;
+  const stateEnteredAt = Number.isFinite(row.state_entered_at) ?
+    row.state_entered_at :
+    Number.isFinite(row.stateEnteredAt) ?
+      row.stateEnteredAt :
+      null;
+
+  return Object.freeze({
+    serviceId,
+    replicaId,
+    serviceType,
+    nodeId,
+    partitionId,
+    groupId,
+    status,
+    raftRole,
+    address,
+    previousState,
+    cleanupToken,
+    createAttemptToken,
+    createdAt,
+    stateEnteredAt,
+  });
+}
+
 function buildObservedReplicaLifecyclePrecondition(row) {
-  const stringsValid = LIFECYCLE_PRECONDITION_STRING_FIELDS.every(
-    (field) => typeof row?.[field] === 'string',
-  );
-  const numbersValid = LIFECYCLE_PRECONDITION_NUMBER_FIELDS.every(
-    (field) => Number.isFinite(row?.[field]),
-  );
-  if (!stringsValid || !numbersValid) {
+  const decoded = decodeCanonicalObservedReplicaRow(row);
+  if (
+    !decoded ||
+    !decoded.status ||
+    !decoded.nodeId ||
+    !Number.isFinite(decoded.createdAt) ||
+    !Number.isFinite(decoded.stateEnteredAt)
+  ) {
+    return NO_REPLICA_LIFECYCLE_PRECONDITION;
+  }
+  if (decoded.serviceType === UNIFIED_SERVICE_TYPE.PARTITION) {
+    if (!decoded.partitionId) {
+      return NO_REPLICA_LIFECYCLE_PRECONDITION;
+    }
+  } else if (decoded.serviceType === SERVICE_TYPE.MESSAGE_GROUP) {
+    if (!decoded.groupId) {
+      return NO_REPLICA_LIFECYCLE_PRECONDITION;
+    }
+  } else if (!decoded.partitionId && !decoded.groupId) {
     return NO_REPLICA_LIFECYCLE_PRECONDITION;
   }
   return Object.freeze({
-    service_id: row.service_id,
-    replica_id: row.replica_id,
-    group_id: row.group_id ?? null,
-    partition_id: row.partition_id,
-    node_id: row.node_id,
-    service_type: row.service_type,
-    status: row.status,
-    cleanup_token: typeof row.cleanup_token === 'string' ?
-      row.cleanup_token : null,
-    create_attempt_token: typeof row.create_attempt_token === 'string' ?
-      row.create_attempt_token : null,
-    created_at: row.created_at,
-    state_entered_at: row.state_entered_at,
+    service_id: decoded.serviceId,
+    replica_id: decoded.replicaId,
+    group_id: decoded.groupId,
+    partition_id: decoded.partitionId,
+    node_id: decoded.nodeId,
+    service_type: decoded.serviceType,
+    status: decoded.status,
+    cleanup_token: decoded.cleanupToken,
+    create_attempt_token: decoded.createAttemptToken,
+    created_at: decoded.createdAt,
+    state_entered_at: decoded.stateEnteredAt,
   });
 }
 
@@ -83,7 +130,6 @@ function assignReplicaOperationRepositoryObservationMethods(
     REPLICA_OPERATION_LOCAL_STATUS_READ_QUERY_OPTIONS,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
     ReplicaStatus,
-    SERVICE_TYPE,
     SQL,
     SYSTEM_TABLE_NAME,
     buildDivergenceEvent,
@@ -91,75 +137,41 @@ function assignReplicaOperationRepositoryObservationMethods(
   } = options;
 
   class ReplicaOperationRepositoryObservationMethods {
-  /**
-   * @param {Object} row
-   * @param {...string} fieldNames
-   * @return {string|null}
-   * @private
-   */
-    readObservedReplicaRowString(row, ...fieldNames) {
-      for (const fieldName of fieldNames) {
-        const value = row?.[fieldName];
-        if (typeof value !== 'string') {
-          continue;
-        }
-        const normalizedValue = value.trim();
-        if (normalizedValue.length > 0) {
-          return normalizedValue.toLowerCase();
-        }
-      }
-      return null;
-    }
-
     /**
-   * Normalize one observed services row into workflow replica lifecycle.
-   *
-   * Partition replicas that report `status=active` but still carry a learner
-   * role are not fully operational for REPLACE progression yet; they remain in
-   * the syncing phase until promotion. Conversely, a `syncing` partition row
-   * with a non-learner role and routable address has crossed the same
-   * voter-ready boundary used before the replica handler emits ACTIVE, so the
-   * coordinator treats it as active even when the status write is lagging.
-   *
-   * @param {Object} row
-   * @return {string|null}
-   */
+     * Normalize one observed services row into workflow replica lifecycle.
+     *
+     * Partition replicas that report `status=active` but still carry a learner
+     * role are not fully operational for REPLACE progression yet; they remain in
+     * the syncing phase until promotion. Conversely, a `syncing` partition row
+     * with a non-learner role and routable address has crossed the same
+     * voter-ready boundary used before the replica handler emits ACTIVE, so the
+     * coordinator treats it as active even when the status write is lagging.
+     *
+     * @param {Object} row
+     * @return {string|null}
+     */
     normalizeObservedReplicaLifecycle(row) {
-      const status = this.readObservedReplicaRowString(
-        row,
-        OBSERVED_REPLICA_ROW_FIELD.STATUS,
-      );
-      if (!status) {
+      const decoded = decodeCanonicalObservedReplicaRow(row);
+      if (!decoded || !decoded.status) {
         return null;
       }
-      const serviceType = this.readObservedReplicaRowString(
-        row,
-        OBSERVED_REPLICA_ROW_FIELD.SERVICE_TYPE,
-        OBSERVED_REPLICA_ROW_FIELD.SERVICE_TYPE_CAMEL,
-      );
-      if (serviceType !== SERVICE_TYPE.PARTITION) {
-        return status;
+      if (decoded.serviceType !== SERVICE_TYPE.PARTITION) {
+        return decoded.status;
       }
-      const raftRole = this.readObservedReplicaRowString(
-        row,
-        OBSERVED_REPLICA_ROW_FIELD.RAFT_ROLE,
-        OBSERVED_REPLICA_ROW_FIELD.RAFT_ROLE_CAMEL,
-      );
-      const address = this.readObservedReplicaRowString(
-        row,
-        OBSERVED_REPLICA_ROW_FIELD.ADDRESS,
-      );
-      if (status === ReplicaStatus.ACTIVE) {
-        return isVoterRaftRole(raftRole) ? status : ReplicaStatus.SYNCING;
+      if (decoded.status === ReplicaStatus.ACTIVE) {
+        if (!isVoterRaftRole(decoded.raftRole)) {
+          return ReplicaStatus.SYNCING;
+        }
+        return ReplicaStatus.ACTIVE;
       }
       if (
-        status === ReplicaStatus.SYNCING &&
-        isVoterRaftRole(raftRole) &&
-        address
+        decoded.status === ReplicaStatus.SYNCING &&
+        isVoterRaftRole(decoded.raftRole) &&
+        decoded.address
       ) {
         return ReplicaStatus.ACTIVE;
       }
-      return status;
+      return decoded.status;
     }
 
     /**
@@ -170,20 +182,15 @@ function assignReplicaOperationRepositoryObservationMethods(
      * @return {Object|null}
      */
     buildObservedReplicaTargetIdentity(row) {
-      if (!row || typeof row !== 'object') return null;
-      const F = OBSERVED_REPLICA_ROW_FIELD;
+      const decoded = decodeCanonicalObservedReplicaRow(row);
+      if (!decoded) return null;
       return Object.freeze({
-        replicaId: this.readObservedReplicaRowString(
-          row, F.REPLICA_ID, F.REPLICA_ID_CAMEL),
-        serviceId: this.readObservedReplicaRowString(
-          row, F.SERVICE_ID, F.SERVICE_ID_CAMEL),
-        partitionId: this.readObservedReplicaRowString(
-          row, F.PARTITION_ID, F.PARTITION_ID_CAMEL),
-        nodeId: this.readObservedReplicaRowString(
-          row, F.NODE_ID, F.NODE_ID_CAMEL),
-        serviceType: this.readObservedReplicaRowString(
-          row, F.SERVICE_TYPE, F.SERVICE_TYPE_CAMEL),
-        status: this.readObservedReplicaRowString(row, F.STATUS),
+        replicaId: decoded.replicaId,
+        serviceId: decoded.serviceId,
+        partitionId: decoded.partitionId,
+        nodeId: decoded.nodeId,
+        serviceType: decoded.serviceType,
+        status: decoded.status,
       });
     }
 
@@ -198,71 +205,47 @@ function assignReplicaOperationRepositoryObservationMethods(
      * @return {boolean}
      * @private
      */
-    doesObservedReplicaRowMatchTarget(row, replicaId, partitionId, targetNodeId) {
-      const observedIdentity = this.buildObservedReplicaTargetIdentity(row);
-      if (!observedIdentity) return false;
-      const expectedReplica = this.normalizeObservedTargetIdentifier(replicaId);
-      const expectedPartition = this.normalizeObservedTargetIdentifier(partitionId);
-      const expectedNode = this.normalizeObservedTargetIdentifier(targetNodeId);
-      return (
-        this.isObservedReplicaTargetNodeExact(expectedNode, observedIdentity.nodeId) &&
-        this.isObservedReplicaIdentityExact(expectedReplica, observedIdentity) &&
-        this.doesObservedReplicaEntityMatch(
-          expectedPartition, observedIdentity, row)
-      );
+    _doesObservedReplicaIdentityMatch(decoded, expectedReplica) {
+      if (expectedReplica.length === 0) return false;
+      const actualReplica = decoded.replicaId ? decoded.replicaId.toLowerCase() : null;
+      const actualService = decoded.serviceId ? decoded.serviceId.toLowerCase() : null;
+      if (!actualReplica && !actualService) return false;
+      if (actualReplica && actualReplica !== expectedReplica) return false;
+      if (actualService && actualService !== expectedReplica) {
+        return decoded.serviceType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE;
+      }
+      return true;
     }
 
-    doesObservedPartitionNodeRowMatchTarget(row, partitionId, targetNodeId) {
-      const observedIdentity = this.buildObservedReplicaTargetIdentity(row);
-      if (!observedIdentity ||
-          (observedIdentity.replicaId === null &&
-            observedIdentity.serviceId === null)) {
+    _doesObservedEntityMatch(decoded, expectedPartition) {
+      if (expectedPartition.length === 0) return false;
+      if (decoded.serviceType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE) {
+        return this.doesObservedRuntimeServiceEntityMatch(
+          expectedPartition,
+          decoded,
+        );
+      }
+      if (decoded.serviceType === SERVICE_TYPE.MESSAGE_GROUP) {
+        return decoded.groupId?.toLowerCase() === expectedPartition;
+      }
+      return decoded.partitionId?.toLowerCase() === expectedPartition;
+    }
+
+    doesObservedReplicaRowMatchTarget(row, replicaId, partitionId, targetNodeId) {
+      const decoded = decodeCanonicalObservedReplicaRow(row);
+      if (!decoded) return false;
+      const expectedNode = this.normalizeObservedTargetIdentifier(targetNodeId);
+      if (expectedNode.length === 0 || decoded.nodeId?.toLowerCase() !== expectedNode) {
         return false;
       }
+      const expectedReplica = this.normalizeObservedTargetIdentifier(replicaId);
+      if (!this._doesObservedReplicaIdentityMatch(decoded, expectedReplica)) return false;
       const expectedPartition = this.normalizeObservedTargetIdentifier(partitionId);
-      const expectedNode = this.normalizeObservedTargetIdentifier(targetNodeId);
-      return (
-        this.isObservedReplicaTargetNodeExact(expectedNode, observedIdentity.nodeId) &&
-        this.doesObservedReplicaEntityMatch(
-          expectedPartition, observedIdentity, row)
-      );
+      return this._doesObservedEntityMatch(decoded, expectedPartition);
     }
 
     normalizeObservedTargetIdentifier(value) {
       return typeof value === 'string' ? value.trim().toLowerCase() : '';
-    }
-
-    isObservedReplicaTargetNodeExact(expected, actual) {
-      return expected.length > 0 && actual === expected;
-    }
-
-    isObservedReplicaIdentityExact(expectedReplicaId, observedIdentity) {
-      if (expectedReplicaId.length === 0) return false;
-      const {replicaId, serviceId, serviceType} = observedIdentity;
-      if (replicaId === null && serviceId === null) return false;
-      if (replicaId !== null && replicaId !== expectedReplicaId) return false;
-      if (serviceId === null || serviceId === expectedReplicaId) return true;
-      return serviceType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
-        replicaId === expectedReplicaId;
-    }
-
-    doesObservedReplicaEntityMatch(
-      expectedPartitionId, observedIdentity, row,
-    ) {
-      if (expectedPartitionId.length === 0) return false;
-      if (observedIdentity.serviceType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE) {
-        return this.doesObservedRuntimeServiceEntityMatch(
-          expectedPartitionId, observedIdentity);
-      }
-      if (observedIdentity.serviceType === SERVICE_TYPE.MESSAGE_GROUP) {
-        const rowGroupId = this.readObservedReplicaRowString(
-          row,
-          OBSERVED_REPLICA_ROW_FIELD.GROUP_ID,
-          OBSERVED_REPLICA_ROW_FIELD.GROUP_ID_CAMEL,
-        );
-        return rowGroupId === expectedPartitionId;
-      }
-      return observedIdentity.partitionId === expectedPartitionId;
     }
 
     doesObservedRuntimeServiceEntityMatch(expectedEntityId, observedIdentity) {
@@ -288,13 +271,10 @@ function assignReplicaOperationRepositoryObservationMethods(
       replicaId,
       partitionId,
       targetNodeId,
-      options = {},
     ) {
       if (!this.systemTableCache) {
         return null;
       }
-      const allowPartitionNodeFallback =
-        options?.allowPartitionNodeFallback !== false;
       const normalizedReplicaId = typeof replicaId === 'string' ? replicaId : '';
       const normalizedPartitionId = typeof partitionId === 'string' ? partitionId : '';
       const normalizedTargetNodeId = typeof targetNodeId === 'string' ? targetNodeId : '';
@@ -305,15 +285,6 @@ function assignReplicaOperationRepositoryObservationMethods(
           normalizedPartitionId,
           normalizedTargetNodeId,
         );
-      const readAllServiceRows = () => {
-        if (typeof this.systemTableCache.getAll === 'function') {
-          return this.systemTableCache.getAll(SYSTEM_TABLE_NAME.SERVICES) || [];
-        }
-        if (typeof this.systemTableCache.filter === 'function') {
-          return this.systemTableCache.filter(SYSTEM_TABLE_NAME.SERVICES, () => true) || [];
-        }
-        return [];
-      };
       if (
         normalizedReplicaId.length > 0 &&
         typeof this.systemTableCache.get === 'function'
@@ -326,6 +297,15 @@ function assignReplicaOperationRepositoryObservationMethods(
           return cachedRow;
         }
       }
+      const readAllServiceRows = () => {
+        if (typeof this.systemTableCache.getAll === 'function') {
+          return this.systemTableCache.getAll(SYSTEM_TABLE_NAME.SERVICES) || [];
+        }
+        if (typeof this.systemTableCache.filter === 'function') {
+          return this.systemTableCache.filter(SYSTEM_TABLE_NAME.SERVICES, () => true) || [];
+        }
+        return [];
+      };
       const serviceRows = readAllServiceRows();
       if (normalizedReplicaId.length > 0) {
         const exactReplicaRow = serviceRows.find((row) => rowMatchesTarget(row));
@@ -333,18 +313,7 @@ function assignReplicaOperationRepositoryObservationMethods(
           return exactReplicaRow;
         }
       }
-      if (!allowPartitionNodeFallback) {
-        return null;
-      }
-      return (
-        serviceRows.find((row) =>
-          this.doesObservedPartitionNodeRowMatchTarget(
-            row,
-            normalizedPartitionId,
-            normalizedTargetNodeId,
-          ),
-        ) || null
-      );
+      return null;
     }
     /**
    * Get observed replica status from cache.
@@ -446,8 +415,6 @@ function assignReplicaOperationRepositoryObservationMethods(
     ) {
       const statusReadQueryOptions =
         this.resolveActualReplicaStatusReadQueryOptions(readOptions);
-      const allowPartitionNodeFallback =
-        readOptions?.allowPartitionNodeFallback !== false;
       let observedRow = null;
       let authoritativeReadAttempted = false;
       let authoritativeReadFailed = false;
@@ -481,20 +448,6 @@ function assignReplicaOperationRepositoryObservationMethods(
             row, replicaId, partitionId, targetNodeId),
         );
       }
-      if (!observedRow && allowPartitionNodeFallback) {
-        // Secondary lookup by partition + node when replicaId yields no row
-        recordAuthoritativeResult(
-          await readAuthoritativeControlPlaneRows(
-            this.controlPlaneSystemTableGateway,
-            SYSTEM_TABLE_NAME.SERVICES,
-            SQL.SELECT_REPLICA_BY_PARTITION_NODE,
-            [partitionId, targetNodeId],
-            statusReadQueryOptions,
-          ),
-          (row) => this.doesObservedPartitionNodeRowMatchTarget(
-            row, partitionId, targetNodeId),
-        );
-      }
       return {
         observedRow,
         authoritativeReadAttempted,
@@ -502,47 +455,7 @@ function assignReplicaOperationRepositoryObservationMethods(
         authoritativeTargetMismatch,
       };
     }
-    /**
-     * Resolve the cache-fallback observation for a replica whose
-     * authoritative read was unavailable or failed. Null when the cache holds
-     * no matching row (the caller then classifies the read outcome).
-     * @param {string} replicaId
-     * @param {string} partitionId
-     * @param {string} targetNodeId
-     * @param {Object} readOptions
-     * @param {boolean} authoritativeReadFailed
-     * @return {Object|null} Frozen observation or null.
-     * @private
-     */
-    buildCacheFallbackReplicaObservation(
-      replicaId,
-      partitionId,
-      targetNodeId,
-      readOptions,
-      authoritativeReadFailed,
-    ) {
-      const observedRow = this.getObservedReplicaRowFromCache(
-        replicaId,
-        partitionId,
-        targetNodeId,
-        readOptions,
-      );
-      if (!observedRow) {
-        return null;
-      }
-      return Object.freeze({
-        state: REPLICA_OPERATION_REPOSITORY_LITERAL.OBSERVED,
-        source:
-          authoritativeReadFailed === true ?
-            REPLICA_OPERATION_REPOSITORY_LITERAL
-              .CACHE_FALLBACK_AFTER_AUTHORITATIVE_FAILURE :
-            REPLICA_OPERATION_REPOSITORY_LITERAL.CACHE,
-        lifecycleStatus: this.resolveObservedReplicaLifecycleStatus(
-          observedRow,
-          readOptions,
-        ),
-      });
-    }
+
     /**
      * Classify a successful-but-empty authoritative read. ABSENT is positive
      * retirement evidence and terminates retiring operations, so absence must
@@ -589,22 +502,21 @@ function assignReplicaOperationRepositoryObservationMethods(
         source: REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE,
       });
     }
+
     /**
-   * Get authoritative replica status via SQL, with cache
-   * fallback for degraded conditions.
-   * @param {string} replicaId
-   * @param {string} partitionId
-   * @param {string} targetNodeId
-   * @param {Object} [readOptions={}]
-   * @return {Promise<Object>}
-   */
+     * Get authoritative replica observation via SQL.
+     * @param {string} replicaId
+     * @param {string} partitionId
+     * @param {string} targetNodeId
+     * @param {Object} [readOptions={}]
+     * @return {Promise<Object>}
+     */
     async getActualReplicaObservation(
       replicaId,
       partitionId,
       targetNodeId,
       readOptions = {},
     ) {
-      const allowCacheFallback = readOptions?.allowCacheFallback !== false;
       const {
         observedRow,
         authoritativeReadAttempted,
@@ -616,23 +528,8 @@ function assignReplicaOperationRepositoryObservationMethods(
         targetNodeId,
         readOptions,
       );
-      if (
-        !observedRow &&
-        allowCacheFallback &&
-        (!authoritativeReadAttempted || authoritativeReadFailed)
-      ) {
-        const cacheObservation = this.buildCacheFallbackReplicaObservation(
-          replicaId,
-          partitionId,
-          targetNodeId,
-          readOptions,
-          authoritativeReadFailed,
-        );
-        if (cacheObservation) {
-          return cacheObservation;
-        }
-      }
       if (observedRow) {
+        const decoded = decodeCanonicalObservedReplicaRow(observedRow);
         return Object.freeze({
           state: REPLICA_OPERATION_REPOSITORY_LITERAL.OBSERVED,
           source: REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE,
@@ -640,11 +537,7 @@ function assignReplicaOperationRepositoryObservationMethods(
             observedRow,
             readOptions,
           ),
-          previousState: this.readObservedReplicaRowString(
-            observedRow,
-            OBSERVED_REPLICA_ROW_FIELD.PREVIOUS_STATE,
-            OBSERVED_REPLICA_ROW_FIELD.PREVIOUS_STATE_CAMEL,
-          ),
+          previousState: decoded?.previousState || null,
           observedTargetIdentity:
             this.buildObservedReplicaTargetIdentity(observedRow),
           lifecyclePrecondition:

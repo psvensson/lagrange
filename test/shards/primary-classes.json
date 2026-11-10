@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2280,
+    "unit": 2281,
     "integration": 124,
     "bootstrap": 223,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2634,
-  "digest": "fnv1a32-05eef723",
+  "censusSize": 2635,
+  "digest": "fnv1a32-295ff72e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1847,6 +1847,7 @@
     "test/rebalancer/batching-concurrency.property.test.js": "unit",
     "test/rebalancer/blocked-spread-release-event-wake.test.js": "unit",
     "test/rebalancer/call-activation-pin-planning.test.js": "unit",
+    "test/rebalancer/canonical-replica-completion-observation.test.js": "unit",
     "test/rebalancer/canonical-replica-inventory-cutover-guard.test.js": "unit",
     "test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js": "unit",
     "test/rebalancer/cl-036-publications-quorum-escape.test.js": "unit",

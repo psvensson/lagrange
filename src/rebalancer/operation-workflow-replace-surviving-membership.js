@@ -86,7 +86,6 @@ function observedReplaceTargetStatus(owner, operation) {
     targetReplicaId,
     operation.partitionId,
     operation.targetNodeId,
-    {allowPartitionNodeFallback: false},
   );
 }
 

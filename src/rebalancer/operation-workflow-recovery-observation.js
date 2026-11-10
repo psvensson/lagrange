@@ -534,9 +534,6 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
         replicaId,
         partitionId,
         targetNodeId,
-        {
-          allowPartitionNodeFallback: false,
-        },
       );
       const observationState =
         observation?.state || STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE;
