@@ -30,6 +30,7 @@ const CACHE_RECONCILIATION_DIAGNOSTIC = Object.freeze({
     'post_apply_cache_divergence=unclassified',
 });
 const LOCAL_STR_APPLYSYSTEMTABLECHANGE = 'applySystemTableChange';
+const PRE_APPLY_INVALID_OR_DUPLICATE_KEYS = 'pre_apply_invalid_or_duplicate_keys';
 
 // The cache's own causal order (HLC / updated_at / nodes heartbeat watermark)
 // is the authority on row supersession. A cached row that this order proves
@@ -106,10 +107,17 @@ function resolveCacheTargets(gateway, options) {
 // with the input wrapper: full reconciliation and committed CDC propagate;
 // authoritative subset repair logs per row and continues.
 function applyCacheRow(target, tableName, operation, row, options) {
-  target.applySystemTableChange(tableName, operation, row, options);
+  return target.applySystemTableChange(tableName, operation, row, options);
 }
 
 const CACHE_APPLY_FAILED = 'control_plane_gateway_apply_cache_failed';
+
+function logCacheApplyError(gateway, tableName, error) {
+  const errorMsg = error ? error.message : null;
+  gateway?.logger?.debug?.(CACHE_APPLY_FAILED, {
+    tableName, error: errorMsg ?? String(error),
+  });
+}
 
 function applyBestEffortRows(gateway, writableCache, tableName, rows, operation, options) {
   const target = resolveWritableCacheTarget(gateway, writableCache);
@@ -119,26 +127,32 @@ function applyBestEffortRows(gateway, writableCache, tableName, rows, operation,
     try {
       applyCacheRow(target, tableName, operation, row, options);
     } catch (error) {
-      gateway?.logger?.debug?.(CACHE_APPLY_FAILED, {
-        tableName, error: error?.message ?? String(error),
-      });
+      logCacheApplyError(gateway, tableName, error);
     }
   }
-  // A usable target accepted this batch. This is not a row-change count,
-  // durable-progress verdict, or complete-table observation receipt.
   return true;
 }
 
-function applyAuthoritativeSystemTableRowsToCache(gateway, writableCache, tableName, rows) {
-  return applyBestEffortRows(gateway, writableCache, tableName, rows, CDC_OPERATION.UPSERT);
+function applyAuthoritativeSystemTableRowsToCache(
+  gateway, writableCache, tableName, rows, options,
+) {
+  return applyBestEffortRows(
+    gateway, writableCache, tableName, rows, CDC_OPERATION.UPSERT, options,
+  );
 }
 
 function evictAuthoritativeAbsentSystemTableRowsFromCache(
-  gateway, writableCache, tableName, rows,
+  gateway, writableCache, tableName, rows, options,
 ) {
-  return applyBestEffortRows(gateway, writableCache, tableName, rows, CDC_OPERATION.DELETE, {
+  const deleteOptions = options ? {
     mutationMode: SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_ABSENCE_RECONCILIATION,
-  });
+    ...options,
+  } : {
+    mutationMode: SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_ABSENCE_RECONCILIATION,
+  };
+  return applyBestEffortRows(
+    gateway, writableCache, tableName, rows, CDC_OPERATION.DELETE, deleteOptions,
+  );
 }
 
 function resolveCommittedCdcObservedAtMs(observedAtMs, nowFn) {
@@ -659,6 +673,12 @@ function buildReconciliationSuccess(context, mutationCount, publication) {
   };
 }
 
+function resolvePreApplyReconciliationReason(indexes) {
+  return indexes.unreconciledCachedKeyCount > 0 ?
+    `pre_apply_unreconciled_cached_keys=${indexes.unreconciledCachedKeyCount}` :
+    PRE_APPLY_INVALID_OR_DUPLICATE_KEYS;
+}
+
 const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
   /**
    * Reconcile authoritative rows into the writable system-table cache.
@@ -721,18 +741,10 @@ const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
     });
     const indexes = buildReconciliationIndexes(context);
     if (observationRequested && !indexes.publishable) {
-      const reconciliationReason =
-        indexes.unreconciledCachedKeyCount > 0 ?
-          `pre_apply_unreconciled_cached_keys=${
-            indexes.unreconciledCachedKeyCount
-          }` :
-          'pre_apply_invalid_or_duplicate_keys';
       return buildAuthoritativeObservationFailure(
-        tableName,
-        reconcileIntent,
-        0,
+        tableName, reconcileIntent, 0,
         CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED,
-        reconciliationReason,
+        resolvePreApplyReconciliationReason(indexes),
       );
     }
 
@@ -747,14 +759,10 @@ const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
       );
     }
 
-    const publication = publishAuthoritativeObservation({
-      ...context,
-    });
+    const publication = publishAuthoritativeObservation({...context});
     if (!publication.success) {
       return buildAuthoritativeObservationFailure(
-        tableName,
-        reconcileIntent,
-        mutationCount,
+        tableName, reconcileIntent, mutationCount,
         CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.STORAGE_UNAVAILABLE,
       );
     }
@@ -762,16 +770,9 @@ const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
     return buildReconciliationSuccess(context, mutationCount, publication);
   },
 
-  applyCommittedPartitionCdcEventToCache(
-    systemTableCache,
-    cdcEvent,
-    observedAtMs,
-  ) {
+  applyCommittedPartitionCdcEventToCache(systemTableCache, cdcEvent, observedAtMs) {
     applyCommittedPartitionCdcEventToCache(
-      systemTableCache,
-      cdcEvent,
-      observedAtMs,
-      this.now,
+      systemTableCache, cdcEvent, observedAtMs, this.now,
     );
   },
 };

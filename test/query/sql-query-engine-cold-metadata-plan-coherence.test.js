@@ -14,6 +14,7 @@ import {
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {CACHE_CDC_OPERATIONS} from '../../src/cache/cache-constants.js';
 import {TABLES} from '../../src/constants/index.js';
+import {INITIAL_PARTITION_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   createCommittedServeEligibilityOwner,
 } from '../control-plane/serve-eligibility-test-support.js';
@@ -56,6 +57,30 @@ function buildServiceRow(partitionId) {
   };
 }
 
+function createCatalogReadWitness(tableName) {
+  return {
+    state: 'observed',
+    partitionId: INITIAL_PARTITION_IDS[tableName] || `${tableName}-p1`,
+    role: 'leader',
+    servingNodeId: TEST_NODE_ID,
+    servingReplicaId: `replica-${TEST_NODE_ID}`,
+    observedAtMs: Date.now(),
+  };
+}
+
+function resolveCatalogTableRows(catalog, tableName, targetTable) {
+  if (tableName === TABLES.TABLES) {
+    return (catalog.tables || []).filter((r) => r.table_name === targetTable);
+  }
+  if (tableName === TABLES.PARTITIONS) {
+    return (catalog.partitions || []).filter((r) => r.table_name === targetTable);
+  }
+  if (tableName === TABLES.SERVICES) {
+    return catalog.services || [];
+  }
+  return [];
+}
+
 function buildAuthoritativeCatalogGateway(catalog, hooks = {}) {
   return {
     async readAuthoritativeRows(tableName, _sql, params = [], options = {}) {
@@ -64,22 +89,14 @@ function buildAuthoritativeCatalogGateway(catalog, hooks = {}) {
         return hooks.overrideRead(tableName, params, options);
       }
       const targetTable = params[0] || null;
-      if (tableName === TABLES.TABLES) {
-        const rows = (catalog.tables || []).filter(
-          (row) => row.table_name === targetTable,
-        );
-        return {success: true, rows};
-      }
-      if (tableName === TABLES.PARTITIONS) {
-        const rows = (catalog.partitions || []).filter(
-          (row) => row.table_name === targetTable,
-        );
-        return {success: true, rows};
-      }
-      if (tableName === TABLES.SERVICES) {
-        return {success: true, rows: catalog.services || []};
-      }
-      return {success: true, rows: []};
+      const witness = createCatalogReadWitness(tableName);
+      const rows = resolveCatalogTableRows(catalog, tableName, targetTable);
+      return {
+        success: true,
+        rows,
+        rowSetComplete: true,
+        readAuthorityWitness: witness,
+      };
     },
   };
 }

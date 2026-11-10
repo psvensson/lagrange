@@ -122,25 +122,26 @@ function mutationObservationCompatible(
 }
 
 function cacheWriteIsFenced(options) {
-  if (options.operation === CDC_OPERATIONS.DELETE) {
-    return false;
-  }
+  if (options.operation === CDC_OPERATIONS.DELETE) return false;
   if (options.completeAuthoritativePresence) {
     return options.cache.tombstoneStore.completeObservationWriteIsFenced(
-      options.tableName,
-      options.key,
+      options.tableName, options.key,
       Math.floor(Number(options.authoritativeObservedAtMs)),
       Math.floor(Number(options.authoritativeReadStartedAtMs)),
     );
   }
+  const incomingObservedAtMs =
+    Number.isFinite(options?.authoritativeObservedAtMs) ?
+      options.authoritativeObservedAtMs :
+      (Number.isFinite(options?.readAuthorityWitness?.observedAtMs) ?
+        options.readAuthorityWitness.observedAtMs : null);
   return options.cache.tombstoneStore.writeIsFenced(
-    options.tableName,
-    options.key,
-    options.data,
-    {
+    options.tableName, options.key, options.data, {
       keyPresent: options.table.has(options.key),
-      authoritativeObservedAtMs:
+      authoritativeTableAbsenceObservedAtMs:
         options.cache.getLastAuthoritativeObservedAtMs(options.tableName),
+      incomingAuthoritativeObservedAtMs: incomingObservedAtMs,
+      readAuthorityWitness: options.readAuthorityWitness || null,
     },
   );
 }
@@ -313,13 +314,14 @@ class SystemTableCache {
       authoritativeObservedAtMs: options?.authoritativeObservedAtMs,
       authoritativeReadStartedAtMs:
         options?.authoritativeReadStartedAtMs,
+      readAuthorityWitness: options?.readAuthorityWitness,
     })) {
       this.logger.debug(CACHE_LOG_MSG.WRITE_FENCED_BY_TOMBSTONE, {
         tableName,
         key,
         operation,
       });
-      return;
+      return false;
     }
 
     switch (operation) {
@@ -554,6 +556,7 @@ class SystemTableCache {
         appliedChangeMetadata,
       );
     }
+    return incomingVersionAccepted;
   }
 
   /**

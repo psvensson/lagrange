@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 281,
-    "query-sql": 193,
+    "query-sql": 194,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2635,
-  "digest": "fnv1a32-484822c1",
+  "censusSize": 2636,
+  "digest": "fnv1a32-fc6fc081",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2a9b7a2d",
+  "observationDigest": "fnv1a32-fdf8213c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1552,6 +1552,7 @@
     "test/query/call-plan.test.js": "query-sql",
     "test/query/call-stage.test.js": "query-sql",
     "test/query/cancellation-token.test.js": "query-sql",
+    "test/query/catalog-authority-and-visible-reconciliation.test.js": "query-sql",
     "test/query/coordinator-resource-limits.property.test.js": "query-sql",
     "test/query/create-table-policy-option.test.js": "query-sql",
     "test/query/cross-partition-join-pushdown.test.js": "query-sql",
@@ -13445,6 +13446,15 @@
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js"
+      ]
+    },
+    "test/query/catalog-authority-and-visible-reconciliation.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/query/create-table-policy-option.test.js": {

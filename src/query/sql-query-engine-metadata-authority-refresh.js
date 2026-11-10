@@ -1,9 +1,13 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
   applyAuthoritativeSystemTableRowsToCache,
   evictAuthoritativeAbsentSystemTableRowsFromCache,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
+import {isValidLeaderReadAuthorityWitness} from
+  '../control-plane/control-plane-authoritative-read-witness.js';
 import {
   getSystemCachePrimaryKeyField,
   resolveSystemCacheRowKey,
@@ -31,6 +35,7 @@ const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_NUMBER = 'number';
 const TIMEOUT_MESSAGE_REGEX = /\b(?:timed?\s*out|timeout|deadline)\b/iu;
 const CANCELLED_MESSAGE_REGEX = /\b(?:cancel(?:led|ed)?|aborted)\b/iu;
+const REQUIRED_CATALOG_RESULT_COUNT = 3;
 
 const METADATA_AUTHORITY_REFRESH_OUTCOME = Object.freeze({
   FOUND: 'FOUND',
@@ -285,8 +290,55 @@ function createRaceCleanupGuard(budgetMs, cancellationToken) {
   return {raceEntries, cleanup};
 }
 
-function isFailedGatewayReadResult(result) {
-  return !result || result.success === false || !Array.isArray(result.rows);
+function rowMatchesTargetTable(row, targetName) {
+  return (row.table_name && row.table_name === targetName) ||
+    (row.table_id && row.table_id === targetName);
+}
+
+function hasMismatchedTableRow(rows, targetName) {
+  if (typeof targetName !== LOCAL_STR_STRING || targetName.length === 0) return false;
+  for (const row of rows) {
+    if (row && typeof row === LOCAL_STR_OBJECT) {
+      if (rowMatchesTargetTable(row, targetName)) continue;
+      const rowName = row.table_name || row.table_id;
+      if (typeof rowName === LOCAL_STR_STRING && rowName !== targetName) return true;
+    }
+  }
+  return false;
+}
+
+function hasMismatchedPartitionRow(rows, targetName) {
+  if (typeof targetName !== LOCAL_STR_STRING || targetName.length === 0) return false;
+  for (const row of rows) {
+    if (row && typeof row === LOCAL_STR_OBJECT &&
+        typeof row.table_name === LOCAL_STR_STRING && row.table_name !== targetName) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const isDegradedOrIncomplete = (r) => !r || r.success === false || !Array.isArray(r.rows) ||
+  r.partial === true || r.degraded === true || r.rowSetComplete === false;
+
+function isInvalidCatalogReadResult(result, expectedSystemTable, targetName) {
+  if (isDegradedOrIncomplete(result)) return true;
+  const expectedPartitionId = INITIAL_PARTITION_IDS[expectedSystemTable] || null;
+  if (result.readAuthorityWitness) {
+    if (!isValidLeaderReadAuthorityWitness(result.readAuthorityWitness, expectedPartitionId)) {
+      return true;
+    }
+  } else if (result.rowSetComplete === true) {
+    return true;
+  }
+  if (expectedSystemTable === TABLES.TABLES && hasMismatchedTableRow(result.rows, targetName)) {
+    return true;
+  }
+  if (expectedSystemTable === TABLES.PARTITIONS &&
+      hasMismatchedPartitionRow(result.rows, targetName)) {
+    return true;
+  }
+  return false;
 }
 
 function buildFailedBatchOutcome(result) {
@@ -298,16 +350,25 @@ function buildFailedBatchOutcome(result) {
   };
 }
 
-function evaluateAuthoritativeReadBatch(results) {
-  const failedResult = results.find((result) =>
-    isFailedGatewayReadResult(result),
-  );
-  return failedResult ?
-    buildFailedBatchOutcome(failedResult) :
-    {
-      outcome: METADATA_AUTHORITY_REFRESH_OUTCOME.FOUND,
-      results,
+function evaluateAuthoritativeReadBatch(results, targetName = null) {
+  if (!Array.isArray(results) || results.length < REQUIRED_CATALOG_RESULT_COUNT) {
+    return {
+      outcome: METADATA_AUTHORITY_REFRESH_OUTCOME.UNAVAILABLE,
+      reason: METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED,
+      errorMessage: '',
     };
+  }
+  const [tableResult, partitionResult, serviceResult] = results;
+  if (isInvalidCatalogReadResult(tableResult, TABLES.TABLES, targetName)) {
+    return buildFailedBatchOutcome(tableResult);
+  }
+  if (isInvalidCatalogReadResult(partitionResult, TABLES.PARTITIONS, targetName)) {
+    return buildFailedBatchOutcome(partitionResult);
+  }
+  if (isInvalidCatalogReadResult(serviceResult, TABLES.SERVICES, null)) {
+    return buildFailedBatchOutcome(serviceResult);
+  }
+  return {outcome: METADATA_AUTHORITY_REFRESH_OUTCOME.FOUND, results};
 }
 
 function resolvePreflightFetchState(engine, queryOptions) {
@@ -347,56 +408,35 @@ function buildCaughtFetchOutcome(error, cancellationToken) {
 function startAuthoritativeCatalogReads(gateway, targetName, readOptions) {
   const fetchPromise = Promise.all([
     gateway.readAuthoritativeRows(
-      TABLES.TABLES,
-      LOOKUP_TABLE_SQL,
-      [targetName],
-      readOptions,
+      TABLES.TABLES, LOOKUP_TABLE_SQL, [targetName], readOptions,
     ),
     gateway.readAuthoritativeRows(
-      TABLES.PARTITIONS,
-      LOOKUP_PARTITIONS_SQL,
-      [targetName],
-      readOptions,
+      TABLES.PARTITIONS, LOOKUP_PARTITIONS_SQL, [targetName], readOptions,
     ),
     gateway.readAuthoritativeRows(
-      TABLES.SERVICES,
-      LOOKUP_SERVICES_SQL,
-      [],
-      readOptions,
+      TABLES.SERVICES, LOOKUP_SERVICES_SQL, [], readOptions,
     ),
-  ]).then((results) => evaluateAuthoritativeReadBatch(results));
+  ]).then((results) => evaluateAuthoritativeReadBatch(results, targetName));
   fetchPromise.catch(() => {});
   return fetchPromise;
 }
 
 async function fetchAuthoritativeTableRows(
-  engine,
-  gateway,
-  targetName,
-  queryOptions = {},
+  engine, gateway, targetName, queryOptions = {},
 ) {
   const preflight = resolvePreflightFetchState(engine, queryOptions);
-  if (preflight.earlyOutcome) {
-    return preflight.earlyOutcome;
-  }
+  if (preflight.earlyOutcome) return preflight.earlyOutcome;
   const {budgetMs, cancellationToken} = preflight;
   const readOptions = {
     authoritativeReadMode:
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
+    leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
     timeoutMs: budgetMs,
     ...(cancellationToken ? {cancellationToken} : {}),
   };
-  const {raceEntries, cleanup} = createRaceCleanupGuard(
-    budgetMs,
-    cancellationToken,
-  );
+  const {raceEntries, cleanup} = createRaceCleanupGuard(budgetMs, cancellationToken);
   try {
-    const fetchPromise = startAuthoritativeCatalogReads(
-      gateway,
-      targetName,
-      readOptions,
-    );
+    const fetchPromise = startAuthoritativeCatalogReads(gateway, targetName, readOptions);
     return await Promise.race([fetchPromise, ...raceEntries]);
   } catch (error) {
     return buildCaughtFetchOutcome(error, cancellationToken);
@@ -406,26 +446,19 @@ async function fetchAuthoritativeTableRows(
 }
 
 function findCachedRowByField(store, tableName, keyField, key) {
-  if (key === undefined || key === null) {
-    return null;
-  }
+  if (key === undefined || key === null) return null;
   if (typeof store.find === LOCAL_STR_FUNCTION) {
-    return store.find(
-      tableName,
-      (candidate) => candidate?.[keyField] === key,
-    ) || null;
+    return store.find(tableName, (c) => c?.[keyField] === key) || null;
   }
   if (typeof store.getAll === LOCAL_STR_FUNCTION) {
     const rows = store.getAll(tableName) || [];
-    return rows.find((candidate) => candidate?.[keyField] === key) || null;
+    return rows.find((c) => c?.[keyField] === key) || null;
   }
   return null;
 }
 
 function findExistingCachedRow(store, tableName, row) {
-  if (!store || !row || typeof row !== LOCAL_STR_OBJECT) {
-    return null;
-  }
+  if (!store || !row || typeof row !== LOCAL_STR_OBJECT) return null;
   const key = resolveSystemCacheRowKey(tableName, row);
   if (
     typeof key === LOCAL_STR_STRING &&
@@ -433,73 +466,100 @@ function findExistingCachedRow(store, tableName, row) {
     typeof store.get === LOCAL_STR_FUNCTION
   ) {
     const direct = store.get(tableName, key);
-    if (direct) {
-      return direct;
-    }
+    if (direct) return direct;
   }
   const keyField = getSystemCachePrimaryKeyField(tableName);
   return findCachedRowByField(store, tableName, keyField, key);
 }
 
 function filterChangedRows(store, tableName, rows) {
-  if (!Array.isArray(rows) || rows.length === 0) {
-    return [];
-  }
+  if (!Array.isArray(rows) || rows.length === 0) return [];
   return rows.filter((row) => {
-    if (!row || typeof row !== LOCAL_STR_OBJECT) {
-      return false;
-    }
+    if (!row || typeof row !== LOCAL_STR_OBJECT) return false;
     const existingRow = findExistingCachedRow(store, tableName, row);
-    if (!existingRow) {
-      return true;
-    }
-    return !areAuthoritativeSystemTableCacheRowsEqual(
-      tableName,
-      existingRow,
-      row,
-    );
+    return !existingRow || !areAuthoritativeSystemTableCacheRowsEqual(tableName, existingRow, row);
   });
 }
 
-function applyTableResultToStore(store, gateway, tableName, result) {
+function resolveBatchObservedAtMs(results) {
+  if (!Array.isArray(results)) {
+    return null;
+  }
+  const timestamps = results
+    .map((r) => r?.readAuthorityWitness?.observedAtMs)
+    .filter((t) => Number.isFinite(t) && t >= 0);
+  return timestamps.length > 0 ? Math.max(...timestamps) : null;
+}
+
+function applyTableResultToStore(store, gateway, tableName, result, options = {}) {
   const changedRows = filterChangedRows(store, tableName, result?.rows);
   if (changedRows.length === 0) return false;
-  return applyAuthoritativeSystemTableRowsToCache(gateway, store, tableName, changedRows);
+  return applyAuthoritativeSystemTableRowsToCache(
+    gateway,
+    store,
+    tableName,
+    changedRows,
+    options,
+  );
 }
 
-function evictStoreRow(store, gateway, systemTable, row) {
+function evictStoreRow(store, gateway, systemTable, row, options = {}) {
   if (!store || !row || typeof row !== LOCAL_STR_OBJECT) return;
-  evictAuthoritativeAbsentSystemTableRowsFromCache(gateway, store, systemTable, [row]);
+  evictAuthoritativeAbsentSystemTableRowsFromCache(
+    gateway,
+    store,
+    systemTable,
+    [row],
+    options,
+  );
 }
 
-function evictMatchingStoreRows(store, gateway, systemTable, predicate) {
-  const rows = typeof store?.getAll === LOCAL_STR_FUNCTION ? store.getAll(systemTable) || [] : [];
+function evictMatchingStoreRows(store, gateway, systemTable, predicate, options = {}) {
+  const rows = typeof store?.getAll === LOCAL_STR_FUNCTION ?
+    store.getAll(systemTable) || [] : [];
   for (const row of rows) {
-    if (predicate(row)) evictStoreRow(store, gateway, systemTable, row);
+    if (predicate(row)) evictStoreRow(store, gateway, systemTable, row, options);
   }
 }
 
-function evictAbsentCatalogRows(store, gateway, tableName, results) {
+function evictAbsentCatalogRows(store, gateway, tableName, results, options = {}) {
   if (!Array.isArray(results) || !store) return;
-  if (!hasAnyRowInResult(results[0])) {
+  const tableResult = results[0];
+  if (isInvalidCatalogReadResult(tableResult, TABLES.TABLES, tableName)) {
+    return;
+  }
+  if (!hasAnyRowInResult(tableResult)) {
     evictMatchingStoreRows(store, gateway, TABLES.TABLES,
-      (row) => row?.table_name === tableName || row?.table_id === tableName);
-    evictMatchingStoreRows(
-      store, gateway, TABLES.PARTITIONS, (row) => row?.table_name === tableName);
+      (r) => r?.table_name === tableName || r?.table_id === tableName, options);
+    evictMatchingStoreRows(store, gateway, TABLES.PARTITIONS,
+      (r) => r?.table_name === tableName, options);
   } else if (!hasAnyRowInResult(results[1])) {
-    evictMatchingStoreRows(
-      store, gateway, TABLES.PARTITIONS, (row) => row?.table_name === tableName);
+    const partitionResult = results[1];
+    if (!isInvalidCatalogReadResult(partitionResult, TABLES.PARTITIONS, tableName)) {
+      evictMatchingStoreRows(store, gateway, TABLES.PARTITIONS,
+        (r) => r?.table_name === tableName, options);
+    }
   }
 }
 
 function applyAuthoritativeRowsToStore(store, gateway, results, tableName = null) {
   if (!Array.isArray(results)) return false;
-  evictAbsentCatalogRows(store, gateway, tableName, results);
+  const observedAtMs = resolveBatchObservedAtMs(results);
+  const options = {
+    authoritativeObservedAtMs: observedAtMs,
+    readAuthorityWitness: results[0]?.readAuthorityWitness || null,
+  };
+  evictAbsentCatalogRows(store, gateway, tableName, results, options);
   const [tableResult, partitionResult, serviceResult] = results;
-  const tableApplied = applyTableResultToStore(store, gateway, TABLES.TABLES, tableResult);
-  const partitionApplied =
-    applyTableResultToStore(store, gateway, TABLES.PARTITIONS, partitionResult);
-  const serviceApplied = applyTableResultToStore(store, gateway, TABLES.SERVICES, serviceResult);
+  const tableApplied = applyTableResultToStore(
+    store, gateway, TABLES.TABLES, tableResult, options,
+  );
+  const partitionApplied = applyTableResultToStore(
+    store, gateway, TABLES.PARTITIONS, partitionResult, options,
+  );
+  const serviceApplied = applyTableResultToStore(
+    store, gateway, TABLES.SERVICES, serviceResult, options,
+  );
   return tableApplied || partitionApplied || serviceApplied;
 }
 
@@ -517,15 +577,6 @@ function resolveMetadataPresence(engine, tableName, results = null) {
   const hasTableMetadata = Boolean(engine?.getTableInfo?.(tableName));
   const hasPartitions = (engine?.getTablePartitions?.(tableName)?.length || 0) > 0;
   return {hasTableMetadata, hasPartitions};
-}
-
-function classifyMetadataPresenceOutcome(tableName, presence, applied) {
-  if (!presence.hasTableMetadata) return buildAbsentRefreshResult(tableName);
-  if (!presence.hasPartitions) {
-    return buildUnavailableRefreshResult(
-      tableName, METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED);
-  }
-  return buildFoundRefreshResult(applied);
 }
 
 function resolveStoreAndGateway(engine) {
@@ -551,16 +602,24 @@ function settleFetchedMetadataOutcome(engine, store, gateway, context) {
   if (fetchOutcome.outcome === METADATA_AUTHORITY_REFRESH_OUTCOME.UNAVAILABLE) {
     return buildUnavailableRefreshResult(tableName, fetchOutcome.reason, fetchOutcome.errorMessage);
   }
-  const applied = fetchOutcome.outcome === METADATA_AUTHORITY_REFRESH_OUTCOME.FOUND ?
-    applyAuthoritativeRowsToStore(store, gateway, fetchOutcome.results, tableName) : false;
-  const presence = resolveMetadataPresence(engine, tableName, fetchOutcome.results);
-  return classifyMetadataPresenceOutcome(tableName, presence, applied);
+  const [tableResult] = fetchOutcome.results;
+  if (!hasAnyRowInResult(tableResult)) {
+    applyAuthoritativeRowsToStore(store, gateway, fetchOutcome.results, tableName);
+    return buildAbsentRefreshResult(tableName);
+  }
+  const applied = applyAuthoritativeRowsToStore(store, gateway, fetchOutcome.results, tableName);
+  const tableInfo = engine?.getTableInfo?.(tableName);
+  const partitions = engine?.getTablePartitions?.(tableName) || [];
+  if (!tableInfo || partitions.length === 0) {
+    return buildUnavailableRefreshResult(
+      tableName, METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED, '',
+    );
+  }
+  return buildFoundRefreshResult(applied);
 }
 
 async function refreshTableRoutingMetadataFromAuthority(
-  engine,
-  tableName,
-  lookupOptions = {},
+  engine, tableName, lookupOptions = {},
 ) {
   if (typeof tableName !== LOCAL_STR_STRING || tableName.length === 0) {
     return buildAbsentRefreshResult(String(tableName || ''));
@@ -570,15 +629,9 @@ async function refreshTableRoutingMetadataFromAuthority(
     return settleUnreadableGatewayOutcome(engine, gateway, tableName);
   }
   const fetchOutcome = await fetchAuthoritativeTableRows(
-    engine,
-    gateway,
-    tableName,
-    lookupOptions,
+    engine, gateway, tableName, lookupOptions,
   );
-  return settleFetchedMetadataOutcome(engine, store, gateway, {
-    tableName,
-    fetchOutcome,
-  });
+  return settleFetchedMetadataOutcome(engine, store, gateway, {tableName, fetchOutcome});
 }
 
 function hasRoutableTablePlan(tablePlan) {
@@ -593,17 +646,11 @@ function collectColdSelectTables(engine, ast, distributedPlan) {
   const coldTables = [];
   const seen = new Set();
   const addIfCold = (tableName, alias) => {
-    if (
-      typeof tableName !== LOCAL_STR_STRING ||
-      tableName.length === 0 ||
-      seen.has(tableName)
-    ) {
+    if (typeof tableName !== LOCAL_STR_STRING || tableName.length === 0 || seen.has(tableName)) {
       return;
     }
-    const plan =
-      distributedPlan.tablePlans.get(alias || tableName) ||
-      distributedPlan.tablePlans.get(tableName) ||
-      null;
+    const plan = distributedPlan.tablePlans.get(alias || tableName) ||
+      distributedPlan.tablePlans.get(tableName) || null;
     if (!engine.getTableInfo(tableName) || !hasRoutableTablePlan(plan)) {
       seen.add(tableName);
       coldTables.push(tableName);
@@ -612,9 +659,7 @@ function collectColdSelectTables(engine, ast, distributedPlan) {
   addIfCold(ast.from.name, ast.from.alias || ast.from.name);
   for (const join of ast.joins || []) {
     const joinTableName = join.table?.name;
-    if (joinTableName) {
-      addIfCold(joinTableName, join.table.alias || joinTableName);
-    }
+    if (joinTableName) addIfCold(joinTableName, join.table.alias || joinTableName);
   }
   return coldTables;
 }
@@ -638,79 +683,42 @@ async function refreshColdSelectTables(engine, coldTables, queryOptions) {
 function validatePlannedSelectRootAndJoins(engine, ast, distributedPlan) {
   const tableName = ast.from.name;
   const rootAlias = ast.from.alias || tableName;
-  const rootPlan =
-    distributedPlan.tablePlans.get(rootAlias) ||
-    distributedPlan.tablePlans.get(tableName) ||
-    null;
+  const rootPlan = distributedPlan.tablePlans.get(rootAlias) ||
+    distributedPlan.tablePlans.get(tableName) || null;
   const tableInfo = engine.getTableInfo(tableName);
-  if (!tableInfo) {
-    return {errorResponse: buildTableNotFoundFailureResult(tableName)};
-  }
+  if (!tableInfo) return {errorResponse: buildTableNotFoundFailureResult(tableName)};
   if (!hasRoutableTablePlan(rootPlan)) {
     return {
       errorResponse: buildUnavailableFailureResult(
-        tableName,
-        METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED,
+        tableName, METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED,
       ),
     };
   }
-  const joinErrorResponse = engine.validateSelectJoinPlans(
-    ast,
-    distributedPlan,
-  );
-  return joinErrorResponse ?
-    {errorResponse: joinErrorResponse} :
-    {rootPlan};
+  const joinErrorResponse = engine.validateSelectJoinPlans(ast, distributedPlan);
+  return joinErrorResponse ? {errorResponse: joinErrorResponse} : {rootPlan};
 }
 
 async function resolveSelectExecutionPlanWithAuthorityRefresh(
-  engine,
-  ast,
-  params,
-  context = {},
+  engine, ast, params, context = {},
 ) {
   const {sessionId, queryOptions = {}} = context;
   const tableName = ast.from.name;
   const planningStartTimeMs = Date.now();
-  let distributedPlan = engine.distributedQueryPlanner.planSelect(
-    ast,
-    params,
-    {sessionId},
-  );
+  let distributedPlan = engine.distributedQueryPlanner.planSelect(ast, params, {sessionId});
   const coldTables = collectColdSelectTables(engine, ast, distributedPlan);
   if (coldTables.length > 0) {
-    const refreshFailure = await refreshColdSelectTables(
-      engine,
-      coldTables,
-      queryOptions,
-    );
-    if (refreshFailure) {
-      return {settled: true, response: refreshFailure};
-    }
-    distributedPlan = engine.distributedQueryPlanner.planSelect(
-      ast,
-      params,
-      {sessionId},
-    );
+    const refreshFailure = await refreshColdSelectTables(engine, coldTables, queryOptions);
+    if (refreshFailure) return {settled: true, response: refreshFailure};
+    distributedPlan = engine.distributedQueryPlanner.planSelect(ast, params, {sessionId});
   }
   const planningDurationMs = Date.now() - planningStartTimeMs;
-  const validation = validatePlannedSelectRootAndJoins(
-    engine,
-    ast,
-    distributedPlan,
-  );
-  if (validation.errorResponse) {
-    return {settled: true, response: validation.errorResponse};
-  }
+  const validation = validatePlannedSelectRootAndJoins(engine, ast, distributedPlan);
+  if (validation.errorResponse) return {settled: true, response: validation.errorResponse};
   const tableInfo = engine.getTableInfo(tableName);
   const dualWriteMode = engine.isDualWriteModeActiveForTable(tableInfo);
   return {
-    settled: false,
-    distributedPlan,
-    rootPlan: validation.rootPlan,
-    tableInfo,
-    dualWriteMode,
-    planningDurationMs,
+    settled: false, distributedPlan, rootPlan: validation.rootPlan,
+    tableInfo, dualWriteMode, planningDurationMs,
   };
 }
 
@@ -734,8 +742,7 @@ async function resolveWriteExecutionPlanWithAuthorityRefresh(
     if (refreshResult.outcome !== METADATA_AUTHORITY_REFRESH_OUTCOME.FOUND) {
       return {settled: true, response: refreshResult.failure};
     }
-    distributedPlan = planStatement(
-      engine.distributedQueryPlanner, ast, params, {sessionId});
+    distributedPlan = planStatement(engine.distributedQueryPlanner, ast, params, {sessionId});
     tableInfo = engine.getTableInfo(tableName);
     tablePlan = distributedPlan.tablePlans.get(tableName) || null;
   }

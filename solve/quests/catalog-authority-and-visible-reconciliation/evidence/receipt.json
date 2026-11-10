@@ -1,0 +1,53 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "catalog-authority-and-visible-reconciliation",
+  "status": "pass",
+  "testFileDigests": {
+    "test/query/catalog-authority-and-visible-reconciliation.test.js": "8a0af7aa48eec05b837fe0ba1919b2a0e03bd14ddf536d4b610fab06c1b1c04a"
+  },
+  "generatedAt": "2026-11-10T12:01:46.520Z",
+  "receipts": [
+    {
+      "id": "follower-partial-mismatched-evidence-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R1 .*$\" test/query/catalog-authority-and-visible-reconciliation.test.js",
+      "detail": "Follower, partial, degraded, or scope-mismatched catalog reads return UNAVAILABLE and never evict cached rows.",
+      "testFile": "test/query/catalog-authority-and-visible-reconciliation.test.js"
+    },
+    {
+      "id": "genuine-authoritative-absence",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R2 .*$\" test/query/catalog-authority-and-visible-reconciliation.test.js",
+      "detail": "Complete leader-witnessed empty tables read evicts cached metadata and records an authoritative absence tombstone.",
+      "testFile": "test/query/catalog-authority-and-visible-reconciliation.test.js"
+    },
+    {
+      "id": "causal-restoration-without-ttl-wait",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R3 .*$\" test/query/catalog-authority-and-visible-reconciliation.test.js",
+      "detail": "Causally newer authoritative observation clears the absence tombstone and restores cached rows without waiting for 30s TTL.",
+      "testFile": "test/query/catalog-authority-and-visible-reconciliation.test.js"
+    },
+    {
+      "id": "actual-cache-and-query-state-confirmed",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R4 .*$\" test/query/catalog-authority-and-visible-reconciliation.test.js",
+      "detail": "Metadata refresh requires verified visible cache state before returning FOUND, enabling working query routing.",
+      "testFile": "test/query/catalog-authority-and-visible-reconciliation.test.js"
+    },
+    {
+      "id": "stale-replay-protection",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R5 .*$\" test/query/catalog-authority-and-visible-reconciliation.test.js",
+      "detail": "Causally older stale replay cannot resurrect deleted rows or supersede an active absence tombstone.",
+      "testFile": "test/query/catalog-authority-and-visible-reconciliation.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/catalog-authority-and-visible-reconciliation.js --check-verification",
+      "detail": "Approving subagent verification recorded after the last attempt.",
+      "testFile": null
+    }
+  ]
+}

@@ -49,7 +49,14 @@ function writeFollowsAuthoritativeObservation(data, observedAtMs) {
     incomingTimestamp > observedAtMs;
 }
 
-function authoritativeWriteSupersedesTombstone(incoming, tombstone) {
+function authoritativeWriteSupersedesTombstone(incoming, tombstone, incomingObservedAtMs = null) {
+  if (
+    Number.isFinite(incomingObservedAtMs) &&
+    Number.isFinite(tombstone.authoritativeObservedAtMs) &&
+    incomingObservedAtMs > tombstone.authoritativeObservedAtMs
+  ) {
+    return true;
+  }
   if (!incomingFollowsAuthoritativeObservation(incoming, tombstone)) {
     return false;
   }
@@ -77,23 +84,13 @@ function completeObservationSupersedesTombstone(observedAtMs, tombstone) {
     causalBoundaries.every((boundary) => observedAtMs > boundary);
 }
 
-/**
- * Whether an incoming write proves that it follows a retained deletion.
- * Ordinary CDC tombstones preserve the equal-millisecond/no-version recreate
- * behavior. Leader-confirmed absence is fail closed when the incoming write
- * cannot establish a later causal version.
- * @param {Object} data
- * @param {Object} tombstone
- * @return {boolean}
- */
-function writeSupersedesTombstone(data, tombstone) {
-  const incoming = versionStampsOf(data);
-  if (tombstone.authoritativeAbsence === true) {
-    return authoritativeWriteSupersedesTombstone(incoming, tombstone);
-  }
-  if (incoming.hlc && tombstone.hlc) {
-    return incoming.hlc.compare(tombstone.hlc) > 0;
-  }
+function observationSupersedesDeletedAt(incomingObservedAtMs, deletedAtMs) {
+  return Number.isFinite(incomingObservedAtMs) &&
+    Number.isFinite(deletedAtMs) &&
+    incomingObservedAtMs > deletedAtMs;
+}
+
+function writeFollowsDeletionTimestamp(incoming, tombstone) {
   if (writeReplaysDeletedIncarnation(incoming, tombstone)) {
     return false;
   }
@@ -106,8 +103,33 @@ function writeSupersedesTombstone(data, tombstone) {
   return true;
 }
 
+/**
+ * Whether an incoming write proves that it follows a retained deletion.
+ * Ordinary CDC tombstones preserve the equal-millisecond/no-version recreate
+ * behavior. Leader-confirmed absence is fail closed when the incoming write
+ * cannot establish a later causal version.
+ * @param {Object} data
+ * @param {Object} tombstone
+ * @param {Object} [options]
+ * @return {boolean}
+ */
+function writeSupersedesTombstone(data, tombstone, options = {}) {
+  const incoming = versionStampsOf(data);
+  const incomingObservedAtMs = options?.incomingAuthoritativeObservedAtMs ?? null;
+  if (tombstone.authoritativeAbsence === true) {
+    return authoritativeWriteSupersedesTombstone(incoming, tombstone, incomingObservedAtMs);
+  }
+  if (observationSupersedesDeletedAt(incomingObservedAtMs, tombstone.deletedAtMs)) {
+    return true;
+  }
+  if (incoming.hlc && tombstone.hlc) {
+    return incoming.hlc.compare(tombstone.hlc) > 0;
+  }
+  return writeFollowsDeletionTimestamp(incoming, tombstone);
+}
+
 function maxAuthoritativeObservedAtMs(existing, incoming) {
-  const values = [existing?.authoritativeObservedAtMs, Number(incoming)]
+  const values = [existing?.authoritativeObservedAtMs, incoming]
     .filter((value) => Number.isFinite(value));
   return values.length > 0 ? Math.max(...values) : null;
 }
@@ -138,8 +160,16 @@ class SystemTableCacheTombstoneStore {
     data,
     keyPresent,
     authoritativeObservedAtMs,
+    incomingAuthoritativeObservedAtMs = null,
   ) {
     if (keyPresent === true) {
+      return false;
+    }
+    if (
+      Number.isFinite(incomingAuthoritativeObservedAtMs) &&
+      Number.isFinite(authoritativeObservedAtMs) &&
+      incomingAuthoritativeObservedAtMs >= authoritativeObservedAtMs
+    ) {
       return false;
     }
     return Number.isFinite(authoritativeObservedAtMs) &&
@@ -190,11 +220,14 @@ class SystemTableCacheTombstoneStore {
     }
     const authoritativeAbsence = existing?.authoritativeAbsence === true ||
       options.authoritativeAbsence === true;
+    const incomingObserved = Number.isFinite(options.authoritativeObservedAtMs) ?
+      options.authoritativeObservedAtMs :
+      (authoritativeAbsence ? this.timeSource.now() : null);
     const authoritativeObservedAtMs = maxAuthoritativeObservedAtMs(
       existing,
-      options.authoritativeObservedAtMs,
+      incomingObserved,
     );
-    if (existing && !writeSupersedesTombstone(data, existing)) {
+    if (existing && !writeSupersedesTombstone(data, existing, options)) {
       if (options.authoritativeAbsence === true) {
         tombstoneTable.delete(key);
         tombstoneTable.set(key, {
@@ -226,7 +259,7 @@ class SystemTableCacheTombstoneStore {
     if (tombstone && !this.evictIfExpired(
       tableName, tombstoneTable, key, tombstone, this.timeSource.now(),
     )) {
-      if (!writeSupersedesTombstone(data, tombstone)) {
+      if (!writeSupersedesTombstone(data, tombstone, options)) {
         return true;
       }
       this.evict(tableName, tombstoneTable, key);
@@ -234,7 +267,8 @@ class SystemTableCacheTombstoneStore {
     return this.writeIsFencedByAuthoritativeTableAbsence(
       data,
       options.keyPresent,
-      options.authoritativeObservedAtMs,
+      options.authoritativeTableAbsenceObservedAtMs,
+      options.incomingAuthoritativeObservedAtMs,
     );
   }
 

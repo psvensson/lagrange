@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2281,
+    "unit": 2282,
     "integration": 124,
     "bootstrap": 223,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2635,
-  "digest": "fnv1a32-295ff72e",
+  "censusSize": 2636,
+  "digest": "fnv1a32-813568dd",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1533,6 +1533,7 @@
     "test/query/call-plan.test.js": "unit",
     "test/query/call-stage.test.js": "unit",
     "test/query/cancellation-token.test.js": "unit",
+    "test/query/catalog-authority-and-visible-reconciliation.test.js": "unit",
     "test/query/coordinator-resource-limits.property.test.js": "unit",
     "test/query/create-table-policy-option.test.js": "unit",
     "test/query/cross-partition-join-pushdown.test.js": "unit",
