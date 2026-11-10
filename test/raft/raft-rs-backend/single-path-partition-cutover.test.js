@@ -56,6 +56,7 @@ import {
 import {createSeedQuerySurface} from
   '../../integration/helpers/seed-query-surface.js';
 import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
+import {partitionCollaboratorOptions} from '../../helpers/partition-service-fixture.js';
 import {resumeFixtureParticipantAdmission} from
   '../../test-helpers/participant-transaction-fixture.js';
 import {createParticipantReleaseDeliveryTrace, emitParticipantReleaseDeliveryTrace} from
@@ -423,8 +424,8 @@ test('omitted selection cannot reach the retired backend',
   {timeout: PARTITION_TEST_TIMEOUT_MS}, async () => {
     quietEnvironment();
     const {directory, dbPath} = tempDbPath();
-    const service = new PartitionService(
-      withFoundingStamp(partitionOptions('omitted-selection', dbPath)));
+    const service = new PartitionService(partitionCollaboratorOptions(
+      withFoundingStamp(partitionOptions('omitted-selection', dbPath))));
     let observedStatusKeys = [];
     let missing = [];
     try {
@@ -460,8 +461,8 @@ test('the write path has one durable log',
   {timeout: PARTITION_TEST_TIMEOUT_MS}, async () => {
     quietEnvironment();
     const {directory, dbPath} = tempDbPath();
-    const service = new PartitionService(withFoundingStamp(partitionOptions('one-durable-log',
-      dbPath, PRODUCTION_SELECTION)));
+    const service = new PartitionService(partitionCollaboratorOptions(withFoundingStamp(partitionOptions('one-durable-log',
+      dbPath, PRODUCTION_SELECTION))));
     try {
       await service.initialize();
       const results = await writeRows(service);
@@ -521,7 +522,8 @@ test('legacy durable consensus state fails closed',
     let service = null;
     let outcome = null;
     try {
-      service = new PartitionService(withFoundingStamp(partitionOptions(partitionId, dbPath)));
+      service = new PartitionService(partitionCollaboratorOptions(
+        withFoundingStamp(partitionOptions(partitionId, dbPath))));
       await service.initialize();
     } catch (error) {
       outcome = error;
@@ -553,7 +555,7 @@ test('restart serves writes from the rs-raft store',
       PRODUCTION_SELECTION);
     let restarted = null;
     try {
-      const first = new PartitionService(withFoundingStamp(options));
+      const first = new PartitionService(partitionCollaboratorOptions(withFoundingStamp(options)));
       try {
         await first.initialize();
         const results = await writeRows(first);
@@ -563,7 +565,7 @@ test('restart serves writes from the rs-raft store',
       } finally {
         await first.shutdown();
       }
-      restarted = new PartitionService(withFoundingStamp(options));
+      restarted = new PartitionService(partitionCollaboratorOptions(withFoundingStamp(options)));
       await restarted.initialize();
       const served = restarted.db.prepare(SELECT_ALL_SQL).all()
         .map(({id, value}) => ({id, value}));

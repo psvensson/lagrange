@@ -4,6 +4,7 @@ import {
   PARTITION_SERVICE_ACTIVATION_ERROR,
   settlePartitionServiceActiveAdmission,
 } from '../../src/bootstrap/shared/partition-service-activation.js';
+import {partitionCollaboratorOptions, partitionServiceContext} from '../helpers/partition-service-fixture.js';
 import {createIdentityTransport} from
   '../test-helpers/replica-handler-identity-fixture.js';
 
@@ -19,14 +20,15 @@ function routerWithExactHandlers(services, registeredReplicaIds) {
 }
 
 function partitionReplicas(replicaIds) {
-  return new Map(replicaIds.map((replicaId) => [replicaId, {
+  return new Map(replicaIds.map((replicaId) => [replicaId, partitionServiceContext({
     partitionId: 'p1', initialized: true,
-    transportHandler: () => replicaId}]));
+    unifiedAddress: `node-a/partition/${replicaId}`,
+    transportHandler: () => replicaId})]));
 }
 
 function createActiveAdmissionService(snapshotFactory) {
   const calls = {leader: 0, role: 0, repairs: []};
-  const service = {
+  const service = partitionServiceContext({
     isLeader: true,
     role: 'leader',
     pendingRoleUpdate: 'leader',
@@ -50,7 +52,7 @@ function createActiveAdmissionService(snapshotFactory) {
         },
       },
     },
-  };
+  });
   return {calls, service};
 }
 
@@ -124,7 +126,7 @@ test('join discovery is evaluated only after exact ACTIVE installation',
   async (t) => {
     let installed = false;
     const snapshots = [];
-    const service = {
+    const service = partitionServiceContext({
       partitionId: 'p1',
       initialized: true,
       sqlQueryEngine: {
@@ -140,8 +142,8 @@ test('join discovery is evaluated only after exact ACTIVE installation',
           },
         },
       },
-    };
-    const activatedCount = await activatePartitionServiceRows({
+    });
+    const activatedCount = await activatePartitionServiceRows(partitionCollaboratorOptions({
       nodeId: 'node-a',
       systemTableWriter: {
         async updateSystemTableRow() {
@@ -156,7 +158,7 @@ test('join discovery is evaluated only after exact ACTIVE installation',
       },
       isReplicaHandlerRegistered: () => true,
       partitionServices: new Map([['p1-r1', service]]),
-    });
+    }));
 
     t.equal(activatedCount, 1);
     t.same(snapshots, [true],
@@ -166,7 +168,7 @@ test('join discovery is evaluated only after exact ACTIVE installation',
 test('activatePartitionServiceRows requires initialized runtime',
   async (t) => {
     await t.rejects(
-      activatePartitionServiceRows({
+      activatePartitionServiceRows(partitionCollaboratorOptions({
         nodeId: 'node-a',
         systemTableWriter: {
           updateSystemTableRow: async () => ({success: true}),
@@ -177,12 +179,12 @@ test('activatePartitionServiceRows requires initialized runtime',
           isRegistered: () => true,
         },
         partitionServices: new Map([
-          ['p1-r1', {
+          ['p1-r1', partitionServiceContext({
             partitionId: 'p1',
             initialized: false,
-          }],
+          })],
         ]),
-      }),
+      })),
       new Error(
         PARTITION_SERVICE_ACTIVATION_ERROR.runtimeRequired('p1-r1'),
       ),
@@ -195,7 +197,7 @@ test('activatePartitionServiceRows requires per-replica handler registration',
     const activated = [];
     const twoReplicas = partitionReplicas(['p1-r1', 'p1-r2']);
     await t.rejects(
-      activatePartitionServiceRows({
+      activatePartitionServiceRows(partitionCollaboratorOptions({
         nodeId: 'node-a',
         systemTableWriter: {
           updateSystemTableRow: async () => ({success: true}),
@@ -209,7 +211,7 @@ test('activatePartitionServiceRows requires per-replica handler registration',
         },
         messageRouter: routerWithExactHandlers(twoReplicas, ['p1-r1']),
         partitionServices: twoReplicas,
-      }),
+      })),
       new Error(
         PARTITION_SERVICE_ACTIVATION_ERROR
           .replicaHandlerRequired('p1-r2'),
@@ -226,7 +228,7 @@ test('activatePartitionServiceRows retains pressure admission failures as debt',
     const oneReplica = partitionReplicas(['p1-r1']);
 
     await t.rejects(
-      activatePartitionServiceRows({
+      activatePartitionServiceRows(partitionCollaboratorOptions({
         nodeId: 'node-a',
         systemTableWriter: {
           updateSystemTableRow: async () => {
@@ -256,7 +258,7 @@ test('activatePartitionServiceRows retains pressure admission failures as debt',
         messageRouter: routerWithExactHandlers(oneReplica, ['p1-r1']),
         partitionServices: oneReplica,
         onDeferredActivation: (details) => deferred.push(details),
-      }),
+      })),
       {code: 'CONTROL_PLANE_PRESSURE_DEGRADED'},
       'seed/join activation must return retryable debt to its workflow owner',
     );

@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 158,
     "solver-tooling": 7,
-    "storage-partition": 208,
+    "storage-partition": 211,
     "storage-raft": 152,
     "test-infrastructure": 162,
     "transactions": 17,
     "transport-messaging": 113,
     "wasm-toolchain": 74
   },
-  "censusSize": 2572,
-  "digest": "fnv1a32-7275e4f3",
+  "censusSize": 2575,
+  "digest": "fnv1a32-447260e3",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-508fbb08",
+  "observationDigest": "fnv1a32-d6f9f8f0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1415,9 +1415,12 @@
     "test/partition/partition-runtime-reconstruction-leadership.test.js": "storage-partition",
     "test/partition/partition-service-cdc-log-suppression.test.js": "storage-partition",
     "test/partition/partition-service-cleanup-token-schema.test.js": "storage-partition",
+    "test/partition/partition-service-collaborator-propagation.test.js": "storage-partition",
+    "test/partition/partition-service-construction.test.js": "storage-partition",
     "test/partition/partition-service-hlc-monotonicity.test.js": "storage-partition",
     "test/partition/partition-service-learner-promotion-wake.test.js": "storage-partition",
     "test/partition/partition-service-learner-promotion.test.js": "storage-partition",
+    "test/partition/partition-service-owner-row-write-guard.test.js": "storage-partition",
     "test/partition/partition-service-qualified-table-name.test.js": "storage-partition",
     "test/partition/partition-service-raft-noop-cdc-placement.test.js": "storage-partition",
     "test/partition/partition-service-raft-propose-metrics.test.js": "storage-partition",
@@ -2628,6 +2631,7 @@
     "test/address/address-manager-peer-location-authority.test.js": {
       "files": [
         "src/address/address-manager.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-operation-port.js",
@@ -3028,6 +3032,7 @@
         "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -3083,6 +3088,11 @@
         "src/control-plane/control-plane-error-classification.js",
         "src/control-plane/node-ready-lease-authority.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js"
+      ]
+    },
+    "test/bootstrap/dynamic-partition-cdc-subscription.test.js": {
+      "files": [
+        "src/partition/partition-service-raft-membership-administration.js"
       ]
     },
     "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js": {
@@ -3319,6 +3329,7 @@
     "test/bootstrap/node-joining-service-message-group-activation.test.js": {
       "files": [
         "src/node/replica-state-machine.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "test/test-helpers/endpoint-incarnation-fixture.js",
         "test/test-helpers/lifecycle-state-store.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -3339,6 +3350,7 @@
     "test/bootstrap/node-joining-service.test.js": {
       "files": [
         "src/node/replica-state-machine.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "test/test-helpers/endpoint-incarnation-fixture.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
@@ -3371,7 +3383,8 @@
         "src/node/replica-state-machine-registered-activation.js",
         "src/node/replica-state-machine-serialization.js",
         "src/node/replica-transport-handler-identity.js",
-        "src/partition/partition-service-lifecycle-methods.js"
+        "src/partition/partition-service-lifecycle-methods.js",
+        "src/partition/partition-service-raft-membership-administration.js"
       ],
       "directories": [
         "src"
@@ -3379,6 +3392,7 @@
     },
     "test/bootstrap/partition-service-activation.test.js": {
       "files": [
+        "src/partition/partition-service-raft-membership-administration.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -3480,6 +3494,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/message-group/message-group-service-state.js",
         "src/partition/partition-service-core-base.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service.js",
         "test/bootstrap/anchored-runner-fixture-cases.js",
         "test/bootstrap/run-anchored-scenario-helper.js"
@@ -3665,6 +3680,7 @@
         "src/partition/partition-participant-transaction-store.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-write-kernel.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -3716,6 +3732,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -3735,6 +3752,7 @@
     "test/bootstrap/service-instance-table-schema.test.js": {
       "files": [
         "src/cache/system-cache-key-descriptor.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-table-bootstrap.js"
       ]
     },
@@ -4308,6 +4326,8 @@
     "test/control-plane/cl-036-local-leader-row-seed.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-service-collaborators.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/replica-leadership-state.js"
       ]
     },
@@ -4797,6 +4817,7 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/storage/data-directory-process-owner.js",
         "test/simulation/formation-sim-infrastructure-composition.js"
       ]
@@ -5253,12 +5274,14 @@
     },
     "test/convergence/dt-local-leader-seed-safety-merge.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js"
       ]
     },
     "test/convergence/dt-movielens-raft-peer-cohort-pruning-election.test.js": {
       "files": [
         "src/config/configuration-manager.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -5350,6 +5373,7 @@
     "test/convergence/dt6-learner-promotion-progress-proof.test.js": {
       "files": [
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-operation-port.js",
@@ -5363,6 +5387,7 @@
     "test/convergence/dt6-learner-promotion-proof-channel-wake.test.js": {
       "files": [
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-operation-port.js",
@@ -5380,6 +5405,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -5562,6 +5588,7 @@
     "test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -5647,6 +5674,7 @@
         "src/bootstrap/bootstrap-service-replica-registration-methods.js",
         "src/bootstrap/shared/startup-runtime-surface-owner.js",
         "src/diagnostics/raft-churn-sync-sections.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js"
       ]
     },
@@ -8307,6 +8335,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -8576,6 +8605,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -8598,6 +8628,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -8621,6 +8652,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -8738,6 +8770,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -8874,6 +8907,7 @@
     },
     "test/integration/cross-node-replica-placement.integration.test.js": {
       "files": [
+        "src/partition/partition-service-raft-membership-administration.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
@@ -8913,6 +8947,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -9524,6 +9559,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -9589,6 +9625,7 @@
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
@@ -9639,6 +9676,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -9685,6 +9723,7 @@
         "src/node/replica-transport-handler-identity.js",
         "src/partition/partition-cdc-obligation-ledger.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -9769,6 +9808,7 @@
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -9802,6 +9842,7 @@
         "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -9826,6 +9867,7 @@
         "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -9987,6 +10029,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -10075,6 +10118,7 @@
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
@@ -10106,6 +10150,7 @@
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
@@ -10136,6 +10181,7 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
@@ -10166,6 +10212,7 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
@@ -10197,6 +10244,7 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
@@ -10228,6 +10276,7 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
@@ -10258,6 +10307,7 @@
         "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
@@ -10289,6 +10339,7 @@
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
@@ -10431,6 +10482,7 @@
       "files": [
         "src/config/configuration-manager.js",
         "src/node/replica-handler-leader-handoff-methods.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -10470,6 +10522,7 @@
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -10493,6 +10546,7 @@
     "test/node/replica-handler-replica-membership.test.js": {
       "files": [
         "src/config/configuration-manager.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -10576,6 +10630,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/node/replica-handler-constants.js",
         "src/node/replica-removal-consensus-exit.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
@@ -10596,6 +10651,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/node/replica-handler-constants.js",
         "src/node/replica-removal-consensus-exit.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
@@ -10612,6 +10668,7 @@
     },
     "test/node/replica-runtime-cleanup-custody.integration.test.js": {
       "files": [
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -10626,6 +10683,7 @@
         "src/config/configuration-manager.js",
         "src/node/replica-state-machine-registered-activation.js",
         "src/node/replica-state-machine.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-row-owner.js"
       ]
     },
@@ -10760,6 +10818,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -10784,6 +10843,7 @@
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-hydration-image-methods.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -10805,6 +10865,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -10820,7 +10881,8 @@
     },
     "test/partition/child-partition-leader-propagation.test.js": {
       "files": [
-        "src/constants/index.js"
+        "src/constants/index.js",
+        "src/partition/partition-service-raft-membership-administration.js"
       ]
     },
     "test/partition/committed-statement-outcome.test.js": {
@@ -10833,6 +10895,7 @@
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -10861,6 +10924,7 @@
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -10881,9 +10945,12 @@
         "src/partition/partition-participant-transaction-bytes.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-collaborators.js",
         "src/partition/partition-service-leader-activation-methods.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port.js",
-        "src/raft/raft-rs-ready-loop-constants.js"
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/helpers/partition-service-fixture.js"
       ]
     },
     "test/partition/durable-voter-visibility-role-write.test.js": {
@@ -10913,6 +10980,7 @@
     },
     "test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js": {
       "files": [
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -10924,6 +10992,7 @@
     },
     "test/partition/learner-promotion-count-check-inputs.test.js": {
       "files": [
+        "src/partition/partition-service-raft-membership-administration.js",
         "test/partition/fixtures/critical-spread-transition-authority/recorded-guard-shapes.json"
       ]
     },
@@ -10950,6 +11019,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -10993,6 +11063,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11011,6 +11082,7 @@
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -11037,6 +11109,7 @@
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11070,6 +11143,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -11088,6 +11162,7 @@
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11114,6 +11189,7 @@
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-participant-transaction-session.js",
         "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11139,6 +11215,7 @@
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-participant-transaction-store.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11166,6 +11243,7 @@
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-participant-transaction-session.js",
         "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11193,6 +11271,7 @@
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-participant-transaction-session.js",
         "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11219,6 +11298,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11248,6 +11328,7 @@
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-participant-transaction-session.js",
         "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11289,6 +11370,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11312,6 +11394,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11334,6 +11417,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11356,6 +11440,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11378,6 +11463,7 @@
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-participant-transaction-store.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11401,6 +11487,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11422,6 +11509,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11445,6 +11533,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11468,6 +11557,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11499,6 +11589,7 @@
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11524,6 +11615,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11546,7 +11638,8 @@
     },
     "test/partition/partition-leader-row-publication-integrity.test.js": {
       "files": [
-        "src/logging/wait-bound-spent.js"
+        "src/logging/wait-bound-spent.js",
+        "src/partition/partition-service-raft-membership-administration.js"
       ]
     },
     "test/partition/partition-legacy-consensus-state.test.js": {
@@ -11563,6 +11656,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11584,6 +11678,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11604,6 +11699,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11626,6 +11722,8 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-collaborators.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11637,6 +11735,11 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/partition-peer-cache-identity-record.test.js": {
+      "files": [
+        "src/partition/partition-service-raft-membership-administration.js"
       ]
     },
     "test/partition/partition-port-refusal-outcomes.test.js": {
@@ -11660,27 +11763,32 @@
     },
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js"
       ]
     },
     "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js"
       ]
     },
     "test/partition/partition-rebalancer-readiness-edge-gate.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js"
       ]
     },
     "test/partition/partition-registration-exact-birth.test.js": {
       "files": [
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-row-owner.js"
       ]
     },
     "test/partition/partition-registration-readback-controls.test.js": {
       "files": [
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-row-owner.js"
       ]
     },
@@ -11694,7 +11802,9 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-collaborators.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-shared.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
@@ -11715,6 +11825,7 @@
     "test/partition/partition-retiring-row-peer-retirement.test.js": {
       "files": [
         "src/config/configuration-manager.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -11733,6 +11844,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-write-kernel.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -11755,11 +11867,30 @@
         "src/partition/partition-service-schema-migration-base.js"
       ]
     },
+    "test/partition/partition-service-collaborator-propagation.test.js": {
+      "files": [
+        "src/partition/partition-service-raft-membership-administration.js"
+      ]
+    },
+    "test/partition/partition-service-construction.test.js": {
+      "files": [
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-row-owner.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/partition-service-hlc-monotonicity.test.js": {
       "files": [
         "src/partition/partition-hlc-warmup.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port.js",
         "src/raft/raft-rs-proposal-codec-constants.js",
@@ -11768,6 +11899,8 @@
     },
     "test/partition/partition-service-learner-promotion.test.js": {
       "files": [
+        "src/partition/partition-service-collaborators.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -11775,6 +11908,12 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/partition-service-owner-row-write-guard.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js"
       ]
     },
     "test/partition/partition-service-raft-noop-cdc-placement.test.js": {
@@ -11785,6 +11924,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11806,6 +11946,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11823,6 +11964,7 @@
     "test/partition/partition-service-raft-transition-evidence.test.js": {
       "files": [
         "src/partition/partition-service-raft-lifecycle-wiring.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -11843,6 +11985,7 @@
     "test/partition/partition-service-role-metadata-publication.test.js": {
       "files": [
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -11852,6 +11995,16 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/partition/partition-service-row-absence-heal.test.js": {
+      "files": [
+        "src/partition/partition-service-raft-membership-administration.js"
+      ]
+    },
+    "test/partition/partition-service-row-owner.test.js": {
+      "files": [
+        "src/partition/partition-service-raft-membership-administration.js"
+      ]
+    },
     "test/partition/partition-service-size-split-transport.test.js": {
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
@@ -11859,6 +12012,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11881,6 +12035,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11902,6 +12057,8 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-collaborators.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11919,6 +12076,7 @@
     "test/partition/partition-service-transactions-query-routing.test.js": {
       "files": [
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -11935,6 +12093,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11958,6 +12117,8 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-collaborators.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -11978,6 +12139,11 @@
         "src/partition/partition-service-split-accessor-base.js"
       ]
     },
+    "test/partition/partition-snapshot-cadence.test.js": {
+      "files": [
+        "src/partition/partition-service-raft-membership-administration.js"
+      ]
+    },
     "test/partition/partition-split-policy-precedence.test.js": {
       "files": [
         "examples/service-data-affinity/lagrange-loader.js",
@@ -11993,6 +12159,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-statement-admission-constants.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
@@ -12015,6 +12182,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -12036,6 +12204,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -12057,6 +12226,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -12078,6 +12248,7 @@
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-participant-transaction-session.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -12101,6 +12272,7 @@
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-participant-transaction-session.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -12122,6 +12294,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-write-kernel.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -12154,6 +12327,7 @@
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/config/configuration-manager.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -12174,6 +12348,7 @@
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/config/configuration-manager.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-write-kernel.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -12195,6 +12370,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -12219,6 +12395,7 @@
     },
     "test/partition/raft-rs-transport-demux.test.js": {
       "files": [
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -12250,6 +12427,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-table-bootstrap.js",
         "src/partition/partition-statement-admission-constants.js",
         "src/partition/partition-transaction-determinism-constants.js",
@@ -12268,7 +12446,10 @@
     "test/partition/retiring-source-resume-refusal.test.js": {
       "files": [
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-collaborators.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port.js",
+        "test/helpers/partition-service-fixture.js",
         "test/partition/partition-rs-raft-restart-fixture.js"
       ]
     },
@@ -12283,6 +12464,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -12311,6 +12493,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -12374,6 +12557,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -12581,6 +12765,7 @@
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -12611,6 +12796,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -12736,6 +12922,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -12757,6 +12944,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -12818,6 +13006,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -12926,7 +13115,7 @@
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-store.js",
-        "src/partition/partition-service-remote-query-methods.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/query/application-database-statement-policy.js",
         "src/query/pg/postgres-wire-adapter.js",
         "src/transport/transport-semantic-outcome.js",
@@ -12967,7 +13156,7 @@
         "src/migration/migration-coordinator.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-service-constants.js",
-        "src/partition/partition-service-remote-query-methods.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-statement-admission-constants.js",
         "src/partition/partition-statement-admission.js",
         "src/query/application-database.js",
@@ -13122,6 +13311,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -13149,6 +13339,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -13180,6 +13371,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -13208,6 +13400,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -13235,6 +13428,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -13265,6 +13459,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -13290,6 +13485,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -13310,6 +13506,7 @@
     "test/raft/leadership-transfer-single-path.test.js": {
       "files": [
         "src/node/replica-handler-leader-handoff-methods.js",
+        "src/partition/partition-service-assembly.js",
         "src/partition/partition-service-leadership-transfer.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port.js",
@@ -13341,6 +13538,7 @@
     "test/raft/raft-rs-backend/admission-redrive-chain.test.js": {
       "files": [
         "src/config/configuration-manager.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
@@ -13352,6 +13550,7 @@
     "test/raft/raft-rs-backend/admission-redrive.test.js": {
       "files": [
         "src/config/configuration-manager.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
@@ -13363,6 +13562,7 @@
     "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js": {
       "files": [
         "src/config/configuration-manager.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
@@ -13450,6 +13650,7 @@
     "test/raft/raft-rs-backend/committed-membership-stamp.test.js": {
       "files": [
         "src/config/configuration-manager.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
@@ -13522,6 +13723,7 @@
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -13559,6 +13761,7 @@
       "files": [
         "src/bootstrap/node-joining-publication-activation.js",
         "src/config/configuration-manager.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port.js",
@@ -13634,6 +13837,7 @@
     "test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js": {
       "files": [
         "src/config/configuration-manager.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
@@ -13740,6 +13944,7 @@
     },
     "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js": {
       "files": [
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -13853,6 +14058,7 @@
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-shared.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -14114,6 +14320,7 @@
     "test/raft/raft-rs-backend/partition-peer-admission.test.js": {
       "files": [
         "src/config/configuration-manager.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -14259,6 +14466,7 @@
         "src/partition/partition-participant-transaction-session.js",
         "src/partition/partition-participant-transaction-store.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-shared.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
@@ -14289,6 +14497,7 @@
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-participant-transaction-session.js",
         "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-shared.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
@@ -14335,6 +14544,7 @@
     },
     "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js": {
       "files": [
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -14420,6 +14630,7 @@
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-raft-storage.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
@@ -14458,6 +14669,7 @@
     },
     "test/raft/raft-rs-backend/startup-cleanup.integration.test.js": {
       "files": [
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -14492,6 +14704,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
@@ -14743,7 +14956,10 @@
     },
     "test/raft/snapshot-dispatcher-wiring.test.js": {
       "files": [
+        "src/partition/partition-service-collaborators.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "test/helpers/partition-service-fixture.js",
         "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
@@ -15290,6 +15506,11 @@
       "files": [
         "src/control-plane/control-plane-readiness-node-service-rows.js",
         "src/rebalancer/unified-rebalancer.js"
+      ]
+    },
+    "test/rebalancer/promoted-voter-voter-ready-routable-60s-axis.test.js": {
+      "files": [
+        "src/partition/partition-service-raft-membership-administration.js"
       ]
     },
     "test/rebalancer/quorum-conditioned-remove-safety.test.js": {
@@ -19225,6 +19446,7 @@
     "test/service/h4-http-invocation-recovery-and-cancellation.test.js": {
       "files": [
         "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/runtime/runtime-driver-registry.js",
         "src/runtime/service-runtime-lifecycle.js",
         "src/runtime/wasi-component-cell-runtime.js",
@@ -19235,6 +19457,7 @@
       "files": [
         "src/authoring/index.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/runtime/runtime-driver-registry.js",
         "src/runtime/service-runtime-lifecycle.js",
         "src/runtime/wasi-component-cell-runtime.js",
@@ -19316,6 +19539,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
         "src/node/runtime-service-handler.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/runtime/runtime-driver-registry.js",
         "src/runtime/service-runtime-lifecycle.js",
         "src/runtime/wasi-component-cell-runtime.js",
@@ -19774,6 +19998,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -19850,6 +20075,7 @@
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-participant-transaction-session.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -19979,7 +20205,6 @@
     },
     "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": {
       "files": [
-        "src/partition/partition-service-merge-replication-methods.js",
         "src/transport/transport-error-codes.js"
       ]
     },
@@ -20013,6 +20238,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/query/runtime-replica-state-projection.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -20037,6 +20263,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/query/runtime-replica-state-projection.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -20063,6 +20290,7 @@
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/owners/service-instance-state.js",
         "src/entrypoint-startup-acquisition-ledger.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/query/runtime-replica-state-projection-owner.js",
         "src/query/runtime-replica-state-projection.js",
         "src/raft/raft-operation-port-constants.js",
@@ -20091,6 +20319,7 @@
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/node/runtime-service-handler-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/query/runtime-replica-state-projection.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -20191,6 +20420,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -20211,6 +20441,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -20242,6 +20473,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -20264,6 +20496,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -20290,6 +20523,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -20340,6 +20574,7 @@
     "test/wasm-service/wasm-strong-write-native-completion.test.js": {
       "files": [
         "src/constants/index.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -20356,6 +20591,7 @@
     "test/wasm-service/wasm-strong-write-v1-native-completion.test.js": {
       "files": [
         "src/constants/index.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",

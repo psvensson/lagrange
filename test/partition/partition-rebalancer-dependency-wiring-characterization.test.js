@@ -34,16 +34,19 @@ import {
   LIFECYCLE_PHASE,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {
-  createMockCache,
-  createMockCdcService,
   createMockPolicyService,
   createMockMessageRouter,
-  createMockCoordinator,
   createMockControlPlaneReadinessService,
   createTestCoordinator,
 } from '../rebalancer/test-helpers.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
+import {
+  createMockCache,
+  createMockCdcService,
+  createMockCoordinator,
+} from './partition-rebalancer-collaborator-mocks.js';
 
 // ── Suite-local fixture constants ──────────────────────────────────
 
@@ -75,7 +78,7 @@ afterEach(() => {
  * @return {PartitionService} Partition service instance.
  */
 function createPartitionService(overrides = {}) {
-  return new PartitionService(withFoundingStamp({
+  return new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_ID,
     replicaId: REPLICA_ID,
@@ -84,7 +87,7 @@ function createPartitionService(overrides = {}) {
     deferElection: true,
     suppressLifecycleLogs: true,
     ...overrides,
-  }));
+  })));
 }
 
 /**

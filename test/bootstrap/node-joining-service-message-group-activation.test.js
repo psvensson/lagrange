@@ -62,6 +62,8 @@ import {insertViaUpsert} from
 import {publishRegisteredEndpoint} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {partitionCollaboratorFake} from '../helpers/partition-service-fixture.js';
+import {PARTITION_SERVICE_COLLABORATOR} from '../../src/partition/partition-service-collaborators.js';
 import {createIdentityTransport} from
   '../test-helpers/replica-handler-identity-fixture.js';
 
@@ -797,14 +799,16 @@ test('NodeJoiningService - replica factory should preserve join mode from replic
       service.transport = {unregister() {}};
       service.systemCacheHydrated = true;
       service.tablePolicyService = {};
-      service.rebalanceCoordinator = {};
-      service.createCdcIntegrationService = () => ({
-        updateSystemTableRow: async () => true,
-        insertSystemTableRow(...args) {
-          return insertViaUpsert(this, args);
-        },
-        upsertSystemTableRow: async () => true,
-      });
+      service.rebalanceCoordinator = partitionCollaboratorFake(
+        PARTITION_SERVICE_COLLABORATOR.REBALANCE_COORDINATOR, {});
+      service.createCdcIntegrationService = () => partitionCollaboratorFake(
+        PARTITION_SERVICE_COLLABORATOR.CDC_INTEGRATION_SERVICE, {
+          updateSystemTableRow: async () => true,
+          insertSystemTableRow(...args) {
+            return insertViaUpsert(this, args);
+          },
+          upsertSystemTableRow: async () => true,
+        });
       service.getLeaderMessageGroupService = () => null;
 
       NodeService.getInstance = () => ({
@@ -822,7 +826,8 @@ test('NodeJoiningService - replica factory should preserve join mode from replic
         capturedCreatePartitionService = createPartitionService;
         return {
           replicaHandler: {},
-          replicaStateMachine: {},
+          replicaStateMachine: partitionCollaboratorFake(
+            PARTITION_SERVICE_COLLABORATOR.REPLICA_STATE_MACHINE, {}),
         };
       };
 
@@ -887,7 +892,8 @@ test('NodeJoiningService - replica factory subscribes exactly the propagated cac
       service.transport = {unregister() {}};
       service.systemCacheHydrated = true;
       service.tablePolicyService = {};
-      service.rebalanceCoordinator = {};
+      service.rebalanceCoordinator = partitionCollaboratorFake(
+        PARTITION_SERVICE_COLLABORATOR.REBALANCE_COORDINATOR, {});
       service.messageGroupServices = new Map([
         ['mg-1', {
           groupId: 'mg-1',
@@ -901,13 +907,14 @@ test('NodeJoiningService - replica factory subscribes exactly the propagated cac
           },
         }],
       ]);
-      service.createCdcIntegrationService = () => ({
-        updateSystemTableRow: async () => true,
-        insertSystemTableRow(...args) {
-          return insertViaUpsert(this, args);
-        },
-        upsertSystemTableRow: async () => true,
-      });
+      service.createCdcIntegrationService = () => partitionCollaboratorFake(
+        PARTITION_SERVICE_COLLABORATOR.CDC_INTEGRATION_SERVICE, {
+          updateSystemTableRow: async () => true,
+          insertSystemTableRow(...args) {
+            return insertViaUpsert(this, args);
+          },
+          upsertSystemTableRow: async () => true,
+        });
 
       NodeService.getInstance = () => ({
         getSystemTableCache() {
@@ -932,7 +939,8 @@ test('NodeJoiningService - replica factory subscribes exactly the propagated cac
         capturedCreatePartitionService = createPartitionService;
         return {
           replicaHandler: {},
-          replicaStateMachine: {},
+          replicaStateMachine: partitionCollaboratorFake(
+            PARTITION_SERVICE_COLLABORATOR.REPLICA_STATE_MACHINE, {}),
         };
       };
 
@@ -1016,7 +1024,8 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
       service.transport = {unregister() {}};
       service.systemCacheHydrated = true;
       service.tablePolicyService = {};
-      service.rebalanceCoordinator = {};
+      service.rebalanceCoordinator = partitionCollaboratorFake(
+        PARTITION_SERVICE_COLLABORATOR.REBALANCE_COORDINATOR, {});
       const preferredMessageGroupService = {
         groupId: 'mg-preferred',
         initialized: true,
@@ -1037,13 +1046,14 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
       service.messageGroupServices = new Map([
         ['mg-preferred', preferredMessageGroupService],
       ]);
-      service.createCdcIntegrationService = () => ({
-        updateSystemTableRow: async () => true,
-        insertSystemTableRow(...args) {
-          return insertViaUpsert(this, args);
-        },
-        upsertSystemTableRow: async () => true,
-      });
+      service.createCdcIntegrationService = () => partitionCollaboratorFake(
+        PARTITION_SERVICE_COLLABORATOR.CDC_INTEGRATION_SERVICE, {
+          updateSystemTableRow: async () => true,
+          insertSystemTableRow(...args) {
+            return insertViaUpsert(this, args);
+          },
+          upsertSystemTableRow: async () => true,
+        });
       service.propagatePartitionCDCEvent = async (messageGroupService, cdcEvent) => {
         propagatedMessageGroupService = messageGroupService;
         propagatedEvent = cdcEvent;
@@ -1072,7 +1082,8 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
         capturedCreatePartitionService = createPartitionService;
         return {
           replicaHandler: {},
-          replicaStateMachine: {},
+          replicaStateMachine: partitionCollaboratorFake(
+            PARTITION_SERVICE_COLLABORATOR.REPLICA_STATE_MACHINE, {}),
         };
       };
 

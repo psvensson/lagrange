@@ -60,6 +60,7 @@ import {
 } from '../../src/constants/index.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 import {forwardHandlerRegistry} from
   '../test-helpers/replica-handler-identity-fixture.js';
 
@@ -316,7 +317,7 @@ function assertLeaderCommitIndex(leader, expected, stage) {
 }
 
 async function createLeader(transport, cache) {
-  const leader = new PartitionService(withFoundingStamp({
+  const leader = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_NAME,
     tableName: TABLE_NAME,
@@ -327,7 +328,7 @@ async function createLeader(transport, cache) {
     systemTableCache: cache,
     schema: TABLE_SCHEMA,
     dbPath: ':memory:',
-  }));
+  })));
   await leader.initialize();
   // How the prefix became committed is a precondition here, not the
   // mechanism under test - the proof consumes committedIndex however it
@@ -397,7 +398,7 @@ async function admitLiveVoter(topology, replicaId, nodeId, options = {}) {
   const address = partitionAddress(nodeId, replicaId);
   const placement = placementWith(topology, replicaId, nodeId);
   const voterCache = createPlacementCache(placement);
-  const voter = new PartitionService(withFoundingStamp({
+  const voter = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_NAME,
     tableName: TABLE_NAME,
@@ -410,7 +411,7 @@ async function admitLiveVoter(topology, replicaId, nodeId, options = {}) {
     schema: TABLE_SCHEMA,
     dbPath: ':memory:',
     deferElection: true,
-  }));
+  })));
   topology.voters.push(voter);
   await voter.initialize();
   const hydratedCaches = options.surplus === true ?
@@ -455,7 +456,7 @@ export function observeLearnerTerm(learner, term) {
 }
 
 async function createLearner(transport, cache, options = {}) {
-  const learner = new PartitionService(withFoundingStamp({
+  const learner = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_NAME,
     tableName: TABLE_NAME,
@@ -472,7 +473,7 @@ async function createLearner(transport, cache, options = {}) {
     learnerCatchUpCheckIntervalMs:
       options.retryIntervalMs || RETRY_INTERVAL_MS,
     replicaStateMachine: options.replicaStateMachine,
-  }));
+  })));
   await learner.initialize();
   return learner;
 }

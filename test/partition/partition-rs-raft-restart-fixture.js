@@ -33,6 +33,7 @@ import {enableParticipantTransactionAdmission} from
   '../../src/partition/partition-participant-transaction-request.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 
 
 const TEMP_PREFIX = 'partition-rs-raft-restart-';
@@ -137,7 +138,8 @@ async function restartOverCommittedCommands(options, commands) {
     }
   };
   try {
-    const first = new PartitionService(withFoundingStamp(partitionOptions));
+    const first = new PartitionService(
+      partitionCollaboratorOptions(withFoundingStamp(partitionOptions)));
     try {
       await first.initialize();
       await leadAlone(first);
@@ -160,7 +162,8 @@ async function restartOverCommittedCommands(options, commands) {
     assert.equal(before.committed.length, expectedNonOriginCommands.length,
       'precondition: every proposed non-origin command is committed and applied in the ' +
       `rs-raft store (${JSON.stringify(before)})`);
-    restarted = new PartitionService(withFoundingStamp(partitionOptions));
+    restarted = new PartitionService(
+      partitionCollaboratorOptions(withFoundingStamp(partitionOptions)));
     await restarted.initialize();
     return {
       restarted,

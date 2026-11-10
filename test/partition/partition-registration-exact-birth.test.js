@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 import {PartitionServiceRowOwner, isPartitionRegistrationEvidence} from
   '../../src/partition/partition-service-row-owner.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE} from
@@ -13,7 +14,7 @@ function fixture({delta = {}, lost = true, observation = 'exact'} = {}) {
   db.exec('CREATE TABLE registration_answer (row_json TEXT NOT NULL)');
   const failure = new Error('registration answer lost after the write');
   const counts = {inserts: 0, reads: 0};
-  const owner = new PartitionServiceRowOwner({systemTableWriter: {
+  const owner = new PartitionServiceRowOwner(partitionCollaboratorOptions({systemTableWriter: {
     async insertSystemTableRow(table, row, options) {
       assert.equal(table, 'services');
       assert.equal(options.allowCoalescing, false);
@@ -36,7 +37,7 @@ function fixture({delta = {}, lost = true, observation = 'exact'} = {}) {
       if (observation === 'duplicate') return {success: true, rows: [row, row]};
       return {success: true, rows: [row]};
     },
-  }});
+  }}));
   return {owner, db, failure, counts};
 }
 

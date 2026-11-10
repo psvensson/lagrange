@@ -10,11 +10,18 @@ import {
   resolveLiveRaftLeaderAddressForPeer,
 } from './partition-service-raft-peer-cache-reconciliation.js';
 import {createRaftRsOperationPort} from '../raft/raft-rs-operation-port.js';
+import {initializePartitionAdmissionState} from
+  './partition-service-raft-membership-administration.js';
 import {RAFT_OPERATION_PORT_REQUEST} from '../raft/raft-operation-port-request.js';
 import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
 import {isLivePartitionServiceRow} from '../constants/service.js';
 import {PartitionWriteTraffic} from './partition-write-traffic.js';
+import {
+  PARTITION_SERVICE_COLLABORATOR as COLLABORATOR,
+  assertPartitionServiceCollaborator,
+  resolveOptionalHook,
+} from './partition-service-collaborators.js';
 const {
   AddressManager,
   CDCEventBuffer,
@@ -31,7 +38,6 @@ const {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_TYPE,
   PARTITION_SUBSYSTEM,
   PartitionCDCDelivery,
   PartitionCDCGenerator,
@@ -201,18 +207,13 @@ class PartitionServiceCoreBase extends EventEmitter {
       logger: this.logger,
     });
     this.suppressLifecycleLogs = Boolean(options.suppressLifecycleLogs);
-    this.onInitializationStage =
-      typeof options.onInitializationStage === PARTITION_SERVICE_TYPE.FUNCTION ?
-        options.onInitializationStage :
-        null;
+    this.onInitializationStage = resolveOptionalHook(
+      COLLABORATOR.INITIALIZATION_STAGE_HOOK, options.onInitializationStage);
     // S4 snapshot catch-up decision seam: settable before or after
     // construction; threaded into the RaftNode options at the partition
     // construction site (partition-service-raft-init-base.js).
-    this.onSnapshotCatchupNeeded =
-      typeof options.onSnapshotCatchupNeeded ===
-        PARTITION_SERVICE_TYPE.FUNCTION ?
-        options.onSnapshotCatchupNeeded :
-        null;
+    this.onSnapshotCatchupNeeded = resolveOptionalHook(
+      COLLABORATOR.SNAPSHOT_CATCHUP_HOOK, options.onSnapshotCatchupNeeded);
     this.initialized = false;
     this.isShutdown = false;
     this.startupFailure = null;
@@ -240,6 +241,8 @@ class PartitionServiceCoreBase extends EventEmitter {
       this.handleSystemTableCacheChange.bind(this);
     this.peerReconciliationScheduled = false;
     this.rebalancer = null;
+    assertPartitionServiceCollaborator(COLLABORATOR.REBALANCE_COORDINATOR,
+      options.rebalanceCoordinator);
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
     this.ownsRebalanceCoordinator = false;
     this.systemTableCache = options.systemTableCache || null;
@@ -284,6 +287,8 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.deferElection = options.deferElection || this.isJoiningExistingGroup;
     this.electionStarted = false;
     this.raftTimingConfig = null;
+    assertPartitionServiceCollaborator(COLLABORATOR.REPLICA_STATE_MACHINE,
+      options.replicaStateMachine);
     this.replicaStateMachine = options.replicaStateMachine || null;
     this.resolveHandlerRetirementLane =
       options.resolveHandlerRetirementLane || null;
@@ -297,6 +302,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     // (quest learner-promotion-guard-inputs-observed).
     this.learnerPromotionCountCheckInputsLogged = false;
     this.learnerPromotionWake = createLearnerPromotionWakeState();
+    initializePartitionAdmissionState(this);
     this.splitReplication = null;
     this.splitReplicationRun = null;
     this.mergeReplication = null;
@@ -308,11 +314,12 @@ class PartitionServiceCoreBase extends EventEmitter {
     return this._systemTableCache || null;
   }
   set systemTableCache(systemTableCache) {
+    assertPartitionServiceCollaborator(COLLABORATOR.SYSTEM_TABLE_CACHE,
+      systemTableCache);
     const previousCache = this._systemTableCache || null;
     if (
       previousCache &&
       previousCache !== systemTableCache &&
-      typeof previousCache.offCacheChange === PARTITION_SERVICE_TYPE.FUNCTION &&
       this.systemTableCacheChangeListener
     ) {
       previousCache.offCacheChange(this.systemTableCacheChangeListener);
@@ -329,8 +336,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     if (
       systemTableCache &&
       systemTableCache !== previousCache &&
-      typeof systemTableCache.onCacheChange ===
-        PARTITION_SERVICE_TYPE.FUNCTION &&
       this.systemTableCacheChangeListener
     ) {
       systemTableCache.onCacheChange(this.systemTableCacheChangeListener);
@@ -341,6 +346,8 @@ class PartitionServiceCoreBase extends EventEmitter {
     return this._cdcIntegrationService || null;
   }
   set cdcIntegrationService(cdcIntegrationService) {
+    assertPartitionServiceCollaborator(COLLABORATOR.CDC_INTEGRATION_SERVICE,
+      cdcIntegrationService);
     this._cdcIntegrationService = cdcIntegrationService;
     this.roleMutationHelper?.setCdcIntegrationService(cdcIntegrationService);
     this.leaderNodeMutationHelper?.setCdcIntegrationService(
@@ -425,10 +432,9 @@ class PartitionServiceCoreBase extends EventEmitter {
     return this._metadataPublicationReadinessState || null;
   }
   set metadataPublicationReadinessState(readinessState) {
-    if (
-      typeof this.releaseMetadataPublicationReadinessListener ===
-      PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
+    // Null until a listener is attached; attachTrafficReadinessListener
+    // always answers a release function.
+    if (this.releaseMetadataPublicationReadinessListener) {
       this.releaseMetadataPublicationReadinessListener();
     }
     this._metadataPublicationReadinessState = readinessState || null;
@@ -437,6 +443,32 @@ class PartitionServiceCoreBase extends EventEmitter {
         this._metadataPublicationReadinessState,
         this.metadataPublicationReadinessTransitionListener,
       );
+  }
+  /**
+   * Shutdown's end of the metadata publication readiness slots, after
+   * clearPartitionLifecycleListeners released the listener: no listener and
+   * no readiness state remain (the constructor's empty state).
+   * @return {void}
+   */
+  clearMetadataPublicationReadinessSlots() {
+    this.releaseMetadataPublicationReadinessListener = null;
+    this._metadataPublicationReadinessState = null;
+  }
+  /**
+   * Shutdown's end of the startup failure: a later initialization starts
+   * without one (the constructor's empty state).
+   * @return {void}
+   */
+  clearStartupFailure() {
+    this.startupFailure = null;
+  }
+  /**
+   * The prepared-state hold sweep's stop, after its interval was cleared:
+   * no sweep timer is held (the constructor's empty state).
+   * @return {void}
+   */
+  clearPreparedStateHoldTimer() {
+    this.preparedStateHoldTimer = null;
   }
   /**
    * Build this replica's consensus operation port. The partition states its
@@ -504,10 +536,7 @@ class PartitionServiceCoreBase extends EventEmitter {
    */
   async refreshMetadataPublicationGuardRow(tableName, key) {
     const cdcIntegrationService = this.cdcIntegrationService;
-    if (
-      !cdcIntegrationService ||
-      typeof cdcIntegrationService.refreshAuthoritativeCacheRow !== 'function'
-    ) {
+    if (!cdcIntegrationService) {
       return false;
     }
     return (
@@ -664,10 +693,7 @@ class PartitionServiceCoreBase extends EventEmitter {
    * @private
    */
   resolvePeerAddressFromCache(peerId) {
-    if (
-      !this.systemTableCache ||
-      typeof this.systemTableCache.get !== PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
+    if (!this.systemTableCache) {
       return null;
     }
     const service = this.systemTableCache.get(TABLES.SERVICES, peerId);

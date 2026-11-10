@@ -30,6 +30,10 @@ import {
   PARTITION_SERVICE_EVENT,
 } from '../../src/partition/partition-service-constants.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {
+  authoritativeSystemTableRead,
+  partitionCollaboratorOptions,
+} from '../helpers/partition-service-fixture.js';
 
 /**
  * Partition ID for the child partition under test.
@@ -125,10 +129,16 @@ function createMockSystemTableCache() {
  */
 function createMockCdcIntegrationService() {
   const calls = [];
+  // The durable rows: what the mock cache holds (the child row), with every
+  // accepted write applied.
+  const durable = createMockSystemTableCache();
   const service = {
+    executeAuthoritativeSystemTableRead: authoritativeSystemTableRead(durable),
     updateSystemTableRow:
       async (tableName, whereClause, data, options) => {
         calls.push({tableName, whereClause, data, options});
+        const row = durable.get(tableName, whereClause[COLUMN.PARTITION_ID]);
+        if (row) Object.assign(row, data);
         return {success: true, partitionResult: {affectedRows: 1}};
       },
   };
@@ -143,7 +153,7 @@ function createMockCdcIntegrationService() {
  * @return {PartitionService} child partition service
  */
 function createChildPartition(cdcIntegrationService, systemTableCache) {
-  return new PartitionService(withFoundingStamp({
+  return new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: CHILD_PARTITION_ID,
     tableId: CHILD_TABLE_ID,
     tableName: CHILD_TABLE_NAME,
@@ -153,7 +163,7 @@ function createChildPartition(cdcIntegrationService, systemTableCache) {
     dbPath: ':memory:',
     cdcIntegrationService,
     systemTableCache,
-  }));
+  })));
 }
 
 test('setup child partition leader propagation tests', async (t) => {
@@ -230,7 +240,13 @@ async (t) => {
 
   try {
     await partition.initialize();
-    await partition.flushLeaderNodeUpdate();
+    // The election queued a flush that confirms against the authoritative
+    // row (asynchronous); settle it before reading the helper's state.
+    for (let spin = 0; spin < 20; spin += 1) {
+      const flushed = await partition.flushLeaderNodeUpdate();
+      if (flushed.reason !== 'in-flight') break;
+      await new Promise((resolve) => setImmediate(resolve));
+    }
 
     // The leaderNodeMutationHelper is the canonical owner for
     // leader_node_id writes. Verify it was used by checking that
@@ -302,7 +318,7 @@ test('leader_node_id write is not issued without cdcIntegrationService',
     const cache = createMockSystemTableCache();
     // Create partition without cdcIntegrationService — the helper
     // should queue the value but not attempt a write.
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
       partitionId: CHILD_PARTITION_ID,
       tableId: CHILD_TABLE_ID,
       tableName: CHILD_TABLE_NAME,
@@ -311,7 +327,7 @@ test('leader_node_id write is not issued without cdcIntegrationService',
       nodeId: CHILD_NODE_ID,
       dbPath: ':memory:',
       systemTableCache: cache,
-    }));
+    })));
 
     try {
       await partition.initialize();

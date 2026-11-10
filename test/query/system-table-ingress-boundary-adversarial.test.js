@@ -33,8 +33,7 @@ import {
 } from '../../src/migration/migration-pipeline.js';
 import {MigrationCoordinator} from
   '../../src/migration/migration-coordinator.js';
-import {PARTITION_SERVICE_REMOTE_QUERY_METHODS} from
-  '../../src/partition/partition-service-remote-query-methods.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
 import {PARTITION_SERVICE_MIGRATION_OPERATION} from
   '../../src/partition/partition-service-constants.js';
 import {classifyPartitionStatementHead} from
@@ -743,8 +742,7 @@ test('Surface 6: PartitionService.handleRemoteQuery, executeMigrationAlterQuery,
   for (const tableName of ALL_SYSTEM_TABLES) {
     const db = new Database(':memory:');
     t.teardown(() => db.close());
-    const partition = Object.assign(
-      Object.create(PARTITION_SERVICE_REMOTE_QUERY_METHODS),
+    const partition = partitionServiceContext(
       {
         role: 'leader',
         tableName,

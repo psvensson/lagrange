@@ -13,6 +13,11 @@ import {
   BOOTSTRAP_PHASE,
   JOINING_PHASE,
 } from '../../src/bootstrap/bootstrap-constants.js';
+import {partitionCollaboratorFake} from '../helpers/partition-service-fixture.js';
+import {PARTITION_SERVICE_COLLABORATOR} from '../../src/partition/partition-service-collaborators.js';
+
+const cdcIntegrationFake = (fake) => partitionCollaboratorFake(
+  PARTITION_SERVICE_COLLABORATOR.CDC_INTEGRATION_SERVICE, fake);
 
 const TEST_CAPTURED_MESSAGE_GROUP_ID = 'mg-captured';
 const TEST_CONTROL_PLANE_PUBLICATIONS_TABLE =
@@ -89,7 +94,8 @@ async function withCapturedReplicaFactory(
     service.systemTableCache = cache;
     service.systemCacheHydrated = true;
     service.tablePolicyService = {};
-    service.rebalanceCoordinator = {};
+    service.rebalanceCoordinator = partitionCollaboratorFake(
+      PARTITION_SERVICE_COLLABORATOR.REBALANCE_COORDINATOR, {});
     service.messageGroupServices =
       typeof options.createMessageGroupServices === 'function' ?
         options.createMessageGroupServices({subscribedTables}) :
@@ -109,19 +115,19 @@ async function withCapturedReplicaFactory(
         hasCustomCreateCdcIntegrationService) {
       const originalCreateCdcIntegrationService =
         service.createCdcIntegrationService.bind(service);
-      service.createCdcIntegrationService = () => ({
+      service.createCdcIntegrationService = () => cdcIntegrationFake({
         ...fallbackCdcIntegrationService,
         ...(originalCreateCdcIntegrationService() || {}),
       });
     } else if (typeof service.createCdcIntegrationService === 'function') {
-      service.createCdcIntegrationService = () => ({
+      service.createCdcIntegrationService = () => cdcIntegrationFake({
         ...fallbackCdcIntegrationService,
       });
     } else {
-      service.cdcIntegrationService = {
+      service.cdcIntegrationService = cdcIntegrationFake({
         ...fallbackCdcIntegrationService,
         ...(service.cdcIntegrationService || {}),
-      };
+      });
     }
 
     if (typeof service.getLeaderMessageGroupService === 'function') {
@@ -168,14 +174,15 @@ async function withCapturedReplicaFactory(
         replicaHandler: {
           initialize() {},
         },
-        replicaStateMachine: {
-          registerReplicaSnapshot() {
-            return true;
-          },
-          getStateCounts() {
-            return {};
-          },
-        },
+        replicaStateMachine: partitionCollaboratorFake(
+          PARTITION_SERVICE_COLLABORATOR.REPLICA_STATE_MACHINE, {
+            registerReplicaSnapshot() {
+              return true;
+            },
+            getStateCounts() {
+              return {};
+            },
+          }),
       };
     };
 

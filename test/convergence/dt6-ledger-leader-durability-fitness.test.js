@@ -3,8 +3,8 @@ import {afterEach, beforeEach, test} from 'node:test';
 import {RaftRole} from '../../src/partition/partition-service.js';
 import {
   LEADER_DURABILITY_CONSEQUENCE_OUTCOME,
-  createPartitionServiceDurabilityFitnessMethods,
 } from '../../src/partition/partition-service-durability-fitness.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
 import {
   clearFixtureSingletons,
   onFixtureLeader,
@@ -29,7 +29,7 @@ function createFitnessFixture({solo = false} = {}) {
   const events = [];
   const errors = [];
   let successorViable = false;
-  const service = {
+  const service = partitionServiceContext({
     db: {open: true, inTransaction: false},
     partitionId: 'durability-fitness-p1',
     replicaId: 'durability-fitness-r1',
@@ -45,8 +45,7 @@ function createFitnessFixture({solo = false} = {}) {
         errors.push({message, context});
       },
     },
-  };
-  Object.assign(service, createPartitionServiceDurabilityFitnessMethods());
+  });
   service.setLeaderDurabilityUnfitHook((evidence) => events.push(evidence));
   service.setLeaderDurabilitySuccessorProbe(() => successorViable);
   return {

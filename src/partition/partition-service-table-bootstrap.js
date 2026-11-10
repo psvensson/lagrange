@@ -303,9 +303,7 @@ function createPartitionServiceTable(service) {
   service.ensureTablesTableColumns();
   service.ensureMessageGroupsTableColumns();
   service.ensurePartitionsTableColumns();
-  if (typeof service.ensureIndicesTableColumns === 'function') {
-    service.ensureIndicesTableColumns();
-  }
+  service.ensureIndicesTableColumns();
   service.ensureSqlTransactionsTableColumns();
   // The coordinator's retained PREPARE evidence (TX1 seam E).
   ensureSqlTransactionParticipantsTableColumns(service);

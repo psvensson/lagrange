@@ -25,6 +25,7 @@ import {CDC_OPERATION} from '../../src/constants/index.js';
 import {isLivePartitionServiceRow} from '../../src/constants/service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
 import {WAIT_BOUND_SPENT_EVENT} from
   '../../src/logging/wait-bound-spent.js';
 import {retireRaftPeerFromAuthoritativeServiceChange} from
@@ -146,11 +147,12 @@ function openGroupWorld(t, {partitionId, voters, reconcile = true}) {
   };
   world.emitNodeRow = (row) => world.emitSystemRow('nodes', 'UPDATE', row);
   // The row-driven reconcile on every member, as PartitionService runs it.
-  const memberServices = new Map(members.map((replicaId) => [replicaId, {
-    raft: countingPort(cluster.node(replicaId), replicaId, world.proposals),
-    replicaId, partitionId, replicaIds: [...members], peerAddresses: [],
-    logger: QUIET_LOGGER,
-  }]));
+  const memberServices = new Map(members.map((replicaId) => [replicaId,
+    partitionServiceContext({
+      raft: countingPort(cluster.node(replicaId), replicaId, world.proposals),
+      replicaId, partitionId, replicaIds: [...members], peerAddresses: [],
+      logger: QUIET_LOGGER,
+    })]));
   const react = (operation, row) => {
     if (!reconcile || !row || row.partition_id !== partitionId ||
         !isLivePartitionServiceRow(row)) {

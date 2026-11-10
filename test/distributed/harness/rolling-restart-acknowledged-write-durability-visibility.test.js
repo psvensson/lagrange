@@ -28,6 +28,7 @@ import {
   assertAcknowledgedWritesVisibleOnReachableNodes,
 } from './acknowledged-write-visibility.js';
 import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
+import {partitionCollaboratorOptions} from '../../helpers/partition-service-fixture.js';
 import {resumeFixtureParticipantAdmission} from
   '../../test-helpers/participant-transaction-fixture.js';
 
@@ -62,7 +63,7 @@ const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayMap = Function.call.bind(Array.prototype.map);
 
 function createEndToEndPartition() {
-  return new PartitionService(withFoundingStamp({
+  return new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: 'user_load_logs-p1',
     tableId: 'user_load_logs',
     tableName: 'user_load_logs',
@@ -85,7 +86,7 @@ function createEndToEndPartition() {
       ],
     },
     dbPath: ':memory:',
-  }));
+  })));
 }
 
 function createEndToEndCoordinator(partition) {
@@ -116,7 +117,7 @@ function createEndToEndCoordinator(partition) {
 }
 
 function createRun13Partition(nodeId, dbPath) {
-  return new PartitionService(withFoundingStamp({
+  return new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: RUN13_PARTITION_ID,
     tableId: 'benchmark_events',
     tableName: 'benchmark_events',
@@ -130,7 +131,7 @@ function createRun13Partition(nodeId, dbPath) {
       ],
     },
     dbPath,
-  }));
+  })));
 }
 
 function buildRun13Command(id, index) {

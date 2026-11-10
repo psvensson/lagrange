@@ -13,6 +13,10 @@ import {
   resolveSplitDescriptorEpochEvidenceForService,
 } from './partition-service-split-replication-state.js';
 import {PARTICIPANT_ACK_RESULT} from '../workflow/workflow-constants.js';
+import {
+  PARTITION_SERVICE_COLLABORATOR as COLLABORATOR,
+  assertPartitionServiceCollaborator,
+} from './partition-service-collaborators.js';
 
 const {
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -23,7 +27,6 @@ const {
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_TYPE,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
   PRESSURE_WORK_CLASS,
@@ -32,7 +35,6 @@ const {
   SPLIT_ACK_STATUS,
   SPLIT_PARTICIPANT_PREFIX,
   TABLES,
-  assertCritical,
   cloneSplitRoutingEntry,
   extractPartitionSplitRoutingKey,
   replayPartitionSplitEntry,
@@ -279,11 +281,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    */
   async emitSplitSourceAck(metadata, ackStatus, checkpoint) {
     const splitWorkflow = this.sqlQueryEngine?.managedSplitWorkflow;
-    if (
-      !splitWorkflow ||
-      typeof splitWorkflow.acknowledgeSourceParticipant !==
-        PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
+    if (!splitWorkflow) {
       throw new Error(
         PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
       );
@@ -367,14 +365,8 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    */
   createSplitSnapshotRowIterator(snapshotDb, metadata) {
     const sql = `SELECT * FROM ${this.tableName} ORDER BY ${metadata.primaryKeyColumn}`;
-    const statement = snapshotDb.prepare(sql);
-    if (statement && typeof statement.iterate === 'function') {
-      return statement.iterate();
-    }
-    if (statement && typeof statement.all === 'function') {
-      return statement.all();
-    }
-    return [];
+    // A better-sqlite3 statement (openSplitSnapshotDatabase): streamed.
+    return snapshotDb.prepare(sql).iterate();
   }
   /**
    * Copy the source snapshot into child partitions using idempotent upserts.
@@ -443,10 +435,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    */
   async markSplitCutoverActive(metadata) {
     const splitWorkflow = this.sqlQueryEngine?.managedSplitWorkflow;
-    if (
-      !splitWorkflow ||
-      typeof splitWorkflow.advanceSplitPhase !== 'function'
-    ) {
+    if (!splitWorkflow) {
       throw new Error(
         PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
       );
@@ -631,7 +620,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
   /**
    * Set the system table cache for the rebalancer.
    * Called after cache hydration is complete.
-   * @param {Object} systemTableCache - Read-only system table cache.
+   * @param {Object} systemTableCache - The node's system table cache.
    */
   setSystemTableCache(systemTableCache) {
     this.systemTableCache = systemTableCache;
@@ -717,24 +706,17 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    * @param {Object} newCoordinator - The new coordinator instance.
    */
   rebindCoordinator(newCoordinator) {
+    assertPartitionServiceCollaborator(COLLABORATOR.REBALANCE_COORDINATOR,
+      newCoordinator);
     const previousCoordinator = this.rebalanceCoordinator;
     const hadPrevious = !!previousCoordinator;
     const isReplacement = hadPrevious && previousCoordinator !== newCoordinator;
     const shouldShutdownPrevious =
-      this.ownsRebalanceCoordinator &&
-      isReplacement &&
-      typeof previousCoordinator.shutdown === PARTITION_SERVICE_TYPE.FUNCTION;
+      this.ownsRebalanceCoordinator && isReplacement;
     this.rebalanceCoordinator = newCoordinator;
     this.ownsRebalanceCoordinator = false;
     if (this.rebalancer) {
-      const setCoordinator = assertCritical(
-        typeof this.rebalancer.setRebalanceCoordinator ===
-          PARTITION_SERVICE_TYPE.FUNCTION ?
-          this.rebalancer.setRebalanceCoordinator.bind(this.rebalancer) :
-          null,
-        PARTITION_SERVICE_ERROR_MSG.REBALANCER_SET_COORDINATOR_REQUIRED,
-      );
-      setCoordinator(newCoordinator);
+      this.rebalancer.setRebalanceCoordinator(newCoordinator);
     }
     this.logger.info(PARTITION_SERVICE_LOG_MSG.COORDINATOR_REBOUND, {
       partitionId: this.partitionId,
@@ -765,11 +747,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     if (this.rebalanceCoordinator) {
       this.rebalanceCoordinator.sqlQueryEngine = sqlQueryEngine;
       const bundle = this.buildRebalancerDependencyBundle();
-      if (
-        bundle &&
-        typeof this.rebalanceCoordinator.syncOwnerDependencies ===
-          PARTITION_SERVICE_TYPE.FUNCTION
-      ) {
+      if (bundle) {
         this.rebalanceCoordinator.syncOwnerDependencies(bundle);
       }
     }

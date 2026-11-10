@@ -72,6 +72,7 @@ import {
   openGroupWorld,
 } from './group-retirement-as-a-unit-fixture.js';
 import {settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
 
 const GROUP_RETIRED = 'group-retired';
 const WORKFLOW_ID = 'wf-fence-1';
@@ -210,7 +211,7 @@ function serviceOf(partitionId, tablesRow) {
     [`tables:${TABLE_ID}`, tablesRow],
   ]);
   const warns = [];
-  return {portCalls, warns, service: {
+  return {portCalls, warns, service: partitionServiceContext({
     partitionId, replicaId: `${partitionId}-r1`,
     logger: {debug() {}, info() {}, warn: (message, fields) =>
       warns.push({message, fields}), error() {}},
@@ -226,7 +227,7 @@ function serviceOf(partitionId, tablesRow) {
         return settledTurn({outcome: 'CORE_OK'});
       },
     },
-  }};
+  })};
 }
 
 test('G2b-A the partition\'s conf-change admission refuses every membership ' +

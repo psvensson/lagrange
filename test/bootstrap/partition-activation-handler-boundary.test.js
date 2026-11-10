@@ -21,6 +21,7 @@ import {runSerializedReplicaMutation} from
   '../../src/node/replica-state-machine-serialization.js';
 import {pendingTurn} from '../../src/raft/raft-rs-turn-answer.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {partitionCollaboratorOptions, partitionServiceContext} from '../helpers/partition-service-fixture.js';
 
 const NODE_ID = 'node-a';
 const REPLICA_ID = 'p1-r1';
@@ -121,20 +122,20 @@ function createWorld(initialRow = registeredRow()) {
   const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: NODE_ID});
   const stateMachine = new ReplicaStateMachine({nodeId: NODE_ID,
     controlPlaneSystemTableGateway: {}, now: () => 150});
-  const service = {partitionId: 'p1', replicaId: REPLICA_ID,
+  const service = partitionServiceContext({partitionId: 'p1', replicaId: REPLICA_ID,
     unifiedAddress: ADDRESS, initialized: true,
-    transportHandler: () => (null)};
+    transportHandler: () => (null)});
   const durable = createDurable(initialRow, {
     atCas: () => router.getRegisteredHandler(ADDRESS) ===
       service.transportHandler,
   });
-  const activate = () => activatePartitionServiceRows({
+  const activate = () => activatePartitionServiceRows(partitionCollaboratorOptions({
     nodeId: NODE_ID,
     systemTableWriter: durable,
     replicaStateMachine: stateMachine,
     messageRouter: router,
     partitionServices: new Map([[REPLICA_ID, service]]),
-  });
+  }));
   // The production retirement path: exact-identity removal in the lane.
   const retire = (handler = service.transportHandler) =>
     stateMachine.retireReplicaHandler(REPLICA_ID,
@@ -316,11 +317,11 @@ async (t) => {
     'the shared retirement waits on the owner\'s activation effect section');
   t.match(helper, /transport\.unregisterExact\(address, handler\)/u,
     'the shared retirement is exact-identity');
-  const shutdownStart = source.indexOf('\n  shutdown() {');
+  const shutdownStart = source.indexOf('\nfunction shutdown(service) {');
   t.ok(shutdownStart >= 0, 'the partition shutdown is located');
   const shutdown = source.slice(shutdownStart);
-  const retireAt = shutdown.indexOf('await retirePartitionTransportHandler(this);');
+  const retireAt = shutdown.indexOf('await retirePartitionTransportHandler(service);');
   t.ok(retireAt >= 0 &&
-    retireAt < shutdown.indexOf('closePartitionPersistenceResources(this);'),
+    retireAt < shutdown.indexOf('closePartitionPersistenceResources(service);'),
   'shutdown retires the handler in the lane before closing the store');
 });

@@ -30,6 +30,7 @@ import {
   createMockStoragePressureBehavior,
 } from './rebalancer-integration-doubles.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 import {createLifecycleCdcServiceForCache} from
   '../test-helpers/lifecycle-state-store.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
@@ -298,28 +299,29 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         const partitionId = 'test-partition-1';
         const schema = createTestSchema('test_table');
 
-        resources.seedPartition = new PartitionService(withFoundingStamp({
-          partitionId,
-          tableId: 'test_table',
-          tableName: 'test_table',
-          schema,
-          keyRange: {start: null, end: null},
-          replicaId: `${partitionId}-r1`,
-          replicaIds: [`${partitionId}-r1`, `${partitionId}-r2`, `${partitionId}-r3`],
-          peerAddresses: [
-            `${seedNodeId}/partition/${partitionId}-r1`,
-            `${seedNodeId}/partition/${partitionId}-r2`,
-            `${seedNodeId}/partition/${partitionId}-r3`,
-          ],
-          nodeId: seedNodeId,
-          transport: resources.seedRouter,
-          dbPath: ':memory:',
-          messageGroupService: resources.messageGroup,
-          messageRouter: resources.seedRouter,
-          systemTableCache,
-          cdcIntegrationService,
-          tablePolicyService,
-        }));
+        resources.seedPartition = new PartitionService(
+          partitionCollaboratorOptions(withFoundingStamp({
+            partitionId,
+            tableId: 'test_table',
+            tableName: 'test_table',
+            schema,
+            keyRange: {start: null, end: null},
+            replicaId: `${partitionId}-r1`,
+            replicaIds: [`${partitionId}-r1`, `${partitionId}-r2`, `${partitionId}-r3`],
+            peerAddresses: [
+              `${seedNodeId}/partition/${partitionId}-r1`,
+              `${seedNodeId}/partition/${partitionId}-r2`,
+              `${seedNodeId}/partition/${partitionId}-r3`,
+            ],
+            nodeId: seedNodeId,
+            transport: resources.seedRouter,
+            dbPath: ':memory:',
+            messageGroupService: resources.messageGroup,
+            messageRouter: resources.seedRouter,
+            systemTableCache,
+            cdcIntegrationService,
+            tablePolicyService,
+          })));
 
         // Set SQL query engine to enable rebalancer initialization
         resources.seedPartition.setSqlQueryEngine(sqlQueryEngine);

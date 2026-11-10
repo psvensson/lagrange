@@ -26,6 +26,8 @@ import {
 import {LeaderActivationGate} from '../raft/leader-activation-gate.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {createRaftRsOperationPort} from '../raft/raft-rs-operation-port.js';
+import {createGroupAdmissionLiveness} from
+  '../raft/raft-rs-group-membership-admission.js';
 import {RAFT_OPERATION_PORT_REQUEST} from '../raft/raft-operation-port-request.js';
 import {AddressManager} from '../address/address-manager.js';
 import {
@@ -253,6 +255,10 @@ class MessageGroupService extends EventEmitter {
     // The replica's raft-rs operation port, opened in initialize().
     // Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
     this.raft = null;
+    // The admissions of the current port in flight and deferred, re-driven
+    // by this replica (message-group-service-raft-lifecycle.js); replaced
+    // with each port it opens.
+    this.groupAdmissionLiveness = createGroupAdmissionLiveness();
     // Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4
     this.operationLedger = new MessageGroupOperationLedger({
       now: this.now,

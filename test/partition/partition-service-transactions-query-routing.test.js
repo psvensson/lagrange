@@ -47,6 +47,7 @@ import {
 import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 
 
 beforeEach(() => {
@@ -101,7 +102,7 @@ test(
     });
 
     const transport = createLoopbackTransport();
-    const leader = new PartitionService(withFoundingStamp({
+    const leader = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
       partitionId: 'stable-join-partition',
       tableId: 'stable_join_table',
       tableName: 'stable_join_table',
@@ -111,8 +112,8 @@ test(
       transport,
       systemTableCache,
       dbPath: ':memory:',
-    }));
-    const joiner = new PartitionService(withFoundingStamp({
+    })));
+    const joiner = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
       partitionId: 'stable-join-partition',
       tableId: 'stable_join_table',
       tableName: 'stable_join_table',
@@ -129,7 +130,7 @@ test(
       isJoiningExistingGroup: true,
       leaderAddress: 'node-1/partition/replica-1',
       learnerCatchUpCheckIntervalMs: 25,
-    }));
+    })));
 
     try {
       await leader.initialize();
@@ -245,7 +246,7 @@ test(
       },
     };
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'test-table',
       replicaId: 'replica-3',
@@ -254,7 +255,7 @@ test(
       dbPath: ':memory:',
       isJoiningExistingGroup: true,
       systemTableCache: mockCache,
-    }));
+    })));
 
     partition.role = RaftRole.LEARNER;
     partition.leaderId = null;
@@ -339,7 +340,7 @@ test('PartitionService - critical partition defers second learner when replaceme
     },
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: `${SYSTEM_TABLE_NAME.CONFIG}-p1`,
     tableId: SYSTEM_TABLE_NAME.CONFIG,
     replicaId: 'replica-5',
@@ -348,7 +349,7 @@ test('PartitionService - critical partition defers second learner when replaceme
     dbPath: ':memory:',
     isJoiningExistingGroup: true,
     systemTableCache: mockCache,
-  }));
+  })));
 
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'replica-1';
@@ -438,7 +439,7 @@ test('PartitionService - learner promotes when multiple learners reach odd count
   };
 
   // Create partition as one of the learners
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-4',
@@ -447,7 +448,7 @@ test('PartitionService - learner promotes when multiple learners reach odd count
     dbPath: ':memory:',
     isJoiningExistingGroup: true,
     systemTableCache: mockCache,
-  }));
+  })));
 
   // Manually set role to learner
   partition.role = RaftRole.LEARNER;
@@ -532,7 +533,7 @@ test('PartitionService - learner defers when multiple learners would exceed targ
     },
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-4',
@@ -541,7 +542,7 @@ test('PartitionService - learner defers when multiple learners would exceed targ
     dbPath: ':memory:',
     isJoiningExistingGroup: true,
     systemTableCache: mockCache,
-  }));
+  })));
 
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'replica-1';
@@ -634,7 +635,7 @@ test('PartitionService - learner deferred when all learners would still be even'
   };
 
   // Create partition as the learner
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-4',
@@ -643,7 +644,7 @@ test('PartitionService - learner deferred when all learners would still be even'
     dbPath: ':memory:',
     isJoiningExistingGroup: true,
     systemTableCache: mockCache,
-  }));
+  })));
 
   // Manually set role to learner
   partition.role = RaftRole.LEARNER;
@@ -777,7 +778,7 @@ test(
       },
     };
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
       partitionId: criticalPartitionId,
       tableId: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       replicaId: currentReplicaId,
@@ -786,7 +787,7 @@ test(
       dbPath: memoryDbPath,
       isJoiningExistingGroup: false,
       systemTableCache: mockCache,
-    }));
+    })));
     let electionStarted = false;
     partition.role = RaftRole.LEARNER;
     partition.leaderId = leaderReplicaId;
@@ -916,7 +917,7 @@ test(
       },
     };
 
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'test-table',
       replicaId: 'replica-4',
@@ -925,7 +926,7 @@ test(
       dbPath: ':memory:',
       isJoiningExistingGroup: true,
       systemTableCache: mockCache,
-    }));
+    })));
 
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
@@ -991,7 +992,7 @@ test('PartitionService - countPendingLearners counts learner replicas', async (t
     },
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-5',
@@ -999,7 +1000,7 @@ test('PartitionService - countPendingLearners counts learner replicas', async (t
     nodeId: 'node-1',
     dbPath: ':memory:',
     systemTableCache: mockCache,
-  }));
+  })));
 
   // Count pending learners - should count replica-2 and replica-3 (not failed replica-4)
   const learnerCount = partition.countPendingLearners();
@@ -1062,7 +1063,7 @@ test('PartitionService - countActiveVoters excludes learners, failed replicas, '
     },
   };
 
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-7',
@@ -1070,7 +1071,7 @@ test('PartitionService - countActiveVoters excludes learners, failed replicas, '
     nodeId: 'node-1',
     dbPath: ':memory:',
     systemTableCache: mockCache,
-  }));
+  })));
 
   // Count active voters - should only count replica-1 and replica-2
   const voterCount = partition.countActiveVoters();
@@ -1078,14 +1079,14 @@ test('PartitionService - countActiveVoters excludes learners, failed replicas, '
 });
 
 test('PartitionService - handleRemoteQuery returns redirect for writes on follower', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  }));
+  })));
 
   await partition.initialize();
 
@@ -1112,14 +1113,14 @@ test('PartitionService - handleRemoteQuery returns redirect for writes on follow
 });
 
 test('PartitionService - handleRemoteQuery executes reads on follower', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  }));
+  })));
 
   await partition.initialize();
 
@@ -1147,14 +1148,14 @@ test('PartitionService - handleRemoteQuery executes reads on follower', async (t
 test(
   'PartitionService - remote read witness is captured before query execution',
   async (t) => {
-    const partition = new PartitionService(withFoundingStamp({
+    const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
       partitionId: 'read-witness-boundary-partition',
       tableId: 'read-witness-boundary-table',
       replicaId: 'read-witness-boundary-partition-r1',
       replicaIds: ['read-witness-boundary-partition-r1'],
       nodeId: 'node-1',
       dbPath: ':memory:',
-    }));
+    })));
     await partition.initialize();
     partition.role = RaftRole.LEADER;
     // The term is the consensus core's, read through the port; the witness
@@ -1196,14 +1197,14 @@ test(
 );
 
 test('PartitionService - removal drain waits for a query admitted before its serving fence', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  }));
+  })));
   await partition.initialize();
 
   let announceStarted;
@@ -1246,14 +1247,14 @@ test('PartitionService - removal drain waits for a query admitted before its ser
 });
 
 test('PartitionService - isWriteQuery detects write operations', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  }));
+  })));
 
   t.equal(partition.isWriteQuery('INSERT INTO t VALUES (1)'), true, 'INSERT is write');
   t.equal(partition.isWriteQuery('UPDATE t SET x = 1'), true, 'UPDATE is write');

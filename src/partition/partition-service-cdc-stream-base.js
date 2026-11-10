@@ -27,7 +27,6 @@ const {
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_OPERATION,
-  PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
   PARTITION_SPLIT_MIRROR_ORIGIN,
   SYSTEM_TABLE_NAME,
@@ -224,9 +223,6 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    * @return {Promise<*>}
    */
   trackPendingCDCEvent(promise) {
-    if (!promise || typeof promise.finally !== 'function') {
-      return promise;
-    }
     this.pendingCDCEventDeliveries.add(promise);
     promise.finally(() => {
       this.pendingCDCEventDeliveries.delete(promise);
@@ -278,11 +274,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
   requestManagedSplitEvaluationAfterWrite(entry) {
     const splitManager =
       this.sqlQueryEngine?.partitionSplitMergeManager || null;
-    if (
-      !this.isLeader ||
-      !splitManager ||
-      typeof splitManager.requestEvaluation !== PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
+    if (!this.isLeader || !splitManager) {
       return;
     }
     if (

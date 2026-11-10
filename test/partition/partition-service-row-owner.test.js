@@ -9,6 +9,7 @@ import {
 import {
   PartitionServiceRowOwner,
 } from '../../src/partition/partition-service-row-owner.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 
 function createActivationHarness({raftRole = 'leader'} = {}) {
   const lifecycleCalls = [];
@@ -39,11 +40,11 @@ function createActivationHarness({raftRole = 'leader'} = {}) {
 test('PartitionServiceRowOwner - activateReplica delegates lifecycle to ReplicaStateMachine',
   async (t) => {
     const harness = createActivationHarness();
-    const owner = new PartitionServiceRowOwner({
+    const owner = new PartitionServiceRowOwner(partitionCollaboratorOptions({
       now: () => 1234,
       systemTableWriter: harness.systemTableWriter,
       replicaStateMachine: harness.replicaStateMachine,
-    });
+    }));
 
     const row = await owner.activateReplica({
       partitionId: 'p1',
@@ -96,11 +97,11 @@ test('PartitionServiceRowOwner - activateReplica delegates lifecycle to ReplicaS
 test('PartitionServiceRowOwner - critical system partitions use critical service-row writes',
   async (t) => {
     const harness = createActivationHarness();
-    const owner = new PartitionServiceRowOwner({
+    const owner = new PartitionServiceRowOwner(partitionCollaboratorOptions({
       now: () => 1234,
       systemTableWriter: harness.systemTableWriter,
       replicaStateMachine: harness.replicaStateMachine,
-    });
+    }));
 
     await owner.activateReplica({
       partitionId: 'services-p1',
@@ -148,11 +149,11 @@ test('PartitionServiceRowOwner - critical system partitions use critical service
 test('PartitionServiceRowOwner - follower activation does not rewrite canonical partition leader',
   async (t) => {
     const harness = createActivationHarness({raftRole: 'follower'});
-    const owner = new PartitionServiceRowOwner({
+    const owner = new PartitionServiceRowOwner(partitionCollaboratorOptions({
       now: () => 1234,
       systemTableWriter: harness.systemTableWriter,
       replicaStateMachine: harness.replicaStateMachine,
-    });
+    }));
 
     await owner.activateReplica({
       partitionId: 'p1',
@@ -172,7 +173,7 @@ test('PartitionServiceRowOwner - follower activation does not rewrite canonical 
 test('PartitionServiceRowOwner - registerReplica uses insert-only admission',
   async (t) => {
     const inserts = [];
-    const owner = new PartitionServiceRowOwner({
+    const owner = new PartitionServiceRowOwner(partitionCollaboratorOptions({
       now: () => 1234,
       systemTableWriter: {
         async insertSystemTableRow(tableName, row, options) {
@@ -180,7 +181,7 @@ test('PartitionServiceRowOwner - registerReplica uses insert-only admission',
           return {success: true, partitionResult: {affectedRows: 1}};
         },
       },
-    });
+    }));
 
     await owner.registerReplica({
       partitionId: 'p1',
@@ -204,7 +205,7 @@ test('PartitionServiceRowOwner - registerReplica uses insert-only admission',
 test('PartitionServiceRowOwner - same-ID recreation cannot reuse a durable ' +
   'registration incarnation', async (t) => {
   const rows = [];
-  const owner = new PartitionServiceRowOwner({
+  const owner = new PartitionServiceRowOwner(partitionCollaboratorOptions({
     now: () => 100,
     systemTableWriter: {
       async insertSystemTableRow(_tableName, row) {
@@ -212,7 +213,7 @@ test('PartitionServiceRowOwner - same-ID recreation cannot reuse a durable ' +
         return {success: true, partitionResult: {affectedRows: 1}};
       },
     },
-  });
+  }));
 
   const first = await owner.registerReplica({
     partitionId: 'p1',
@@ -270,11 +271,11 @@ test('PartitionServiceRowOwner + BootstrapJoinAdmissionOwner preserve canonical 
       return activated;
     },
   };
-  const owner = new PartitionServiceRowOwner({
+  const owner = new PartitionServiceRowOwner(partitionCollaboratorOptions({
     now: () => 2000,
     systemTableWriter,
     replicaStateMachine,
-  });
+  }));
   const systemTableCache = {
     filter(tableName, predicate) {
       const rows = tableName === 'partitions' ?

@@ -92,7 +92,8 @@ async function buildSourceContext(options = {}) {
         if (sql.startsWith('PRAGMA')) {
           return {all: () => [{name: 'id'}, {name: 'v'}]};
         }
-        return {all: () => snapshotRows};
+        // A better-sqlite3 statement: the snapshot is streamed.
+        return {all: () => snapshotRows, iterate: () => snapshotRows.values()};
       },
     },
     logger: {info() {}, warn() {}, error() {}},

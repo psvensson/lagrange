@@ -30,6 +30,12 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {
+  partitionCollaboratorFake,
+  partitionCollaboratorOptions,
+} from '../helpers/partition-service-fixture.js';
+import {PARTITION_SERVICE_COLLABORATOR} from
+  '../../src/partition/partition-service-collaborators.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -46,7 +52,7 @@ afterEach(() => {
 });
 
 function createSelfOnlyPartition(id) {
-  return new PartitionService(withFoundingStamp({
+  return new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: id,
     tableId: 'test_table',
     tableName: 'test_table',
@@ -61,7 +67,7 @@ function createSelfOnlyPartition(id) {
       ],
     },
     dbPath: ':memory:',
-  }));
+  })));
 }
 
 function countRaftLogRows(partition) {
@@ -146,16 +152,17 @@ test('stale self-only replica contradicted by the published leader pointer rejec
     partition.role = 'follower';
     partition.isLeader = false;
     partition.leaderId = null;
-    partition.systemTableCache = {
-      get: (tableName, key) =>
-        tableName === 'partitions' && key === 'stale-leader-pointer' ?
-          {
-            partition_id: 'stale-leader-pointer',
-            leader_node_id: 'some-other-node',
-            replica_count: 3,
-          } :
-          null,
-    };
+    partition.systemTableCache = partitionCollaboratorFake(
+      PARTITION_SERVICE_COLLABORATOR.SYSTEM_TABLE_CACHE, {
+        get: (tableName, key) =>
+          tableName === 'partitions' && key === 'stale-leader-pointer' ?
+            {
+              partition_id: 'stale-leader-pointer',
+              leader_node_id: 'some-other-node',
+              replica_count: 3,
+            } :
+            null,
+      });
 
     const logRowsBefore = countRaftLogRows(partition);
     const response = await partition.handleApplicationMessage(
@@ -196,16 +203,17 @@ test('rejected query-routed writes propagate the failure through the response en
     partition.role = 'leader';
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
-    partition.systemTableCache = {
-      get: (tableName, key) =>
-        tableName === 'partitions' && key === 'query-envelope' ?
-          {
-            partition_id: 'query-envelope',
-            leader_node_id: 'some-other-node',
-            replica_count: 3,
-          } :
-          null,
-    };
+    partition.systemTableCache = partitionCollaboratorFake(
+      PARTITION_SERVICE_COLLABORATOR.SYSTEM_TABLE_CACHE, {
+        get: (tableName, key) =>
+          tableName === 'partitions' && key === 'query-envelope' ?
+            {
+              partition_id: 'query-envelope',
+              leader_node_id: 'some-other-node',
+              replica_count: 3,
+            } :
+            null,
+      });
     const response = await partition.handleApplicationMessage({
       payload: {
         type: 'QUERY',
@@ -244,16 +252,17 @@ test('single-replica placement under a replica_count>1 partition row keeps accep
     // a TARGET; with no actual remote leader (pointer names THIS node) the
     // lone replica must keep serving writes — rejecting here bricked every
     // user table on default-config single-node clusters.
-    partition.systemTableCache = {
-      get: (tableName, key) =>
-        tableName === 'partitions' && key === 'single-node-target-3' ?
-          {
-            partition_id: 'single-node-target-3',
-            leader_node_id: partition.nodeId,
-            replica_count: 3,
-          } :
-          null,
-    };
+    partition.systemTableCache = partitionCollaboratorFake(
+      PARTITION_SERVICE_COLLABORATOR.SYSTEM_TABLE_CACHE, {
+        get: (tableName, key) =>
+          tableName === 'partitions' && key === 'single-node-target-3' ?
+            {
+              partition_id: 'single-node-target-3',
+              leader_node_id: partition.nodeId,
+              replica_count: 3,
+            } :
+            null,
+      });
 
     const response = await partition.handleApplicationMessage(
       buildForwardedInsert(partition, 'single-node-row-1'),

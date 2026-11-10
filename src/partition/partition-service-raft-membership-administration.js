@@ -3,6 +3,7 @@ import {
   REDRIVEN_ADMISSION_OUTCOMES,
   admissionOfPortAnswer,
   admitGroupPeer,
+  createGroupAdmissionLiveness,
   reserveGroupPeerIdentity,
   takeGroupAdmissionsInFlight,
 } from '../raft/raft-rs-group-membership-admission.js';
@@ -79,29 +80,37 @@ function admitPartitionRaftPeer(service, peer) {
       change: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, ...refused});
     return refused;
   }
-  return admitGroupPeer(service.raft, admissionGroupOf(service), peer);
+  return admitGroupPeer(service.raft, service.groupAdmissionLiveness,
+    admissionGroupOf(service), peer);
 }
 
-// The row-driven retirements (REMOVE_PEER) the port deferred, by the change
-// proposed: re-proposed when a configuration change settles or this replica
-// gains leadership, like a deferred admission (verification V2). Removing a
-// peer that is no longer a member is a raft no-op, so a repeat is harmless.
-const RETIREMENTS_DEFERRED = new WeakMap();
-
-function retirementsDeferredOf(service) {
-  if (!RETIREMENTS_DEFERRED.has(service)) {
-    RETIREMENTS_DEFERRED.set(service, new Map());
-  }
-  return RETIREMENTS_DEFERRED.get(service);
+/**
+ * The partition's own admission state, the two stores its re-drive takes
+ * from when a configuration change settles or it gains leadership
+ * (partition-service-raft-peer-cache-reconciliation.js):
+ * `groupAdmissionLiveness`, the admissions of the current consensus port in
+ * flight and deferred (replaced with each port the replica opens), and
+ * `deferredRetirements`, the row-driven retirements (REMOVE_PEER) the port
+ * deferred, by replica identity (else address), for the replica's lifetime.
+ * @param {Object} service - The partition service, at construction.
+ * @return {void}
+ */
+function initializePartitionAdmissionState(service) {
+  service.groupAdmissionLiveness = createGroupAdmissionLiveness();
+  service.deferredRetirements = new Map();
 }
 
+// A row-driven retirement the port deferred is re-proposed when a
+// configuration change settles or this replica gains leadership, like a
+// deferred admission (verification V2). Removing a peer that is no longer a
+// member is a raft no-op, so a repeat is harmless.
 function trackRetirement(service, change, answered) {
   const key = change.replicaIdentity ?? change.peerAddress;
   if (REDRIVEN_ADMISSION_OUTCOMES.has(
     admissionOfPortAnswer(answered).outcome)) {
-    retirementsDeferredOf(service).set(key, change);
+    service.deferredRetirements.set(key, change);
   } else {
-    retirementsDeferredOf(service).delete(key);
+    service.deferredRetirements.delete(key);
   }
 }
 
@@ -116,7 +125,7 @@ function trackRetirement(service, change, answered) {
 function proposePeerRetirement(service, change) {
   const retiring = groupRetiringRefusal(service);
   if (retiring) {
-    retirementsDeferredOf(service).delete(
+    service.deferredRetirements.delete(
       change.replicaIdentity ?? change.peerAddress);
     return settledTurn(retiring);
   }
@@ -136,7 +145,7 @@ function proposePeerRetirement(service, change) {
  * @return {Array<Object>} The REMOVE_PEER changes.
  */
 function takeDeferredRetirements(service) {
-  const deferred = retirementsDeferredOf(service);
+  const deferred = service.deferredRetirements;
   const taken = [...deferred.values()];
   deferred.clear();
   return taken;
@@ -150,7 +159,8 @@ function takeDeferredRetirements(service) {
  * @return {Set<string>} The replica identities.
  */
 function takeAdmissionsInFlight(service) {
-  return takeGroupAdmissionsInFlight(service.raft);
+  return takeGroupAdmissionsInFlight(service.raft,
+    service.groupAdmissionLiveness);
 }
 
 /**
@@ -292,6 +302,7 @@ async function retirePartitionRaftPeer(service, replicaIdentity) {
 
 export {
   admitPartitionRaftPeer,
+  initializePartitionAdmissionState,
   readPartitionReplicaMembership,
   proposePeerRetirement,
   reservePartitionRaftPeerIdentity,

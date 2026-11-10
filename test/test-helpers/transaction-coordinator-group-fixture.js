@@ -42,6 +42,7 @@ import {CDC_TABLE} from './participant-transaction-fixture.js';
 import {attachPartitionReleaseOwners} from '../partition/partition-release-fixture.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 import {createTransactionPersistenceGateway} from
   './transaction-persistence-gateway.js';
 
@@ -310,7 +311,7 @@ async function withTransactionGroup(name, body) {
       const member = members[index];
       await stopped.shutdown();
       return async () => {
-        const restarted = new PartitionService(withFoundingStamp({
+        const restarted = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
           tableId: GROUP_TABLE,
           tableName: GROUP_TABLE,
           schema: GROUP_SCHEMA,
@@ -322,7 +323,7 @@ async function withTransactionGroup(name, body) {
           dbPath: group.dbFileOf(member),
           transport: stopped.transport,
           systemTableCache: stopped.systemTableCache,
-        }));
+        })));
         await restarted.initialize();
         group.services[index] = restarted;
         releaseOwners.host(restarted);

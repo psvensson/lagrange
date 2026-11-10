@@ -34,9 +34,7 @@ import {
 import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
-import {
-  createPartitionServiceLearnerPromotionMethods,
-} from '../../src/partition/partition-service-learner-promotion-methods.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
 import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -206,8 +204,7 @@ function guardOverRealPlanningOwner() {
     serviceRow(5, 'learner', GUARD_NODE_ID),
   ];
   const lines = [];
-  const guard = {
-    ...createPartitionServiceLearnerPromotionMethods(),
+  const guard = partitionServiceContext({
     role: 'learner',
     leaderId: `${GUARD_PARTITION_ID}-r1`,
     partitionId: GUARD_PARTITION_ID,
@@ -233,7 +230,7 @@ function guardOverRealPlanningOwner() {
     },
     scheduleLearnerPromotion() {},
     async applyLearnerPromotionProofGate() {},
-  };
+  });
   return {guard, lines};
 }
 

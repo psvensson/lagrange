@@ -11,8 +11,6 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 // meaning: the closed-after-ACK delivery is refused and marked a loss
 // candidate instead of being taken as a processed START.
 import {test} from '../../src/test-helpers/tap.js';
-import {createPartitionServiceMergeReplicationMethods} from
-  '../../src/partition/partition-service-merge-replication-methods.js';
 import {ConnectionState} from '../../src/transport/message-router.js';
 import {
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
@@ -120,10 +118,10 @@ for (const family of ['split', 'merge']) {
           tableId: 'table', tableName: 'table', role: 'follower', logger: {info() {}},
           normalizeSplitTransitionMetadata: () => ({targetPartitionIds: ['left', 'right']}),
           resolveLeaderAddress: () => address};
-        const methods = createPartitionServiceMergeReplicationMethods();
         forwarder.router.register(forwardingAddress, (envelope) =>
           family === 'merge' ?
-            methods.forwardStartMergeReplicationToLeader.call(owner, envelope.payload, {}) :
+            PartitionService.prototype.forwardStartMergeReplicationToLeader.call(
+              owner, envelope.payload, {}) :
             PartitionService.prototype.handleStartSplitReplication.call(owner, envelope.payload));
         await fixture.connect(source, forwarder);
         if (afterAdmission) await fixture.connect(forwarder, leader);

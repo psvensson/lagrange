@@ -28,9 +28,7 @@ import {
   applyReplicaLeadership,
   applyReplicaDemotion,
 } from '../../src/raft/replica-leadership-state.js';
-import {
-  createPartitionServiceMetadataDeliveryMethods,
-} from '../../src/partition/partition-service-metadata-delivery-methods.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -238,21 +236,17 @@ function buildElectionReplica({term = 11, withTermResolver = true} = {}) {
     },
     {causeId: 'cdc:durable-partition-row'},
   );
-  const replica = Object.assign(
-    Object.create(null),
-    createPartitionServiceMetadataDeliveryMethods(),
-    {
-      nodeId: LOCAL_NODE,
-      partitionId: PARTITION_ID,
-      replicaId: `${PARTITION_ID}-r9`,
-      isLeader: false,
-      role: null,
-      systemTableCache: cache,
-      leaderNodeMutationHelper: {queue() {}},
-      queueRoleUpdate() {},
-      logger: LoggingService.getInstance().forSubsystem('test'),
-    },
-  );
+  const replica = partitionServiceContext({
+    nodeId: LOCAL_NODE,
+    partitionId: PARTITION_ID,
+    replicaId: `${PARTITION_ID}-r9`,
+    isLeader: false,
+    role: null,
+    systemTableCache: cache,
+    leaderNodeMutationHelper: {queue() {}},
+    queueRoleUpdate() {},
+    logger: LoggingService.getInstance().forSubsystem('test'),
+  });
   if (withTermResolver) {
     replica.resolveCurrentTermSafe = () => term;
   }

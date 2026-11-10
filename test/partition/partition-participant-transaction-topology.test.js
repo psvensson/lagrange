@@ -11,12 +11,19 @@ import {
   generationOf, identityOf, operationOf, prepareCommandOf, prepareMessage,
   resetFixtureSingletons, send, settleTicks, shutdownAll, startLeader, track,
 } from '../test-helpers/participant-transaction-fixture.js';
+import {partitionCollaboratorFake} from '../helpers/partition-service-fixture.js';
+import {PARTITION_SERVICE_COLLABORATOR as COLLABORATOR} from
+  '../../src/partition/partition-service-collaborators.js';
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
 
 const UNAVAILABLE = 'participant_transaction_topology_unavailable';
-const cacheOf = (rows) => ({getAll: () => rows, get: () => null});
+// A system-table cache fake completed to the partition's collaborator
+// interface (the topology fence reads getAll).
+const cacheFake = (fake) =>
+  partitionCollaboratorFake(COLLABORATOR.SYSTEM_TABLE_CACHE, fake);
+const cacheOf = (rows) => cacheFake({getAll: () => rows, get: () => null});
 const rowOf = (state, metadata) => ({partition_transition_state: state,
   partition_transition_metadata: metadata});
 const split = (sourcePartitionId, targetPartitionIds) => ({sourcePartitionId,
@@ -67,9 +74,9 @@ for (const [name, state] of topologyCases) {
 
 for (const [name, cache] of [
   ['missing owner', null],
-  ['unreadable owner', {getAll: () => {
+  ['unreadable owner', cacheFake({getAll: () => {
     throw new Error('owner unavailable');
-  }}],
+  }})],
   ['unavailable rows', cacheOf(null)],
   ['malformed active metadata', cacheOf([rowOf(STATE.SPLIT_CATCHUP, '{broken')])],
   ['incomplete source metadata', cacheOf([rowOf(STATE.SPLIT_CATCHUP,

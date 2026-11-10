@@ -70,6 +70,13 @@ import {insertViaUpsert} from
 import {
   FIXTURE_ENDPOINT_INCARNATION,
 } from '../test-helpers/endpoint-incarnation-fixture.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
+import {AddressManager} from '../../src/address/address-manager.js';
+import {ENTITY_TYPE} from '../../src/constants/addresses.js';
+
+// The unified address a constructed partition replica carries.
+const partitionAddress = (nodeId, replicaId) =>
+  AddressManager.getInstance().format(nodeId, ENTITY_TYPE.PARTITION, replicaId);
 
 const DEFAULT_SEED_WS_ADDRESS =
   `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
@@ -915,14 +922,15 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
     service.triggerJoinReconciler = async () => {
       calls.push('reconcile');
       for (const replicaId of service.joinReplicaOptionsByServiceId.keys()) {
-        service.partitionServices.set(replicaId, {
+        service.partitionServices.set(replicaId, partitionServiceContext({
+          unifiedAddress: partitionAddress(service.nodeId, replicaId),
           initialized: true,
           transportHandler: () => (null),
           partitionId: 'nodes-p1',
           startElection() {
             calls.push(`start:${replicaId}`);
           },
-        });
+        }));
       }
     };
 
@@ -1076,14 +1084,15 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
   });
   service.createJoinLocalPartitionService = async (options) => {
     calls.push(`create:${options.replicaId}`);
-    service.partitionServices.set(options.replicaId, {
+    service.partitionServices.set(options.replicaId, partitionServiceContext({
+      unifiedAddress: partitionAddress(service.nodeId, options.replicaId),
       initialized: true,
       transportHandler: () => (null),
       partitionId: options.partitionId,
       startElection() {
         calls.push(`start:${options.replicaId}`);
       },
-    });
+    }));
   };
   const initializeJoiningLifecycleOwners =
       service.initializeJoiningLifecycleOwners.bind(service);
@@ -1246,14 +1255,15 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
   };
   service.createJoinLocalPartitionService = async (options) => {
     calls.push(`create:${options.replicaId}`);
-    service.partitionServices.set(options.replicaId, {
+    service.partitionServices.set(options.replicaId, partitionServiceContext({
+      unifiedAddress: partitionAddress(service.nodeId, options.replicaId),
       initialized: true,
       transportHandler: () => (null),
       partitionId: options.partitionId,
       startElection() {
         calls.push(`start:${options.replicaId}`);
       },
-    });
+    }));
   };
 
   const schemaDefinition = {

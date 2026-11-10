@@ -31,6 +31,10 @@ import {
   SPLIT_PARTICIPANT_PREFIX,
 } from '../../src/partition/split-ack-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {PARTITION_SERVICE_COLLABORATOR} from
+  '../../src/partition/partition-service-collaborators.js';
+import {partitionCollaboratorFake} from
+  '../helpers/partition-service-fixture.js';
 import {restartOverCommittedCommands} from
   './partition-rs-raft-restart-fixture.js';
 
@@ -59,7 +63,9 @@ function resumeContext(row, base = {}) {
     splitReplication: null,
     mergeReplication: null,
     logger: {info() {}, warn() {}, error() {}, debug() {}},
-    systemTableCache: {getAll: (table) => table === 'tables' ? [row] : []},
+    systemTableCache: partitionCollaboratorFake(
+      PARTITION_SERVICE_COLLABORATOR.SYSTEM_TABLE_CACHE,
+      {getAll: (table) => table === 'tables' ? [row] : []}),
     runSplitReplicationWorkflow() {
       workerRuns.push('split');
       return Promise.resolve();

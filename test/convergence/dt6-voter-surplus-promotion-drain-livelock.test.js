@@ -25,6 +25,7 @@ import {
 } from '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 
 // Quest formation-voter-surplus-promotion-deferral-livelock (P1) — deterministic
 // reproduction of the affinity-demo run-21 voter-surplus wedge on
@@ -223,7 +224,7 @@ function createLearnerPartitionService({
   leaderReplicaId,
   deferrals,
 }) {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_ID,
     tableName: TABLE_ID,
@@ -233,7 +234,7 @@ function createLearnerPartitionService({
     dbPath: ':memory:',
     isJoiningExistingGroup: true,
     systemTableCache: partitionCache,
-  }));
+  })));
   partition.role = RaftRole.LEARNER;
   partition.leaderId = leaderReplicaId;
   // Per-instance log recorder: capture the guard's structured deferral payloads

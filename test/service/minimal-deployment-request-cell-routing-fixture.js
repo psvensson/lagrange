@@ -37,6 +37,7 @@ import {WasiComponentCellRuntime} from
 import {WasmComponentDriver} from
   '../../src/runtime/wasm-component-driver.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 
 const COMPONENT_BYTES = Buffer.from(
   'AGFzbQ0AAQABwQEAYXNtAQAAAAEPAmAEf39/fwF/YAJ/fwF/AwMCAAEFAwEAAQcaAw' +
@@ -340,7 +341,7 @@ class MemoryInvocationJournal {
 class SqliteInvocationJournal {
   constructor() {
     this.insertOperationIds = [];
-    this.partition = new PartitionService(withFoundingStamp({
+    this.partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
       dbPath: SQLITE_MEMORY_DATABASE,
       partitionId: WASM_OPERATIONS_PROOF_PARTITION,
       replicaId: WASM_OPERATIONS_PROOF_REPLICA,
@@ -348,7 +349,7 @@ class SqliteInvocationJournal {
       schema: LEGACY_WASM_OPERATIONS_SCHEMA,
       tableId: WASM_OPERATIONS_SCHEMA.tableName,
       tableName: WASM_OPERATIONS_SCHEMA.tableName,
-    }));
+    })));
     this.partition.db = new Database(SQLITE_MEMORY_DATABASE);
     this.partition.db.exec(
       generateCreateTableSQL(LEGACY_WASM_OPERATIONS_SCHEMA),

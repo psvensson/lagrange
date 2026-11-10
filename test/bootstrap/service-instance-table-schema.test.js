@@ -25,6 +25,7 @@ import {
   CDC_AUTHORITY_CLASS,
   getSystemTableCdcPolicy,
 } from '../../src/cache/cdc-table-policy.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
 import {getSystemCachePrimaryKeyField} from
   '../../src/cache/system-cache-key-descriptor.js';
 
@@ -90,11 +91,11 @@ test('the real per-replica table creator preserves the service-instance key and 
   t.after(() => db.close());
   // Unrelated table-specific column upgrades are explicit collaborators here.
   // Only this table's real DDL owner and SQLite are under observation.
-  const service = {db, tableName: NAME, schema: schema(), partitionId: 'component-p1',
-    logger: {debug() {}},
+  const service = partitionServiceContext({db, tableName: NAME, schema: schema(),
+    partitionId: 'component-p1', logger: {debug() {}},
     ensureServicesTableColumns() {}, ensureTablesTableColumns() {},
     ensureMessageGroupsTableColumns() {}, ensurePartitionsTableColumns() {},
-    ensureSqlTransactionsTableColumns() {}, ensureReplicaOperationsTableColumns() {}};
+    ensureSqlTransactionsTableColumns() {}, ensureReplicaOperationsTableColumns() {}});
   createPartitionServiceTable(service);
   const columns = db.prepare('PRAGMA table_info(service_instances)').all();
   assert.deepEqual(columns.map((col) => [col.name, col.type, col.notnull, col.pk]), [

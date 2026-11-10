@@ -29,14 +29,17 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   LIFECYCLE_PHASE,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
+import {
+  createMockMessageRouter,
+  createMockPolicyService,
+} from '../rebalancer/test-helpers.js';
 import {
   createMockCache,
   createMockCdcService,
-  createMockPolicyService,
-  createMockMessageRouter,
   createMockCoordinator,
-} from '../rebalancer/test-helpers.js';
-import {withFoundingStamp} from './partition-founding-stamp.js';
+} from './partition-rebalancer-collaborator-mocks.js';
 
 const PARTITION_ID = 'test-partition-1';
 const TABLE_ID = 'test-table-1';
@@ -102,7 +105,7 @@ const DRAINING_SNAPSHOT = {
 };
 
 function createPartitionService() {
-  return new PartitionService(withFoundingStamp({
+  return new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_ID,
     replicaId: REPLICA_ID,
@@ -110,7 +113,7 @@ function createPartitionService() {
     dbPath: ':memory:',
     deferElection: true,
     suppressLifecycleLogs: true,
-  }));
+  })));
 }
 
 /**

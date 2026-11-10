@@ -43,6 +43,7 @@ import {
   partitionServiceRow as serviceRow,
 } from './replica-removal-consensus-exit-fixture.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
 
 const ELECTION_ROUNDS = 400;
 const EXIT_ROUNDS = 60;
@@ -88,10 +89,10 @@ async function removeLeaderSource(t, voterCount) {
     'the leader source marked itself retiring');
   // The REMOVING row reaches every replica's row-driven retirement.
   for (const replicaId of members) {
-    retireRaftPeerFromAuthoritativeServiceChange({
+    retireRaftPeerFromAuthoritativeServiceChange(partitionServiceContext({
       raft: cluster.node(replicaId), replicaId, partitionId,
       replicaIds: [...members], peerAddresses: [], logger: QUIET_LOGGER,
-    }, CDC_OPERATION.UPDATE, retiringRow);
+    }), CDC_OPERATION.UPDATE, retiringRow);
   }
   const survivorVoters = () => durableAppliedState(
     cluster.replica(survivors[0]).dbFile, partitionId).voters;

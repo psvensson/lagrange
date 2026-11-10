@@ -17,6 +17,7 @@ import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 
 /**
  * Attach the production release recipient/recovery owners to a fixture group.
@@ -39,7 +40,8 @@ async function attachPartitionReleaseOwners(services, {directory, budgetMs}) {
     if (!handler) {
       handler = new ReplicaHandler({nodeId: service.nodeId, ownerIncarnation: 1,
         systemTableCache: service.systemTableCache, cdcIntegrationService: {},
-        createPartitionService: (options) => new PartitionService(options),
+        createPartitionService: (options) =>
+          new PartitionService(partitionCollaboratorOptions(options)),
         messageRouter: transport, dataDir: directory});
       handler.registerWithRouter(transport);
       handlers.set(service.nodeId, handler);
@@ -50,13 +52,13 @@ async function attachPartitionReleaseOwners(services, {directory, budgetMs}) {
   services.forEach(host);
   const partitionId = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];
   const replicaId = `${partitionId}-release-fixture-r1`;
-  const control = new PartitionService(withFoundingStamp({
+  const control = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId, replicaId, replicaIds: [replicaId], nodeId: first.nodeId,
     tableId: TABLES.SQL_TRANSACTIONS, tableName: TABLES.SQL_TRANSACTIONS,
     schema: SQL_TRANSACTIONS_SCHEMA, systemTableCache: first.systemTableCache,
     transport, dbPath: path.join(directory, 'release-control.sqlite'),
     deferElection: true,
-  }));
+  })));
   const dispose = async () => {
     const failures = [];
     const handlerEntries = [...handlers];

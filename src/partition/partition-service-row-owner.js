@@ -13,6 +13,8 @@ import {
   SERVICE_TYPE,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
+import {assertPartitionServiceRowOwnerCollaborators} from
+  './partition-service-collaborators.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {classifyControlPlaneMutationResult} from
   '../control-plane/control-plane-mutation-outcome-classifier.js';
@@ -77,28 +79,22 @@ function assertRequiredString(value, errorMessage) {
   }
 }
 
+// The service, when given, is the PartitionService the row describes (the
+// replica handler's and the seed registration's partitions); absent, the
+// row states no leadership and the role the caller passed.
 function isLeaderPartitionService(service) {
-  return service?.isLeader === true ||
-    (typeof service?.isLeaderReplica === 'function' &&
-      service.isLeaderReplica());
+  return service !== null && service !== undefined &&
+    (service.isLeader === true || service.isLeaderReplica());
 }
 
 function resolvePartitionRaftRole(service) {
+  let role;
   if (isLeaderPartitionService(service)) {
-    return normalizePublishedRaftRole(RAFT_ROLE.LEADER, {
-      collapseLeaderToFollower: true,
-    });
+    role = RAFT_ROLE.LEADER;
+  } else if (service !== null && service !== undefined) {
+    role = service.getRole();
   }
-
-  if (typeof service?.getRole === 'function') {
-    return normalizePublishedRaftRole(service.getRole(), {
-      collapseLeaderToFollower: true,
-    });
-  }
-
-  return normalizePublishedRaftRole(service?.role, {
-    collapseLeaderToFollower: true,
-  });
+  return normalizePublishedRaftRole(role, {collapseLeaderToFollower: true});
 }
 
 function partitionCreateOwnershipError(code, replicaId, cause = null) {
@@ -164,11 +160,12 @@ async function resolvePartitionRegistration(systemTableWriter, row,
 
 class PartitionServiceRowOwner {
   constructor(options = {}) {
+    // Each collaborator is validated once, here; an unwired writer or
+    // lifecycle owner is the typed refusal of the step that needs it.
+    assertPartitionServiceRowOwnerCollaborators(options);
     this.systemTableWriter = options.systemTableWriter || null;
     this.replicaStateMachine = options.replicaStateMachine || null;
-    this.now = typeof options.now === 'function' ?
-      options.now :
-      () => Date.now();
+    this.now = options.now ?? (() => Date.now());
   }
 
   static buildServiceRow(options = {}) {
@@ -264,8 +261,7 @@ class PartitionServiceRowOwner {
         row.service_type !== SERVICE_TYPE.PARTITION ||
         row.status !== SERVICE_STATUS.ACTIVE ||
         !isLeader ||
-        !this.systemTableWriter ||
-        typeof this.systemTableWriter.updateSystemTableRow !== 'function') {
+        !this.systemTableWriter) {
       return;
     }
 
@@ -281,10 +277,7 @@ class PartitionServiceRowOwner {
   }
 
   async registerReplica(options = {}) {
-    if (
-      !this.systemTableWriter ||
-      typeof this.systemTableWriter.insertSystemTableRow !== 'function'
-    ) {
+    if (!this.systemTableWriter) {
       throw new Error(
         PARTITION_SERVICE_ROW_OWNER_ERROR.INSERT_REQUIRED,
       );
@@ -340,18 +333,13 @@ class PartitionServiceRowOwner {
   }
 
   async updateReplicaStatus(options = {}) {
-    if (
-      !this.systemTableWriter ||
-      typeof this.systemTableWriter.updateSystemTableRow !== 'function'
-    ) {
+    if (!this.systemTableWriter) {
       throw new Error(
         PARTITION_SERVICE_ROW_OWNER_ERROR.UPDATE_REQUIRED,
       );
     }
 
-    if (!this.replicaStateMachine ||
-        typeof this.replicaStateMachine.activateRegisteredReplica !==
-          'function') {
+    if (!this.replicaStateMachine) {
       throw new Error(
         PARTITION_SERVICE_ROW_OWNER_ERROR.LIFECYCLE_OWNER_REQUIRED,
       );

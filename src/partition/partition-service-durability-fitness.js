@@ -92,251 +92,242 @@ const LEADER_DURABILITY_CONSEQUENCE_OUTCOME = Object.freeze({
 });
 const ABSENT_DURABILITY_TIMESTAMP = null;
 
-class PartitionServiceDurabilityFitnessMethods {
-  isSoloReplicaGroup() {
-    const peerCount = this.raft?.readStatus?.().peerCount || 0;
-    return (!Array.isArray(this.replicaIds) || this.replicaIds.length <= 1) &&
-      peerCount === 0;
-  }
+function isSoloReplicaGroup(service) {
+  const peerCount = service.raft?.readStatus?.().peerCount || 0;
+  return (!Array.isArray(service.replicaIds) || service.replicaIds.length <= 1) &&
+    peerCount === 0;
+}
 
-  getLeaderDurabilityFitnessState() {
-    if (!this.leaderDurabilityFitness) {
-      this.leaderDurabilityFitness = {
-        inTransactionSinceMs: null,
-        strikes: 0,
-        unfit: false,
-        activeReason: null,
-        handoffRequestedWhileLeader: false,
-        successorlessUnfitSinceMs: ABSENT_DURABILITY_TIMESTAMP,
-      };
-      this.isLeaderDurabilityUnfit = false;
-    }
-    return this.leaderDurabilityFitness;
+function getLeaderDurabilityFitnessState(service) {
+  if (!service.leaderDurabilityFitness) {
+    service.leaderDurabilityFitness = {
+      inTransactionSinceMs: null,
+      strikes: 0,
+      unfit: false,
+      activeReason: null,
+      handoffRequestedWhileLeader: false,
+      successorlessUnfitSinceMs: ABSENT_DURABILITY_TIMESTAMP,
+    };
+    service.isLeaderDurabilityUnfit = false;
   }
+  return service.leaderDurabilityFitness;
+}
 
-  /**
-   * The replica handler wires this to requestTrackedPartitionLeaderHandoff;
-   * tests inject recorders. Invoked with the unfitness evidence when a LEADER
-   * crosses the strike bound (and again if it re-wins leadership while unfit).
-   * @param {Function} hook
-   */
-  setLeaderDurabilityUnfitHook(hook) {
-    this.leaderDurabilityUnfitHook =
-      typeof hook === 'function' ? hook : null;
+/**
+ * The replica handler wires this to requestTrackedPartitionLeaderHandoff;
+ * tests inject recorders. Invoked with the unfitness evidence when a LEADER
+ * crosses the strike bound (and again if it re-wins leadership while unfit).
+ * @param {Function} hook
+ */
+function setLeaderDurabilityUnfitHook(service, hook) {
+  service.leaderDurabilityUnfitHook =
+    typeof hook === 'function' ? hook : null;
+}
+
+/**
+ * Cluster-informed successor viability (CL-039: never shed leadership
+ * without a viable successor). Without a probe no successor is provable:
+ * the follower-ack actuals the default used to read lived on the retired
+ * backend's log adapter. A single-replica group has no successor and stays
+ * surface-only.
+ * @param {Function} probe
+ */
+function setLeaderDurabilitySuccessorProbe(service, probe) {
+  service.leaderDurabilitySuccessorProbe =
+    typeof probe === 'function' ? probe : null;
+}
+
+function hasViableLeaderDurabilitySuccessor(service, nowMs) {
+  if (service.leaderDurabilitySuccessorProbe) {
+    return service.leaderDurabilitySuccessorProbe(nowMs) === true;
   }
+  return false;
+}
 
-  /**
-   * Cluster-informed successor viability (CL-039: never shed leadership
-   * without a viable successor). Without a probe no successor is provable:
-   * the follower-ack actuals the default used to read lived on the retired
-   * backend's log adapter. A single-replica group has no successor and stays
-   * surface-only.
-   * @param {Function} probe
-   */
-  setLeaderDurabilitySuccessorProbe(probe) {
-    this.leaderDurabilitySuccessorProbe =
-      typeof probe === 'function' ? probe : null;
-  }
-
-  hasViableLeaderDurabilitySuccessor(nowMs) {
-    if (this.leaderDurabilitySuccessorProbe) {
-      return this.leaderDurabilitySuccessorProbe(nowMs) === true;
-    }
+/**
+ * C3 bounded demotion fallback: true once a MULTI-MEMBER leader has been
+ * continuously successorless-unfit for the full fallback bound. The wedged
+ * leader is the reason no successor can be proven (it starves follower-ack
+ * evidence), so ack-recency viability is a lying sensor here — membership
+ * shape (solo vs multi-member) decides structural exemption instead. The
+ * clock resets whenever fitness recovers, a successor becomes provable, or
+ * the node is no longer the leader.
+ * @param {number} nowMs
+ * @param {Object} state
+ * @param {boolean} isLeader
+ * @return {boolean}
+ * @private
+ */
+function shouldDemoteSuccessorlessUnfitLeader(service, nowMs, state, isLeader) {
+  if (!isLeader || service.isSoloReplicaGroup() !== false) {
+    state.successorlessUnfitSinceMs = ABSENT_DURABILITY_TIMESTAMP;
     return false;
-  }
-
-  /**
-   * C3 bounded demotion fallback: true once a MULTI-MEMBER leader has been
-   * continuously successorless-unfit for the full fallback bound. The wedged
-   * leader is the reason no successor can be proven (it starves follower-ack
-   * evidence), so ack-recency viability is a lying sensor here — membership
-   * shape (solo vs multi-member) decides structural exemption instead. The
-   * clock resets whenever fitness recovers, a successor becomes provable, or
-   * the node is no longer the leader.
-   * @param {number} nowMs
-   * @param {Object} state
-   * @param {boolean} isLeader
-   * @return {boolean}
-   * @private
-   */
-  shouldDemoteSuccessorlessUnfitLeader(nowMs, state, isLeader) {
-    if (!isLeader || this.isSoloReplicaGroup?.() !== false) {
-      state.successorlessUnfitSinceMs = ABSENT_DURABILITY_TIMESTAMP;
-      return false;
-    } else if (
-      state.successorlessUnfitSinceMs === ABSENT_DURABILITY_TIMESTAMP
-    ) {
-      state.successorlessUnfitSinceMs = nowMs;
-    }
-    return (
-      nowMs - state.successorlessUnfitSinceMs >=
-      LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK_MS
-    );
-  }
-
-  /**
-   * One durability-fitness tick. Rides the same 1s sweep as
-   * enforcePreparedStateHoldTimeouts; nowMs-overridable for deterministic
-   * tests exactly like that sweep.
-   * @param {number} [nowMs]
-   * @return {Object} The tick observation (for tests/diagnostics).
-   */
-  enforceLeaderDurabilityFitness(nowMs = Date.now()) {
-    const state = this.getLeaderDurabilityFitnessState();
-    const signal = this.observeLeaderDurabilitySignals(nowMs, state);
-    if (!signal.stuck) {
-      const wasUnfit = state.unfit;
-      state.strikes = 0;
-      state.unfit = false;
-      state.activeReason = null;
-      state.handoffRequestedWhileLeader = false;
-      state.successorlessUnfitSinceMs = ABSENT_DURABILITY_TIMESTAMP;
-      this.isLeaderDurabilityUnfit = false;
-      if (wasUnfit) {
-        this.logger.info(
-          PARTITION_SERVICE_LOG_MSG.LEADER_DURABILITY_RECOVERED,
-          {
-            partitionId: this.partitionId,
-            replicaId: this.replicaId,
-          },
-        );
-      }
-      return {fit: true, ...signal};
-    }
-
-    state.strikes += 1;
-    if (state.strikes < LEADER_DURABILITY_STRIKE_LIMIT && !state.unfit) {
-      return {fit: true, pendingStrikes: state.strikes, ...signal};
-    }
-
-    const firstDetection = !state.unfit;
-    state.unfit = true;
-    state.activeReason = signal.reason;
-    this.isLeaderDurabilityUnfit = true;
-    this.resolveLeaderDurabilityUnfitConsequence(nowMs, state, {
-      firstDetection,
-      signal,
-    });
-    return {fit: false, reason: signal.reason, strikes: state.strikes};
-  }
-
-  observeLeaderDurabilitySignals(nowMs, state) {
-    const inTransaction = Boolean(this.db?.open && this.db.inTransaction);
-    if (!inTransaction) {
-      state.inTransactionSinceMs = null;
-    } else if (state.inTransactionSinceMs === null) {
-      state.inTransactionSinceMs = nowMs;
-    }
-    const heldMs =
-      state.inTransactionSinceMs === null ?
-        0 :
-        nowMs - state.inTransactionSinceMs;
-    if (inTransaction && heldMs >= LEADER_DURABILITY_LEGAL_HOLD_MS) {
-      return {
-        stuck: true,
-        reason: LEADER_DURABILITY_UNFIT_REASON.TRANSACTION_HOLD,
-        heldMs,
-      };
-    }
-    return {stuck: false, heldMs};
-  }
-
-  resolveLeaderDurabilityUnfitConsequence(
-    nowMs,
-    state,
-    {firstDetection, signal},
+  } else if (
+    state.successorlessUnfitSinceMs === ABSENT_DURABILITY_TIMESTAMP
   ) {
-    const isLeader = this.role === RAFT_ROLE.LEADER;
-    if (!isLeader) {
-      state.handoffRequestedWhileLeader = false;
-    }
-    const successorViable = this.hasViableLeaderDurabilitySuccessor(nowMs);
-    const evidence = Object.freeze({
-      partitionId: this.partitionId,
-      replicaId: this.replicaId,
-      reason: signal.reason,
-      strikes: state.strikes,
-      role: this.role,
-      successorViable,
-      heldMs: signal.heldMs,
-      candidacyDeferral:
-        LEADER_DURABILITY_CONSEQUENCE_OUTCOME.CANDIDACY_DEFERRAL_UNSUPPORTED,
-      demotion: LEADER_DURABILITY_CONSEQUENCE_OUTCOME.DEMOTION_UNSUPPORTED,
-    });
-    if (firstDetection) {
-      // The loud surfacing lives HERE: the handoff seam itself logs nothing
-      // (design-vet finding) and run-23's whole failure was silence.
-      reportLeaderDurabilitySpent(this, LEADER_DURABILITY_WAIT.hold, {
-        boundMs: LEADER_DURABILITY_LEGAL_HOLD_MS,
-        elapsedMs: signal.heldMs,
-        evidence,
-      });
-    }
-    // The alive zombie's in-memory log matches the followers', so vote rules
-    // do NOT disfavor it: it needs candidacy deferral while unfit (CL-033/034
-    // churn), which the port cannot provide; the evidence above carries
-    // CANDIDACY_DEFERRAL_UNSUPPORTED rather than a no-op call here.
-    if (successorViable) {
-      state.successorlessUnfitSinceMs = ABSENT_DURABILITY_TIMESTAMP;
-    } else if (
-      !this.shouldDemoteSuccessorlessUnfitLeader(nowMs, state, isLeader)
-    ) {
-      // Surface-only: a solo group keeps serving forever (deposing the only
-      // replica leaves no leader, and its heal is already permitted in
-      // place); a multi-member group holds the seat only until the bounded
-      // fallback expires.
-      return;
-    }
-    if (isLeader && !state.handoffRequestedWhileLeader) {
-      state.handoffRequestedWhileLeader = true;
-      this.demoteDurabilityUnfitLeader(nowMs, state, evidence, successorViable);
-    }
+    state.successorlessUnfitSinceMs = nowMs;
   }
+  return (
+    nowMs - state.successorlessUnfitSinceMs >=
+    LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK_MS
+  );
+}
 
-  /**
-   * The demotion tail shared by the normal viable-successor handoff and the
-   * C3 successorless bounded fallback; the fallback path is logged LOUD and
-   * distinct. The port has no step-down operation, so no demotion runs: the
-   * evidence handed to the hook carries DEMOTION_UNSUPPORTED. The hook is
-   * notification/observability.
-   * @param {number} nowMs
-   * @param {Object} state
-   * @param {Object} evidence
-   * @param {boolean} successorViable
-   * @private
-   */
-  demoteDurabilityUnfitLeader(nowMs, state, evidence, successorViable) {
-    if (!successorViable) {
-      reportLeaderDurabilitySpent(
-        this,
-        LEADER_DURABILITY_WAIT.successorless,
+/**
+ * One durability-fitness tick. Rides the same 1s sweep as
+ * enforcePreparedStateHoldTimeouts; nowMs-overridable for deterministic
+ * tests exactly like that sweep.
+ * @param {number} [nowMs]
+ * @return {Object} The tick observation (for tests/diagnostics).
+ */
+function enforceLeaderDurabilityFitness(service, nowMs = Date.now()) {
+  const state = service.getLeaderDurabilityFitnessState();
+  const signal = service.observeLeaderDurabilitySignals(nowMs, state);
+  if (!signal.stuck) {
+    const wasUnfit = state.unfit;
+    state.strikes = 0;
+    state.unfit = false;
+    state.activeReason = null;
+    state.handoffRequestedWhileLeader = false;
+    state.successorlessUnfitSinceMs = ABSENT_DURABILITY_TIMESTAMP;
+    service.isLeaderDurabilityUnfit = false;
+    if (wasUnfit) {
+      service.logger.info(
+        PARTITION_SERVICE_LOG_MSG.LEADER_DURABILITY_RECOVERED,
         {
-          boundMs: LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK_MS,
-          elapsedMs: nowMs - state.successorlessUnfitSinceMs,
-          evidence,
+          partitionId: service.partitionId,
+          replicaId: service.replicaId,
         },
       );
     }
-    this.leaderDurabilityUnfitHook?.(evidence);
+    return {fit: true, ...signal};
+  }
+
+  state.strikes += 1;
+  if (state.strikes < LEADER_DURABILITY_STRIKE_LIMIT && !state.unfit) {
+    return {fit: true, pendingStrikes: state.strikes, ...signal};
+  }
+
+  const firstDetection = !state.unfit;
+  state.unfit = true;
+  state.activeReason = signal.reason;
+  service.isLeaderDurabilityUnfit = true;
+  service.resolveLeaderDurabilityUnfitConsequence(nowMs, state, {
+    firstDetection,
+    signal,
+  });
+  return {fit: false, reason: signal.reason, strikes: state.strikes};
+}
+
+function observeLeaderDurabilitySignals(service, nowMs, state) {
+  const inTransaction = Boolean(service.db?.open && service.db.inTransaction);
+  if (!inTransaction) {
+    state.inTransactionSinceMs = null;
+  } else if (state.inTransactionSinceMs === null) {
+    state.inTransactionSinceMs = nowMs;
+  }
+  const heldMs =
+    state.inTransactionSinceMs === null ?
+      0 :
+      nowMs - state.inTransactionSinceMs;
+  if (inTransaction && heldMs >= LEADER_DURABILITY_LEGAL_HOLD_MS) {
+    return {
+      stuck: true,
+      reason: LEADER_DURABILITY_UNFIT_REASON.TRANSACTION_HOLD,
+      heldMs,
+    };
+  }
+  return {stuck: false, heldMs};
+}
+
+function resolveLeaderDurabilityUnfitConsequence(service, nowMs,
+  state,
+  {firstDetection, signal}) {
+  const isLeader = service.role === RAFT_ROLE.LEADER;
+  if (!isLeader) {
+    state.handoffRequestedWhileLeader = false;
+  }
+  const successorViable = service.hasViableLeaderDurabilitySuccessor(nowMs);
+  const evidence = Object.freeze({
+    partitionId: service.partitionId,
+    replicaId: service.replicaId,
+    reason: signal.reason,
+    strikes: state.strikes,
+    role: service.role,
+    successorViable,
+    heldMs: signal.heldMs,
+    candidacyDeferral:
+      LEADER_DURABILITY_CONSEQUENCE_OUTCOME.CANDIDACY_DEFERRAL_UNSUPPORTED,
+    demotion: LEADER_DURABILITY_CONSEQUENCE_OUTCOME.DEMOTION_UNSUPPORTED,
+  });
+  if (firstDetection) {
+    // The loud surfacing lives HERE: the handoff seam itself logs nothing
+    // (design-vet finding) and run-23's whole failure was silence.
+    reportLeaderDurabilitySpent(service, LEADER_DURABILITY_WAIT.hold, {
+      boundMs: LEADER_DURABILITY_LEGAL_HOLD_MS,
+      elapsedMs: signal.heldMs,
+      evidence,
+    });
+  }
+  // The alive zombie's in-memory log matches the followers', so vote rules
+  // do NOT disfavor it: it needs candidacy deferral while unfit (CL-033/034
+  // churn), which the port cannot provide; the evidence above carries
+  // CANDIDACY_DEFERRAL_UNSUPPORTED rather than a no-op call here.
+  if (successorViable) {
+    state.successorlessUnfitSinceMs = ABSENT_DURABILITY_TIMESTAMP;
+  } else if (
+    !service.shouldDemoteSuccessorlessUnfitLeader(nowMs, state, isLeader)
+  ) {
+    // Surface-only: a solo group keeps serving forever (deposing the only
+    // replica leaves no leader, and its heal is already permitted in
+    // place); a multi-member group holds the seat only until the bounded
+    // fallback expires.
+    return;
+  }
+  if (isLeader && !state.handoffRequestedWhileLeader) {
+    state.handoffRequestedWhileLeader = true;
+    service.demoteDurabilityUnfitLeader(nowMs, state, evidence, successorViable);
   }
 }
 
-function createPartitionServiceDurabilityFitnessMethods() {
-  const methods = {};
-  const prototypeNames = Object.getOwnPropertyNames(
-    PartitionServiceDurabilityFitnessMethods.prototype,
-  );
-  for (const name of prototypeNames) {
-    if (name === 'constructor') {
-      continue;
-    }
-    methods[name] = PartitionServiceDurabilityFitnessMethods.prototype[name];
+/**
+ * The demotion tail shared by the normal viable-successor handoff and the
+ * C3 successorless bounded fallback; the fallback path is logged LOUD and
+ * distinct. The port has no step-down operation, so no demotion runs: the
+ * evidence handed to the hook carries DEMOTION_UNSUPPORTED. The hook is
+ * notification/observability.
+ * @param {number} nowMs
+ * @param {Object} state
+ * @param {Object} evidence
+ * @param {boolean} successorViable
+ * @private
+ */
+function demoteDurabilityUnfitLeader(service, nowMs, state, evidence, successorViable) {
+  if (!successorViable) {
+    reportLeaderDurabilitySpent(
+      service,
+      LEADER_DURABILITY_WAIT.successorless,
+      {
+        boundMs: LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK_MS,
+        elapsedMs: nowMs - state.successorlessUnfitSinceMs,
+        evidence,
+      },
+    );
   }
-  return methods;
+  service.leaderDurabilityUnfitHook?.(evidence);
 }
 
 export {
+  demoteDurabilityUnfitLeader,
+  enforceLeaderDurabilityFitness,
+  getLeaderDurabilityFitnessState,
+  hasViableLeaderDurabilitySuccessor,
+  isSoloReplicaGroup,
   LEADER_DURABILITY_CONSEQUENCE_OUTCOME,
   LEADER_DURABILITY_UNFIT_REASON,
-  createPartitionServiceDurabilityFitnessMethods,
+  observeLeaderDurabilitySignals,
+  resolveLeaderDurabilityUnfitConsequence,
+  setLeaderDurabilitySuccessorProbe,
+  setLeaderDurabilityUnfitHook,
+  shouldDemoteSuccessorlessUnfitLeader,
 };

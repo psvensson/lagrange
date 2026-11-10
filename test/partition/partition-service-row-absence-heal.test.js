@@ -12,12 +12,17 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   PartitionServiceRowOwner,
 } from '../../src/partition/partition-service-row-owner.js';
+import {
+  partitionCollaboratorOptions, partitionServiceContext,
+} from '../helpers/partition-service-fixture.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 
 const REPLICA_OPTIONS = Object.freeze({
   partitionId: 'services-p1',
   replicaId: 'services-p1-r1',
   nodeId: 'node-a',
-  service: {isLeaderReplica: () => false},
+  // A constructed, not-yet-elected partition replica.
+  service: partitionServiceContext({role: RAFT_ROLE.FOLLOWER}),
 });
 
 function cloneRow(row) {
@@ -70,10 +75,10 @@ function createInsertOnlyHarness({initialRow = null, readAvailable = true} = {})
 }
 
 function createOwner(writer, now) {
-  return new PartitionServiceRowOwner({
+  return new PartitionServiceRowOwner(partitionCollaboratorOptions({
     now: () => now,
     systemTableWriter: writer,
-  });
+  }));
 }
 
 test('PartitionServiceRowOwner - concurrent rowless creation has one ' +

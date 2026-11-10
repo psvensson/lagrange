@@ -81,8 +81,15 @@ test('W5: the port operation has one partition issuer and one caller of it',
     assert.deepEqual(filesMatching(new RegExp(`\\.${OPERATION}\\(`, 'u')),
       ['src/partition/partition-service-leadership-transfer.js'],
       'only the partition issuer asks the port to transfer leadership');
+    // PartitionService declares the issuer as a delegator to the module
+    // that owns it (`<module>.requestLeadershipTransfer(this, ...)`): the
+    // issuer's own definition, in exactly one place, not a caller of it.
+    const delegator = `\\b\\w+\\.${PARTITION_ISSUER}\\(this\\b`;
+    assert.deepEqual(filesMatching(new RegExp(delegator, 'u')),
+      ['src/partition/partition-service-assembly.js'],
+      'the partition declares the issuer once, as its delegator');
     assert.deepEqual(filesMatching(
-      new RegExp(`\\.${PARTITION_ISSUER}\\(`, 'u')),
+      new RegExp(`(?!${delegator})\\b\\w+\\.${PARTITION_ISSUER}\\(`, 'u')),
     ['src/node/replica-handler-leader-handoff-methods.js'],
     'only the replica handler\'s handoff asks the partition issuer');
   });

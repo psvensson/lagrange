@@ -18,6 +18,7 @@ import {PARTICIPANT_RELEASE_TYPE} from
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {observeParticipantReleaseDelivery} from './participant-release-delivery-recorder.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 
 function routeNativeServices(cache, services) {
   for (const service of services) {
@@ -46,7 +47,7 @@ async function attachQueryRelease({group, owners}) {
   const transport = control.transport;
   const partitionId = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTION_PARTICIPANTS];
   const replicaId = `${partitionId}-release-fixture-r1`;
-  const progress = new PartitionService(withFoundingStamp({
+  const progress = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId, replicaId, replicaIds: [replicaId], nodeId: control.nodeId,
     tableId: TABLES.SQL_TRANSACTION_PARTICIPANTS,
     tableName: TABLES.SQL_TRANSACTION_PARTICIPANTS,
@@ -54,7 +55,7 @@ async function attachQueryRelease({group, owners}) {
     systemTableCache: control.systemTableCache,
     dbPath: path.join(path.dirname(group.dbFileOf([group.services[0].replicaId])),
       'release-progress.sqlite'), deferElection: true,
-  }));
+  })));
   const cache = new SystemTableCache();
   const services = new Map([...group.services, control, progress].map((service) =>
     [service.replicaId, service]));

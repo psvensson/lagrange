@@ -40,7 +40,7 @@ import {
   ServiceType as RecoveryServiceType,
 } from '../../src/node/replica-recovery-service.js';
 import {
-  createPartitionServiceLearnerPromotionMethods,
+  getTargetReplicaCountForPromotion,
 } from '../../src/partition/partition-service-learner-promotion-methods.js';
 import {ManagedSplitWorkflow} from '../../src/partition/managed-split-workflow.js';
 import {ManagedMergeWorkflow} from '../../src/partition/managed-merge-workflow.js';
@@ -251,14 +251,13 @@ function makeRoutingInstance() {
  * @return {number} Promotion target.
  */
 function promotionTargetFor(partitionRow) {
-  const methods = createPartitionServiceLearnerPromotionMethods();
   const context = {
     partitionId: 'witness-p1',
     systemTableCache: makeCache({
       [TABLES.PARTITIONS]: partitionRow ? [partitionRow] : [],
     }),
   };
-  return methods.getTargetReplicaCountForPromotion.call(context);
+  return getTargetReplicaCountForPromotion(context);
 }
 
 /**
@@ -453,7 +452,6 @@ test('learner-promotion-target-resolves-through-authority', () => {
   );
   // The removed ladder read this.replicaCount (identity-derived). A context
   // carrying a contradictory identity count must not influence the target.
-  const methods = createPartitionServiceLearnerPromotionMethods();
   const context = {
     partitionId: 'witness-p1',
     replicaCount: 7,
@@ -461,7 +459,7 @@ test('learner-promotion-target-resolves-through-authority', () => {
       [TABLES.PARTITIONS]: [{partition_id: 'witness-p1', replica_count: 3}],
     }),
   };
-  assert.equal(methods.getTargetReplicaCountForPromotion.call(context), 3,
+  assert.equal(getTargetReplicaCountForPromotion(context), 3,
     'identity-derived context count must not leak into the promotion target');
 });
 

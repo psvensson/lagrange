@@ -33,20 +33,13 @@ const LEADER_PUBLICATION_RETRY_BUDGET_WAIT = Object.freeze({
   awaited: 'durable partitions.leader_node_id publication accepted',
 });
 
+// The partition's own ControlPlaneSystemTableGateway (core-base) resolves
+// the partition's CDC service (validated when wired, it reads
+// authoritatively) and SQL engine (an SQLQueryEngine, which executes): an
+// authoritative read has an owner when either is wired.
 function hasAuthoritativeReadOwner(gateway) {
-  if (
-    typeof gateway.resolveCdcIntegrationService !==
-      PARTITION_SERVICE_LITERAL.FUNCTION ||
-    typeof gateway.resolveSqlQueryEngine !==
-      PARTITION_SERVICE_LITERAL.FUNCTION
-  ) {
-    return true;
-  }
-  const cdcIntegrationService = gateway.resolveCdcIntegrationService();
-  const sqlQueryEngine = gateway.resolveSqlQueryEngine();
-  return typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead ===
-    PARTITION_SERVICE_LITERAL.FUNCTION ||
-    typeof sqlQueryEngine?.executeQuery === PARTITION_SERVICE_LITERAL.FUNCTION;
+  return Boolean(gateway.resolveCdcIntegrationService()) ||
+    Boolean(gateway.resolveSqlQueryEngine());
 }
 
 // The clock a metadata mutation stamps and retries on: the owning replica's
@@ -62,12 +55,6 @@ function hostedMutationTimers(owner) {
 
 async function readAuthoritativeRoleRow(owner) {
   const gateway = owner.controlPlaneSystemTableGateway;
-  if (
-    typeof gateway?.readAuthoritativeRows !==
-    PARTITION_SERVICE_LITERAL.FUNCTION
-  ) {
-    return {supported: false, available: false, row: null};
-  }
   if (!hasAuthoritativeReadOwner(gateway)) {
     return {supported: false, available: false, row: null};
   }
@@ -88,12 +75,6 @@ async function readAuthoritativeRoleRow(owner) {
 
 async function readAuthoritativeLeaderRow(owner) {
   const gateway = owner.controlPlaneSystemTableGateway;
-  if (
-    typeof gateway?.readAuthoritativeRows !==
-      PARTITION_SERVICE_LITERAL.FUNCTION
-  ) {
-    return {supported: false, available: false, row: null};
-  }
   if (!hasAuthoritativeReadOwner(gateway)) {
     return {supported: false, available: false, row: null};
   }

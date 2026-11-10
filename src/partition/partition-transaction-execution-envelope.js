@@ -112,17 +112,9 @@ function readTransactionEnvelopeDiagnostics(service) {
   return DIAGNOSTICS.get(service) ?? NO_MISMATCH;
 }
 
-// The partition service's read surface for the diagnostics (W20), mixed
-// into the service by its assembly.
-const TRANSACTION_ENVELOPE_SERVICE_METHODS = Object.freeze({
-  readTransactionEnvelopeDiagnostics() {
-    return readTransactionEnvelopeDiagnostics(this);
-  },
-});
-
 export {
-  TRANSACTION_ENVELOPE_SERVICE_METHODS,
   executionEnvelopeOf,
   isExecutionEnvelope,
   noteExecutionEnvelope,
+  readTransactionEnvelopeDiagnostics,
 };

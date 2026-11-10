@@ -15,6 +15,8 @@ import {
 } from './partition-service-raft-peer-cache-reconciliation.js';
 import {admitPartitionRaftPeer} from
   './partition-service-raft-membership-administration.js';
+import {createGroupAdmissionLiveness} from
+  '../raft/raft-rs-group-membership-admission.js';
 import {
   relayPartitionConsensusObservations,
   wirePartitionRaftLifecycleEvents,
@@ -73,7 +75,6 @@ const {
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_ROLE,
-  PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
   RaftRole,
   ReplicaStatus,
@@ -128,15 +129,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     if (!this.systemTableCache || typeof predicate !== 'function') {
       return null;
     }
-    if (typeof this.systemTableCache.filter === 'function') {
-      const rows = this.systemTableCache.filter(tableName, predicate);
-      return rows[0] || null;
-    }
-    if (typeof this.systemTableCache.getAll === 'function') {
-      const rows = this.systemTableCache.getAll(tableName) || [];
-      return rows.find(predicate) || null;
-    }
-    return null;
+    const rows = this.systemTableCache.filter(tableName, predicate);
+    return rows[0] || null;
   }
   /**
    * Read matching system table rows from the local cache when present.
@@ -149,14 +143,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     if (!this.systemTableCache || typeof predicate !== 'function') {
       return [];
     }
-    if (typeof this.systemTableCache.filter === 'function') {
-      return this.systemTableCache.filter(tableName, predicate);
-    }
-    if (typeof this.systemTableCache.getAll === 'function') {
-      const rows = this.systemTableCache.getAll(tableName) || [];
-      return rows.filter(predicate);
-    }
-    return [];
+    return this.systemTableCache.filter(tableName, predicate);
   }
   /**
    * Resolve the current leader replica from canonical owner-row metadata.
@@ -437,7 +424,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     // its own requirements and the rs-raft backend builds the port. Nothing
     // is read from a global - a backend that needs something absent from
     // this request changes the boundary rather than reaching around it.
-    this.raft = await openPartitionConsensusPort(this, {
+    const port = await openPartitionConsensusPort(this, {
       [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: this.partitionId,
       [RAFT_OPERATION_PORT_REQUEST.PEER_ID]: this.replicaId,
       [RAFT_OPERATION_PORT_REQUEST.PEER_ADDRESS]: this.unifiedAddress,
@@ -474,12 +461,18 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY_MODE]:
         RAFT_COMMITTED_ENTRY_APPLY_MODE.SYNCHRONOUS,
       [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: (decision) => {
-        if (typeof this.onSnapshotCatchupNeeded ===
-            PARTITION_SERVICE_TYPE.FUNCTION) {
+        // Null, or the hook validated at construction or set by the
+        // snapshot catch-up wiring.
+        if (this.onSnapshotCatchupNeeded) {
           this.onSnapshotCatchupNeeded(decision);
         }
       },
     });
+    // The admission liveness record is per port: a new port starts with no
+    // admission in flight or deferred, and a proposal of an earlier port
+    // settles into that port's record.
+    this.groupAdmissionLiveness = createGroupAdmissionLiveness();
+    this.raft = port;
     await this.refuseConsensusHeldAtOpen();
     // Committed-prefix divergence witness (quest raft-committed-prefix-
     // conflict-livelock): the follower's consensus core surfaces a poisoned
@@ -591,8 +584,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       this.raft.startScheduling();
     } else if (this.replicaIds.length === 1) {
       assertCritical(
-        this.raft &&
-          typeof this.raft.campaign === PARTITION_SERVICE_TYPE.FUNCTION,
+        this.raft,
         PARTITION_SERVICE_ERROR_MSG.SINGLE_REPLICA_RAFT_OWNER_REQUIRED,
         {partitionId: this.partitionId, replicaId: this.replicaId},
       );

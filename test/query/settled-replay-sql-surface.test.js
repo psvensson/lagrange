@@ -43,6 +43,7 @@ import * as outcomeConstants from
 import {buildDeliveryEnvelope} from
   '../../src/transport/transport-semantic-outcome.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
 
@@ -127,7 +128,7 @@ async function withSurface(body) {
   const replicaId = `${partitionId}-r1`;
   const address = `${NODE_ID}/partition/${replicaId}`;
   const dbPath = path.join(directory, 'partition.sqlite');
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     tableId: TABLE_NAME, tableName: TABLE_NAME, partitionId, replicaId,
     replicaIds: [replicaId], nodeId: NODE_ID, dbPath,
     systemTableCache: {
@@ -139,7 +140,7 @@ async function withSurface(body) {
       {name: 'id', type: 'TEXT', primaryKey: true},
       {name: 'value', type: 'TEXT'},
     ]},
-  }));
+  })));
   // The router delivers to the partition's own remote-query handler; while
   // `loseNextAnswer` is set, the partition handles the delivery and its
   // answer is lost on the way back.

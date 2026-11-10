@@ -22,6 +22,7 @@ import {QueryOptimizer} from '../../src/index-management/query-optimizer.js';
 import {DistributedQueryPlanner} from
   '../../src/query/distributed/distributed-query-planner.js';
 import {TABLES} from '../../src/constants/index.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -54,7 +55,7 @@ const ORDERS_SCHEMA = {
  * @return {Promise<PartitionService>} Initialized partition service.
  */
 async function createTestPartition(partitionId, replicaId) {
-  const ps = new PartitionService(withFoundingStamp({
+  const ps = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId,
     tableId: 'orders',
     tableName: 'orders',
@@ -64,7 +65,7 @@ async function createTestPartition(partitionId, replicaId) {
     systemTableCache: {getAll: () => [], get: () => null, filter: () => []},
     dbPath: ':memory:',
     schema: ORDERS_SCHEMA,
-  }));
+  })));
   await ps.initialize();
   await resumeFixtureParticipantAdmission(ps);
   return ps;

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-08T12:15:36.616Z",
-  "rawViolationCount": 59,
+  "generatedAt": "2026-11-08T21:24:54.103Z",
+  "rawViolationCount": 47,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
@@ -167,7 +167,7 @@
     },
     {
       "filePath": "src/node/replica-handler-leader-handoff-methods.js",
-      "line": 149,
+      "line": 150,
       "column": 27,
       "functionName": "assignReplicaHandlerLeaderHandoffMethods",
       "kind": "prototype_copy_bags",
@@ -251,114 +251,6 @@
       "line": 272,
       "column": 27,
       "functionName": "assignReplicaHandlerVoterReadinessMethods",
-      "kind": "prototype_copy_bags",
-      "reason": "prototype-copy method bag; write an explicit-context module instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-durability-fitness.js",
-      "line": 326,
-      "column": 25,
-      "functionName": "createPartitionServiceDurabilityFitnessMethods",
-      "kind": "prototype_copy_bags",
-      "reason": "prototype-copy method bag; write an explicit-context module instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-learner-promotion-count-check-methods.js",
-      "line": 339,
-      "column": 25,
-      "functionName": "createPartitionServiceLearnerPromotionCountCheckMethods",
-      "kind": "prototype_copy_bags",
-      "reason": "prototype-copy method bag; write an explicit-context module instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 671,
-      "column": 4,
-      "functionName": "createPartitionServiceLearnerPromotionMethods",
-      "kind": "prototype_copy_bags",
-      "reason": "prototype-copy method bag; write an explicit-context module instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-learner-promotion-proof-methods.js",
-      "line": 325,
-      "column": 25,
-      "functionName": "createPartitionServiceLearnerPromotionProofMethods",
-      "kind": "prototype_copy_bags",
-      "reason": "prototype-copy method bag; write an explicit-context module instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-learner-promotion-wake-methods.js",
-      "line": 215,
-      "column": 25,
-      "functionName": "createPartitionServiceLearnerPromotionWakeMethods",
-      "kind": "prototype_copy_bags",
-      "reason": "prototype-copy method bag; write an explicit-context module instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-lifecycle-methods.js",
-      "line": 236,
-      "column": 21,
-      "functionName": "createPartitionServiceLifecycleMethods",
-      "kind": "prototype_copy_bags",
-      "reason": "prototype-copy method bag; write an explicit-context module instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-merge-replication-methods.js",
-      "line": 714,
-      "column": 25,
-      "functionName": "createPartitionServiceMergeReplicationMethods",
-      "kind": "prototype_copy_bags",
-      "reason": "prototype-copy method bag; write an explicit-context module instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-merge-replication-resumption-methods.js",
-      "line": 118,
-      "column": 21,
-      "functionName": "createPartitionServiceMergeReplicationResumptionMethods",
-      "kind": "prototype_copy_bags",
-      "reason": "prototype-copy method bag; write an explicit-context module instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-metadata-delivery-methods.js",
-      "line": 595,
-      "column": 4,
-      "functionName": "createPartitionServiceMetadataDeliveryMethods",
-      "kind": "prototype_copy_bags",
-      "reason": "prototype-copy method bag; write an explicit-context module instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-rebalancer-methods.js",
-      "line": 244,
-      "column": 21,
-      "functionName": "createPartitionServiceRebalancerMethods",
-      "kind": "prototype_copy_bags",
-      "reason": "prototype-copy method bag; write an explicit-context module instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-source-replication-start-methods.js",
-      "line": 427,
-      "column": 21,
-      "functionName": "createPartitionServiceSourceReplicationStartMethods",
-      "kind": "prototype_copy_bags",
-      "reason": "prototype-copy method bag; write an explicit-context module instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-split-mirror-queue-methods.js",
-      "line": 296,
-      "column": 25,
-      "functionName": "createPartitionServiceSplitMirrorQueueMethods",
       "kind": "prototype_copy_bags",
       "reason": "prototype-copy method bag; write an explicit-context module instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -518,7 +410,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-visibility-methods.js",
-      "line": 790,
+      "line": 767,
       "column": 24,
       "functionName": "assignReplicaOperationRepositoryVisibilityMethods",
       "kind": "prototype_copy_bags",

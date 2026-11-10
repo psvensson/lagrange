@@ -10,19 +10,13 @@
 // on, that those values come from the one evaluation that decided, and that
 // no decision, reason, cap or recheck moved.
 //
-// The guard is driven through its own methods bag over a hand-built context —
-// the same seam test/bootstrap/behaviour-changing-consumer-convergence.test.js
-// uses for getTargetReplicaCountForPromotion — so every source read is
+// The guard is driven through the partition's own methods over a hand-built
+// context (test/helpers/partition-service-fixture.js) so every source read is
 // counted and every input is stated by the fixture rather than inferred.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  createPartitionServiceLearnerPromotionMethods,
-} from '../../src/partition/partition-service-learner-promotion-methods.js';
-import {
-  createPartitionServiceLearnerPromotionProofMethods,
-} from '../../src/partition/partition-service-learner-promotion-proof-methods.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
 import {
   registerSpreadCureTransitionAuthorizationCases,
 } from './learner-promotion-count-check-authorization-cases.js';
@@ -108,8 +102,6 @@ const CARRIED_READ_ORDER = Object.freeze([
   ...MAIN_READ_ORDER, STEPS_HISTORY_READ,
 ]);
 
-const methods = createPartitionServiceLearnerPromotionMethods();
-const proofMethods = createPartitionServiceLearnerPromotionProofMethods();
 
 function voterRow(index, nodeId) {
   const replicaId = `${CRITICAL_PARTITION_ID}-r${index}`;
@@ -372,13 +364,10 @@ function createGuardContext(options = {}) {
   });
   const readinessService =
     createCountingReadinessService(options, bump, trace);
-  const context = {
-    ...methods,
-    // The promotion-proof bag is composed here exactly as
-    // partition-service-assembly.js composes it, so the partition's own
-    // membership epoch comes from its production reader over this same
-    // counted cache rather than from a double.
-    ...proofMethods,
+  // The partition's own methods (the promotion proof's included), so the
+  // partition's membership epoch comes from its production reader over this
+  // same counted cache rather than from a double.
+  const context = partitionServiceContext({
     role: options.role || LEARNER_ROLE,
     leaderId: options.leaderId === undefined ? LEADER_REPLICA_ID : options.leaderId,
     partitionId,
@@ -404,7 +393,7 @@ function createGuardContext(options = {}) {
     applyLearnerPromotionProofGate: async () => {
       logLines.push({level: 'proof-gate', message: null, fields: null});
     },
-  };
+  });
   return {context, logLines, counts, trace, cache};
 }
 

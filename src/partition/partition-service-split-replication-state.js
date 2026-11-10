@@ -11,7 +11,6 @@ import {
 const {
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_TYPE,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
   SPLIT_ACK_CHECKPOINT_FIELD,
@@ -116,10 +115,7 @@ function normalizeSplitTransitionMetadataForService(service, rawMetadata) {
 }
 
 function resolveSplitDescriptorEpochEvidenceForService(service, metadata) {
-  if (
-    !service.systemTableCache ||
-    typeof service.systemTableCache.get !== PARTITION_SERVICE_TYPE.FUNCTION
-  ) {
+  if (!service.systemTableCache) {
     return null;
   }
   const tableDescriptor =

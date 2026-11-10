@@ -3,6 +3,9 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {PARTITION_SERVICE_COLLABORATOR} from
+  '../../src/partition/partition-service-collaborators.js';
+import {partitionCollaboratorFake} from '../helpers/partition-service-fixture.js';
 import {
   createLeaderNodeMutationHelper,
 } from '../../src/partition/partition-service-metadata-mutation-helpers.js';
@@ -372,13 +375,18 @@ t.test(
       nodeId: REPLACEMENT_NODE_ID,
       isLeader: true,
       systemTableCache: cache,
-      cdcIntegrationService: {
-        updateSystemTableRow: async (tableName, whereClause, data, options) => {
-          mutations.push({tableName, whereClause, data, options});
-          return {success: true, affectedRows: 1};
-        },
-      },
+      cdcIntegrationService: partitionCollaboratorFake(
+        PARTITION_SERVICE_COLLABORATOR.CDC_INTEGRATION_SERVICE, {
+          updateSystemTableRow: async (tableName, whereClause, data, options) => {
+            mutations.push({tableName, whereClause, data, options});
+            return {success: true, affectedRows: 1};
+          },
+        }),
       controlPlaneSystemTableGateway: {
+        // The production gateway resolves the owner's CDC service and SQL
+        // engine; the authoritative read has an owner when either is wired.
+        resolveCdcIntegrationService: () => owner.cdcIntegrationService,
+        resolveSqlQueryEngine: () => null,
         readAuthoritativeRows: async () => ({
           success: true,
           rows: [{
@@ -444,13 +452,18 @@ t.test(
       nodeId: REPLACEMENT_NODE_ID,
       isLeader: true,
       systemTableCache: cache,
-      cdcIntegrationService: {
-        updateSystemTableRow: async (...args) => {
-          mutations.push(args);
-          return {success: true, affectedRows: 1};
-        },
-      },
+      cdcIntegrationService: partitionCollaboratorFake(
+        PARTITION_SERVICE_COLLABORATOR.CDC_INTEGRATION_SERVICE, {
+          updateSystemTableRow: async (...args) => {
+            mutations.push(args);
+            return {success: true, affectedRows: 1};
+          },
+        }),
       controlPlaneSystemTableGateway: {
+        // The production gateway resolves the owner's CDC service and SQL
+        // engine; the authoritative read has an owner when either is wired.
+        resolveCdcIntegrationService: () => owner.cdcIntegrationService,
+        resolveSqlQueryEngine: () => null,
         readAuthoritativeRows: async () => {
           await readGate;
           return {

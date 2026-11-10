@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 import {PartitionServiceRowOwner, isPartitionRegistrationEvidence} from
   '../../src/partition/partition-service-row-owner.js';
 
@@ -16,7 +17,7 @@ function fixture({change = (row) => row, lost = false, applied = false} = {}) {
   const failure = new Error('lost INSERT answer');
   const calls = {inserts: 0, reads: 0};
   let submitted;
-  const owner = new PartitionServiceRowOwner({systemTableWriter: {
+  const owner = new PartitionServiceRowOwner(partitionCollaboratorOptions({systemTableWriter: {
     async insertSystemTableRow(table, row, options) {
       assert.equal(table, 'services');
       assert.equal(options.allowCoalescing, false);
@@ -35,7 +36,7 @@ function fixture({change = (row) => row, lost = false, applied = false} = {}) {
       return {success: true, rows: db.prepare('SELECT row_json FROM answer').all()
         .map(({row_json: json}) => JSON.parse(json))};
     },
-  }});
+  }}));
   return {db, owner, failure, calls, submitted: () => submitted};
 }
 

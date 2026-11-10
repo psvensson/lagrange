@@ -15,6 +15,7 @@ import {
   AuthoritativeRowMutationHelper,
 } from '../../src/raft/authoritative-row-mutation-helper.js';
 import {captureLogger} from '../test-helpers/wait-bound-spent-capture.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 
 // Quest partition-leader-row-publication-integrity: the durable
 // partitions.leader_node_id publication rides the delivery lane matching
@@ -123,7 +124,7 @@ t.test('delivery options: divergent observed row rides the critical lane',
 t.test('row-owner leader publication rides the critical lane for ordinary ' +
   'partitions (no observation = unruled-out divergence)', async (t) => {
   const updates = [];
-  const owner = new PartitionServiceRowOwner({
+  const owner = new PartitionServiceRowOwner(partitionCollaboratorOptions({
     now: () => 1234,
     replicaStateMachine: {
       async activateRegisteredReplica(options) {
@@ -144,7 +145,7 @@ t.test('row-owner leader publication rides the critical lane for ordinary ' +
         updates.push({options, tableName});
       },
     },
-  });
+  }));
   await owner.activateReplica({
     nodeId: NODE_SELF,
     partitionId: ORDINARY_PARTITION,

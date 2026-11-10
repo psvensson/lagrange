@@ -3,23 +3,24 @@
 import {participantTransactionActive} from
   './partition-participant-transaction-session.js';
 
-const PARTITION_SERVICE_REMOVAL_SERVING_METHODS = Object.freeze({
-  fenceServingAdmissionForRemoval() {
-    this.removalServingAdmissionFenced = true;
-    return {
-      activeServingRequestCount: this.activeServingRequestCount,
-      participantTransactionActive: participantTransactionActive(this),
-    };
-  },
+function fenceServingAdmissionForRemoval(service) {
+  service.removalServingAdmissionFenced = true;
+  return {
+    activeServingRequestCount: service.activeServingRequestCount,
+    participantTransactionActive: participantTransactionActive(service),
+  };
+}
 
-  async waitForRemovalServingDrain(options = {}) {
-    const pollIntervalMs = Number.isFinite(options.pollIntervalMs) &&
-      options.pollIntervalMs > 0 ? Math.floor(options.pollIntervalMs) : 10;
-    while (this.activeServingRequestCount > 0 ||
-        participantTransactionActive(this)) {
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-    }
-  },
-});
+async function waitForRemovalServingDrain(service, options = {}) {
+  const pollIntervalMs = Number.isFinite(options.pollIntervalMs) &&
+    options.pollIntervalMs > 0 ? Math.floor(options.pollIntervalMs) : 10;
+  while (service.activeServingRequestCount > 0 ||
+      participantTransactionActive(service)) {
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+}
 
-export {PARTITION_SERVICE_REMOVAL_SERVING_METHODS};
+export {
+  fenceServingAdmissionForRemoval,
+  waitForRemovalServingDrain,
+};

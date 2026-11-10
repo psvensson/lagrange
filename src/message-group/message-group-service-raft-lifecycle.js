@@ -102,7 +102,8 @@ function expectedPeersFromServicesCache(service, onlyReplicaIds) {
  */
 function redriveMessageGroupAdmissions(service) {
   const redrive = () => {
-    const taken = takeGroupAdmissionsInFlight(service.raft);
+    const taken = takeGroupAdmissionsInFlight(service.raft,
+      service.groupAdmissionLiveness);
     if (taken.size > 0) {
       queueMicrotask(() =>
         service.reconcileRaftPeersFromCache({onlyReplicaIds: taken}));
@@ -145,7 +146,7 @@ function assignRaftLifecycle(serviceClass) {
         if (!this.replicaIds.includes(replicaIdentity)) {
           this.replicaIds.push(replicaIdentity);
         }
-        reserveAndAdmitGroupPeer(this.raft, {
+        reserveAndAdmitGroupPeer(this.raft, this.groupAdmissionLiveness, {
           groupId: this.groupId,
           localReplicaIdentity: this.replicaId,
           logger: this.logger,

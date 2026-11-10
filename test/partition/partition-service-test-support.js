@@ -26,6 +26,7 @@ export {
   ControllableConsensusPort,
   applyCommandThroughApplicationOwner,
 } from '../test-helpers/controllable-consensus-port.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 
 // The test seam for a controllable consensus port. Production construction
 // names no implementation; a suite that drives roles and proposals by hand
@@ -33,7 +34,7 @@ export {
 // instead.
 class ControllablePartitionService extends PartitionService {
   constructor(options, controllablePort) {
-    super(options);
+    super(partitionCollaboratorOptions(options));
     this.controllablePort = controllablePort;
   }
 

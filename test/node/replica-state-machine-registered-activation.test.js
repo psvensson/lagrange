@@ -2,6 +2,9 @@ import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  partitionCollaboratorOptions, partitionServiceContext,
+} from '../helpers/partition-service-fixture.js';
 import {ReplicaStateMachine} from
   '../../src/node/replica-state-machine.js';
 import {REPLICA_REGISTERED_ACTIVATION_ERROR_CODE} from
@@ -135,16 +138,16 @@ async function createRegistrationEvidenceFixture(options = {}) {
     },
   };
   const stateMachine = createStateMachine(150);
-  const owner = new PartitionServiceRowOwner({
+  const owner = new PartitionServiceRowOwner(partitionCollaboratorOptions({
     systemTableWriter: writer,
     replicaStateMachine: stateMachine,
     now: () => ownerNow,
-  });
+  }));
   const registrationEvidence = await owner.registerReplica({
     partitionId: 'p1',
     replicaId: 'p1-r1',
     nodeId: 'node-a',
-    service: {getRole: () => 'follower'},
+    service: partitionServiceContext({role: 'follower'}),
     status: 'stopped',
   });
   return {
@@ -403,7 +406,7 @@ test('ReplicaStateMachine refuses old registration evidence after same-ID ' +
     partitionId: 'p1',
     replicaId: 'p1-r1',
     nodeId: 'node-a',
-    service: {getRole: () => 'follower'},
+    service: partitionServiceContext({role: 'follower'}),
     status: 'stopped',
   });
   const recreatedRow = fixture.durableRow;
@@ -600,11 +603,12 @@ test('partition activation lost acknowledgement resolves by generation even ' +
       throw new Error('acknowledgement lost after durable apply');
     },
   };
-  const owner = new PartitionServiceRowOwner({systemTableWriter: writer,
-    replicaStateMachine: createStateMachine(150), now: () => 100});
+  const owner = new PartitionServiceRowOwner(partitionCollaboratorOptions({
+    systemTableWriter: writer,
+    replicaStateMachine: createStateMachine(150), now: () => 100}));
   const registrationEvidence = await owner.registerReplica({
     partitionId: 'p1', replicaId: 'p1-r1', nodeId: 'node-a',
-    service: {getRole: () => 'follower'}, status: 'stopped'});
+    service: partitionServiceContext({role: 'follower'}), status: 'stopped'});
   const activated = await owner.activateReplica({isEffectHandlerCurrent: () => true,
     partitionId: 'p1',
     replicaId: 'p1-r1', nodeId: 'node-a', registrationEvidence});

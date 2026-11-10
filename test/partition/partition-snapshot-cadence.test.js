@@ -5,9 +5,7 @@ import {
   canCompactPartitionRaftLog,
   evaluatePartitionSnapshotCadence,
 } from '../../src/partition/partition-snapshot-cadence.js';
-import {
-  PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS,
-} from '../../src/partition/partition-service-participant-transaction-cadence-methods.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
 
 describe('partition snapshot cadence', () => {
   describe('canCompactPartitionRaftLog', () => {
@@ -195,10 +193,7 @@ describe('partition snapshot cadence', () => {
   describe('recordCommittedWriteForSnapshotCadence', () => {
     it('increments write count, records outcome, and warns on failure', () => {
       const warnings = [];
-      const service = Object.create(
-        PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS,
-      );
-      Object.assign(service, {
+      const service = partitionServiceContext({
         partitionId: 'part-test-1',
         snapshotThreshold: 5,
         committedWritesSinceSnapshot: 3,
@@ -229,10 +224,7 @@ describe('partition snapshot cadence', () => {
 
     it('increments write count and returns skipped if below threshold without warnings', () => {
       const warnings = [];
-      const service = Object.create(
-        PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS,
-      );
-      Object.assign(service, {
+      const service = partitionServiceContext({
         partitionId: 'part-test-2',
         snapshotThreshold: 10,
         committedWritesSinceSnapshot: 1,

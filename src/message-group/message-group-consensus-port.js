@@ -37,6 +37,8 @@ import {committedMembershipRefusal} from
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 import {retireCdcCommitWaiters} from './message-group-cdc-committed-acceptance.js';
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
+import {createGroupAdmissionLiveness} from
+  '../raft/raft-rs-group-membership-admission.js';
 
 // The replica's opening: the message-group domain, for its group. Its typed
 // startup refusal is the port's one refusal - the runtime owner refused to
@@ -153,8 +155,12 @@ function openMessageGroupConsensusPort(service) {
   service.db.pragma(REPLICA_DB_PRAGMA.SYNCHRONOUS);
   service.cdcCommitLifetime = Object.freeze({});
   try {
-    service.raft = service.createOperationPort(
+    const port = service.createOperationPort(
       messageGroupConsensusRequest(service, service.cdcCommitLifetime));
+    // The admission liveness record is per port: a new port starts with no
+    // admission in flight or deferred.
+    service.groupAdmissionLiveness = createGroupAdmissionLiveness();
+    service.raft = port;
   } catch (error) {
     throw consensusOpeningFailure(error, messageGroupConsensusOpening(service));
   }

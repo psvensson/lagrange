@@ -152,6 +152,10 @@ function proposeAdmission(port, group, {replicaIdentity, peerAddress}) {
 //  - deferred: a proposal the port deferred, or refused NOT_LEADER on a
 //    follower; it latches nothing, so any later observation still proposes
 //    it.
+// The group owner that re-drives them (the partition, the message group)
+// holds the record as a named field, one per port it opens, and hands it to
+// every admission of that port; a queued proposal settles into the record it
+// was proposed under, never into a later port's.
 const REDRIVEN_ADMISSION_OUTCOMES = Object.freeze(new Set([
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME.DEFERRED,
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME.NOT_LEADER,
@@ -160,21 +164,20 @@ const ADMISSION_IN_FLIGHT_OUTCOMES = Object.freeze(new Set([
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME.PROPOSED,
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME.QUEUED,
 ]));
-const ADMISSIONS_IN_FLIGHT = new WeakMap();
-const ADMISSIONS_DEFERRED = new WeakMap();
 
-function admissionSetOf(sets, port) {
-  if (!sets.has(port)) {
-    sets.set(port, new Set());
-  }
-  return sets.get(port);
+/**
+ * The admission liveness record of one raft-rs operation port: the replica
+ * identities in flight and deferred, both empty.
+ * @return {{inFlight: Set<string>, deferred: Set<string>}} The record.
+ */
+function createGroupAdmissionLiveness() {
+  return {inFlight: new Set(), deferred: new Set()};
 }
 
 // Where one admission decision leaves its identity: in flight, deferred, or
 // in neither (a queued proposal is placed again when the port settles it).
-function trackAdmission(port, replicaIdentity, outcome) {
-  const inFlight = admissionSetOf(ADMISSIONS_IN_FLIGHT, port);
-  const deferred = admissionSetOf(ADMISSIONS_DEFERRED, port);
+function trackAdmission(liveness, replicaIdentity, outcome) {
+  const {inFlight, deferred} = liveness;
   inFlight.delete(replicaIdentity);
   deferred.delete(replicaIdentity);
   if (ADMISSION_IN_FLIGHT_OUTCOMES.has(outcome)) {
@@ -184,17 +187,19 @@ function trackAdmission(port, replicaIdentity, outcome) {
   }
 }
 
-function proposeInFlightAdmission(port, group, peer) {
+function proposeInFlightAdmission(port, liveness, group, peer) {
   const admission = proposeAdmission(port, group, peer);
-  trackAdmission(port, peer.replicaIdentity, admission.outcome);
+  trackAdmission(liveness, peer.replicaIdentity, admission.outcome);
   admission.settled?.then((settled) =>
-    trackAdmission(port, peer.replicaIdentity, settled.outcome));
+    trackAdmission(liveness, peer.replicaIdentity, settled.outcome));
   return admission;
 }
 
 /**
  * A group's one path to admitting a peer into its raft configuration.
  * @param {Object} port - The replica's raft-rs operation port.
+ * @param {Object} liveness - The port's admission liveness record
+ *   (createGroupAdmissionLiveness), held by the group owner.
  * @param {Object} group - {groupId, localReplicaIdentity, logger,
  *   logContext?}.
  * @param {Object} peer - {replicaIdentity, peerAddress}.
@@ -202,23 +207,23 @@ function proposeInFlightAdmission(port, group, peer) {
  *   (`proposal`, `portOutcome`, `reason`) when the admission reached the
  *   port, and `settled` when the port queued it.
  */
-function admitGroupPeer(port, group, {replicaIdentity, peerAddress}) {
+function admitGroupPeer(port, liveness, group, {replicaIdentity, peerAddress}) {
   const status = port.readStatus();
   let admission;
   if (status?.role !== RAFT_ROLE.LEADER) {
     admission = {replicaIdentity,
       outcome: RAFT_MEMBERSHIP_ADMISSION_OUTCOME.NOT_LEADER};
     // Re-driven if this replica gains leadership (it admits then).
-    trackAdmission(port, replicaIdentity, admission.outcome);
+    trackAdmission(liveness, replicaIdentity, admission.outcome);
   } else if ((status.peers || []).some((member) =>
     member.replicaIdentity === replicaIdentity)) {
     admission = {replicaIdentity,
       outcome: RAFT_MEMBERSHIP_ADMISSION_OUTCOME.ALREADY_MEMBER};
-  } else if (admissionSetOf(ADMISSIONS_IN_FLIGHT, port).has(replicaIdentity)) {
+  } else if (liveness.inFlight.has(replicaIdentity)) {
     admission = {replicaIdentity,
       outcome: RAFT_MEMBERSHIP_ADMISSION_OUTCOME.IN_FLIGHT};
   } else {
-    admission = proposeInFlightAdmission(port, group,
+    admission = proposeInFlightAdmission(port, liveness, group,
       {replicaIdentity, peerAddress});
   }
   recordAdmission(group, peerAddress, admission);
@@ -229,12 +234,13 @@ function admitGroupPeer(port, group, {replicaIdentity, peerAddress}) {
  * Reserve the peer's identity, then admit it: a reservation this replica
  * cannot make is a recorded refusal and proposes nothing.
  * @param {Object} port - The replica's raft-rs operation port.
+ * @param {Object} liveness - The port's admission liveness record.
  * @param {Object} group - {groupId, localReplicaIdentity, logger,
  *   logContext?}.
  * @param {Object} peer - {replicaIdentity, peerAddress}.
  * @return {Object} The frozen admission record.
  */
-function reserveAndAdmitGroupPeer(port, group, peer) {
+function reserveAndAdmitGroupPeer(port, liveness, group, peer) {
   const reservation = reserveGroupPeerIdentity(group, peer.replicaIdentity);
   if (!ADMISSIBLE_RESERVATION_OUTCOMES.has(reservation.outcome)) {
     const refused = Object.freeze({
@@ -246,7 +252,7 @@ function reserveAndAdmitGroupPeer(port, group, peer) {
     recordAdmission(group, peer.peerAddress, refused);
     return refused;
   }
-  return admitGroupPeer(port, group, peer);
+  return admitGroupPeer(port, liveness, group, peer);
 }
 
 /**
@@ -255,14 +261,14 @@ function reserveAndAdmitGroupPeer(port, group, peer) {
  * gained leadership), so none of them is in flight any more and each is
  * re-evaluated once. A closed replica (no port) has none.
  * @param {Object|null} port - The replica's raft-rs operation port.
+ * @param {Object} liveness - That port's admission liveness record.
  * @return {Set<string>} The replica identities.
  */
-function takeGroupAdmissionsInFlight(port) {
+function takeGroupAdmissionsInFlight(port, liveness) {
   if (port === null || typeof port !== 'object') {
     return new Set();
   }
-  const inFlight = admissionSetOf(ADMISSIONS_IN_FLIGHT, port);
-  const deferred = admissionSetOf(ADMISSIONS_DEFERRED, port);
+  const {inFlight, deferred} = liveness;
   const taken = new Set([...inFlight, ...deferred]);
   inFlight.clear();
   deferred.clear();
@@ -472,6 +478,7 @@ export {
   REDRIVEN_ADMISSION_OUTCOMES,
   admissionOfPortAnswer,
   admitGroupPeer,
+  createGroupAdmissionLiveness,
   reserveAndAdmitGroupPeer,
   reserveGroupPeerIdentity,
   takeGroupAdmissionsInFlight,

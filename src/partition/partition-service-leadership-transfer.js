@@ -29,32 +29,22 @@ const NO_CONSENSUS_PORT_ANSWER = deepFreeze({
   recoveryRequired: false,
 });
 
-class PartitionServiceLeadershipTransferMethods {
-  /**
-   * Ask this replica's consensus port to transfer the partition's
-   * leadership.
-   * @param {Object} successor - {successor, replicaIdentity?}, the port's
-   *   canonical transfer request.
-   * @return {Object} The port's turn of its frozen outcome record
-   *   (raft-rs-turn-answer.js); NO_CONSENSUS_PORT_ANSWER settled without one.
-   */
-  requestLeadershipTransfer(successor) {
-    if (!this.raft) {
-      return settledTurn(NO_CONSENSUS_PORT_ANSWER);
-    }
-    return this.raft.transferLeadership(successor);
+/**
+ * Ask this replica's consensus port to transfer the partition's
+ * leadership.
+ * @param {Object} successor - {successor, replicaIdentity?}, the port's
+ *   canonical transfer request.
+ * @return {Object} The port's turn of its frozen outcome record
+ *   (raft-rs-turn-answer.js); NO_CONSENSUS_PORT_ANSWER settled without one.
+ */
+function requestLeadershipTransfer(service, successor) {
+  if (!service.raft) {
+    return settledTurn(NO_CONSENSUS_PORT_ANSWER);
   }
-}
-
-function createPartitionServiceLeadershipTransferMethods() {
-  return {
-    requestLeadershipTransfer:
-      PartitionServiceLeadershipTransferMethods.prototype
-        .requestLeadershipTransfer,
-  };
+  return service.raft.transferLeadership(successor);
 }
 
 export {
   PARTITION_LEADERSHIP_TRANSFER_MESSAGE,
-  createPartitionServiceLeadershipTransferMethods,
+  requestLeadershipTransfer,
 };

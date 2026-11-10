@@ -40,7 +40,7 @@
  */
 import {test} from '../../src/test-helpers/tap.js';
 import {PriorityPublicationSafetyRows} from '../../src/rebalancer/priority-publication-safety-rows.js';
-import {createPartitionServiceLearnerPromotionMethods} from '../../src/partition/partition-service-learner-promotion-methods.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
 import {PARTITION_SERVICE_SHARED} from '../../src/partition/partition-service-shared.js';
 
 const {ReplicaStatus, PARTITION_RAFT_ROLE, SERVICE_TYPE} = PARTITION_SERVICE_SHARED;
@@ -49,9 +49,9 @@ const PARTITION = 'sql_transaction_participants-p1';
 const MIN_REPLICAS = 3;
 
 // Real guard per-row predicate (drives the `would_exceed_target` voter count).
-const guard = createPartitionServiceLearnerPromotionMethods();
+const guard = partitionServiceContext();
 function guardCountsAsVoter(row) {
-  return guard.isActiveVoterServiceRowForPromotion.call(guard, row);
+  return guard.isActiveVoterServiceRowForPromotion(row);
 }
 
 // Real floor predicate holder. isNodeReadyForRouting reads the control-plane readiness

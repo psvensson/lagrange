@@ -18,6 +18,7 @@ import {cleanOwnedParticipantFixture as cleanOwnedFixture} from
   './participant-transaction-fixture.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 
 const NODE = 'test-node';
 const CONTROL_NODE = 'control-node';
@@ -30,14 +31,14 @@ const SQL = `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`;
 const cache = {getAll: () => [], get: () => null, filter: () => []};
 
 function createControlService(directory, remoteControl, overrides) {
-  return new PartitionService(withFoundingStamp({
+  return new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     nodeId: remoteControl ? CONTROL_NODE : NODE, partitionId: CONTROL_PARTITION,
     replicaId: CONTROL_REPLICA, replicaIds: [CONTROL_REPLICA],
     tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
     tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA,
     dbPath: path.join(directory, 'sql-transactions.db'), systemTableCache: cache,
     deferElection: true, ...overrides,
-  }));
+  })));
 }
 
 async function withParticipantReleaseProtocol(measure, table = {tableId: TABLE, tableName: TABLE,
@@ -48,7 +49,8 @@ async function withParticipantReleaseProtocol(measure, table = {tableId: TABLE, 
   const options = {nodeId: NODE, partitionId: PARTITION, replicaId: REPLICA,
     replicaIds: [REPLICA], ...table, dbPath: path.join(directory, 'partition.db'),
     systemTableCache: cache, deferElection: true};
-  const create = (overrides) => new PartitionService(withFoundingStamp({...options, ...overrides}));
+  const create = (overrides) => new PartitionService(
+    partitionCollaboratorOptions(withFoundingStamp({...options, ...overrides})));
   const createControl = (overrides) =>
     createControlService(directory, fixtureOptions.remoteControl === true, overrides);
   const topologyOwner = fixtureOptions.remoteControl === true ? {

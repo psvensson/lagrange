@@ -22,6 +22,7 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
 import {settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
 
 const PARTITION_ID = 'identity-record-admission';
 const QUIET = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
@@ -37,7 +38,7 @@ function leaderPartition(rows) {
   };
   return {
     proposed,
-    service: {
+    service: partitionServiceContext({
       partitionId: PARTITION_ID,
       replicaId: `${PARTITION_ID}-leader`,
       replicaIds: [`${PARTITION_ID}-leader`],
@@ -45,7 +46,7 @@ function leaderPartition(rows) {
       raft,
       systemTableCache: {filter: (table, predicate) => rows.filter(predicate)},
       normalizeLeaderReplicaId: (id) => id,
-    },
+    }),
   };
 }
 

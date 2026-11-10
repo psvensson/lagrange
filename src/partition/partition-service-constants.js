@@ -351,6 +351,7 @@ const PARTITION_SERVICE_INIT_STAGE = Object.freeze({
 const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   ...PARTITION_SERVICE_CREATE_ADMISSION_LOG_MSG,
   INITIALIZING: 'Initializing partition service',
+  SNAPSHOT_CADENCE_FAILED: 'partition snapshot cadence failed',
   CREATED_PARTITION_DIR: 'Created partition directory',
   DEFERRING_ELECTION_START: 'Deferring election start',
   STARTING_AS_LEARNER:
@@ -561,7 +562,7 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
     'Serving admission fenced for replica removal',
   RAFT_COMMAND_FAILED: 'Raft command failed',
   SINGLE_REPLICA_RAFT_OWNER_REQUIRED:
-    'PartitionService single-replica leadership requires raft.campaign(...)',
+    'PartitionService single-replica leadership requires its raft operation port',
   QUERY_FAILED: 'Query execution failed',
   CDC_UNKNOWN_OPERATION: 'Unknown operation type, skipping CDC',
   CDC_PARSE_INSERT_FAILED: 'Could not parse INSERT SQL for CDC',
@@ -636,8 +637,6 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
     'PartitionService requires sqlQueryEngine for rebalancer',
   REBALANCER_COORDINATOR_REQUIRED:
     'PartitionService requires rebalanceCoordinator for rebalancer',
-  REBALANCER_SET_COORDINATOR_REQUIRED:
-    'PartitionService rebalancer must implement setRebalanceCoordinator',
   REBALANCE_COORDINATOR_SHUTDOWN_FAILED:
     'Failed to shutdown rebalance coordinator',
   REBALANCER_DEPENDENCY_BUNDLE_INCOMPLETE:

@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-08T12:15:36.615Z",
-  "rawViolationCount": 87,
+  "generatedAt": "2026-11-08T21:24:54.053Z",
+  "rawViolationCount": 84,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-stale-watermark-record.js",
-      "line": 114,
+      "line": 116,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -185,7 +185,7 @@
     },
     {
       "filePath": "src/control-plane/startup-authority-snapshot-owner.js",
-      "line": 236,
+      "line": 233,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -454,24 +454,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/partition/partition-service-raft-membership-administration.js",
-      "line": 88,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "identity_keyed_module_state",
-      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-raft-write-commit.js",
-      "line": 145,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "identity_keyed_module_state",
-      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/partition/partition-service-raft-write-commit.js",
       "line": 146,
       "column": 6,
@@ -481,8 +463,17 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
+      "filePath": "src/partition/partition-service-raft-write-commit.js",
+      "line": 147,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
       "filePath": "src/partition/partition-service-row-owner.js",
-      "line": 61,
+      "line": 63,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -535,24 +526,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/raft/raft-rs-group-membership-admission.js",
-      "line": 162,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "identity_keyed_module_state",
-      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/raft-rs-group-membership-admission.js",
-      "line": 163,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "identity_keyed_module_state",
-      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/raft/raft-rs-membership-administration.js",
       "line": 4,
       "column": 6,
@@ -581,7 +554,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-replica-lifecycle-owner.js",
-      "line": 54,
+      "line": 55,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -590,7 +563,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 153,
+      "line": 159,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -599,7 +572,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 155,
+      "line": 161,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",

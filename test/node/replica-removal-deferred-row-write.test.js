@@ -42,6 +42,7 @@ import {
   createRemovalSourceHandler,
   durableLifecycleState,
 } from './replica-removal-consensus-exit-fixture.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
 
 const PARTITION_ID = 'users-p8';
 const SOURCE = `${PARTITION_ID}-r1`;
@@ -138,10 +139,10 @@ async (t) => {
   t.equal(retiringRow?.status, ReplicaStatus.REMOVING,
     'the re-dispatched REMOVE made the REMOVING row durable');
   for (const replicaId of [SOURCE, PEER]) {
-    retireRaftPeerFromAuthoritativeServiceChange({
+    retireRaftPeerFromAuthoritativeServiceChange(partitionServiceContext({
       raft: cluster.node(replicaId), replicaId, partitionId: PARTITION_ID,
       replicaIds: [SOURCE, PEER], peerAddresses: [], logger: QUIET_LOGGER,
-    }, CDC_OPERATION.UPDATE, retiringRow);
+    }), CDC_OPERATION.UPDATE, retiringRow);
   }
   for (let round = 0; round < 40 && source.exits.length === 0; round += 1) {
     cluster.settle(() => false, {rounds: 10});

@@ -48,6 +48,10 @@ import {
   createLifecycleServiceRow,
   createLifecycleStateStore,
 } from '../test-helpers/lifecycle-state-store.js';
+import {PARTITION_SERVICE_COLLABORATOR} from
+  '../../src/partition/partition-service-collaborators.js';
+import {partitionCollaboratorFake} from
+  '../helpers/partition-service-fixture.js';
 import {TEST_BOOT_INCARNATION} from
   '../test-helpers/boot-incarnation-fixture.js';
 
@@ -210,7 +214,9 @@ test('PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam',
       systemCacheHydrated: false,
       tablePolicyService: {},
       partitionServices: new Map(),
-      createCdcIntegrationService: () => ({sqlQueryEngine: null}),
+      createCdcIntegrationService: () => partitionCollaboratorFake(
+        PARTITION_SERVICE_COLLABORATOR.CDC_INTEGRATION_SERVICE,
+        {sqlQueryEngine: null}),
       trackJoinPartitionReplica() {},
     };
     let service = null;

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-08T13:54:47.503Z",
-  "rawViolationCount": 621,
+  "generatedAt": "2026-11-08T21:24:54.463Z",
+  "rawViolationCount": 583,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -1849,190 +1849,10 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/control-plane/control-plane-readiness-evidence-reasons.js",
-      "line": 134,
-      "column": 25,
-      "functionName": "shouldAllowTransportBackedRecoveryGrace",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-evidence-reasons.js",
-      "line": 142,
-      "column": 29,
-      "functionName": "shouldAllowTransportBackedRecoveryGrace",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-participation-base.js",
-      "line": 147,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-participation-base.js",
-      "line": 151,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-participation-base.js",
-      "line": 229,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-participation-base.js",
-      "line": 233,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-participation-base.js",
-      "line": 365,
-      "column": 6,
-      "functionName": "logMissingOwner",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-planning-owner-delegate-methods.js",
-      "line": 32,
-      "column": 7,
-      "functionName": "readPlanningProjectionIdentity",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
-      "line": 716,
-      "column": 6,
-      "functionName": "readPlanningProjectionGenerationForCall",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
-      "line": 724,
-      "column": 7,
-      "functionName": "readPlanningProjectionGenerationForCall",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-diagnostics.js",
-      "line": 67,
-      "column": 4,
-      "functionName": "getMembershipPublicationDiagnostics",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-diagnostics.js",
-      "line": 266,
-      "column": 23,
-      "functionName": "readMembershipPlanningDerivationVersionKey",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-diagnostics.js",
-      "line": 273,
-      "column": 6,
-      "functionName": "readMembershipPlanningDerivationMemoCurrency",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 452,
-      "column": 6,
-      "functionName": "resolveMemoizedMembershipPublicationPlanningSnapshotSync",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 320,
-      "column": 6,
-      "functionName": "readMembershipPublicationPlanningMemoVersionKey",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 379,
-      "column": 6,
-      "functionName": "readPlanningProjectionSourceGeneration",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 390,
-      "column": 6,
-      "functionName": "resolveMemoizedPriorityRecoveryPlanningProjectionSync",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/control-plane/control-plane-readiness-service-node-methods.js",
-      "line": 30,
-      "column": 9,
-      "functionName": "readTrustCacheRows",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-node-methods.js",
-      "line": 37,
+      "line": 41,
       "column": 9,
       "functionName": "readTrustCacheWatermark",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-node-methods.js",
-      "line": 298,
-      "column": 6,
-      "functionName": "getAllNodeReadinessSync",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-readiness-service-node-methods.js",
-      "line": 302,
-      "column": 6,
-      "functionName": "getAllNodeReadinessSync",
       "kind": "typeof_dual_paths",
       "reason": "typeof dual path; keep one path and delete the other",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -2912,7 +2732,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-service-lifecycle.js",
-      "line": 128,
+      "line": 123,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -2921,7 +2741,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-service-lifecycle.js",
-      "line": 132,
+      "line": 127,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -3209,7 +3029,7 @@
     },
     {
       "filePath": "src/message-group/message-group-service-state.js",
-      "line": 226,
+      "line": 228,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -3622,27 +3442,9 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/partition/partition-service-core-base.js",
-      "line": 205,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-core-base.js",
-      "line": 212,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/partition/partition-service-durability-fitness.js",
-      "line": 125,
-      "column": 6,
+      "line": 124,
+      "column": 4,
       "functionName": "setLeaderDurabilityUnfitHook",
       "kind": "typeof_dual_paths",
       "reason": "typeof dual path; keep one path and delete the other",
@@ -3650,117 +3452,18 @@
     },
     {
       "filePath": "src/partition/partition-service-durability-fitness.js",
-      "line": 138,
-      "column": 6,
+      "line": 137,
+      "column": 4,
       "functionName": "setLeaderDurabilitySuccessorProbe",
       "kind": "typeof_dual_paths",
       "reason": "typeof dual path; keep one path and delete the other",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/partition/partition-service-leader-activation-methods.js",
-      "line": 65,
-      "column": 6,
-      "functionName": "setRebalancerLeadershipSink",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-learner-promotion-count-check-methods.js",
-      "line": 142,
-      "column": 8,
-      "functionName": "resolvePriorityRecoveryCompletionForLearnerPromotion",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 102,
-      "column": 4,
-      "functionName": "resolvePromotionReplicationTarget",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-lifecycle-methods.js",
-      "line": 133,
-      "column": 6,
-      "functionName": "getStats",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-merge-replication-methods.js",
-      "line": 358,
-      "column": 6,
-      "functionName": "backfillMergeSnapshot",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-merge-replication-methods.js",
-      "line": 361,
-      "column": 9,
-      "functionName": "backfillMergeSnapshot",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/partition/partition-service-raft-membership-administration.js",
-      "line": 220,
+      "line": 230,
       "column": 17,
       "functionName": "readPartitionReplicaMembership",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-raft-peer-cache-reconciliation.js",
-      "line": 125,
-      "column": 21,
-      "functionName": "isBootstrapPeerAdmissible",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-rebalancer-methods.js",
-      "line": 80,
-      "column": 4,
-      "functionName": "applyRebalancerDependencies",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-rebalancer-methods.js",
-      "line": 98,
-      "column": 8,
-      "functionName": "applyRebalancerDependencies",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-row-owner.js",
-      "line": 169,
-      "column": 15,
-      "functionName": "constructor",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-split-accessor-base.js",
-      "line": 731,
-      "column": 8,
-      "functionName": "rebindCoordinator",
       "kind": "typeof_dual_paths",
       "reason": "typeof dual path; keep one path and delete the other",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -4586,7 +4289,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-lifecycle.js",
-      "line": 242,
+      "line": 237,
       "column": 6,
       "functionName": "initializeCoordinatorState",
       "kind": "typeof_dual_paths",
@@ -4595,7 +4298,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-lifecycle.js",
-      "line": 246,
+      "line": 241,
       "column": 6,
       "functionName": "initializeCoordinatorState",
       "kind": "typeof_dual_paths",
@@ -4604,7 +4307,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-lifecycle.js",
-      "line": 304,
+      "line": 299,
       "column": 6,
       "functionName": "initializeCoordinatorState",
       "kind": "typeof_dual_paths",
@@ -4613,7 +4316,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-lifecycle.js",
-      "line": 323,
+      "line": 318,
       "column": 17,
       "functionName": "initializeCoordinatorState",
       "kind": "typeof_dual_paths",
@@ -4838,7 +4541,7 @@
     },
     {
       "filePath": "src/rebalancer/storage-admission-service.js",
-      "line": 60,
+      "line": 63,
       "column": 15,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -4882,51 +4585,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 450,
-      "column": 18,
-      "functionName": "readAvailablePriorityRecoveryPlanningSnapshot",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 516,
-      "column": 6,
-      "functionName": "getPriorityRecoveryPlanningSnapshotSync",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 520,
-      "column": 4,
-      "functionName": "getPriorityRecoveryPlanningSnapshotSync",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 528,
-      "column": 11,
-      "functionName": "getPriorityRecoveryPlanningSnapshotSync",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 537,
-      "column": 11,
-      "functionName": "getPriorityRecoveryPlanningSnapshotSync",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
       "line": 316,
       "column": 6,
@@ -4964,16 +4622,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 103,
-      "column": 6,
-      "functionName": "constructor",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 121,
+      "line": 107,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -4990,8 +4639,17 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
+      "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
+      "line": 129,
+      "column": 6,
+      "functionName": "constructor",
+      "kind": "typeof_dual_paths",
+      "reason": "typeof dual path; keep one path and delete the other",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
       "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
-      "line": 565,
+      "line": 562,
       "column": 6,
       "functionName": "resolveConnectedClusterNodeIds",
       "kind": "typeof_dual_paths",
@@ -5000,7 +4658,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
-      "line": 582,
+      "line": 579,
       "column": 6,
       "functionName": "evaluateCriticalSystemEndpointVisibility",
       "kind": "typeof_dual_paths",
@@ -5009,7 +4667,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
-      "line": 621,
+      "line": 618,
       "column": 11,
       "functionName": "getBootstrapReadinessSnapshot",
       "kind": "typeof_dual_paths",
@@ -5018,7 +4676,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
-      "line": 623,
+      "line": 620,
       "column": 6,
       "functionName": "getBootstrapReadinessSnapshot",
       "kind": "typeof_dual_paths",

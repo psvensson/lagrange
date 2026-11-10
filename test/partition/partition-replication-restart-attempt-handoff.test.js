@@ -41,6 +41,12 @@ import {
   turns,
 } from './workflow-record-sqlite-world.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {
+  partitionCollaboratorFake,
+  partitionCollaboratorOptions,
+} from '../helpers/partition-service-fixture.js';
+import {PARTITION_SERVICE_COLLABORATOR} from
+  '../../src/partition/partition-service-collaborators.js';
 
 const {RaftRole} = PARTITION_SERVICE_SHARED;
 const QUIET = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
@@ -273,7 +279,7 @@ test('stale split and merge delta replay uses the target registry and ' +
   'preserves a newer target-authoritative write', async (t) => {
   for (const family of ['split', 'merge']) {
     const targetId = `${family}-target`;
-    const target = new PartitionService(withFoundingStamp({
+    const target = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
       partitionId: targetId,
       tableId: 'tbl-users',
       tableName: 'users',
@@ -286,7 +292,7 @@ test('stale split and merge delta replay uses the target registry and ' +
       systemTableCache: new SystemTableCache(),
       dbPath: ':memory:',
       deferElection: true,
-    }));
+    })));
     await target.initialize();
     try {
       await turnChainValue(target.raft.campaign());
@@ -465,8 +471,9 @@ test('an accepted split START whose answer is lost stays on its durable ' +
   const resumedEvents = [];
   const resumedGate = deferred();
   const resumedSource = buildSource(resumedEvents, resumedGate);
-  resumedSource.systemTableCache = {getAll: (table) =>
-    table === 'tables' ? [store.tablesRow()] : []};
+  resumedSource.systemTableCache = partitionCollaboratorFake(
+    PARTITION_SERVICE_COLLABORATOR.SYSTEM_TABLE_CACHE, {getAll: (table) =>
+      table === 'tables' ? [store.tablesRow()] : []});
   resumedSource.sqlQueryEngine = {managedSplitWorkflow: workflow};
   const resumed = await resumedSource.startOrResumeSplitReplicationFromDurable();
   t.equal(resumed, true,

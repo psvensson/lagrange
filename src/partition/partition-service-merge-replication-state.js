@@ -16,7 +16,6 @@ import {
 } from './partition-descriptor-epoch-contract.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
-  PARTITION_SERVICE_TYPE,
 } from './partition-service-constants.js';
 
 const LOCAL_STR_OBJECT = 'object';
@@ -199,10 +198,7 @@ function assertMergeRoutingDescriptorEpochForService(service, metadata) {
  * @return {Object|null}
  */
 function resolveLocalTableDescriptorForService(service) {
-  if (
-    !service.systemTableCache ||
-    typeof service.systemTableCache.get !== PARTITION_SERVICE_TYPE.FUNCTION
-  ) {
+  if (!service.systemTableCache) {
     return null;
   }
   return service.systemTableCache.get(TABLES.TABLES, service.tableId) ||

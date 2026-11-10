@@ -1,7 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionServiceCoreBase} from
   '../../src/partition/partition-service-core-base.js';
-import {createPartitionServiceMetadataDeliveryMethods} from
+import {getMetadataPublicationReadinessDimension} from
   '../../src/partition/partition-service-metadata-delivery-methods.js';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -163,6 +163,10 @@ function createRoleHelperForReplica({replicaId, cache, store, warns}) {
     systemTableCache: cache,
     cdcIntegrationService: store.cdcIntegrationService,
     controlPlaneSystemTableGateway: {
+      // The production gateway resolves the partition's CDC service and SQL
+      // engine; the authoritative read has an owner when either is wired.
+      resolveCdcIntegrationService: () => store.cdcIntegrationService,
+      resolveSqlQueryEngine: () => null,
       readAuthoritativeRows: (tableName, sql, params, options) =>
         store.cdcIntegrationService.executeAuthoritativeSystemTableRead(
           tableName,
@@ -180,12 +184,11 @@ function createRoleHelperForReplica({replicaId, cache, store, warns}) {
     },
     isServicesLeaderAvailable: () => true,
   };
-  // Wire the REAL metadata-delivery mixin methods the helper wiring consults
+  // Wire the REAL metadata-delivery read the helper wiring consults
   // (getMetadataPublicationReadinessDimension) plus the core-base guard-row
   // refresh, so the wiring under test is production code.
-  const deliveryMethods = createPartitionServiceMetadataDeliveryMethods();
   svc.getMetadataPublicationReadinessDimension =
-    deliveryMethods.getMetadataPublicationReadinessDimension.bind(svc);
+    getMetadataPublicationReadinessDimension;
   svc.refreshMetadataPublicationGuardRow =
     PartitionServiceCoreBase.prototype.refreshMetadataPublicationGuardRow
       .bind(svc);

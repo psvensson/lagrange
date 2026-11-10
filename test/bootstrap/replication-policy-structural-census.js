@@ -76,9 +76,13 @@ function persistedReplicaCountWrites(relativePath) {
 // The STRUCTURAL dependency boundary. A module that owns runtime replica
 // identity either declares the seed identity lists or keeps a mutable peer
 // container of its own; both are marks of ownership that survive renaming a
-// variable, and neither matches a module that merely names the string.
+// variable, and neither matches a module that merely names the string. The
+// peer container is spelled on the instance (this.replicaIds) or, in an
+// explicit-context module whose functions take the service first, on that
+// context (service.replicaIds): the same property either way.
 const IDENTITY_OWNER_MARKERS = Object.freeze([
   /\bthis\.replicaIds\b/u,
+  /\bservice\.replicaIds\b/u,
   /\b(?:const|let|var|function)\s+(?:INITIAL_REPLICA_IDS|INITIAL_MESSAGE_GROUP_REPLICA_IDS|getInitialReplicaIds)\b/u,
 ]);
 const SOURCE_ROOT = 'src';

@@ -40,6 +40,7 @@ import {getSchemaByTableName} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 
@@ -246,7 +247,7 @@ async function startLoneLeader(directory, table) {
   const dbPath = path.join(directory, `${partitionId}.sqlite`);
   const tableRow = {table_name: table, primaryKey: keyOf(table),
     active_partition_version: ACTIVE_PARTITION_VERSION};
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     tableId: table, tableName: table, partitionId, replicaId,
     replicaIds: [replicaId], nodeId: NODE_ID, dbPath,
     systemTableCache: {
@@ -255,7 +256,7 @@ async function startLoneLeader(directory, table) {
       getAll: (type) => (type === TABLES.TABLES ? [tableRow] : []),
     },
     schema: partitionSchemaOf(table),
-  }));
+  })));
   await partition.initialize();
   partition.startElection();
   // Leading, as the core says and as the service's write path sees it.

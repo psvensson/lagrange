@@ -14,6 +14,7 @@ import {IndexService} from '../../src/index-management/index-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {partitionCollaboratorOptions} from '../helpers/partition-service-fixture.js';
 import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
 
@@ -81,7 +82,7 @@ const dataArbitrary = fc.record({
  * Create a partition with a schema that includes indexable columns.
  */
 async function createTestPartition(partitionId, tableName) {
-  const partition = new PartitionService(withFoundingStamp({
+  const partition = new PartitionService(partitionCollaboratorOptions(withFoundingStamp({
     partitionId,
     tableId: tableName,
     tableName,
@@ -97,7 +98,7 @@ async function createTestPartition(partitionId, tableName) {
         {name: 'col_num', type: 'INTEGER'},
       ],
     },
-  }));
+  })));
 
   await partition.initialize();
   await resumeFixtureParticipantAdmission(partition);

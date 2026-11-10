@@ -27,29 +27,30 @@ const PARTITION_HYDRATION_IMAGE_STATE = Object.freeze({
 // A group with no applied-state row has applied nothing.
 const NOTHING_APPLIED_INDEX = '0';
 
-const PARTITION_SERVICE_HYDRATION_IMAGE_METHODS = Object.freeze({
-  /**
-   * Read a hydration image: the rows of one read statement and the durable
-   * applied index P, in one synchronous span on the leader.
-   * @param {string} sql - A read statement (admitted by the statement owner).
-   * @return {Object} {state: READ, rows, appliedIndex (decimal string),
-   *   tenure} or {state: NOT_LEADER | REFUSED, partitionId, reason}.
-   */
-  readHydrationImage(sql) {
-    if (!this.isLeader || this.isShutdown) {
-      return Object.freeze({state: PARTITION_HYDRATION_IMAGE_STATE.NOT_LEADER,
-        partitionId: this.partitionId, reason: null});
-    }
-    const admission = admitPartitionStatement(this, sql, []);
-    if (!admission.admitted || admission.kind !== PARTITION_STATEMENT_KIND.READ) {
-      return Object.freeze({state: PARTITION_HYDRATION_IMAGE_STATE.REFUSED,
-        partitionId: this.partitionId, reason: admission.reason ?? null});
-    }
-    const rows = collectBoundedSqliteRows(admission.statement, [], {});
-    const appliedIndex = readPartitionAppliedIndex(this) ?? NOTHING_APPLIED_INDEX;
-    return Object.freeze({state: PARTITION_HYDRATION_IMAGE_STATE.READ, rows,
-      appliedIndex, tenure: this.leadershipTenure, partitionId: this.partitionId});
-  },
-});
+/**
+ * Read a hydration image: the rows of one read statement and the durable
+ * applied index P, in one synchronous span on the leader.
+ * @param {string} sql - A read statement (admitted by the statement owner).
+ * @return {Object} {state: READ, rows, appliedIndex (decimal string),
+ *   tenure} or {state: NOT_LEADER | REFUSED, partitionId, reason}.
+ */
+function readHydrationImage(service, sql) {
+  if (!service.isLeader || service.isShutdown) {
+    return Object.freeze({state: PARTITION_HYDRATION_IMAGE_STATE.NOT_LEADER,
+      partitionId: service.partitionId, reason: null});
+  }
+  const admission = admitPartitionStatement(service, sql, []);
+  if (!admission.admitted || admission.kind !== PARTITION_STATEMENT_KIND.READ) {
+    return Object.freeze({state: PARTITION_HYDRATION_IMAGE_STATE.REFUSED,
+      partitionId: service.partitionId, reason: admission.reason ?? null});
+  }
+  const rows = collectBoundedSqliteRows(admission.statement, [], {});
+  const appliedIndex = readPartitionAppliedIndex(service) ?? NOTHING_APPLIED_INDEX;
+  return Object.freeze({state: PARTITION_HYDRATION_IMAGE_STATE.READ, rows,
+    appliedIndex, tenure: service.leadershipTenure, partitionId: service.partitionId});
+}
 
-export {PARTITION_HYDRATION_IMAGE_STATE, PARTITION_SERVICE_HYDRATION_IMAGE_METHODS};
+export {
+  PARTITION_HYDRATION_IMAGE_STATE,
+  readHydrationImage,
+};

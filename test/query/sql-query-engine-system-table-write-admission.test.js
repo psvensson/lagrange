@@ -25,8 +25,7 @@ import {
 } from '../../src/query/sql-statement-ingress.js';
 import {createApplicationDatabaseExecutionOptions} from
   '../../src/query/application-database-statement-policy.js';
-import {PARTITION_SERVICE_REMOTE_QUERY_METHODS} from
-  '../../src/partition/partition-service-remote-query-methods.js';
+import {partitionServiceContext} from '../helpers/partition-service-fixture.js';
 import {resolveFailureSqlState} from '../../src/runtime/pgwire-result-mapper.js';
 import {createTestPostgresWireAdapter} from '../helpers/pgwire-auth-handler.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
@@ -263,18 +262,17 @@ test('the admin WebSocket query channel refuses a system-table write',
 test('a partition refuses a routed client write to its system table',
   async (t) => {
     const applied = [];
-    const partition = Object.assign(
-      Object.create(PARTITION_SERVICE_REMOTE_QUERY_METHODS), {
-        role: 'leader',
-        tableName: 'tables',
-        partitionId: 'tables-p1',
-        replicaId: 'tables-p1-r1',
-        logger: {debug() {}, error() {}, warn() {}, info() {}},
-        async executeQuery(sql) {
-          applied.push(sql);
-          return {success: true, changes: 1};
-        },
-      });
+    const partition = partitionServiceContext({
+      role: 'leader',
+      tableName: 'tables',
+      partitionId: 'tables-p1',
+      replicaId: 'tables-p1-r1',
+      logger: {debug() {}, error() {}, warn() {}, info() {}},
+      async executeQuery(sql) {
+        applied.push(sql);
+        return {success: true, changes: 1};
+      },
+    });
     const clientWrite = await partition.handleRemoteQuery({
       type: 'QUERY',
       sql: OWNER_SYSTEM_TABLE_WRITE,
@@ -304,20 +302,19 @@ test('Logs user DML preserves exact parser identity and client origin through ' 
   openParticipantTransactionStore(db);
   db.exec('CREATE TABLE Logs (id TEXT PRIMARY KEY, total INTEGER)');
   db.prepare('INSERT INTO Logs VALUES (?, ?)').run('a1', 0);
-  const partition = Object.assign(
-    Object.create(PARTITION_SERVICE_REMOTE_QUERY_METHODS), {
-      role: 'leader',
-      tableName: 'Logs',
-      tableId: 'tbl-Logs',
-      systemTableCache: createSystemCache(),
-      db,
-      partitionId: 'Logs-p1',
-      replicaId: 'Logs-p1-r1',
-      logger: {debug() {}, error() {}, warn() {}, info() {}},
-      async executeQuery(sql, params) {
-        return {success: true, changes: db.prepare(sql).run(...params).changes};
-      },
-    });
+  const partition = partitionServiceContext({
+    role: 'leader',
+    tableName: 'Logs',
+    tableId: 'tbl-Logs',
+    systemTableCache: createSystemCache(),
+    db,
+    partitionId: 'Logs-p1',
+    replicaId: 'Logs-p1-r1',
+    logger: {debug() {}, error() {}, warn() {}, info() {}},
+    async executeQuery(sql, params) {
+      return {success: true, changes: db.prepare(sql).run(...params).changes};
+    },
+  });
   const {engine, delivered} = createEngine((message) =>
     partition.handleRemoteQuery(message));
   const names = ['Logs', '"Logs"'];

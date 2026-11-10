@@ -26,7 +26,6 @@ const {
   ENTITY_TYPE,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_LITERAL,
-  PARTITION_SERVICE_TYPE,
   ReplicaStatus,
   SERVICE_TYPE,
   TABLES,
@@ -122,8 +121,7 @@ function shouldSkipPeerServiceRow(partitionService, serviceRow, replicaId) {
  * @return {boolean}
  */
 function isBootstrapPeerAdmissible(partitionService, peerId) {
-  const serviceRow = typeof partitionService.systemTableCache?.get ===
-    PARTITION_SERVICE_TYPE.FUNCTION ?
+  const serviceRow = partitionService.systemTableCache ?
     partitionService.systemTableCache.get(TABLES.SERVICES, peerId) : null;
   return !serviceRow ||
     !shouldSkipPeerServiceRow(partitionService, serviceRow, peerId);
@@ -216,8 +214,8 @@ function retireMatchingRaftAddresses(
       .map((node) => node?.address)
       .filter((address) => address === serviceAddress),
   );
-  if (typeof partitionService.raft?.proposeConfChange ===
-      PARTITION_SERVICE_TYPE.FUNCTION) {
+  // A closed replica has no port; an open one is a validated operation port.
+  if (partitionService.raft) {
     for (const address of retiredAddresses) {
       proposePeerRetirement(partitionService, {
         type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
@@ -314,8 +312,7 @@ function reconcileExpectedRaftPeer({
     replicaId,
     expectedAddress,
   );
-  if (typeof partitionService.raft?.proposeConfChange ===
-      PARTITION_SERVICE_TYPE.FUNCTION) {
+  if (partitionService.raft) {
     for (const staleAddress of staleAddresses) {
       proposePeerRetirement(partitionService, {
         type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
@@ -376,12 +373,7 @@ function expectedPeerAddressesOf(partitionService, services, addressManager,
 function reconcileRaftPeersFromCacheForService(partitionService,
   options = {}) {
   const onlyReplicaIds = options.onlyReplicaIds ?? null;
-  if (
-    !partitionService.raft ||
-    !partitionService.systemTableCache ||
-    typeof partitionService.systemTableCache.filter !==
-      PARTITION_SERVICE_TYPE.FUNCTION
-  ) {
+  if (!partitionService.raft || !partitionService.systemTableCache) {
     return;
   }
   const services = partitionService.systemTableCache.filter(

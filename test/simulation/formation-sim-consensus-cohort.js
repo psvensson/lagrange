@@ -36,7 +36,7 @@ import {
 } from '../../src/raft/raft-operation-port-request.js';
 import {createRaftRsOperationPort} from '../../src/raft/raft-rs-operation-port.js';
 import {
-  reserveAndAdmitGroupPeer, takeGroupAdmissionsInFlight,
+  createGroupAdmissionLiveness, reserveAndAdmitGroupPeer, takeGroupAdmissionsInFlight,
 } from '../../src/raft/raft-rs-group-membership-admission.js';
 import {guardedDispatch} from './formation-sim-guard.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
@@ -59,6 +59,8 @@ const QUIET_LOGGER = Object.freeze({warn() {}, info() {}, debug() {}, error() {}
  */
 function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, charges}) {
   const ports = new Map();
+  // Each member's admission liveness record, one per port it opens.
+  const admissionLiveness = new Map();
   const databases = new Map();
   const pendingJoins = [];
 
@@ -126,7 +128,8 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, char
   function admitOnEveryMember(joinerId) {
     for (const [memberId, port] of ports) {
       runOnExecutionNode(memberId, () => reserveAndAdmitGroupPeer(port,
-        admissionGroup(memberId), {replicaIdentity: joinerId, peerAddress: joinerId}));
+        admissionLiveness.get(memberId), admissionGroup(memberId),
+        {replicaIdentity: joinerId, peerAddress: joinerId}));
     }
   }
 
@@ -135,8 +138,9 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, char
   function redrive(nodeId) {
     const port = ports.get(nodeId);
     if (!port) return;
-    for (const joinerId of takeGroupAdmissionsInFlight(port)) {
-      reserveAndAdmitGroupPeer(port, admissionGroup(nodeId),
+    const liveness = admissionLiveness.get(nodeId);
+    for (const joinerId of takeGroupAdmissionsInFlight(port, liveness)) {
+      reserveAndAdmitGroupPeer(port, liveness, admissionGroup(nodeId),
         {replicaIdentity: joinerId, peerAddress: joinerId});
     }
     drivePendingJoins();
@@ -170,6 +174,7 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, char
       [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
     }));
     ports.set(nodeId, port);
+    admissionLiveness.set(nodeId, createGroupAdmissionLiveness());
     // Announced inside the port's own turn, so the re-drive runs after it.
     const scheduleRedrive = () => queueMicrotask(() => redrive(nodeId));
     port.subscribe(RAFT_EVENT.CONF_CHANGE_APPLIED, scheduleRedrive);

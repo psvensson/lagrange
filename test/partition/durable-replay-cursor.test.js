@@ -42,8 +42,8 @@ import {
   PartitionService,
 } from '../../src/partition/partition-service.js';
 import {
-  startMergeReplicationHandleForService,
-  startSplitReplicationHandleForService,
+  startMergeReplicationHandle,
+  startSplitReplicationHandle,
 } from '../../src/partition/partition-service-source-replication-start-methods.js';
 import {
   MERGE_ACK_CHECKPOINT_FIELD,
@@ -61,6 +61,10 @@ import {
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {encodeProposal} from '../../src/raft/raft-rs-proposal-codec.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {PARTITION_SERVICE_COLLABORATOR} from
+  '../../src/partition/partition-service-collaborators.js';
+import {partitionCollaboratorFake} from
+  '../helpers/partition-service-fixture.js';
 import {RAFT_RS_ENTRY_TYPE} from
   '../../src/raft/raft-rs-ready-loop-constants.js';
 
@@ -427,8 +431,8 @@ test('accepted recovery refreshes writes committed while START waits and ' +
       });
 
       const start = isSplit ?
-        startSplitReplicationHandleForService(source.restarted, handle) :
-        startMergeReplicationHandleForService(source.restarted, handle);
+        startSplitReplicationHandle(source.restarted, handle) :
+        startMergeReplicationHandle(source.restarted, handle);
       await authorizationEntered.promise;
       const duringAuthorization = insertCommand(
         `${scenario.family}-${scenario.phase}`);
@@ -536,17 +540,18 @@ test('leader activation on a restarted source resumes the split ' +
       splitReplication: null,
       mergeReplication: null,
       logger: buildLogger(),
-      systemTableCache: {
-        getAll(tableName) {
-          return tableName === 'tables' ?
-            [{
-              partition_transition_state:
-                PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
-              partition_transition_metadata: rawMetadata,
-            }] :
-            [];
-        },
-      },
+      systemTableCache: partitionCollaboratorFake(
+        PARTITION_SERVICE_COLLABORATOR.SYSTEM_TABLE_CACHE, {
+          getAll(tableName) {
+            return tableName === 'tables' ?
+              [{
+                partition_transition_state:
+                  PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
+                partition_transition_metadata: rawMetadata,
+              }] :
+              [];
+          },
+        }),
       runSplitReplicationWorkflow() {
         workerCalls.push(this.splitReplication?.phase || null);
         return Promise.resolve();

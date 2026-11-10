@@ -23,6 +23,7 @@ import {isConsensusInitRefusal} from '../../../src/raft/raft-operation-port.js';
 import {ENTITY_TYPE} from '../../../src/constants/addresses.js';
 import {TEST_BOOT_INCARNATION} from '../../test-helpers/boot-incarnation-fixture.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
+import {partitionCollaboratorOptions} from '../../helpers/partition-service-fixture.js';
 
 const NODE_ID = 'opening-refusal-node';
 const EXISTING_GROUP = 'opening-refusal-survivor';
@@ -113,8 +114,8 @@ function buildService(fixture, kind) {
     timeSource: fixture.clock, deferElection: true, systemTableCache: new SystemTableCache()};
   let service;
   if (kind === 'partition') {
-    service = new PartitionService({...options, partitionId: id, tableId: `${id}-table`,
-      tableName: 'opening_refusal_rows', bootstrapMembership: genesisStamp([replicaId])});
+    service = new PartitionService(partitionCollaboratorOptions({...options, partitionId: id, tableId: `${id}-table`,
+      tableName: 'opening_refusal_rows', bootstrapMembership: genesisStamp([replicaId])}));
   } else if (kind === 'message-group') {
     service = new MessageGroupService({...options, groupId: id});
   } else {

@@ -513,6 +513,7 @@ function evaluatePartitionSnapshotCadence(service) {
 }
 
 export {
+  CADENCE_STATUS_FAILED,
   RAFT_SNAPSHOT_CADENCE_OUTCOME,
   canCompactPartitionRaftLog,
   createPartitionSnapshotCadence,
