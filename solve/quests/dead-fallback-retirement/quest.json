@@ -2,16 +2,48 @@
   "schema": "solve-quest/2",
   "id": "dead-fallback-retirement",
   "epic": "code-navigability-and-mistake-resistance",
-  "statement": "Every census record of class never or fallback-only is retired: a never site loses its fallback side and, where the primary side can be absent, answers with a named outcome instead of a silent default; a fallback-only site loses its dead primary side and is renamed for what it actually does; each deletion is one attempt per owner directory and cites the census record and run identities that justify it; the budget rows fallback_branches_never_taken and fallback_branches_only_fallback_taken read zero.",
+  "statement": "Resolve each never or fallback-only census candidate through source and caller analysis. Migrate every caller of genuine legacy or fallback semantics to its canonical owner, preserve explicit unavailability and recovery, and delete the alternate implementation. A legitimate default or owned conversion needs a verified semantic disposition; lack of execution never proves a branch dead. Work proceeds in bounded owner interactions with retained regression evidence; this is not the repository-wide closure claim.",
   "doneWhen": {
-    "probe": "script",
-    "args": {"command": "node scripts/checks/code-navigability-budget.js --metric --rows fallback_branches_never_taken,fallback_branches_only_fallback_taken", "target": 0}
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/dead-fallback-retirement/evidence/receipt.json",
+      "requiredReceipts": [
+        "candidate-reachability-and-semantic-dispositions",
+        "canonical-caller-migration",
+        "alternate-implementations-deleted",
+        "owner-refusal-recovery-and-cleanup",
+        "independent-verification"
+      ]
+    }
   },
   "constraints": [
-    {"id": "census-cites-the-run", "statement": "A deletion names the census record (file, hash, class) and the runs behind it. A site whose record is unloaded or whose hash changed since the census is not deletable on census evidence."},
-    {"id": "named-outcome-not-crash", "statement": "Removing a fallback never widens a failure into a crash path: where the primary side can be absent, the result is a typed refusal or named state the consumer handles (R07, R11)."},
-    {"id": "one-owner-per-attempt", "statement": "Each attempt changes one owner directory (readiness, partition, raft first) and lands on its own, so a regression is attributable to one owner."},
-    {"id": "no-legacy-kept", "statement": "No alias, compatibility branch or parallel implementation is kept for safety; a retained path is a finding routed to its owner, not a preserved fallback."},
-    {"id": "independent-verification", "statement": "The src/ changes land only behind an approving verification newer than the last attempt."}
+    {
+      "id": "census-cites-the-run",
+      "statement": "Retain the candidate census file/hash/class and contributing run identities; verify current source and all callers before assigning a disposition. Unloaded or changed-source candidates require fresh applicability and owner analysis. Coverage alone authorizes no deletion; preserve and verify legitimate conversion/default guarantees."
+    },
+    {
+      "id": "named-outcome-not-crash",
+      "statement": "Removing a fallback never widens a failure into a crash path: where the primary side can be absent, the result is a typed refusal or named state the consumer handles (R07, R11)."
+    },
+    {
+      "id": "one-owner-per-attempt",
+      "statement": "Each attempt changes one owner directory (readiness, partition, raft first) and lands on its own, so a regression is attributable to one owner."
+    },
+    {
+      "id": "no-legacy-kept",
+      "statement": "No alias, compatibility branch or parallel implementation is kept for safety; a retained path is a finding routed to its owner, not a preserved fallback."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "The src/ changes land only behind an approving verification newer than the last attempt."
+    },
+    {
+      "id": "coverage-is-not-semantic-proof",
+      "statement": "Coverage classes identify investigation candidates only. Before deletion or classification, trace the canonical owner, every actual caller/export/dynamic entrypoint and fixture, distinguish legitimate defaults/owned conversion from alternate semantics, and retain discriminating evidence. No observed execution is not proof that code is dead. No legacy, compatibility, fallback or second authority is retained as an exception."
+    },
+    {
+      "id": "bounded-work-and-global-closure",
+      "statement": "This Quest retains its bounded work under code-navigability-and-mistake-resistance. Coordinate shared owner changes with repository-legacy-fallback-closure (Q11) and Q5 canonical-replica-completion-observation. Classification or routed debt does not close global removal; Q11 requires zero unresolved violations and zero unclassified candidates across maintained executable code. One writer per interaction, with independent owner-sized repairs."
+    }
   ]
 }

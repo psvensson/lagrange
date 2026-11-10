@@ -1,0 +1,63 @@
+{
+  "schema": "solve-quest/2",
+  "id": "lab-census-benchmark-evidence-custody",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Unify lab, census and benchmark evidence custody. missing child coverage, lost witnesses, source mismatch, inadmissible placement, skipped semantic proofs and changed deployment identity cannot yield complete/pass evidence. Valid complete collection is accepted. A bounded runner witness proves supported placement and cleanup before the final full collection. No claim is made from filenames alone or a stale aggregate census.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/lab-census-benchmark-evidence-custody/evidence/receipt.json",
+      "requiredReceipts": [
+        "canonical-runner-placement-and-cleanup",
+        "complete-source-bound-witness-manifest",
+        "invalid-or-incomplete-evidence-refused",
+        "dependency-aware-shard-applicability",
+        "executed-semantic-proof-ids",
+        "actual-deployment-binding",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "owner-and-sequence",
+      "statement": "Owners: existing lab execution and census/proof producers. Difficulty: medium. Dependency: P0; Q3 for verdicts. Tool work can proceed alongside runtime repairs. Admission dependencies: Q3 (canonical-report-outcome-classification). P0 reconciliation is recorded in the epic. Dependencies are coordination instructions, not an implemented Solver scheduler; diagnosis need not wait for every tooling change."
+    },
+    {
+      "id": "owned-work-1",
+      "statement": "Run workloads through the existing lab owner with declared source/dependencies, placement, locks, storage, thermal conditions and physical topology. Move any necessary census extension into that owner and retire private competing orchestration. Retain first failures and immutable witness manifests. Reuse shards only after the existing proof owner establishes dependency/configuration/environment applicability."
+    },
+    {
+      "id": "owned-work-2",
+      "statement": "Verify the already edited benchmark receipt path: award only executed proof IDs, preserve actual deployment bindings across re-formation, and leave skipped/unavailable durability unproved. Keep native/physical semantic qualification separate from throughput measurements."
+    },
+    {
+      "id": "existing-owners-and-evidence",
+      "statement": "Reuse scripts/lab.js, fallback-branch-coverage-census and comparative-benchmark-evidence-repair within their actual scope and evidence applicability. Their solved status does not certify private sharding, new source, skipped semantic checks or changed deployment identity. No second scheduler or receipt authority."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

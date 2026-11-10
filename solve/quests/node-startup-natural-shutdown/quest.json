@@ -1,0 +1,58 @@
+{
+  "schema": "solve-quest/2",
+  "id": "node-startup-natural-shutdown",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Make failed and successful startup terminate naturally. both successful startup and failure during joining terminate within existing bounds without SIGKILL or a new forced-exit workaround. No owned workers, subscriptions, retry loops or handles remain. Restart resumes retained obligations correctly. Coverage completion is checked separately and cannot substitute for natural exit.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/node-startup-natural-shutdown/evidence/receipt.json",
+      "requiredReceipts": [
+        "retained-resource-cause",
+        "successful-start-natural-exit",
+        "failed-join-natural-exit",
+        "owned-resources-released",
+        "restart-retains-committed-obligations",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "owner-and-sequence",
+      "statement": "Owner: node lifecycle and the owners of retained workers, timers, subscriptions, requests and native runtimes. Difficulty: medium to high. Dependency: P0 and Q1; can be investigated alongside Q8. Admission dependencies: Q1 (contract-first-authoring-and-producer-fidelity). P0 reconciliation is recorded in the epic. Dependencies are coordination instructions, not an implemented Solver scheduler; diagnosis need not wait for every tooling change."
+    },
+    {
+      "id": "owned-work-1",
+      "statement": "Trace the forced-stop case to its actual retained resource, using the historical worker-teardown investigation as a counterexample family. Do not assume the recently changed listener is the cause. Stop admission, cancel or complete volatile work through the owner, retain committed obligations correctly, and release every acquired resource through the existing shutdown chain."
+    },
+    {
+      "id": "existing-owners-and-evidence",
+      "statement": "Use node-shutdown-cell-worker-teardown and managed-split-shutdown-timer-leak as historical counterexamples. Trace the currently retained resource; neither the historical Worker cause nor the latest listener edit is presumed responsible. The v5 forced stop is not natural-exit evidence."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

@@ -2,7 +2,7 @@
   "schema": "solve-quest/2",
   "id": "fresh-formation-user-table-routability",
   "class": "product",
-  "epic": "topology-convergence-hardening",
+  "epic": "operation-integrity-and-reliable-formation",
   "statement": "On a fresh three-node formation, within a preregistered bound, (a) every node's serve lane opens (controlPlaneDiagnostics.readinessByNodeId[*] serveEligible true, none of PRIORITY_CONTROL_PLANE_RECOVERY_PENDING, priority_partitions_not_spread, publication_stream_not_ready, priority_recovery_active, planning_snapshot_refresh_pending, config_safe_mode), (b) all six priority control-plane partitions reach readyDistinct == required, (c) replica_operations in-flight reaches 0 for a quiet window, (d) a CREATE TABLE issued after (a)-(c) becomes routable (contractState != pending; every partitions row has leader_node_id and >= syncReplicaAcks+1 active services rows on distinct nodes; SELECT COUNT(*) returns a result), (e) one INSERT + readback succeeds with rowCount 1 from every node, and (f) zero learner_address_unresolvable refusals are logged for a learner whose services row is durably committed.",
   "doneWhen": {
     "probe": "test-receipt",

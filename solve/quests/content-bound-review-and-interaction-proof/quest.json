@@ -1,0 +1,64 @@
+{
+  "schema": "solve-quest/2",
+  "id": "content-bound-review-and-interaction-proof",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Bind review and interaction proof to the code. a post-review source mutation is rejected; changes to relevant proof inputs are rejected; a valid matching reviewed candidate is accepted; harmless append-only review recording does not create a digest loop. One-sided producer and consumer changes select the paired witness, incomplete registration fails closed, and unaffected evidence can be reused only with a valid applicability record.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/content-bound-review-and-interaction-proof/evidence/receipt.json",
+      "requiredReceipts": [
+        "reviewed-content-mutation-refused",
+        "proof-input-mutation-refused",
+        "matching-candidate-accepted",
+        "append-only-review-binding-stable",
+        "one-sided-interaction-witness-selected",
+        "missing-registration-refused",
+        "evidence-reuse-applicability",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "owner-and-sequence",
+      "statement": "Owner: existing Solver/provenance and impact-proof owners. Difficulty: medium. Dependency: P0; applies Q1. P0 reconciliation is recorded in the epic. Dependencies are coordination instructions, not an implemented Solver scheduler; diagnosis need not wait for every tooling change."
+    },
+    {
+      "id": "owned-work-1",
+      "statement": "Require an independently issued review record to identify reviewed content, relevant dependencies, declared scope and evidence. Landing compares that binding with the candidate it is about to commit. Changing relevant code, contract, fixture or runner invalidates the affected approval; reusing unaffected approval requires the existing applicability rules."
+    },
+    {
+      "id": "owned-work-2",
+      "statement": "For a change to either endpoint of a registered authority interaction, the existing selector must select its paired witness and the guard must reject missing or malformed required contract coverage. Preserve single-owner selection already implemented by the proof-cone tool. Do not infer test execution merely from registry membership."
+    },
+    {
+      "id": "existing-owners-and-evidence",
+      "statement": "Use scripts/solve/{schema,store,commands,guards}.js and scripts/checks/{impact-contract-registry,impact-proof-cone}.js. Preserve the existing single-owner selector. The solved solver-workflow-candidate-verification-cutover is historical evidence, not current content-binding proof."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

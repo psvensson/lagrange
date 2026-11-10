@@ -1,0 +1,62 @@
+{
+  "schema": "solve-quest/2",
+  "id": "routing-overlay-complete-state-retirement",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Retire routing protection only after the relevant state catches up. mixed-age rows and delayed deletions cannot resurrect stale routes; genuinely newer complete authority restores routing; deletion/recreation and cache replacement remain correct; listeners and outstanding refreshes are released. A refutation closes the hypothesis only with evidence covering the actual path and ordering, not by passing the older, weaker test.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/routing-overlay-complete-state-retirement/evidence/receipt.json",
+      "requiredReceipts": [
+        "mixed-age-counterexample-resolved",
+        "real-engine-cache-executor-composition",
+        "newer-complete-authority-progress",
+        "deletion-recreation-and-cache-replacement",
+        "subscription-and-refresh-cleanup",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "owner-and-sequence",
+      "statement": "Owner: query-routing/projection interaction. Difficulty: medium to high. Dependency: P0 and Q1; coordinate shared projection changes with Q6. Admission dependencies: Q1 (contract-first-authoring-and-producer-fidelity). P0 reconciliation is recorded in the epic. Dependencies are coordination instructions, not an implemented Solver scheduler; diagnosis need not wait for every tooling change."
+    },
+    {
+      "id": "owned-work-1",
+      "statement": "First confirm or refute the specific counterexample: authoritative evidence excludes stale service B; B remains cached; service A advances while B's deletion is delayed. Exercise the real engine/cache/query-executor path and determine whether whole-overlay retirement exposes B."
+    },
+    {
+      "id": "owned-work-2",
+      "statement": "If confirmed, repair the existing owner around the relevant row-set completeness or authoritative revision, including deletion evidence. Reuse an existing watermark if its semantics suffice. Do not prescribe a new global clock or leave a permanent overlay. Cover cache replacement, subscription teardown and in-flight refresh completion as parts of the same lifetime."
+    },
+    {
+      "id": "existing-owners-and-evidence",
+      "statement": "The mixed-age overlay case is an unexecuted source-derived hypothesis. A ruled-out finding requires the real engine/cache/query path and ordering. Refutation authorizes no speculative replacement; refine the unsealed proof scope or explicitly supersede a disproven sealed premise."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

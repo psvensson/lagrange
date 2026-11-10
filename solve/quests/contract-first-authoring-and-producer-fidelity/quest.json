@@ -1,0 +1,66 @@
+{
+  "schema": "solve-quest/2",
+  "id": "contract-first-authoring-and-producer-fidelity",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Make contract-first authoring executable. a deliberately invented hasQuorum-style member is rejected before integration; real producer values pass; a shared fixture cannot drift silently; the first repaired interaction demonstrates refusal, recovery and cleanup through production owners. Updated guidance has one canonical home and existing routes, with no extra approval bureaucracy.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/contract-first-authoring-and-producer-fidelity/evidence/receipt.json",
+      "requiredReceipts": [
+        "real-producer-contract-typecheck",
+        "phantom-member-rejected",
+        "fixture-producer-conformance",
+        "real-interaction-refusal-recovery-cleanup",
+        "steering-owner-alignment",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "owner-and-sequence",
+      "statement": "Owners: existing Quest workflow, fixture guidance and the first selected runtime contract owner. Difficulty: medium. P0 reconciliation is recorded in the epic. These are coordination dependencies, not an implemented Solver scheduler; diagnosis may proceed without waiting for every tooling change."
+    },
+    {
+      "id": "owned-work-1",
+      "statement": "Before each behavior-changing attempt, its existing Quest record identifies the actual producer and consumer symbols, canonical shape, identity/generation, ordering, unavailable/absent outcomes, retained obligations, wake and release path, historical failure family and first discriminating proof. Use the existing design-review step when an owner boundary or recovery semantics changes."
+    },
+    {
+      "id": "owned-work-2",
+      "statement": "Align harness-fidelity.md with the stronger rule in fixtures.md: substitutes consume owner-defined shapes and undergo producer conformance; they do not reproduce decision logic. Tighten owner-interaction.md so its exception wording cannot authorize legacy or fallback paths prohibited by the user. Keep legitimate representation conversion at one owned boundary, with no alternate semantic decision."
+    },
+    {
+      "id": "owned-work-3",
+      "statement": "Pilot concrete type checking on a narrow real producer/consumer boundary. Keep the type owned with the producer, cover its consumer and fixture, and reject phantom members and malformed outcomes. Extend this to other changed boundaries within their own Quests. Improve explicit-context interfaces when already changing fragmented code; retain file-size and complexity ratchets."
+    },
+    {
+      "id": "existing-fixture-owner",
+      "statement": "Reuse committed-readiness-fixture-custody for its sealed readiness-fixture claim. This Quest owns the authoring/checking gap, not a second readiness fixture implementation. Extend the selected producer/consumer check through owner-defined concrete types; no untyped facade, handwritten parallel declaration or repository-wide language migration."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}
