@@ -18,6 +18,7 @@ import {
 import {
   advanceTablePolicyCurrencyFromObservation, beginTablePolicyRead,
   clearTablePolicyCurrencyForTable, endTablePolicyRead, isConfiguredPolicyRowStale,
+  markActiveReadsEvictedForTable, markActiveReadsInvalidatedForTable,
 } from './table-policy-committed-base.js';
 import {
   assertValidMessageGroupPolicy, assertValidTablePolicy, buildPolicyAuthorityDecision,
@@ -229,6 +230,8 @@ async function resolveServiceTablePolicyFact(service, tableId) {
   if (!table) {
     if (tableId) {
       service.policyCache.delete(tableId);
+      markActiveReadsInvalidatedForTable(service, tableId);
+      markActiveReadsEvictedForTable(service, tableId);
       clearTablePolicyCurrencyForTable(service, tableId);
     }
     return buildPolicyAuthorityDecision(
@@ -451,6 +454,8 @@ async function readConfiguredTablePolicy(service, tableId) {
   if (!table) {
     if (tableId) {
       service.policyCache.delete(tableId);
+      markActiveReadsInvalidatedForTable(service, tableId);
+      markActiveReadsEvictedForTable(service, tableId);
       clearTablePolicyCurrencyForTable(service, tableId);
     }
     throw policyReadUnavailable(POLICY_READ_REASON.TABLE_ABSENT, {

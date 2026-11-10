@@ -5,8 +5,9 @@ import {CDC_COMPLETION, CDC_COVERAGE_STATE, cdcCoverageState, completeCdcPropaga
   emptyCdcCoverage, observeCdcCoverage, observeCdcDeliveryCoverage} from './cdc-delivery-outcome.js';
 import {captureDurablePropagationPlan} from '../topology/cdc-group-propagation-durable-plan.js';
 import {
+  collectKnownMessageGroupDomain,
   isPreActivationLatencyGroup,
-  resolveLatencyGroupRecipients,
+  resolveLatencyGroupTargetCandidates,
 } from '../topology/cdc-group-propagation-routing.js';
 
 const OBSERVED_ROUTE_LIFETIME_FIELDS = Object.freeze([
@@ -44,7 +45,11 @@ function hasRouteAddress(routeOrTarget) {
 
 function transferInvalidLatencyBindings(progress, targets) {
   const systemTableCache = progress.cache;
-  if (!systemTableCache) {
+  if (
+    !systemTableCache ||
+    progress.targets.length === 0 ||
+    progress.targets.every((leaf) => hasRouteAddress(leaf.route))
+  ) {
     return false;
   }
   const owner = progress.owner;
@@ -53,19 +58,27 @@ function transferInvalidLatencyBindings(progress, targets) {
     nodeId: owner?.nodeId ?? null,
     messageGroupReplicaSuffix: owner?.messageGroupReplicaSuffix ?? null,
   };
+  const domain = collectKnownMessageGroupDomain(options);
+  if (progress.targets.every((leaf) => domain.knownGroupIds.has(leaf.groupId))) {
+    return false;
+  }
   let changed = false;
   const retainedTargets = [];
   for (const leaf of progress.targets) {
+    if (domain.knownGroupIds.has(leaf.groupId)) {
+      retainedTargets.push(leaf);
+      continue;
+    }
     if (
       !hasRouteAddress(leaf.route) &&
       leaf.coverage.state === CDC_COVERAGE_STATE.UNCOVERED &&
       !targets.some((t) => t.groupId === leaf.groupId) &&
-      isPreActivationLatencyGroup(leaf.groupId, systemTableCache)
+      isPreActivationLatencyGroup(leaf.groupId, systemTableCache, domain)
     ) {
       changed = true;
       continue;
     }
-    const candidates = resolveLatencyGroupRecipients(leaf.groupId, options);
+    const candidates = resolveLatencyGroupTargetCandidates(leaf.groupId, options, domain);
     if (candidates.length === 0 || (candidates.length === 1 && candidates[0] === leaf.groupId)) {
       retainedTargets.push(leaf);
       continue;

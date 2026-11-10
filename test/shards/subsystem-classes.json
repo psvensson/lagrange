@@ -7,7 +7,7 @@
     "bootstrap-membership": 343,
     "cdc-metadata": 70,
     "cli-tooling": 99,
-    "control-plane": 236,
+    "control-plane": 237,
     "convergence-topology": 80,
     "distributed-harness": 214,
     "examples-e2e": 8,
@@ -25,8 +25,8 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2631,
-  "digest": "fnv1a32-b2f95b4c",
+  "censusSize": 2632,
+  "digest": "fnv1a32-c0ee4172",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-4cc628dc",
   "classes": {
@@ -1536,6 +1536,7 @@
     "test/policy/policy-driven-adjustment.property.test.js": "control-plane",
     "test/policy/table-policy-application.property.test.js": "control-plane",
     "test/policy/table-policy-clock-seam.test.js": "control-plane",
+    "test/policy/table-policy-outstanding-read-currency.test.js": "control-plane",
     "test/policy/table-policy-service.test.js": "control-plane",
     "test/policy/table-policy-target-refusal.test.js": "control-plane",
     "test/query/aggregate-function-correctness.property.test.js": "query-sql",

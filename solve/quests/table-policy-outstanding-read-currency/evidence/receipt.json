@@ -1,0 +1,53 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "table-policy-outstanding-read-currency",
+  "status": "pass",
+  "testFileDigests": {
+    "test/policy/table-policy-outstanding-read-currency.test.js": "587aa7bdea3165980219d31377785b64a10b3d3a048fc1e7be5579beca19c713"
+  },
+  "generatedAt": "2026-11-10T10:00:48.802Z",
+  "receipts": [
+    {
+      "id": "producer-ordering-and-identity",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R1 .*$\" test/policy/table-policy-outstanding-read-currency.test.js",
+      "detail": "Producer-owned ordering and table creation incarnation / identity scope of policy revisions monotonically advance currency and preserve identity.",
+      "testFile": "test/policy/table-policy-outstanding-read-currency.test.js"
+    },
+    {
+      "id": "delayed-old-read-cannot-resurrect",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R2 .*$\" test/policy/table-policy-outstanding-read-currency.test.js",
+      "detail": "Controlled delayed old responses cannot override a newer committed policy after retirement or eviction; ABA content recurrence is rejected.",
+      "testFile": "test/policy/table-policy-outstanding-read-currency.test.js"
+    },
+    {
+      "id": "retirement-eviction-and-recreation",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R3 .*$\" test/policy/table-policy-outstanding-read-currency.test.js",
+      "detail": "Old read from before table deletion/recreation cannot resurrect into cache or return authoritative policy after recreation or eviction; absent vs unavailable remain distinct.",
+      "testFile": "test/policy/table-policy-outstanding-read-currency.test.js"
+    },
+    {
+      "id": "real-permission-consumer",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R4 .*$\" test/policy/table-policy-outstanding-read-currency.test.js",
+      "detail": "PriorityPublicationSafetyRows.getCriticalMinReplicaCount schedule: hold 3, commit 5 then 7, fresh 7, release 3; old evidence stays stale and cached minimum 7 is enforced.",
+      "testFile": "test/policy/table-policy-outstanding-read-currency.test.js"
+    },
+    {
+      "id": "fresh-read-progress-and-resource-bounds",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R5 .*$\" test/policy/table-policy-outstanding-read-currency.test.js",
+      "detail": "Fresh reads make progress and succeed; active reads, currency, and fences remain strictly bounded without leaking entries.",
+      "testFile": "test/policy/table-policy-outstanding-read-currency.test.js"
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "command": "node scripts/quest-evidence/table-policy-outstanding-read-currency.js --check-verification",
+      "detail": "An approving subagent verification newer than the last attempt, read through the solve store owner.",
+      "testFile": null
+    }
+  ]
+}

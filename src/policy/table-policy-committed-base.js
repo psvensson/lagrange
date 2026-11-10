@@ -224,12 +224,8 @@ function buildChangedSnapshotIfDifferent(existing, nextPolicies, nextUpdatedAt) 
 }
 
 function buildCurrencyEntryPayload({
-  tablePolicies,
-  updatedAt,
-  resolvedVersion,
-  supersededSnapshots,
-  minWitnessTerm,
-  minWitnessAppliedIndex,
+  tablePolicies, updatedAt, createdAt, tableIncarnation,
+  resolvedVersion, supersededSnapshots, minWitnessTerm, minWitnessAppliedIndex,
 }) {
   const entry = {
     table_policies: tablePolicies,
@@ -238,9 +234,11 @@ function buildCurrencyEntryPayload({
     minWitnessTerm,
     minWitnessAppliedIndex,
   };
-  if (resolvedVersion !== undefined) {
-    entry.version = resolvedVersion;
+  if (Number.isFinite(createdAt)) entry.created_at = createdAt;
+  if (tableIncarnation !== undefined && tableIncarnation !== null) {
+    entry.table_incarnation = tableIncarnation;
   }
+  if (resolvedVersion !== undefined) entry.version = resolvedVersion;
   return entry;
 }
 
@@ -252,27 +250,41 @@ function resolveMaxFencesLimit(service) {
   return service.maxCommittedPolicyFences || MAX_COMMITTED_POLICY_FENCES;
 }
 
+function readCreationIncarnation(entry) {
+  return entry?.created_at ?? entry?.table_incarnation ??
+    entry?.tableCreationIncarnation ?? null;
+}
+
+function resolveTableCreationIncarnation(existing, rowOrFence) {
+  const rowCreated = readCreationIncarnation(rowOrFence);
+  if (Number.isFinite(rowCreated)) return rowCreated;
+  const existingCreated = readCreationIncarnation(existing);
+  return Number.isFinite(existingCreated) ? existingCreated : null;
+}
+
+function resolveTableIncarnation(rowOrFence, existing) {
+  if (rowOrFence?.table_incarnation !== undefined && rowOrFence?.table_incarnation !== null) {
+    return rowOrFence.table_incarnation;
+  }
+  if (existing?.table_incarnation !== undefined && existing?.table_incarnation !== null) {
+    return existing.table_incarnation;
+  }
+  return null;
+}
+
 function buildUpdatedCurrencyEntry(
-  existing,
-  nextPolicies,
-  nextUpdatedAt,
-  nextVersion,
-  extraSnapshots,
-  maxSnapshots,
-  witnessFloor,
+  existing, nextPolicies, nextUpdatedAt, nextVersion,
+  extraSnapshots, maxSnapshots, witnessFloor, rowOrFence = null,
 ) {
   const priorSnapshot = buildChangedSnapshotIfDifferent(
-    existing,
-    nextPolicies,
-    nextUpdatedAt,
+    existing, nextPolicies, nextUpdatedAt,
   );
   return buildCurrencyEntryPayload({
     tablePolicies: nextPolicies,
     updatedAt: resolveMonotonicUpdatedAt(existing?.updated_at, nextUpdatedAt),
-    resolvedVersion: resolveMonotonicPolicyVersion(
-      existing?.version,
-      nextVersion,
-    ),
+    createdAt: resolveTableCreationIncarnation(existing, rowOrFence),
+    tableIncarnation: resolveTableIncarnation(rowOrFence, existing),
+    resolvedVersion: resolveMonotonicPolicyVersion(existing?.version, nextVersion),
     supersededSnapshots: mergeBoundedSupersededSnapshots(
       existing?.supersededSnapshots,
       [...priorSnapshot, ...extraSnapshots],
@@ -284,22 +296,13 @@ function buildUpdatedCurrencyEntry(
 }
 
 function recordCommittedPolicyFence(service, tableId, fenceEntry, snapshots = []) {
-  if (!tableId) {
-    return;
-  }
+  if (!tableId) return;
   markActiveReadsInvalidatedForTable(service, tableId);
   const maxSnapshots = resolveMaxSnapshotsLimit(service);
   const maxFences = resolveMaxFencesLimit(service);
   const existingCurrency = service.policyCurrencyByTable?.get(tableId) || null;
-  const boundedSnapshots = Array.isArray(snapshots) ?
-    snapshots.slice(-maxSnapshots) :
-    [];
-  upsertBoundedMapEntry(
-    service.supersededSnapshots,
-    tableId,
-    boundedSnapshots,
-    maxSnapshots,
-  );
+  const boundedSnapshots = Array.isArray(snapshots) ? snapshots.slice(-maxSnapshots) : [];
+  upsertBoundedMapEntry(service.supersededSnapshots, tableId, boundedSnapshots, maxSnapshots);
   upsertBoundedMapEntry(
     service.committedPolicyFences,
     tableId,
@@ -324,6 +327,7 @@ function recordCommittedPolicyFence(service, tableId, fenceEntry, snapshots = []
         minWitnessTerm: existingCurrency?.minWitnessTerm ?? null,
         minWitnessAppliedIndex: existingCurrency?.minWitnessAppliedIndex ?? null,
       },
+      fenceEntry,
     ),
   );
 }
@@ -378,21 +382,25 @@ function isOlderFiniteTimestamp(rowUpdatedAt, fenceUpdatedAt) {
     rowUpdatedAt < fenceUpdatedAt;
 }
 
-function isSupersededByCommittedPolicyFence(service, fence, row, tableId = null) {
-  if (!row) {
-    return true;
+function compareIncarnations(row, fence) {
+  const rowCreated = readCreationIncarnation(row);
+  const fenceCreated = readCreationIncarnation(fence);
+  if (!Number.isFinite(rowCreated) || !Number.isFinite(fenceCreated)) {
+    return 0;
   }
+  return Math.sign(rowCreated - fenceCreated);
+}
+
+function isSupersededByCommittedPolicyFence(service, fence, row, tableId = null) {
+  if (!row) return true;
+  const incarnationDiff = compareIncarnations(row, fence);
+  if (incarnationDiff !== 0) return incarnationDiff < 0;
   const rowPolicies = row.table_policies ?? null;
   const rowUpdatedAt = row.updated_at ?? null;
   const versionVerdict = evaluateVersionSupersedence(
-    fence,
-    row,
-    rowPolicies,
-    rowUpdatedAt,
+    fence, row, rowPolicies, rowUpdatedAt,
   );
-  if (versionVerdict !== null) {
-    return versionVerdict;
-  }
+  if (versionVerdict !== null) return versionVerdict;
   if (
     fence.table_policies !== undefined &&
     matchesExactPolicyContent(fence, rowPolicies, rowUpdatedAt)
@@ -422,15 +430,19 @@ function isWitnessOlderThanCurrency(currency, witness) {
       witness.appliedIndex < currency.minWitnessAppliedIndex);
 }
 
+function hasNewerFiniteNumber(left, right) {
+  return Number.isFinite(left) && Number.isFinite(right) ? left > right : null;
+}
+
 function isRowStrictlyNewerThanCurrency(row, currency) {
-  const rowVersion = Number(row?.version ?? NaN);
-  const currencyVersion = Number(currency?.version ?? NaN);
-  if (Number.isFinite(rowVersion) && Number.isFinite(currencyVersion)) {
-    return rowVersion > currencyVersion;
-  }
-  return Number.isFinite(row?.updated_at) &&
-    Number.isFinite(currency?.updated_at) &&
-    row.updated_at > currency.updated_at;
+  const incarnationDiff = compareIncarnations(row, currency);
+  if (incarnationDiff !== 0) return incarnationDiff > 0;
+  const versionVerdict = hasNewerFiniteNumber(
+    Number(row?.version ?? NaN),
+    Number(currency?.version ?? NaN),
+  );
+  if (versionVerdict !== null) return versionVerdict;
+  return hasNewerFiniteNumber(row?.updated_at, currency?.updated_at) === true;
 }
 
 function isWitnessNewerThanFloor(curTerm, curIndex, witness) {
@@ -475,6 +487,7 @@ function advanceTablePolicyCurrencyFromObservation(
       [],
       resolveMaxSnapshotsLimit(service),
       resolveMaxWitnessPosition(existing, witness),
+      row,
     ),
   );
 }
@@ -486,11 +499,7 @@ function isInvalidatedRowStaleAgainstCurrency(currency, row, readToken) {
   if (!row) {
     return true;
   }
-  return !matchesExactPolicyContent(
-    currency,
-    row.table_policies ?? null,
-    row.updated_at ?? null,
-  ) && !isRowStrictlyNewerThanCurrency(row, currency);
+  return !isRowStrictlyNewerThanCurrency(row, currency);
 }
 
 function isRowStaleAgainstCurrency(service, currency, row, readToken) {
@@ -626,6 +635,12 @@ function buildPostWriteSupersededSnapshots(
   ];
 }
 
+function resolveCommittedWriteCreatedAt(table, existingCurrency, existingFence) {
+  if (Number.isFinite(table?.created_at)) return table.created_at;
+  if (Number.isFinite(existingCurrency?.created_at)) return existingCurrency.created_at;
+  return Number.isFinite(existingFence?.created_at) ? existingFence.created_at : null;
+}
+
 function commitPolicyFenceAfterWrite(
   service,
   tableId,
@@ -649,11 +664,14 @@ function commitPolicyFenceAfterWrite(
     Number(existingCurrency?.version ?? 0),
     Number(table?.version ?? 0),
   ) + 1;
+  const createdAt = resolveCommittedWriteCreatedAt(table, existingCurrency, existingFence);
   service.recordCommittedPolicyFence(
     tableId,
     {
       table_policies: serializedPolicy,
       updated_at: updatedAt,
+      created_at: createdAt,
+      ...(table?.table_incarnation ? {table_incarnation: table.table_incarnation} : {}),
       version: updatedStoredPolicy.version ?? nextVersion,
     },
     supersededSnapshots,
@@ -768,6 +786,8 @@ export {
   isConfiguredPolicyRowStale,
   isStaleAgainstCommittedPolicyFence,
   isSupersededByCommittedPolicyFence,
+  markActiveReadsEvictedForTable,
+  markActiveReadsInvalidatedForTable,
   readCommittedPolicyBase,
   recordCommittedPolicyFence,
   retireCommittedPolicyFence,

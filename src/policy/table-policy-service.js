@@ -23,6 +23,8 @@ import {
   initializeTablePolicyCurrencyState,
   isStaleAgainstCommittedPolicyFence as checkStaleAgainstCommittedPolicyFence,
   isSupersededByCommittedPolicyFence as checkSupersededByCommittedPolicyFence,
+  markActiveReadsEvictedForTable,
+  markActiveReadsInvalidatedForTable,
   readCommittedPolicyBase,
   recordCommittedPolicyFence as storeCommittedPolicyFence,
   retireCommittedPolicyFence as clearCommittedPolicyFence,
@@ -651,6 +653,8 @@ class TablePolicyService extends EventEmitter {
       return false;
     }
     this.policyCache.delete(tableId);
+    markActiveReadsInvalidatedForTable(this, tableId);
+    markActiveReadsEvictedForTable(this, tableId);
     clearTablePolicyCurrencyForTable(this, tableId);
     return true;
   }
@@ -660,6 +664,10 @@ class TablePolicyService extends EventEmitter {
    */
   clearCache() {
     this.policyCache.clear();
+    for (const tableId of (this.activePolicyReadsByTable?.keys() || [])) {
+      markActiveReadsInvalidatedForTable(this, tableId);
+      markActiveReadsEvictedForTable(this, tableId);
+    }
     clearAllTablePolicyCurrency(this);
     this.logger.debug(POLICY_LOG_MSG.POLICY_CACHE_CLEARED);
   }
@@ -670,6 +678,8 @@ class TablePolicyService extends EventEmitter {
    */
   invalidateCache(tableId) {
     this.policyCache.delete(tableId);
+    markActiveReadsInvalidatedForTable(this, tableId);
+    markActiveReadsEvictedForTable(this, tableId);
     clearTablePolicyCurrencyForTable(this, tableId);
     this.logger.debug(POLICY_LOG_MSG.POLICY_CACHE_INVALIDATED, {tableId});
   }
