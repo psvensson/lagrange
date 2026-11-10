@@ -49,6 +49,10 @@
     {
       "id": "existing-owners-and-evidence",
       "statement": "Begin with the existing table-policy-committed-base.js fence/active-read repair and partition-placement-declared-target evidence. Establish missing implementation versus missing proof; keep valid current repairs."
+    },
+    {
+      "id": "preserve-integrated-policy-repair",
+      "statement": "947fbe658ebb2efe993900b672ded51d5610dbcb contains active-read invalidation and retained currency after transient fence retirement; table-policy-committed-base.js blob 510b42c6a30d511dd37d51a26c034f2f19865952. WIP 386644a2109bf2cc7847ee2b4a6002a7ad872e7f has older blob 69fd2ac25f8a38d3aec73601051dcc39f8f62401; both diverge from c8215e322cbd1347f50297b7cfa5b6c669fae52a. Preserve the integrated behavior during composition. Retain the actual PriorityPublicationSafetyRows.getCriticalMinReplicaCount schedule: hold minimum 3 read, commit 5 then 7, consume fresh 7, release old 3; old evidence must remain stale and cached minimum 7. Add ABA/content recurrence and bounded-state eviction controls. The other verifier reports this passing on the integration head and failing on WIP; this planning session confirmed source divergence, not executed REMOVE or the witness."
     }
   ],
   "verificationTemplates": [

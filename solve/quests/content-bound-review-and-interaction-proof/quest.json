@@ -55,6 +55,10 @@
     {
       "id": "existing-owners-and-evidence",
       "statement": "Use scripts/solve/{schema,store,commands,guards}.js and scripts/checks/{impact-contract-registry,impact-proof-cone}.js. Preserve the existing single-owner selector. The solved solver-workflow-candidate-verification-cutover is historical evidence, not current content-binding proof."
+    },
+    {
+      "id": "full-proof-consumer",
+      "statement": "For the newly identified catalog, CDC recipient, incarnation, ingress and benchmark interactions, select proof that reaches the actual decision/visibility/claim consumer. A helper accepting a batch, endpoint selection without its cache, or gate.status passed before claim admission is not full interaction proof. Bind composed-candidate evidence after reconciliation of divergent WIP, not to timestamps or a different branch."
     }
   ],
   "verificationTemplates": [

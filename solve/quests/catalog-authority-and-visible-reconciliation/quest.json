@@ -1,0 +1,66 @@
+{
+  "schema": "solve-quest/2",
+  "id": "catalog-authority-and-visible-reconciliation",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Only complete successful leader-witnessed catalog evidence for the requested scope can establish table absence. Unsupported evidence returns UNAVAILABLE without eviction. A causally newer authoritative observation restores actual metadata and working query routing without waiting for tombstone expiry, and application success describes verified visible state while retaining stale-replay protection.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/catalog-authority-and-visible-reconciliation/evidence/receipt.json",
+      "requiredReceipts": [
+        "follower-partial-mismatched-evidence-refused",
+        "genuine-authoritative-absence",
+        "causal-restoration-without-ttl-wait",
+        "actual-cache-and-query-state-confirmed",
+        "stale-replay-protection",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "responsible-interaction",
+      "statement": "Q13; priority P1; Catalog read consumer, canonical read-authority gateway and cache reconciliation owner. Apply P0 composition reconciliation and Q1 contract discipline immediately; Q2 governs review. Planning only, not an assigned runtime writer or queued run."
+    },
+    {
+      "id": "production-interaction",
+      "statement": "Trace sql-query-engine-metadata-authority-refresh.js through the real gateway dispatch, owner-RPC leader-witness enforcement, CDC normalization and cache application. The current OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC caller omits required leader authority and accepts rows without checking complete successful scope. Use the existing authority contract, not a new authority approximation."
+    },
+    {
+      "id": "causal-application",
+      "statement": "Repair absence eviction and restoration together with control-plane-system-table-gateway-cache-reconciliation.js and system-table-cache-tombstone-store.js. A usable batch target is not evidence that rows became visible; swallowed row errors or fenced writes cannot become successful application. Carry causal observation evidence rather than clearing tombstones or shortening/increasing TTL to hide the problem."
+    },
+    {
+      "id": "positive-and-negative",
+      "statement": "Use production owners to exercise follower-empty, partial, failed, wrong-partition/scope and absent witness observations; retain cached rows on unavailable authority. Prove genuine authoritative TABLE_NOT_FOUND and subsequent valid restoration through query execution, not just a FOUND/applied flag. Preserve causally older replay refusal."
+    },
+    {
+      "id": "coordination-and-history",
+      "statement": "Apply Q1/Q2 and coordinate the shared cache/gateway boundary with Q15 before writing; final routing composition includes Q7. Research cdc-cache-delete-resurrection (95bb4690fe2bdfbea94aed55128b917673bedb83), authoritative absence eviction in c10f1f854 and shared ingress consolidation in 61ce6e9796a54317fa7edef52c7ae2cc9cd312d8. This finding establishes a local metadata/routing defect, not durable user-data deletion or the full formation cause."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

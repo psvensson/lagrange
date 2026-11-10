@@ -1,0 +1,68 @@
+{
+  "schema": "solve-quest/2",
+  "id": "load-admission-ingress-identity",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Load admission is bound to the actual request ingress service, protocol and incarnation, plus shared table/routing prerequisites. Reordering discovery responses or changing an unrelated transport cannot change that admission. Cached results retain the same ingress binding and cannot authorize a different endpoint or a later incarnation.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/load-admission-ingress-identity/evidence/receipt.json",
+      "requiredReceipts": [
+        "actual-ingress-binding",
+        "discovery-order-invariance",
+        "opposite-endpoint-health",
+        "zero-postgres-replicas",
+        "stale-endpoint-incarnation-refused",
+        "admission-cache-binding",
+        "real-ingress-to-query-composition",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-until-bounded",
+      "statement": "Treat each problem as systematic until evidence proves it local. Read the real producer and all affected consumers, research prior project failures, trace the first causal divergence and record ruled-out causes before repair. Compare related systems through primary sources only where their contracts apply; do not copy an unavailable capability."
+    },
+    {
+      "id": "contract-before-edit",
+      "statement": "Before a behavior-changing attempt, record the producer/consumer symbols, owner-defined shape, identity/generation, ordering, absent versus unavailable, durable commit, retained obligations, canonical wake and cleanup. Apply Q1 immediately; obtain the existing independent design review before changing an owner boundary or recovery semantics."
+    },
+    {
+      "id": "no-legacy-or-fallback",
+      "statement": "No legacy, compatibility, alias reader, silent fallback or alternate authority implementation may survive in the affected caller closure. Migrate callers and delete the competing path. Legitimate representation conversion has one owner and cannot make a second semantic decision; historical immutable records stay history."
+    },
+    {
+      "id": "proof-and-review-custody",
+      "statement": "Preserve valid existing repairs and establish evidence applicability before reuse. Use the smallest discriminating proof, then the actual affected interaction with safety, progress and resource evidence. Independent verification binds reviewed content, contracts, fixtures, proof machinery and relevant dependencies; implementation approval and execution evidence are separate."
+    },
+    {
+      "id": "planning-is-not-acceptance",
+      "statement": "This record is an unsealed proposal until start measures a real red probe. Required receipt IDs are proof obligations, not executed results. Retain original failures; do not fabricate receipts, relax sealed predicates, widen bounds or use the harness to repair product state. Refine an unsealed proposal before start; supersede a changed sealed premise."
+    },
+    {
+      "id": "responsible-interaction",
+      "statement": "Q16; priority P2; Actual load ingress, discovery selection, table admission cache and query dispatch interaction. Apply P0 composition reconciliation and Q1 contract discipline immediately; Q2 governs review. Planning only, not an assigned runtime writer or queued run."
+    },
+    {
+      "id": "identity-not-any-ready",
+      "statement": "Trace assertLoadLaneTableQueryAdmitted through resolveLoadLaneTableAdmissionState and real request ingress. The current mixed PostgreSQL/admin allowlists and first-local-result loop select a different subject depending on order. Do not replace this with any-ready selection across transports or trust caller-invented ingress identity."
+    },
+    {
+      "id": "cache-and-context",
+      "statement": "The current cache is keyed only by normalized tableName and the resolver receives only that name. Preserve actual ingress identity through the request context and cache key/validation/invalidation so a warm answer cannot cross protocol, service or incarnation. Coordinate any shared routing changes with Q7/Q13."
+    },
+    {
+      "id": "regressions",
+      "statement": "Reverse discovery order with blocked admin/ready PostgreSQL and the opposite health combination; cover zero PostgreSQL replicas for an actual admin request, a missing actual ingress despite a ready unrelated service, stale incarnations and warm-cache order changes. Retain the earlier stale-eligibility refresh, which solves a different stage."
+    },
+    {
+      "id": "history-and-boundary",
+      "statement": "Apply Q1/Q2 and research rolling-restart-run4-load-lane-admin-emission and rolling-restart-run4-load-lane-owner-reproducer plus c8215e322cbd1347f50297b7cfa5b6c669fae52a. Prove the supported actual ingress-to-query path; this is not permission to grant readiness by changing endpoint order."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

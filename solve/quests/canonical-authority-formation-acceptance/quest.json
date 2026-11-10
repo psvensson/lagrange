@@ -23,6 +23,10 @@
         "frozen-composition-required-gates",
         "all-material-findings-discharged",
         "comparison-handoff-bound",
+        "catalog-authority-and-visible-reconciliation-verified",
+        "cdc-recipient-domain-and-retained-debt-verified",
+        "cache-replica-incarnation-coherence-verified",
+        "load-admission-ingress-identity-verified",
         "independent-verification"
       ]
     }
@@ -67,6 +71,10 @@
     {
       "id": "existing-owners-and-evidence",
       "statement": "Before sealing, produce the aggregate receipt reproducibly through existing receipt/provenance owners. Verify each input, candidate SHA/content scope, original failure, disposition, executed proof, independent review and applicability. Missing or contradictory input cannot pass; do not hand-author passed booleans or copy Quest status as proof. original-formation-receipt-admitted consumes the existing fresh-formation-user-table-routability receipt and its original four required IDs unchanged on the frozen candidate. Do not reimplement its predicates or substitute five local processes for declared physical topology. Natural exit is additional. This receipt is also the explicitly amended epic doneWhen. Hand off only to developer-journey-and-measured-comparisons; its acceptance, publication and release remain separate."
+    },
+    {
+      "id": "additional-material-repairs",
+      "statement": "Q13 catalog-authority-and-visible-reconciliation, Q14 cdc-recipient-domain-and-retained-debt, Q15 cache-replica-incarnation-coherence and Q16 load-admission-ingress-identity are required bounded repair/proof dependencies before frozen composition closure. Coordinate shared cache/gateway writers and retain Q6 policy behavior through composition. C1/C2 remain in the comparison epic; they do not silently broaden the sealed three-node service predicate. Any later comparison-source change needs current evidence applicability, not automatic reuse of a prior formation pass."
     }
   ],
   "verificationTemplates": [

@@ -54,6 +54,10 @@
     {
       "id": "existing-owners-and-evidence",
       "statement": "Reuse scripts/lab.js, fallback-branch-coverage-census and comparative-benchmark-evidence-repair within their actual scope and evidence applicability. Their solved status does not certify private sharding, new source, skipped semantic checks or changed deployment identity. No second scheduler or receipt authority."
+    },
+    {
+      "id": "comparison-lifecycle-owner",
+      "statement": "C1 benchmark-cohort-preserving-dataset-reset and C2 tidb-canonical-semantic-case-completion under developer-journey-and-measured-comparisons own the concrete reset/cohort and missing native-case implementation. Q10 keeps lab/proof custody; do not duplicate the lifecycle implementation or weaken binding to make a comparison pass. Check actual final claim admission, not only gate.status."
     }
   ],
   "verificationTemplates": [
