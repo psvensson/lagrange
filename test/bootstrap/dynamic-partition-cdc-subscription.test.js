@@ -90,7 +90,9 @@ async function withCapturedReplicaFactory(
     service.systemCacheHydrated = true;
     service.tablePolicyService = {};
     service.rebalanceCoordinator = {};
-    service.messageGroupServices =
+    // The service's own registry (MessageGroupServiceRegistry) holds the
+    // stand-in group services, so its readiness subscription stays real.
+    const messageGroupServiceEntries =
       typeof options.createMessageGroupServices === 'function' ?
         options.createMessageGroupServices({subscribedTables}) :
         new Map([
@@ -105,6 +107,10 @@ async function withCapturedReplicaFactory(
             },
           }],
         ]);
+    service.messageGroupServices.clear();
+    for (const [replicaId, messageGroupService] of messageGroupServiceEntries) {
+      service.messageGroupServices.set(replicaId, messageGroupService);
+    }
     if (typeof service.createCdcIntegrationService === 'function' &&
         hasCustomCreateCdcIntegrationService) {
       const originalCreateCdcIntegrationService =
