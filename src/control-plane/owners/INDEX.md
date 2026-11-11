@@ -7,7 +7,8 @@ documentClass: generated
 
 ## Files
 
-- [control-plane-publications-owner.js](control-plane-publications-owner.js) - No leading comment; first export: ControlPlanePublicationsOwner. (importers: few)
+- [control-plane-publication-change.js](control-plane-publication-change.js) - The vocabulary of a control_plane_publications write (owner ruling 2026-11-11, option B: a guarded write on a row... (importers: many)
+- [control-plane-publications-owner.js](control-plane-publications-owner.js) - Owner contract: Owner: ControlPlanePublicationsOwner owns every write of a control_plane_publications row. (importers: many)
 - [create-system-metadata-owners.js](create-system-metadata-owners.js) - No leading comment; first export: createSystemMetadataOwners. (importers: few)
 - [deployment-binding-contract.js](deployment-binding-contract.js) - No leading comment; first export: DEPLOYMENT_BINDING_ERROR_CODE. (importers: hub)
 - [deployment-binding-owner.js](deployment-binding-owner.js) - No leading comment; first export: ARTIFACT_PAYLOAD_NOT_INTERNALIZED. (importers: few)
