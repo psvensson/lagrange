@@ -59,9 +59,6 @@ function openPass() {
   });
   rebalancer.replicaId = replicaId;
   rebalancer.initialize();
-  // The global budget's owner answers an empty ledger (this test is not
-  // about the budget read, whose failure now holds the pass).
-  rebalancer.getGlobalInFlightOperationCount = async () => 0;
   rebalancer.setLeader(true);
   const pass = {rebalancer, planned: 0, executed: [], lostLogs: []};
   const planner = rebalancer.movePlanner;

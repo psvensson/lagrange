@@ -33,6 +33,20 @@ test('OwnerKeyReconcileQueue - requires reconcileFn', async (t) => {
   );
 });
 
+test('OwnerKeyReconcileQueue - a declared drain scheduler must be a function',
+  async (t) => {
+    for (const declared of [null, 0, 'setImmediate', {}]) {
+      t.throws(
+        () => new OwnerKeyReconcileQueue({
+          reconcileFn: async () => {},
+          scheduleDrainFn: declared,
+        }),
+        {message: RECONCILE_QUEUE_ERROR_MSG.SCHEDULE_DRAIN_FN_INVALID},
+        `a declared ${String(declared)} is refused, never replaced by the default`,
+      );
+    }
+  });
+
 test('OwnerKeyReconcileQueue - requires owner key on enqueue',
   async (t) => {
     const queue = new OwnerKeyReconcileQueue({

@@ -196,6 +196,56 @@ class ScenarioHostObserver {
 }
 
 /**
+ * The drains a node's reconcile queues have handed to the deterministic
+ * scheduler and the scheduler has not yet run.
+ *
+ * A queue whose drain scheduler is the node's virtual timer is not idle while
+ * that drain is held: its current-work contract (awaitCurrentWorkIdle)
+ * correctly waits for it. But only the scheduler can run it, and the closure
+ * loop runs the scheduler only after the owner contracts resolve, so awaiting
+ * the contract alone would wait for an event that can never fire: the run ends
+ * with the promise still pending. The quiescence rule is therefore: an owner
+ * contract is awaited until it resolves OR until a drain is held, whichever
+ * comes first. A held drain is a runnable scheduler event at this instant
+ * (DRAIN_DELAY_MS is zero), so the closure loop cannot terminate on that round;
+ * it runs the drain and awaits the contract again. Closure is therefore still
+ * reached only on a round where every contract resolved by itself.
+ * @returns {object} the ledger
+ */
+function createHeldDrainLedger() {
+  let held = ZERO;
+  const waiters = new Set();
+  return Object.freeze({
+    hold() {
+      held += ONE;
+      for (const waiter of waiters) waiter();
+      waiters.clear();
+    },
+    release() {
+      held -= ONE;
+    },
+    /**
+     * @param {Function} contract an owner's current-work contract
+     * @returns {Promise<void>}
+     */
+    untilIdleOrDrainHeld(contract) {
+      if (held > ZERO) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const waiter = () => resolve();
+        waiters.add(waiter);
+        contract().then(() => {
+          waiters.delete(waiter);
+          resolve();
+        }, (error) => {
+          waiters.delete(waiter);
+          reject(error);
+        });
+      });
+    },
+  });
+}
+
+/**
  * Close the current causal instant: everything runnable at the scheduler's
  * present virtual time, plus every owner continuation that work causes, plus
  * anything those continuations enqueue at the same instant, until nothing at
@@ -268,5 +318,6 @@ async function advanceToNextInstant({network, owners = [], horizonMs}) {
 export {
   advanceToNextInstant,
   closeCurrentInstant,
+  createHeldDrainLedger,
   ScenarioHostObserver,
 };

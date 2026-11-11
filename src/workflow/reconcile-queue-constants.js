@@ -93,6 +93,8 @@ const RECONCILE_QUEUE_ERROR_MSG = Object.freeze({
   SELF_REQUEUE_DECLARATION_INVALID:
     'OwnerKeyReconcileQueue selfRequeue must name exactly one of ' +
     'changed (a non-empty string) or delayMs (a positive safe integer)',
+  SCHEDULE_DRAIN_FN_INVALID:
+    'OwnerKeyReconcileQueue scheduleDrainFn must be a function when declared',
 });
 
 /**

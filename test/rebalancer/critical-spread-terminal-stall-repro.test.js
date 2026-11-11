@@ -75,7 +75,6 @@ const TEST_RAFT_ROLE_LEADER = 'leader';
 const TEST_RAFT_ROLE_FOLLOWER = 'follower';
 const TEST_TARGET_REPLICA_COUNT = 3;
 const TEST_REBALANCE_BUDGET = 5;
-const TEST_NO_GLOBAL_IN_FLIGHT_OPERATIONS = 0;
 // The live failure signature this repro re-creates: the authoritative
 // services owner read stays unavailable while the cache remains readable
 // (run archive: authoritativeAvailable:false, authoritativeReasonCode:null,
@@ -195,8 +194,6 @@ function createStallReproStack(cache, options = {}) {
   rebalancer.isStabilized = () => true;
   rebalancer.getConfiguredRebalanceBudget = async () =>
     TEST_REBALANCE_BUDGET;
-  rebalancer.getGlobalInFlightOperationCount = async () =>
-    TEST_NO_GLOBAL_IN_FLIGHT_OPERATIONS;
   return {coordinator, rebalancer};
 }
 
