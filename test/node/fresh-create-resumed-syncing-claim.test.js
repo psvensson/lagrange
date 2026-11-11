@@ -34,6 +34,8 @@ import {applyOperationWorkflowExecutorOutcomeReconcileMethods} from
   '../../src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js';
 import {admitCreateTerminalFailure, decideFailedCreateTargetCleanup} from
   '../../src/rebalancer/operation-workflow-replace-terminal-admission.js';
+import {buildPresentOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 import {buildFailedCreateCleanupToken} from
   '../../src/rebalancer/failed-create-cleanup-token.js';
 import {MovePlanner} from '../../src/rebalancer/move-planner.js';
@@ -179,11 +181,15 @@ async function plannerMovesFor(run) {
   // owner, over the observation of the resulting durable FAILED row.
   const observation = {state: 'observed', lifecycleStatus: run.row.status,
     lifecyclePrecondition: lifecyclePreconditionOf(run.row)};
-  const owner = {repository: {getActualReplicaObservation: async () => observation}};
   const operation = {operationId: run.operationId, type: OperationType.ADD,
     entityType: 'partition', partitionId: PARTITION_ID, replicaId: run.replicaId,
     targetNodeId: NODE_ID, workflowStep: WORKFLOW_STEP.SYNCING,
     createAdmissionAttemptToken: run.row.create_attempt_token};
+  // The repository's two reads the admission consults: the target's
+  // actual observation and the operation's durable row (its step).
+  const owner = {repository: {getActualReplicaObservation: async () => observation,
+    queryReplicaOperationPersistenceAuthorityObservation: async () =>
+      buildPresentOperationVisibility(operation)}};
   const admission = await admitCreateTerminalFailure(owner, operation);
   assert.equal(admission.admitted, true, 'the coordinator admits the FAILED');
   const terminal = {...operation, workflowStep: WORKFLOW_STEP.FAILED,

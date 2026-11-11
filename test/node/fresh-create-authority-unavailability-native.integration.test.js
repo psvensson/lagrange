@@ -36,6 +36,8 @@ import {
   buildReplicaCreateAdmissionToken,
   buildReplicaCreateAttemptToken,
 } from '../../src/rebalancer/replica-create-admission-token.js';
+import {buildPresentOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 import {buildFailedCreateCleanupToken} from
   '../../src/rebalancer/failed-create-cleanup-token.js';
 import {admitCreateTerminalFailure, decideFailedCreateTargetCleanup} from
@@ -240,11 +242,15 @@ test('an authority read unavailable forever fails the fresh create at the ' +
   // lifecycle precondition (verifier N2).
   const observation = {state: 'observed', lifecycleStatus: row.status,
     lifecyclePrecondition: Object.fromEntries(Object.entries(row))};
-  const owner = {repository: {getActualReplicaObservation: async () => observation}};
   const operation = {operationId: run.operationId, type: OperationType.ADD,
     entityType: 'partition', partitionId: PARTITION_ID, replicaId: run.replicaId,
     targetNodeId: NODE_ID, workflowStep: 'SYNCING',
     createAdmissionAttemptToken: row.create_attempt_token};
+  // The repository's two reads the admission consults: the target's
+  // actual observation and the operation's durable row (its step).
+  const owner = {repository: {getActualReplicaObservation: async () => observation,
+    queryReplicaOperationPersistenceAuthorityObservation: async () =>
+      buildPresentOperationVisibility(operation)}};
   const admission = await admitCreateTerminalFailure(owner, operation);
   assert.equal(admission.admitted, true, 'the operation owner admits the FAILED');
   const decision = await decideFailedCreateTargetCleanup(owner, {...operation,
