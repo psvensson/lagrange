@@ -88,6 +88,18 @@ local cache from those findings. The compact Quest receipt references the verifi
 objects and explains coverage per sealed check; it never embeds raw transcripts.
 Retain failed attempts, including output whose post-execution identity is unavailable.
 
+The command owner reads only Node's native `output` vector. Uncaptured streams
+are `null` with `null` digests; captured strings, including empty strings, retain
+their exact hashes. Missing or malformed fields refuse admission. Null streams
+are admissible only in failed or incomplete baseline observations, never positive
+phases or successful baselines. A cleanup failure retains the actual command
+result and ends its timestamp after the cleanup attempt. Its non-null error is
+owner-produced JSON with code `tooling_command_cleanup_unavailable`, the actual
+process group ID, and the native command and cleanup errors. This records cleanup
+unavailability, including alongside a timeout; it does not establish quiescence.
+Version probes validate each result before starting the next. Historical evidence
+remains bound to the bytes it measured after this boundary changes.
+
 The capture phases are `candidate`, `control`, `baseline`, `authoring` and `landing`.
 Only candidate observations establish positive tool capability. Controls exercise
 the validator, historical baselines retain failures, authoring retains actual changed

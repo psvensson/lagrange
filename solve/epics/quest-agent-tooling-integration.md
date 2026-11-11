@@ -57,8 +57,12 @@ this epic owns coordination and its current summary.
   `103f132c13268321445369d3b4c1183ca2c39c66`. Implementation remains isolated in
   `/mnt/data/peter/projects/.worktrees/quest-agent-tooling-20261110`, branch
   `work/quest-agent-tooling-20261110`. Unrelated primary-worktree changes are preserved.
-- Q1-Q6 are canonically landed and independently admitted at current HEAD
-  `645f8aa6305902a48cf4f64f653b0e29b6f7560e`. Q7's exact lifecycle receipt is in final review. Q8 remains open.
+- Q1-Q7 canonically landed through
+  `c7c7acd89351dda62ef527df53ad1b18556d95bc`. Those closures record their actual
+  reviewed source bytes. The later
+  [failure-retention repair](../quests/tooling-cleanup-failure-observation-retention/quest.json)
+  changes the shared runtime and evidence boundary; the closed component receipts
+  remain historical and do not establish current-source acceptance. Q8 remains open.
   Initial source integration landed in `f9da7b04a`; `15be1890a` reconciled the
   existing remote formation trend row without altering tooling source.
 - Implemented: five project skills, a pinned profile, worktree-local Serena and
@@ -71,6 +75,10 @@ this epic owns coordination and its current summary.
   component landings also passed their selected proof. A distinct later session
   retrieved the closed Q1 lesson, inspected current prevention owners and rejected
   stale guidance without rewriting history or creating another memory store.
+  The Q7 landing passed 89 selected files and 1,968 runner-reported assertions.
+  A further distinct session reused Q7's lesson and found the failure-retention
+  gap described below. These counts describe separate executions, not unique or
+  cumulative coverage.
 - Observed limits remain explicit: JavaScript reference results are partial;
   Context7 did not establish exact-version coverage for installed ws8.21.0;
   lifecycle upgrade proof covers configuration/profile transition, not a new
@@ -81,14 +89,26 @@ this epic owns coordination and its current summary.
   exceeding the 360-line steering budget by one. Shorter introductory prose
   restored 360; the existing 20-assertion check and full selected proof passed.
   No baseline or acceptance requirement was weakened.
-- Publication remains open: the exact `15be1890a` publisher gate refused the
+- The successor repair preserves actual command output when process-group cleanup
+  refuses and represents native unavailable streams as null with null digests.
+  Real permission-denial, timeout and missing-executable controls reproduced the
+  original losses. Its current focused proof passed 54 assertions across three
+  files; the full capture CLI retained the real native failure and refused positive
+  admission. Actual setup and the append-only audit passed. The nested authoring
+  session's Git spawn failure remains retained; it did not reproduce in the
+  coordinating host's canonical run. Exact review, custody and landing status
+  belong to the successor Quest, not to a rewritten closed component.
+- Publication remains open: the exact `15be1890a` and `c7c7acd89` publisher gates refused the
   existing duplication ratchets (source/scripts 45 groups and 1,342 lines versus
   35/1,109; tests 632/23,582 versus 623/23,339). No push occurred. Independent
   review confirmed the retained clone reports contain no pair involving this
   epic's changed files. This attribution does not waive the composed gate.
-- Next: capture Q7's actual canonical landing, finish the separate Q8 lesson-reuse
-  review and retain the required publication outcome. Q8 cannot close without an
-  actual publisher-owned receipt for its pilot commit. Product formation,
+- Remaining for Q8: a publishable composed candidate, fresh affected capability
+  proof with explicit reviewed supersession of historical evidence, and an actual
+  authoring-to-landing-to-publication journey on that source. The later lesson
+  session and failed publication attempts are retained in Q8's evidence store.
+  Q8 cannot close without an actual publisher-owned receipt for its pilot commit.
+  Source fixes cannot relabel the earlier pilot or its evidence. Product formation,
   durability, release and comparative measurements retain their existing owners;
   this integration has run no comparative system campaign.
 

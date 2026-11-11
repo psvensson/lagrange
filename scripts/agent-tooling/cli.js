@@ -15,6 +15,7 @@ import {INSTALLATION_STATUS, PROFILE_CHANGE_REFUSAL, TOOLING_ACTION, TOOLING_ENT
   TOOLING_EXECUTABLE, TOOLING_SERVER} from './host-protocol.js';
 
 const HOST_FLAG = Object.freeze({
+  VERSION: '--version',
   AGENT_INTERFACE: '--agent-interface',
   CONTEXT: '--context',
   GUI: '--enable-gui-log-window',
@@ -77,9 +78,12 @@ function versions(root, profile) {
   if (process.version !== `v${profile.runtime.node}` || process.platform !== profile.runtime.platform) {
     throw new Error(REFUSAL.NODE_OR_PLATFORM_MISMATCH);
   }
-  const observations = [run(root, TOOLING_EXECUTABLE.CODEX, ['--version']), run(root, TOOLING_EXECUTABLE.UV, ['--version'])];
-  if (requireSuccess(observations[0]) !== `codex-cli ${profile.host.version}` ||
-    requireSuccess(observations[1]) !== `uv ${profile.runtime.uv}`) {
+  const observations = [run(root, TOOLING_EXECUTABLE.CODEX, [HOST_FLAG.VERSION])];
+  if (requireSuccess(observations[0]) !== `codex-cli ${profile.host.version}`) {
+    throw new Error(REFUSAL.HOST_VERSION_MISMATCH);
+  }
+  observations.push(run(root, TOOLING_EXECUTABLE.UV, [HOST_FLAG.VERSION]));
+  if (requireSuccess(observations[1]) !== `uv ${profile.runtime.uv}`) {
     throw new Error(REFUSAL.HOST_VERSION_MISMATCH);
   }
   return observations;

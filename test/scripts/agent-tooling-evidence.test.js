@@ -18,6 +18,7 @@ import {headSha} from '../../scripts/solve/guards.js';
 import {computeCandidateDigest} from '../../scripts/solve/commands.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
 import {materializedEvidencePath, readMaterializedEvidence} from '../../scripts/solve/evidence-store.js';
+import {OBSERVATION_PHASE} from '../../scripts/agent-tooling/evidence-contract.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const PROJECT = '.serena/project.yml';
@@ -44,7 +45,9 @@ function fixture(t) {
   write(root, `${directory}/node_modules/${dependency.package}/package.json`,
     JSON.stringify({name: dependency.package, version: dependency.version}));
   recordRuntime(root, profile);
-  const execution = run(root, process.execPath, ['--version']);
+  // These admission controls send no stdin; retain actual child output and errors.
+  const execution = run(root, process.execPath, ['--version'], {stdio: ['ignore', 'pipe', 'pipe']});
+  assert.equal(execution.error, null, 'admission fixture requires an actual completed command');
   const source = {root, commit: headSha(REPO), files: sourceDigests(root)};
   const configuration = configurationIdentity(root, profile);
   const observation = {schema: 'quest-agent-tooling-observation/1', id: 'isolated-command-control',
@@ -123,6 +126,113 @@ test('historical observations require their actual source snapshot and remain hi
   assert.throws(() => validateObservation(root, observation, profile), /historical source bytes missing/u);
 });
 
+function baselineControl(t) {
+  const control = fixture(t);
+  control.observation.phase = OBSERVATION_PHASE.BASELINE;
+  control.observation.sourceContents = Object.fromEntries(
+    Object.keys(control.observation.source.files)
+      .map((file) => [file, fs.readFileSync(path.join(control.root, file), 'utf8')]));
+  return control;
+}
+
+test('failed baseline admission preserves unavailable streams for each failure state', (t) => {
+  const {root, profile, observation} = baselineControl(t);
+  const failures = [
+    {exitCode: 1, error: null, signal: null},
+    {exitCode: null, error: null, signal: null},
+    {exitCode: 0, error: 'isolated error admission control', signal: null},
+    {exitCode: 0, error: null, signal: 'SIGKILL'},
+  ];
+  for (const failure of failures) {
+    for (const streams of [['stdout'], ['stderr'], ['stdout', 'stderr']]) {
+      const copy = {...structuredClone(observation), ...failure};
+      for (const stream of streams) {
+        copy[stream] = null;
+        copy[`${stream}Sha256`] = null;
+      }
+      assert.deepEqual(validateObservation(root, copy, profile), []);
+    }
+  }
+});
+
+for (const phase of Object.values(OBSERVATION_PHASE)) {
+  test(`${phase} admission refuses unavailable streams on an otherwise successful result`, (t) => {
+    const {root, profile, observation} = baselineControl(t);
+    for (const stream of ['stdout', 'stderr']) {
+      const copy = {...structuredClone(observation), phase,
+        [stream]: null, [`${stream}Sha256`]: null};
+      assert.throws(() => validateObservation(root, copy, profile),
+        new RegExp(`unavailable ${stream}`, 'u'));
+    }
+  });
+}
+
+test('every positive phase rejects failed observations even with valid null digest pairs', (t) => {
+  const {root, profile, observation} = baselineControl(t);
+  for (const phase of Object.values(OBSERVATION_PHASE)) {
+    if (phase === OBSERVATION_PHASE.BASELINE) continue;
+    const copy = {...structuredClone(observation), phase, exitCode: null,
+      error: 'isolated failure admission control', stdout: null, stderr: null,
+      stdoutSha256: null, stderrSha256: null};
+    assert.throws(() => validateObservation(root, copy, profile), /execution incomplete/u);
+  }
+});
+
+test('failed baseline admission rejects malformed streams and mismatched digest pairs', (t) => {
+  const {root, profile, observation} = baselineControl(t);
+  const invalidPairs = [
+    [null, sha256('')], [null, undefined], [undefined, null], [undefined, undefined],
+    [0, null], [false, null], [{}, null], [[], null],
+    ['', null], ['', undefined], ['', {}], ['', sha256('different bytes')],
+  ];
+  for (const stream of ['stdout', 'stderr']) {
+    for (const [output, digest] of invalidPairs) {
+      const copy = {...structuredClone(observation), exitCode: 1,
+        [stream]: output, [`${stream}Sha256`]: digest};
+      assert.throws(() => validateObservation(root, copy, profile),
+        new RegExp(`(?:altered|unavailable) ${stream}`, 'u'));
+    }
+  }
+});
+
+test('admission requires explicit native status, error and signal shapes in every phase', (t) => {
+  const {root, profile, observation} = baselineControl(t);
+  for (const phase of Object.values(OBSERVATION_PHASE)) {
+    for (const field of ['exitCode', 'error', 'signal']) {
+      const invalid = field === 'exitCode' ? [undefined, '0', false, 0.5, NaN] :
+        [undefined, 0, false, {}, []];
+      for (const value of invalid) {
+        const copy = {...structuredClone(observation), phase, [field]: value};
+        assert.throws(() => validateObservation(root, copy, profile),
+          /execution status, error or signal invalid/u);
+      }
+    }
+  }
+});
+
+test('genuine empty strings retain their exact hashes and remain distinct from missing output', (t) => {
+  const {root, profile, observation} = baselineControl(t);
+  const empty = {...observation, stdout: '', stderr: '',
+    stdoutSha256: sha256(''), stderrSha256: sha256('')};
+  assert.equal(empty.stdoutSha256,
+    'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+  assert.deepEqual(validateObservation(root, {...empty, exitCode: 1}, profile), []);
+  assert.throws(() => validateObservation(root, empty, profile), /output missing/u);
+  const positive = {...empty, phase: OBSERVATION_PHASE.CANDIDATE,
+    stderr: 'captured output', stderrSha256: sha256('captured output')};
+  assert.deepEqual(validateObservation(root, positive, profile), []);
+});
+
+test('a failed Codex baseline with unavailable stdout retains no invented events', (t) => {
+  const {root, profile, observation} = baselineControl(t);
+  Object.assign(observation, {kind: 'codex', command: ['codex', 'exec', '--json'],
+    exitCode: null, error: 'isolated missing executable admission control',
+    stdout: null, stderr: null, stdoutSha256: null, stderrSha256: null});
+  assert.deepEqual(validateObservation(root, observation, profile), []);
+  observation.phase = OBSERVATION_PHASE.CANDIDATE;
+  assert.throws(() => validateObservation(root, observation, profile), /execution incomplete/u);
+});
+
 test('runtime binding detects changed executable metadata and removed files', (t) => {
   const {root, profile} = fixture(t);
   const file = `${runtimeDirectory(profile)}/node_modules/@upstash/context7-mcp/package.json`;
@@ -176,7 +286,8 @@ test('capability applicability preserves unrelated edits and refuses affected so
 
 test('failed real executions remain failure evidence and cannot establish a positive capability', (t) => {
   const {root, profile, observation} = fixture(t);
-  const actual = run(root, process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {timeout: 50});
+  const actual = run(root, process.execPath, ['-e', 'setInterval(() => {}, 1000)'],
+    {timeout: 50, stdio: ['ignore', 'pipe', 'pipe']});
   Object.assign(observation, actual, {phase: 'baseline', stdoutSha256: sha256(actual.stdout),
     stderrSha256: sha256(actual.stderr)});
   observation.sourceContents = Object.fromEntries(Object.keys(observation.source.files)
@@ -227,7 +338,7 @@ test('positive component subjects reject a historical session and an unrelated s
 
 function localGit(root, args) {
   return execGit(['-c', 'user.name=isolated-control', '-c', 'user.email=control@example.com',
-    ...args], {cwd: root, encoding: 'utf8'}).trim();
+    ...args], {cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']}).trim();
 }
 
 test('review refuses self-approval, a held verdict, receipt replacement and intervening edits', (t) => {

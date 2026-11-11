@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 218,
     "storage-raft": 151,
-    "test-infrastructure": 171,
+    "test-infrastructure": 172,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2646,
-  "digest": "fnv1a32-4d1f2310",
+  "censusSize": 2647,
+  "digest": "fnv1a32-a7e1ea76",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-5d0ab075",
+  "observationDigest": "fnv1a32-b3f9a295",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2252,6 +2252,7 @@
     "test/runtime/work-class-scheduler.test.js": "services-runtime",
     "test/scripts/acceptance-proof-manifest-runner.test.js": "test-infrastructure",
     "test/scripts/action-authority.test.js": "test-infrastructure",
+    "test/scripts/agent-tooling-command-cleanup.test.js": "test-infrastructure",
     "test/scripts/agent-tooling-configuration.test.js": "test-infrastructure",
     "test/scripts/agent-tooling-evidence.test.js": "test-infrastructure",
     "test/scripts/agent-tooling-process.test.js": "test-infrastructure",
@@ -18629,6 +18630,14 @@
         "src",
         "test",
         "wit"
+      ],
+      "env": [
+        "LAGRANGE_PROBE"
+      ]
+    },
+    "test/scripts/agent-tooling-command-cleanup.test.js": {
+      "files": [
+        "scripts/agent-tooling/process.js"
       ],
       "env": [
         "LAGRANGE_PROBE"

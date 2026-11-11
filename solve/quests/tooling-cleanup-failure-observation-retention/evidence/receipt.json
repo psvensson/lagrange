@@ -1,0 +1,96 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "quest": "tooling-cleanup-failure-observation-retention",
+  "sourceCommit": "c7c7acd89351dda62ef527df53ad1b18556d95bc",
+  "testFileDigests": {
+    "scripts/agent-tooling/process.js": "4ee34cabf16178604c8dba1d625ec4d6650b93efc8bb24daabc294187774cc10",
+    "scripts/agent-tooling/cli.js": "4bba47b07581d0e84d7edfaa859b5b429a6932f17c74b0247ddbd7c03aa40896",
+    "scripts/agent-tooling/evidence.js": "ef5405d355dd5b74f58f314fa0bacbe0b9b057c0bbfdd8bb2380a0b110fe93ff",
+    "scripts/quest-evidence/quest-agent-tooling.js": "9c5504f140559a2715bf76648b58a31d7d770710c3d7654b1bb1ad6f0b23ad59",
+    "test/scripts/agent-tooling-command-cleanup.test.js": "66d5537cc477da1f9b4eb545d6fad7d118dd69a05ebb962696e272d71d41c91d",
+    "test/scripts/agent-tooling-process.test.js": "1fd5f686ca9a54a5264ae3e4b64253addeb4bfa6d956c7ac5a5681440bd1a150",
+    "test/scripts/agent-tooling-evidence.test.js": "7868e86bd4b61e9e841eb38e57ad376fe6b21dc81690761a8883a5f18ce4c6fe",
+    "docs/development/agent-tooling.md": "13c8f14d86275a9e34c0091e8b252b3c4c6350d1fdf7b4b56a43c6dc52dcaf2e"
+  },
+  "receipts": [
+    {
+      "id": "real-cleanup-denial-retains-and-refuses",
+      "passed": true,
+      "evidence": "cleanup-repair-canonical",
+      "detail": "All five real controls pass, including permission-denied cleanup after success and timeout with actual PID, streams and both native errors retained; unavailable stdout and ENOENT refuse."
+    },
+    {
+      "id": "existing-command-lifetime-controls",
+      "passed": true,
+      "evidence": "cleanup-repair-canonical",
+      "detail": "All19 existing real command/process lifetime controls pass on these source bytes."
+    },
+    {
+      "id": "production-capture-persists-native-error",
+      "passed": true,
+      "evidence": "cleanup-native-error-after",
+      "detail": "Actual full capture CLI persists native ENOENT with null streams/null digests and exits1. Exact outer result and isolated admission refusals are retained in cleanup-repair-retained-evidence."
+    }
+  ],
+  "evidence": {
+    "cleanup-repair-retained-evidence": {
+      "sha256": "3f08d64c66f74ab7b49d718a1b8e897dceb1bb9da70b43fe3dc600ca5658610f",
+      "bytes": 4887578,
+      "asset": "tooling-cleanup-failure-observation-retention--cleanup-repair-retained-evidence.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/tooling-cleanup-failure-observation-retention--cleanup-repair-retained-evidence.zip"
+    },
+    "cleanup-retention-authoring": {
+      "sha256": "4c2aafa583f296894a547510fdf4b9ca5a62e0402d0e602ba90eeb04973d52ca",
+      "bytes": 2874767,
+      "asset": "tooling-cleanup-failure-observation-retention--cleanup-retention-authoring.json",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/tooling-cleanup-failure-observation-retention--cleanup-retention-authoring.json"
+    },
+    "cleanup-repair-canonical": {
+      "sha256": "2cafd36b7e46ea6e2238d5bed6f220acafe76cdbcce40f9bfbe38ae86bd83164",
+      "bytes": 17304,
+      "asset": "tooling-cleanup-failure-observation-retention--cleanup-repair-canonical.json",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/tooling-cleanup-failure-observation-retention--cleanup-repair-canonical.json"
+    },
+    "cleanup-native-error-after": {
+      "sha256": "8aeacab23d9612b955dab3564592a63942e1704232f78da1d01e337b7f98cacf",
+      "bytes": 1171081,
+      "asset": "tooling-cleanup-failure-observation-retention--cleanup-native-error-after.json",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/tooling-cleanup-failure-observation-retention--cleanup-native-error-after.json"
+    },
+    "cleanup-repair-setup": {
+      "sha256": "6e101dcecde7e8b43038bb863eaa61ae8b10a1358b1e1c8eacec2848a7b33037",
+      "bytes": 20680,
+      "asset": "tooling-cleanup-failure-observation-retention--cleanup-repair-setup.json",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/tooling-cleanup-failure-observation-retention--cleanup-repair-setup.json"
+    },
+    "cleanup-repair-history-audit": {
+      "sha256": "a60bb170b82d90e9588d4a819f796de24c9ba6fde63102c09f0fda5a61b54b27",
+      "bytes": 16589,
+      "asset": "tooling-cleanup-failure-observation-retention--cleanup-repair-history-audit.json",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/tooling-cleanup-failure-observation-retention--cleanup-repair-history-audit.json"
+    },
+    "cleanup-repair-fast-static": {
+      "sha256": "b7747cb8f111f92c9ab6cd91c5ad0a28ee1f6c93dffdf451e0073209c9e83044",
+      "bytes": 17164,
+      "asset": "tooling-cleanup-failure-observation-retention--cleanup-repair-fast-static.json",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/tooling-cleanup-failure-observation-retention--cleanup-repair-fast-static.json"
+    }
+  },
+  "supportingProof": {
+    "canonicalFiles": 3,
+    "runnerReportedAssertions": 54,
+    "setup": "cleanup-repair-setup",
+    "appendOnly": "cleanup-repair-history-audit",
+    "fastStatic": "cleanup-repair-fast-static",
+    "authoring": "cleanup-retention-authoring"
+  },
+  "limits": [
+    "Actual process/command controls and isolated admission controls; no comparative systems workload or fabricated measurement.",
+    "Direct permission-denied cleanup and full native-error capture establish distinct stated portions of the same boundary; the CLI control does not inject cleanup denial.",
+    "The nested authoring Git EPERM and its failing canonical/audit logs remain retained. Coordinating-host canonical proof and audit passed without widening publisher code or changing runtime stdin semantics.",
+    "Setup observes real versions and configuration; it is not a fresh live MCP capability or full lifecycle claim.",
+    "Q1-Q7 closures and receipts remain historical after shared runtime changes. Q8, applicable composed capability proof and exact-head publication remain open.",
+    "Hard owner crash, PID reuse, process-group escape and quiescence after unavailable cleanup are not established."
+  ]
+}

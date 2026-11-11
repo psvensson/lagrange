@@ -1,0 +1,41 @@
+{
+  "schema": "solve-quest/2",
+  "id": "tooling-cleanup-failure-observation-retention",
+  "class": "fix",
+  "statement": "Preserve the actual command observation when post-execution process-group cleanup is unavailable. Keep stdout, stderr, status, signal, invocation and timestamps, retain both command and cleanup errors, refuse success and stop sequential CLI version probes on failure. Repair the existing process/capture boundary without weakening cleanup, evidence admission or historical proof binding.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/tooling-cleanup-failure-observation-retention/evidence/receipt.json",
+      "requiredReceipts": [
+        "real-cleanup-denial-retains-and-refuses",
+        "existing-command-lifetime-controls",
+        "production-capture-persists-native-error"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "bounded-existing-owners",
+      "statement": "Only the existing process completion, CLI version sequencing and failed-capture contract, their real regression controls, necessary generated metadata and coordination records are in scope. No publication ratchet repair, new scheduler, parallel evidence authority or PID-reclamation scheme."
+    },
+    {
+      "id": "real-evidence",
+      "statement": "Use actual Node permission denial and real command execution, preserving original failures. No fabricated process or MCP outcome; no comparative systems measurement. Distinguish the direct cleanup-denial witness from the full capture CLI native-error control."
+    },
+    {
+      "id": "no-success-after-cleanup-refusal",
+      "statement": "Cleanup failure remains non-null error, never established quiescence. Preserve real command errors alongside cleanup errors; do not change deadlines, signal ownership or ordinary observations. Validate one version probe before starting the next."
+    },
+    {
+      "id": "historical-proof-immutable",
+      "statement": "Q1-Q7 closures and observations remain exact-byte historical records. Changed runtime bytes require refreshed applicable current-source proof and independent verification. Q8 and publication remain open; no old receipt or publication may be relabeled."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity",
+    "recovery-replay"
+  ],
+  "sealedAt": "c7c7acd89351dda62ef527df53ad1b18556d95bc"
+}

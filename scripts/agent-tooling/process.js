@@ -7,6 +7,7 @@ import {ownedPath} from './paths.js';
 const TERMINATION_GRACE_MS = 5000;
 const COMMAND_TIMEOUT_MS = 120000;
 const OUTPUT_LIMIT = 8 * 1024 * 1024;
+const STANDARD_STREAM_COUNT = 3;
 const GROUP_POLL_MS = 50;
 const SUPPORTED_PROCESS_PLATFORM = 'linux';
 const PROCESS_TEXT_ENCODING = 'utf8';
@@ -28,6 +29,9 @@ const PROCESS_FAILURE = Object.freeze({
   UNSUPPORTED_HOST: 'tooling_process_host_unsupported',
   INVALID_COMMAND_TIMEOUT: 'tooling_command_timeout_invalid',
   COMMAND_UNAVAILABLE: 'tooling_command_unavailable',
+  COMMAND_OUTPUT_INVALID: 'tooling_command_output_invalid',
+  COMMAND_OUTPUT_UNAVAILABLE: 'tooling_command_output_unavailable',
+  COMMAND_CLEANUP_UNAVAILABLE: 'tooling_command_cleanup_unavailable',
   OWNED_GROUP_STILL_ALIVE: 'tooling_owned_group_still_alive',
 });
 
@@ -35,6 +39,15 @@ function refuseProbe() {
   if (process.env.LAGRANGE_PROBE === PROBE_ACTIVE_MARKER) {
     throw new Error(PROCESS_FAILURE.PROBE_ACTION_REFUSED);
   }
+}
+
+function commandOutput(output) {
+  if (output === null) return {stdout: null, stderr: null};
+  if (!Array.isArray(output) || output.length < STANDARD_STREAM_COUNT ||
+    Array.from(output).some((slot) => slot !== null && typeof slot !== 'string')) {
+    throw new Error(PROCESS_FAILURE.COMMAND_OUTPUT_INVALID);
+  }
+  return {stdout: output[1], stderr: output[2]};
 }
 
 function run(root, command, args, options = {}) {
@@ -53,16 +66,26 @@ function run(root, command, args, options = {}) {
     timeout, killSignal: PROCESS_SIGNAL.KILL, detached: true});
   // spawnSync only terminates its immediate child, including on timeout/overflow.
   // Completion also owns descendants left behind by a normally exiting launcher.
-  finishCommandGroup(result.pid);
+  let error = result.error ? result.error.message : null;
+  try {
+    finishCommandGroup(result.pid);
+  } catch (cleanupError) {
+    error = JSON.stringify({code: PROCESS_FAILURE.COMMAND_CLEANUP_UNAVAILABLE,
+      groupId: result.pid,
+      commandError: result.error ? {code: result.error.code, message: result.error.message} : null,
+      cleanupError: {code: cleanupError.code, message: cleanupError.message}});
+  }
   return {command: [command, ...args], cwd: root, startedAt,
     endedAt: new Date().toISOString(), exitCode: result.status,
-    signal: result.signal, stdout: result.stdout, stderr: result.stderr,
-    error: result.error ? result.error.message : null};
+    signal: result.signal, ...commandOutput(result.output), error};
 }
 
 function requireSuccess(observation) {
   if (observation.error !== null || observation.exitCode !== 0) {
     throw new Error(`${PROCESS_FAILURE.COMMAND_UNAVAILABLE}: ${JSON.stringify(observation)}`);
+  }
+  if (observation.stdout === null) {
+    throw new Error(PROCESS_FAILURE.COMMAND_OUTPUT_UNAVAILABLE);
   }
   return observation.stdout.trim();
 }

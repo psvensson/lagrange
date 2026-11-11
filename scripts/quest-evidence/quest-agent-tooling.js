@@ -73,8 +73,8 @@ try {
     changedFiles: sourceAfter === null ? null :
       [...new Set([...Object.keys(source.files), ...Object.keys(sourceAfter.files)])]
         .filter((file) => source.files[file] !== sourceAfter.files[file]),
-    stdoutSha256: sha256(observation.stdout === null ? '' : observation.stdout),
-    stderrSha256: sha256(observation.stderr === null ? '' : observation.stderr)};
+    stdoutSha256: observation.stdout === null ? null : sha256(observation.stdout),
+    stderrSha256: observation.stderr === null ? null : sha256(observation.stderr)};
   fs.writeFileSync(fd, JSON.stringify(record, null, 2) + LINE_SEPARATOR);
   fs.closeSync(fd);
   console.log(JSON.stringify({output: path.relative(root, output), id,

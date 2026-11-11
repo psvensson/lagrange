@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2291,
+    "unit": 2292,
     "integration": 124,
     "bootstrap": 224,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2646,
-  "digest": "fnv1a32-7a63164c",
+  "censusSize": 2647,
+  "digest": "fnv1a32-d725c99e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2233,6 +2233,7 @@
     "test/runtime/work-class-scheduler.test.js": "unit",
     "test/scripts/acceptance-proof-manifest-runner.test.js": "unit",
     "test/scripts/action-authority.test.js": "unit",
+    "test/scripts/agent-tooling-command-cleanup.test.js": "unit",
     "test/scripts/agent-tooling-configuration.test.js": "unit",
     "test/scripts/agent-tooling-evidence.test.js": "unit",
     "test/scripts/agent-tooling-process.test.js": "unit",

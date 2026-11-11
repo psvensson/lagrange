@@ -35,6 +35,7 @@ const INVALID_EVIDENCE = Object.freeze({
   COMMAND: 'command missing',
   TIME: 'execution time missing',
   INCOMPLETE: 'execution incomplete',
+  EXECUTION_SHAPE: 'execution status, error or signal invalid',
   OUTPUT: 'output missing',
   HOST: 'host identity missing',
   PROFILE_SOURCE: 'observation profile does not match its source',
@@ -160,6 +161,37 @@ function validateSource(root, source, files) {
   }
 }
 
+function validateExecution(observation) {
+  requireEvidence(observation.exitCode === null || Number.isInteger(observation.exitCode),
+    INVALID_EVIDENCE.EXECUTION_SHAPE);
+  for (const value of [observation.error, observation.signal]) {
+    requireEvidence(value === null || typeof value === 'string', INVALID_EVIDENCE.EXECUTION_SHAPE);
+  }
+  const completed = Number.isInteger(observation.exitCode) && observation.error === null &&
+    observation.signal === null;
+  requireEvidence(completed || observation.phase === OBSERVATION_PHASE.BASELINE,
+    INVALID_EVIDENCE.INCOMPLETE);
+  const failedBaseline = observation.phase === OBSERVATION_PHASE.BASELINE &&
+    (observation.exitCode !== 0 || observation.error !== null || observation.signal !== null);
+  validateOutput(observation, failedBaseline);
+}
+
+function validateOutput(observation, failedBaseline) {
+  for (const stream of Object.values(OUTPUT_STREAM)) {
+    const output = observation[stream];
+    const digest = observation[`${stream}Sha256`];
+    if (output === null) {
+      requireEvidence(failedBaseline && digest === null, `unavailable ${stream}`);
+    } else {
+      requireEvidence(typeof output === 'string' && typeof digest === 'string' &&
+        HEX_SHA.test(digest) && sha256(output) === digest, `altered ${stream}`);
+    }
+  }
+  requireEvidence(Object.values(OUTPUT_STREAM).some((stream) =>
+    observation[stream] !== null && observation[stream].length > 0) || failedBaseline,
+  INVALID_EVIDENCE.OUTPUT);
+}
+
 function validateObservation(root, observation, profile, files = sourceFiles(root)) {
   requireEvidence(typeof observation.id === 'string' && observation.id.length > 0,
     INVALID_EVIDENCE.OBSERVATION_ID);
@@ -176,16 +208,7 @@ function validateObservation(root, observation, profile, files = sourceFiles(roo
     observation.command.every((part) => typeof part === 'string'), INVALID_EVIDENCE.COMMAND);
   requireEvidence(Number.isFinite(Date.parse(observation.startedAt)) &&
     Date.parse(observation.endedAt) >= Date.parse(observation.startedAt), INVALID_EVIDENCE.TIME);
-  const completed = Number.isInteger(observation.exitCode) && observation.error === null &&
-    observation.signal === null;
-  requireEvidence(completed || observation.phase === OBSERVATION_PHASE.BASELINE,
-    INVALID_EVIDENCE.INCOMPLETE);
-  for (const stream of [OUTPUT_STREAM.STDOUT, OUTPUT_STREAM.STDERR]) {
-    requireEvidence(typeof observation[stream] === 'string' &&
-      sha256(observation[stream]) === observation[`${stream}Sha256`], `altered ${stream}`);
-  }
-  requireEvidence(observation.stdout.length + observation.stderr.length > 0 ||
-    (observation.phase === OBSERVATION_PHASE.BASELINE && !completed), INVALID_EVIDENCE.OUTPUT);
+  validateExecution(observation);
   requireEvidence(observation.host?.name === profile.host.name &&
     /^\d+\.\d+\.\d+$/u.test(observation.host.version), INVALID_EVIDENCE.HOST);
   requireEvidence(observation.profileDigest === observation.source.files[PROFILE_PATH],
@@ -244,6 +267,7 @@ function validateObservation(root, observation, profile, files = sourceFiles(roo
   if (observation.kind === OBSERVATION_KIND.CODEX) {
     requireEvidence(path.basename(observation.command[0]) === TOOLING_EXECUTABLE.CODEX &&
       observation.command.includes(JSON_FLAG), INVALID_EVIDENCE.CODEX_STREAM);
+    if (observation.stdout === null) return [];
     const events = observation.stdout.trim().split('\n').map((line) => JSON.parse(line));
     requireEvidence(events.some((event) => event.type === CODEX_EVENT.THREAD_STARTED) &&
       (observation.phase === OBSERVATION_PHASE.BASELINE ||

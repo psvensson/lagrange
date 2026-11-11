@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2620,
+    "ordinary": 2621,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2646,
-  "digest": "fnv1a32-021c3ab3",
+  "censusSize": 2647,
+  "digest": "fnv1a32-afd30149",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2232,6 +2232,7 @@
     "test/runtime/work-class-scheduler.test.js": "ordinary",
     "test/scripts/acceptance-proof-manifest-runner.test.js": "ordinary",
     "test/scripts/action-authority.test.js": "ordinary",
+    "test/scripts/agent-tooling-command-cleanup.test.js": "ordinary",
     "test/scripts/agent-tooling-configuration.test.js": "ordinary",
     "test/scripts/agent-tooling-evidence.test.js": "ordinary",
     "test/scripts/agent-tooling-process.test.js": "ordinary",
