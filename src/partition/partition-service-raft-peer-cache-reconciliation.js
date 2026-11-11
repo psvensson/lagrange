@@ -222,18 +222,23 @@ function retireRaftPeerFromAuthoritativeServiceChange(
 }
 
 /**
- * Re-drive, whenever a configuration change settles (CONF_CHANGE_APPLIED),
- * this replica gains leadership (LEADER) or its live voter set changes
- * (VOTER_LIVENESS_CHANGED): the deferred retirements, and
- * the admission requests this leader accepted from targets and has not seen
- * settle (the admission owner's in-flight set is handed over first, so a
- * settled proposal is evaluated again from its committed operation). Rows
- * re-drive nothing.
+ * Re-drive the latched membership proposals on the events that can release
+ * them: the deferred row-driven retirements, and the admission requests this
+ * leader accepted from targets and has not seen settle. Rows re-drive
+ * nothing.
+ * - CONF_CHANGE_APPLIED (a configuration change settled) and LEADER (this
+ *   replica gains leadership): the admission owner's in-flight set is handed
+ *   over first - no proposal of the settled configuration or of an earlier
+ *   tenure is in flight any more - so each is evaluated again from its
+ *   committed operation.
+ * - VOTER_LIVENESS_CHANGED (the leader's live voter set changed): a removal
+ *   deferred on a live quorum (REMOVES_LIVE_QUORUM) may go ahead. Nothing
+ *   settled, so the in-flight set is kept: an admission still in flight in
+ *   this configuration answers IN_FLIGHT and is never proposed twice.
  * @param {Object} partitionService - The partition service (current port).
  */
 function redriveAdmissionsOnMembershipChange(partitionService) {
-  const redrive = () => {
-    takeAdmissionsInFlight(partitionService);
+  const redriveLatched = () => {
     const retirements = takeDeferredRetirements(partitionService);
     queueMicrotask(() => {
       for (const change of retirements) {
@@ -242,11 +247,13 @@ function redriveAdmissionsOnMembershipChange(partitionService) {
       redriveAcceptedAdmissionRequests(partitionService);
     });
   };
-  partitionService.raft.subscribe(RAFT_EVENT.CONF_CHANGE_APPLIED, redrive);
-  partitionService.raft.subscribe(RAFT_EVENT.LEADER, redrive);
-  // A removal deferred on a live quorum (REMOVES_LIVE_QUORUM) waits for the
-  // leader's live voter set to change.
-  partitionService.raft.subscribe(RAFT_EVENT.VOTER_LIVENESS_CHANGED, redrive);
+  const redriveSettled = () => {
+    takeAdmissionsInFlight(partitionService);
+    redriveLatched();
+  };
+  partitionService.raft.subscribe(RAFT_EVENT.CONF_CHANGE_APPLIED, redriveSettled);
+  partitionService.raft.subscribe(RAFT_EVENT.LEADER, redriveSettled);
+  partitionService.raft.subscribe(RAFT_EVENT.VOTER_LIVENESS_CHANGED, redriveLatched);
 }
 
 export {

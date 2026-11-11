@@ -222,14 +222,18 @@ const NOT_LEADER_ANSWER = Object.freeze({
 // What each wake re-drives, per latch: the number of proposals the wake
 // must produce for the latched identity. A remembered NOT_LEADER admission
 // is proposed only by a leader, so a settlement while this replica still
-// follows re-drives it to nothing (it stays remembered).
+// follows re-drives it to nothing (it stays remembered). A liveness change
+// settles no configuration change, so an admission still in flight in this
+// configuration is never proposed again on it (T6, raft-rs-backend
+// admission-redrive: at most one proposal per identity per configuration).
 const LATCHES = Object.freeze({
   'an admission the port accepted (in flight)': {
     open: (t) => openLeader(t, PROPOSED),
     latch: async ({partition}) =>
       await requestAdmission(partition) === 'in_flight',
     count: (provider, mark) => additionsOfTarget(provider, mark),
-    expected: () => 1,
+    expected: (wakeEvent) =>
+      wakeEvent === RAFT_EVENT.VOTER_LIVENESS_CHANGED ? 0 : 1,
   },
   'an admission the port deferred': {
     open: (t) => openLeader(t, DEFERRED),
