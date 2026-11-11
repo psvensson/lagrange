@@ -64,6 +64,10 @@ import {
 } from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {answerKnownClusterIdentity} from './bootstrap-api-test-fixtures.js';
+
+// The in-process seed knows its cluster identity (the join identity gate).
+answerKnownClusterIdentity();
 
 const REPORTER_FORWARD_NODE_ID = 'joiner-reporter-publication-mode';
 const REPORTER_FORWARD_NODE_ADDRESS = 'ws://localhost:19103';

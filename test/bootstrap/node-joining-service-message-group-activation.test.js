@@ -67,6 +67,10 @@ import {beginDurableCdcInvocation, createDurableCdcEvent} from
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {createIdentityTransport} from
   '../test-helpers/replica-handler-identity-fixture.js';
+import {answerKnownClusterIdentity} from './bootstrap-api-test-fixtures.js';
+
+// The in-process seeds know their cluster identity (the join identity gate).
+answerKnownClusterIdentity();
 
 // The canonical node clock the joiner hands its replica lifecycle owner.
 const nodeTimeSource = new RealTimeSource();
