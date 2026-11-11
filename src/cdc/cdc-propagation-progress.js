@@ -5,6 +5,7 @@
 // stores this for its leadership tenure and attaches each leaf's drive state;
 // a cursor is never durable: a new tenure starts every leaf again from the
 // ledger. There is no payload or timer here.
+import {TABLES} from '../constants/index.js';
 import {captureDurablePropagationPlan} from '../topology/cdc-group-propagation-durable-plan.js';
 import {
   collectKnownMessageGroupDomain,
@@ -106,6 +107,9 @@ function transferInvalidLatencyBindings(progress, targets) {
 // lane's next observation starts it at once.
 function refreshCdcPropagationRoutes(progress, targets) {
   transferInvalidLatencyBindings(progress, targets);
+  // The groups the topology owner names now: an omitted leaf stays required;
+  // its omission is only a hint to ask the lifecycle owner (never evidence).
+  progress.plannedGroupIds = new Set(targets.map((target) => target.groupId));
   for (const target of targets) {
     const leaf = progress.targets.find((entry) => entry.groupId === target.groupId);
     if (!leaf) {
@@ -119,11 +123,28 @@ function refreshCdcPropagationRoutes(progress, targets) {
   }
 }
 
-function createCdcPropagationProgress(owner, source, targets) {
+// The recipient-domain tables of the sender's cache: a change to any of them
+// can add, retire or re-route a recipient group, so it wakes the source lane
+// to re-observe its recipient set (CDC Stage 3: a group that becomes a
+// recipient is contacted without waiting for the next owed row).
+const RECIPIENT_DOMAIN_TABLES = Object.freeze(new Set([TABLES.SERVICES, TABLES.MESSAGE_GROUPS,
+  TABLES.LATENCY_GROUPS, TABLES.NODES]));
+
+function watchRecipientDomain(cache, onChanged) {
+  if (typeof cache?.onCacheChange !== 'function') return () => {};
+  const listener = (tableName) => {
+    if (RECIPIENT_DOMAIN_TABLES.has(tableName)) onChanged();
+  };
+  cache.onCacheChange(listener);
+  return () => cache.offCacheChange(listener);
+}
+
+function createCdcPropagationProgress(owner, source, targets, onRecipientDomainChanged) {
   const progress = {owner, source, lifetime: owner.durablePropagationLifetime,
     cache: owner.systemTableCache, tree: owner.latencyTreeService, router: owner.messageRouter,
     port: source.raft, sourceLifetime: source.cdcCommitLifetime,
-    sourceGroupId: source.groupId, targets: []};
+    sourceGroupId: source.groupId, targets: [], plannedGroupIds: new Set(),
+    unwatch: watchRecipientDomain(owner.systemTableCache, onRecipientDomainChanged)};
   refreshCdcPropagationRoutes(progress, targets);
   return progress;
 }

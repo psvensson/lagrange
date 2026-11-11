@@ -7,10 +7,8 @@ import {
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
-import {
-  OPERATION_VISIBILITY_STATE,
-  readOperationVisibilityState,
-} from './replica-operation-repository-operation-visibility.js';
+import {isOperationVisibilityUnavailableError} from
+  './replica-operation-repository-operation-visibility.js';
 
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -182,7 +180,7 @@ class RebalanceCoordinatorOperationIntentMethods {
 
     let cacheVisibleOperation = null;
     try {
-      cacheVisibleOperation = await this.queryOperationById(cachedOperationId);
+      cacheVisibleOperation = await this.queryOperationProjectionById(cachedOperationId);
     } catch (error) {
       this.logger.debug(
         LOCAL_STR_FAILED_TO_REFRESH_RECENT_OPERATION_INTEN,
@@ -205,23 +203,24 @@ class RebalanceCoordinatorOperationIntentMethods {
         cacheVisibleOperation :
         cachedOperation;
 
-    const observation =
-      await this.repository.queryAuthoritativeOperationVisibilityObservation(
-        cachedOperationId,
-        {
+    // null is the owner's confirmed absence; an unanswered read throws its
+    // typed unavailability, and the remembered intent keeps deduplicating
+    // (no second operation is created on an unanswered read).
+    let authoritativeOperation;
+    try {
+      authoritativeOperation =
+        await this.repository.queryAuthoritativeOperationById(cachedOperationId, {
           authoritativeReadMode:
             CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-        },
-      );
-    const observationState = readOperationVisibilityState(observation);
-    if (observationState === OPERATION_VISIBILITY_STATE.UNAVAILABLE) {
-      // No owner answer: the remembered intent keeps deduplicating (no
-      // second operation is created on an unanswered read).
+        });
+    } catch (error) {
+      if (!isOperationVisibilityUnavailableError(error)) {
+        throw error;
+      }
       this.rememberOperationIntent(dedupeKey, operationForMissReuse);
       return operationForMissReuse;
     }
-    const authoritativeOperation = observation.operation;
-    if (observationState === OPERATION_VISIBILITY_STATE.ABSENT) {
+    if (!authoritativeOperation) {
       const authoritativeEntityVisibility =
         await this.inspectRecentOperationIntentEntityVisibility(
           operationForMissReuse,

@@ -35,8 +35,8 @@ function createFacadeCoordinator(overrides = {}) {
   };
 
   const repository = {
-    async queryOperationById(operationId) {
-      calls.repository.push(['queryOperationById', operationId]);
+    async queryOperationProjectionById(operationId) {
+      calls.repository.push(['queryOperationProjectionById', operationId]);
       return {operationId};
     },
     async queryExistingInFlightOperation(...args) {
@@ -196,7 +196,7 @@ test('RebalanceCoordinator facade delegates repository contract methods',
   async (t) => {
     const {coordinator, calls} = createFacadeCoordinator();
 
-    const byId = await coordinator.queryOperationById('op-1');
+    const byId = await coordinator.queryOperationProjectionById('op-1');
     t.equal(byId.operationId, 'op-1');
 
     const inFlight = await coordinator.queryExistingInFlightOperation(
@@ -225,7 +225,7 @@ test('RebalanceCoordinator facade delegates repository contract methods',
     t.equal(byEntity.length, 1);
 
     t.same(calls.repository.map(([name]) => name), [
-      'queryOperationById',
+      'queryOperationProjectionById',
       'queryExistingInFlightOperation',
       'persistNewOperation',
       'runReplicaOperationTransitionExclusive',

@@ -297,7 +297,7 @@ function createTestCoordinator(options = {}) {
 
 /**
  * Convert an in-memory operation object to a row shape that
- * queryOperationById expects from SQL.
+ * queryOperationProjectionById expects from SQL.
  */
 function operationToRow(op) {
   return {

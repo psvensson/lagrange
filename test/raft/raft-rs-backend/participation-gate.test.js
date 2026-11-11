@@ -555,7 +555,10 @@ test('B12: R-1a waits on a witness below its gate (whose view, folded at ' +
     const operation = {operationId: 'b12-replace', type: OperationType.REPLACE,
       entityType: SERVICE_TYPE.PARTITION, entityId: PARTITION_ID,
       partitionId: PARTITION_ID,
-      replicaId: TARGET, targetNodeId: 'b12-target-node'};
+      // A REPLACE names its source's node (the route to the source when it
+      // leads); the route is never invented from an absent field.
+      replicaId: TARGET, targetNodeId: 'b12-target-node',
+      sourceNodeId: 'h1-b-node'};
     const targetView = await readPartitionReplicaMembership({
       raft: cluster.node(TARGET), replicaId: TARGET, partitionId: PARTITION_ID,
       replicaIds: [], raftTimingConfig: null}, 'h1-b');

@@ -263,6 +263,9 @@ const INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE = Object.freeze({
     'priority_recovery_authoritative_operation_failure',
   PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_EMPTY_READ:
     'priority_recovery_authoritative_operation_empty_read',
+  AUTHORITATIVE_READ_FAILURE: 'incomplete_operation_authoritative_read_failure',
+  AUTHORITATIVE_READ_BACKOFF: 'incomplete_operation_authoritative_read_backoff',
+  UNANSWERED_PROJECTION: 'incomplete_operation_unanswered_projection',
 });
 const REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE = Object.freeze({
   CONFIRMED: 'confirmed',
@@ -526,6 +529,7 @@ class ReplicaOperationRepository {
     this.lastIncompleteOperationObservationSource =
       INCOMPLETE_OPERATION_OBSERVATION_SOURCE.CACHE_OR_AUTHORITATIVE_READ;
     this.lastIncompleteOperationReadOutcome = null;
+    this.lastIncompleteOperationReadComplete = false;
     this.lastAuthoritativeOperationVisibilityOutcome = null;
     this.ownerPersistedTransitionVisibilityWitnesses = new Map();
     this.replicaOperationTransitionQueues = new Map();

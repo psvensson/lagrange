@@ -190,16 +190,33 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     authoritativeSnapshot: true,
   });
   const service = new EventEmitter();
+  // The runtime's transport identity as production binds it: its exact
+  // handler registered at its address while its port is open, retired
+  // through this lifecycle owner (a durable ACTIVE - a cancelled removal's
+  // row - is written only while it is bound).
+  const transportHandler = () => undefined;
+  let portClosed = false;
   Object.assign(service, {
     partitionId,
     replicaId,
     raft: cluster.node(replicaId),
     admissionFenced: false,
+    unifiedAddress: initialRow.address,
+    transportHandler,
+    transport: {getRegisteredHandler: (address) =>
+      !portClosed && address === initialRow.address ? transportHandler : null},
+    resolveHandlerRetirementLane: () => replicaStateMachine,
     fenceServingAdmissionForRemoval() {
       service.admissionFenced = true;
     },
+    liftServingAdmissionFenceForCancelledRemoval() {
+      const fenced = service.admissionFenced;
+      service.admissionFenced = false;
+      return fenced;
+    },
     async waitForRemovalServingDrain() {},
     async shutdown() {
+      portClosed = true;
       service.raft.close();
     },
   });

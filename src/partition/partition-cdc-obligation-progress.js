@@ -46,7 +46,9 @@ function subscriberBindingCurrent(delivery, branch) {
  */
 function syncSubscriberBranches(delivery, lane) {
   for (const [wrapper, branch] of lane.branches) {
-    if (!subscriberBindingCurrent(delivery, branch)) lane.branches.delete(wrapper);
+    if (subscriberBindingCurrent(delivery, branch)) continue;
+    branch.topology?.unwatch();
+    lane.branches.delete(wrapper);
   }
   for (const wrapper of delivery.owner.cdcSubscribers) {
     if (lane.branches.has(wrapper)) continue;
@@ -72,9 +74,24 @@ function topologyBindingCurrent(branch) {
 // behind the owed tail; whoever re-observes starts it (startRecipientDrives).
 function releaseStaleTopology(branch) {
   if (topologyBindingCurrent(branch)) return;
+  releaseBranchTopology(branch);
+}
+
+// The released propagation stops watching its recipient domain.
+function releaseBranchTopology(branch) {
+  branch.topology.unwatch();
   branch.topology = null;
   branch.primary.cursor = null;
   branch.releases += 1;
+}
+
+/**
+ * Stop every branch's recipient-domain watch (the lane's tenure ended).
+ * @param {Object} lane - The delivery lane.
+ * @return {void}
+ */
+function releaseLaneTopologies(lane) {
+  for (const branch of lane.branches.values()) branch.topology?.unwatch();
 }
 
 function recipientsOfBranch(branch) {
@@ -125,15 +142,14 @@ function recipientKeyOf(branch, recipient) {
 // The topology owner reports the recipient set it observed for a source
 // group. Another owner or source group is another propagation: its recipients
 // have confirmed nothing.
-function bindBranchTopology(branch, owner, source, targets) {
+function bindBranchTopology(branch, owner, source, targets, onRecipientDomainChanged) {
   if (branch.topology !== null && (branch.topology.owner !== owner ||
       branch.topology.source !== source)) {
-    branch.topology = null;
-    branch.primary.cursor = null;
-    branch.releases += 1;
+    releaseBranchTopology(branch);
   }
   if (branch.topology === null) {
-    branch.topology = createCdcPropagationProgress(owner, source, targets);
+    branch.topology = createCdcPropagationProgress(owner, source, targets,
+      onRecipientDomainChanged);
   } else {
     refreshCdcPropagationRoutes(branch.topology, targets);
   }
@@ -141,23 +157,28 @@ function bindBranchTopology(branch, owner, source, targets) {
 
 /**
  * The invocation one recipient's delivery runs under: it names the recipient
- * group the topology owner must address (null: the source group) and
- * receives the recipient set that owner observed.
+ * group the topology owner must address (null: the source group) and the
+ * source range the vector is shipped as (CDC Stage 3), and receives the
+ * recipient set that owner observed.
  * @param {Object} context - The recipient's delivery invocation.
  * @param {Function} isCurrent - Whether the recipient is still the lane's.
  * @param {Object} branch - The recipient's branch.
  * @param {Object} recipient - The recipient.
- * @param {Function} onRecipientsObserved - Called after the set was bound.
+ * @param {Object} hooks - {recipientsObserved: called after the set was
+ *   bound, recipientDomainChanged: called when the sender's cache changes a
+ *   recipient-domain table while the propagation is bound}.
+ * @param {Object} sourceRange - The vector's source range.
  * @return {Object} The scoped invocation.
  */
-function cdcRecipientInvocation(context, isCurrent, branch, recipient, onRecipientsObserved) {
+function cdcRecipientInvocation(context, isCurrent, branch, recipient, hooks, sourceRange) {
   return scopeCdcDeliveryInvocation(context, isCurrent, (scoped) => ({
     recipientGroupId: recipient.groupId,
     recipientRoute: recipient.route,
+    sourceRange,
     bindTopology: (owner, source, targets) => {
       scoped.assertCurrent();
-      bindBranchTopology(branch, owner, source, targets);
-      onRecipientsObserved();
+      bindBranchTopology(branch, owner, source, targets, hooks.recipientDomainChanged);
+      hooks.recipientsObserved();
     },
   }));
 }
@@ -177,17 +198,21 @@ function recordUncoveredSubscriberHint(state, answer) {
   }
   if (answer?.error === CDC_COMPLETION.BACKPRESSURE ||
       answer?.reason === CDC_COMPLETION.BACKPRESSURE) state.backpressured = true;
+  if (answer?.error === CDC_COMPLETION.POSITION_GAP) state.positionGap = true;
 }
 
 // A recipient's answer that is neither committed nor provisional over the
 // vector: the typed unknown, with the recipient's own backpressure hint.
 function unconfirmedRecipientError(answer) {
-  const state = {retryAfterMs: null, backpressured: false};
+  const state = {retryAfterMs: null, backpressured: false, positionGap: false};
   recordUncoveredSubscriberHint(state, answer);
-  const error = new Error(CDC_COMPLETION.UNKNOWN);
+  const error = new Error(state.positionGap ? CDC_COMPLETION.POSITION_GAP : CDC_COMPLETION.UNKNOWN);
   error.deferRetry = true;
   if (state.retryAfterMs !== null) error.retryAfterMs = state.retryAfterMs;
   if (state.backpressured) error.reason = CDC_COMPLETION.BACKPRESSURE;
+  // A recipient that lacks the range's predecessor re-lists; its gap is
+  // retried on the recipient's hint, as hinted backpressure.
+  if (state.positionGap) error.reason = CDC_COMPLETION.POSITION_GAP;
   return error;
 }
 
@@ -197,6 +222,7 @@ export {
   receiptGroupOf,
   recipientAttached,
   recipientKeyOf,
+  releaseLaneTopologies,
   reobserveLaneRecipients,
   syncSubscriberBranches,
   unconfirmedRecipientError,

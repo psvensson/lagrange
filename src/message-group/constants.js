@@ -62,6 +62,10 @@ const MESSAGE_GROUP_COMMAND_TYPE = Object.freeze({
 // proposed: a refused command reaches no log.
 const MESSAGE_GROUP_COMMAND_REFUSAL = Object.freeze({
   UNKNOWN_TYPE: 'message_group_command_type_unknown',
+  // A CDC_BATCH outside its closed shape: a durable vector carries exactly
+  // {type, events, sourceRange} with a well-formed range (CDC Stage 3); an
+  // ordinary one exactly {type, events}.
+  CDC_BATCH_SHAPE: 'message_group_cdc_batch_shape_invalid',
 });
 
 // How one attempt of a leader-routed proposal reached the group (design R3

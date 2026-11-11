@@ -68,6 +68,8 @@ import {
 } from './replace-real-group-harness.js';
 import {RAFT_RS_MESSAGE_TYPE} from
   '../../src/raft/raft-rs-ingress-constants.js';
+import {presentOperationOf} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 test('T5-prime installs the canonical waiter and fallback before returning ' +
   'from a re-sent removal effect', async (t) => {
@@ -359,8 +361,8 @@ async (t) => {
     for (const [label, world, expected] of [
       ['decide-first', first, expectedFirst],
       ['process-first', second, WORKFLOW_STEP.FAILED]]) {
-      const durable = await world.coordinator.repository
-        .queryReplicaOperationPersistenceAuthorityOperation(world.operation);
+      const durable = presentOperationOf(await world.coordinator.repository
+        .queryReplicaOperationPersistenceAuthorityObservation(world.operation));
       t.equal(durable.workflowStep, expected,
         `${label}: the first terminal stands (authority read)`);
       const landed = world.terminalWrites.filter((write) =>
@@ -596,8 +598,8 @@ test('S13: a terminal written elsewhere between SAFE and the effect - the ' +
     t.equal(landed, true, 'setup: the remote terminal landed after SAFE');
     t.equal(world.removeEffects.length, 0,
       'no REMOVE_REPLICA leaves for an operation that became terminal');
-    const durable = await world.coordinator.repository
-      .queryReplicaOperationPersistenceAuthorityOperation(world.operation);
+    const durable = presentOperationOf(await world.coordinator.repository
+      .queryReplicaOperationPersistenceAuthorityObservation(world.operation));
     t.equal(durable.workflowStep, WORKFLOW_STEP.FAILED, 'the terminal stands');
   } finally {
     await disposeWorld(world);

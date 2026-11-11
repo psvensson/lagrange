@@ -23,6 +23,9 @@ import {
 import {
   createReplicaOperationsCasStore,
 } from './durable-step-authority-fixture.js';
+import {
+  buildUnavailableOperationVisibility,
+} from '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 const TEST_NODE_ID = 'reservation-gate-node';
 const TEST_PARTITION_ID = 'p-gate';
@@ -242,15 +245,12 @@ function createCoordinatorWithStorage(options = {}) {
     async (...args) => {
       if (sqlEngine.reservations.size > 0 && unavailableReads > 0) {
         unavailableReads--;
-        return {
-          operation: null,
-          deferredOutcome: {
-            error: 'injected owner RPC authority unavailable',
-            errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
-            deferRetry: true,
-            retryAfterMs: NUM.FIVE,
-          },
-        };
+        return buildUnavailableOperationVisibility({
+          error: 'injected owner RPC authority unavailable',
+          errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+          deferRetry: true,
+          retryAfterMs: NUM.FIVE,
+        });
       }
       return queryAuthority(...args);
     };

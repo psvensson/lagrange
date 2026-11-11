@@ -32,6 +32,8 @@ import {buildFailedCreateCleanupToken} from
   './failed-create-cleanup-token.js';
 import {assertCanonicalRebalancerEntityIdentity} from
   './rebalancer-entity-identity.js';
+import {presentOperationOf} from
+  './replica-operation-repository-operation-visibility.js';
 
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
@@ -128,11 +130,9 @@ function isPartitionAdd(operation) {
  * @return {Promise<string>}
  */
 async function readReplaceDurableStep(owner, operation) {
-  const authoritative = typeof owner.repository
-    ?.queryReplicaOperationPersistenceAuthorityOperation ===
-      OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
-    await owner.repository.queryReplicaOperationPersistenceAuthorityOperation(
-      operation) : null;
+  const authoritative = presentOperationOf(
+    await owner.repository.queryReplicaOperationPersistenceAuthorityObservation(
+      operation));
   // The persistence authority's step, else the operation's own.
   return readStateField(authoritative?.workflowStep, operation.workflowStep);
 }
@@ -151,7 +151,8 @@ async function observeCreateTarget(owner, operation) {
 /**
  * D2's admission of a terminal FAILED for a partition REPLACE, decided on
  * the DURABLE step: before the durable intent every existing failure
- * applies; after it, only target death with the source still a voter. The
+ * applies; after it, only target death, decided on the source node's typed
+ * cancel answer (its source retained, or - degraded - already removed). The
  * admitted write is a CAS on the step it was admitted against, so a copy
  * that read before the intent landed cannot write FAILED past it.
  * @param {Object} owner
@@ -163,8 +164,8 @@ async function admitReplaceTerminalFailure(owner, operation, options = {}) {
   const durableStep = await readReplaceDurableStep(owner, operation);
   const admitted = !isReplaceRemovalIntentDurable(
     {...operation, workflowStep: durableStep}) ||
-    options?.replacePostIntentFailure ===
-      REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED;
+    Object.values(REPLACE_POST_INTENT_FAILURE)
+      .includes(options?.replacePostIntentFailure);
   return Object.freeze({admitted,
     expectedWorkflowStep: durableStep,
     completeInstead: false,

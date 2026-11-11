@@ -83,6 +83,8 @@ import {assignReplicaHandlerRuntimeMethods} from './replica-handler-runtime-meth
 import {
   assignReplicaHandlerRemoveExecutionMethods,
 } from './replica-handler-remove-execution-methods.js';
+import {assignReplicaHandlerRemovalCancellationMethods} from
+  './replica-removal-cancellation.js';
 import {
   METADATA_RESOLUTION_POLL_INTERVAL_MS,
   PARTITION_METADATA_MISSING_PREFIX,
@@ -248,6 +250,7 @@ assignReplicaHandlerMembershipMethods(ReplicaHandler);
 assignReplicaHandlerCommittedMembershipMethods(ReplicaHandler);
 assignReplicaHandlerVoterReadinessMethods(ReplicaHandler);
 assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler);
+assignReplicaHandlerRemovalCancellationMethods(ReplicaHandler);
 assignReplicaHandlerGroupRetiredTombstoneMethods(ReplicaHandler);
 assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   AddressManager,

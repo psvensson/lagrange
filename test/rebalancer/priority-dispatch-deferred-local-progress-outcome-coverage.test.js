@@ -89,7 +89,7 @@ async function readOwnerViews(world) {
   return {
     visibilityRead: visibility?.operation?.workflowStep,
     cacheFirstRead:
-      (await repository.queryOperationById(OPERATION_ID))?.workflowStep,
+      (await repository.queryOperationProjectionById(OPERATION_ID))?.workflowStep,
     authoritativeRead:
       (await repository.queryAuthoritativeOperationById(OPERATION_ID))
         ?.workflowStep,

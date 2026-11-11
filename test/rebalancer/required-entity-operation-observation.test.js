@@ -73,7 +73,9 @@ for (const retained of [false, true]) {
     const observation = await f.coordinator.getEntityAuthoritativeOperationObservation(
       ENTITY.entityType, ENTITY.entityId);
     t.ok(repository.deferredOutcome, 'the actual repository reports unavailable authority');
-    t.equal(observation.state, retained ? 'present' : 'deferred');
+    t.equal(observation.state, 'deferred',
+      'an unanswered read is DEFERRED whatever its projection retains');
+    t.equal(observation.complete, false, 'its retained rows are a projection');
     for (const key of ['completionState', 'reasonCode', 'retryAfterMs', 'entityType', 'entityId']) {
       t.equal(observation.deferredOutcome?.[key], repository.deferredOutcome[key],
         `${key} survives the coordinator`);

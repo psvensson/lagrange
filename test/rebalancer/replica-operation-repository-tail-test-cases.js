@@ -191,9 +191,9 @@ export function registerReplicaOperationRepositoryTailTests({
     t.equal(result, null);
   });
 
-  // ── queryOperationById ──────────────────────────────────────────
+  // ── queryOperationProjectionById ──────────────────────────────────────────
 
-  test('queryOperationById returns from cache when available', async (t) => {
+  test('queryOperationProjectionById returns from cache when available', async (t) => {
     const row = makeRow();
     const repo = createTestRepository({
       systemTableCache: {
@@ -208,11 +208,11 @@ export function registerReplicaOperationRepositoryTailTests({
       },
     });
 
-    const op = await repo.queryOperationById(TEST_OPERATION_ID);
+    const op = await repo.queryOperationProjectionById(TEST_OPERATION_ID);
     t.equal(op.operationId, TEST_OPERATION_ID);
   });
 
-  test('queryOperationById falls back to SQL when not in cache', async (t) => {
+  test('queryOperationProjectionById falls back to SQL when not in cache', async (t) => {
     const row = makeRow();
     const repo = createTestRepository({
       controlPlaneSystemTableGateway: {
@@ -221,13 +221,13 @@ export function registerReplicaOperationRepositoryTailTests({
       },
     });
 
-    const op = await repo.queryOperationById(TEST_OPERATION_ID);
+    const op = await repo.queryOperationProjectionById(TEST_OPERATION_ID);
     t.equal(op.operationId, TEST_OPERATION_ID);
   });
 
-  test('queryOperationById returns null for missing operation', async (t) => {
+  test('queryOperationProjectionById returns null for missing operation', async (t) => {
     const repo = createTestRepository();
-    const op = await repo.queryOperationById('nonexistent');
+    const op = await repo.queryOperationProjectionById('nonexistent');
     t.equal(op, null);
   });
 

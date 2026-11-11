@@ -47,8 +47,11 @@ import {
   shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry,
   shouldReconcilePriorityRecoveryDispatchPendingDrain,
 } from './operation-workflow-recovery-reconcile-dispatch-pending.js';
+import {presentOperationOf} from
+  './replica-operation-repository-operation-visibility.js';
 
 const {
+  INCOMPLETE_OPERATION_OBSERVATION_STATE,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   REBALANCE_COORDINATOR_DEFER_REASON,
@@ -83,6 +86,15 @@ function recordIntentOnCurrentStoppingEntry(stepsHistory, stepMetadata) {
     }
   }
   return history;
+}
+
+// A recovery or orphan decision fails, adopts or completes work: it runs
+// only on a list the owner answered. A DEFERRED observation's operations are
+// a projection fallback; acting on them would decide from it, so the turn
+// decides nothing and a later sweep reads again.
+function isAnsweredIncompleteObservation(observation) {
+  return Array.isArray(observation?.operations) &&
+    observation.state !== INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED;
 }
 
 class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain {
@@ -336,8 +348,8 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
           REPLICA_OPERATION_VISIBILITY_READ_MODE
             .CACHE_PREFERRED_SQL_FALLBACK,
       });
-    const incompleteOps = Array.isArray(
-      incompleteOperationObservation?.operations,
+    const incompleteOps = isAnsweredIncompleteObservation(
+      incompleteOperationObservation,
     ) ?
       incompleteOperationObservation.operations :
       [];
@@ -592,8 +604,8 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
    * @private
    */
   async ensureReplaceRemovalIntentRecorded(operation, stepMetadata) {
-    const durable = await this.repository
-      .queryReplicaOperationPersistenceAuthorityOperation(operation);
+    const durable = presentOperationOf(await this.repository
+      .queryReplicaOperationPersistenceAuthorityObservation(operation));
     if (!durable || this.repository.isOperationTerminal(durable)) {
       return false;
     }

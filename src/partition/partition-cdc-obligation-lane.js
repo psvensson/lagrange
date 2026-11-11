@@ -7,6 +7,7 @@ import {CDC_COMPLETION} from '../cdc/cdc-delivery-outcome.js';
 import {PARTITION_CDC_OBLIGATION_BOUND as BOUND} from './partition-cdc-obligation-constants.js';
 import {acknowledgedEventBytesOf, cdcObligationEventKeyDigest,
   emptyAcknowledgedBytes} from './partition-cdc-obligation-ledger.js';
+import {releaseLaneTopologies} from './partition-cdc-obligation-progress.js';
 
 const OBLIGATION_RETRY_STATE = Object.freeze({IDLE: 'idle', ARMED: 'armed'});
 const IDLE_OBLIGATION_RETRY = Object.freeze({state: OBLIGATION_RETRY_STATE.IDLE, handle: null});
@@ -40,6 +41,7 @@ function createCdcObligationLane(tenure = null) {
     consecutiveBackpressure: 0,
     acknowledgementBlocked: false, driveDelivered: 0, driveUnacknowledged: 0,
     held: null, lastDrive: null, lastFlush: null, noSubscriberReported: false,
+    recipientDomainWake: false,
   };
 }
 
@@ -78,6 +80,7 @@ function resetCdcObligationLane(delivery) {
   clearTimer(delivery.owner, lane.flushTimer);
   clearTimer(delivery.owner, lane.retryTimer.handle);
   retireRecipientInvocations(delivery);
+  releaseLaneTopologies(lane);
   delivery.obligationLane = createCdcObligationLane(tenure);
 }
 

@@ -331,6 +331,21 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         .filter((operation) => operation && !this.isOperationTerminal(operation));
     }
 
+    /**
+     * This node's incomplete operations. The answer's meaning is in the
+     * observation this read records (resolveIncompleteOperationObservation):
+     *   PRESENT  - a list; complete (authoritative) or a cache projection
+     *              (complete=false, possibly partial).
+     *   EMPTY    - the owner answered with no rows (confirmed, complete).
+     *   DEFERRED - the read did not answer (failed, deferred or backing
+     *              off): typed deferredOutcome with retry semantics; the
+     *              returned list is only a projection fallback (possibly
+     *              empty, possibly partial) and is never "no operations".
+     * A caller that drops, completes, plans or opens a gate on the list
+     * consults that observation first.
+     * @param {Object} [options={}]
+     * @return {Promise<Array>}
+     */
     async queryIncompleteOperations(options = {}) {
       const visibilityReadMode = resolveReplicaOperationVisibilityReadMode(options);
       const requireAuthoritativeOutcome =
@@ -349,6 +364,14 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
           cachedOperations.length === 0 &&
         this.nextIncompleteOperationSqlRetryAtMs > this.timeSource.now()
         ) {
+          // Backing off after a failed owner read: nothing was read, so the
+          // answer is the typed unavailability, never an empty list.
+          this.recordIncompleteOperationReadUnavailable(null, {
+            retryAfterMs:
+              this.nextIncompleteOperationSqlRetryAtMs - this.timeSource.now(),
+            source:
+              INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE.AUTHORITATIVE_READ_BACKOFF,
+          });
           return this.resolveDeferredIncompleteOperationReadFallback(cachedOperations);
         }
         if (
@@ -357,6 +380,8 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         ) {
           this.recordIncompleteOperationObservation(cachedOperations);
           this.clearIncompleteOperationReadOutcome();
+          // A cache projection: possibly partial, never "confirmed empty".
+          this.lastIncompleteOperationReadComplete = false;
           return cachedOperations;
         }
       }
@@ -412,11 +437,23 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
           this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.QUERY_OPERATIONS_FAILED, logPayload);
         }
 
+        // A failed read is unavailability for every caller: the priority
+        // recovery outcome when it applies, else the typed read failure.
+        // The returned list is only the projection fallback (possibly empty,
+        // possibly partial); the outcome says so.
         if (deferredOutcome) {
           this.lastIncompleteOperationReadOutcome = deferredOutcome;
-          return fallbackOperations;
+          this.lastIncompleteOperationReadComplete = false;
+        } else {
+          this.recordIncompleteOperationReadUnavailable(result, {
+            retryAfterMs: this.getRetryableIncompleteOperationReadBackoffMs(result),
+            queryDurationMs,
+            fallbackOperations,
+            source:
+              INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE.AUTHORITATIVE_READ_FAILURE,
+          });
         }
-        return [];
+        return fallbackOperations;
       }
 
       this.nextIncompleteOperationSqlRetryAtMs = 0;
@@ -445,6 +482,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
             .PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_EMPTY_READ,
         });
         this.lastIncompleteOperationReadOutcome = deferredOutcome;
+        this.lastIncompleteOperationReadComplete = false;
 
         if (shouldWarnOnQueryPressure) {
           const nowMs = this.timeSource.now();
@@ -491,6 +529,9 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
 
       const operations = this.mapAndSortIncompleteOperations(result.rows);
       this.recordIncompleteOperationObservation(operations);
+      // The owner answered: the list is complete as of the read (an empty
+      // list is a confirmed empty).
+      this.lastIncompleteOperationReadComplete = true;
       return operations;
     }
   }

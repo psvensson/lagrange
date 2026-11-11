@@ -770,9 +770,11 @@ function buildGroupedContext(options = {}, sourceGroupIdOverride = null) {
 }
 
 export {
+  ROUTING_DOMAIN_GROUP,
   buildGroupedContext,
   buildSafeTargets,
   collectKnownMessageGroupDomain,
   isPreActivationLatencyGroup,
   resolveLatencyGroupTargetCandidates,
+  resolveMessageGroupId,
 };

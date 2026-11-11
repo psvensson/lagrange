@@ -102,6 +102,8 @@ import {
 import {
   createPublishedPlanningReadinessService,
 } from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
+import {buildUnavailableOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 const PARTITION_ID = 'sql_transactions-p1';
 const SOURCE_NODE_ID = 'node-a';
@@ -418,7 +420,7 @@ test('no retarget: a target that reports its replica missing fails the ' +
   try {
     await harness.coordinator.executeOperation(harness.operation);
     await harness.coordinator.executeOperation(harness.operation);
-    const persisted = await harness.coordinator.queryOperationById(
+    const persisted = await harness.coordinator.queryOperationProjectionById(
       harness.operation.operationId);
     t.equal(persisted.workflowStep, WORKFLOW_STEP.FAILED,
       'the REPLACE failed before any removal intent');
@@ -437,7 +439,7 @@ test('BR12: no handoff leaves on a deferred-visibility snapshot', async (t) => {
     await harness.coordinator.repository.persistOperationUpdate(
       harness.operation);
     const snapshot = harness.owner.resolveDeferredRetryVisibleOperation(
-      {operation: null, deferredOutcome: {reasonCode: 'visibility_deferred'}},
+      buildUnavailableOperationVisibility({reasonCode: 'visibility_deferred'}),
       harness.operation);
     await harness.coordinator.executeOperation(snapshot);
     t.equal(harness.stepDowns().length, 0,

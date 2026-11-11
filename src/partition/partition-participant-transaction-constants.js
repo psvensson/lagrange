@@ -275,6 +275,11 @@ const PARTICIPANT_TRANSACTION_SQL = Object.freeze({
   SELECT_RESERVATION:
     'SELECT 1 AS reserved FROM _participant_transactions WHERE state = ? ' +
     'LIMIT 1',
+  // Whether a database file holds the participant table at all (a file read
+  // on an independent connection: no table, nothing was ever PREPARED).
+  SELECT_TABLE_PRESENT:
+    'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' ' +
+    'AND name = \'_participant_transactions\'',
   // Whether a PREPARED row carries a routing sessionId (a sessionId-only
   // request naming it is fenced, never run as an ordinary write).
   SELECT_SESSION_PREPARED:
@@ -336,13 +341,14 @@ const PARTICIPANT_STORE_CONNECTION_STATE = Object.freeze({
 });
 
 // The participant owner's custody of a partition: ACTIVE while a staging
-// session or a durable PREPARED reservation holds it, IDLE otherwise, CLOSED
-// once the lifecycle owner released the connection (nothing it holds can
-// progress or be read on this runtime again).
+// session or a durable PREPARED reservation holds it, IDLE when neither does
+// (read, never assumed), UNAVAILABLE when the durable reservation cannot be
+// read (the lifecycle owner released the connection and no other read
+// answered): a released connection is never "settled" (2026-11-11).
 const PARTICIPANT_TRANSACTION_CUSTODY = Object.freeze({
   ACTIVE: 'active',
   IDLE: 'idle',
-  CLOSED: 'closed',
+  UNAVAILABLE: 'unavailable',
 });
 
 // What the leader's determinism self-check answers for BEGIN (design 3.3,

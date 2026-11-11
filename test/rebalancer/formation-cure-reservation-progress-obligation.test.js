@@ -282,7 +282,7 @@ test(
       );
 
       operationAuthorityAvailable = true;
-      const durable = await coordinator.repository.queryOperationById(
+      const durable = await coordinator.repository.queryOperationProjectionById(
         OPERATION_ID,
       );
       t.equal(

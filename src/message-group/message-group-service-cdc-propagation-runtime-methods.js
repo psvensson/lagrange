@@ -19,7 +19,8 @@ async function handleDurableLatencyCdcMessage(service, runtimeDeps, messageId, r
   const budget = createCdcDeliveryBudget(service,
     {...localDelivery, receivedRemainingMs: payload[CDC_DELIVERY_REMAINING_MS]}, startedAtMs);
   const answer = await service.applyCDCBatch(incoming, {...context, ...budget,
-    skipSubscriptionCheck: true, replayOnly: payload.replayOnly === true});
+    skipSubscriptionCheck: true, replayOnly: payload.replayOnly === true,
+    sourceRange: payload.sourceRange});
   budget.assertCurrent();
   // Optional wrapper metadata comes from the shallow wrapper copy and its
   // dense, already classified member count; it never overrides the answer.

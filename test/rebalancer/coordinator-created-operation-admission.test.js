@@ -242,7 +242,7 @@ test('CREATE redispatch adopts the durable admission tuple instead of mutable ' 
       'redispatch carries the exact durable attempt token');
     t.equal(delivered[0].request.createAdmissionWorkflowUpdatedAt, 101,
       'mutable CREATING updated_at cannot rotate the SENDING anchor');
-    t.equal(delivered[0].operation, durable,
+    t.same(delivered[0].operation, durable,
       'the workflow owner dispatches the authoritative row snapshot');
 
     delivered.length = 0;

@@ -7,6 +7,12 @@ import {
 import {noteReplaceOwnerObservedReplicaRows} from './operation-workflow-replace-owner-wake.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED} from
+  './operation-workflow-recovery-reconcile-shared.js';
+import {removalSubjectNodeIdOf} from './operation-workflow-replace-witness.js';
+import {ReplicaStatus} from './replica-status.js';
+import {WORKFLOW_STEP} from '../constants/index.js';
+import {readStateField} from '../utils/state-field-read.js';
 import {
   evaluateProjectedPeersContactable,
   evaluateReplaceReplacementVoterReady,
@@ -22,6 +28,8 @@ import {
 import {
   evaluateRemovalLeadershipSafety,
 } from './operation-workflow-removal-leadership-gate.js';
+import {evaluateConcurrentOperationRemoveSafety} from
+  './operation-workflow-remove-safety-concurrent-operation.js';
 import {
   createRemoveSafetyPlanningSnapshotReader,
   resolveRemoveSafetyPlanningSnapshotReader,
@@ -428,6 +436,44 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
   return context.buildSafeRemoveSafetyEvaluation();
 }
 
+// A plain REMOVE re-sent at STOPPING: the removal effect already took (its
+// subject's row retires or is gone) - the re-send repeats it and needs no
+// new evaluation; the row still serves - the first delivery never took
+// effect, so the re-send starts a fresh removal and passes every floor the
+// first send passed; the row could not be read - a named wait.
+const {STOPPING_REPLICA_OBSERVATION_STATE} =
+  OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED;
+const STOPPING_REMOVE_RESEND = Object.freeze({
+  NOT_A_RESEND: 'not_a_resend',
+  EFFECT_TAKEN: 'effect_taken',
+  STARTS_FRESH: 'starts_fresh',
+  SUBJECT_UNOBSERVED: 'subject_unobserved',
+});
+const STOPPING_REMOVE_RESEND_DEFERRAL = 'Plain REMOVE re-sent at STOPPING ' +
+  'waits: its subject\'s row could not be read to tell a repeated effect ' +
+  'from a fresh removal, replica ';
+const RETIRING_SUBJECT_STATUSES = Object.freeze(new Set([
+  ReplicaStatus.REMOVING,
+  ReplicaStatus.REMOVED,
+  ReplicaStatus.FAILED,
+]));
+
+async function classifyStoppingRemoveResend(context, operation) {
+  if (operation.type !== OperationType.REMOVE ||
+      readStateField(operation.workflowStep) !== WORKFLOW_STEP.STOPPING) {
+    return STOPPING_REMOVE_RESEND.NOT_A_RESEND;
+  }
+  const observation = await context.observeStoppingReplicaProgress(
+    operation.replicaId, operation.partitionId,
+    removalSubjectNodeIdOf(operation));
+  if (observation.state === STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE) {
+    return STOPPING_REMOVE_RESEND.SUBJECT_UNOBSERVED;
+  }
+  return observation.state === STOPPING_REPLICA_OBSERVATION_STATE.ABSENT ||
+    RETIRING_SUBJECT_STATUSES.has(observation.lifecycleStatus) ?
+    STOPPING_REMOVE_RESEND.EFFECT_TAKEN : STOPPING_REMOVE_RESEND.STARTS_FRESH;
+}
+
 /**
  * Evaluate safety validation for REMOVE operations.
  * @param {Object} context - Segment/Class context instance.
@@ -447,56 +493,27 @@ async function evaluateRemoveSafety(context, operation) {
   const isReplaceRemoveDispatch =
     context.repository.isReplaceRemoveDispatchPhase(operation);
   if (!isRemoveInitialDispatch && !isReplaceRemoveDispatch) {
-    return context.buildSafeRemoveSafetyEvaluation();
+    const resend = await classifyStoppingRemoveResend(context, operation);
+    if (resend === STOPPING_REMOVE_RESEND.SUBJECT_UNOBSERVED) {
+      return context.buildDeferredRemoveSafetyEvaluation(
+        STOPPING_REMOVE_RESEND_DEFERRAL + operation.replicaId,
+        REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED);
+    }
+    if (resend !== STOPPING_REMOVE_RESEND.STARTS_FRESH) {
+      return context.buildSafeRemoveSafetyEvaluation();
+    }
   }
 
   const {entityType, entityId} =
     assertCanonicalRebalancerEntityIdentity(operation);
 
-  // The operation ledger serializes the actual entity. Hard-coding partition
-  // here lets runtime/message-group replacements overtake their own source
-  // retirement while unrelated partition rows appear idle.
-  const allOps = await context.repository.getOperationsByEntity(
-    entityType,
-    entityId,
-  );
-  // CL-043: a persist-failed concurrent op (coordination row never committed)
-  // stays non-terminal with no terminal-timeout anchor and would otherwise block
-  // every peer surplus-drain forever. Exclude ops whose configured step timeout
-  // has already elapsed — they are reaper candidates, not genuinely in-flight.
-  const concurrentOperationNowMs = context.resolveTimeoutCheckNowMs();
-  let concurrentActiveOp = null;
-  for (const op of allOps) {
-    if (
-      op.operationId === operation.operationId ||
-      context.repository.isOperationTerminal(op) ||
-      context.isConcurrentOperationStalePastStepTimeout(
-        op,
-        concurrentOperationNowMs,
-      )
-    ) {
-      continue;
-    }
-    // CL-044: an op stuck SYNCING/moving to a down target makes no progress yet
-    // would head-of-line-block this peer recovery that targets a LIVE node. Its
-    // ~1s dispatch-retry loop keeps the step-timeout staleness clock fresh, so
-    // the exclusion above can lag the recovery deadline. An op whose move target
-    // fails a live ping is not genuinely in-flight, so it must not hold the
-    // partition serialization lock. The independent voter-ready-minimum,
-    // published-membership, and per-peer-ping checks below still protect quorum
-    // for the operation that is now allowed to proceed.
-    if (await context.isConcurrentOperationTargetUncontactable(op)) {
-      continue;
-    }
-    concurrentActiveOp = op;
-    break;
-  }
-  if (concurrentActiveOp) {
-    return context.buildDeferredRemoveSafetyEvaluationForOperation(
-      operation,
-      `Safety check failed: concurrent ${entityType} operation ` +
-        `${concurrentActiveOp.operationId} is active`,
-    );
+  // The operation ledger serializes the actual entity (not its partition):
+  // the ledger owner's answer, never the cache projection.
+  const concurrentOperationEvaluation =
+    await evaluateConcurrentOperationRemoveSafety(
+      context, operation, {entityType, entityId});
+  if (concurrentOperationEvaluation) {
+    return concurrentOperationEvaluation;
   }
 
   if (entityType !== SERVICE_TYPE.PARTITION) {

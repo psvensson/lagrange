@@ -5,6 +5,8 @@ import {
   isEngagedLedgerQuorumSpreadCureMove,
   shouldLeaseRecentCompletedLedgerSelfMove,
 } from './operation-ledger-hold-policy.js';
+import {isOperationVisibilityUnavailableError} from
+  './replica-operation-repository-operation-visibility.js';
 
 const {
   OperationType,
@@ -120,9 +122,7 @@ class RebalanceCoordinatorReplicaIdentityMethods {
       observation, entityType, entityId,
     );
     const cacheVisibleOperations =
-      typeof this.repository?.getOperationsByEntity === LOCAL_STR_FUNCTION ?
-        await this.repository.getOperationsByEntity(entityType, entityId) :
-        [];
+      await this.readAdditiveEntityOperationProjection(entityType, entityId);
     for (const operations of [
       authoritativeOperations,
       cacheVisibleOperations,
@@ -135,6 +135,23 @@ class RebalanceCoordinatorReplicaIdentityMethods {
       }
     }
     return replicaIds;
+  }
+
+  // An ADDITIVE supplement to the authoritative rows (more ids are only more
+  // conservative): an unavailable projection adds nothing and decides
+  // nothing; the authoritative observation above already gated the read.
+  async readAdditiveEntityOperationProjection(entityType, entityId) {
+    if (typeof this.repository?.getOperationsByEntity !== LOCAL_STR_FUNCTION) {
+      return [];
+    }
+    try {
+      return await this.repository.getOperationsByEntity(entityType, entityId);
+    } catch (error) {
+      if (isOperationVisibilityUnavailableError(error)) {
+        return [];
+      }
+      throw error;
+    }
   }
 
   addAllocatedOperationReplicaIds(replicaIds, operation) {
@@ -172,9 +189,7 @@ class RebalanceCoordinatorReplicaIdentityMethods {
       observation, entityType, entityId,
     );
     const cacheVisibleOperations =
-      typeof this.repository?.getOperationsByEntity === LOCAL_STR_FUNCTION ?
-        await this.repository.getOperationsByEntity(entityType, entityId) :
-        [];
+      await this.readAdditiveEntityOperationProjection(entityType, entityId);
     for (const operations of [
       authoritativeOperations,
       cacheVisibleOperations,

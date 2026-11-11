@@ -268,9 +268,14 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       return;
     }
     this.clearEmptyIncompleteOperationQueryDelay();
+    // DEFERRED: the owner did not answer. Its operations (if any) are a
+    // projection, so the sweep visits them - each turn re-reads its row by
+    // id from the owner and decides nothing on an unanswered read - and
+    // concludes nothing from what the projection lacks.
     if (
       incompleteOperationObservation.state ===
-      INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED
+        INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED &&
+      incompleteOps.length === 0
     ) {
       return;
     }
@@ -442,7 +447,10 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
         visibilityReadMode:
           REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK,
       });
-    const incompleteOps = Array.isArray(observation?.operations) ?
+    // Orphan adoption fails or adopts work: only on an answered list (a
+    // DEFERRED observation's operations are a projection fallback).
+    const incompleteOps = Array.isArray(observation?.operations) &&
+      observation.state !== INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED ?
       observation.operations :
       [];
     const ownedOps = incompleteOps.filter((op) =>

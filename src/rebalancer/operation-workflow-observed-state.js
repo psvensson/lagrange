@@ -1,4 +1,6 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {isOperationVisibilityUnavailableError} from
+  './replica-operation-repository-operation-visibility.js';
 
 const {
   OperationType,
@@ -155,15 +157,23 @@ async function adoptMostAdvancedObservedReplaceState(context, operation) {
     maybeSelectOperation(cachedOperation);
   }
 
-  const authoritativeOperation =
+  // Advisory: only a PRESENT owner row can name a more advanced state; an
+  // absent or unanswered read adopts nothing and the caller's next write is
+  // a compare-and-set on its own step.
+  maybeSelectOperation(
     await context.repository.queryAuthoritativeOperationById(
       operation.operationId,
       {
         authoritativeReadMode:
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       },
-    );
-  maybeSelectOperation(authoritativeOperation);
+    ).catch((error) => {
+      if (isOperationVisibilityUnavailableError(error)) {
+        return null;
+      }
+      throw error;
+    }),
+  );
 
   if (!selectedOperation) {
     return null;

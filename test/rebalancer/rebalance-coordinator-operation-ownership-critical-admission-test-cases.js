@@ -115,6 +115,9 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         enableTimeouts: false,
       }));
       coordinator.initialize();
+      // The create-dedupe read answered: no in-flight operation for this
+      // move (this fixture has no replica_operations read port).
+      coordinator.repository.queryExistingInFlightOperation = async () => null;
       coordinator.repository.getOperationsByEntityAuthoritativeObservation =
         async (entityType, entityId) => (
           coordinator.repository.buildEntityOperationVisibilityObservation([
@@ -185,6 +188,9 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       enableTimeouts: false,
     }));
     coordinator.initialize();
+    // The create-dedupe read answered: no in-flight operation for this
+    // move (this fixture has no replica_operations read port).
+    coordinator.repository.queryExistingInFlightOperation = async () => null;
     coordinator.repository.getOperationsByEntity = async () => [];
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
         async (entityType, entityId) => (
@@ -496,7 +502,8 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       const retained = await coordinator.getEntityRecoveryOperationObservation(
         'partition', BLOCKED_PRIORITY_PARTITION_ID,
       );
-      t.equal(retained.state, 'present', 'nonzero retained work cannot acquire bounded use');
+      t.equal(retained.state, 'deferred',
+        'nonzero retained work cannot acquire bounded use: it stays DEFERRED');
       t.throws(() => coordinator.requireEntityOperationRows(
         retained, 'partition', BLOCKED_PRIORITY_PARTITION_ID,
       ), {rebalanceSkipReason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING});

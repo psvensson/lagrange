@@ -26,6 +26,7 @@ import {PARTITION_WRITE_LEADERSHIP_REFUSAL, pickTypedWriteAnswer} from
   './partition-write-kernel.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {isPartitionServiceClosed} from './partition-service-closed-refusal.js';
+import {PARTITION_HYDRATION_IMAGE_QUERY_FIELD} from './partition-service-hydration-image-methods.js';
 
 const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
   NOT_APPLICABLE: 'not_applicable',
@@ -327,6 +328,13 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
       };
     }
     const isWriteOperation = this.isWriteQuery(sql);
+    // A hydration-image read (CDC Stage 3 re-list) answers rows and the
+    // position they are current as of from one span on the leader.
+    if (!isWriteOperation && payload[PARTITION_HYDRATION_IMAGE_QUERY_FIELD] === true) {
+      return this.answerHydrationImageQuery(sql, {
+        maxRows: payload[QUERY_RESULT_REQUEST_FIELD.MAX_ROWS],
+        maxBytes: payload[QUERY_RESULT_REQUEST_FIELD.MAX_BYTES]});
+    }
     const routingRefusal = writeRoutingRefusal(this, payload, isWriteOperation);
     if (routingRefusal !== null) return routingRefusal;
     const ingressRefusal = isWriteOperation ?

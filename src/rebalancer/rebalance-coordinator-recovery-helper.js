@@ -3,6 +3,7 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {filterConcurrentAddBudgetOperations} from './rebalance-coordinator-priority-budget-helper.js';
 
 const {
+  INCOMPLETE_OPERATION_OBSERVATION_STATE,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -10,6 +11,15 @@ const {
   SERVICE_TYPE,
   WORKFLOW_STEP,
 } = REBALANCE_COORDINATOR_SHARED;
+
+// A recovery or orphan decision fails, adopts or completes work: it runs
+// only on a list the owner answered. A DEFERRED observation's operations are
+// a projection fallback; acting on them would decide from it, so the turn
+// decides nothing and a later sweep reads again.
+function isAnsweredIncompleteObservation(observation) {
+  return Array.isArray(observation?.operations) &&
+    observation.state !== INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED;
+}
 
 function checkTimeouts(coordinator) {
   if (!coordinator.workflowOwner) {
@@ -68,7 +78,9 @@ async function handleRecovery(coordinator) {
       visibilityReadMode:
         REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK,
     });
-  const incompleteOps = Array.isArray(incompleteOperationObservation?.operations) ?
+  const incompleteOps = isAnsweredIncompleteObservation(
+    incompleteOperationObservation,
+  ) ?
     incompleteOperationObservation.operations :
     [];
   result.totalIncomplete = incompleteOps.length;
@@ -187,7 +199,7 @@ function emitReplicaStatusDivergence(
 }
 
 async function getOperation(coordinator, operationId) {
-  return coordinator.queryOperationById(operationId);
+  return coordinator.queryOperationProjectionById(operationId);
 }
 
 async function getAllOperations(coordinator) {

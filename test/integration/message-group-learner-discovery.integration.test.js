@@ -270,9 +270,9 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         assert.deepEqual(await sweep(fx.owner),
           summaryOf({retained: 1}));
         let laneReads = 0; const repository = fx.owner.repository;
-        const readLane = repository.queryAuthoritativeOperationByMessageGroupMembershipLane
+        const readLane = repository.observeAuthoritativeOperationByMessageGroupMembershipLane
           .bind(repository);
-        repository.queryAuthoritativeOperationByMessageGroupMembershipLane = (...args) => {
+        repository.observeAuthoritativeOperationByMessageGroupMembershipLane = (...args) => {
           laneReads += 1; return readLane(...args);
         };
         // The owing row is listed first, so only the ACTIVE check keeps the
@@ -496,7 +496,7 @@ test('owned discovery recovers the exact learner outcome from membership debt by
       const fx = await discoveryFixture(t); const before = {...fx.f.row()};
       const proposals = fx.f.proposalCount();
       const laneReads = countCalls(fx.owner.repository,
-        'queryAuthoritativeOperationByMessageGroupMembershipLane');
+        'observeAuthoritativeOperationByMessageGroupMembershipLane');
       const operationReads = () => fx.f.reads.filter((read) =>
         read.table === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS).length;
       fx.f.cacheOperationRow();
@@ -521,7 +521,7 @@ test('owned discovery recovers the exact learner outcome from membership debt by
       const proposals = fx.f.proposalCount(); const repository = fx.owner.repository;
       repository.hasReplicaOperationCacheObservationBoundary = () => false;
       const laneReads = countCalls(repository,
-        'queryAuthoritativeOperationByMessageGroupMembershipLane');
+        'observeAuthoritativeOperationByMessageGroupMembershipLane');
       fx.owner.handleObservedReplicaStateChange('services', 'insert',
         fx.f.hostWitness(SUCCESSOR, fx.replicaId));
       assert.equal(await settled(() =>

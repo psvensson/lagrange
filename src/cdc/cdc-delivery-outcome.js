@@ -43,11 +43,19 @@ const CDC_COMPLETION = objectFreeze({
   // delivery whose response already retired): retry after its hint. Never a
   // capacity refusal and never a fault of the route that relayed it.
   DUPLICATE_IN_FLIGHT: 'cdc_committed_acceptance_duplicate_in_flight',
+  // The recipient has not applied the range's predecessor (CDC Stage 3): it
+  // lists the table again; nothing was proposed or merged. Retry after the
+  // hint: the same range then applies or answers already-applied.
+  POSITION_GAP: 'cdc_recipient_position_gap',
 });
 const CDC_COVERAGE_STATE = objectFreeze({
   UNCOVERED: 'uncovered',
   PROVISIONAL: 'provisional_coverage',
   COMMITTED: 'native_committed',
+  // The recipient group's own log already holds this range (CDC Stage 3): a
+  // positive, typed confirmation through `appliedThrough`, with nothing
+  // proposed again.
+  ALREADY_APPLIED: 'already_applied',
 });
 const UNCOVERED_CDC = objectFreeze({state: CDC_COVERAGE_STATE.UNCOVERED});
 const CDC_BINDING_FIELDS = objectFreeze(['sourcePartition', 'eventKey', 'eventDigest']);
@@ -68,6 +76,16 @@ const COMMITTED_REQUIRED_FIELDS = objectFreeze([
 const PROVISIONAL_REQUIRED_FIELDS = objectFreeze([
   CDC_OUTCOME_FIELD.SUCCESS, CDC_OUTCOME_FIELD.ERROR,
   CDC_OUTCOME_FIELD.PROVISIONAL, CDC_OUTCOME_FIELD.VECTOR_DIGEST,
+]);
+const ALREADY_APPLIED_FIELD = objectFreeze({
+  BINDINGS: 'cdcAlreadyApplied',
+  THROUGH: 'cdcAppliedThrough',
+  INCARNATION: 'cdcSourceIncarnation',
+});
+const ALREADY_APPLIED_REQUIRED_FIELDS = objectFreeze([
+  CDC_OUTCOME_FIELD.SUCCESS, CDC_OUTCOME_FIELD.VECTOR_DIGEST, CDC_OUTCOME_FIELD.GROUP_ID,
+  ALREADY_APPLIED_FIELD.BINDINGS, ALREADY_APPLIED_FIELD.THROUGH,
+  ALREADY_APPLIED_FIELD.INCARNATION,
 ]);
 
 const SUCCESS_STATUSES = objectFreeze([
@@ -153,6 +171,25 @@ const PROVISIONAL_OUTCOME_FIELDS = objectFreeze({
   cdcVectorDigest: isSha256Digest,
   deferRetry: trueValue,
   retryAfterMs: nullable((value) => numberIsFinite(value) && value > 0),
+  deliveryFailures: emptyArray,
+});
+
+function sourcePositionValue(value) {
+  return isRecord(value) && objectKeys(value).length === 2 &&
+    numberIsSafeInteger(value.logIndex) && value.logIndex >= 0 &&
+    numberIsSafeInteger(value.ordinal);
+}
+
+const ALREADY_APPLIED_OUTCOME_FIELDS = objectFreeze({
+  ...OUTCOME_METADATA_FIELDS,
+  success: trueValue,
+  cdcAlreadyApplied: isDenseDataArray,
+  cdcVectorDigest: isSha256Digest,
+  cdcAppliedThrough: sourcePositionValue,
+  cdcSourceIncarnation: nullable(nonEmptyText),
+  error: nullValue,
+  deferRetry: falseValue,
+  retryAfterMs: nullValue,
   deliveryFailures: emptyArray,
 });
 
@@ -251,6 +288,27 @@ function buildProvisionalCdcOutcome(events, retryAfterMs, groupId = null) {
   };
 }
 
+/**
+ * The already-applied answer of a recipient group whose log already holds a
+ * range (CDC Stage 3): a positive confirmation through `appliedThrough`, the
+ * highest position its log committed in that incarnation.
+ * @param {Array<Object>} events - The range's events.
+ * @param {string} groupId - The recipient group.
+ * @param {{logIndex: number, ordinal: number}} appliedThrough - Its position.
+ * @param {string|null} incarnation - The source incarnation it belongs to.
+ * @return {Object} The outcome.
+ */
+function buildAlreadyAppliedCdcOutcome(events, groupId, appliedThrough, incarnation) {
+  return {
+    success: true,
+    cdcVectorDigest: cdcCommitWaitIdentity(events),
+    groupId,
+    cdcAlreadyApplied: durableCdcBindings(events),
+    cdcAppliedThrough: {logIndex: appliedThrough.logIndex, ordinal: appliedThrough.ordinal},
+    cdcSourceIncarnation: incarnation,
+  };
+}
+
 function sameBinding(actual, expected) {
   return isRecord(actual) && actual.sourcePartition === expected.sourcePartition &&
     actual?.eventKey === expected.eventKey &&
@@ -322,13 +380,30 @@ function isProvisionalCdcOutcome(answer, events, groupId = null) {
     (actual) => exactReceiptFields(actual, CDC_BINDING_FIELDS));
 }
 
+/**
+ * Whether an answer is the canonical already-applied outcome over exactly
+ * these events, from `groupId` when one is required.
+ * @param {*} answer - The answer.
+ * @param {Array<Object>} events - The range's events.
+ * @param {string|null} [groupId] - The recipient group required.
+ * @return {boolean} Whether it is.
+ */
+function isAlreadyAppliedCdcOutcome(answer, events, groupId = null) {
+  if (!outcomeFieldsMatch(answer, ALREADY_APPLIED_OUTCOME_FIELDS,
+    ALREADY_APPLIED_REQUIRED_FIELDS) || answer.success !== true ||
+      (groupId !== null && answer.groupId !== groupId) ||
+      !matchesCdcVector(answer, events)) return false;
+  return exactBindings(answer.cdcAlreadyApplied, durableCdcBindings(events),
+    (actual) => exactReceiptFields(actual, CDC_BINDING_FIELDS));
+}
+
 function unknownCdcAcceptance(error = CDC_COMPLETION.UNKNOWN) {
   return {success: false, error, deferRetry: true};
 }
 
 // The unknown outcomes that carry a typed reason and a retry hint.
 const TYPED_UNCONFIRMED_COMPLETIONS = objectFreeze([CDC_COMPLETION.BACKPRESSURE,
-  CDC_COMPLETION.DUPLICATE_IN_FLIGHT]);
+  CDC_COMPLETION.DUPLICATE_IN_FLIGHT, CDC_COMPLETION.POSITION_GAP]);
 
 /**
  * A recipient's answer that is neither committed nor provisional, as one hop
@@ -352,8 +427,10 @@ function unconfirmedCdcAcceptance(answer) {
 // canonical committed (or provisional) CDC outcome. The answer's own
 // deferral is CDC's provisional state, never a transport deferral.
 function isCommittedCdcDelivery(delivery, events, groupId) {
-  return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) &&
-    isCommittedCdcOutcome(deliveryAnswerOf(delivery), events, groupId);
+  if (!isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery))) return false;
+  const answer = deliveryAnswerOf(delivery);
+  return isCommittedCdcOutcome(answer, events, groupId) ||
+    isAlreadyAppliedCdcOutcome(answer, events, groupId);
 }
 
 function isProvisionalCdcDelivery(delivery, events, groupId = null) {
@@ -366,6 +443,12 @@ function isProvisionalCdcDelivery(delivery, events, groupId = null) {
 // no response body or event payload is retained between invocations. A local
 // answer is observed as is; a delivery is observed through its envelope.
 function observeCdcCoverage(answer, events, groupId = null) {
+  if (isAlreadyAppliedCdcOutcome(answer, events, groupId)) {
+    return objectFreeze({state: CDC_COVERAGE_STATE.ALREADY_APPLIED,
+      cdcVectorDigest: answer.cdcVectorDigest,
+      appliedThrough: objectFreeze({...answer.cdcAppliedThrough}),
+      incarnation: answer.cdcSourceIncarnation});
+  }
   if (isCommittedCdcOutcome(answer, events, groupId)) {
     return objectFreeze({state: CDC_COVERAGE_STATE.COMMITTED,
       cdcVectorDigest: answer.cdcVectorDigest,
@@ -420,12 +503,14 @@ function completeCdcPropagation(events, source, targets, groupId, retryAfterMs) 
 export {
   CDC_COMPLETION,
   CDC_COVERAGE_STATE,
+  buildAlreadyAppliedCdcOutcome,
   buildCommittedCdcOutcome,
   buildProvisionalCdcOutcome,
   cdcCommitWaitIdentity,
   cdcCoverageState,
   completeCdcPropagation,
   hasDurableCdcEvents,
+  isAlreadyAppliedCdcOutcome,
   isCommittedCdcOutcome,
   isCommittedCdcDelivery,
   isProvisionalCdcDelivery,

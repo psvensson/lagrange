@@ -347,22 +347,43 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         },
       );
     }
-    resolveIncompleteOperationObservation(operations = []) {
-      const normalizedOperations = Array.isArray(operations) ? operations : [];
+    /**
+     * The named state of the last incomplete-operation list read: DEFERRED
+     * whenever it did not answer (its operations, if any, are a projection
+     * fallback), else PRESENT or a confirmed EMPTY. `complete` is true only
+     * for an authoritative answer.
+     * @param {Array|null} [operations=null] - Null: the last recorded read.
+     * @return {Object}
+     */
+    resolveIncompleteOperationObservation(operations = null) {
+      // Without a list, the observation is of the last recorded read.
+      const normalizedOperations = Array.isArray(operations) ?
+        operations :
+        Array.isArray(this.lastIncompleteOperationObservation) ?
+          this.lastIncompleteOperationObservation :
+          [];
       const deferredOutcome = this.getLastIncompleteOperationReadOutcome();
-      const hasDeferredOwnerRead =
-      deferredOutcome?.completionState ===
-      PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED;
+      const complete = !deferredOutcome &&
+        this.lastIncompleteOperationReadComplete === true;
       const state =
-      normalizedOperations.length > 0 ?
-        INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
-        hasDeferredOwnerRead ?
-          INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED :
-          INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY;
+      deferredOutcome ?
+        INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED :
+        normalizedOperations.length > 0 ?
+          INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
+          complete ?
+            INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY :
+            INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED;
       return Object.freeze({
         state,
+        complete,
         operationCount: normalizedOperations.length,
-        deferredOutcome,
+        deferredOutcome: deferredOutcome ||
+          (state === INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED ?
+            this.buildIncompleteOperationReadUnavailableOutcome(null, {
+              source: INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE
+                .UNANSWERED_PROJECTION,
+            }) :
+            null),
         retryAfterMs: Number.isFinite(deferredOutcome?.retryAfterMs) ?
           deferredOutcome.retryAfterMs :
           null,
@@ -370,6 +391,39 @@ function assignReplicaOperationRepositoryVisibilityMethods(
     }
     clearIncompleteOperationReadOutcome() {
       this.lastIncompleteOperationReadOutcome = null;
+    }
+    /**
+     * The typed unavailability of one incomplete-operation list read that
+     * did not answer (no priority-recovery deferral applied).
+     * @param {Object|null} result - The failed read result, if any.
+     * @param {Object} options
+     * @return {Object}
+     */
+    buildIncompleteOperationReadUnavailableOutcome(result, options = {}) {
+      const fallbackOperationCount = Array.isArray(options.fallbackOperations) ?
+        options.fallbackOperations.length :
+        0;
+      return {
+        completionState: null,
+        reasonCode:
+          REPLICA_OPERATION_VISIBILITY_REASON.AUTHORITATIVE_READ_UNAVAILABLE,
+        retryable: result ? isRetryableControlPlaneError(result) : true,
+        errorCode: result?.errorCode || result?.code || null,
+        retryAfterMs: Number.isFinite(options.retryAfterMs) ?
+          Math.max(0, Math.floor(options.retryAfterMs)) :
+          null,
+        cachedOperationCount: fallbackOperationCount,
+        fallbackOperationCount,
+        queryDurationMs: Number.isFinite(options.queryDurationMs) ?
+          Math.floor(options.queryDurationMs) :
+          null,
+        source: options.source,
+      };
+    }
+    recordIncompleteOperationReadUnavailable(result, options = {}) {
+      this.lastIncompleteOperationReadOutcome =
+        this.buildIncompleteOperationReadUnavailableOutcome(result, options);
+      this.lastIncompleteOperationReadComplete = false;
     }
     clearAuthoritativeOperationVisibilityOutcome() {
       this.lastAuthoritativeOperationVisibilityOutcome = null;
@@ -559,16 +613,20 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       const normalizedOperations = this.cloneIncompleteOperationObservationSet(
         Array.isArray(operations) ? operations : [],
       );
+      // A deferred owner read is DEFERRED whatever its fallback holds: the
+      // operations are then a projection (complete=false, possibly partial),
+      // never a PRESENT authoritative list.
       const hasDeferredOwnerRead =
       deferredOutcome?.completionState ===
       PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED;
       return Object.freeze({
         state:
-        normalizedOperations.length > 0 ?
-          INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
-          hasDeferredOwnerRead ?
-            INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED :
+        hasDeferredOwnerRead ?
+          INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED :
+          normalizedOperations.length > 0 ?
+            INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
             INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
+        complete: !hasDeferredOwnerRead,
         operationCount: normalizedOperations.length,
         operations: normalizedOperations,
         deferredOutcome: deferredOutcome ? {...deferredOutcome} : null,
@@ -635,6 +693,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       ) {
         this.recordIncompleteOperationObservation(cachedOperations);
         this.clearIncompleteOperationReadOutcome();
+        this.lastIncompleteOperationReadComplete = false;
         visibleOperations = cachedOperations;
       } else {
         visibleOperations = await this.queryIncompleteOperations({

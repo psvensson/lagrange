@@ -34,6 +34,8 @@ import {REBALANCE_COORDINATOR_LOG_MSG as LOG} from './rebalancer-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {recoverMessageGroupLearnerInline, issueMessageGroupLearnerSuccessorInline} from
   './operation-workflow-message-group-native-read.js';
+import {OPERATION_VISIBILITY_STATE, readOperationVisibilityState}
+  from './replica-operation-repository-operation-visibility.js';
 
 const {OPERATION_WORKFLOW_OWNER_LITERAL} = OPERATION_WORKFLOW_OWNER_SHARED;
 const CLAIM_HELD = 'held';
@@ -358,9 +360,10 @@ function laneOwesLearnerTurn(repository, laneKey) {
 }
 async function observeDebtWakeRoute(repository, route) {
   if (route.operationId) return observeMembershipOperation(repository, route.operationId);
-  const holder = await repository.queryAuthoritativeOperationByMessageGroupMembershipLane(
+  const holder = await repository.observeAuthoritativeOperationByMessageGroupMembershipLane(
     route.laneKey);
-  return {available: holder !== null, row: holder};
+  return {available: readOperationVisibilityState(holder) !==
+    OPERATION_VISIBILITY_STATE.UNAVAILABLE, row: holder.operation};
 }
 /** Replicated-row wake: an operation row still owing debt, or a hosted replica
  * of a group whose lane holder owes debt, re-enters the same algorithm. */

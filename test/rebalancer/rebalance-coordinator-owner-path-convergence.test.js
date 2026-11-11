@@ -14,6 +14,11 @@
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {
+  buildAbsentOperationVisibility,
+  buildPresentOperationVisibility,
+  buildUnavailableOperationVisibility,
+} from '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {
@@ -457,7 +462,8 @@ test('Owner-path convergence: all progression entry points ' +
   );
 
   await t.test(
-    'services cache progression keeps REPLACE source removal moving when ' +
+    'services cache progression keeps REPLACE source removal retained, and ' +
+    'moving once the owner answers, when ' +
     'authoritative operation visibility is missing',
     async (t) => {
       const replaceRow = buildOperationRow({
@@ -495,6 +501,7 @@ test('Owner-path convergence: all progression entry points ' +
           return originalEvaluateRemoveSafety(operation);
         };
       coordinator.repository.queryAuthoritativeOperationById = async () => null;
+      let ownerReadDeferred = true;
       coordinator.repository.getOperationByIdVisibilityObservation =
         async (operationId, options = {}) => {
           visibilityObservationCalls.push({
@@ -502,25 +509,22 @@ test('Owner-path convergence: all progression entry points ' +
             options: {...options},
           });
           if (operationId !== TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID) {
-            return {
-              operation: null,
-              deferredOutcome: null,
-            };
+            return buildAbsentOperationVisibility();
           }
-          return {
-            operation: {
-              ...coordinator.repository.rowToOperation(
-                operationMap.get(TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID),
-              ),
-              sourceReplicaId: TEST_OBSERVED_PROGRESS_SOURCE_REPLICA_ID,
-            },
-            deferredOutcome: {
+          if (ownerReadDeferred) {
+            return buildUnavailableOperationVisibility({
               completionState: 'deferred',
               retryAfterMs:
                 TEST_OBSERVED_PROGRESS_VISIBILITY_RETRY_AFTER_MS,
               source: TEST_OBSERVED_PROGRESS_VISIBILITY_DEFERRED_SOURCE,
-            },
-          };
+            });
+          }
+          return buildPresentOperationVisibility({
+            ...coordinator.repository.rowToOperation(
+              operationMap.get(TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID),
+            ),
+            sourceReplicaId: TEST_OBSERVED_PROGRESS_SOURCE_REPLICA_ID,
+          });
         };
 
       try {
@@ -532,7 +536,33 @@ test('Owner-path convergence: all progression entry points ' +
           status: ReplicaStatus.ACTIVE,
           raft_role: 'follower',
         });
+        for (let turn = 0; turn < 20; turn += 1) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+        const stepBeforeAnswer = operationMap.get(
+          TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
+        )?.workflow_step;
+        t.not(
+          stepBeforeAnswer,
+          WORKFLOW_STEP.STOPPING,
+          'a deferred owner read drives no transition from a cached row',
+        );
+        t.same(
+          visibilityObservationCalls,
+          [{
+            operationId: TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
+            options: {
+              allowPriorityRecoveryDeferredVisibility: true,
+            },
+          }],
+          'observed progress reads the owner through the repository visibility contract',
+        );
 
+        // The owner answers: the retained observed-progress wake continues.
+        ownerReadDeferred = false;
+        await coordinator.workflowOwner.reconcileObservedProgressOperation(
+          TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
+        );
         // The owner reads the witness and persists the removal intent before
         // the effect (quest replace-source-removal-owner): settle its turns.
         for (let turn = 0; turn < 20; turn += 1) {
@@ -545,22 +575,12 @@ test('Owner-path convergence: all progression entry points ' +
         t.equal(
           updated?.workflow_step,
           WORKFLOW_STEP.STOPPING,
-          'service-row progress should continue the REPLACE into source removal even when authoritative operation reads miss',
+          'once the owner answers, service-row progress continues the REPLACE into source removal',
         );
         t.equal(
           updated?.status,
           ReplicaStatus.REMOVING,
-          'the durable row should reflect source removal in progress after the visibility fallback',
-        );
-        t.same(
-          visibilityObservationCalls,
-          [{
-            operationId: TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
-            options: {
-              allowPriorityRecoveryDeferredVisibility: true,
-            },
-          }],
-          'observed progress should use the repository visibility observation contract instead of abandoning on authoritative reread misses',
+          'the durable row reflects source removal in progress',
         );
         t.ok(
           recordedOwnerKeys.includes(
@@ -568,7 +588,7 @@ test('Owner-path convergence: all progression entry points ' +
               TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
             ),
           ),
-          'services cache progression must still route through the shared owner key during visibility fallback',
+          'services cache progression must still route through the shared owner key',
         );
       } finally {
         await coordinator.shutdown();
@@ -623,17 +643,14 @@ test('Owner-path convergence: all progression entry points ' +
             operationId,
             options: {...options},
           });
-          return {
-            operation: null,
-            deferredOutcome: {
-              completionState:
-                TEST_DEFERRED_DISPATCH_RETRY_COMPLETION_STATE,
-              retryAfterMs:
-                TEST_DEFERRED_DISPATCH_RETRY_VISIBILITY_RETRY_AFTER_MS,
-              source:
-                TEST_DEFERRED_DISPATCH_RETRY_VISIBILITY_DEFERRED_SOURCE,
-            },
-          };
+          return buildUnavailableOperationVisibility({
+            completionState:
+              TEST_DEFERRED_DISPATCH_RETRY_COMPLETION_STATE,
+            retryAfterMs:
+              TEST_DEFERRED_DISPATCH_RETRY_VISIBILITY_RETRY_AFTER_MS,
+            source:
+              TEST_DEFERRED_DISPATCH_RETRY_VISIBILITY_DEFERRED_SOURCE,
+          });
         };
 
       try {
@@ -678,6 +695,7 @@ test('Owner-path convergence: all progression entry points ' +
           [{
             operationId: TEST_DEFERRED_DISPATCH_RETRY_OPERATION_ID,
             options: {
+              authoritativeReadMode: 'owner_rpc_required',
               allowPriorityRecoveryDeferredVisibility: true,
               allowOwnerPersistedTransitionDeferredVisibility: false,
             },

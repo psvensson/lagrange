@@ -1355,9 +1355,9 @@ async (t) => {
 
     const authoritativeReadsBeforeRetry = authoritativeReadCount;
     const originalQueryOperationById =
-      coordinator.repository.queryOperationById
+      coordinator.repository.queryOperationProjectionById
         .bind(coordinator.repository);
-    coordinator.repository.queryOperationById = async (requestedOperationId) => {
+    coordinator.repository.queryOperationProjectionById = async (requestedOperationId) => {
       if (requestedOperationId === operationId) {
         return null;
       }

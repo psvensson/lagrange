@@ -83,6 +83,9 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
     'Replica removal deferred: its REMOVING row could not be made durable',
   REMOVE_CONSENSUS_EXIT:
     'Retiring replica left consensus; retiring its port',
+  REMOVE_CANCEL_REQUEST: 'Handling CANCEL_REPLICA_REMOVAL request',
+  REMOVE_CANCELLED:
+    'Replica removal cancelled: its row serves again and it stays a voter',
   OPENED_INTO_RETIRED_GROUP:
     'Replica opened into a group its durable workflow record retired; ' +
     'retiring it as a unit',

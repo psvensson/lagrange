@@ -1,3 +1,4 @@
+import {REPLICA_ABSENT_NOT_BY_OPERATION} from './replica-removal-debt-errors.js';
 import {
   ReplicaOperationField,
   ReplicaOperationMessageType,
@@ -476,13 +477,21 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           if (request?.[ReplicaOperationField.GROUP_RETIREMENT]) {
             return this.answerRemovedGroupMember(request, error);
           }
-          this.logger.error(REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED, {
-            operationId,
-            replicaId,
-            partitionId,
-            error: error.message,
-            stack: error.stack,
-          });
+          // A replica another operation (or none) already removed is a
+          // typed, final answer for the asker, not a failure of this node.
+          if (error?.code === REPLICA_ABSENT_NOT_BY_OPERATION) {
+            this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_ALREADY_REMOVED, {
+              operationId, replicaId, partitionId, nodeId: this.nodeId,
+              errorCode: error.code});
+          } else {
+            this.logger.error(REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED, {
+              operationId,
+              replicaId,
+              partitionId,
+              error: error.message,
+              stack: error.stack,
+            });
+          }
           return this.buildReplicaOperationResponse(
             ReplicaOperationResponseStatus.ERROR,
             {...typedRemoveErrorFields(error), replicaId, nodeId: this.nodeId},

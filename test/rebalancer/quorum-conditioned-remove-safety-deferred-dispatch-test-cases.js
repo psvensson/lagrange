@@ -283,7 +283,7 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
       await deferredTimers[0].fn();
 
       const currentOperation =
-        await coordinator.queryOperationById(
+        await coordinator.queryOperationProjectionById(
           operation.operationId,
         );
       t.equal(

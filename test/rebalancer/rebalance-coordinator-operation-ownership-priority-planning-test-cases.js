@@ -1,5 +1,7 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {stubAnsweredIncompleteOperationsRead} from
+  './incomplete-operations-read-stub.js';
 function findPriorityRecoveryDecisionSnapshot(
   planningSnapshot,
   partitionId,
@@ -127,9 +129,9 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       coordinator.queryCachedIncompleteOperations = async () => (
         [activePriorityReplaceOperation]
       );
-      coordinator.queryIncompleteOperations = async () => (
+      stubAnsweredIncompleteOperationsRead(coordinator, () => (
         [activePriorityReplaceOperation]
-      );
+      ));
       coordinator.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshotForOperation =
       async () => planningSnapshot;
 
@@ -258,12 +260,12 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
           secondActivePriorityReplaceOperation,
         ]
       );
-      coordinator.queryIncompleteOperations = async () => (
+      stubAnsweredIncompleteOperationsRead(coordinator, () => (
         [
           firstActivePriorityReplaceOperation,
           secondActivePriorityReplaceOperation,
         ]
-      );
+      ));
       coordinator.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshotForOperation =
       async () => planningSnapshot;
 
@@ -343,9 +345,9 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       coordinator.queryCachedIncompleteOperations = async () => (
         [activePriorityReplaceOperation]
       );
-      coordinator.queryIncompleteOperations = async () => (
+      stubAnsweredIncompleteOperationsRead(coordinator, () => (
         [activePriorityReplaceOperation]
-      );
+      ));
       coordinator.workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations =
       async () => ({
         partitionId: 'sql_transaction_participants-p1',
@@ -494,9 +496,9 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       coordinator.queryCachedIncompleteOperations = async () => (
         [stalePriorityReplaceOperation]
       );
-      coordinator.queryIncompleteOperations = async () => (
+      stubAnsweredIncompleteOperationsRead(coordinator, () => (
         [stalePriorityReplaceOperation]
-      );
+      ));
       coordinator.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshot =
       async () => planningSnapshot;
       coordinator.workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations =
@@ -657,9 +659,9 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       coordinator.queryCachedIncompleteOperations = async () => (
         [stalePriorityReplaceOperation]
       );
-      coordinator.queryIncompleteOperations = async () => (
+      stubAnsweredIncompleteOperationsRead(coordinator, () => (
         [stalePriorityReplaceOperation]
-      );
+      ));
       coordinator.workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations =
       async (partitionId, operations) => {
         planningSnapshotCalls += 1;
@@ -771,9 +773,9 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       coordinator.queryCachedIncompleteOperations = async () => (
         [stalePriorityReplaceOperation]
       );
-      coordinator.queryIncompleteOperations = async () => (
+      stubAnsweredIncompleteOperationsRead(coordinator, () => (
         [stalePriorityReplaceOperation]
-      );
+      ));
       coordinator.workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations =
       async () => null;
       coordinator.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshotForOperation =
@@ -878,7 +880,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
           isEmergencyPriorityPartition: () => false,
         });
       coordinator.queryCachedIncompleteOperations = async () => [];
-      coordinator.queryIncompleteOperations = async () => [];
+      stubAnsweredIncompleteOperationsRead(coordinator, () => []);
 
       try {
         const blockedPartitionCanStart =
@@ -993,9 +995,9 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       coordinator.queryCachedIncompleteOperations = async () => (
         [stalePriorityReplaceOperation]
       );
-      coordinator.queryIncompleteOperations = async () => (
+      stubAnsweredIncompleteOperationsRead(coordinator, () => (
         [stalePriorityReplaceOperation]
-      );
+      ));
       coordinator.workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations =
       async () => null;
       coordinator.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshotForOperation =

@@ -16,6 +16,8 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {REPLICA_REMOVAL_CANCEL_ANSWER} from
+  '../../src/node/replica-removal-cancel-contract.js';
 
 const DEFAULT_TRANSFER_WINDOW_MS = 1_000;
 const DEFAULT_COMMIT_INDEX = 10;
@@ -96,8 +98,13 @@ export function createReplaceWitness(options = {}) {
     // What RETIRE_REPLICA_PEER does to the configuration: nothing until the
     // test commits it (commitRemoval), unless commitOnRetire is set.
     commitOnRetire: options.commitOnRetire === true,
+    // What the source node answers CANCEL_REPLICA_REMOVAL (D2 target death):
+    // a REPLICA_REMOVAL_CANCEL_ANSWER, or by default from the configuration
+    // (still a voter: CANCELLED; removed: ALREADY_REMOVED).
+    cancelAnswer: options.cancelAnswer ?? null,
     reads: [],
     retirements: [],
+    cancels: [],
     commitRemoval() {
       witness.sourceVoter = false;
       witness.commitIndex += 1;
@@ -113,6 +120,16 @@ export function createReplaceWitness(options = {}) {
       if (type === ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP) {
         witness.reads.push(payload);
         return answerMembershipRead(witness, payload);
+      }
+      if (type === ReplicaOperationMessageType.CANCEL_REPLICA_REMOVAL) {
+        witness.cancels.push(payload);
+        const answer = witness.cancelAnswer ?? (witness.sourceVoter ?
+          REPLICA_REMOVAL_CANCEL_ANSWER.CANCELLED :
+          REPLICA_REMOVAL_CANCEL_ANSWER.ALREADY_REMOVED);
+        return {
+          status: ReplicaOperationResponseStatus.COMPLETED,
+          [ReplicaOperationField.REMOVAL_CANCELLATION]: {answer, reason: null},
+        };
       }
       if (type === ReplicaOperationMessageType.RETIRE_REPLICA_PEER) {
         witness.retirements.push(payload);

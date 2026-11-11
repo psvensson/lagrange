@@ -6,8 +6,12 @@ import {TYPEOF, WORKFLOW_STEP} from '../constants/index.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
-import {buildUnavailableOperationVisibility} from
-  './replica-operation-repository-operation-visibility.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  buildOperationVisibilityUnavailableError,
+  buildUnavailableOperationVisibility,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 import {
   REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS,
 } from './replica-operation-message-group-membership-fields.js';
@@ -202,6 +206,16 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
     }).operationLedger === true;
   }
 
+  function requireAnsweredConflictRead(observation, operationId) {
+    if (
+      readOperationVisibilityState(observation) ===
+      OPERATION_VISIBILITY_STATE.UNAVAILABLE
+    ) {
+      throw buildOperationVisibilityUnavailableError(observation, operationId);
+    }
+    return observation.operation;
+  }
+
   async function resolveNewOperationInsertCollision(
     repository,
     operation,
@@ -218,10 +232,14 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       });
     if (!existingOperation) {
-      const conflictingMembershipOperation =
-        await repository.queryAuthoritativeOperationByMessageGroupMembershipLane(
+      // Each conflict read must answer: an unavailable one cannot prove the
+      // collision is not its conflict.
+      const conflictingMembershipOperation = requireAnsweredConflictRead(
+        await repository.observeAuthoritativeOperationByMessageGroupMembershipLane(
           operation.messageGroupMembershipLaneKey,
-        );
+        ),
+        operation.operationId,
+      );
       if (conflictingMembershipOperation) {
         repository.emitReplicaOperationPersistenceDivergence(
           conflictingMembershipOperation,
@@ -232,10 +250,12 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
           conflictingMembershipOperation,
         );
       }
-      const conflictingTargetOperation =
-        await repository.queryAuthoritativeOperationByTargetClaimKey(
+      const conflictingTargetOperation = requireAnsweredConflictRead(
+        await repository.observeAuthoritativeOperationByTargetClaimKey(
           operation.targetClaimKey,
-        );
+        ),
+        operation.operationId,
+      );
       if (conflictingTargetOperation) {
         repository.emitReplicaOperationPersistenceDivergence(
           conflictingTargetOperation,
@@ -394,15 +414,6 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         options.expectedWorkflowStep.length > 0 ?
         options.expectedWorkflowStep :
         null;
-    }
-
-    async queryReplicaOperationPersistenceAuthorityOperation(operation, options = {}) {
-      const observation =
-        await this.queryReplicaOperationPersistenceAuthorityObservation(
-          operation,
-          options,
-        );
-      return observation?.operation || null;
     }
 
     async queryReplicaOperationPersistenceAuthorityObservation(operation, options = {}) {

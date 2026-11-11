@@ -255,11 +255,14 @@ const byEntryIndex = (left, right) => {
 // reduction and refused.
 function expectedReclamation(emitting, acknowledgments) {
   const reclaimed = [];
-  for (const source of [...emitting].sort(byEntryIndex)) {
+  const ordered = [...emitting].sort(byEntryIndex);
+  for (const source of ordered) {
     const acknowledgment = acknowledgments.firstApplied.get(source.entryKey);
     if (!acknowledgment) break;
     reclaimed.push({source, acknowledgment});
   }
+  // The ledger's newest row is never reclaimed (CDC Stage 3 position probe).
+  if (reclaimed.length > 0 && reclaimed.length === ordered.length) reclaimed.pop();
   if (reclaimed.length > PARTITION_CDC_OBLIGATION_BOUND.RECLAIM_ROWS_PER_APPLY) return null;
   const keys = new Set(reclaimed.map(({source}) => source.entryKey));
   if (reclaimed.length === 0) return {keys, progress: null};

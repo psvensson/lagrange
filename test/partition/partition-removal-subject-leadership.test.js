@@ -195,7 +195,7 @@ function leaderOf(services) {
     service.raft?.readStatus().role === RAFT_ROLE.LEADER) ?? null;
 }
 
-async function withGroup(kind, body) {
+async function withGroup(kind, subjectIndex, body) {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   ConfigurationManager.getInstance().initialize({
@@ -212,7 +212,8 @@ async function withGroup(kind, body) {
       {directory: path.dirname(group.dbFileOf(members[0])),
         budgetMs: GROUP_BUDGET_MS});
     await owners.release(kind.partitionId);
-    const setup = await kind.setupWrite(group.services[0], members[2][1]);
+    const setup = await kind.setupWrite(group.services[0],
+      members[subjectIndex][1]);
     assert.equal(setup.success, true,
       `setup: the group serves a write (${JSON.stringify(setup)})`);
     await body({group, members, owners});
@@ -227,11 +228,18 @@ async function withGroup(kind, body) {
 // The REMOVING row reaches the subject and one survivor while the leader's
 // cache lags (CDC delivery), the subject wins leadership, and the row then
 // reaches the lagging cache too.
-async function subjectWinsWhileRemoving(kind) {
+// subjectIndex 2: a plain REMOVE of the replica admitted last; 1: a REPLACE
+// source - a founding replica whose target (the replica admitted last) is
+// already a voter. The first replica leads at the start and hosts the
+// release fixture's control partition.
+async function subjectWinsWhileRemoving(kind, subjectIndex = 2) {
   let facts = null;
-  await withGroup(kind, async ({group, members, owners}) => {
-    const [first, second, subject] = group.services;
-    const subjectRow = retiringRow(subject.partitionId, members[2]);
+  await withGroup(kind, subjectIndex, async ({group, members, owners}) => {
+    const first = group.services[0];
+    const subject = group.services[subjectIndex];
+    const second = group.services.find((service, index) =>
+      index !== 0 && index !== subjectIndex);
+    const subjectRow = retiringRow(subject.partitionId, members[subjectIndex]);
     const watch = watchGroup(group.services, subject.replicaId);
     try {
       await deliverRow(subject, subjectRow);
@@ -274,7 +282,7 @@ async function subjectWinsWhileRemoving(kind) {
       if (removed) await owners.release(subject.partitionId);
       const leader = leaderOf([first, second]);
       const write = leader ?
-        await kind.finalWrite(leader, members[2][1]) : null;
+        await kind.finalWrite(leader, members[subjectIndex][1]) : null;
       watch.stop();
       facts = {
         removedBySurvivor: removed,
@@ -319,4 +327,20 @@ test('(ii) partitions-p1: the removal of a source that won leadership ' +
   assert.deepEqual(judged(await subjectWinsWhileRemoving(PARTITIONS_P1)),
     EXPECTED, 'partitions-p1 removes its source through a survivor and ' +
     'takes the leader-clear write');
+});
+
+test('(i) REPLACE: a REPLACE source (a founder, its target a voter) that ' +
+  'wins an election after its row is REMOVING hands off and is removed by ' +
+  'a survivor', {timeout: TEST_TIMEOUT_MS}, async () => {
+  assert.deepEqual(judged(await subjectWinsWhileRemoving(USER_TABLE, 1)),
+    EXPECTED, 'the REPLACE source is removed by a survivor; the group ' +
+    'stays led and takes writes');
+});
+
+test('(ii) REPLACE on partitions-p1: the REPLACE source that won leadership ' +
+  'is removed and the leader-clear write lands at a survivor',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  assert.deepEqual(judged(await subjectWinsWhileRemoving(PARTITIONS_P1, 1)),
+    EXPECTED, 'partitions-p1 removes its REPLACE source through a survivor ' +
+    'and takes the leader-clear write');
 });

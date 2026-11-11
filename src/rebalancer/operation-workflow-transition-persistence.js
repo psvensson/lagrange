@@ -32,6 +32,8 @@ import {
 } from './operation-workflow-dispatch-ledger-self-move-gate.js';
 import {operationCarriesReplicaCreateAdmission} from
   './replica-operation-create-admission-fields.js';
+import {presentOperationOf} from
+  './replica-operation-repository-operation-visibility.js';
 
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -92,9 +94,9 @@ async function observeConcurrentCreateAdmissionWinner(
   ) {
     return NO_CONCURRENT_CREATE_ADMISSION_WINNER;
   }
-  const authoritativeOperation =
+  const authoritativeOperation = presentOperationOf(
     await owner.repository
-      .queryReplicaOperationPersistenceAuthorityOperation(operation);
+      .queryReplicaOperationPersistenceAuthorityObservation(operation));
   if (
     !authoritativeOperation ||
     owner.repository.isOperationTerminal(authoritativeOperation) ||

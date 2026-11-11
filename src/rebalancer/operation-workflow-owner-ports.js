@@ -699,10 +699,10 @@ async function readOperationWorkflowOwnerPortDurableOperation(
     return operationInput;
   }
   if (
-    typeof owner.repository?.queryOperationById ===
+    typeof owner.repository?.queryOperationProjectionById ===
       OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE
   ) {
-    return owner.repository.queryOperationById(operationId);
+    return owner.repository.queryOperationProjectionById(operationId);
   }
   return OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD;
 }

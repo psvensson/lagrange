@@ -412,9 +412,10 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
       const service = this.service;
       options = captureCdcForwardOptions(service, options);
       if (requiresDurableCdcForwarding(events, options)) {
+        // A durable vector travels with the source range it was shipped as.
         return this.forwardDurableCdcPayload({
           type: messageGroupApplicationMessageType.LATENCY_CDC_PROPAGATION_BATCH,
-          events, sourceNodeId: service.nodeId,
+          events, sourceNodeId: service.nodeId, sourceRange: options.sourceRange,
         }, options);
       }
       const replayOnly = options.replayOnly === true;

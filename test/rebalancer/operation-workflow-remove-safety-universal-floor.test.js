@@ -332,3 +332,42 @@ test(
     t.end();
   },
 );
+
+// A plain REMOVE re-sent at STOPPING whose first delivery never took effect
+// (its subject's row still serves) starts a fresh removal: it passes the
+// same floors as a first send. Before, every STOPPING re-send was SAFE
+// without evaluation. A re-send whose effect already took (row retiring or
+// absent) repeats it and stays SAFE; an unreadable row is a named wait.
+function stoppingResend(lifecycle) {
+  const context = buildContext({
+    rows: [
+      replicaRow('custom-p1-r1', 'node-a'),
+      replicaRow('custom-p1-r2', 'node-b'),
+      replicaRow('custom-p1-r3', 'node-c'),
+    ],
+    minReplicaCount: 3,
+  });
+  context.isRemoveInitialDispatchPhase = () => false;
+  context.observeStoppingReplicaProgress = async () => lifecycle;
+  return evaluateRemoveSafety(context, {
+    ...removeOperation(USER_PARTITION_ID, 'custom-p1-r1'),
+    workflowStep: 'STOPPING', targetNodeId: 'node-a'});
+}
+
+test('a plain REMOVE re-sent at STOPPING is evaluated when its first ' +
+  'delivery never took effect', async (t) => {
+  const {DEFER, SAFE} = REMOVE_SAFETY_EVALUATION_CLASSIFICATION;
+  t.same({
+    fresh: (await stoppingResend({state: 'observed',
+      lifecycleStatus: 'active'})).classification,
+    removing: (await stoppingResend({state: 'observed',
+      lifecycleStatus: 'removing'})).classification,
+    absent: (await stoppingResend({state: 'absent',
+      lifecycleStatus: null})).classification,
+    unread: (await stoppingResend({state: 'unavailable',
+      lifecycleStatus: null})).classification,
+  }, {fresh: DEFER, removing: SAFE, absent: SAFE, unread: DEFER},
+  'a fresh removal below the floor defers; a repeated effect is safe; an ' +
+  'unreadable subject waits');
+  t.end();
+});

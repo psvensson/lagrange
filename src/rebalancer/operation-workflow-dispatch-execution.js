@@ -217,7 +217,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
       return null;
     }
 
-    const operation = await this.repository.queryOperationById(operationId);
+    const operation = await this.repository.queryOperationProjectionById(operationId);
     if (!operation) {
       return null;
     }
@@ -330,7 +330,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
       typeof operationInput === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
       operationInput.length > 0
     ) {
-      return this.repository.queryOperationById(operationInput);
+      return this.repository.queryOperationProjectionById(operationInput);
     }
     if (
       !operationInput ||

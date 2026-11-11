@@ -59,8 +59,6 @@ function shouldReturnDeferredDispatchOwnerProgressResult(result) {
 import {recordMessageGroupLearnerFromRecipient, recoverMessageGroupLearnerFromRecipient,
   recoverMessageGroupVoterFromRecipient, issueMessageGroupSuccessorFromRecipient} from
   './operation-workflow-message-group-native-read.js';
-import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
-  '../control-plane/control-plane-system-table-gateway-constants.js';
 import {
   OPERATION_VISIBILITY_STATE,
   readOperationVisibilityState,
@@ -317,13 +315,14 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
       await this.repository.getOperationByIdVisibilityObservation(
         operationId,
         {
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
           allowPriorityRecoveryDeferredVisibility: true,
         },
       );
-    // No owner answer: the observed-progress retry stays armed (it is not
-    // cleared on a read that answered nothing).
+    // The owner's local durable rows (owner-preferred, local SQL fallback):
+    // observed progress must move during control-plane recovery, when the
+    // strict owner-RPC lane is what is unavailable; its step writes are
+    // compare-and-set. No answer at all keeps the observed-progress retry
+    // armed (it is not cleared on a read that answered nothing).
     if (
       readOperationVisibilityState(visibilityObservation) ===
       OPERATION_VISIBILITY_STATE.UNAVAILABLE

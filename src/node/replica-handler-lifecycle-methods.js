@@ -67,6 +67,8 @@ async function dispatchReplicaMessage(handler, type, payload) {
     return handler.handleReadCommittedMembership(payload);
   case ReplicaOperationMessageType.CLAIM_FAILED_CREATE_CLEANUP:
     return handler.handleClaimFailedCreateCleanup(payload);
+  case ReplicaOperationMessageType.CANCEL_REPLICA_REMOVAL:
+    return handler.handleCancelReplicaRemoval(payload);
   default:
     return handler.buildReplicaOperationResponse(
       ReplicaOperationResponseStatus.ERROR,

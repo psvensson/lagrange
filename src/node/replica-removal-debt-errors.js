@@ -14,6 +14,17 @@ const REPLICA_LEADER_CLEAR_DEFERRED = 'REPLICA_LEADER_CLEAR_DEFERRED';
 // ABSENT, asked by an operation other than the one that removed it: final
 // (no later state changes the answer), so never deferred.
 const REPLICA_ABSENT_NOT_BY_OPERATION = 'REPLICA_ABSENT_NOT_BY_OPERATION';
+// A removal whose replica has no evidence it left consensus (no port to read
+// its applied configuration through while its durable lifecycle still holds
+// an active record): nothing local retires; its owner re-drives it.
+const REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED =
+  'REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED';
+// A removal whose replica's participant custody is not proven settled (a
+// durable PREPARED participant, volatile participant work, or custody that
+// cannot be read): nothing is retired, deleted or completed; the PREPARED
+// state is kept until its decision settles it.
+const REPLICA_REMOVAL_PARTICIPANT_CUSTODY_DEFERRED =
+  'REPLICA_REMOVAL_PARTICIPANT_CUSTODY_DEFERRED';
 
 function retryableRemovalDebtError(code, message, metadata = {}) {
   const error = new Error(message);
@@ -73,6 +84,8 @@ export {
   REPLICA_ABSENT_NOT_BY_OPERATION,
   REPLICA_LEADER_CLEAR_DEFERRED,
   REPLICA_REMOVAL_COMPLETION_DEFERRED,
+  REPLICA_REMOVAL_CONSENSUS_EXIT_DEFERRED,
+  REPLICA_REMOVAL_PARTICIPANT_CUSTODY_DEFERRED,
   buildFailedRemovalOutcome,
   removalRowDeleteDeferred,
   replicaAbsentNotByOperationError,

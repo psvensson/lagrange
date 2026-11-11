@@ -312,9 +312,11 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       t.equal(readCalls, 1, 'the repository should still attempt one authoritative owner read');
       t.equal(
         observation?.state,
-        'present',
-        'cache-visible in-flight rows should remain usable while authoritative visibility is deferred',
+        'deferred',
+        'an unanswered owner read is DEFERRED; its cache-visible rows are a projection',
       );
+      t.equal(observation?.complete, false,
+        'the projection is not a complete list');
       t.same(
         observation?.operations?.map((operation) => operation.operationId),
         ['op-entity-visibility-cached'],

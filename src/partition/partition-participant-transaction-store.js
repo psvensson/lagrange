@@ -9,6 +9,8 @@
 // created with the partition, outside any command, identically on every
 // replica, by the open hook the lifecycle owner runs on each connection.
 
+import fs from 'node:fs';
+import Database from 'better-sqlite3';
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
 import {stampParticipantConnection} from './partition-participant-transaction-connection.js';
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
@@ -31,6 +33,7 @@ import {
   PARTICIPANT_TRANSACTION_STORE_ERROR as STORE_ERROR,
   PARTICIPANT_TRANSACTION_STORE_ERROR_CODE as STORE_ERROR_CODE,
   PARTICIPANT_STORE_CONNECTION_STATE as CONNECTION_STATE,
+  PARTICIPANT_TRANSACTION_CUSTODY as CUSTODY,
 } from './partition-participant-transaction-constants.js';
 
 const ONE_ROW = 1;
@@ -294,6 +297,36 @@ function isPartitionReserved(db) {
 }
 
 /**
+ * The durable participant custody of a partition database file, read on an
+ * independent read-only connection (the removal owner's read once the
+ * partition's own connection is released): ACTIVE while a PREPARED row
+ * reserves it, IDLE when none does (no file, or no participant table:
+ * nothing was ever PREPARED there), UNAVAILABLE when the file cannot be
+ * read - never IDLE on a read that failed.
+ * @param {string} dbPath - The partition database file.
+ * @return {string} A PARTICIPANT_TRANSACTION_CUSTODY.
+ */
+function readDurableParticipantCustodyAt(dbPath) {
+  try {
+    if (!fs.existsSync(dbPath)) {
+      return CUSTODY.IDLE;
+    }
+    const db = new Database(dbPath, {readonly: true, fileMustExist: true});
+    try {
+      if (db.prepare(SQL.SELECT_TABLE_PRESENT).get() === undefined) {
+        return CUSTODY.IDLE;
+      }
+      return db.prepare(SQL.SELECT_RESERVATION).get(STATE.PREPARED) !==
+        undefined ? CUSTODY.ACTIVE : CUSTODY.IDLE;
+    } finally {
+      db.close();
+    }
+  } catch (_error) {
+    return CUSTODY.UNAVAILABLE;
+  }
+}
+
+/**
  * Whether a PREPARED row carries this routing sessionId (the current routing
  * collision predicate refuses a sessionId-only request naming it).
  * @param {Object} db - The partition's connection.
@@ -446,6 +479,7 @@ export {
   openParticipantTransactionStore,
   participantOutcomeOf,
   participantStoreConnectionStateOf,
+  readDurableParticipantCustodyAt,
   readParticipantTransactionRow,
   readPreparedParticipantIds,
   readPartitionWriteGeneration,

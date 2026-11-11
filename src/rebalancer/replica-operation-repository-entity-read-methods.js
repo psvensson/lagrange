@@ -5,6 +5,14 @@ import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {REPLICA_OPERATION_REPOSITORY_ERROR_CODE, REPLICA_OPERATION_REPOSITORY_ERROR_MSG} from
   './replica-operation-repository-constants.js';
+import {buildOperationListUnavailableError} from
+  './replica-operation-repository-operation-visibility.js';
+
+const LIST_SCOPE = Object.freeze({
+  ALL: 'all operations',
+  ENTITY: 'entity operations ',
+  IN_FLIGHT_REMOVES: 'in-flight REMOVE operations',
+});
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -105,7 +113,9 @@ function assignReplicaOperationRepositoryEntityReadMethods(
       return replicaIds;
     }
     /**
-   * Get all operations (cache-first, SQL fallback).
+   * ADVISORY projection of all operations: the cache when it exists, else
+   * an owner-preferred read. Never "no operations" on a failed read: that
+   * throws the typed unavailability.
    * @return {Promise<Array>}
    */
     async getAllOperations() {
@@ -132,12 +142,15 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         REPLICA_OPERATION_OWNER_PREFERRED_READ_QUERY_OPTIONS,
       );
       if (!result.success || !result.rows) {
-        return [];
+        throw buildOperationListUnavailableError(result, LIST_SCOPE.ALL);
       }
       return result.rows.map((row) => this.rowToOperation(row));
     }
     /**
-   * Get operations for an entity (cache-first, SQL fallback).
+   * ADVISORY projection of an entity's operations: the cache when it
+   * exists (possibly lagging or partial), else an owner-preferred read. A
+   * failed read throws the typed unavailability, never []. A caller that
+   * decides on absence uses getOperationsByEntityAuthoritativeObservation.
    * @param {string} entityType
    * @param {string} entityId
    * @return {Promise<Array>}
@@ -158,7 +171,8 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         REPLICA_OPERATION_OWNER_PREFERRED_READ_QUERY_OPTIONS,
       );
       if (!result.success || !result.rows) {
-        return [];
+        throw buildOperationListUnavailableError(
+          result, `${LIST_SCOPE.ENTITY}${entityType}:${entityId}`);
       }
       return result.rows.map((row) => this.rowToOperation(row));
     }
@@ -284,7 +298,8 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         buildReplicaOperationVisibilityReadOptions(visibilityReadMode),
       );
       if (!result.success || !result.rows) {
-        return 0;
+        throw buildOperationListUnavailableError(
+          result, LIST_SCOPE.IN_FLIGHT_REMOVES);
       }
 
       return result.rows

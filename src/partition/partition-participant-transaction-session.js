@@ -398,18 +398,22 @@ function hasParticipantSession(service) {
 
 /**
  * The participant owner's custody of the partition: ACTIVE (volatile staging
- * on this leader, or a durable PREPARED reservation), IDLE, or CLOSED once
- * the lifecycle owner released the connection - a named answer, never a read
- * through a released connection.
+ * on this leader, or a durable PREPARED reservation), IDLE (neither, both
+ * read), or UNAVAILABLE when the lifecycle owner released the connection and
+ * no volatile session holds it: the durable reservation cannot be read
+ * through a released connection, so a closed connection is never answered
+ * as settled - a named answer, never a read through a released connection.
  * @param {Object} service - The partition.
  * @return {string} A PARTICIPANT_TRANSACTION_CUSTODY.
  */
 function participantTransactionCustodyOf(service) {
-  if (participantStoreConnectionStateOf(service.db) === CONNECTION_STATE.CLOSED) {
-    return CUSTODY.CLOSED;
+  if (hasParticipantSession(service)) {
+    return CUSTODY.ACTIVE;
   }
-  return hasParticipantSession(service) || isPartitionReserved(service.db) ?
-    CUSTODY.ACTIVE : CUSTODY.IDLE;
+  if (participantStoreConnectionStateOf(service.db) === CONNECTION_STATE.CLOSED) {
+    return CUSTODY.UNAVAILABLE;
+  }
+  return isPartitionReserved(service.db) ? CUSTODY.ACTIVE : CUSTODY.IDLE;
 }
 
 /**

@@ -549,7 +549,10 @@ async function b12Shape({key, sourceLetter}) {
     const operation = {operationId: 'b12', type: OperationType.REPLACE,
       entityType: SERVICE_TYPE.PARTITION, entityId: PARTITION_ID,
       partitionId: PARTITION_ID,
-      replicaId: target, targetNodeId: 'b12-node'};
+      // A REPLACE names its source's node (the route to the source when it
+      // leads); the route is never invented from an absent field.
+      replicaId: target, targetNodeId: 'b12-node',
+      sourceNodeId: `${source}-node`};
     const targetView = await readPartitionReplicaMembership(
       serviceOf(model, target), source);
     // Folded at C_j: no transient view.

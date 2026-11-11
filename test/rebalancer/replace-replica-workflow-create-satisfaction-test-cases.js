@@ -156,7 +156,7 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
         }
 
         const persistedAfterRetry =
-          await coordinator.queryOperationById(operation.operationId);
+          await coordinator.queryOperationProjectionById(operation.operationId);
         t.equal(
           deliveries.length,
           2,
@@ -458,7 +458,7 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
         }
 
         const persistedAfterRetry =
-          await coordinator.queryOperationById(operation.operationId);
+          await coordinator.queryOperationProjectionById(operation.operationId);
         t.equal(
           deliveries.length,
           2,
@@ -671,7 +671,7 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
         }
 
         const persistedAfterRetry =
-          await coordinator.queryOperationById(operation.operationId);
+          await coordinator.queryOperationProjectionById(operation.operationId);
         t.equal(
           deliveries.length,
           2,

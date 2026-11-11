@@ -16,6 +16,8 @@ import {applyRebalanceCoordinatorConcurrentBudgetGateMethods} from './rebalance-
 import {applyRebalanceCoordinatorOwnerFacadeMethods} from './rebalance-coordinator-owner-facade.js';
 import {applyRebalanceCoordinatorReservationLifecycleMethods} from './rebalance-coordinator-reservation-lifecycle-methods.js';
 import {applyRebalanceCoordinatorRecoveryBudgetBindingMethods} from './rebalance-coordinator-recovery-budget-bindings.js';
+import {isOperationVisibilityUnavailableError} from
+  './replica-operation-repository-operation-visibility.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_SKIPPING_IN_FLIGHT_OPERATION_COUNT_DURIN = 'Skipping in-flight operation count during coordinator shutdown';
@@ -134,7 +136,13 @@ class RebalanceCoordinator extends EventEmitter {
    */
   async getStats() {
     const inFlightOps = await this.getInFlightOperations();
-    const allOps = await this.getAllOperations();
+    // Diagnostics: an unavailable all-operations read is reported, not 0.
+    const allOps = await this.getAllOperations().catch((error) => {
+      if (isOperationVisibilityUnavailableError(error)) {
+        return null;
+      }
+      throw error;
+    });
 
     const inFlightObservation =
       this.getIncompleteOperationObservation(inFlightOps);
@@ -144,7 +152,7 @@ class RebalanceCoordinator extends EventEmitter {
       inFlightOperations: inFlightOps.length,
       inFlightOperationObservationState: inFlightObservation.state,
       inFlightOperationRetryAfterMs: inFlightObservation.retryAfterMs,
-      totalOperations: allOps.length,
+      totalOperations: allOps === null ? null : allOps.length,
     };
   }
 

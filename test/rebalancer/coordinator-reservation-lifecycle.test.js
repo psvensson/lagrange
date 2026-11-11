@@ -30,17 +30,16 @@ import {
   createMockControlPlaneSystemTableGateway,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {buildUnavailableOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 const TEST_DEFERRED_RESERVATION_ID = 'res-deferred';
 const TEST_DEFERRED_OPERATION_ID = 'op-deferred';
 const TEST_DEFERRED_PARTITION_ID = 'p-deferred';
 const TEST_DEFERRED_TARGET_NODE_ID = 'node-deferred';
 const TEST_DEFERRED_CONFIRMATION_STATE = 'deferred';
-const TEST_DEFERRED_OPERATION_VISIBILITY = Object.freeze({
-  operation: null,
-  deferredOutcome: Object.freeze({
-    confirmationState: TEST_DEFERRED_CONFIRMATION_STATE,
-  }),
+const TEST_DEFERRED_OPERATION_VISIBILITY = buildUnavailableOperationVisibility({
+  confirmationState: TEST_DEFERRED_CONFIRMATION_STATE,
 });
 
 function initializeConfig(overrides = {}) {
@@ -777,7 +776,7 @@ test('reconcileReservations - skips orphan release while operation visibility ' 
   const {coordinator} = createCoordinatorWithStorage({
     sqlQueryEngine: sqlEngine,
   });
-  coordinator.repository.queryOperationById = async () => null;
+  coordinator.repository.queryOperationProjectionById = async () => null;
   coordinator.repository.getOperationByIdVisibilityObservation = async () =>
     TEST_DEFERRED_OPERATION_VISIBILITY;
 

@@ -10,6 +10,7 @@ import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   OPERATION_VISIBILITY_STATE,
   buildAbsentOperationVisibility,
+  buildOperationListUnavailableError,
   buildOperationVisibilityUnavailableError,
   buildPresentOperationVisibility,
   buildUnavailableOperationVisibility,
@@ -17,6 +18,7 @@ import {
 } from './replica-operation-repository-operation-visibility.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const IN_FLIGHT_DEDUPE_SCOPE = 'in-flight operations for a move intent';
 const REPLICA_OPERATION_READ_COALESCING_KEY_SEPARATOR = ':';
 const REPLICA_OPERATION_READ_BY_ID_COALESCING_KEY_PREFIX =
   'replica-operation';
@@ -329,7 +331,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
    * @param {string} operationId
    * @return {Promise<object|null>}
    */
-    async queryOperationById(operationId) {
+    async queryOperationProjectionById(operationId) {
       const cachedRow = this.getReplicaOperationRowFromCache(operationId);
       if (cachedRow) {
         return this.rowToOperation(cachedRow);
@@ -529,17 +531,44 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     }
 
     /**
-     * Query the authoritative operation holding one durable runtime target
-     * identity claim.
-     * @param {string} targetClaimKey
-     * @return {Promise<object|null>}
+     * The by-id visibility contract for a keyed authoritative row read: a
+     * failed read is UNAVAILABLE (typed), an empty answer ABSENT, a row of a
+     * coordinator-owned type PRESENT.
+     * @param {Object} result
+     * @param {Object} unavailableContext - {retryAfterMs, queryDurationMs}.
+     * @return {Object}
+     * @private
      */
-    async queryAuthoritativeOperationByTargetClaimKey(targetClaimKey) {
+    classifyAuthoritativeOperationRowRead(result, unavailableContext = {}) {
+      if (result?.success !== true || !Array.isArray(result.rows)) {
+        return buildUnavailableOperationVisibility(
+          this.buildAuthoritativeReadUnavailableOutcome(result, {
+            retryAfterMs: this.getRetryableReplicaOperationReadRetryDelayMs(result),
+            ...unavailableContext,
+          }),
+        );
+      }
+      if (result.rows.length === 0) {
+        return buildAbsentOperationVisibility();
+      }
+      const operation = this.rowToOperation(result.rows[0]);
+      return isCoordinatorOwnedOperationType(operation?.type) ?
+        buildPresentOperationVisibility(operation) :
+        buildAbsentOperationVisibility();
+    }
+
+    /**
+     * Observe the authoritative operation holding one durable runtime target
+     * identity claim (named state: PRESENT / ABSENT / UNAVAILABLE).
+     * @param {string} targetClaimKey
+     * @return {Promise<Object>}
+     */
+    async observeAuthoritativeOperationByTargetClaimKey(targetClaimKey) {
       if (
         typeof targetClaimKey !== 'string' ||
         targetClaimKey.length === 0
       ) {
-        return null;
+        return buildAbsentOperationVisibility();
       }
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_OPERATION_BY_TARGET_CLAIM,
@@ -550,30 +579,20 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           retryOnRetryableFailure: true,
         },
       );
-      if (
-        result?.success !== true ||
-        !Array.isArray(result.rows) ||
-        result.rows.length === 0
-      ) {
-        return null;
-      }
-      const operation = this.rowToOperation(result.rows[0]);
-      return isCoordinatorOwnedOperationType(operation?.type) ?
-        operation :
-        null;
+      return this.classifyAuthoritativeOperationRowRead(result);
     }
 
     /**
-     * Query the authoritative operation retaining one message-group
-     * membership lane. The nullable unique key is released only by the
-     * membership owner after it proves definitive non-admission or a fresh
-     * committed absence.
+     * Observe the authoritative operation retaining one message-group
+     * membership lane (named state). The nullable unique key is released
+     * only by the membership owner after it proves definitive non-admission
+     * or a fresh committed absence.
      * @param {string} laneKey
-     * @return {Promise<object|null>}
+     * @return {Promise<Object>}
      */
-    async queryAuthoritativeOperationByMessageGroupMembershipLane(laneKey) {
+    async observeAuthoritativeOperationByMessageGroupMembershipLane(laneKey) {
       if (typeof laneKey !== 'string' || laneKey.length === 0) {
-        return null;
+        return buildAbsentOperationVisibility();
       }
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_OPERATION_BY_MESSAGE_GROUP_MEMBERSHIP_LANE,
@@ -584,17 +603,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           retryOnRetryableFailure: true,
         },
       );
-      if (
-        result?.success !== true ||
-        !Array.isArray(result.rows) ||
-        result.rows.length === 0
-      ) {
-        return null;
-      }
-      const operation = this.rowToOperation(result.rows[0]);
-      return isCoordinatorOwnedOperationType(operation?.type) ?
-        operation :
-        null;
+      return this.classifyAuthoritativeOperationRowRead(result);
     }
 
     /**
@@ -674,8 +683,11 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         );
       }
       if (!allowCacheFallbackOnReadFailure) {
-        return null;
-      } // Fallback path for degraded SQL-read conditions.
+        // A strict dedupe read that did not answer cannot say "no existing
+        // operation": creating on it would duplicate.
+        throw buildOperationListUnavailableError(
+          result, IN_FLIGHT_DEDUPE_SCOPE);
+      } // Advisory fallback path for degraded SQL-read conditions.
       const cachedRows = this.filterReplicaOperationRowsFromCache((row) => {
         if (!row || row.partition_id !== partitionId || row.target_node_id !== targetNodeId) {
           return false;

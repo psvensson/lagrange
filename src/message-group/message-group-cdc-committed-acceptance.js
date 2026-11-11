@@ -3,10 +3,13 @@
 // no durable outcome and cannot discharge the source ledger's obligation.
 import {CDC_EVENT_METADATA_FIELD, captureCdcEvents} from
   '../cdc/cdc-event-envelope.js';
-import {CDC_COMPLETION, buildCommittedCdcOutcome, buildProvisionalCdcOutcome, cdcCommitWaitIdentity,
-  hasDurableCdcEvents, isCommittedCdcOutcome, isProvisionalCdcOutcome, unconfirmedCdcAcceptance,
-  unknownCdcAcceptance} from
+import {CDC_COMPLETION, buildAlreadyAppliedCdcOutcome, buildCommittedCdcOutcome,
+  buildProvisionalCdcOutcome, cdcCommitWaitIdentity, hasDurableCdcEvents,
+  isAlreadyAppliedCdcOutcome, isCommittedCdcOutcome, isProvisionalCdcOutcome,
+  unconfirmedCdcAcceptance, unknownCdcAcceptance} from
   '../cdc/cdc-delivery-outcome.js';
+import {SOURCE_RANGE_DECISION, isSourceRange} from '../cache/system-table-cache-cdc-observation.js';
+import {groupCommittedThroughOf} from './message-group-cdc-source-range.js';
 import {assertCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
 import {appendOwnArrayValue, copyArrayByIndex, isDenseDataArray, isRecord} from
   '../utils/canonical-json-data.js';
@@ -28,15 +31,62 @@ const reservationToken = Symbol;
 const arraySome = Function.call.bind(Array.prototype.some);
 const arrayFind = Function.call.bind(Array.prototype.find);
 
-// A durable vector has one committed form, whatever its length: CDC_BATCH.
-function capturedCommand(events) {
-  return objectFreeze({type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events});
+// A durable vector has one committed form, whatever its length: CDC_BATCH
+// with the source range it was shipped as (CDC Stage 3), so every member
+// decides the range against its own cache when the entry applies.
+function capturedCommand(events, sourceRange) {
+  return objectFreeze({type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events, sourceRange});
 }
 
 const CDC_ACCEPTANCE_LOG_MSG = objectFreeze({
   DUPLICATE_IN_FLIGHT:
     'CDC vector refused as a duplicate: raw work for the identical vector is still open',
+  POSITION_GAP:
+    'CDC range refused: this node has not applied its predecessor; the table is listed again',
 });
+
+function invalidCdcInput() {
+  return objectAssign(new Error(CDC_COMPLETION.INVALID), {code: CDC_COMPLETION.INVALID});
+}
+
+// The source range of a durable vector (CDC Stage 3), captured once. Every
+// durable vector carries one: there is no positionless durable form.
+function captureSourceRange(options) {
+  const range = options.sourceRange;
+  if (!isSourceRange(range)) throw invalidCdcInput();
+  return objectFreeze({sourcePartition: range.sourcePartition, incarnation: range.incarnation,
+    after: objectFreeze({logIndex: range.after.logIndex, ordinal: range.after.ordinal}),
+    through: objectFreeze({logIndex: range.through.logIndex, ordinal: range.through.ordinal})});
+}
+
+// The group-level decision beside the cache's node-level APPLY / GAP.
+const CDC_ALREADY_APPLIED = 'already_applied';
+
+// The range decision of the replica that will propose (CDC Stage 3), on the
+// shallow range only, before any payload is captured: ALREADY_APPLIED when
+// this group's own log already committed the range (every member applied it
+// or listed past it), GAP when this node's cache has not applied the range's
+// predecessor (it lists the table again; nothing is proposed), else APPLY. A
+// replica that does not lead only relays: the leader decides.
+function classifyDurableRange(service, range, tableName) {
+  if (!service.isCurrentRaftLeader()) return {decision: SOURCE_RANGE_DECISION.APPLY};
+  const committed = groupCommittedThroughOf(service, range);
+  if (committed !== null) return {decision: CDC_ALREADY_APPLIED, committed};
+  const sourceOrder = service.cdcHandler.cache.sourceOrder;
+  const classified = sourceOrder.classifyRange(range);
+  if (classified.decision === SOURCE_RANGE_DECISION.GAP) {
+    sourceOrder.recordGap(range, tableName);
+    service.logger?.info?.(CDC_ACCEPTANCE_LOG_MSG.POSITION_GAP, {groupId: service.groupId,
+      sourcePartition: range.sourcePartition, have: classified.have, need: classified.need});
+  }
+  return classified;
+}
+
+
+function positionGapAcceptance() {
+  return {...unknownCdcAcceptance(CDC_COMPLETION.POSITION_GAP),
+    retryAfterMs: PROPOSAL_QUEUE_DEFAULT.BACKPRESSURE_RETRY_AFTER_MS};
+}
 
 function backpressuredCdcAcceptance() {
   return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
@@ -127,7 +177,7 @@ function captureCdcCommandVector(service, events, options) {
   return {events: captureCdcEvents(normalized), inputVectorDigest};
 }
 
-function reserveCdcWait(service, command, timeoutMs, parent, options) {
+function reserveCdcWait(service, command, timeoutMs, parent, options, classified) {
   const queue = service.cdcCommitWaiters;
   const reservation = reservationToken();
   // The queue owner reserves capacity BEFORE immutable capture or digesting.
@@ -142,6 +192,10 @@ function reserveCdcWait(service, command, timeoutMs, parent, options) {
     const budget = createTimeoutBudget({configuredBudgetMs: timeoutMs, now});
     const {events, inputVectorDigest} = captureCdcCommandVector(service,
       command.events, options);
+    if (classified.decision === CDC_ALREADY_APPLIED) {
+      return {answer: buildAlreadyAppliedCdcOutcome(events, service.groupId,
+        classified.committed.through, classified.committed.incarnation)};
+    }
     const key = cdcCommitWaitIdentity(events);
     if (queue.has(key)) {
       const first = joinableWait(service, key);
@@ -163,7 +217,7 @@ function reserveCdcWait(service, command, timeoutMs, parent, options) {
     queue.enqueue(key, entry);
     armCdcWait(service, key, entry, budget);
     return {key, entry, completion: completion.promise,
-      command: capturedCommand(events)};
+      command: capturedCommand(events, command.sourceRange)};
   } finally {
     queue.resolve(reservation);
   }
@@ -270,6 +324,7 @@ async function deliverCapturedCdc(service, wait, options, context) {
   });
   assertCurrent();
   return isCommittedCdcOutcome(answer, wait.entry.events, service.groupId) ||
+    isAlreadyAppliedCdcOutcome(answer, wait.entry.events, service.groupId) ||
     isProvisionalCdcOutcome(answer, wait.entry.events, service.groupId) ?
     answer : {...unconfirmedCdcAcceptance(answer), cause: answer};
 }
@@ -289,6 +344,7 @@ function captureCdcParentGrant(service, options) {
 function inputCdcOutcome(service, wait, answer, context) {
   assertCdcRequestCurrent(service, wait, context);
   if (!isCommittedCdcOutcome(answer, wait.entry.events, wait.entry.groupId) &&
+      !isAlreadyAppliedCdcOutcome(answer, wait.entry.events, wait.entry.groupId) &&
       !isProvisionalCdcOutcome(answer, wait.entry.events, wait.entry.groupId)) return answer;
   // Only this live admission owns I -> N. Native/remote/provisional acceptance
   // must first bind the actual normalized command; no receipt field is changed.
@@ -329,12 +385,16 @@ async function joinCdcWait(service, join, context) {
 }
 
 async function applyDurableCdcBatch(service, events, options = {}) {
+  const sourceRange = captureSourceRange(options);
   const {context, timeoutMs, parent} = captureCdcParentGrant(service, options);
   if (!numberIsFinite(timeoutMs) || timeoutMs <= 0) return unknownCdcAcceptance();
+  const classified = classifyDurableRange(service, sourceRange, events[0]?.tableName ?? null);
+  if (classified.decision === SOURCE_RANGE_DECISION.GAP) return positionGapAcceptance();
   let wait;
   try {
-    wait = reserveCdcWait(service, {type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events},
-      timeoutMs, parent, options);
+    wait = reserveCdcWait(service,
+      {type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH, events, sourceRange},
+      timeoutMs, parent, options, classified);
   } catch (error) {
     if (error.code === PROPOSAL_QUEUE_BACKPRESSURE_CODE) return backpressuredCdcAcceptance();
     throw error;

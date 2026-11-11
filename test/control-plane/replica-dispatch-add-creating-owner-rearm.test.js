@@ -201,7 +201,7 @@ async function runStrandedAddOrdering(t, scenario, operationId, payloadRow) {
     CREATING_STEP_TIMEOUT_MS * 2,
   );
 
-  return sourceCoordinator.repository.queryOperationById(operationId);
+  return sourceCoordinator.repository.queryOperationProjectionById(operationId);
 }
 
 // Quest runtime-service-add-creating-owner-rearm. Live ordering from the
@@ -415,12 +415,12 @@ test(
         ownerOperation,
       );
       const primedOperation =
-        await sourceCoordinator.repository.queryOperationById(operationId);
+        await sourceCoordinator.repository.queryOperationProjectionById(operationId);
       await sourceCoordinator.workflowOwner.dispatchOperation(
         primedOperation,
       );
       const creatingOperation =
-        await sourceCoordinator.repository.queryOperationById(operationId);
+        await sourceCoordinator.repository.queryOperationProjectionById(operationId);
       t.equal(
         deliveries.length,
         1,
@@ -471,7 +471,7 @@ test(
       }
 
       const progressedOperation =
-        await sourceCoordinator.repository.queryOperationById(operationId);
+        await sourceCoordinator.repository.queryOperationProjectionById(operationId);
       t.equal(
         progressedOperation?.workflowStep,
         WORKFLOW_STEP.ACTIVE,

@@ -253,7 +253,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
 
       coordinator.initialize();
       try {
-        await coordinator.queryOperationById('op-1');
+        await coordinator.queryOperationProjectionById('op-1');
         await coordinator.queryIncompleteOperations();
         await coordinator.queryExistingInFlightOperation(
           'p1',

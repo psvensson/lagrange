@@ -339,7 +339,7 @@ async function createDeferredReplaceHarness(profile) {
   const removeDeliveries = () => deliveries.filter((delivery) =>
     delivery.payload?.type === ReplicaOperationMessageType.REMOVE_REPLICA);
   const readStep = async () =>
-    (await coordinator.queryOperationById(operation.operationId))
+    (await coordinator.queryOperationProjectionById(operation.operationId))
       ?.workflowStep;
   const shutdown = async () => {
     await coordinator.shutdown();

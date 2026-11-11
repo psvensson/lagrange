@@ -115,6 +115,41 @@ function buildOperationVisibilityUnavailableError(observation, operationId) {
   return error;
 }
 
+/**
+ * The retryable typed error a list read raises when the owner did not
+ * answer, instead of an empty list (no operations is never inferred from a
+ * failed read).
+ * @param {Object|null} result - The failed read result.
+ * @param {string} scope - What was being listed.
+ * @param {number|null} [retryAfterMs]
+ * @return {Error}
+ */
+function buildOperationListUnavailableError(result, scope, retryAfterMs = null) {
+  const error = new Error(`${OPERATION_VISIBILITY_UNAVAILABLE_MESSAGE}${scope}`);
+  error.code = OPERATION_VISIBILITY_UNAVAILABLE_ERROR_CODE;
+  error.errorCode = OPERATION_VISIBILITY_UNAVAILABLE_ERROR_CODE;
+  error.deferRetry = true;
+  error.retryAfterMs = Number.isFinite(retryAfterMs) ? retryAfterMs : null;
+  error.visibilityState = OPERATION_VISIBILITY_STATE.UNAVAILABLE;
+  error.cause = result || null;
+  return error;
+}
+
+/**
+ * The PRESENT row of an observation, else null - for a consumer whose
+ * null branch DECIDES NOTHING (it keeps its own copy behind a CAS, re-arms,
+ * or reports no winner). It still refuses a value without a named state. A
+ * consumer that acts on absence branches on readOperationVisibilityState.
+ * @param {Object} observation
+ * @return {Object|null}
+ */
+function presentOperationOf(observation) {
+  return readOperationVisibilityState(observation) ===
+    OPERATION_VISIBILITY_STATE.PRESENT ?
+    observation.operation :
+    null;
+}
+
 function isOperationVisibilityUnavailableError(error) {
   return error?.code === OPERATION_VISIBILITY_UNAVAILABLE_ERROR_CODE;
 }
@@ -123,9 +158,11 @@ export {
   OPERATION_VISIBILITY_STATE,
   OPERATION_VISIBILITY_UNAVAILABLE_ERROR_CODE,
   buildAbsentOperationVisibility,
+  buildOperationListUnavailableError,
   buildOperationVisibilityUnavailableError,
   buildPresentOperationVisibility,
   buildUnavailableOperationVisibility,
   isOperationVisibilityUnavailableError,
+  presentOperationOf,
   readOperationVisibilityState,
 };

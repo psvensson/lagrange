@@ -29,6 +29,7 @@ import {RETAINED_STORE_ERROR, retainedStoreError, retainedStoreTableExistsIn, re
 
 const ONE_ROW = 1;
 const FIRST_POSITION = Object.freeze({logIndex: 0, ordinal: -1});
+const INCARNATION_SEPARATOR = ':';
 const DELIVERED_FLAG = Object.freeze({OWED: 0, DELIVERED: 1});
 const JSON_ARRAY_BRACKETS = 2;
 const JSON_SEPARATOR_LENGTH = 1;
@@ -39,15 +40,34 @@ function isNonEmptyString(value) {
 }
 
 /**
- * Create the ledger (DDL; idempotent over an existing image). Run inside the
- * application transaction before the first obligation of a connection is
- * recorded, so every replica creates it at the same committed entry.
+ * Create the ledger (DDL; idempotent over an existing image) and mint its
+ * incarnation once. Run inside the application transaction of every
+ * committed entry that records an obligation, so every replica creates it,
+ * and mints the incarnation, at the same committed entry. The incarnation is
+ * that entry's own identity (log position and entry id): a log rebuilt from
+ * fresh storage that reuses the index mints another one.
  * @param {Object} db - The partition's connection.
+ * @param {{index: number, term: number, entryId: string|null}} entry - The
+ *   committed entry recording the obligation.
  */
-function ensureCdcObligationLedger(db) {
+function ensureCdcObligationLedger(db, {index, term, entryId}) {
   db.exec(SQL.CREATE_TABLE);
   db.exec(SQL.CREATE_OWED_INDEX);
   db.exec(SQL.CREATE_PROGRESS_TABLE);
+  db.exec(SQL.CREATE_INCARNATION_TABLE);
+  db.prepare(SQL.INSERT_INCARNATION).run({scope: PROGRESS_SCOPE,
+    incarnation: [term, index, entryId ?? ''].join(INCARNATION_SEPARATOR), index, term});
+}
+
+/**
+ * The ledger's incarnation, or null while it has none (no obligation was
+ * recorded under this build): a position is comparable only within it.
+ * @param {Object} db - The partition's connection.
+ * @return {string|null} The incarnation.
+ */
+function readCdcLedgerIncarnation(db) {
+  if (db.prepare(SQL.INCARNATION_TABLE_EXISTS).get() === undefined) return null;
+  return db.prepare(SQL.SELECT_INCARNATION).get(PROGRESS_SCOPE)?.incarnation ?? null;
 }
 
 function progressTableExists(db) {
@@ -271,6 +291,51 @@ function readOwedCdcHead(db) {
 }
 
 /**
+ * The ledger's newest row, owed or delivered, or null without one. Decision
+ * D1 never reclaims it: it is the position probe a recipient with no cursor
+ * is shipped when nothing is owed (CDC Stage 3).
+ * @param {Object} db - The partition's connection.
+ * @return {Object|null} The frozen row (as readOwedCdcObligations).
+ */
+function readCdcLedgerNewest(db) {
+  if (!cdcObligationLedgerExists(db)) return null;
+  const row = db.prepare(SQL.SELECT_NEWEST).get();
+  return row ? obligationOf(row) : null;
+}
+
+/**
+ * The position of the source event immediately before `position` in the
+ * ledger's order: the retained row below it, else the end of the reclaimed
+ * prefix, else the position before the first event. A range names it as its
+ * predecessor (CDC Stage 3): a recipient that has applied it has missed
+ * nothing before the range.
+ * @param {Object} db - The partition's connection.
+ * @param {{logIndex: number, ordinal: number}} position - A range's first row.
+ * @return {{logIndex: number, ordinal: number}} The predecessor position.
+ */
+function readCdcPredecessorPosition(db, position) {
+  const row = cdcObligationLedgerExists(db) ?
+    db.prepare(SQL.SELECT_PREDECESSOR).get(position) : undefined;
+  if (row !== undefined) return positionOf(row);
+  const progress = readCdcObligationProgress(db);
+  return progress === null ? {...FIRST_POSITION} :
+    {logIndex: progress.throughLogIndex, ordinal: progress.throughOrdinal};
+}
+
+/**
+ * How many owed rows lie after a position, counted up to `limit`.
+ * @param {Object} db - The partition's connection.
+ * @param {{logIndex: number, ordinal: number}|null} position - null: all.
+ * @param {number} limit - The bound counted to.
+ * @return {number} min(owed rows after the position, limit).
+ */
+function countOwedCdcObligationsAfter(db, position, limit) {
+  if (!cdcObligationLedgerExists(db)) return 0;
+  return Number(db.prepare(SQL.COUNT_OWED_AFTER).get({...(position ?? FIRST_POSITION),
+    limit}).count);
+}
+
+/**
  * How many delivered rows the ledger retains (above an owed row), counted
  * up to `limit`: the lane's backpressure input.
  * @param {Object} db - The partition's connection.
@@ -285,19 +350,22 @@ function countRetainedDeliveredCdcObligations(db, limit) {
 /**
  * Reclaim the delivered prefix (decision D1), inside the application
  * transaction of the committed CDC_DELIVERED at `marker`: delete the delivered
- * rows below the lowest owed one, in log order and at most
- * RECLAIM_ROWS_PER_APPLY of them, and fold them into the compact progress
- * row. A function of the committed ledger alone, so every replica reclaims
- * the same rows at the same entry; a count that does not match throws (the
- * application fails closed).
+ * rows below the lowest owed one (and, when nothing is owed, below the newest
+ * row, which is always retained: CDC Stage 3's position probe), in log order
+ * and at most RECLAIM_ROWS_PER_APPLY of them, and fold them into the compact
+ * progress row. A function of the committed ledger alone, so every replica
+ * reclaims the same rows at the same entry; a count that does not match
+ * throws (the application fails closed).
  * @param {Object} db - The partition's connection.
  * @param {{index: number, term: number}} marker - The CDC_DELIVERED entry.
  * @return {number} How many rows were reclaimed.
  */
 function reclaimDeliveredCdcObligations(db, {index, term}) {
   if (!cdcObligationLedgerExists(db)) return 0;
-  const head = readOwedCdcHead(db) ??
-    {logIndex: Number.MAX_SAFE_INTEGER, ordinal: Number.MAX_SAFE_INTEGER};
+  const newest = readCdcLedgerNewest(db);
+  if (newest === null) return 0;
+  const head = readOwedCdcHead(db) ?? positionOf({log_index: newest.logIndex,
+    ordinal: newest.ordinal});
   const reclaimable = db.prepare(SQL.SELECT_RECLAIMABLE).all({...head,
     limit: BOUND.RECLAIM_ROWS_PER_APPLY});
   if (reclaimable.length === 0) return 0;
@@ -522,6 +590,7 @@ export {
   cdcObligationEventKeyDigest,
   cdcObligationLedgerExists,
   countCdcObligations,
+  countOwedCdcObligationsAfter,
   countRetainedDeliveredCdcObligations,
   emptyAcknowledgedBytes,
   ensureCdcObligationLedger,
@@ -532,7 +601,10 @@ export {
   readCdcObligation,
   readCdcObligationCensusIn,
   readCdcObligationProgress,
+  readCdcLedgerIncarnation,
+  readCdcLedgerNewest,
   readCdcObligationStanding,
+  readCdcPredecessorPosition,
   readOwedCdcHead,
   readOwedCdcObligations,
   readOwedCdcTail,

@@ -306,7 +306,7 @@ test('forensic honesty: the interlock blocking message embeds the HELD ' +
     isOperationTerminal() {
       return false;
     }
-    async queryOperationById(operationId) {
+    async queryOperationProjectionById(operationId) {
       // The held ledger self-move is still live: the hold cannot clear.
       return {operationId, status: 'executing'};
     }

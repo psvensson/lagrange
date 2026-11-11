@@ -8,8 +8,9 @@ import {deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 // queue. Source debt and every recipient's progress remain with the source
 // lane; the service keeps no payload between attempts or after a delivery.
 import {captureCdcEvents} from '../cdc/cdc-event-envelope.js';
-import {CDC_COMPLETION, CDC_COVERAGE_STATE, isCommittedCdcOutcome, isProvisionalCdcOutcome,
-  observeCdcDeliveryCoverage, unconfirmedCdcAcceptance, unknownCdcAcceptance} from
+import {CDC_COMPLETION, CDC_COVERAGE_STATE, isAlreadyAppliedCdcOutcome, isCommittedCdcOutcome,
+  isProvisionalCdcOutcome, observeCdcDeliveryCoverage, unconfirmedCdcAcceptance,
+  unknownCdcAcceptance} from
   '../cdc/cdc-delivery-outcome.js';
 import {assertCdcDeliveryInvocation, openCdcDeliveryChildScope} from
   '../cdc/cdc-delivery-invocation.js';
@@ -35,11 +36,13 @@ const DURABLE_PROPAGATION_CAUSE = Object.freeze({
 });
 
 // The durable vector has one wire form, whatever its length: the batch
-// message naming its events.
-function targetDeliveryPayload(owner, source, events, target) {
+// message naming its events and the source range the lane shipped them as
+// (CDC Stage 3: source partition and incarnation, predecessor, last row).
+function targetDeliveryPayload(owner, source, events, target, sourceRange) {
   return {
     type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH,
     events,
+    sourceRange,
     sourceNodeId: owner.nodeId,
     sourceGroupId: source.groupId,
     targetGroupId: target.groupId,
@@ -72,7 +75,7 @@ async function deliverTarget(owner, wave, events, leaf) {
     return notSentTarget();
   }
   const profile = resolveCdcPropagationDeliveryProfile(events);
-  const payload = targetDeliveryPayload(owner, source, events, leaf.route);
+  const payload = targetDeliveryPayload(owner, source, events, leaf.route, wave.sourceRange);
   const delivery = await context.run(() => owner.messageRouter.deliver(
     leaf.route.address, payload, {
       targetNodeId: leaf.route.coordinatorNodeId,
@@ -125,6 +128,7 @@ async function deliverToRecipient(owner, wave, events, recipient) {
     if (recipient.isSource) {
       const answer = await context.run(() => source.applyCDCBatch(events, {
         deliveryContext: context, remainingMs: context.remainingMs,
+        sourceRange: wave.sourceRange,
       }));
       traceWaveLeaf(wave.trace,
         {isSource: true, leaf, elapsedMs: owner.now() - startedAtMs, answer, error: null});
@@ -153,6 +157,7 @@ function prepareRecipientDelivery(owner, wave, events, plan, recipient) {
   const {context, source} = wave;
   let last = {answer: unknownCdcAcceptance(), cause: {state: DURABLE_PROPAGATION_CAUSE.NONE}};
   const complete = () => isCommittedCdcOutcome(last.answer, events, recipient.groupId) ||
+    isAlreadyAppliedCdcOutcome(last.answer, events, recipient.groupId) ||
     isProvisionalCdcOutcome(last.answer, events, recipient.groupId);
   const result = () => complete() ?
     propagationResult(owner, source, plan, last.answer) :
@@ -161,6 +166,7 @@ function prepareRecipientDelivery(owner, wave, events, plan, recipient) {
   return {
     deliveryLabel: owner.describeDeliveryEvents(events),
     complete,
+    positionGap: () => last.answer?.error === CDC_COMPLETION.POSITION_GAP,
     result,
     // One recipient: its answer, never this diagnostic count, decides.
     failureCount: () => 1,
@@ -213,7 +219,8 @@ function publicationModeOf(plan) {
 // recipient) on this node.
 function openRecipientDelivery(owner, parent, source) {
   const context = openCdcDeliveryChildScope(parent);
-  const wave = {context, source, trace: openDurableWaveTrace(owner)};
+  const wave = {context, source, sourceRange: parent.sourceRange,
+    trace: openDurableWaveTrace(owner)};
   owner.activeDurableDeliveries.add(wave);
   owner.stats.peakActiveDurableDeliveries = Math.max(
     owner.stats.peakActiveDurableDeliveries, owner.activeDurableDeliveries.size);

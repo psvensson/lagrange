@@ -20,6 +20,8 @@ import {
 } from './rebalance-coordinator-reservation-adoption.js';
 import {STORAGE_RESERVATION_AUTHORITY_ERROR} from
   './storage-reservation-authority.js';
+import {OPERATION_VISIBILITY_STATE, readOperationVisibilityState} from
+  './replica-operation-repository-operation-visibility.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const RESERVATION_ORPHAN_RECONCILE_STATE = Object.freeze({
@@ -521,44 +523,32 @@ class RebalanceCoordinatorReservationLifecycleMethods {
    * @private
    */
   async getReservationOperationVisibilityObservation(operationId) {
-    if (
-      typeof this.repository?.getOperationByIdVisibilityObservation ===
-      LOCAL_STR_FUNCTION
-    ) {
-      const preferredObservation =
-        await this.repository.getOperationByIdVisibilityObservation(
-          operationId,
-          {
-            allowPriorityRecoveryDeferredVisibility: true,
-          },
-        );
-      if (
-        preferredObservation?.operation ||
-        preferredObservation?.deferredOutcome
-      ) {
-        return preferredObservation;
-      }
-      // An ABSENT answer from the preferred read may be a lagging local
-      // view. Releasing an active reservation requires the absence to be
-      // confirmed by the owner-RPC-required read; an UNAVAILABLE answer
-      // (from either read) carries its deferred outcome and keeps it.
-      return this.repository.getOperationByIdVisibilityObservation(
+    const preferredObservation =
+      await this.repository.getOperationByIdVisibilityObservation(
         operationId,
         {
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
           allowPriorityRecoveryDeferredVisibility: true,
         },
       );
+    if (
+      readOperationVisibilityState(preferredObservation) !==
+      OPERATION_VISIBILITY_STATE.ABSENT
+    ) {
+      return preferredObservation;
     }
-    const operation = operationId ?
-      await this.queryOperationById(operationId) :
-      null;
-    return Object.freeze({
-      operation,
-      deferredOutcome: null,
-    });
+    // An ABSENT answer from the preferred read may be a lagging local
+    // view. Releasing an active reservation requires the absence to be
+    // confirmed by the owner-RPC-required read; an UNAVAILABLE answer
+    // (from either read) carries its deferred outcome and keeps it.
+    return this.repository.getOperationByIdVisibilityObservation(
+      operationId,
+      {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+        allowPriorityRecoveryDeferredVisibility: true,
+      },
+    );
   }
 
   /**

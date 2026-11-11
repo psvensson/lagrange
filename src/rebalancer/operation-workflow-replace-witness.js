@@ -86,8 +86,9 @@ function unavailableWitness(reason, delivery = null) {
 }
 
 function buildReplaceWitnessRequest(operation, messageType, replicaIds,
-  readReplicaId) {
+  readReplicaId, fields = null) {
   return {
+    ...(fields || {}),
     [ReplicaOperationField.TYPE]: messageType,
     [ReplicaOperationField.OPERATION_ID]: operation.operationId,
     [ReplicaOperationField.OPERATION_TYPE]: operation.type,
@@ -180,10 +181,12 @@ function classifyReplaceWitnessError(error) {
  * @param {Object} operation
  * @param {string} messageType
  * @param {Object} [member] - {replicaId, nodeId}; defaults to t.
+ * @param {Object} [fields] - The message's own fields beyond the witness
+ *   request's (CANCEL_REPLICA_REMOVAL's replica generation).
  * @return {Promise<Object>} {outcome, response?, reason?}.
  */
 async function deliverToReplaceWitness(owner, operation, messageType,
-  member = null) {
+  member = null, fields = null) {
   const destination = replaceWitnessDestination(owner, operation, member);
   if (destination === null) {
     return unavailableWitnessDelivery();
@@ -195,7 +198,7 @@ async function deliverToReplaceWitness(owner, operation, messageType,
     return classifyReplaceWitnessResponse(await owner.messageRouter.deliver(
       `${targetNodeId}/service/${handlerType}`,
       buildReplaceWitnessRequest(operation, messageType, replicaIds,
-        readReplicaId),
+        readReplicaId, fields),
       {
         targetNodeId,
         deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,

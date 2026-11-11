@@ -10,6 +10,7 @@ import {operationCarriesMessageGroupMembership} from
   './replica-operation-message-group-membership-fields.js';
 import {
   OPERATION_VISIBILITY_STATE,
+  presentOperationOf,
   readOperationVisibilityState,
 } from './replica-operation-repository-operation-visibility.js';
 
@@ -487,8 +488,11 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     // terminal, null otherwise (idempotent replay, lagging non-terminal row,
     // or missing row — the zero-change divergence arm re-inserts).
     async queryConflictingTerminalAuthorityOperation(operation) {
-      const authoritativeOperation =
-        await this.queryReplicaOperationPersistenceAuthorityOperation(operation);
+      const authoritativeOperation = presentOperationOf(
+        await this.queryReplicaOperationPersistenceAuthorityObservation(
+          operation,
+        ),
+      );
       if (!authoritativeOperation) {
         return null;
       }

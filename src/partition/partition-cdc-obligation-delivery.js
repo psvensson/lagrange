@@ -41,6 +41,8 @@ import {eventOf, positionOf, readRetainedDeliveredGauge, retainedDeliveredBackpr
 import {custodyOf, recipientDiagnosticsOf, recipientFrontier, recipientsBehindOwedTail,
   startRecipientDrives, wakeRecipient} from
   './partition-cdc-recipient-drive.js';
+import {lifecycleQuestionDue, markRelistRecipients, requestRecipientLifecycle} from
+  './partition-cdc-recipient-lifecycle.js';
 import {reportObligationBackpressure} from
   './partition-cdc-obligation-backpressure-diagnostics.js';
 
@@ -429,8 +431,32 @@ const RECIPIENT_OPS = Object.freeze({
   },
   track: (delivery, drive) => trackOnOwner(delivery.owner, drive),
   frontierMoved: acknowledgeFrontier,
-  recipientHeld: (delivery, lane, target, obligation, error) =>
-    handleDeliveryFailure(delivery, lane, obligation, REASON.DELIVERY_RETRY, 0, error, target),
+  recipientHeld: (delivery, lane, target, obligation, error) => {
+    const outcome = handleDeliveryFailure(delivery, lane, obligation, REASON.DELIVERY_RETRY, 0,
+      error, target);
+    // A held target group the sender's cache no longer names (or one too far
+    // behind) is asked about at its lifecycle owner: only its evidence may
+    // detach it.
+    if (lifecycleQuestionDue(target)) requestRecipientLifecycle(delivery, lane, target, RECIPIENT_OPS);
+    return outcome;
+  },
+  // The sender's cache changed a recipient-domain table: the recipient set is
+  // observed again (coalesced to one drive per turn), and a group it newly
+  // names - or a detached one it names again - is contacted.
+  recipientDomainChanged: (delivery, lane) => {
+    if (lane.recipientDomainWake || !laneIsCurrent(delivery, lane)) return;
+    lane.recipientDomainWake = true;
+    queueMicrotask(() => {
+      lane.recipientDomainWake = false;
+      if (!laneIsCurrent(delivery, lane)) return;
+      for (const target of laneRecipients(lane)) {
+        if (lifecycleQuestionDue(target)) {
+          requestRecipientLifecycle(delivery, lane, target, RECIPIENT_OPS);
+        }
+      }
+      trackOnOwner(delivery.owner, driveCdcObligations(delivery, REASON.RECIPIENT_DOMAIN_CHANGED));
+    });
+  },
   // The recipient set was observed (again): a recipient it left behind the
   // owed tail - a new group, a released propagation's primary - is started.
   // A held one keeps its backoff: another recipient's delivery never wakes it.
@@ -487,6 +513,8 @@ function acknowledgeFrontier(delivery, lane) {
   // The recipient set is observed again first: a group the topology owner
   // newly requires holds the frontier until it confirmed, and is started.
   RECIPIENT_OPS.recipientsObserved(delivery, lane);
+  // A recipient too far behind leaves the frontier (it re-lists on return).
+  markRelistRecipients(delivery, lane, RECIPIENT_OPS);
   const through = acknowledgeableThrough(lane);
   if (through === null || !owner.db) return;
   const gauge = readRetainedDeliveredGauge(owner);

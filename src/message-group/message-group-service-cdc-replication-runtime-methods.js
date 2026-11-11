@@ -420,6 +420,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
             ...options,
             relayDepth,
             replayOnly: command?.replayOnly === true,
+            sourceRange: command.sourceRange,
           },
         );
       }

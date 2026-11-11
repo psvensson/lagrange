@@ -43,7 +43,6 @@ import {
   shouldUsePublicationMerge,
   tryParseHLCTimestamp,
 } from './system-table-cache-row-merge.js';
-import {SystemTableCacheSourceOrder} from './system-table-cache-source-order.js';
 import {SystemTableCacheTombstoneStore} from
   './system-table-cache-tombstone-store.js';
 import {
@@ -52,6 +51,7 @@ import {
   resetSharedRowReadStats,
 } from './system-table-cache-observation-methods.js';
 import {
+  SystemTableCacheSourceOrder,
   updateSystemTableCacheCdcObservation,
 } from './system-table-cache-cdc-observation.js';
 

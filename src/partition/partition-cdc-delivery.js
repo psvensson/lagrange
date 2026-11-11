@@ -12,7 +12,7 @@ import {
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
 import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
-import {CDC_COMPLETION, hasDurableCdcEvents, isCommittedCdcOutcome,
+import {CDC_COMPLETION, hasDurableCdcEvents, isAlreadyAppliedCdcOutcome, isCommittedCdcOutcome,
   isProvisionalCdcOutcome} from '../cdc/cdc-delivery-outcome.js';
 import {assertCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
 import {readStateField} from '../utils/state-field-read.js';
@@ -79,15 +79,17 @@ function assertSubscriberReadiness(readiness) {
   throw error;
 }
 
-// A durable vector is accepted only by the committed (or provisional)
-// outcome over that exact vector; an ordinary event by any answer that is
-// not an explicit refusal.
+// A durable vector is accepted only by the committed, already-applied or
+// provisional outcome over that exact vector; an ordinary event by any answer
+// that is not an explicit refusal. A refusal keeps the recipient's position
+// gap (CDC Stage 3) as its typed reason.
 function assertSubscriberAcceptance(answer, refused) {
   if (!refused) return;
   const error = new Error(CDC_SUBSCRIBER_REFUSED_MSG);
   error.code = CDC_SUBSCRIBER_REFUSED_CODE;
   error.cause = answer;
   error.retryAfterMs = answer?.retryAfterMs;
+  if (answer?.error === CDC_COMPLETION.POSITION_GAP) error.reason = CDC_COMPLETION.POSITION_GAP;
   throw error;
 }
 
@@ -461,7 +463,7 @@ function markReplayOnlyCdcEvent(cdcEvent) {
     const answer = await deliveryContext.run(() =>
       invoke(subscriber, events, deliveryContext));
     assertSubscriberAcceptance(answer, !isProvisionalCdcOutcome(answer, events) &&
-      !isCommittedCdcOutcome(answer, events));
+      !isCommittedCdcOutcome(answer, events) && !isAlreadyAppliedCdcOutcome(answer, events));
     return answer;
   }
   /**

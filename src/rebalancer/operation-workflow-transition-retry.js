@@ -457,15 +457,23 @@ async function resumeDeferredTransitionOperation(owner, operationId) {
     return;
   }
   // Clearing the retry on absence drops the wake, so absence must be the
-  // owner's; an unavailable read re-arms the retry (the timer's failure
-  // handler) and no retained snapshot stands in for the row.
+  // owner's (OWNER_RPC_REQUIRED). An UNAVAILABLE read re-enters with the
+  // retry's retained snapshot marked DEFERRED_SNAPSHOT (BR12): the claim it
+  // drives is a compare-and-set and every effect boundary waits on the mark,
+  // so nothing is completed or sent on its strength; without a snapshot the
+  // retry re-arms.
   const visibilityObservation =
     await owner.repository.getOperationByIdVisibilityObservation(operationId, {
       authoritativeReadMode:
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       allowPriorityRecoveryDeferredVisibility: true,
     });
+  const operation = owner.resolveDeferredRetryVisibleOperation(
+    visibilityObservation,
+    owner.getTransitionRetryOperationSnapshot(operationId),
+  );
   if (
+    !operation &&
     readOperationVisibilityState(visibilityObservation) ===
     OPERATION_VISIBILITY_STATE.UNAVAILABLE
   ) {
@@ -474,7 +482,6 @@ async function resumeDeferredTransitionOperation(owner, operationId) {
       operationId,
     );
   }
-  const operation = visibilityObservation.operation;
   const now = Date.now();
   const resumeOutcome = buildOperationOwnerResumeOutcome({
     operationAvailable: Boolean(operation),

@@ -1,4 +1,4 @@
-import {CDC_COMPLETION, hasDurableCdcEvents,
+import {CDC_COMPLETION, hasDurableCdcEvents, isAlreadyAppliedCdcOutcome,
   isCommittedCdcOutcome, isProvisionalCdcOutcome} from
   '../../cdc/cdc-delivery-outcome.js';
 import {assertCdcDeliveryInvocation} from '../../cdc/cdc-delivery-invocation.js';
@@ -191,10 +191,12 @@ function requirePropagationService(selection, cdcEvent, requiredTables, deferred
 function resolveUnknownAnswerDeferredFields(answer) {
   const retryAfterMs = Number.isFinite(answer?.retryAfterMs) && answer.retryAfterMs > 0 ?
     Math.floor(answer.retryAfterMs) : undefined;
+  // The recipient's typed reasons survive this hop: its backpressure, and
+  // its position gap (CDC Stage 3: it re-lists; the lane retries on the hint).
   const reason = answer?.reason ?
     answer.reason :
-    (answer?.error === CDC_COMPLETION.BACKPRESSURE ?
-      CDC_COMPLETION.BACKPRESSURE : undefined);
+    (answer?.error === CDC_COMPLETION.BACKPRESSURE ||
+      answer?.error === CDC_COMPLETION.POSITION_GAP ? answer.error : undefined);
   return {
     ...(retryAfterMs !== undefined ? {retryAfterMs} : {}),
     ...(reason !== undefined ? {reason} : {}),
@@ -202,7 +204,8 @@ function resolveUnknownAnswerDeferredFields(answer) {
 }
 
 function propagationIsProvisional(answer, events, groupId) {
-  if (isCommittedCdcOutcome(answer, events, groupId)) return false;
+  if (isCommittedCdcOutcome(answer, events, groupId) ||
+      isAlreadyAppliedCdcOutcome(answer, events, groupId)) return false;
   if (isProvisionalCdcOutcome(answer, events, groupId)) return true;
   throw Object.assign(new Error(CDC_COMPLETION.UNKNOWN), {
     code: CDC_COMPLETION.UNKNOWN, cause: answer, deferRetry: true,

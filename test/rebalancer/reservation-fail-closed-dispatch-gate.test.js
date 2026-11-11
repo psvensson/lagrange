@@ -205,7 +205,7 @@ test('post-insert authority deferral: terminal settlement wins before rearm ' +
       /Storage reservation creation failed/,
       'temporary authority loss leaves one retained retry before terminal settlement',
     );
-    const operation = await coordinator.repository.queryOperationById(
+    const operation = await coordinator.repository.queryOperationProjectionById(
       TEST_OPERATION_ID,
     );
     await coordinator.workflowOwner.failOperation(
