@@ -550,6 +550,10 @@ async () => {
       .getDiagnostics().writeCount,
     0,
   );
+  // The retained reopen's write is in flight when the reopen returns: wait
+  // for the seed's publication coordinator to settle it (the guarded write's
+  // admission-then-change takes more turns than the deleted upsert).
+  await fixture.seed.formationReleaseHandoffPublicationCoordinator.whenIdle();
   assert.deepEqual(fixture.storageOwner.publisherNodeIds(), [SEED, SEED],
     'every durable write (capture, retained reopen) is published by the seed');
 });
