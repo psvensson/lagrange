@@ -56,6 +56,15 @@ function publicationRow(epoch, nowMs) {
       publisherNodeId: 'N1',
       requiredAckNodeIds: MEMBERS,
       acknowledgedNodeIds: MEMBERS,
+      // A steady published epoch carries the census its owner derived.
+      priorityPartitionSummary: {
+        satisfied: true,
+        requiredDistinctNodeCount: MEMBERS.length,
+        readyEligibleNodeCount: MEMBERS.length,
+        totalPriorityPartitionCount: 0,
+        missingPartitionIds: [],
+        blockedPartitions: [],
+      },
     },
     status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
     nowMs,

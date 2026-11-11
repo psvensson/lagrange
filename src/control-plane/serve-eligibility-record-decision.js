@@ -11,6 +11,10 @@ import {
   resolvePublishedActiveNodeIds,
 } from './active-node-publication-snapshots.js';
 import {hasPriorityRecoverySpreadGap} from './priority-recovery-planning-intent.js';
+import {
+  PRIORITY_PARTITION_CENSUS_STATE,
+  readPriorityPartitionCensusState,
+} from './membership-publication-priority-partition-summary.js';
 import {indexCommittedNodeRows} from './committed-node-rows.js';
 import {projectNodeLivenessSemantics, readNodeLivenessRowFacts} from
   './node-liveness-semantic-projection.js';
@@ -121,7 +125,8 @@ function isPublicationAcknowledged(publication) {
 
 function resolvePrioritySpreadReason(publication) {
   const summary = publication.priorityPartitionSummary;
-  if (!summary || typeof summary !== 'object') {
+  if (readPriorityPartitionCensusState(summary) !==
+      PRIORITY_PARTITION_CENSUS_STATE.DERIVED) {
     return SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_UNSTATED;
   }
   return hasPriorityRecoverySpreadGap(summary) ?

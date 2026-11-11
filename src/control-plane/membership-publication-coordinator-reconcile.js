@@ -77,6 +77,7 @@ import {
   buildPublicationReadinessTraceFields,
   hasPrioritySummaryRefreshClearedGap,
   reportOwnerMembershipReconcileSpent,
+  requestOwedPriorityCensus,
   resolveDeferredPropagatedCatchupCooldownMs,
   resolveOwnerAckCompletionPendingNodeIds,
   shouldDeferMembershipReconcileToWriteLeader,
@@ -379,6 +380,22 @@ class MembershipPublicationCoordinatorReconcile extends
     );
   }
 
+  // The latest durable row still states its census NOT_DERIVED: ask for
+  // the full reconcile that derives it, from the durable owner.
+  _requestOwedPriorityCensus(latestPublicationRow, traceFields) {
+    if (requestOwedPriorityCensus(
+      this,
+      latestPublicationRow,
+      {readSource: MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED},
+    )) {
+      this._emitConvergenceDecisionTrace({
+        decision: CONVERGENCE_DECISION.DRIVE,
+        reason: CONVERGENCE_REASON.CENSUS_NOT_DERIVED,
+        ...traceFields,
+      });
+    }
+  }
+
   _buildPublicationReadinessTraceFields(handoffContract, planningSnapshot) {
     return buildPublicationReadinessTraceFields(handoffContract, planningSnapshot);
   }
@@ -461,6 +478,10 @@ class MembershipPublicationCoordinatorReconcile extends
         ownerAckCompletionPendingNodeIds,
       });
       const missingCount = handoffContract?.missingPublishedCount ?? 0;
+      this._requestOwedPriorityCensus(planningSnapshot.latestPublicationRow, {
+        leadershipTier: leadership.tier,
+        publicationEpoch,
+      });
       if (
         missingCount <= 0 &&
         ownerAckCompletionPendingNodeIds.length === 0

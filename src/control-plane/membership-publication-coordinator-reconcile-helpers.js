@@ -11,7 +11,11 @@ import {
   normalizeNodeRow,
 } from './system-row-normalizers.js';
 import {hasPriorityRecoverySpreadGap} from './priority-recovery-planning-intent.js';
-import {buildDerivedPriorityPartitionSummary} from './membership-publication-priority-partition-summary.js';
+import {
+  PRIORITY_PARTITION_CENSUS_STATE,
+  buildDerivedPriorityPartitionSummary,
+  readPriorityPartitionCensusState,
+} from './membership-publication-priority-partition-summary.js';
 import {isTerminalReplicaOperationRecord} from '../rebalancer/replica-operation-progress.js';
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
@@ -35,6 +39,44 @@ const OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS = 5000;
 // gate) takes ONE extra reconcile hop after the refresh write. That hop is
 // ended by the write itself, never by the owner-driver timer.
 const PRIORITY_SUMMARY_REFRESHED_REASON = 'priority_summary_refreshed';
+
+// A row admitted by a reconcile that planned without the census inputs (a
+// handoff-routed admission) states its priority census NOT_DERIVED, and every
+// reader of the spread rule holds on it. What ends that hold is a full
+// reconcile, which reads the service and partition rows and refreshes the
+// row with the census. The handoff-routed reconcile asks for it when its
+// publication is durably visible (the admission is what changed), and the
+// owner driver asks again on every tick while the latest durable row still
+// states NOT_DERIVED (bounded by OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS).
+const PRIORITY_CENSUS_NOT_DERIVED_REASON = 'priority_census_not_derived';
+
+function isPriorityCensusOwed(publicationRow) {
+  return Boolean(publicationRow) && typeof publicationRow === 'object' &&
+    readPriorityPartitionCensusState(
+      normalizeControlPlanePublicationRow(publicationRow)
+        .priorityPartitionSummary,
+    ) === PRIORITY_PARTITION_CENSUS_STATE.NOT_DERIVED;
+}
+
+/**
+ * Ask the owner's queue for the full reconcile that derives the priority
+ * census of a row that states NOT_DERIVED.
+ * @param {Object} coordinator
+ * @param {Object|null} publicationRow - The latest durable publication row.
+ * @param {Object} context - The reconcile context of the request.
+ * @return {boolean} Whether the census was owed (and asked for).
+ */
+function requestOwedPriorityCensus(coordinator, publicationRow, context) {
+  if (!isPriorityCensusOwed(publicationRow)) {
+    return false;
+  }
+  coordinator.enqueueClusterMembershipReconcile(
+    PRIORITY_CENSUS_NOT_DERIVED_REASON,
+    context,
+    {selfRequeue: {changed: PRIORITY_CENSUS_NOT_DERIVED_REASON}},
+  );
+  return true;
+}
 
 const OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS = 15000; // ends-on: the reconcileActiveGateMembershipPublication() drive resolves
 const OWNER_MEMBERSHIP_RECONCILE_WAIT = Object.freeze({
@@ -104,6 +146,7 @@ const CONVERGENCE_REASON = Object.freeze({
   NO_SNAPSHOT: 'no-snapshot',
   NO_DEFICIT: 'no-deficit',
   DRIVEN: 'driven',
+  CENSUS_NOT_DERIVED: 'priority-census-not-derived',
   IN_FLIGHT: 'reconcile-in-flight',
   ERROR: 'error',
   NOT_WRITE_LEADER: 'not-publications-write-leader',
@@ -473,6 +516,7 @@ export {
   buildPublicationReadinessTraceFields,
   hasPrioritySummaryRefreshClearedGap,
   reportOwnerMembershipReconcileSpent,
+  requestOwedPriorityCensus,
   resolveDeferredPropagatedCatchupCooldownMs,
   resolveOwnerAckCompletionPendingNodeIds,
   shouldDeferMembershipReconcileToWriteLeader,

@@ -80,6 +80,61 @@ const SERVICE_TYPE_FIELDS = Object.freeze([
 const mathMax = Math.max;
 const mathMin = Math.min;
 
+// Whether a publication row's priority summary is a census. The publication
+// owner derives the census from service and partition rows; a reconcile that
+// plans without those rows (a handoff-routed admission) states NOT_DERIVED on
+// the row it admits, and the owner's next full reconcile derives it. A
+// NOT_DERIVED summary is `satisfied: false` with no blocked partition named:
+// every reader of the spread rule holds on it. ABSENT is a value that is no
+// summary at all (the owner never writes one).
+const PRIORITY_PARTITION_CENSUS_STATE = Object.freeze({
+  DERIVED: 'derived',
+  NOT_DERIVED: 'not_derived',
+  ABSENT: 'absent',
+});
+const CENSUS_STATE_FIELD = 'censusState';
+
+// One frozen value: a summary that states NOT_DERIVED is the same object
+// wherever the owner states it (identity-keyed memos see no change in it).
+const NOT_DERIVED_PRIORITY_PARTITION_SUMMARY = Object.freeze({
+  [CENSUS_STATE_FIELD]: PRIORITY_PARTITION_CENSUS_STATE.NOT_DERIVED,
+  satisfied: false,
+  requiredDistinctNodeCount: 0,
+  readyEligibleNodeCount: 0,
+  totalPriorityPartitionCount: 0,
+  missingPartitionIds: Object.freeze([]),
+  blockedPartitions: Object.freeze([]),
+});
+
+/**
+ * The census state a priority summary value states.
+ * @param {*} summary - A publication row's or a candidate's summary.
+ * @return {string} A PRIORITY_PARTITION_CENSUS_STATE.
+ */
+function readPriorityPartitionCensusState(summary) {
+  const summarySnapshot = copyStrictOwnDataRecord(summary);
+  if (summarySnapshot === null) {
+    return PRIORITY_PARTITION_CENSUS_STATE.ABSENT;
+  }
+  return readOwnPrimitiveString(summarySnapshot, [CENSUS_STATE_FIELD]) ===
+    PRIORITY_PARTITION_CENSUS_STATE.NOT_DERIVED ?
+    PRIORITY_PARTITION_CENSUS_STATE.NOT_DERIVED :
+    PRIORITY_PARTITION_CENSUS_STATE.DERIVED;
+}
+
+/**
+ * The summary a publication owner states for an epoch: the census it
+ * derived, else NOT_DERIVED (never no summary).
+ * @param {*} summary - The census the owner derived, if it derived one.
+ * @return {Object} The summary to state.
+ */
+function statePriorityPartitionSummary(summary) {
+  return readPriorityPartitionCensusState(summary) ===
+    PRIORITY_PARTITION_CENSUS_STATE.ABSENT ?
+    NOT_DERIVED_PRIORITY_PARTITION_SUMMARY :
+    summary;
+}
+
 function readCanonicalNonNegativeInteger(
   record,
   propertyNames,
@@ -181,7 +236,16 @@ function normalizeBlockedPriorityPartition(
   };
 }
 
+// A summary that states NOT_DERIVED normalizes to that state; any other
+// value is normalized as a census.
 function normalizePriorityPartitionSummary(summary, options = {}, _helperFns = {}) {
+  return readPriorityPartitionCensusState(summary) ===
+    PRIORITY_PARTITION_CENSUS_STATE.NOT_DERIVED ?
+    NOT_DERIVED_PRIORITY_PARTITION_SUMMARY :
+    normalizePriorityPartitionCensus(summary, options);
+}
+
+function normalizePriorityPartitionCensus(summary, options) {
   const summarySnapshot = copyStrictOwnDataRecord(summary);
   const optionsSnapshot = copyStrictOwnDataRecord(options);
   if (summarySnapshot === null || optionsSnapshot === null) {
@@ -298,7 +362,45 @@ function arePriorityPartitionSummariesEqual(leftSummary, rightSummary, helperFns
   if (left === null || right === null) {
     return left === right;
   }
-  return normalizedPriorityPartitionSummariesEqual(left, right);
+  return readPriorityPartitionCensusState(left) ===
+      readPriorityPartitionCensusState(right) &&
+    normalizedPriorityPartitionSummariesEqual(left, right);
+}
+
+/**
+ * The summary a refresh leaves on a durable row: an offered derived census
+ * replaces it; an offered NOT_DERIVED (or nothing offered) leaves the durable
+ * summary, and states NOT_DERIVED only on a row that has none.
+ * @param {*} offeredSummary - The refreshing candidate's summary.
+ * @param {*} durableSummary - The durable row's summary.
+ * @return {Object|null} The normalized summary of the refreshed row.
+ */
+function refreshPriorityPartitionSummary(offeredSummary, durableSummary,
+  helperFns = {}) {
+  return normalizePriorityPartitionSummary(
+    readPriorityPartitionCensusState(offeredSummary) ===
+      PRIORITY_PARTITION_CENSUS_STATE.DERIVED ?
+      offeredSummary :
+      durableSummary ?? offeredSummary,
+    {},
+    helperFns,
+  );
+}
+
+/**
+ * Whether a candidate's summary moves the latest row's: only a derived
+ * census does. A candidate that derived none asks for no summary refresh
+ * (the row it admits states NOT_DERIVED).
+ * @param {*} latestSummary - The latest publication row's summary.
+ * @param {*} candidateSummary - The candidate's summary.
+ * @return {boolean}
+ */
+function isDerivedPriorityCensusChange(latestSummary, candidateSummary,
+  helperFns = {}) {
+  return readPriorityPartitionCensusState(candidateSummary) ===
+      PRIORITY_PARTITION_CENSUS_STATE.DERIVED &&
+    !arePriorityPartitionSummariesEqual(
+      latestSummary, candidateSummary, helperFns);
 }
 
 function incrementOwnCount(counts, key) {
@@ -634,10 +736,15 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
 }
 
 export {
+  PRIORITY_PARTITION_CENSUS_STATE,
   PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT,
   arePriorityPartitionSummariesEqual,
   buildDerivedPriorityPartitionSummary,
+  isDerivedPriorityCensusChange,
   isPrioritySpreadHolderServiceRow,
   isReadinessPromotable,
   normalizePriorityPartitionSummary,
+  readPriorityPartitionCensusState,
+  refreshPriorityPartitionSummary,
+  statePriorityPartitionSummary,
 };
